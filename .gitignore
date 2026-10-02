@@ -1,0 +1,6 @@
+node_modules/
+# Личные выгрузки не должны попадать на GitHub
+Statistic*.csv
+dohody*.csv
+backup-*.json
+!tests/fixtures/sample-statistic.csv

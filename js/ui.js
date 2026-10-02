@@ -1,0 +1,71 @@
+// Общие мелочи интерфейса: экранирование, окна, уведомления, обработчики действий и форм.
+import { parseNum } from './format.js';
+
+export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+export const acts = {};   // data-act="имя"  → acts.имя(dataset, element, event)
+export const forms = {};  // <form data-form="имя"> → forms.имя(FormData, form, event)
+export const changes = {}; // data-chg="имя" → changes.имя(value, element)
+
+let toastTimer;
+export function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+}
+
+// Число из поля ввода: пусто → null, «1 234,5» → 1234.5, мусор → NaN
+export function N(v) {
+  if (v === null || v === undefined || String(v).trim() === '') return null;
+  return parseNum(v);
+}
+
+export function openSheet(title, bodyHtml, onSubmit, { submitText = 'Сохранить' } = {}) {
+  const dlg = document.getElementById('sheet');
+  const f = document.getElementById('sheetForm');
+  f.innerHTML = `<h2>${esc(title)}</h2>${bodyHtml}<div class="row between" style="margin-top:16px"><button type="button" data-close>Отмена</button>${onSubmit ? `<button class="primary" type="submit">${esc(submitText)}</button>` : ''}</div>`;
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    if (!onSubmit) return;
+    const keep = await onSubmit(new FormData(f), f);
+    if (keep !== false) dlg.close();
+  };
+  f.querySelector('[data-close]').onclick = () => dlg.close();
+  if (!dlg.open) dlg.showModal();
+  return f;
+}
+export const closeSheet = () => document.getElementById('sheet').close();
+
+export function installHandlers(afterChange) {
+  document.addEventListener('click', async (e) => {
+    const el = e.target.closest('[data-act]');
+    if (!el) return;
+    const fn = acts[el.dataset.act];
+    if (!fn) return;
+    e.preventDefault();
+    try { await fn(el.dataset, el, e); } catch (err) { console.error(err); toast('Ошибка: ' + (err.message || err)); }
+    afterChange?.();
+  });
+  document.addEventListener('submit', async (e) => {
+    const f = e.target.closest('form[data-form]');
+    if (!f) return;
+    e.preventDefault();
+    try { await forms[f.dataset.form]?.(new FormData(f), f, e); } catch (err) { console.error(err); toast('Ошибка: ' + (err.message || err)); }
+  });
+  document.addEventListener('change', async (e) => {
+    const el = e.target.closest('[data-chg]');
+    if (!el) return;
+    try { await changes[el.dataset.chg]?.(el.value, el, el.type === 'checkbox' ? el.checked : undefined); } catch (err) { console.error(err); toast('Ошибка: ' + (err.message || err)); }
+  });
+}
+
+export function download(filename, text, mime = 'text/plain') {
+  const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+export const readFile = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(file); });
+
+export const opt = (value, label, sel) => `<option value="${esc(value)}"${String(sel) === String(value) ? ' selected' : ''}>${esc(label)}</option>`;
+export const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
