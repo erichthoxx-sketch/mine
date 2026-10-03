@@ -1,7 +1,7 @@
 name: Публикация сайта
 on:
   push:
-    branches: [main]
+    branches: [main, 'claude/author-income-ads-tracker-3zjbxd']
   workflow_dispatch:
 permissions:
   contents: read
