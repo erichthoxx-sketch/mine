@@ -58,12 +58,29 @@ export function installHandlers(afterChange) {
   });
 }
 
-export function download(filename, text, mime = 'text/plain') {
+// Скачивание: в Claude через разрешение «downloads» (обычные ссылки там заблокированы), в обычном браузере — через ссылку
+export async function download(filename, text, mime = 'text/plain') {
+  try {
+    const d = await window.claude?.use?.('downloads');
+    if (d) { await d.save({ filename, data: text }); return true; }
+  } catch (e) {
+    if (e?.code === 'declined') return false;
+    if (e?.code && e.code !== 'unavailable') { toast('Не удалось сохранить файл: ' + (e.message || e.code)); return false; }
+  }
   const blob = new Blob([text], { type: mime + ';charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  return true;
+}
+// Подтверждение внутри страницы (окна confirm() в Claude не показываются)
+export function ask(text, okText = 'Удалить') {
+  return new Promise((res) => {
+    let done = false;
+    openSheet('Подтвердите', `<p>${esc(text)}</p>`, async () => { done = true; res(true); }, { submitText: okText });
+    document.getElementById('sheet').addEventListener('close', () => { if (!done) res(false); }, { once: true });
+  });
 }
 export const readFile = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(file); });
 

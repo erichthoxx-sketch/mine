@@ -1,4 +1,4 @@
-import { esc, acts, forms, openSheet, opt, toast, N } from '../ui.js';
+import { esc, acts, forms, openSheet, opt, toast, N, ask } from '../ui.js';
 import { rub, fmtDate } from '../format.js';
 import { priceAt, bookIdFor, inferPriceChanges, addDays, incomeSeries, sumSeries } from '../calc.js';
 
@@ -11,7 +11,7 @@ export function books(a) {
   const html = `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Книги</h2><button class="primary" data-act="book.new">+ Книга</button></div>
   <div class="card list">${list.length ? list.map((b) => {
     const m30 = sumSeries(incomeSeries(c.sales, [], addDays(c.dataEnd, -29), c.dataEnd, b.id));
-    return `<a class="item" href="#/book/${b.id}"><div class="row between"><b>${esc(b.title)}</b><span class="badge ${b.status === 'done' ? '' : 'good'}">${STATUS[b.status] || STATUS.progress}</span></div>
+    return `<a class="item" href="#" data-act="go" data-to="/book/${b.id}"><div class="row between"><b>${esc(b.title)}</b><span class="badge ${b.status === 'done' ? '' : 'good'}">${STATUS[b.status] || STATUS.progress}</span></div>
       <div class="small muted">цена сейчас: ${priceAt(b, c.today) != null ? rub(priceAt(b, c.today)) : 'не задана'} · за 30 дней: ${rub(m30)}</div>
       <div class="small muted">старт: ${fmtDate(b.startDate) || '—'} · последняя глава: ${fmtDate(b.lastChapterDate) || '—'}</div></a>`;
   }).join('') : '<p class="muted">Книги появятся сами после импорта выгрузки. Можно добавить и вручную.</p>'}</div>`;
@@ -21,9 +21,9 @@ export function books(a) {
 export function bookPage(a, id) {
   const c = a.ctx();
   const b = c.booksById[id];
-  if (!b) return { html: '<div class="card"><p>Книга не найдена.</p><a href="#/books">← К списку</a></div>' };
+  if (!b) return { html: '<div class="card"><p>Книга не найдена.</p><a href="#" data-act="go" data-to="/books">← К списку</a></div>' };
   const hist = [...(b.priceHistory || [])].sort((x, y) => y.from.localeCompare(x.from));
-  const html = `<p><a href="#/books">← Все книги</a></p>
+  const html = `<p><a href="#" data-act="go" data-to="/books">← Все книги</a></p>
   <div class="card"><form data-form="book.save" data-id="${b.id}">
     <label style="margin-top:0">Название</label><input name="title" value="${esc(b.title)}" required>
     <div class="f2"><div><label>Статус</label><select name="status">${opt('progress', STATUS.progress, b.status || 'progress')}${opt('done', STATUS.done, b.status)}</select></div>
@@ -83,7 +83,7 @@ acts['book.infer'] = async (d) => {
 acts['book.del'] = async (d) => {
   const c = app().ctx();
   if (c.sales.some((s) => s.bookId === d.id)) { toast('У книги есть продажи — удалить нельзя. Можно отметить как «Завершена».'); return; }
-  if (!confirm('Удалить книгу?')) return;
+  if (!(await ask('Удалить книгу?'))) return;
   await app().store.remove('books', d.id);
-  location.hash = '#/books';
+  app().go('/books');
 };

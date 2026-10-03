@@ -78,7 +78,7 @@ changes['imp.stat'] = async (v, el) => {
       await app().store.put('books', { id: bookId, title, status: 'progress', startDate: '', lastChapterDate: '', priceHistory: inferPriceChanges(r.rows, bookId) });
     }
     toast(`Импорт готов: добавлено ${d.added}, обновлено ${d.changed}`);
-    location.hash = '#/';
+    app().go('/');
   }, { submitText: 'Загрузить' });
 };
 
@@ -105,7 +105,7 @@ changes['imp.legacy'] = async (v, el) => {
 };
 
 // ---------- резервная копия и экспорт ----------
-acts['backup.save'] = () => { download(`backup-${stamp()}.json`, makeBackup(app().store.data), 'application/json'); toast('Копия скачана'); };
+acts['backup.save'] = async () => { if (await download(`backup-${stamp()}.json`, makeBackup(app().store.data), 'application/json')) toast('Копия сохранена'); };
 changes['backup.restore'] = async (v, el) => {
   const file = el.files[0];
   el.value = '';
@@ -117,7 +117,7 @@ changes['backup.restore'] = async (v, el) => {
     toast('Данные восстановлены');
   }, { submitText: 'Заменить данные' });
 };
-acts['export.csv'] = (d) => {
+acts['export.csv'] = async (d) => {
   const c = app().ctx(), k = d.k;
   const D = (x) => (x ? fmtDate(x) : '');
   const defs = {
@@ -129,5 +129,5 @@ acts['export.csv'] = (d) => {
     days: [c.data.days.slice().sort((x, y) => x.date.localeCompare(y.date)), [['Дата', (r) => D(r.date)], ['Доход (старый трекер)', (r) => csvDec(r.income)], ['События', (r) => (r.events || []).map((e) => e.text || e.type).join('; ')], ['Заметка', (r) => r.note || '']]],
   };
   const [rows, cols] = defs[k];
-  download(`${k}-${stamp()}.csv`, toCsv(rows, cols.map(([title, get]) => ({ title, get }))), 'text/csv');
+  await download(`${k}-${stamp()}.csv`, toCsv(rows, cols.map(([title, get]) => ({ title, get }))), 'text/csv');
 };

@@ -63,7 +63,7 @@ acts['month.edit'] = (d) => {
     <label>Прочие мои расходы на рекламу, ₽</label><input name="extraAdSpend" inputmode="decimal" value="${m.extraAdSpend ?? ''}">
     <div class="hint">То, что не внесено в кампании: например, платные баннеры.</div>`, async (fd) => {
     const idx = N(fd.get('rocketIndex'));
-    if (idx != null && !Number.isNaN(idx) && idx > c.settings.rocketCap && !confirm(`Индекс ${idx} выше обычного потолка ${c.settings.rocketCap} ₽. Всё равно сохранить?`)) return false;
+    if (idx != null && !Number.isNaN(idx) && idx > c.settings.rocketCap) toast(`Индекс ${idx} выше обычного потолка ${c.settings.rocketCap} ₽ — проверьте цифру`);
     const val = (n) => { const v = N(fd.get(n)); return v == null || Number.isNaN(v) ? null : v; };
     await app().store.put('months', { id: d.m, month: d.m, rocketIndex: val('rocketIndex'), rocketFee: val('rocketFee'), litnetSpend: val('litnetSpend'), extraAdSpend: val('extraAdSpend') });
     toast('Сохранено');

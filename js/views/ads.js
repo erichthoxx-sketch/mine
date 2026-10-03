@@ -1,4 +1,4 @@
-import { esc, acts, forms, openSheet, opt, toast, N, uid } from '../ui.js';
+import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth } from '../format.js';
 import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, bookIdFor } from '../calc.js';
 import { parseTargetReport, reportId } from '../parse.js';
@@ -40,7 +40,7 @@ export function ads(a) {
     const m = metricsFor(c, k);
     const badge = m.status === 'planned' ? '<span class="badge">запланирована</span>' : m.status === 'active' ? '<span class="badge good">идёт</span>' : '<span class="badge">завершена</span>';
     const pay = m.payback == null ? '<span class="muted">нет базы для сравнения</span>' : `<span class="${m.payback >= 0 ? 'up' : 'down'}">${m.payback >= 0 ? '▲ окупается' : '▼ не окупается'}: ${rub(m.payback, 0)}/день</span>`;
-    return `<a class="item" href="#/ad/${k.id}"><div class="row between"><b>${esc(k.name)}</b>${badge}</div>
+    return `<a class="item" href="#" data-act="go" data-to="/ad/${k.id}"><div class="row between"><b>${esc(k.name)}</b>${badge}</div>
       <div class="small muted">${esc(CHANNELS[k.channel] || '')} · ${esc(k.bookId ? c.titleOf(k.bookId, '') : 'все книги')} · ${fmtDate(k.start)}–${fmtDate(k.end) || '…'}</div>
       ${m.status === 'planned' ? '' : `<div class="small">расход ${rub(m.spendPerDay, 0)}/день · ${pay}</div>`}</a>`;
   }).join('') : '<p class="muted">Кампаний пока нет.</p>'}</div>`;
@@ -50,7 +50,7 @@ export function ads(a) {
 export function adPage(a, id) {
   const c = a.ctx();
   const k = c.campaigns.find((x) => x.id === id);
-  if (!k) return { html: '<div class="card"><p>Кампания не найдена.</p><a href="#/ads">← К рекламе</a></div>' };
+  if (!k) return { html: '<div class="card"><p>Кампания не найдена.</p><a href="#" data-act="go" data-to="/ads">← К рекламе</a></div>' };
   const m = metricsFor(c, k);
   const reps = c.data.reports.filter((r) => r.campaignId === k.id).sort((x, y) => y.start.localeCompare(x.start));
   const chronological = [...reps].reverse();
@@ -67,7 +67,7 @@ export function adPage(a, id) {
       <dt>Стоимость одной продажи</dt><dd>${m.costPerSale == null ? '—' : rub(m.costPerSale)} <span class="muted small">(расход ÷ все ${m.qtyDuring} шт. за период)</span></dd>
       <dt>Стоимость одной «лишней» продажи</dt><dd>${m.costPerExtraSale == null ? '<span class="muted">продаж не больше, чем в базе</span>' : rub(m.costPerExtraSale)}</dd>
     </dl>`;
-  const html = `<p><a href="#/ads">← Вся реклама</a></p>
+  const html = `<p><a href="#" data-act="go" data-to="/ads">← Вся реклама</a></p>
   <div class="card"><h2>${esc(k.name)}</h2>${metricsHtml}</div>
   <div class="card"><h2>Доход вокруг кампании</h2><div class="chart" id="chart"></div><div id="legend"></div></div>
   <div class="card"><h2>Недельные отчёты таргетологов</h2>
@@ -114,7 +114,7 @@ acts['ad.new'] = () => {
     <label>Бюджет, ₽ (на весь период)</label><input name="budget" inputmode="decimal">`, async (fd) => {
     const id = 'k' + uid();
     await app().store.put('campaigns', { id, name: fd.get('name').trim(), bookId: fd.get('bookId') || '', scope: fd.get('bookId') ? 'book' : 'all', channel: fd.get('channel'), start: fd.get('start'), end: fd.get('end') || '', budget: N(fd.get('budget')), baseMode: 'auto' });
-    location.hash = '#/ad/' + id;
+    app().go('/ad/' + id);
   });
 };
 forms['ad.save'] = async (fd, f) => {
@@ -124,11 +124,11 @@ forms['ad.save'] = async (fd, f) => {
   toast('Сохранено');
 };
 acts['ad.del'] = async (d) => {
-  if (!confirm('Удалить кампанию и её недельные отчёты?')) return;
+  if (!(await ask('Удалить кампанию и все её недельные отчёты?'))) return;
   const c = app().ctx();
   await app().store.removeMany('reports', c.data.reports.filter((r) => r.campaignId === d.id).map((r) => r.id));
   await app().store.remove('campaigns', d.id);
-  location.hash = '#/ads';
+  app().go('/ads');
 };
 acts['rep.del'] = (d) => app().store.remove('reports', d.id);
 acts['rep.new'] = (d) => {

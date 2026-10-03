@@ -13,7 +13,7 @@ import { money } from './views/money.js';
 import { data } from './views/data.js';
 
 const store = createStore();
-const ui = { range: 90, table: 'weeks', day: null, month: null };
+const ui = { route: '/', range: 90, table: 'weeks', day: null, month: null };
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* нет доступа к памяти браузера */ }
 
@@ -26,6 +26,7 @@ const app = {
     applyTheme(); render();
   },
   rerender: () => render(),
+  go(path) { ui.route = path; render(); window.scrollTo(0, 0); },
   ctx: () => getCtx(),
   fin: (m) => { const c = getCtx(); return monthFinance(m, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings }); },
 };
@@ -67,7 +68,7 @@ function getCtx() {
 // ---------- маршруты ----------
 const TABS = [['#/', '📈', 'Главная'], ['#/day', '✏️', 'День'], ['#/books', '📚', 'Книги'], ['#/ads', '🎯', 'Реклама'], ['#/money', '💰', 'Финансы'], ['#/data', '⚙️', 'Данные']];
 function route() {
-  const h = location.hash || '#/';
+  const h = '#' + (ui.route || '/');
   const [, a, b] = h.split('/');
   if (b && a === 'book') return { tab: '#/books', view: (x) => bookPage(x, decodeURIComponent(b)) };
   if (b && a === 'ad') return { tab: '#/ads', view: (x) => adPage(x, decodeURIComponent(b)) };
@@ -107,7 +108,7 @@ function render() {
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
   <button data-act="theme.toggle" aria-label="Тема" title="Тема">${theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '🌓'}</button></div>
   <main>${r.html}</main>
-  <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="${h}" class="${tab === h ? 'on' : ''}"><b>${i}</b>${t}</a>`).join('')}</nav>`;
+  <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h.slice(1)}" class="${tab === h ? 'on' : ''}"><b>${i}</b>${t}</a>`).join('')}</nav>`;
   afterFn = r.after || null;
   afterFn?.();
 }
@@ -121,7 +122,7 @@ function safeRender() {
   render();
 }
 document.addEventListener('focusout', () => { if (pending) setTimeout(() => { if (!document.activeElement?.closest?.('main') || !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { pending = false; render(); } }, 150); });
-window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+acts.go = (d) => { ui.route = d.to; window.scrollTo(0, 0); };
 let rt;
 window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => afterFn?.(), 150); });
 window.addEventListener('online', render); window.addEventListener('offline', render);

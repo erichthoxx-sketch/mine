@@ -26,7 +26,7 @@ export function chartLegend(inp) {
 export function home(app) {
   const c = app.ctx(), ui = app.ui;
   if (!c.hasData) {
-    return { html: `<div class="card"><h2>Пока нет данных</h2><p>Начните с импорта выгрузки продаж из кабинета Литнета.</p><a class="btn primary" href="#/data">Загрузить Statistic.csv</a></div>` };
+    return { html: `<div class="card"><h2>Пока нет данных</h2><p>Начните с импорта выгрузки продаж из кабинета Литнета.</p><a class="btn primary" href="#" data-act="go" data-to="/data">Загрузить Statistic.csv</a></div>` };
   }
   const st = dashboardStats(c.sales, c.legacyDays, c.today);
   const last = c.series[c.series.length - 1];
