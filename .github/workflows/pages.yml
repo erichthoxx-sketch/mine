@@ -11,21 +11,18 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: npm test
+  # одна задача: проверка расчётов → сборка → публикация (ждём свободный сервер GitHub один раз)
   deploy:
-    needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm test
       - run: |
           # каждая версия — в своей папке, чтобы браузер не держал старые файлы
           V=v${GITHUB_SHA::8}
