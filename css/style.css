@@ -239,3 +239,7 @@ input[type="date"]::-webkit-datetime-edit, input[type="month"]::-webkit-datetime
   .f2 { grid-template-columns: 1fr; gap: 0; }
   .f2 > * { display: block; }
 }
+/* дата в шапке «Дня» — по центру */
+.day-title input[type="date"] { text-align: center; }
+.day-title input[type="date"]::-webkit-date-and-time-value { text-align: center; }
+.day-title input[type="date"]::-webkit-datetime-edit { display: inline-flex; justify-content: center; width: 100%; }
