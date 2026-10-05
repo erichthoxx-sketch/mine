@@ -243,3 +243,4 @@ input[type="date"]::-webkit-datetime-edit, input[type="month"]::-webkit-datetime
 .day-title input[type="date"] { text-align: center; }
 .day-title input[type="date"]::-webkit-date-and-time-value { text-align: center; }
 .day-title input[type="date"]::-webkit-datetime-edit { display: inline-flex; justify-content: center; width: 100%; }
+.list .item.sel { background: var(--accent-soft); border-radius: 14px; }
