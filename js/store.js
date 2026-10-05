@@ -91,9 +91,11 @@ class FirebaseStore extends Base {
   _listen(uid) {
     const { collection, doc, onSnapshot } = this.F;
     for (const c of COLLECTIONS) {
-      this.unsubs.push(onSnapshot(collection(this.db, 'users', uid, c), (snap) => {
+      this.unsubs.push(onSnapshot(collection(this.db, 'users', uid, c), { includeMetadataChanges: true }, (snap) => {
         this.data[c] = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
-        this.sync = snap.metadata.hasPendingWrites ? 'pending' : 'ok';
+        // «сохраняется…», пока хотя бы в одной коллекции есть неподтверждённые записи
+        (this.pending ||= {})[c] = snap.metadata.hasPendingWrites;
+        if (this.sync !== 'error') this.sync = Object.values(this.pending).some(Boolean) ? 'pending' : 'ok';
         this.emit();
       }, (e) => { this.sync = 'error'; this.error = e; this.emit(); }));
     }
