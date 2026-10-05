@@ -31,6 +31,12 @@ export function openSheet(title, bodyHtml, onSubmit, { submitText = 'Сохра�
   };
   f.querySelector('[data-close]').onclick = () => dlg.close();
   if (!dlg.open) dlg.showModal();
+  // Окно открывается с начала: фокус на заголовок, а не на первую кнопку где-то в середине (иначе верх «уезжает»)
+  const h = f.querySelector('h2');
+  h.tabIndex = -1;
+  h.focus({ preventScroll: true });
+  dlg.scrollTop = 0; f.scrollTop = 0;
+  requestAnimationFrame(() => { dlg.scrollTop = 0; });
   return f;
 }
 export const closeSheet = () => document.getElementById('sheet').close();

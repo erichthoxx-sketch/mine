@@ -156,3 +156,7 @@ nav.tabs { transform: translateZ(0); }
 nav.tabs::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 120px; background: var(--surface); }
 .tax-sum { font-family: var(--font-display); font-size: 30px; font-weight: 600; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
 .unpaid { margin-top: 12px; padding: 10px 12px; border-radius: 16px; background: var(--accent-soft); }
+
+/* окна целиком помещаются в экран телефона (с учётом панели браузера) и прокручиваются внутри */
+dialog { margin: auto; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+dialog h2 { outline: none; padding-right: 8px; }
