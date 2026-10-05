@@ -6,7 +6,7 @@
   --font-body: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --bg: #f6f4f2; --surface: #ffffff; --surface-2: #f8eef2; --line: #ece4e7;
   --text: #1c1a1b; --text-2: #5c5257; --muted: #7d7277;
-  --accent: #b0466f; --accent-2: #f6c9d9; --accent-ink: #1c1a1b; --accent-soft: #fbe7ef; --btn-from: #f9d5e2; --btn-to: #f3bcd0;
+  --accent: #b0466f; --link: #2f64a3; --accent-2: #f6c9d9; --accent-ink: #1c1a1b; --accent-soft: #fbe7ef; --btn-from: #f9d5e2; --btn-to: #f3bcd0;
   --bar: #eeaac4; --bar-unk: #f6dbe5; --ma: #1c1a1b; --ma3: #8a6fc9;
   --band: rgba(238, 170, 196, .18); --price: #8a5a00;
   --good: #1e7a4c; --bad: #b3263e; --warn: #9a5b00;
@@ -18,7 +18,7 @@
     color-scheme: dark;
     --bg: #161515; --surface: #201f1f; --surface-2: #2c2427; --line: #353032;
     --text: #f7f3f4; --text-2: #cfc4c8; --muted: #a2969b;
-    --accent: #f2b3ca; --accent-2: #f2b3ca; --accent-ink: #1c1a1b; --accent-soft: #3a2a30; --btn-from: #f6c6d7; --btn-to: #eeaac4;
+    --accent: #f2b3ca; --link: #9cc3ee; --accent-2: #f2b3ca; --accent-ink: #1c1a1b; --accent-soft: #3a2a30; --btn-from: #f6c6d7; --btn-to: #eeaac4;
     --bar: #e79ab8; --bar-unk: #5a3a46; --ma: #f7f3f4; --ma3: #b79bff;
     --band: rgba(242, 179, 202, .12); --price: #e0b45a;
     --good: #5fd39b; --bad: #ff8fa0; --warn: #f0b85a;
@@ -30,7 +30,7 @@
   color-scheme: dark;
   --bg: #161515; --surface: #201f1f; --surface-2: #2c2427; --line: #353032;
   --text: #f7f3f4; --text-2: #cfc4c8; --muted: #a2969b;
-  --accent: #f2b3ca; --accent-2: #f2b3ca; --accent-ink: #1c1a1b; --accent-soft: #3a2a30; --btn-from: #f6c6d7; --btn-to: #eeaac4;
+  --accent: #f2b3ca; --link: #9cc3ee; --accent-2: #f2b3ca; --accent-ink: #1c1a1b; --accent-soft: #3a2a30; --btn-from: #f6c6d7; --btn-to: #eeaac4;
   --bar: #e79ab8; --bar-unk: #5a3a46; --ma: #f7f3f4; --ma3: #b79bff;
   --band: rgba(242, 179, 202, .12); --price: #e0b45a;
   --good: #5fd39b; --bad: #ff8fa0; --warn: #f0b85a;
@@ -61,7 +61,7 @@ button, .btn { font: inherit; border: 1px solid var(--line); background: var(--s
 button.primary, .btn.primary { background: linear-gradient(135deg, var(--btn-from), var(--btn-to)); border-color: var(--btn-to); color: var(--accent-ink); font-weight: 800; box-shadow: none; }
 button:not(.primary):not(.link):not(.chip) { border-color: var(--btn-to); color: var(--text); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
-button.danger, button.danger:not(.primary) { color: var(--bad); border-color: var(--bad); } button.link { border: 0; background: none; padding: 4px 6px; min-height: 0; color: var(--accent); }
+button.danger, button.danger:not(.primary) { color: var(--bad); border-color: var(--bad); } button.link { border: 0; background: none; padding: 4px 6px; min-height: 0; color: var(--link); }
 button:disabled { opacity: .5; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .row.between { justify-content: space-between; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
@@ -142,14 +142,14 @@ button.wide { width: 100%; }
 .g-item { position: relative; padding: 0; border: 0; border-radius: 16px; overflow: hidden; aspect-ratio: 1; background: var(--surface-2); min-height: 0; box-shadow: var(--shadow); }
 .g-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .g-item .tag { position: absolute; left: 6px; bottom: 6px; }
-details summary { cursor: pointer; font-weight: 700; color: var(--accent); }
+details summary { cursor: pointer; font-weight: 700; color: var(--link); }
 .top .row { flex-wrap: nowrap; }
 /* компактная шапка на телефоне */
 .top { flex-wrap: wrap; row-gap: 6px; }
 .top > div:first-child { min-width: 0; }
 .top .row { gap: 6px; }
-.top .btn, .top button { min-height: 36px; padding: 6px 12px; font-size: 14px; }
-.top button[aria-label] { width: 40px; padding: 0; }
+.top .btn, .top button { min-height: 34px; padding: 6px 14px; font-size: 14px; }
+.top button[aria-label] { width: 34px; padding: 0; }
 /* нижнее меню не отрывается от низа экрана при прокрутке до конца (эффект «резинки» на телефоне) */
 html, body { overscroll-behavior-y: none; }
 nav.tabs { transform: translateZ(0); }
@@ -186,10 +186,18 @@ nav.tabs a.on .ic { color: var(--accent); }
 .day-sum { font-family: var(--font-display); font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .chip-stat { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); }
 /* ссылки — аккуратно, без подчёркивания; «назад» — маленькая кнопка */
-main a:not(.btn):not(.item):not(.tag):not(.cover-tile) { color: var(--accent); text-decoration: none; font-weight: 700; }
+main a:not(.btn):not(.item):not(.tag):not(.cover-tile) { color: var(--link); text-decoration: none; font-weight: 700; }
 .btn.back { min-height: 34px; padding: 6px 14px; font-size: 14px; }
 .btn.small-btn { min-height: 34px; padding: 6px 14px; font-size: 14px; }
 tr.sel td { background: var(--accent-soft); }
 /* кнопки в заголовках карточек — одного размера и вида, как «Отчёт» */
 .card > .row.between:first-child > :is(button, .btn):not(.link),
 .card > .row.between:first-child > .row > :is(button, .btn):not(.link) { min-height: 34px; padding: 6px 14px; font-size: 14px; font-weight: 700; background: var(--surface); border-color: var(--btn-to); color: var(--text); }
+/* все кнопки на страницах — одного аккуратного размера, как «Отчёт» (в окнах — крупнее, удобнее пальцем) */
+main :is(button, .btn):not(.link):not(.chip):not(.wide) { min-height: 34px; padding: 6px 14px; font-size: 14px; }
+/* выбор месяца: ‹ месяц ›, без длинной ленты */
+.mnav { display: flex; align-items: center; gap: 2px; margin: 8px 0 2px; }
+.mnav select { width: auto; min-height: 32px; padding: 4px 8px; border: 0; background: transparent; font-weight: 700; cursor: pointer; }
+.mnav button.link { font-size: 20px; line-height: 1; padding: 2px 8px; font-weight: 700; }
+.mnav button.link:disabled { opacity: .25; }
+.mnav button.link:last-child:not([aria-label]) { font-size: 13px; margin-left: auto; }

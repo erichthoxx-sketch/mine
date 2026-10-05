@@ -262,20 +262,22 @@ export function monthSpendForecast(campaigns, reports, today) {
 // Статус: «ожидается» (посчитана приложением) или «подтверждена» (отмечена вручную, можно с фактической суммой).
 // В чистый доход идёт только подтверждённая (applied); ожидаемая — для справки.
 // confirmed: {месяц: {amount?}} — подтверждённые месяцы
-export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2, forecastMonth = null } = {}, confirmed = {}) {
+// payments: {месяц: оплата таргетологам} — оплата ≥ порога тоже выполняет порог (меньше 10 000 ₽ программа не берёт)
+export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2, forecastMonth = null, payments = {} } = {}, confirmed = {}) {
   const keys = [...new Set([...Object.keys(litnetSpend), ...Object.keys(confirmed)])].sort();
   const out = {};
   if (!keys.length) return out;
   for (const k of monthsBetween(keys[0], keys[keys.length - 1])) {
     const spend = litnetSpend[k] || 0;
     const prev = out[addMonths(k, -1)]?.discount || 0;
-    const ok = spend >= threshold;
+    const paid = payments[k] || 0;
+    const ok = spend > 0 && (spend >= threshold || paid >= threshold);
     const expected = ok ? r2(Math.max(0, (spend - prev) * pct)) : 0;
     const conf = confirmed[k];
     const isConf = !!conf;
     const discount = isConf && conf.amount != null && conf.amount !== '' ? r2(Number(conf.amount)) : expected;
     out[k] = {
-      month: k, spend, forecast: k === forecastMonth, prevDiscount: prev, qualified: ok, expected, discount,
+      month: k, spend, paid, forecast: k === forecastMonth, prevDiscount: prev, qualified: ok, byPayment: ok && spend < threshold, expected, discount,
       status: isConf ? 'confirmed' : expected ? 'expected' : 'none',
       applied: isConf ? discount : 0,
       effective: r2(spend - discount),

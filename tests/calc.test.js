@@ -393,6 +393,12 @@ test('«Литнет платит»: скидка от фактического 
   assert.equal(d['2026-10'].forecast, true);
   assert.equal(d['2026-10'].status, 'expected');
   assert.ok(Math.abs(d['2026-10'].expected - 3557.42) < 0.01); // (17 787,11 − 0) × 20 %
+
+  // оплата 10 000 ₽ в сентябре выполняет порог, скидка — от расхода
+  const dp = litnetDiscounts(base, { forecastMonth: '2026-10', payments: litnetPaymentsByMonth(camps) });
+  assert.equal(dp['2026-09'].qualified, true); assert.equal(dp['2026-09'].byPayment, true);
+  assert.ok(Math.abs(dp['2026-09'].expected - 1619.05) < 0.01); // 8 095,24 × 20 %
+  assert.ok(Math.abs(dp['2026-10'].expected - 3233.61) < 0.01); // (17 787,11 − 1 619,05) × 20 %
 });
 
 test('метрики кампании за календарный месяц (period)', () => {

@@ -1,4 +1,4 @@
-import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../ui.js';
+import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthIn } from '../format.js';
 import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween } from '../calc.js';
 import { rocketCard } from './money.js';
@@ -61,9 +61,10 @@ function discountTable(c, sel) {
     const disc = ok
       ? `${d.forecast && d.status !== 'confirmed' ? '≈ ' : ''}${rub(d.discount, 0)}<br>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'} <button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>`
       : `0 ₽<br><span class="small muted">порог не достигнут</span>`;
-    return `<tr${k === sel ? ' class="sel"' : ''}><td>${fmtMonth(k)}</td><td>≈ ${rub(d.spend, 0)}${d.forecast ? '<br><span class="small muted">прогноз</span>' : ''}</td><td>${disc}</td><td class="muted">${c.litnetPayments?.[k] ? rub(c.litnetPayments[k], 0) : '—'}</td></tr>`;
+    const spendNote = d.forecast ? '<br><span class="small muted">прогноз</span>' : d.byPayment ? '<br><span class="small muted">порог выполнен оплатой</span>' : '';
+    return `<tr${k === sel ? ' class="sel"' : ''}><td>${fmtMonth(k)}</td><td>≈ ${rub(d.spend, 0)}${spendNote}</td><td>${disc}</td><td class="muted">${c.litnetPayments?.[k] ? rub(c.litnetPayments[k], 0) : '—'}</td></tr>`;
   }).join('')}</table></div>
-    <div class="hint">Расход — сколько бюджета пришлось на дни кампаний в этом месяце (как в «По месяцам»), текущий месяц — прогноз до конца месяца. Скидка = (расход − скидка прошлого месяца) × ${c.settings.litnetPct} %, если расход ≥ ${th}. «Оплачено» — оплаты таргетологам, для справки. В чистый доход скидка идёт после подтверждения.</div>`;
+    <div class="hint">Расход — сколько бюджета пришлось на дни кампаний в этом месяце (как в «По месяцам»), текущий месяц — прогноз до конца месяца. Скидка = (расход − скидка прошлого месяца) × ${c.settings.litnetPct} %. Порог ${th} выполнен, если столько потрачено или оплачено таргетологам в этом месяце. В чистый доход скидка идёт после подтверждения.</div>`;
 }
 
 // переключатель месяца для сводок: текущий и прошедшие месяцы с рекламой
@@ -91,7 +92,13 @@ export function ads(a) {
   const discTxt = !disc || (!disc.spend && disc.status !== 'confirmed') ? '' : disc.qualified || disc.status === 'confirmed'
     ? ` · скидка Литнета ${disc.status === 'confirmed' ? 'подтверждена' : 'ожидается'} ${disc.forecast && disc.status !== 'confirmed' ? '≈ ' : ''}${rub(disc.discount, 0)}`
     : ' · скидка Литнета: порог не достигнут';
-  const chips = months.length > 1 ? `<div class="chips" style="margin-top:10px">${months.slice(0, 6).map((k) => `<button class="chip${k === mk ? ' on' : ''}" data-act="ads.month" data-v="${k}">${fmtMonth(k)}</button>`).join('')}</div>` : '';
+  // месяц: стрелки ‹ › и выпадающий список — компактно, сколько бы месяцев ни набралось
+  const i = months.indexOf(mk), older = months[i + 1], newer = months[i - 1];
+  const chips = months.length > 1 ? `<div class="mnav">
+      <button class="link" data-act="ads.month" data-v="${older || ''}" ${older ? '' : 'disabled'} aria-label="Предыдущий месяц">‹</button>
+      <select data-chg="ads.month" aria-label="Месяц">${months.map((k) => opt(k, fmtMonth(k), mk)).join('')}</select>
+      <button class="link" data-act="ads.month" data-v="${newer || ''}" ${newer ? '' : 'disabled'} aria-label="Следующий месяц">›</button>
+      ${past ? `<button class="link" data-act="ads.month" data-v="${cur}">к текущему</button>` : ''}</div>` : '';
   const html = `
   <div class="card"><div class="row between"><h2 style="margin:0">Платная реклама</h2><button data-act="report.dl" title="Скачать отчёт для анализа">Отчёт</button></div>
     ${chips}
@@ -114,7 +121,8 @@ export function ads(a) {
   return { html };
 }
 
-acts['ads.month'] = (d) => { app().ui.adMonth = d.v; };
+acts['ads.month'] = (d) => { if (d.v) app().ui.adMonth = d.v; };
+changes['ads.month'] = (v) => { app().ui.adMonth = v; app().rerender(); };
 
 acts['extra.new'] = () => {
   const c = app().ctx();
