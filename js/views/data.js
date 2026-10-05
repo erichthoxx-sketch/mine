@@ -1,7 +1,7 @@
 import { esc, acts, forms, changes, openSheet, opt, toast, N, download, readFile, closeSheet } from '../ui.js';
 import { rub, fmtDate, fmtMonth, num, parseNum } from '../format.js';
 import { decodeBuffer, parseStatistic, parseLegacy, makeBackup, readBackup, toCsv, csvDec } from '../parse.js';
-import { diffSales, inferPriceChanges, monthKey, r2, addDays } from '../calc.js';
+import { diffSales, inferPriceChanges, monthKey, r2, addDays, manualSaleRow } from '../calc.js';
 import { buildReportModel, toMarkdown, toHtml, toJson, toXlsxBook } from '../report.js';
 
 const app = () => window.__app;
@@ -10,11 +10,10 @@ const stamp = () => new Date().toISOString().slice(0, 10);
 export function data(a) {
   const c = a.ctx(), s = c.settings, st = a.store;
   const html = `
-  <div class="card"><h2>Импорт продаж из Литнета</h2>
-    <p class="small muted">Кабинет Литнета → «Статистика продаж» → выгрузить файл Statistic.csv. Можно загружать снова и снова: пересекающиеся дни обновятся, дублей не будет.</p>
-    <label class="btn primary" style="cursor:pointer">Выбрать файл Statistic.csv<input type="file" accept=".csv,.txt" data-chg="imp.stat" hidden></label>
-    <p class="small muted" style="margin-top:12px">Данные из старого трекера (dohody.csv) — для дней до начала выгрузки, плюс события и заметки:</p>
-    <label class="btn" style="cursor:pointer">Выбрать dohody.csv<input type="file" accept=".csv,.txt" data-chg="imp.legacy" hidden></label>
+  <div class="card"><h2>Продажи</h2>
+    <div class="row"><label class="btn primary" style="cursor:pointer">Загрузить отчёт о продажах<input type="file" accept=".csv,.txt" data-chg="imp.any" hidden></label>
+    <button data-act="sale.manual">Добавить продажи вручную</button></div>
+    <p class="hint">Загрузка: выгрузка Литнета (Statistic.csv) или таблица старого трекера (dohody.csv) — приложение само узнает формат. Повторная загрузка не задваивает. Вручную — например, пара продаж с другой площадки.</p>
     <div class="hint">Сейчас в базе: ${c.sales.length} строк продаж${c.hasData ? ` за ${fmtDate(c.firstDate)} – ${fmtDate(c.dataEnd)}` : ''}.</div></div>
   ${reportCard(a)}
   <div class="card"><h2>Резервная копия</h2>
@@ -53,13 +52,17 @@ changes.theme = (v) => app().setTheme(v);
 acts['auth.out'] = () => app().store.signOut();
 
 // ---------- импорт продаж ----------
-changes['imp.stat'] = async (v, el) => {
+changes['imp.any'] = async (v, el) => {
   const file = el.files[0];
   el.value = '';
   if (!file) return;
   const text = decodeBuffer(await readFile(file));
+  if (parseStatistic(text).rows.length) return importStatistic(text);
+  if (parseLegacy(text).days.length) return importLegacy(text);
+  toast('Не узнала формат файла. Подходят выгрузка Литнета (Statistic.csv) и таблица dohody.csv (дата, доход, события, заметка).');
+};
+async function importStatistic(text) {
   const r = parseStatistic(text);
-  if (!r.rows.length) { toast('В файле не нашлось строк продаж. Это точно Statistic.csv из кабинета Литнета?'); return; }
   const c = app().ctx();
   const d = diffSales(c.sales, r.rows, true);
   const fm = /(\d[\d  ]*[.,]\d{2})[  ]*RUB/i.exec(text);
@@ -86,11 +89,8 @@ changes['imp.stat'] = async (v, el) => {
 };
 
 // ---------- старый трекер ----------
-changes['imp.legacy'] = async (v, el) => {
-  const file = el.files[0];
-  el.value = '';
-  if (!file) return;
-  const r = parseLegacy(decodeBuffer(await readFile(file)));
+async function importLegacy(text) {
+  const r = parseLegacy(text);
   if (!r.days.length) { toast('Не нашла строк с датами. Первая колонка должна быть датой ДД.ММ.ГГГГ.'); return; }
   const sum = r.days.reduce((a, d) => a + (d.income || 0), 0);
   openSheet('Импорт из старого трекера', `<p>Дней: <b>${r.days.length}</b> (${fmtDate(r.days[0].date)} … ${fmtDate(r.days[r.days.length - 1].date)}), сумма дохода ${rub(sum)}, событий: ${r.days.reduce((a, d) => a + d.events.length, 0)}.</p><p class="small muted">Доход из старого трекера используется только за даты до начала выгрузки Литнета. События и заметки добавятся к существующим.</p>`, async () => {
@@ -188,4 +188,30 @@ acts['report.copy'] = async () => {
   const md = toMarkdown(reportModel());
   try { await navigator.clipboard.writeText(md); toast('Текст скопирован — вставьте его в чат с нейросетью'); }
   catch { toast('Не получилось скопировать — скачайте файл кнопкой «Скачать отчёт»'); }
+};
+
+// ---------- продажи вручную (например, с другой площадки) ----------
+const PLATFORMS = ['Литнет', 'Литмаркет', 'Литгород'];
+acts['sale.manual'] = () => {
+  const c = app().ctx();
+  openSheet('Добавить продажи вручную', `
+    <div class="f2"><div><label for="md">Дата</label><input id="md" type="date" name="date" value="${c.today}" required></div>
+    <div><label for="mp">Площадка</label><input id="mp" name="platform" list="mpl" value="Литнет" required><datalist id="mpl">${PLATFORMS.map((p) => `<option value="${p}">`).join('')}</datalist></div></div>
+    <label for="mb">Книга</label><select id="mb" name="bookId">${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}<option value="">другая — впишу название</option></select>
+    <input name="bookTitle" placeholder="название, если книги нет в списке" style="margin-top:6px" aria-label="Название книги">
+    <div class="f2"><div><label for="mk">Тип</label><select id="mk" name="kind">${opt('sale', 'продажи')}${opt('sub', 'подписки')}</select></div>
+    <div><label for="mq">Количество, шт.</label><input id="mq" name="qty" inputmode="numeric" required></div></div>
+    <div class="f2"><div><label for="mr">Мне начислено, ₽</label><input id="mr" name="royalty" inputmode="decimal" required></div>
+    <div><label for="mg">Заплатили читатели, ₽</label><input id="mg" name="gross" inputmode="decimal" placeholder="для налога"></div></div>
+    <div class="hint">«Заплатили читатели» — полная цена, с неё считается налог. Если пусто — посчитаю как «начислено ÷ 70 %». Ручные продажи Литнета заменятся точными при загрузке выгрузки; продажи с других площадок сохраняются.</div>`, async (fd) => {
+    const b = c.booksById[fd.get('bookId')];
+    const title = b ? b.title : String(fd.get('bookTitle') || '').trim();
+    const qty = N(fd.get('qty')), royalty = N(fd.get('royalty')), gross = N(fd.get('gross'));
+    if (!title) { toast('Выберите книгу или впишите название'); return false; }
+    if ([qty, royalty].some((x) => x == null || Number.isNaN(x)) || (gross != null && Number.isNaN(gross))) { toast('Количество и суммы — числами'); return false; }
+    const row = manualSaleRow({ date: fd.get('date'), book: title, bookId: b?.id, kind: fd.get('kind'), qty, royalty, gross, platform: fd.get('platform') });
+    if (!b) await app().store.put('books', { id: row.bookId, title, status: 'progress', startDate: '', lastChapterDate: '', priceHistory: [] });
+    await app().store.put('sales', row);
+    toast('Продажи добавлены');
+  }, { submitText: 'Добавить' });
 };

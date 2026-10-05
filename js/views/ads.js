@@ -2,7 +2,7 @@ import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth } from '../format.js';
 import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, bookIdFor, monthsBetween } from '../calc.js';
 import { rocketCard } from './money.js';
-import { targetAlert } from '../calc.js';
+import { targetAlert, campaignProgress } from '../calc.js';
 import { buildTargetPrompt } from '../report.js';
 import { resizeImage } from '../img.js';
 import { parseTargetReport, reportId } from '../parse.js';
@@ -16,31 +16,42 @@ export function metricsFor(c, k) {
   return campaignMetrics(k, { sales: c.sales, legacyDays: c.legacyDays, reports: c.data.reports, campaigns: c.campaigns, dataEnd: c.dataEnd, baseDays: c.settings.baseDays, today: c.today });
 }
 
-function litnetCard(c) {
-  const s = c.settings, mk = monthKey(c.today);
-  const spendNow = c.spend[mk]?.litnet || 0;
-  const pace = litnetPace(spendNow, c.today, { threshold: s.litnetThreshold }, c.forecast?.month === mk ? c.forecast.litnet : null);
-  const hasAny = Object.values(c.spend).some((x) => x.litnet > 0);
-  let msg = '';
-  if (pace.reached) msg = `<div class="alert ok">✔︎ Порог ${rub(s.litnetThreshold, 0)} за ${fmtMonth(mk)} достигнут — скидка будет начислена.</div>`;
-  else if (hasAny && !pace.onTrack) msg = `<div class="alert bad">⚠︎ Расход в ${fmtMonth(mk)} идёт ниже порога: сейчас ${rub(spendNow)}, при таком темпе к концу месяца выйдет ≈ ${rub(pace.projected, 0)} из ${rub(s.litnetThreshold, 0)}. Чтобы получить скидку, нужно ещё ${rub(pace.remaining, 0)}${pace.daysLeft > 0 ? ` (≈ ${rub(pace.perDayNeeded, 0)} в день, осталось ${pace.daysLeft} дн.)` : ''}. Без достижения порога скидка за месяц не начисляется.</div>`;
-  else if (hasAny) msg = `<div class="alert ok">Темп расхода достаточный: к концу месяца ≈ ${rub(pace.projected, 0)}.</div>`;
-  else msg = '<p class="muted">Пока нет расхода по «Литнет платит». Добавьте кампанию с этим каналом и недельные отчёты таргетологов.</p>';
-  const months = Object.keys(c.spend).filter((k) => c.spend[k].litnet > 0).sort().reverse().slice(0, 8);
-  return `<div class="card"><h2>Скидка «Литнет платит»</h2>
-    <div class="row between small"><span>${fmtMonth(mk)}: расход ${rub(spendNow)}</span><span class="muted">порог ${rub(s.litnetThreshold, 0)}</span></div>
-    <div class="progress"><i style="width:${Math.min(100, (spendNow / s.litnetThreshold) * 100).toFixed(1)}%"></i></div>${msg}
-    ${months.length ? `<div class="scroll"><table><tr><th>Месяц</th><th>Расход</th><th>Скидка</th><th>После скидки</th><th></th></tr>${months.map((k) => { const d = c.discounts[k]; const st = d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : d.status === 'expected' ? '<span class="badge">ожидается</span>' : ''; return `<tr><td>${fmtMonth(k)}${k === mk && c.forecast?.litnet ? `<div class="small muted">прогноз на месяц: ${rub(c.forecast.litnet, 0)}</div>` : ''}</td><td>${rub(d.spend)}</td><td>${d.qualified || d.status === 'confirmed' ? `<span class="${d.status === 'confirmed' ? '' : 'muted'}">${rub(d.discount)}</span><br>${st}` : '<span class="muted" title="расход ниже порога">нет</span>'}</td><td>${rub(d.effective)}</td><td>${d.qualified || d.status === 'confirmed' ? `<button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>` : ''}<button class="link" data-act="month.edit" data-m="${k}">расход</button></td></tr>`; }).join('')}</table></div>
-    <div class="hint">Скидка = (расход за месяц − скидка за прошлый месяц) × ${s.litnetPct}%, если расход за календарный месяц ≥ ${rub(s.litnetThreshold, 0)}. Расход месяца — только прошедшие дни: фактический из отчётов таргетологов, иначе бюджет ÷ дни кампании. Скидка «ожидается», пока вы её не подтвердите, — в чистый доход идёт только подтверждённая. Точную сумму расхода за месяц можно вписать вручную — «расход».</div>` : ''}
-  </div>`;
+// Сводка «как идёт таргет»: по каждой идущей кампании — окупаемость, бюджет, сколько реклама вернула, сигналы
+function targetCard(c, alerts) {
+  const live = c.campaigns.filter((k) => k.start && k.start <= c.today && (!k.end || k.end >= c.today)).sort((a, b) => a.start.localeCompare(b.start));
+  const soon = c.campaigns.filter((k) => k.start && k.start > c.today);
+  const cards = live.map((k) => {
+    const m = metricsFor(c, k), p = campaignProgress(k, m, c.today);
+    const al = alerts.find((x) => x.campaignId === k.id && !x.snoozed);
+    const pay = m.payback == null ? '<span class="muted">нет базы</span>' : `<span class="${m.payback >= 0 ? 'up' : 'down'}">${m.payback >= 0 ? '▲ +' : '▼ '}${rub(m.payback, 0)}</span>`;
+    const ret = p.returnShare == null ? null : Math.max(0, p.returnShare);
+    return `<div class="card target">
+      <div class="row between"><h2 style="margin:0">${esc(k.name)}</h2>${p.total ? `<span class="badge">день ${p.day} из ${p.total}</span>` : ''}</div>
+      <div class="small muted">${esc(k.bookId ? c.titleOf(k.bookId, '') : 'все книги')} · ${esc(CHANNELS[k.channel] || '')}${k.end ? ` · до ${fmtDate(k.end)}, осталось ${p.daysLeft} дн.` : ''}</div>
+      <div class="tiles">
+        <div><div class="k">Окупаемость в день</div><div class="v">${pay}</div><div class="s">${m.baseline == null ? 'задайте базу в кампании' : `доход ${rub(m.avgDuring, 0)} при пороге ${rub(m.threshold, 0)}`}</div></div>
+        <div><div class="k">Продажа обходится в</div><div class="v">${m.costPerSale == null ? '—' : rub(m.costPerSale, 0)}</div><div class="s">${m.qtyDuring} шт. за кампанию</div></div>
+      </div>
+      ${p.budget ? `<div class="bar-row"><div class="row between small"><span>Бюджет потрачен <span class="muted">(по сегодня)</span></span><span><b>${rub(p.spentToDate, 0)}</b> из ${rub(p.budget, 0)}</span></div><div class="progress"><i style="width:${Math.min(100, (p.spentShare || 0) * 100).toFixed(1)}%"></i></div></div>` : ''}
+      ${ret != null ? `<div class="bar-row"><div class="row between small"><span>Реклама вернула доходом <span class="muted">(по ${fmtShort(m.to)})</span></span><span><b>${rub(Math.max(0, p.returned), 0)}</b> из ${rub(m.spendTotal, 0)} · ${pct(ret, 0)}</span></div><div class="progress ${ret >= 1 ? 'ok' : ''}"><i style="width:${Math.min(100, ret * 100).toFixed(1)}%"></i></div>${ret >= 1 ? '<div class="small up">✔︎ уже окупилась</div>' : ''}</div>` : ''}
+      ${m.overlaps?.length ? `<div class="small warnc">⚠︎ пересекается: ${m.overlaps.map((o) => `${esc(o.name)} (${fmtShort(o.from)}–${fmtShort(o.to)})`).join(', ')}</div>` : ''}
+      ${al ? `<div class="alert" style="margin-top:10px">⚠︎ ${esc(alertText(al))}. Запросите отчёт у таргетологов.</div>` : ''}
+      <div class="row" style="margin-top:10px"><a href="#" class="btn" data-act="go" data-to="/ad/${k.id}">Подробнее</a><button data-act="note.new" data-id="${k.id}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${k.id}">Запрос для нейросети</button></div>
+    </div>`;
+  }).join('');
+  const dm = Object.keys(c.discounts).filter((k) => c.discounts[k].spend > 0).sort().reverse().slice(0, 6);
+  const disc = dm.length ? `<div class="card"><h2>Скидка «Литнет платит»</h2>
+    <div class="scroll"><table><tr><th>Месяц</th><th>Оплачено</th><th>Скидка</th><th></th></tr>${dm.map((k) => { const d = c.discounts[k]; return `<tr><td>${fmtMonth(k)}</td><td>${rub(d.spend, 0)}</td><td>${d.qualified || d.status === 'confirmed' ? `${rub(d.discount, 0)}<br>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'}` : '<span class="muted">нет</span>'}</td><td>${d.qualified || d.status === 'confirmed' ? `<button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>` : ''}</td></tr>`; }).join('')}</table></div>
+    <div class="hint">Скидка = (оплата таргетологам за месяц − скидка прошлого месяца) × ${c.settings.litnetPct} %. В чистый доход идёт после того, как вы её подтвердите.</div></div>` : '';
+  const head = live.length ? '' : `<div class="card"><h2>Таргет</h2><p class="muted">Сейчас реклама не идёт.${soon.length ? ` Скоро: ${soon.map((k) => `«${esc(k.name)}» с ${fmtDate(k.start)}`).join(', ')}.` : ''}</p></div>`;
+  return head + cards + disc;
 }
 
 export function ads(a) {
   const c = a.ctx();
   const list = [...c.campaigns].sort((x, y) => (y.start || '').localeCompare(x.start || ''));
   const alerts = c.campaigns.map((k) => targetAlert(k, actx(c), c.data.adnotes || [])).filter(Boolean);
-  const html = `${alertsBlock(c, alerts)}
-  ${litnetCard(c)}
+  const html = `${targetCard(c, alerts)}
   ${c.hasData ? rocketCard(c, monthsBetween(monthKey(c.firstDate), monthKey(c.today)).reverse()) : ''}
   <div class="row between" style="margin:14px 0 10px"><h2 style="margin:0">Кампании</h2><button class="primary" data-act="ad.new">+ Кампания</button></div>
   <p class="small"><a href="#" data-act="go" data-to="/data">Скачать отчёт для нейросети →</a></p>
@@ -92,10 +103,11 @@ export function adPage(a, id) {
   <div class="card"><h2>Настройки кампании</h2>
   <form data-form="ad.save" data-id="${k.id}">
     <label style="margin-top:0">Название</label><input name="name" value="${esc(k.name)}" required>
-    <div class="f2"><div><label>Книга</label><select name="bookId"><option value="">Все книги</option>${c.books.map((b) => opt(b.id, b.title, k.bookId)).join('')}</select></div>
+    <div class="f2"><div><label>Книга</label><select name="bookId"><option value="">Все книги</option>${c.books.filter((b) => b.status !== 'removed' || b.id === k.bookId).map((b) => opt(b.id, b.title, k.bookId)).join('')}</select></div>
     <div><label>Канал</label><select name="channel">${Object.entries(CHANNELS).map(([v, t]) => opt(v, t, k.channel)).join('')}</select></div></div>
     <div class="f2"><div><label>Начало</label><input type="date" name="start" value="${k.start || ''}" required></div><div><label>Конец</label><input type="date" name="end" value="${k.end || ''}"></div></div>
-    <div class="f2"><div><label>Бюджет, ₽</label><input name="budget" inputmode="decimal" value="${k.budget ?? ''}"></div>
+    <div class="f2"><div><label>Бюджет (оплата), ₽</label><input name="budget" inputmode="decimal" value="${k.budget ?? ''}"></div><div><label>Дата оплаты</label><input type="date" name="paidAt" value="${k.paidAt || ''}"></div></div>
+    <div class="f2">
     <div><label>Сравнивать доход</label><select name="scope">${opt('book', 'только этой книги', k.scope || 'book')}${opt('all', 'всех книг', k.scope)}</select></div></div>
     <label>База для сравнения</label><select name="baseMode">${opt('auto', `${c.settings.baseDays} дней до старта (по умолчанию)`, bm)}${opt('range', 'свой период', bm)}${opt('value', 'вручную: ₽ в день', bm)}</select>
     <div class="f2"><div><label>Дней до старта (если авто)</label><input name="baseDays" inputmode="numeric" value="${k.baseDays ?? ''}" placeholder="${c.settings.baseDays}"></div><div><label>База вручную, ₽/день</label><input name="baseValue" inputmode="decimal" value="${k.baseValue ?? ''}"></div></div>
@@ -123,18 +135,19 @@ export function adPage(a, id) {
 acts['ad.new'] = () => {
   const c = app().ctx();
   openSheet('Новая кампания', `<label>Название</label><input name="name" required>
-    <div class="f2"><div><label>Книга</label><select name="bookId"><option value="">Все книги</option>${c.books.map((b) => opt(b.id, b.title)).join('')}</select></div><div><label>Канал</label><select name="channel">${Object.entries(CHANNELS).map(([v, t]) => opt(v, t)).join('')}</select></div></div>
+    <div class="f2"><div><label>Книга</label><select name="bookId"><option value="">Все книги</option>${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}</select></div><div><label>Канал</label><select name="channel">${Object.entries(CHANNELS).map(([v, t]) => opt(v, t)).join('')}</select></div></div>
     <div class="f2"><div><label>Начало</label><input type="date" name="start" value="${c.today}" required></div><div><label>Конец</label><input type="date" name="end"></div></div>
-    <label>Бюджет, ₽ (на весь период)</label><input name="budget" inputmode="decimal">`, async (fd) => {
+    <div class="f2"><div><label>Бюджет (оплата таргетологам), ₽</label><input name="budget" inputmode="decimal"></div><div><label>Дата оплаты</label><input type="date" name="paidAt"></div></div>
+    <div class="hint">Дата оплаты — для скидки «Литнет платит». Пусто — считается датой старта.</div>`, async (fd) => {
     const id = 'k' + uid();
-    await app().store.put('campaigns', { id, name: fd.get('name').trim(), bookId: fd.get('bookId') || '', scope: fd.get('bookId') ? 'book' : 'all', channel: fd.get('channel'), start: fd.get('start'), end: fd.get('end') || '', budget: N(fd.get('budget')), baseMode: 'auto' });
+    await app().store.put('campaigns', { id, name: fd.get('name').trim(), bookId: fd.get('bookId') || '', scope: fd.get('bookId') ? 'book' : 'all', channel: fd.get('channel'), start: fd.get('start'), end: fd.get('end') || '', budget: N(fd.get('budget')), paidAt: fd.get('paidAt') || '', baseMode: 'auto' });
     app().go('/ad/' + id);
   });
 };
 forms['ad.save'] = async (fd, f) => {
   const k = app().ctx().campaigns.find((x) => x.id === f.dataset.id);
   const bookId = fd.get('bookId') || '';
-  await app().store.put('campaigns', { ...k, name: fd.get('name').trim(), bookId, channel: fd.get('channel'), start: fd.get('start'), end: fd.get('end') || '', budget: N(fd.get('budget')), scope: bookId ? fd.get('scope') : 'all', baseMode: fd.get('baseMode'), baseDays: N(fd.get('baseDays')), baseValue: N(fd.get('baseValue')), baseFrom: fd.get('baseFrom') || '', baseTo: fd.get('baseTo') || '' });
+  await app().store.put('campaigns', { ...k, name: fd.get('name').trim(), bookId, channel: fd.get('channel'), start: fd.get('start'), end: fd.get('end') || '', budget: N(fd.get('budget')), paidAt: fd.get('paidAt') || '', scope: bookId ? fd.get('scope') : 'all', baseMode: fd.get('baseMode'), baseDays: N(fd.get('baseDays')), baseValue: N(fd.get('baseValue')), baseFrom: fd.get('baseFrom') || '', baseTo: fd.get('baseTo') || '' });
   toast('Сохранено');
 };
 acts['ad.del'] = async (d) => {

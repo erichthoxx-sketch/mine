@@ -34,7 +34,7 @@ export function money(a) {
       <tr><td>− Налог <span class="muted small">${s.taxRate}% от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены книг'} (${rub(f.taxBase)})</span></td><td>${rub(f.tax)}</td></tr>
       <tr class="total"><td>Чистый доход</td><td class="${f.net >= 0 ? 'up' : 'down'}">${rub(f.net)}</td></tr>
     </table>
-    <div class="row" style="margin-top:10px"><button class="primary" data-act="month.edit" data-m="${sel}">Расходы на рекламу за ${fmtMonth(sel)}</button></div>
+    <div class="row" style="margin-top:10px"><button class="primary" data-act="month.edit" data-m="${sel}">Другие расходы на рекламу</button></div>
     ${f.rocketFee ? '' : '<div class="hint">Цифры Rocket за прошедший месяц записываются на вкладке «Реклама». Пока их нет, чистый доход немного завышен.</div>'}
   </div>
   <div class="card"><h2>По месяцам</h2><div class="scroll"><table><tr><th>Месяц</th><th>Роялти</th><th>Rocket</th><th>Реклама</th><th>Налог</th><th>Чистый</th></tr>
@@ -54,20 +54,10 @@ changes['money.month'] = (v) => { app().ui.month = v; app().rerender(); };
 
 acts['month.edit'] = (d) => {
   const c = app().ctx(), m = c.monthsMap[d.m] || {};
-  const auto = c.spend[d.m]?.litnet || 0;
-  openSheet(`Месяц: ${fmtMonth(d.m)}`, `
-    <h3>Rocket</h3>
-    <div class="f2"><div><label>Индекс Rocket</label><input name="rocketIndex" inputmode="decimal" value="${m.rocketIndex ?? ''}"></div><div><label>Комиссия за месяц, ₽</label><input name="rocketFee" inputmode="decimal" value="${m.rocketFee ?? ''}"></div></div>
-    <div class="hint">Индекс — не выше ${c.settings.rocketCap} ₽ за продажу. Комиссия — итог из кабинета («Комиссия Rocket»), она списывается из роялти.</div>
-    <h3>Расходы на рекламу</h3>
-    <label>«Литнет платит»: фактический расход за месяц, ₽</label><input name="litnetSpend" inputmode="decimal" value="${m.litnetSpend ?? ''}" placeholder="по отчётам: ${num(auto, 2)}">
-    <div class="hint">Оставьте пустым — возьмётся сумма по недельным отчётам (${rub(auto)}). Впишите, если знаете точную цифру за календарный месяц.</div>
-    <label>Прочие мои расходы на рекламу, ₽</label><input name="extraAdSpend" inputmode="decimal" value="${m.extraAdSpend ?? ''}">
-    <div class="hint">То, что не внесено в кампании: например, платные баннеры.</div>`, async (fd) => {
-    const idx = N(fd.get('rocketIndex'));
-    if (idx != null && !Number.isNaN(idx) && idx > c.settings.rocketCap) toast(`Индекс ${idx} выше обычного потолка ${c.settings.rocketCap} ₽ — проверьте цифру`);
-    const val = (n) => { const v = N(fd.get(n)); return v == null || Number.isNaN(v) ? null : v; };
-    await app().store.put('months', { ...m, id: d.m, month: d.m, rocketIndex: val('rocketIndex'), rocketFee: val('rocketFee'), litnetSpend: val('litnetSpend'), extraAdSpend: val('extraAdSpend') });
+  openSheet(`Другие расходы на рекламу — ${fmtMonth(d.m)}`, `<p class="small muted">То, что не оформлено кампанией: платные баннеры, услуги и т. п. Таргет учитывается в кампаниях сам.</p>
+    <label for="ex">Сумма за месяц, ₽</label><input id="ex" name="extraAdSpend" inputmode="decimal" value="${m.extraAdSpend ?? ''}">`, async (fd) => {
+    const v = N(fd.get('extraAdSpend'));
+    await app().store.put('months', { ...m, id: d.m, month: d.m, extraAdSpend: v == null || Number.isNaN(v) ? null : v });
     toast('Сохранено');
   });
 };

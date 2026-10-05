@@ -98,7 +98,7 @@ export function buildReportModel(d, from, to) {
   const priceCh = d.books.flatMap((b) => (b.priceHistory || []).filter((x) => x.from >= from && x.from <= to).map((x) => [x.from, b.title, x.price])).sort((a, b) => a[0].localeCompare(b[0]));
   if (priceCh.length) table('Цены', ['С даты', 'Книга', 'Цена'], priceCh.map(([dt, t, pr]) => [fmtDate(dt), t, RUB2(pr)]));
 
-  const inProgress = d.books.filter((b) => b.status !== 'done');
+  const inProgress = d.books.filter((b) => b.status !== 'done' && b.status !== 'removed');
   if (inProgress.length) {
     h2('Выкладка глав и подписки');
     p('Среднее число подписок в день: в дни, когда я выкладывала главу этой книги, и в остальные дни (по книгам в процессе).');
@@ -135,7 +135,7 @@ export function buildReportModel(d, from, to) {
   const lmonths = months.filter((k) => d.discounts[k]);
   if (lmonths.length) {
     h2('«Литнет платит»: расход и скидка');
-    table('Литнет платит', ['Месяц', 'Расход (по сегодня)', 'Порог достигнут', 'Скидка', 'Статус скидки', 'Расход после скидки'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k), RUB(x.spend), x.qualified ? 'да' : 'нет', RUB(x.discount), x.status === 'confirmed' ? 'подтверждена' : x.status === 'expected' ? 'ожидается' : '—', RUB(x.effective)]; }));
+    table('Литнет платит', ['Месяц', 'Оплачено таргетологам', 'Порог достигнут', 'Скидка', 'Статус скидки', 'Оплата после скидки'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k), RUB(x.spend), x.qualified ? 'да' : 'нет', RUB(x.discount), x.status === 'confirmed' ? 'подтверждена' : x.status === 'expected' ? 'ожидается' : '—', RUB(x.effective)]; }));
     if (d.forecast && d.forecast.litnet) p(`Прогноз расхода «Литнет платит» за ${fmtMonth(d.forecast.month)} по плану кампаний: ${cellText(RUB(d.forecast.litnet))}.`);
   }
 

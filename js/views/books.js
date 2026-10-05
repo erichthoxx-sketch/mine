@@ -3,15 +3,16 @@ import { rub, fmtDate } from '../format.js';
 import { priceAt, bookIdFor, inferPriceChanges, addDays, incomeSeries, sumSeries } from '../calc.js';
 
 const app = () => window.__app;
-const STATUS = { progress: 'В процессе', done: 'Завершена' };
+const STATUS = { progress: 'В процессе', done: 'Завершена', removed: 'Снята с продажи' };
 
 export function books(a) {
   const c = a.ctx();
-  const list = [...c.books].sort((x, y) => (x.status === 'done') - (y.status === 'done') || x.title.localeCompare(y.title));
+  const rank = (b) => (b.status === 'removed' ? 2 : b.status === 'done' ? 1 : 0);
+  const list = [...c.books].sort((x, y) => rank(x) - rank(y) || x.title.localeCompare(y.title));
   const html = `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Книги</h2><button class="primary" data-act="book.new">+ Книга</button></div>
   <div class="card list">${list.length ? list.map((b) => {
     const m30 = sumSeries(incomeSeries(c.sales, [], addDays(c.dataEnd, -29), c.dataEnd, b.id));
-    return `<a class="item" href="#" data-act="go" data-to="/book/${b.id}"><div class="row between"><b>${esc(b.title)}</b><span class="badge ${b.status === 'done' ? '' : 'good'}">${STATUS[b.status] || STATUS.progress}</span></div>
+    return `<a class="item" href="#" data-act="go" data-to="/book/${b.id}"><div class="row between"><b>${esc(b.title)}</b><span class="badge ${b.status === 'progress' || !b.status ? 'good' : ''}">${STATUS[b.status] || STATUS.progress}</span></div>
       <div class="small muted">цена сейчас: ${priceAt(b, c.today) != null ? rub(priceAt(b, c.today)) : 'не задана'} · за 30 дней: ${rub(m30)}</div>
       <div class="small muted">старт: ${fmtDate(b.startDate) || '—'} · последняя глава: ${fmtDate(b.lastChapterDate) || '—'}</div></a>`;
   }).join('') : '<p class="muted">Книги появятся сами после импорта выгрузки. Можно добавить и вручную.</p>'}</div>`;
@@ -26,7 +27,7 @@ export function bookPage(a, id) {
   const html = `<p><a href="#" data-act="go" data-to="/books">← Все книги</a></p>
   <div class="card"><form data-form="book.save" data-id="${b.id}">
     <label style="margin-top:0">Название</label><input name="title" value="${esc(b.title)}" required>
-    <div class="f2"><div><label>Статус</label><select name="status">${opt('progress', STATUS.progress, b.status || 'progress')}${opt('done', STATUS.done, b.status)}</select></div>
+    <div class="f2"><div><label>Статус</label><select name="status">${Object.entries(STATUS).map(([k, v]) => opt(k, v, b.status || 'progress')).join('')}</select></div>
     <div><label>Дата старта</label><input type="date" name="startDate" value="${b.startDate || ''}"></div></div>
     <label>Дата последней главы</label><input type="date" name="lastChapterDate" value="${b.lastChapterDate || ''}">
     <div class="row between" style="margin-top:14px"><button class="primary" type="submit">Сохранить</button><button type="button" class="danger" data-act="book.del" data-id="${b.id}">Удалить книгу</button></div>
@@ -43,7 +44,7 @@ export function bookPage(a, id) {
 const upd = (b, patch) => app().store.put('books', { ...b, ...patch });
 
 acts['book.new'] = () => {
-  openSheet('Новая книга', `<label>Название</label><input name="title" required><label>Статус</label><select name="status">${opt('progress', STATUS.progress)}${opt('done', STATUS.done)}</select><div class="f2"><div><label>Дата старта</label><input type="date" name="startDate"></div><div><label>Цена, ₽</label><input name="price" inputmode="decimal"></div></div>`, async (fd) => {
+  openSheet('Новая книга', `<label>Название</label><input name="title" required><label>Статус</label><select name="status">${Object.entries(STATUS).map(([k, v]) => opt(k, v)).join('')}</select><div class="f2"><div><label>Дата старта</label><input type="date" name="startDate"></div><div><label>Цена, ₽</label><input name="price" inputmode="decimal"></div></div>`, async (fd) => {
     const title = (fd.get('title') || '').trim();
     if (!title) return false;
     const id = bookIdFor(title);

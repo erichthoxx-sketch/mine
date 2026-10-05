@@ -16,6 +16,7 @@ export function day(a) {
   const manual = c.sales.filter((s) => s.date === date && s.manual);
   const recent = c.data.days.filter((d) => (d.events?.length || d.note)).sort((x, y) => y.date.localeCompare(x.date)).slice(0, 30);
   const html = `
+  <div class="row" style="margin-bottom:12px"><button class="primary" data-act="chapter.quick">＋ Выкладка главы</button></div>
   <div class="card">
     <label for="dd" style="margin-top:0">Дата</label>
     <div class="row"><input id="dd" type="date" value="${date}" data-chg="day.date" style="flex:1"><button data-act="day.today">Сегодня</button></div>
@@ -26,7 +27,7 @@ export function day(a) {
   <div class="card"><h2>Результат дня вручную</h2>
     <p class="small muted">Если выгрузки Литнета за этот день ещё нет. Когда загрузите выгрузку, ручные цифры заменятся точными.</p>
     ${manual.length ? manual.map((s) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(c.titleOf(s.bookId, s.book))} · ${s.kind === 'sub' ? 'подписки' : 'продажи'} ${s.qty} шт. · ${rub(s.royalty)}</span><button class="link danger" data-act="day.delManual" data-id="${esc(s.id)}">убрать</button></div>`).join('') : ''}
-    <form data-form="day.manual"><div class="f2"><div><label>Книга</label><select name="bookId" required>${c.books.map((b) => opt(b.id, b.title)).join('')}</select></div>
+    <form data-form="day.manual"><div class="f2"><div><label>Книга</label><select name="bookId" required>${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}</select></div>
       <div><label>Тип</label><select name="kind">${opt('sale', 'продажи')}${opt('sub', 'подписки')}</select></div></div>
       <div class="f2"><div><label>Количество, шт.</label><input name="qty" inputmode="numeric" required></div><div><label>Гонорар, ₽</label><input name="royalty" inputmode="decimal" required></div></div>
       <div style="margin-top:12px"><button class="primary" type="submit">Сохранить результат</button></div></form>
@@ -34,7 +35,7 @@ export function day(a) {
   <div class="card"><h2>События дня</h2>
     ${(doc.events || []).length ? (doc.events).map((e, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="pill-ev"><i style="background:${(EVENT_TYPES[e.type] || EVENT_TYPES.note).color}"></i><span>${esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)}${e.bookId ? ' · ' + esc(c.titleOf(e.bookId, '')) : ''}${e.text ? ': ' + esc(e.text) : ''}</span></span><button class="link danger" data-act="day.delEv" data-i="${i}">убрать</button></div>`).join('') : '<p class="muted">Событий нет.</p>'}
     <form data-form="day.addEv"><div class="f2"><div><label>Что произошло</label><select name="type">${Object.entries(EVENT_TYPES).map(([k, v]) => opt(k, v.label)).join('')}</select></div>
-      <div><label>Книга (необязательно)</label><select name="bookId"><option value="">—</option>${c.books.map((b) => opt(b.id, b.title)).join('')}</select></div></div>
+      <div><label>Книга (необязательно)</label><select name="bookId"><option value="">—</option>${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}</select></div></div>
       <label>Пояснение (необязательно)</label><input name="text" placeholder="например, глава 25 или скидка 30%">
       <div style="margin-top:12px"><button class="primary" type="submit">Добавить событие</button></div></form>
   </div>

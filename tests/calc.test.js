@@ -379,3 +379,15 @@ test('сводка кампании: бюджет израсходован и с
   assert.equal(p.returned, 800);
   assert.equal(Math.round(p.returnShare * 100), 68);
 });
+
+test('ручные продажи с других площадок не стираются выгрузкой Литнета', async () => {
+  const { manualSaleRow, diffSales } = await import('../js/calc.js');
+  const lm = manualSaleRow({ date: '2026-10-02', book: 'А', kind: 'sale', qty: 2, royalty: 150, gross: 300, platform: 'Литмаркет' });
+  assert.equal(lm.price, 150); // 300 ÷ 2
+  assert.equal(lm.platform, 'Литмаркет');
+  const lnManual = manualSaleRow({ date: '2026-10-02', book: 'А', kind: 'sale', qty: 1, royalty: 70 });
+  assert.notEqual(lm.id, lnManual.id);
+  const fromFile = [{ id: 'x', date: '2026-10-02', qty: 1, royalty: 70 }];
+  const d = diffSales([lm, lnManual], fromFile, true);
+  assert.deepEqual(d.removeIds, [lnManual.id]); // ручная строка Литнета заменяется точной, Литмаркет остаётся
+});

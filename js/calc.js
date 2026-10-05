@@ -469,19 +469,23 @@ export function diffSales(existing, incoming, replacePeriod = true) {
   if (replacePeriod && incoming.length) {
     const from = incoming.reduce((a, s) => (s.date < a ? s.date : a), incoming[0].date);
     const to = incoming.reduce((a, s) => (s.date > a ? s.date : a), incoming[0].date);
-    removeIds = existing.filter((s) => s.date >= from && s.date <= to && !inIds.has(s.id)).map((s) => s.id);
+    // выгрузка Литнета заменяет только строки Литнета; продажи с других площадок не трогаем
+    removeIds = existing.filter((s) => s.date >= from && s.date <= to && !inIds.has(s.id) && (!s.platform || s.platform.toLowerCase() === 'литнет')).map((s) => s.id);
   }
   return { added, changed, same, removeIds };
 }
 
 // Ручной результат дня (пока нет выгрузки Литнета). Полная цена восстанавливается из роялти 70 %.
 // Когда загрузите выгрузку за этот период, ручные строки заменятся точными (галочка «убрать старые строки»).
-export function manualSaleRow({ date, book, bookId, kind, qty, royalty }) {
+// platform — площадка (Литнет, Литмаркет…); gross — сколько заплатили читатели (если не указано — роялти ÷ 70 %)
+export function manualSaleRow({ date, book, bookId, kind, qty, royalty, gross = null, platform = 'Литнет' }) {
   const q = Math.max(1, Number(qty) || 1);
+  const pl = (platform || 'Литнет').trim();
+  const other = pl.toLowerCase() !== 'литнет';
   return {
-    id: `${date}_${hashStr(book.trim().toLowerCase())}_m${kind === 'sub' ? 'p' : 's'}`,
+    id: `${date}_${hashStr(book.trim().toLowerCase())}_m${kind === 'sub' ? 'p' : 's'}${other ? '_' + hashStr(pl.toLowerCase()) : ''}`,
     date, book, bookId: bookId || bookIdFor(book), kind: kind === 'sub' ? 'sub' : 'sale',
-    price: r2(royalty / 0.7 / q), qty: Number(qty) || 0, royalty: r2(royalty), manual: true,
+    price: r2((gross != null && gross !== '' ? Number(gross) : royalty / 0.7) / q), qty: Number(qty) || 0, royalty: r2(royalty), manual: true, platform: pl,
   };
 }
 

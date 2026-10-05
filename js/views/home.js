@@ -46,7 +46,6 @@ export function home(app) {
     <div class="stat"><div class="k">Этот месяц</div><div class="v">${rub(st.mtd)}</div><div class="s ${vs == null ? '' : vs >= 0 ? 'up' : 'down'}">${vs == null ? 'нет прошлого месяца' : (vs >= 0 ? '▲ ' : '▼ ') + pct(Math.abs(vs)) + ' к тому же сроку прошлого'}</div></div>
     <div class="stat"><div class="k">Прошлый месяц</div><div class="v">${rub(st.prevTotal)}</div><div class="s">за тот же срок: ${rub(st.prevSame)}</div></div>
   </div>
-  <div class="row" style="margin-bottom:12px"><button class="primary" data-act="chapter.quick">＋ Выкладка главы</button></div>
   ${activeAlerts(c).map((a) => `<div class="card row between"><span>⚠︎ Таргет «${esc(a.name)}» просел — запросите отчёт у таргетологов</span><button class="link" data-act="go" data-to="/ads">открыть</button></div>`).join('')}
   ${taxReminder(c)}
   ${goalCard(c, st)}
@@ -90,11 +89,11 @@ function taxReminder(c) {
 // Быстрая отметка: «сегодня выложила главу» — событие на сегодня, книга по умолчанию — в процессе
 acts['chapter.quick'] = () => {
   const c = window.__app.ctx();
-  const books = [...c.books].sort((a, b) => (a.status === 'done') - (b.status === 'done'));
+  const books = c.activeBooks;
   const def = books.find((b) => b.status !== 'done') || books[0];
   openSheet('Выкладка главы', `<label for="cb">Книга</label><select id="cb" name="bookId">${books.map((b) => `<option value="${esc(b.id)}"${b.id === def?.id ? ' selected' : ''}>${esc(b.title)}${b.status === 'done' ? ' (завершена)' : ''}</option>`).join('')}</select>
     <label for="ct">Какая глава (необязательно)</label><input id="ct" name="text" placeholder="например, глава 25">
-    <label for="cd">Дата</label><input id="cd" type="date" name="date" value="${c.today}">`, async (fd) => {
+    <label for="cd">Дата</label><input id="cd" type="date" name="date" value="${window.__app.ui.day || c.today}">`, async (fd) => {
     const date = fd.get('date') || c.today;
     const doc = c.data.days.find((x) => x.id === date) || { id: date, date, events: [], note: '' };
     const ev = { type: 'chapter', bookId: fd.get('bookId'), text: (fd.get('text') || '').trim() };
