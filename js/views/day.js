@@ -1,46 +1,66 @@
 import { esc, acts, forms, changes, opt, toast } from '../ui.js';
-import { rub, fmtDate } from '../format.js';
-import { incomeSeries, booksBreakdown, manualSaleRow } from '../calc.js';
+import { rub, fmtDate, fmtShort, fmtMonth, pct } from '../format.js';
+import { incomeSeries, booksBreakdown, manualSaleRow, dayStats, sumSeries, buildPlan, monthKey, daysInMonth, campaignDailySpend, countDays, addDays } from '../calc.js';
 import { N } from '../ui.js';
 import { EVENT_TYPES } from '../charts.js';
 
 const app = () => window.__app;
 const dayDoc = (c, date) => c.data.days.find((d) => d.id === date) || { id: date, date, events: [], note: '' };
 
+const WD = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+const WD_ACC = ['прошлому воскресенью', 'прошлому понедельнику', 'прошлому вторнику', 'прошлой среде', 'прошлому четвергу', 'прошлой пятнице', 'прошлой субботе'];
+const chg = (v, label) => (v == null ? '' : `<span class="chip-stat ${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '▲' : '▼'} ${pct(Math.abs(v), 0)} к ${label}</span>`);
+
 export function day(a) {
   const c = a.ctx(), ui = a.ui;
-  const date = ui.day || c.today;
+  const date = ui.day || c.dataEnd || c.today; // по умолчанию — последний день с данными
   const doc = dayDoc(c, date);
-  const inc = incomeSeries(c.sales, c.legacyDays, date, date)[0];
+  const st = dayStats(c.sales, c.legacyDays, date);
   const bb = booksBreakdown(c.sales, date, date);
   const manual = c.sales.filter((s) => s.date === date && s.manual);
-  const recent = c.data.days.filter((d) => (d.events?.length || d.note)).sort((x, y) => y.date.localeCompare(x.date)).slice(0, 30);
+  const noData = date > c.dataEnd;
+  const wd = new Date(date + 'T00:00:00Z').getUTCDay();
+  // цель месяца: сколько к этому дню и вклад дня
+  const s = c.settings, mk = monthKey(date);
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} }).find((p) => p.month === mk);
+  const mtd = sumSeries(incomeSeries(c.sales, c.legacyDays, mk + '-01', date));
+  const perDayPlan = plan ? plan.plan / daysInMonth(mk) : null;
+  // реклама в этот день
+  const adsOn = c.campaigns.filter((k) => k.start && k.start <= date && (k.end || k.start) >= date);
+  const maxBook = Math.max(1, ...bb.map((b) => b.royalty));
+  const recent = c.data.days.filter((d) => (d.events?.length || d.note)).sort((x, y) => y.date.localeCompare(x.date)).slice(0, 20);
   const html = `
-  <div class="row" style="margin-bottom:12px"><button class="primary" data-act="chapter.quick">＋ Выкладка главы</button></div>
+  <div class="day-nav card">
+    <button data-act="day.shift" data-n="-1" aria-label="Предыдущий день">←</button>
+    <div class="day-title"><input id="dd" type="date" value="${date}" data-chg="day.date" aria-label="Дата"><div class="small muted">${WD[wd]}${date === c.dataEnd ? ' · последний день с данными' : ''}</div></div>
+    <button data-act="day.shift" data-n="1" aria-label="Следующий день">→</button>
+  </div>
+  <div class="row" style="margin-bottom:12px"><button class="primary" data-act="chapter.quick">＋ Выкладка главы</button><button data-act="sale.manual" data-date="${date}">Добавить продажи вручную</button>${date !== c.dataEnd ? '<button class="link" data-act="day.today">к последнему дню с данными</button>' : ''}</div>
   <div class="card">
-    <label for="dd" style="margin-top:0">Дата</label>
-    <div class="row"><input id="dd" type="date" value="${date}" data-chg="day.date" style="flex:1"><button data-act="day.today">Сегодня</button></div>
-    <h3>Доход за день</h3>
-    <div class="stat" style="border:0;padding:0"><div class="v">${rub(inc.royalty)}</div><div class="s">${inc.qty} шт.: продажи ${inc.saleQty}, подписки ${inc.subQty}${c.legacyDays.some((d) => d.date === date && d.income != null && !c.sales.some((s) => s.date === date)) ? ' · из старого трекера' : ''}</div></div>
-    ${bb.map((b) => `<div class="row between small"><span>${esc(c.titleOf(b.bookId, b.title))}</span><span>${rub(b.royalty)}</span></div>`).join('')}
+    ${noData && !st.royalty ? `<p class="muted" style="margin:0">Выгрузки Литнета за ${fmtDate(date)} ещё нет. Загрузите её на вкладке «Данные» или добавьте продажи вручную.</p>` : `
+    <div class="k small muted">Доход за день</div>
+    <div class="day-sum">${rub(st.royalty)}</div>
+    <div class="chips" style="margin:6px 0">${chg(st.vsAvg, `среднему за 7 дн. (${rub(st.avg7, 0)})`)}${chg(st.vsWeek, `${WD_ACC[wd]} (${rub(st.weekAgo, 0)})`)}</div>
+    <div class="small">${st.qty} шт.: продажи ${st.saleQty} (${rub(st.saleRoyalty, 0)}) · подписки ${st.subQty} (${rub(st.subRoyalty, 0)})</div>`}
   </div>
-  <div class="card"><h2>Результат дня вручную</h2>
-    <p class="small muted">Если выгрузки Литнета за этот день ещё нет. Когда загрузите выгрузку, ручные цифры заменятся точными.</p>
-    ${manual.length ? manual.map((s) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(c.titleOf(s.bookId, s.book))} · ${s.kind === 'sub' ? 'подписки' : 'продажи'} ${s.qty} шт. · ${rub(s.royalty)}</span><button class="link danger" data-act="day.delManual" data-id="${esc(s.id)}">убрать</button></div>`).join('') : ''}
-    <form data-form="day.manual"><div class="f2"><div><label>Книга</label><select name="bookId" required>${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}</select></div>
-      <div><label>Тип</label><select name="kind">${opt('sale', 'продажи')}${opt('sub', 'подписки')}</select></div></div>
-      <div class="f2"><div><label>Количество, шт.</label><input name="qty" inputmode="numeric" required></div><div><label>Гонорар, ₽</label><input name="royalty" inputmode="decimal" required></div></div>
-      <div style="margin-top:12px"><button class="primary" type="submit">Сохранить результат</button></div></form>
-  </div>
+  ${plan ? `<div class="card"><h2>Цель ${fmtMonth(mk)}</h2>
+    <div class="row between small"><span>К ${fmtShort(date)}: <b>${rub(mtd, 0)}</b> из ${rub(plan.plan, 0)}</span><span class="muted">${pct(mtd / plan.plan, 0)}</span></div>
+    <div class="progress"><i style="width:${Math.min(100, (mtd / plan.plan) * 100).toFixed(1)}%"></i></div>
+    <div class="small">Чтобы идти в ногу с целью, нужно ≈ ${rub(perDayPlan, 0)} в день — этот день ${st.royalty >= perDayPlan ? '<span class="up">выше нормы ✔︎</span>' : `<span class="down">ниже на ${rub(perDayPlan - st.royalty, 0)}</span>`}.</div></div>` : ''}
+  ${bb.length ? `<div class="card"><h2>По книгам</h2>${bb.map((b) => `<div class="item" style="padding:8px 0"><div class="row between"><span>${esc(c.titleOf(b.bookId, b.title))}</span><b>${rub(b.royalty)}</b></div>
+    <div class="small muted">продажи ${b.saleQty} · подписки ${b.subQty}</div><div class="bar-share"><i style="width:${((b.royalty / maxBook) * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>` : ''}
+  ${adsOn.length ? `<div class="card"><h2>Реклама в этот день</h2>${adsOn.map((k) => { const sp = campaignDailySpend(k, c.data.reports, null)[date]; const dn = k.oneOff ? null : countDays(k.start, date); return `<div class="item row between"><span><b>${esc(k.name)}</b><br><span class="small muted">${k.oneOff ? 'разовый расход' : `день ${dn}${k.end ? ' из ' + countDays(k.start, k.end) : ''}`}${k.bookId ? ' · ' + esc(c.titleOf(k.bookId, '')) : ''}</span></span><span class="small">${sp ? '≈ ' + rub(sp, 0) : ''}</span></div>`; }).join('')}</div>` : ''}
+  ${manual.length ? `<div class="card"><h2>Добавлено вручную</h2>${manual.map((x) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(c.titleOf(x.bookId, x.book))}${x.platform && x.platform !== 'Литнет' ? ' · ' + esc(x.platform) : ''} · ${x.kind === 'sub' ? 'подписки' : 'продажи'} ${x.qty} шт. · ${rub(x.royalty)}</span><button class="link danger" data-act="day.delManual" data-id="${esc(x.id)}">убрать</button></div>`).join('')}</div>` : ''}
   <div class="card"><h2>События дня</h2>
     ${(doc.events || []).length ? (doc.events).map((e, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="pill-ev"><i style="background:${(EVENT_TYPES[e.type] || EVENT_TYPES.note).color}"></i><span>${esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)}${e.bookId ? ' · ' + esc(c.titleOf(e.bookId, '')) : ''}${e.text ? ': ' + esc(e.text) : ''}</span></span><button class="link danger" data-act="day.delEv" data-i="${i}">убрать</button></div>`).join('') : '<p class="muted">Событий нет.</p>'}
+    <details style="margin-top:8px"><summary>Добавить событие</summary>
     <form data-form="day.addEv"><div class="f2"><div><label>Что произошло</label><select name="type">${Object.entries(EVENT_TYPES).map(([k, v]) => opt(k, v.label)).join('')}</select></div>
       <div><label>Книга (необязательно)</label><select name="bookId"><option value="">—</option>${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}</select></div></div>
-      <label>Пояснение (необязательно)</label><input name="text" placeholder="например, глава 25 или скидка 30%">
-      <div style="margin-top:12px"><button class="primary" type="submit">Добавить событие</button></div></form>
+      <label>Пояснение (необязательно)</label><input name="text" placeholder="например, скидка 30%">
+      <div style="margin-top:12px"><button class="primary" type="submit">Добавить событие</button></div></form></details>
   </div>
   <div class="card"><h2>Заметка</h2><form data-form="day.note"><textarea name="note" placeholder="Что важно запомнить об этом дне">${esc(doc.note || '')}</textarea><div style="margin-top:10px"><button class="primary" type="submit">Сохранить заметку</button></div></form></div>
-  ${recent.length ? `<div class="card"><h2>Последние записи</h2><div class="list">${recent.map((d) => `<a class="item" href="#" data-act="day.open" data-date="${d.date}"><b>${fmtDate(d.date)}</b> ${(d.events || []).map((e) => esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)).join(', ')} <span class="muted">${esc(d.note || '').slice(0, 80)}</span></a>`).join('')}</div></div>` : ''}`;
+  ${recent.length ? `<details class="card"><summary>Последние записи</summary><div class="list">${recent.map((d) => `<a class="item" href="#" data-act="day.open" data-date="${d.date}"><b>${fmtDate(d.date)}</b> ${(d.events || []).map((e) => esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)).join(', ')} <span class="muted">${esc(d.note || '').slice(0, 80)}</span></a>`).join('')}</div></details>` : ''}`;
   return { html };
 }
 
@@ -50,6 +70,7 @@ async function save(doc) {
 }
 changes['day.date'] = (v) => { if (v) app().ui.day = v; app().rerender(); };
 acts['day.today'] = () => { app().ui.day = null; };
+acts['day.shift'] = (d) => { const c = app().ctx(); app().ui.day = addDays(app().ui.day || c.dataEnd || c.today, Number(d.n)); };
 acts['day.open'] = (d) => { app().ui.day = d.date; window.scrollTo(0, 0); };
 acts['day.delEv'] = async (d) => {
   const c = app().ctx(), date = app().ui.day || c.today, doc = dayDoc(c, date);

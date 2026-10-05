@@ -16,7 +16,7 @@ function salesCard(c, wb) {
   const end = c.dataEnd;
   const s30 = incomeSeries(d.sales, legacy, addDays(end, -29), end, incomeId);
   const mtd = incomeSeries(d.sales, legacy, monthKey(end) + '-01', end, incomeId);
-  const camps = d.campaigns.filter((k) => (!incomeId || !k.bookId || k.bookId === incomeId) && k.start && k.start <= end && (!k.end || k.end >= addDays(end, -30)));
+  const camps = d.campaigns.filter((k) => !k.oneOff && (!incomeId || !k.bookId || k.bookId === incomeId) && k.start && k.start <= end && (!k.end || k.end >= addDays(end, -30)));
   const ctx = { sales: d.sales, legacyDays: legacy, reports: d.reports, campaigns: d.campaigns, dataEnd: end, baseDays: c.settings.baseDays, today: c.today };
   return `<div class="card"><h2>Продажи${wb ? ': ' + esc(wb.title) : ''}</h2>
     <div class="grid3"><div><div class="small muted">за 30 дней</div><div class="big">${rub(sumSeries(s30), 0)}</div></div>

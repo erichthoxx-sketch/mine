@@ -27,7 +27,7 @@ const app = {
     applyTheme(); render();
   },
   rerender: () => render(),
-  go(path) { ui.route = path; render(); window.scrollTo(0, 0); },
+  go(path) { ui.route = path; ui.baseTry = null; render(); window.scrollTo(0, 0); },
   ctx: () => getCtx(),
   fin: (m) => { const c = getCtx(); return monthFinance(m, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings }); },
 };
@@ -129,7 +129,7 @@ function safeRender() {
   render();
 }
 document.addEventListener('focusout', () => { if (pending) setTimeout(() => { if (!document.activeElement?.closest?.('main') || !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { pending = false; render(); } }, 150); });
-acts.go = (d) => { ui.route = d.to; window.scrollTo(0, 0); };
+acts.go = (d) => { ui.route = d.to; ui.baseTry = null; window.scrollTo(0, 0); }; // «примерка» базы сбрасывается при уходе
 let rt;
 window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => afterFn?.(), 150); });
 window.addEventListener('online', render); window.addEventListener('offline', render);
@@ -166,6 +166,18 @@ store.init().then(() => {
       await store.saveSettings({ campFix202610: true });
     } catch { campFixed = false; }
   };
+  // База теперь всегда автоматическая: убираем сохранённые вручную базы (разово)
+  let baseFixed = false;
+  const fixBase = async () => {
+    if (baseFixed || !store.user || !store.settingsLoaded || !store.loaded?.campaigns || !store.data.settings.campFix202610) return;
+    if (store.data.settings.baseAuto202610) { baseFixed = true; return; }
+    baseFixed = true;
+    try {
+      for (const k of store.data.campaigns) if (k.baseMode && k.baseMode !== 'auto') await store.put('campaigns', { ...k, baseMode: 'auto', baseFrom: '', baseTo: '', baseValue: null });
+      await store.saveSettings({ baseAuto202610: true });
+    } catch { baseFixed = false; }
+  };
+  setTimeout(() => { store.subscribe(fixBase); fixBase(); }, 2500);
   setTimeout(() => { store.subscribe(fixCampaigns); fixCampaigns(); }, 1500);
 }).catch((e) => {
   console.error(e);

@@ -34,7 +34,7 @@ export function money(a) {
       <tr><td>− Налог <span class="muted small">${s.taxRate}% от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены книг'} (${rub(f.taxBase)})</span></td><td>${rub(f.tax)}</td></tr>
       <tr class="total"><td>Чистый доход</td><td class="${f.net >= 0 ? 'up' : 'down'}">${rub(f.net)}</td></tr>
     </table>
-    <div class="row" style="margin-top:10px"><button class="primary" data-act="month.edit" data-m="${sel}">Другие расходы на рекламу</button></div>
+    <div class="row" style="margin-top:10px"><span class="small muted">Другие расходы на рекламу — на вкладке «Реклама».</span></div>
     ${f.rocketFee ? '' : '<div class="hint">Цифры Rocket за прошедший месяц записываются на вкладке «Реклама». Пока их нет, чистый доход немного завышен.</div>'}
   </div>
   <div class="card"><h2>По месяцам</h2><div class="scroll"><table><tr><th>Месяц</th><th>Роялти</th><th>Rocket</th><th>Реклама</th><th>Налог</th><th>Чистый</th></tr>

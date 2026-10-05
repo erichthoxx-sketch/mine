@@ -307,7 +307,7 @@ export function litnetPace(spendSoFar, today, { threshold = 10000 } = {}, foreca
 export function campaignOverlaps(c, campaigns) {
   if (!c.start) return [];
   const cEnd = c.end || '9999-12-31';
-  return campaigns.filter((o) => o.id !== c.id && o.start && o.start <= cEnd && (o.end || '9999-12-31') >= c.start)
+  return campaigns.filter((o) => o.id !== c.id && !o.oneOff && o.start && o.start <= cEnd && (o.end || '9999-12-31') >= c.start)
     .map((o) => ({ id: o.id, name: o.name, from: o.start > c.start ? o.start : c.start, to: (o.end || '9999-12-31') < cEnd ? (o.end || cEnd) : cEnd }));
 }
 
@@ -321,12 +321,12 @@ export function campaignMetrics(c, ctx) {
   const during = incomeSeries(ctx.sales, ctx.legacyDays, c.start, end, bookId);
   const avgDuring = avgSeries(during, 'royalty', false);
   const qtyDuring = during.reduce((a, x) => a + x.qty, 0);
-  const others = (ctx.campaigns || []).filter((o) => o.id !== c.id && o.start);
+  const others = (ctx.campaigns || []).filter((o) => o.id !== c.id && o.start && !o.oneOff); // разовые расходы — не кампании
   const adOn = (d) => others.some((o) => d >= o.start && d <= (o.end || '9999-12-31'));
 
   // база для сравнения
-  // Ручная (сумма или свой период) — в приоритете. Авто: N дней до старта (по умолчанию 14),
-  // кроме дней, когда шла любая другая реклама; меньше 5 чистых дней — предупреждение.
+  // Ручная (сумма или свой период) — только для «примерки» на экране. Авто: N последних чистых дней до старта
+  // (по умолчанию 14, без дней любой другой рекламы, поиск до 60 дней назад); меньше 5 — предупреждение.
   let baseline = null, baseQty = null, baseFrom = null, baseTo = null, baseSource = 'auto', baseDaysUsed = 0;
   const baseNotes = [];
   const mode = c.baseMode || 'auto';
@@ -338,8 +338,10 @@ export function campaignMetrics(c, ctx) {
     picked = incomeSeries(ctx.sales, ctx.legacyDays, c.baseFrom, c.baseTo, bookId).filter((x) => x.known);
     if (picked.some((x) => adOn(x.date))) baseNotes.push('overlap');
   } else {
+    // N последних дней до старта, когда не шла никакая реклама; если рядом таких мало — ищем раньше (до 60 дней назад)
     const n = c.baseDays || ctx.baseDays || 14;
-    picked = incomeSeries(ctx.sales, ctx.legacyDays, addDays(c.start, -n), addDays(c.start, -1), bookId).filter((x) => x.known && !adOn(x.date));
+    picked = incomeSeries(ctx.sales, ctx.legacyDays, addDays(c.start, -60), addDays(c.start, -1), bookId)
+      .filter((x) => x.known && !adOn(x.date)).slice(-n);
     if (picked.length < 5) baseNotes.push('few');
   }
   if (picked.length) {
@@ -589,5 +591,49 @@ export function campaignProgress(c, m, today) {
     budget, spentToDate, left: budget && spentToDate != null ? r2(budget - spentToDate) : null,
     spentShare: budget && spentToDate != null ? spentToDate / budget : null,
     returned, returnShare: returned != null && m.spendTotal ? returned / m.spendTotal : null,
+  };
+}
+
+// Сводка по группе рекламы (вся платная / таргет Литнета / мой таргет)
+// ctx — как для campaignMetrics, плюс today. Разовые расходы (oneOff) входят только в «потрачено».
+export function adGroupSummary(camps, ctx) {
+  const today = ctx.today || ctx.dataEnd;
+  const r = { live: 0, perDaySpend: 0, perDayUplift: null, perDayPayback: null, returned: null, spent: 0, returnShare: null, paid: 0, plannedSpent: 0, budgetShare: null };
+  let up = 0, hasUp = false, ret = 0, hasRet = false, spentWithData = 0;
+  for (const k of camps) {
+    if (!k.start || k.start > today) continue;
+    if (k.oneOff) { r.spent += Number(k.budget) || 0; continue; }
+    const m = campaignMetrics(k, ctx);
+    const noData = m.status === 'planned'; // уже идёт по датам, но выгрузки за эти дни ещё нет
+    if (!noData) {
+      r.spent += m.spendTotal;
+      if (m.uplift != null) { ret += m.uplift * m.days; hasRet = true; spentWithData += m.spendTotal; }
+    }
+    const live = !k.end || k.end >= today;
+    if (live) {
+      r.live++;
+      r.perDaySpend += noData ? budgetPerDay(k) : m.spendPerDay;
+      if (!noData && m.uplift != null) { up += m.uplift; hasUp = true; }
+      const p = campaignProgress(k, noData ? { uplift: null, days: 0, spendTotal: 0 } : m, today);
+      if (p.budget) { r.paid += p.budget; r.plannedSpent += p.spentToDate; }
+    }
+  }
+  if (hasUp) { r.perDayUplift = r2(up); r.perDayPayback = r2(up - r.perDaySpend); }
+  if (hasRet) { r.returned = r2(ret); r.returnShare = spentWithData ? ret / spentWithData : null; }
+  r.perDaySpend = r2(r.perDaySpend); r.spent = r2(r.spent); r.paid = r2(r.paid); r.plannedSpent = r2(r.plannedSpent);
+  r.budgetShare = r.paid ? r.plannedSpent / r.paid : null;
+  return r;
+}
+
+// Аналитика дня: доход против среднего за 7 предыдущих дней и против того же дня неделю назад
+export function dayStats(sales, legacyDays, date) {
+  const day = incomeSeries(sales, legacyDays, date, date)[0];
+  const prev7 = incomeSeries(sales, legacyDays, addDays(date, -7), addDays(date, -1)).filter((x) => x.known);
+  const avg7 = prev7.length ? r2(prev7.reduce((a, x) => a + x.royalty, 0) / prev7.length) : null;
+  const wk = incomeSeries(sales, legacyDays, addDays(date, -7), addDays(date, -7))[0];
+  return {
+    ...day, avg7, weekAgo: wk.known ? wk.royalty : null,
+    vsAvg: avg7 ? day.royalty / avg7 - 1 : null,
+    vsWeek: wk.known && wk.royalty ? day.royalty / wk.royalty - 1 : null,
   };
 }

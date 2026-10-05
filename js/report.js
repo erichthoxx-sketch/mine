@@ -44,7 +44,7 @@ export function buildReportModel(d, from, to) {
   const months = monthsBetween(monthKey(from), monthKey(to));
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
   const planOf = (k) => plan.find((p) => p.month === k)?.plan ?? null;
-  const camps = d.campaigns.filter((k) => k.start && k.start <= to && (!k.end || k.end >= from)).sort((a, b) => a.start.localeCompare(b.start));
+  const camps = d.campaigns.filter((k) => !k.oneOff && k.start && k.start <= to && (!k.end || k.end >= from)).sort((a, b) => a.start.localeCompare(b.start));
   const adOn = (date) => camps.filter((k) => date >= k.start && date <= (k.end || '9999')).map((k) => k.name);
   const evBy = {};
   for (const x of d.days) for (const e of x.events || []) if (x.date >= from && x.date <= to) (evBy[x.date] ||= []).push(`${EV[e.type] || e.type}${e.bookId ? ' (' + title(e.bookId) + ')' : ''}${e.text ? ': ' + e.text : ''}`);

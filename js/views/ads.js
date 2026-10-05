@@ -1,8 +1,8 @@
 import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../ui.js';
-import { rub, pct, num, fmtDate, fmtShort, fmtMonth } from '../format.js';
+import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthIn } from '../format.js';
 import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, bookIdFor, monthsBetween } from '../calc.js';
 import { rocketCard } from './money.js';
-import { targetAlert, campaignProgress } from '../calc.js';
+import { targetAlert, campaignProgress, adGroupSummary } from '../calc.js';
 import { buildTargetPrompt } from '../report.js';
 import { resizeImage } from '../img.js';
 import { parseTargetReport, reportId } from '../parse.js';
@@ -10,69 +10,100 @@ import { dailyChart, lineChart } from '../charts.js';
 import { chartInputs, chartLegend } from './home.js';
 
 const app = () => window.__app;
-export const CHANNELS = { litnet: 'Литнет платит', own: 'Свой таргет', other: 'Другое' };
+export const CHANNELS = { litnet: 'Литнет платит', own: 'Мой таргет', other: 'Другое' };
 
 export function metricsFor(c, k) {
   return campaignMetrics(k, { sales: c.sales, legacyDays: c.legacyDays, reports: c.data.reports, campaigns: c.campaigns, dataEnd: c.dataEnd, baseDays: c.settings.baseDays, today: c.today });
 }
 
 // Сводка «как идёт таргет»: по каждой идущей кампании — окупаемость, бюджет, сколько реклама вернула, сигналы
-function targetCard(c, alerts) {
-  const live = c.campaigns.filter((k) => k.start && k.start <= c.today && (!k.end || k.end >= c.today)).sort((a, b) => a.start.localeCompare(b.start));
-  const soon = c.campaigns.filter((k) => k.start && k.start > c.today);
-  const cards = live.map((k) => {
-    const m = metricsFor(c, k), p = campaignProgress(k, m, c.today);
-    const al = alerts.find((x) => x.campaignId === k.id && !x.snoozed);
-    const pay = m.payback == null ? '<span class="muted">нет базы</span>' : `<span class="${m.payback >= 0 ? 'up' : 'down'}">${m.payback >= 0 ? '▲ +' : '▼ '}${rub(m.payback, 0)}</span>`;
-    const ret = p.returnShare == null ? null : Math.max(0, p.returnShare);
-    return `<div class="card target">
-      <div class="row between"><h2 style="margin:0">${esc(k.name)}</h2>${p.total ? `<span class="badge">день ${p.day} из ${p.total}</span>` : ''}</div>
-      <div class="small muted">${esc(k.bookId ? c.titleOf(k.bookId, '') : 'все книги')} · ${esc(CHANNELS[k.channel] || '')}${k.end ? ` · до ${fmtDate(k.end)}, осталось ${p.daysLeft} дн.` : ''}</div>
-      <div class="tiles">
-        <div><div class="k">Окупаемость в день</div><div class="v">${pay}</div><div class="s">${m.baseline == null ? 'задайте базу в кампании' : `доход ${rub(m.avgDuring, 0)} при пороге ${rub(m.threshold, 0)}`}</div></div>
-        <div><div class="k">Продажа обходится в</div><div class="v">${m.costPerSale == null ? '—' : rub(m.costPerSale, 0)}</div><div class="s">${m.qtyDuring} шт. за кампанию</div></div>
-      </div>
-      ${p.budget ? `<div class="bar-row"><div class="row between small"><span>Бюджет потрачен <span class="muted">(по сегодня)</span></span><span><b>${rub(p.spentToDate, 0)}</b> из ${rub(p.budget, 0)}</span></div><div class="progress"><i style="width:${Math.min(100, (p.spentShare || 0) * 100).toFixed(1)}%"></i></div></div>` : ''}
-      ${ret != null ? `<div class="bar-row"><div class="row between small"><span>Реклама вернула доходом <span class="muted">(по ${fmtShort(m.to)})</span></span><span><b>${rub(Math.max(0, p.returned), 0)}</b> из ${rub(m.spendTotal, 0)} · ${pct(ret, 0)}</span></div><div class="progress ${ret >= 1 ? 'ok' : ''}"><i style="width:${Math.min(100, ret * 100).toFixed(1)}%"></i></div>${ret >= 1 ? '<div class="small up">✔︎ уже окупилась</div>' : ''}</div>` : ''}
-      ${m.overlaps?.length ? `<div class="small warnc">⚠︎ пересекается: ${m.overlaps.map((o) => `${esc(o.name)} (${fmtShort(o.from)}–${fmtShort(o.to)})`).join(', ')}</div>` : ''}
-      ${al ? `<div class="alert" style="margin-top:10px">⚠︎ ${esc(alertText(al))}. Запросите отчёт у таргетологов.</div>` : ''}
-      <div class="row" style="margin-top:10px"><a href="#" class="btn" data-act="go" data-to="/ad/${k.id}">Подробнее</a><button data-act="note.new" data-id="${k.id}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${k.id}">Запрос для нейросети</button></div>
-    </div>`;
-  }).join('');
+// ---------- вкладка «Реклама»: вся платная реклама → таргет Литнета → мой таргет → Rocket → другие расходы ----------
+const bar = (label, right, share, good) => `<div class="bar-row"><div class="row between small"><span>${label}</span><span>${right}</span></div><div class="progress ${good ? 'ok' : ''}"><i style="width:${Math.min(100, Math.max(0, share || 0) * 100).toFixed(1)}%"></i></div></div>`;
+const payTxt = (v) => (v == null ? '<span class="muted">нет базы</span>' : `<span class="${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '▲ +' : '▼ '}${rub(v, 0)}</span>`);
+
+function summaryBody(c, s, { showBudget = true } = {}) {
+  return `<div class="tiles">
+      <div><div class="k">Окупаемость в день сейчас</div><div class="v">${s.live ? (s.perDayPayback == null ? '<span class="muted">ждём данные</span>' : payTxt(s.perDayPayback)) : '<span class="muted">не идёт</span>'}</div><div class="s">${s.live ? `расход ≈ ${rub(s.perDaySpend, 0)}/день${s.perDayUplift != null ? `, доход сверх обычного ${rub(s.perDayUplift, 0)}/день` : ''}` : 'сейчас кампаний нет'}</div></div>
+      <div><div class="k">Реклама вернула доходом</div><div class="v">${s.returnShare == null ? '—' : pct(Math.max(0, s.returnShare), 0)}</div><div class="s">${s.returned == null ? 'появится, когда будут данные' : `${rub(Math.max(0, s.returned), 0)} сверх обычного дохода`}</div></div>
+    </div>
+    ${s.returnShare != null ? bar('Вернула от потраченного', `<b>${rub(Math.max(0, s.returned), 0)}</b> из ${rub(s.spent, 0)}`, s.returnShare, s.returnShare >= 1) : ''}
+    ${showBudget && s.paid ? bar('Бюджет идущих кампаний израсходован <span class="muted">≈ по плану</span>', `<b>${rub(s.plannedSpent, 0)}</b> из ${rub(s.paid, 0)}`, s.budgetShare) : ''}`;
+}
+
+function miniCampaign(c, k, alerts) {
+  const m = metricsFor(c, k), p = campaignProgress(k, m, c.today);
+  const al = alerts.find((x) => x.campaignId === k.id && !x.snoozed);
+  const started = k.start <= c.today;
+  const st = m.status === 'planned' ? (started ? `<span class="badge good">идёт · ждём данные</span>` : `<span class="badge">с ${fmtShort(k.start)}</span>`) : m.status === 'active' ? `<span class="badge good">день ${p.day}${p.total ? ' из ' + p.total : ''}</span>` : '<span class="badge">завершена</span>';
+  return `<a class="item" href="#" data-act="go" data-to="/ad/${k.id}"><div class="row between"><b>${esc(k.name)}</b>${al ? '<span class="badge bad">⚠︎ проверить</span>' : st}</div>
+    <div class="small muted">${esc(k.bookId ? c.titleOf(k.bookId, '') : 'все книги')}${k.budget ? ` · ${rub(k.budget, 0)}` : ''} · ${fmtDate(k.start)}–${fmtDate(k.end) || '…'}</div>
+    ${m.status === 'planned' ? (started ? '<div class="small muted">окупаемость появится, когда загрузите выгрузку Литнета за эти дни</div>' : '') : `<div class="small">окупаемость в день ${payTxt(m.payback)}${m.costPerSale != null ? ` · продажа ≈ ${rub(m.costPerSale, 0)}` : ''}</div>`}
+    ${m.overlaps?.length ? `<div class="small warnc">⚠︎ пересекается: ${m.overlaps.map((o) => `${esc(o.name)} (${fmtShort(o.from)}–${fmtShort(o.to)})`).join(', ')}</div>` : ''}
+    ${al ? `<div class="small down">${esc(alertText(al))}</div>` : ''}</a>`;
+}
+function campaignList(c, camps, alerts) {
+  const cur = camps.filter((k) => !k.end || k.end >= c.today).sort((a, b) => a.start.localeCompare(b.start));
+  const past = camps.filter((k) => k.end && k.end < c.today).sort((a, b) => b.start.localeCompare(a.start));
+  return `${cur.length ? `<div class="list">${cur.map((k) => miniCampaign(c, k, alerts)).join('')}</div>` : ''}
+    ${past.length ? `<details style="margin-top:6px"><summary>Завершённые (${past.length})</summary><div class="list">${past.map((k) => miniCampaign(c, k, alerts)).join('')}</div></details>` : ''}`;
+}
+function discountTable(c) {
   const dm = Object.keys(c.discounts).filter((k) => c.discounts[k].spend > 0).sort().reverse().slice(0, 6);
-  const disc = dm.length ? `<div class="card"><h2>Скидка «Литнет платит»</h2>
-    <div class="scroll"><table><tr><th>Месяц</th><th>Оплачено</th><th>Скидка</th><th></th></tr>${dm.map((k) => { const d = c.discounts[k]; return `<tr><td>${fmtMonth(k)}</td><td>${rub(d.spend, 0)}</td><td>${d.qualified || d.status === 'confirmed' ? `${rub(d.discount, 0)}<br>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'}` : '<span class="muted">нет</span>'}</td><td>${d.qualified || d.status === 'confirmed' ? `<button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>` : ''}</td></tr>`; }).join('')}</table></div>
-    <div class="hint">Скидка = (оплата таргетологам за месяц − скидка прошлого месяца) × ${c.settings.litnetPct} %. В чистый доход идёт после того, как вы её подтвердите.</div></div>` : '';
-  const head = live.length ? '' : `<div class="card"><h2>Таргет</h2><p class="muted">Сейчас реклама не идёт.${soon.length ? ` Скоро: ${soon.map((k) => `«${esc(k.name)}» с ${fmtDate(k.start)}`).join(', ')}.` : ''}</p></div>`;
-  return head + cards + disc;
+  if (!dm.length) return '';
+  return `<h3>Скидка «Литнет платит»</h3><div class="scroll"><table><tr><th>Месяц</th><th>Оплачено</th><th>Скидка</th><th></th></tr>${dm.map((k) => { const d = c.discounts[k]; return `<tr><td>${fmtMonth(k)}</td><td>${rub(d.spend, 0)}</td><td>${d.qualified || d.status === 'confirmed' ? `${rub(d.discount, 0)}<br>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'}` : '<span class="muted">нет</span>'}</td><td>${d.qualified || d.status === 'confirmed' ? `<button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>` : ''}</td></tr>`; }).join('')}</table></div>
+    <div class="hint">Скидка = (оплата таргетологам за месяц − скидка прошлого месяца) × ${c.settings.litnetPct} %. В чистый доход идёт после подтверждения.</div>`;
 }
 
 export function ads(a) {
   const c = a.ctx();
-  const list = [...c.campaigns].sort((x, y) => (y.start || '').localeCompare(x.start || ''));
-  const alerts = c.campaigns.map((k) => targetAlert(k, actx(c), c.data.adnotes || [])).filter(Boolean);
-  const html = `${targetCard(c, alerts)}
+  const ctx = actx(c);
+  const real = c.campaigns.filter((k) => !k.oneOff);
+  const alerts = real.map((k) => targetAlert(k, ctx, c.data.adnotes || [])).filter(Boolean);
+  const open = alerts.filter((x) => !x.snoozed);
+  const litnet = real.filter((k) => k.channel === 'litnet'), own = real.filter((k) => k.channel === 'own');
+  const extras = c.campaigns.filter((k) => k.oneOff || (k.channel !== 'litnet' && k.channel !== 'own'));
+  const all = adGroupSummary(c.campaigns, ctx), sL = adGroupSummary(litnet, ctx), sO = adGroupSummary(own, ctx);
+  const mk = monthKey(c.today), sp = c.spend[mk] || { litnet: 0, own: 0, other: 0 }, monthNow = sp.litnet + sp.own + sp.other;
+  const disc = c.discounts[mk];
+  const html = `
+  <div class="card"><div class="row between"><h2 style="margin:0">Платная реклама</h2><a href="#" class="small" data-act="go" data-to="/data">отчёт для нейросети →</a></div>
+    ${summaryBody(c, all)}
+    <p class="small" style="margin:10px 0 0">В ${fmtMonthIn(mk)}: ≈ ${rub(monthNow, 0)} по сегодня${c.forecast?.total ? ` · до конца месяца по плану ≈ ${rub(c.forecast.total, 0)}` : ''}${disc && disc.status === 'expected' ? ` · скидка Литнета ожидается ${rub(disc.expected, 0)}` : ''}</p>
+    ${open.map((x) => `<div class="alert" style="margin-top:10px">⚠︎ «${esc(x.name)}»: ${esc(alertText(x))}. Запросите отчёт у таргетологов.<div class="row" style="margin-top:8px"><button class="primary" data-act="note.new" data-id="${x.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${x.campaignId}">Запрос для нейросети</button></div></div>`).join('')}
+    <div class="hint">Расход по дням — бюджет ÷ дни кампании (оценка). «Доход сверх обычного» — сколько книга зарабатывает больше, чем в дни без рекламы.</div>
+  </div>
+  <div class="card"><div class="row between"><h2 style="margin:0">Таргет «Литнет платит»</h2><button class="primary" data-act="ad.new" data-ch="litnet">+ Кампания</button></div>
+    ${litnet.length ? summaryBody(c, sL) + campaignList(c, litnet, alerts) : '<p class="muted">Кампаний пока нет. Добавьте оплату таргетологам как кампанию: книга, даты, сумма.</p>'}
+    ${discountTable(c)}
+  </div>
+  <div class="card"><div class="row between"><h2 style="margin:0">Мой таргет</h2><button data-act="ad.new" data-ch="own">+ Кампания</button></div>
+    ${own.length ? summaryBody(c, sO) + campaignList(c, own, alerts) : '<p class="muted">Здесь будут кампании, которые вы ведёте сами. Добавьте кампанию с бюджетом и датами — окупаемость посчитается так же.</p>'}
+  </div>
   ${c.hasData ? rocketCard(c, monthsBetween(monthKey(c.firstDate), monthKey(c.today)).reverse()) : ''}
-  <div class="row between" style="margin:14px 0 10px"><h2 style="margin:0">Кампании</h2><button class="primary" data-act="ad.new">+ Кампания</button></div>
-  <p class="small"><a href="#" data-act="go" data-to="/data">Скачать отчёт для нейросети →</a></p>
-  <div class="card list">${list.length ? list.map((k) => {
-    const m = metricsFor(c, k);
-    const al = alerts.find((x) => x.campaignId === k.id && !x.snoozed);
-    const badge = al ? '<span class="badge bad">⚠︎ проверить</span>' : m.status === 'planned' ? '<span class="badge">запланирована</span>' : m.status === 'active' ? '<span class="badge good">идёт</span>' : '<span class="badge">завершена</span>';
-    const ov = m.overlaps?.length ? `<div class="small warnc">⚠︎ пересекается: ${m.overlaps.map((o) => `${esc(o.name)} (${fmtShort(o.from)}–${fmtShort(o.to)})`).join(', ')}</div>` : '';
-    const pay = m.payback == null ? '<span class="muted">нет базы для сравнения</span>' : `<span class="${m.payback >= 0 ? 'up' : 'down'}">${m.payback >= 0 ? '▲ окупается' : '▼ не окупается'}: ${rub(m.payback, 0)}/день</span>`;
-    return `<a class="item" href="#" data-act="go" data-to="/ad/${k.id}"><div class="row between"><b>${esc(k.name)}</b>${badge}</div>
-      <div class="small muted">${esc(CHANNELS[k.channel] || '')} · ${esc(k.bookId ? c.titleOf(k.bookId, '') : 'все книги')} · ${fmtDate(k.start)}–${fmtDate(k.end) || '…'}</div>
-      ${m.status === 'planned' ? '' : `<div class="small">расход ${rub(m.spendPerDay, 0)}/день · ${pay}</div>`}${ov}</a>`;
-  }).join('') : '<p class="muted">Кампаний пока нет.</p>'}</div>`;
+  <div class="card"><div class="row between"><h2 style="margin:0">Другие расходы на рекламу</h2><button data-act="extra.new">+ Расход</button></div>
+    ${extras.length ? `<div class="list">${extras.sort((x, y) => (y.start || '').localeCompare(x.start || '')).slice(0, 12).map((k) => `<div class="item row between"><span><b>${esc(k.name)}</b><br><span class="small muted">${fmtDate(k.start)}${k.end && k.end !== k.start ? '–' + fmtDate(k.end) : ''}</span></span><span class="row"><b>${rub(k.budget || 0, 0)}</b><button class="link danger" data-act="extra.del" data-id="${k.id}">убрать</button></span></div>`).join('')}</div>` : '<p class="muted">Баннеры, услуги, рассылки — всё, что не кампания. Учитывается в расходах месяца и в чистом доходе.</p>'}
+  </div>`;
   return { html };
 }
+
+acts['extra.new'] = () => {
+  const c = app().ctx();
+  openSheet('Другой расход на рекламу', `<label for="en">На что</label><input id="en" name="name" required placeholder="например, платный баннер">
+    <div class="f2"><div><label for="ed">Дата</label><input id="ed" type="date" name="date" value="${c.today}" required></div><div><label for="ea">Сумма, ₽</label><input id="ea" name="amount" inputmode="decimal" required></div></div>`, async (fd) => {
+    const v = N(fd.get('amount'));
+    if (v == null || Number.isNaN(v)) { toast('Сумма — числом'); return false; }
+    await app().store.put('campaigns', { id: 'x' + uid(), name: fd.get('name').trim(), channel: 'other', oneOff: true, start: fd.get('date'), end: fd.get('date'), budget: v });
+    toast('Расход добавлен');
+  });
+};
+acts['extra.del'] = async (d) => { if (await ask('Убрать этот расход?', 'Убрать')) await app().store.remove('campaigns', d.id); };
 
 export function adPage(a, id) {
   const c = a.ctx();
   const k = c.campaigns.find((x) => x.id === id);
   if (!k) return { html: '<div class="card"><p>Кампания не найдена.</p><a href="#" data-act="go" data-to="/ads">← К рекламе</a></div>' };
-  const m = metricsFor(c, k);
+  const wi = a.ui.baseTry?.id === k.id ? a.ui.baseTry : null; // «примерка» своей базы — только на экране
+  const m = metricsFor(c, wi ? { ...k, baseMode: wi.mode, baseFrom: wi.from, baseTo: wi.to, baseValue: wi.value } : k);
   const reps = c.data.reports.filter((r) => r.campaignId === k.id).sort((x, y) => y.start.localeCompare(x.start));
   const chronological = [...reps].reverse();
   const bm = k.baseMode || 'auto';
@@ -80,9 +111,10 @@ export function adPage(a, id) {
     <dl class="dl">
       ${m.overlaps?.length ? `<dd class="alert">⚠︎ Пересекается с ${m.overlaps.map((o) => `«${esc(o.name)}» ${fmtDate(o.from)}–${fmtDate(o.to)}`).join(', ')}. В эти дни прирост дохода делится между кампаниями пропорционально расходу в день — доход не считается дважды.</dd>` : ''}
       <dt>Расход в день ${m.spendSource === 'reports' ? '(факт из отчётов)' : m.spendSource === 'mixed' ? '(факт из отчётов + бюджет ÷ дни)' : '(бюджет ÷ дни)'}</dt><dd>${rub(m.spendPerDay)}</dd>
-      <dt>База: средний доход в день ${m.baseSource === 'manual' ? '(вручную)' : m.baseFrom ? `(${m.baseDaysUsed} дн. с данными, ${fmtDate(m.baseFrom)}–${fmtDate(m.baseTo)}${m.baseSource === 'auto' ? ', без дней другой рекламы' : m.baseSource === 'range' ? ', свой период' : ''})` : ''}</dt><dd>${m.baseline == null ? '<span class="muted">нет данных до старта — загрузите выгрузку за прошлые дни или задайте базу вручную</span>' : rub(m.baseline)}</dd>
+      <dt>База: средний доход в день ${m.baseSource === 'manual' ? '(вручную)' : m.baseFrom ? `(${m.baseDaysUsed} дн. с данными, ${fmtDate(m.baseFrom)}–${fmtDate(m.baseTo)}${m.baseSource === 'auto' ? ', без дней другой рекламы' : m.baseSource === 'range' ? ', свой период' : ''})` : ''}</dt><dd>${m.baseline == null ? '<span class="muted">нет данных до старта — загрузите выгрузку за прошлые дни</span>' : rub(m.baseline)}</dd>
+      ${wi ? `<dd class="alert">Вы примеряете свою базу — это только на экране. <button class="link" data-act="base.reset">Вернуть автоматическую</button></dd>` : ''}
       ${m.baseNotes?.includes('overlap') ? '<dd class="alert">⚠︎ В выбранном периоде базы шла другая реклама — база может быть завышена, а окупаемость занижена.</dd>' : ''}
-      ${m.baseNotes?.includes('few') ? `<dd class="alert">⚠︎ Чистых дней для базы ${m.baseDaysUsed} (меньше 5): до старта мало дней без другой рекламы или нет данных. Задайте ниже «свой период» базы.</dd>` : ''}
+      ${m.baseNotes?.includes('few') ? `<dd class="alert">⚠︎ Чистых дней для базы ${m.baseDaysUsed} (меньше 5): до старта мало дней без другой рекламы или нет данных. Можно примерить свою базу ниже.</dd>` : ''}
       <dt>Средний доход в день во время кампании (${m.days} дн.)</dt><dd>${rub(m.avgDuring)}</dd>
       <dt>Прирост к базе</dt><dd class="${m.uplift == null ? '' : m.uplift >= 0 ? 'up' : 'down'}">${m.uplift == null ? '—' : rub(m.uplift)}</dd>
       <dt>Окупаемость в день (прирост − расход)</dt><dd class="${m.payback == null ? '' : m.payback >= 0 ? 'up' : 'down'}">${m.payback == null ? '—' : (m.payback >= 0 ? '▲ ' : '▼ ') + rub(m.payback)}</dd>
@@ -95,11 +127,17 @@ export function adPage(a, id) {
   <div class="card"><h2>${esc(k.name)}</h2>${metricsHtml}</div>
   <div class="card"><h2>Доход вокруг кампании</h2><div class="chart" id="chart"></div><div id="legend"></div></div>
   ${notesSection(c, k)}
-  <div class="card"><h2>Фактический расход по неделям <span class="small muted">(необязательно)</span></h2>
+  <details class="card"><summary>Фактический расход по неделям — если таргетологи его присылают</summary>
+    <p class="small muted">Не обязательно. Без этих цифр расход считается как бюджет ÷ дни кампании. Если таргетологи пришлют, сколько реально потрачено за неделю, впишите — оценка заменится фактом.</p>
     ${reps.length ? `<div class="scroll"><table><tr><th>Неделя</th><th>Расход</th><th>Показы</th><th>Клики</th><th>CPC</th><th>CTR</th><th></th></tr>${reps.map((r) => `<tr><td>${fmtShort(r.start)}–${fmtDate(r.end)}</td><td>${rub(r.spend)}</td><td>${r.impressions == null ? '—' : num(r.impressions)}</td><td>${r.clicks == null ? '—' : num(r.clicks)}</td><td>${r.clicks ? rub(cpc(r)) : '—'}</td><td>${r.impressions ? pct(ctr(r), 2) : '—'}</td><td><button class="link danger" data-act="rep.del" data-id="${r.id}">убрать</button></td></tr>`).join('')}</table></div>` : '<p class="muted">Отчётов пока нет.</p>'}
     <div class="row" style="margin-top:10px"><button class="primary" data-act="rep.new" data-id="${k.id}">+ Отчёт</button><button data-act="rep.paste" data-id="${k.id}">Вставить таблицу</button></div>
     ${chronological.length ? `<h3>Цена клика (CPC), ₽</h3><div class="chart" id="cpc"></div><h3>CTR, %</h3><div class="chart" id="ctr"></div>` : ''}
-  </div>
+  </details>
+  <details class="card"${wi ? ' open' : ''}><summary>Примерить свою базу</summary>
+    <p class="small muted">База считается автоматически: ${c.settings.baseDays} последних дней до старта, когда не шла никакая реклама. Здесь можно посмотреть, как изменятся цифры с другой базой — это не сохраняется.</p>
+    <form data-form="base.try" data-id="${k.id}"><div class="f2"><div><label>С</label><input type="date" name="from" value="${wi?.from || ''}"></div><div><label>По</label><input type="date" name="to" value="${wi?.to || ''}"></div></div>
+    <label>или сразу сумма, ₽ в день</label><input name="value" inputmode="decimal" value="${wi?.value ?? ''}">
+    <div class="row" style="margin-top:10px"><button class="primary" type="submit">Посмотреть</button>${wi ? '<button type="button" data-act="base.reset">Вернуть автоматическую</button>' : ''}</div></form></details>
   <div class="card"><h2>Настройки кампании</h2>
   <form data-form="ad.save" data-id="${k.id}">
     <label style="margin-top:0">Название</label><input name="name" value="${esc(k.name)}" required>
@@ -109,9 +147,7 @@ export function adPage(a, id) {
     <div class="f2"><div><label>Бюджет (оплата), ₽</label><input name="budget" inputmode="decimal" value="${k.budget ?? ''}"></div><div><label>Дата оплаты</label><input type="date" name="paidAt" value="${k.paidAt || ''}"></div></div>
     <div class="f2">
     <div><label>Сравнивать доход</label><select name="scope">${opt('book', 'только этой книги', k.scope || 'book')}${opt('all', 'всех книг', k.scope)}</select></div></div>
-    <label>База для сравнения</label><select name="baseMode">${opt('auto', `${c.settings.baseDays} дней до старта (по умолчанию)`, bm)}${opt('range', 'свой период', bm)}${opt('value', 'вручную: ₽ в день', bm)}</select>
-    <div class="f2"><div><label>Дней до старта (если авто)</label><input name="baseDays" inputmode="numeric" value="${k.baseDays ?? ''}" placeholder="${c.settings.baseDays}"></div><div><label>База вручную, ₽/день</label><input name="baseValue" inputmode="decimal" value="${k.baseValue ?? ''}"></div></div>
-    <div class="f2"><div><label>Свой период: с</label><input type="date" name="baseFrom" value="${k.baseFrom || ''}"></div><div><label>по</label><input type="date" name="baseTo" value="${k.baseTo || ''}"></div></div>
+
     <div class="row between" style="margin-top:14px"><button class="primary" type="submit">Сохранить</button><button type="button" class="danger" data-act="ad.del" data-id="${k.id}">Удалить</button></div>
   </form></div>`;
   return {
@@ -132,10 +168,10 @@ export function adPage(a, id) {
 }
 
 // ---------- действия ----------
-acts['ad.new'] = () => {
-  const c = app().ctx();
+acts['ad.new'] = (d) => {
+  const c = app().ctx(), ch = d?.ch || 'litnet';
   openSheet('Новая кампания', `<label>Название</label><input name="name" required>
-    <div class="f2"><div><label>Книга</label><select name="bookId"><option value="">Все книги</option>${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}</select></div><div><label>Канал</label><select name="channel">${Object.entries(CHANNELS).map(([v, t]) => opt(v, t)).join('')}</select></div></div>
+    <div class="f2"><div><label>Книга</label><select name="bookId"><option value="">Все книги</option>${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}</select></div><div><label>Канал</label><select name="channel">${Object.entries(CHANNELS).map(([v, t]) => opt(v, t, ch)).join('')}</select></div></div>
     <div class="f2"><div><label>Начало</label><input type="date" name="start" value="${c.today}" required></div><div><label>Конец</label><input type="date" name="end"></div></div>
     <div class="f2"><div><label>Бюджет (оплата таргетологам), ₽</label><input name="budget" inputmode="decimal"></div><div><label>Дата оплаты</label><input type="date" name="paidAt"></div></div>
     <div class="hint">Дата оплаты — для скидки «Литнет платит». Пусто — считается датой старта.</div>`, async (fd) => {
@@ -147,7 +183,7 @@ acts['ad.new'] = () => {
 forms['ad.save'] = async (fd, f) => {
   const k = app().ctx().campaigns.find((x) => x.id === f.dataset.id);
   const bookId = fd.get('bookId') || '';
-  await app().store.put('campaigns', { ...k, name: fd.get('name').trim(), bookId, channel: fd.get('channel'), start: fd.get('start'), end: fd.get('end') || '', budget: N(fd.get('budget')), paidAt: fd.get('paidAt') || '', scope: bookId ? fd.get('scope') : 'all', baseMode: fd.get('baseMode'), baseDays: N(fd.get('baseDays')), baseValue: N(fd.get('baseValue')), baseFrom: fd.get('baseFrom') || '', baseTo: fd.get('baseTo') || '' });
+  await app().store.put('campaigns', { ...k, name: fd.get('name').trim(), bookId, channel: fd.get('channel'), start: fd.get('start'), end: fd.get('end') || '', budget: N(fd.get('budget')), paidAt: fd.get('paidAt') || '', scope: bookId ? fd.get('scope') : 'all', baseMode: 'auto', baseFrom: '', baseTo: '', baseValue: null });
   toast('Сохранено');
 };
 acts['ad.del'] = async (d) => {
@@ -182,7 +218,7 @@ acts['rep.paste'] = (d) => {
 
 // ---------- сигналы по таргету, отчёты-скриншоты, запрос для нейросети ----------
 const actx = (c) => ({ sales: c.sales, legacyDays: c.legacyDays, reports: c.data.reports, campaigns: c.campaigns, dataEnd: c.dataEnd, baseDays: c.settings.baseDays, today: c.today });
-export const activeAlerts = (c) => c.campaigns.map((k) => targetAlert(k, actx(c), c.data.adnotes || [])).filter((a) => a && !a.snoozed);
+export const activeAlerts = (c) => c.campaigns.filter((k) => !k.oneOff).map((k) => targetAlert(k, actx(c), c.data.adnotes || [])).filter((a) => a && !a.snoozed);
 function alertText(a) {
   const t = [];
   if (a.reasons.includes('drop')) t.push(`продажи книги за последние 7 дней упали на ${pct(a.drop, 0)} (${rub(a.last7, 0)} в день против ${rub(a.prev, 0)})`);
@@ -244,3 +280,13 @@ acts['disc.confirm'] = (d) => {
     toast(fd.get('ok') ? 'Скидка подтверждена' : 'Скидка снова «ожидается»');
   });
 };
+
+forms['base.try'] = (fd, f) => {
+  const v = N(fd.get('value'));
+  const from = fd.get('from'), to = fd.get('to');
+  if (v != null && !Number.isNaN(v)) app().ui.baseTry = { id: f.dataset.id, mode: 'value', value: v };
+  else if (from && to && from <= to) app().ui.baseTry = { id: f.dataset.id, mode: 'range', from, to };
+  else { toast('Укажите период (с — по) или сумму в день'); return; }
+  app().rerender(); window.scrollTo(0, 0);
+};
+acts['base.reset'] = () => { app().ui.baseTry = null; };

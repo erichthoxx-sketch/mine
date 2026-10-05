@@ -41,6 +41,12 @@ export function parseDateRu(s) {
 }
 
 const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+const MONTHS_PREP = ['январе', 'феврале', 'марте', 'апреле', 'мае', 'июне', 'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре'];
+// «в октябре 2026»
+export function fmtMonthIn(key) {
+  const [y, m] = key.split('-');
+  return `${MONTHS_PREP[+m - 1]} ${y}`;
+}
 export function fmtMonth(key) {
   const [y, m] = key.split('-');
   return `${MONTHS[+m - 1]} ${y}`;

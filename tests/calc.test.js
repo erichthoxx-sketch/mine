@@ -204,35 +204,51 @@ test('история цен: предложение из продаж и цен�
   assert.equal(priceAt({ priceHistory: ch }, '2026-08-01'), null);
 });
 
-test('база: 14 дней до старта без дней любой другой рекламы; ручной период в приоритете', () => {
+test('база: 14 последних чистых дней до старта (без любой другой рекламы, ищем раньше); своя — для примерки', () => {
   const sales = [];
   for (let i = 0; i < 30; i++) sales.push(mk(addDays('2026-09-01', i), 100, 1, i >= 14 && i <= 17 ? 900 : 100)); // 15–18.09 — 900 ₽ (шла другая реклама)
   const other = { id: 'old', start: '2026-09-15', end: '2026-09-18', bookId: bookIdFor('Б'), scope: 'book' }; // даже по другой книге
   const cur = { id: 'new', start: '2026-09-20', end: '2026-09-30', bookId: bookIdFor('А'), scope: 'book', budget: 1100 };
   const ctx = { sales, legacyDays: [], reports: [], campaigns: [other, cur], dataEnd: '2026-09-30', baseDays: 14 };
   const m = campaignMetrics(cur, ctx);
-  // окно 06–19.09, без 15–18.09 → 10 чистых дней по 100 ₽
+  // 19.09 и 14…02.09 — 14 чистых дней по 100 ₽; 15–18.09 пропущены
   assert.equal(m.baseline, 100);
-  assert.equal(m.baseDaysUsed, 10);
+  assert.equal(m.baseDaysUsed, 14);
+  assert.equal(m.baseFrom, '2026-09-02');
+  assert.equal(m.baseTo, '2026-09-19');
   assert.deepEqual(m.baseNotes, []);
-  // ручной период в приоритете, даже если в нём шла реклама (с пометкой)
+  // своя база (примерка) — считается как задано, с пометкой о рекламе в периоде
   const r = campaignMetrics({ ...cur, baseMode: 'range', baseFrom: '2026-09-15', baseTo: '2026-09-18' }, ctx);
   assert.equal(r.baseline, 900);
   assert.ok(r.baseNotes.includes('overlap'));
 });
 
+test('база: кампания сразу после другой — база сама уходит раньше её', () => {
+  const sales = [];
+  for (let i = 0; i < 13; i++) sales.push(mk(addDays('2026-09-01', i), 100, 1, 216)); // 01–13.09 без рекламы
+  for (let i = 0; i < 21; i++) sales.push(mk(addDays('2026-09-14', i), 100, 9, 1000)); // 14.09–04.10 «тестовый»
+  const test = { id: 't', start: '2026-09-14', end: '2026-10-04', scope: 'all', budget: 10000 };
+  const alp = { id: 'a', start: '2026-10-05', end: '2026-11-07', scope: 'all', budget: 20000 };
+  const m = campaignMetrics(alp, { sales, legacyDays: [], reports: [], campaigns: [test, alp], dataEnd: '2026-10-05', baseDays: 14 });
+  assert.equal(m.baseFrom, '2026-09-01');
+  assert.equal(m.baseTo, '2026-09-13');
+  assert.equal(m.baseline, 216);
+});
+
 test('база: меньше 5 чистых дней — предупреждение, нет чистых дней — базы нет', () => {
   const sales = [];
-  for (let i = 0; i < 30; i++) sales.push(mk(addDays('2026-09-01', i), 100, 1, 100));
-  const other = { id: 'old', start: '2026-09-06', end: '2026-09-16', scope: 'all' };
+  for (let i = 0; i < 20; i++) sales.push(mk(addDays('2026-09-11', i), 100, 1, 100)); // данные с 11.09
+  const other = { id: 'old', start: '2026-09-14', end: '2026-09-16', scope: 'all' };
   const cur = { id: 'new', start: '2026-09-20', end: '2026-09-30', scope: 'all', budget: 1100 };
   const ctx = { sales, legacyDays: [], reports: [], campaigns: [other, cur], dataEnd: '2026-09-30', baseDays: 14 };
-  const m = campaignMetrics(cur, ctx); // окно 06–19.09, чистые 17–19.09 = 3 дня
-  assert.equal(m.baseDaysUsed, 3);
-  assert.ok(m.baseNotes.includes('few'));
-  const all = campaignMetrics(cur, { ...ctx, campaigns: [{ ...other, end: '2026-09-25' }, cur] });
-  assert.equal(all.baseline, null);
-  assert.ok(all.baseNotes.includes('few'));
+  const m = campaignMetrics(cur, ctx); // чистые: 11–13 и 17–19 = 6 → без предупреждения
+  assert.equal(m.baseDaysUsed, 6);
+  assert.deepEqual(m.baseNotes, []);
+  const few = campaignMetrics(cur, { ...ctx, campaigns: [{ ...other, start: '2026-09-12' }, cur] }); // чистые: 11, 17–19 = 4
+  assert.equal(few.baseDaysUsed, 4);
+  assert.ok(few.baseNotes.includes('few'));
+  const none = campaignMetrics(cur, { ...ctx, campaigns: [{ ...other, start: '2026-09-01', end: '2026-09-19' }, cur] });
+  assert.equal(none.baseline, null);
 });
 
 test('пересечение кампаний: предупреждение и прирост делится по расходу в день', async () => {
@@ -390,4 +406,48 @@ test('ручные продажи с других площадок не стир
   const fromFile = [{ id: 'x', date: '2026-10-02', qty: 1, royalty: 70 }];
   const d = diffSales([lm, lnManual], fromFile, true);
   assert.deepEqual(d.removeIds, [lnManual.id]); // ручная строка Литнета заменяется точной, Литмаркет остаётся
+});
+
+test('сводка по рекламе: окупаемость в день, сколько вернула, бюджет по плану', async () => {
+  const { adGroupSummary } = await import('../js/calc.js');
+  const sales = [];
+  for (let i = 0; i < 14; i++) sales.push(mk(addDays('2026-09-01', i), 100, 1, 100));
+  for (let i = 0; i < 10; i++) sales.push(mk(addDays('2026-09-15', i), 100, 5, 500));
+  const a = { id: 'a', start: '2026-09-15', end: '2026-10-14', budget: 9000, scope: 'all', channel: 'litnet' }; // 300/день
+  const extra = { id: 'x', start: '2026-09-20', end: '2026-09-20', budget: 700, channel: 'other', oneOff: true };
+  const ctx = { sales, legacyDays: [], reports: [], campaigns: [a, extra], dataEnd: '2026-09-24', baseDays: 14, today: '2026-09-24' };
+  const s = adGroupSummary([a, extra], ctx);
+  assert.equal(s.live, 1);
+  assert.equal(s.perDaySpend, 300);
+  assert.equal(s.perDayUplift, 400);
+  assert.equal(s.perDayPayback, 100);
+  assert.equal(s.returned, 4000); // 10 дней × 400
+  assert.equal(s.spent, 3000 + 700);
+  assert.equal(Math.round(s.returnShare * 100), 133); // 4000 / 3000 (разовый расход без данных о доходе)
+  assert.equal(s.paid, 9000);
+  assert.equal(s.plannedSpent, 3000);
+});
+
+test('аналитика дня: против среднего за 7 дней и против прошлой недели', async () => {
+  const { dayStats } = await import('../js/calc.js');
+  const sales = [];
+  for (let i = 0; i < 7; i++) sales.push(mk(addDays('2026-09-01', i), 100, 1, 100));
+  sales.push(mk('2026-09-08', 100, 2, 150));
+  const d = dayStats(sales, [], '2026-09-08');
+  assert.equal(d.royalty, 150);
+  assert.equal(d.avg7, 100);
+  assert.equal(d.vsAvg, 0.5);
+  assert.equal(d.weekAgo, 100);
+});
+
+test('сводка: кампания уже идёт по датам, но выгрузки за её дни ещё нет', async () => {
+  const { adGroupSummary } = await import('../js/calc.js');
+  const sales = [mk('2026-09-30', 100, 1, 100)];
+  const k = { id: 'a', start: '2026-10-05', end: '2026-11-07', budget: 20000, scope: 'all', channel: 'litnet' };
+  const s = adGroupSummary([k], { sales, legacyDays: [], reports: [], campaigns: [k], dataEnd: '2026-09-30', baseDays: 14, today: '2026-10-06' });
+  assert.equal(s.live, 1);
+  assert.equal(s.perDaySpend, 588.24);
+  assert.equal(s.perDayPayback, null);
+  assert.equal(s.paid, 20000);
+  assert.equal(s.plannedSpent, 1176.47); // 2 дня по плану
 });

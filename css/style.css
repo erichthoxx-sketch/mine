@@ -179,3 +179,9 @@ nav.tabs a.on .ic { color: var(--accent); }
 .tiles .k { font-size: 12px; color: var(--text-2); } .tiles .v { font-family: var(--font-display); font-size: 18px; font-weight: 600; margin-top: 2px; } .tiles .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .bar-row { margin-top: 8px; }
 .progress.ok i { background: linear-gradient(90deg, #bfe8cf, #7fd3a2); }
+.day-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+.day-nav button { width: 44px; padding: 0; font-size: 18px; }
+.day-title { flex: 1; text-align: center; min-width: 0; }
+.day-title input { text-align: center; font-weight: 800; border: 0; background: transparent; min-height: 36px; }
+.day-sum { font-family: var(--font-display); font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chip-stat { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); }

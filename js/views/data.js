@@ -192,10 +192,10 @@ acts['report.copy'] = async () => {
 
 // ---------- продажи вручную (например, с другой площадки) ----------
 const PLATFORMS = ['Литнет', 'Литмаркет', 'Литгород'];
-acts['sale.manual'] = () => {
-  const c = app().ctx();
+acts['sale.manual'] = (d) => {
+  const c = app().ctx(), date = d?.date || c.today;
   openSheet('Добавить продажи вручную', `
-    <div class="f2"><div><label for="md">Дата</label><input id="md" type="date" name="date" value="${c.today}" required></div>
+    <div class="f2"><div><label for="md">Дата</label><input id="md" type="date" name="date" value="${date}" required></div>
     <div><label for="mp">Площадка</label><input id="mp" name="platform" list="mpl" value="Литнет" required><datalist id="mpl">${PLATFORMS.map((p) => `<option value="${p}">`).join('')}</datalist></div></div>
     <label for="mb">Книга</label><select id="mb" name="bookId">${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}<option value="">другая — впишу название</option></select>
     <input name="bookTitle" placeholder="название, если книги нет в списке" style="margin-top:6px" aria-label="Название книги">

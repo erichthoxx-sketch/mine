@@ -11,7 +11,7 @@ export function chartInputs(c, from, to) {
   const slice = c.series.slice(i0, i1 + 1);
   const events = [];
   for (const d of c.data.days) for (const e of d.events || []) if (d.date >= from && d.date <= to) events.push({ date: d.date, ...e });
-  const bands = c.campaigns.filter((k) => k.start && k.start <= to && (k.end || to) >= from).map((k) => ({ from: k.start, to: k.end || to, label: k.name }));
+  const bands = c.campaigns.filter((k) => !k.oneOff && k.start && k.start <= to && (k.end || to) >= from).map((k) => ({ from: k.start, to: k.end || to, label: k.name }));
   const priceLines = [];
   for (const b of c.books) [...(b.priceHistory || [])].sort((x, y) => x.from.localeCompare(y.from)).slice(1).forEach((p) => { if (p.from >= from && p.from <= to) priceLines.push({ date: p.from, label: `${b.title}: ${rub(p.price)}` }); });
   return { days: slice.map((d) => ({ date: d.date, value: d.royalty, known: d.known })), ma: c.ma.slice(i0, i1 + 1), events, bands, priceLines };
