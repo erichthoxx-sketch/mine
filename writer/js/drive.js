@@ -116,7 +116,7 @@ export async function fileMeta(id) {
 let jszip;
 const loadJsZip = () => (jszip ||= new Promise((res, rej) => {
   const s = document.createElement('script');
-  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+  s.src = new URL('../../js/vendor/jszip.min.js', import.meta.url).href; // библиотека лежит в самом приложении
   s.onload = () => res(window.JSZip); s.onerror = () => { jszip = null; rej(new Error('Не загрузился модуль для Word')); };
   document.head.appendChild(s);
 }));

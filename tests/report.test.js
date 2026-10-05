@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMarketingReport } from '../js/report.js';
+import { buildMarketingReport, buildReportModel, toHtml, toJson, cellText, RUB, PCT } from '../js/report.js';
 import { bookIdFor, spendByMonthChannel, litnetDiscounts } from '../js/calc.js';
 import { DEFAULT_SETTINGS } from '../js/store.js';
 
@@ -22,6 +22,20 @@ test('маркетинговый отчёт: все разделы и ключе
   assert.ok(md.includes('| Роялти (доход до вычетов) | 4 732 ₽ |'), 'итог роялти'); // 10×118,3 + 10×354,9
   assert.ok(md.includes('| 11.09.2026 – 17.09.2026 | 1 400,00 ₽ | 10 000 | 150 | 1,50 % | 9,33 ₽ |'), 'строка отчёта таргетологов');
   assert.ok(md.includes('11.09.2026: выкладка главы: глава 5'));
-  assert.ok(md.includes('| 11.09.2026 | пт | 354,90 |'), 'день с днём недели');
+  assert.ok(md.includes('| 11.09.2026 | пт | 354,90 ₽ | 3 |'), 'день с днём недели');
   assert.ok(!md.includes(' '), 'без неразрывных пробелов');
+
+  const m = buildReportModel(d, '2026-09-01', '2026-09-20');
+  const html = toHtml(m);
+  assert.ok(html.startsWith('<!doctype html>') && html.includes('<h2>Рекламные кампании</h2>') && html.includes('<td class="n">1,50 %</td>'));
+  const j = JSON.parse(toJson(m));
+  const itog = j.sections.find((x) => x.name === 'Итоги');
+  assert.equal(itog.rows[0][1], 4732); // в JSON — настоящие числа
+  assert.equal(j.sections.find((x) => x.name === 'Таргет 1').rows[0][4], 0.015);
+});
+
+test('ячейки отчёта: форматирование', () => {
+  assert.equal(cellText(RUB(25438.4)), '25 438 ₽');
+  assert.equal(cellText(PCT(0.0194, 2)), '1,94 %');
+  assert.equal(cellText(null), '—');
 });

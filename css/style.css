@@ -150,3 +150,7 @@ details summary { cursor: pointer; font-weight: 700; color: var(--accent); }
 .top .row { gap: 6px; }
 .top .btn, .top button { min-height: 36px; padding: 6px 12px; font-size: 14px; }
 .top button[aria-label] { width: 40px; padding: 0; }
+/* нижнее меню не отрывается от низа экрана при прокрутке до конца (эффект «резинки» на телефоне) */
+html, body { overscroll-behavior-y: none; }
+nav.tabs { transform: translateZ(0); }
+nav.tabs::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 120px; background: var(--surface); }

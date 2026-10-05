@@ -2,7 +2,7 @@ import { esc, acts, forms, changes, openSheet, opt, toast, N, download, readFile
 import { rub, fmtDate, fmtMonth, num, parseNum } from '../format.js';
 import { decodeBuffer, parseStatistic, parseLegacy, makeBackup, readBackup, toCsv, csvDec } from '../parse.js';
 import { diffSales, inferPriceChanges, monthKey, r2, addDays } from '../calc.js';
-import { buildMarketingReport } from '../report.js';
+import { buildReportModel, toMarkdown, toHtml, toJson, toXlsxBook } from '../report.js';
 
 const app = () => window.__app;
 const stamp = () => new Date().toISOString().slice(0, 10);
@@ -135,26 +135,56 @@ acts['export.csv'] = async (d) => {
 };
 
 // ---------- отчёт для нейросети ----------
+const FORMATS = {
+  md: { label: 'Markdown', hint: 'лучше всего для нейросети' },
+  xlsx: { label: 'Excel', hint: 'таблицы на листах, числа можно считать' },
+  html: { label: 'Веб-страница', hint: 'красиво читать; из браузера можно сохранить в PDF' },
+  json: { label: 'Данные JSON', hint: 'сырые цифры для нейросетей, которые анализируют файлы' },
+};
 export function reportCard(a) {
   const c = a.ctx();
   if (!c.hasData) return '';
-  const r = a.ui.reportDays ?? 90;
+  const r = a.ui.reportDays ?? 90, f = a.ui.reportFmt || 'md';
   const chip = (v, t) => `<button class="chip${r === v ? ' on' : ''}" data-act="report.period" data-v="${v}">${t}</button>`;
   return `<div class="card" id="report"><h2>Отчёт для нейросети</h2>
     <p class="small muted">Все цифры по продажам, книгам, рекламе, целям и событиям в одном файле — с пояснениями и готовым вопросом в конце. Загрузите файл или вставьте текст в чат с нейросетью и попросите советы.</p>
+    <label style="margin-top:0">Период</label>
     <div class="chips">${chip(30, '30 дней')}${chip(90, '90 дней')}${chip(180, '180 дней')}${chip(0, 'Всё время')}</div>
+    <label>Формат</label>
+    <div class="chips">${Object.entries(FORMATS).map(([k, x]) => `<button class="chip${f === k ? ' on' : ''}" data-act="report.fmt" data-v="${k}">${x.label}</button>`).join('')}</div>
+    <p class="hint" style="margin:-2px 0 10px">${FORMATS[f].hint}</p>
     <div class="row"><button class="primary" data-act="report.dl">Скачать отчёт</button><button data-act="report.copy">Скопировать текст</button></div></div>`;
 }
-function makeReport() {
+function reportModel() {
   const a = app(), c = a.ctx(), days = a.ui.reportDays ?? 90;
   const from = days ? (addDays(c.dataEnd, -(days - 1)) < c.firstDate ? c.firstDate : addDays(c.dataEnd, -(days - 1))) : c.firstDate;
-  const md = buildMarketingReport({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, c.dataEnd);
-  return { md, name: `otchet-${from}_${c.dataEnd}.md` };
+  return buildReportModel({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, c.dataEnd);
 }
+let sheetjs;
+const loadSheetJs = () => (sheetjs ||= new Promise((res, rej) => {
+  const el = document.createElement('script');
+  el.src = new URL('../vendor/xlsx.full.min.js', import.meta.url).href; // библиотека лежит в самом приложении
+  el.onload = () => res(window.XLSX); el.onerror = () => { sheetjs = null; rej(new Error('Не загрузился модуль Excel — обновите страницу.')); };
+  document.head.appendChild(el);
+}));
 acts['report.period'] = (d) => { app().ui.reportDays = Number(d.v); };
-acts['report.dl'] = async () => { const r = makeReport(); if (await download(r.name, r.md, 'text/markdown')) toast('Отчёт скачан'); };
+acts['report.fmt'] = (d) => { app().ui.reportFmt = d.v; };
+acts['report.dl'] = async () => {
+  const m = reportModel(), f = app().ui.reportFmt || 'md';
+  const name = `otchet-${m.from}_${m.to}`;
+  let ok;
+  if (f === 'xlsx') {
+    toast('Готовлю Excel…');
+    const XLSX = await loadSheetJs();
+    const buf = XLSX.write(toXlsxBook(m, XLSX), { bookType: 'xlsx', type: 'array' });
+    ok = await download(name + '.xlsx', buf, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  } else if (f === 'html') ok = await download(name + '.html', toHtml(m), 'text/html');
+  else if (f === 'json') ok = await download(name + '.json', toJson(m), 'application/json');
+  else ok = await download(name + '.md', toMarkdown(m), 'text/markdown');
+  if (ok) toast('Отчёт скачан');
+};
 acts['report.copy'] = async () => {
-  const r = makeReport();
-  try { await navigator.clipboard.writeText(r.md); toast('Текст скопирован — вставьте его в чат с нейросетью'); }
+  const md = toMarkdown(reportModel());
+  try { await navigator.clipboard.writeText(md); toast('Текст скопирован — вставьте его в чат с нейросетью'); }
   catch { toast('Не получилось скопировать — скачайте файл кнопкой «Скачать отчёт»'); }
 };
