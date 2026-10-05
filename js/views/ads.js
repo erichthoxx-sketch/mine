@@ -66,10 +66,10 @@ export function ads(a) {
   const mk = monthKey(c.today), sp = c.spend[mk] || { litnet: 0, own: 0, other: 0 }, monthNow = sp.litnet + sp.own + sp.other;
   const disc = c.discounts[mk];
   const html = `
-  <div class="card"><div class="row between"><h2 style="margin:0">Платная реклама</h2><a href="#" class="small" data-act="go" data-to="/data">отчёт для нейросети →</a></div>
+  <div class="card"><div class="row between"><h2 style="margin:0">Платная реклама</h2><a href="#" class="btn small-btn" data-act="go" data-to="/data">Отчёт</a></div>
     ${summaryBody(c, all)}
     <p class="small" style="margin:10px 0 0">В ${fmtMonthIn(mk)}: ≈ ${rub(monthNow, 0)} по сегодня${c.forecast?.total ? ` · до конца месяца по плану ≈ ${rub(c.forecast.total, 0)}` : ''}${disc && disc.status === 'expected' ? ` · скидка Литнета ожидается ${rub(disc.expected, 0)}` : ''}</p>
-    ${open.map((x) => `<div class="alert" style="margin-top:10px">⚠︎ «${esc(x.name)}»: ${esc(alertText(x))}. Запросите отчёт у таргетологов.<div class="row" style="margin-top:8px"><button class="primary" data-act="note.new" data-id="${x.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${x.campaignId}">Запрос для нейросети</button></div></div>`).join('')}
+    ${open.map((x) => `<div class="alert" style="margin-top:10px">⚠︎ «${esc(x.name)}»: ${esc(alertText(x))}. Запросите отчёт у таргетологов.<div class="row" style="margin-top:8px"><button class="primary" data-act="note.new" data-id="${x.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${x.campaignId}">Скопировать отчёт</button></div></div>`).join('')}
     <div class="hint">Расход по дням — бюджет ÷ дни кампании (оценка). «Доход сверх обычного» — сколько книга зарабатывает больше, чем в дни без рекламы.</div>
   </div>
   <div class="card"><div class="row between"><h2 style="margin:0">Таргет «Литнет платит»</h2><button class="primary" data-act="ad.new" data-ch="litnet">+ Кампания</button></div>
@@ -123,7 +123,7 @@ export function adPage(a, id) {
       <dt>Стоимость одной продажи</dt><dd>${m.costPerSale == null ? '—' : rub(m.costPerSale)} <span class="muted small">(расход ÷ все ${m.qtyDuring} шт. за период)</span></dd>
       <dt>Стоимость одной «лишней» продажи</dt><dd>${m.costPerExtraSale == null ? '<span class="muted">продаж не больше, чем в базе</span>' : rub(m.costPerExtraSale)}</dd>
     </dl>`;
-  const html = `<p><a href="#" data-act="go" data-to="/ads">← Вся реклама</a></p>
+  const html = `<p><a class="btn back" href="#" data-act="go" data-to="/ads">← Вся реклама</a></p>
   <div class="card"><h2>${esc(k.name)}</h2>${metricsHtml}</div>
   <div class="card"><h2>Доход вокруг кампании</h2><div class="chart" id="chart"></div><div id="legend"></div></div>
   ${notesSection(c, k)}
@@ -230,7 +230,7 @@ function alertsBlock(c, alerts) {
   if (!open.length) return '';
   return open.map((a) => `<div class="card alert-card"><div class="row between"><b>⚠︎ ${esc(a.name)}</b><span class="badge bad">таргет просел</span></div>
     <p class="small" style="margin:8px 0">${esc(alertText(a))}. Запросите отчёт у таргетологов: скриншот с показами, кликами и ценой клика.</p>
-    <div class="row"><button class="primary" data-act="note.new" data-id="${a.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${a.campaignId}">Запрос для нейросети</button></div></div>`).join('');
+    <div class="row"><button class="primary" data-act="note.new" data-id="${a.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${a.campaignId}">Скопировать отчёт</button></div></div>`).join('');
 }
 function notesSection(c, k) {
   const notes = (c.data.adnotes || []).filter((n) => n.campaignId === k.id).sort((a, b) => b.date.localeCompare(a.date));
@@ -240,8 +240,8 @@ function notesSection(c, k) {
     ${notes.map((n) => `<div class="item"><div class="row between"><b>${fmtDate(n.date)}</b><button class="link danger" data-act="note.del" data-id="${n.id}">убрать</button></div>
       ${n.note ? `<div class="idea-text">${esc(n.note)}</div>` : ''}
       ${(n.images || []).length ? `<div class="shots">${n.images.map((src, i) => `<button class="shot" data-act="note.img" data-id="${n.id}" data-i="${i}"><img src="${src}" alt="скриншот отчёта"></button>`).join('')}</div>` : ''}</div>`).join('')}
-    <div class="row" style="margin-top:10px"><button class="primary" data-act="note.new" data-id="${k.id}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${k.id}">Запрос для нейросети</button></div>
-    <div class="hint">«Запрос для нейросети» копирует текст с цифрами кампании, продажами по дням и вашими примечаниями. Скриншоты приложите к сообщению сами (нажмите на скриншот — откроется крупно, его можно сохранить).</div></div>`;
+    <div class="row" style="margin-top:10px"><button class="primary" data-act="note.new" data-id="${k.id}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${k.id}">Скопировать отчёт</button></div>
+    <div class="hint">«Скопировать отчёт» копирует текст с цифрами кампании, продажами по дням и вашими примечаниями. Скриншоты приложите к сообщению сами (нажмите на скриншот — откроется крупно, его можно сохранить).</div></div>`;
 }
 acts['note.new'] = (d) => {
   const c = app().ctx();
@@ -266,8 +266,8 @@ acts['note.img'] = (d) => {
 acts['ai.prompt'] = async (d) => {
   const c = app().ctx(), k = c.campaigns.find((x) => x.id === d.id);
   const text = buildTargetPrompt({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, settings: c.settings, dataEnd: c.dataEnd }, k, targetAlert(k, actx(c), []), c.data.adnotes || []);
-  try { await navigator.clipboard.writeText(text); toast('Запрос скопирован — вставьте его в чат с нейросетью и приложите скриншоты'); }
-  catch { openSheet('Запрос для нейросети', `<p class="small muted">Выделите текст и скопируйте:</p><textarea style="min-height:300px" readonly>${esc(text)}</textarea>`, null); }
+  try { await navigator.clipboard.writeText(text); toast('Отчёт скопирован — вставьте его в чат и приложите скриншоты'); }
+  catch { openSheet('Отчёт по кампании', `<p class="small muted">Выделите текст и скопируйте:</p><textarea style="min-height:300px" readonly>${esc(text)}</textarea>`, null); }
 };
 
 acts['disc.confirm'] = (d) => {

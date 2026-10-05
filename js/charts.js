@@ -8,6 +8,7 @@ export const EVENT_TYPES = {
   promo: { label: 'Акция Литнета', color: 'var(--ev-promo)' },
   contest: { label: 'Итоги конкурса', color: 'var(--ev-contest)' },
   note: { label: 'Заметка', color: 'var(--ev-note)' },
+  other: { label: 'Другое', color: 'var(--ev-note)' },
 };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

@@ -53,7 +53,7 @@ export function bookPage(a, id) {
   const contests = c.data.w_contests.filter((x) => x.bookId === b.id);
   const ideas = c.data.w_ideas.filter((x) => x.bookId === b.id);
   const extra = (b.platforms || []).filter((x) => !PLATFORMS.includes(x)).join(', ');
-  const html = `<p><a href="#" data-act="go" data-to="/">← Все книги</a></p>
+  const html = `<p><a class="btn back" href="#" data-act="go" data-to="/">← Все книги</a></p>
   <div class="card book-head">
     <div class="cover big">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}
       <label class="btn small-btn">${b.cover ? 'Сменить обложку' : 'Загрузить обложку'}<input type="file" accept="image/*" data-chg="wbook.cover" data-id="${b.id}" hidden></label></div>

@@ -1,4 +1,4 @@
-import { esc, acts, forms, changes, opt, toast } from '../ui.js';
+import { esc, acts, forms, changes, opt, toast, openSheet } from '../ui.js';
 import { rub, fmtDate, fmtShort, fmtMonth, pct } from '../format.js';
 import { incomeSeries, booksBreakdown, manualSaleRow, dayStats, sumSeries, buildPlan, monthKey, daysInMonth, campaignDailySpend, countDays, addDays } from '../calc.js';
 import { N } from '../ui.js';
@@ -13,7 +13,7 @@ const chg = (v, label) => (v == null ? '' : `<span class="chip-stat ${v >= 0 ? '
 
 export function day(a) {
   const c = a.ctx(), ui = a.ui;
-  const date = ui.day || c.dataEnd || c.today; // по умолчанию — последний день с данными
+  const date = ui.day || c.today; // по умолчанию — сегодня
   const doc = dayDoc(c, date);
   const st = dayStats(c.sales, c.legacyDays, date);
   const bb = booksBreakdown(c.sales, date, date);
@@ -32,10 +32,10 @@ export function day(a) {
   const html = `
   <div class="day-nav card">
     <button data-act="day.shift" data-n="-1" aria-label="Предыдущий день">←</button>
-    <div class="day-title"><input id="dd" type="date" value="${date}" data-chg="day.date" aria-label="Дата"><div class="small muted">${WD[wd]}${date === c.dataEnd ? ' · последний день с данными' : ''}</div></div>
+    <div class="day-title"><input id="dd" type="date" value="${date}" data-chg="day.date" aria-label="Дата"><div class="small muted">${WD[wd]}${date === c.today ? ' · сегодня' : ''}${date === c.dataEnd ? ' · последний день с данными' : ''}</div></div>
     <button data-act="day.shift" data-n="1" aria-label="Следующий день">→</button>
   </div>
-  <div class="row" style="margin-bottom:12px"><button class="primary" data-act="chapter.quick">＋ Выкладка главы</button><button data-act="sale.manual" data-date="${date}">Добавить продажи вручную</button>${date !== c.dataEnd ? '<button class="link" data-act="day.today">к последнему дню с данными</button>' : ''}</div>
+  <div class="row" style="margin-bottom:12px"><button class="primary" data-act="event.quick" data-date="${date}">＋ Событие</button><button data-act="sale.manual" data-date="${date}">Добавить продажи вручную</button>${date !== c.today ? '<button class="link" data-act="day.today">к сегодня</button>' : ''}${date !== c.dataEnd ? `<button class="link" data-act="day.open" data-date="${c.dataEnd}">к последнему дню с данными</button>` : ''}</div>
   <div class="card">
     ${noData && !st.royalty ? `<p class="muted" style="margin:0">Выгрузки Литнета за ${fmtDate(date)} ещё нет. Загрузите её на вкладке «Данные» или добавьте продажи вручную.</p>` : `
     <div class="k small muted">Доход за день</div>
@@ -53,11 +53,7 @@ export function day(a) {
   ${manual.length ? `<div class="card"><h2>Добавлено вручную</h2>${manual.map((x) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(c.titleOf(x.bookId, x.book))}${x.platform && x.platform !== 'Литнет' ? ' · ' + esc(x.platform) : ''} · ${x.kind === 'sub' ? 'подписки' : 'продажи'} ${x.qty} шт. · ${rub(x.royalty)}</span><button class="link danger" data-act="day.delManual" data-id="${esc(x.id)}">убрать</button></div>`).join('')}</div>` : ''}
   <div class="card"><h2>События дня</h2>
     ${(doc.events || []).length ? (doc.events).map((e, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="pill-ev"><i style="background:${(EVENT_TYPES[e.type] || EVENT_TYPES.note).color}"></i><span>${esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)}${e.bookId ? ' · ' + esc(c.titleOf(e.bookId, '')) : ''}${e.text ? ': ' + esc(e.text) : ''}</span></span><button class="link danger" data-act="day.delEv" data-i="${i}">убрать</button></div>`).join('') : '<p class="muted">Событий нет.</p>'}
-    <details style="margin-top:8px"><summary>Добавить событие</summary>
-    <form data-form="day.addEv"><div class="f2"><div><label>Что произошло</label><select name="type">${Object.entries(EVENT_TYPES).map(([k, v]) => opt(k, v.label)).join('')}</select></div>
-      <div><label>Книга (необязательно)</label><select name="bookId"><option value="">—</option>${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}</select></div></div>
-      <label>Пояснение (необязательно)</label><input name="text" placeholder="например, скидка 30%">
-      <div style="margin-top:12px"><button class="primary" type="submit">Добавить событие</button></div></form></details>
+    <div style="margin-top:8px"><button data-act="event.quick" data-date="${date}">＋ Событие</button></div>
   </div>
   <div class="card"><h2>Заметка</h2><form data-form="day.note"><textarea name="note" placeholder="Что важно запомнить об этом дне">${esc(doc.note || '')}</textarea><div style="margin-top:10px"><button class="primary" type="submit">Сохранить заметку</button></div></form></div>
   ${recent.length ? `<details class="card"><summary>Последние записи</summary><div class="list">${recent.map((d) => `<a class="item" href="#" data-act="day.open" data-date="${d.date}"><b>${fmtDate(d.date)}</b> ${(d.events || []).map((e) => esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)).join(', ')} <span class="muted">${esc(d.note || '').slice(0, 80)}</span></a>`).join('')}</div></details>` : ''}`;
@@ -70,7 +66,7 @@ async function save(doc) {
 }
 changes['day.date'] = (v) => { if (v) app().ui.day = v; app().rerender(); };
 acts['day.today'] = () => { app().ui.day = null; };
-acts['day.shift'] = (d) => { const c = app().ctx(); app().ui.day = addDays(app().ui.day || c.dataEnd || c.today, Number(d.n)); };
+acts['day.shift'] = (d) => { const c = app().ctx(); app().ui.day = addDays(app().ui.day || c.today, Number(d.n)); };
 acts['day.open'] = (d) => { app().ui.day = d.date; window.scrollTo(0, 0); };
 acts['day.delEv'] = async (d) => {
   const c = app().ctx(), date = app().ui.day || c.today, doc = dayDoc(c, date);
@@ -99,3 +95,21 @@ forms['day.manual'] = async (fd) => {
   toast('Результат сохранён');
 };
 acts['day.delManual'] = (d) => app().store.remove('sales', d.id);
+
+// Событие на выбранный день: можно добавлять сколько угодно, по одному нажатию
+acts['event.quick'] = (d) => {
+  const c = app().ctx(), date = d.date || app().ui.day || c.today;
+  const books = c.activeBooks, def = books.find((b) => b.status !== 'done');
+  openSheet(`Событие — ${fmtDate(date)}`, `<label for="et">Что произошло</label><select id="et" name="type">${Object.entries(EVENT_TYPES).map(([k, v]) => opt(k, v.label, 'chapter')).join('')}</select>
+    <label for="eb">Книга (необязательно)</label><select id="eb" name="bookId"><option value="">—</option>${books.map((b) => opt(b.id, b.title, def?.id)).join('')}</select>
+    <label for="ex">Пояснение</label><input id="ex" name="text" placeholder="например, глава 25, скидка 30 % или своё событие">
+    <div class="hint">Для «Другое» напишите, что произошло, в пояснении.</div>`, async (fd) => {
+    const type = fd.get('type'), text = (fd.get('text') || '').trim();
+    if (type === 'other' && !text) { toast('Для «Другое» напишите, что произошло'); return false; }
+    const doc = dayDoc(app().ctx(), date);
+    const ev = { type, text };
+    if (fd.get('bookId')) ev.bookId = fd.get('bookId');
+    await save({ ...doc, id: date, date, events: [...(doc.events || []), ev] });
+    toast('Событие добавлено');
+  }, { submitText: 'Добавить' });
+};

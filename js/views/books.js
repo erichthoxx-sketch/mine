@@ -24,7 +24,7 @@ export function bookPage(a, id) {
   const b = c.booksById[id];
   if (!b) return { html: '<div class="card"><p>Книга не найдена.</p><a href="#" data-act="go" data-to="/books">← К списку</a></div>' };
   const hist = [...(b.priceHistory || [])].sort((x, y) => y.from.localeCompare(x.from));
-  const html = `<p><a href="#" data-act="go" data-to="/books">← Все книги</a></p>
+  const html = `<p><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a></p>
   <div class="card"><form data-form="book.save" data-id="${b.id}">
     <label style="margin-top:0">Название</label><input name="title" value="${esc(b.title)}" required>
     <div class="f2"><div><label>Статус</label><select name="status">${Object.entries(STATUS).map(([k, v]) => opt(k, v, b.status || 'progress')).join('')}</select></div>

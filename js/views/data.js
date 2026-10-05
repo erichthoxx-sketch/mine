@@ -147,7 +147,7 @@ export function reportCard(a) {
   if (!c.hasData) return '';
   const r = a.ui.reportDays ?? 90, f = a.ui.reportFmt || 'md';
   const chip = (v, t) => `<button class="chip${r === v ? ' on' : ''}" data-act="report.period" data-v="${v}">${t}</button>`;
-  return `<div class="card" id="report"><h2>Отчёт для нейросети</h2>
+  return `<div class="card" id="report"><h2>Отчёт</h2>
     <p class="small muted">Все цифры по продажам, книгам, рекламе, целям и событиям в одном файле — с пояснениями и готовым вопросом в конце. Загрузите файл или вставьте текст в чат с нейросетью и попросите советы.</p>
     <label style="margin-top:0">Период</label>
     <div class="chips">${chip(30, '30 дней')}${chip(90, '90 дней')}${chip(180, '180 дней')}${chip(0, 'Всё время')}</div>
@@ -186,7 +186,7 @@ acts['report.dl'] = async () => {
 };
 acts['report.copy'] = async () => {
   const md = toMarkdown(reportModel());
-  try { await navigator.clipboard.writeText(md); toast('Текст скопирован — вставьте его в чат с нейросетью'); }
+  try { await navigator.clipboard.writeText(md); toast('Отчёт скопирован — вставьте его в чат'); }
   catch { toast('Не получилось скопировать — скачайте файл кнопкой «Скачать отчёт»'); }
 };
 
@@ -198,9 +198,9 @@ acts['sale.manual'] = (d) => {
   const platforms = [...new Set([...PLATFORMS, ...c.sales.map((x) => x.platform).filter(Boolean)])];
   openSheet('Добавить продажи вручную', `
     <div class="f2"><div><label for="md">Дата</label><input id="md" type="date" name="date" value="${date}" required></div>
-    <div><label for="mp">Площадка</label><select id="mp" name="platform">${platforms.map((p) => opt(p, p, 'Литнет')).join('')}<option value="">другая — впишу название</option></select></div></div>
+    <div><label for="mp">Площадка</label><select id="mp" name="platform">${platforms.map((p) => opt(p, p, 'Литнет')).join('')}<option value="">Другая — впишу название</option></select></div></div>
     <input name="platformOther" placeholder="название площадки, если её нет в списке" aria-label="Другая площадка" style="margin-top:6px">
-    <label for="mb">Книга</label><select id="mb" name="bookId">${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}<option value="">другая — впишу название</option></select>
+    <label for="mb">Книга</label><select id="mb" name="bookId">${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}<option value="">Другая — впишу название</option></select>
     <input name="bookTitle" placeholder="название, если книги нет в списке" style="margin-top:6px" aria-label="Название книги">
     <div class="f2"><div><label for="mk">Тип</label><select id="mk" name="kind">${opt('sale', 'продажи')}${opt('sub', 'подписки')}</select></div>
     <div><label for="mq">Количество, шт.</label><input id="mq" name="qty" inputmode="numeric" required></div></div>

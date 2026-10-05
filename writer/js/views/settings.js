@@ -8,7 +8,7 @@ const app = () => window.__app;
 export function settingsView(a) {
   const c = a.ctx(), s = c.settings, st = a.store;
   const folder = (id, name, act, label) => `<div class="item"><div class="small muted">${label}</div><div class="row between"><b>${id ? ic('folder') + ' ' + esc(name || id) : 'не выбрана'}</b><button data-act="${act}">${id ? 'Сменить' : 'Выбрать'}</button></div></div>`;
-  const html = `<p><a href="#" data-act="go" data-to="/">← Назад</a></p>
+  const html = `<p><a class="btn back" href="#" data-act="go" data-to="/">← Назад</a></p>
   <div class="card"><h2>Google Диск</h2>
     ${!drive.driveConfigured ? '<p>Диск ещё не подключён к приложению: нужен ключ Google. Инструкция — docs/SETUP-WRITER.md; пришлите ключ Claude, он вставит.</p>'
     : drive.isConnected() ? `<p><span class="badge good">● подключён на этом устройстве</span></p>
