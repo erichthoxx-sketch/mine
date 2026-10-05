@@ -22,7 +22,7 @@ export function N(v) {
 export function openSheet(title, bodyHtml, onSubmit, { submitText = 'Сохранить' } = {}) {
   const dlg = document.getElementById('sheet');
   const f = document.getElementById('sheetForm');
-  f.innerHTML = `<h2>${esc(title)}</h2>${bodyHtml}<div class="row between" style="margin-top:16px"><button type="button" data-close>Отмена</button>${onSubmit ? `<button class="primary" type="submit">${esc(submitText)}</button>` : ''}</div>`;
+  f.innerHTML = `<h2>${esc(title)}</h2>${bodyHtml}<div class="row between sheet-actions"><button type="button" data-close>${onSubmit ? 'Отмена' : 'Закрыть'}</button>${onSubmit ? `<button class="primary" type="submit">${esc(submitText)}</button>` : ''}</div>`;
   f.onsubmit = async (e) => {
     e.preventDefault();
     if (!onSubmit) return;
@@ -36,7 +36,7 @@ export function openSheet(title, bodyHtml, onSubmit, { submitText = 'Сохра�
   h.tabIndex = -1;
   h.focus({ preventScroll: true });
   dlg.scrollTop = 0; f.scrollTop = 0;
-  requestAnimationFrame(() => { dlg.scrollTop = 0; });
+  requestAnimationFrame(() => { dlg.scrollTop = 0; f.scrollTop = 0; });
   return f;
 }
 export const closeSheet = () => document.getElementById('sheet').close();

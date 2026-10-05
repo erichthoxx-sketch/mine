@@ -193,11 +193,18 @@ tr.sel td { background: var(--accent-soft); }
 /* кнопки в заголовках карточек — одного размера и вида, как «Отчёт» */
 .card > .row.between:first-child > :is(button, .btn):not(.link),
 .card > .row.between:first-child > .row > :is(button, .btn):not(.link) { min-height: 34px; padding: 6px 14px; font-size: 14px; font-weight: 700; background: var(--surface); border-color: var(--btn-to); color: var(--text); }
-/* все кнопки на страницах — одного аккуратного размера, как «Отчёт» (в окнах — крупнее, удобнее пальцем) */
-main :is(button, .btn):not(.link):not(.chip):not(.wide) { min-height: 34px; padding: 6px 14px; font-size: 14px; }
+/* все кнопки — на страницах и в окнах — одного аккуратного размера, как «Отчёт» */
+:is(main, dialog) :is(button, .btn):not(.link):not(.chip):not(.wide) { min-height: 34px; padding: 6px 14px; font-size: 14px; }
 /* выбор месяца: ‹ месяц ›, без длинной ленты */
 .mnav { display: flex; align-items: center; gap: 2px; margin: 8px 0 2px; }
 .mnav select { width: auto; min-height: 32px; padding: 4px 8px; border: 0; background: transparent; font-weight: 700; cursor: pointer; }
 .mnav button.link { font-size: 20px; line-height: 1; padding: 2px 8px; font-weight: 700; }
 .mnav button.link:disabled { opacity: .25; }
 .mnav button.link:last-child:not([aria-label]) { font-size: 13px; margin-left: auto; }
+/* окна: скругление не ломается полосой прокрутки — прокручивается содержимое внутри, кнопки всегда видны внизу */
+dialog { padding: 0; overflow: hidden; }
+#sheetForm { max-height: calc(100vh - 34px); max-height: calc(100dvh - 34px); overflow-y: auto; overscroll-behavior: contain; padding: 18px 18px 0; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#sheetForm::-webkit-scrollbar { width: 6px; }
+#sheetForm::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+#sheetForm::-webkit-scrollbar-track { background: transparent; margin: 18px 0; }
+.sheet-actions { position: sticky; bottom: 0; margin: 16px -18px 0; padding: 12px 18px 16px; background: var(--surface); border-top: 1px solid var(--line); }
