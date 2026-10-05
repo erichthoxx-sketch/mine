@@ -24,19 +24,18 @@ export function money(a) {
 
   const html = `
   ${taxCard(c, sel, keys)}
-  ${rocketCard(c, keys)}
   <div class="card"><div class="row between"><h2 style="margin:0">Итоги месяца</h2><select id="mSel" data-chg="money.month" style="width:auto">${keys.map((k) => opt(k, fmtMonth(k), sel)).join('')}</select></div>
     <table style="margin-top:8px">
       <tr><td><b>Доход до вычетов</b> <span class="muted small">(роялти)</span></td><td><b>${rub(f.royalty)}</b></td></tr>
-      <tr><td>− Комиссия Rocket <span class="muted small">${f.rocketIndex != null ? 'индекс ' + num(f.rocketIndex, 1) : 'не внесена'}</span></td><td>${rub(f.rocketFee)}</td></tr>
+      <tr><td>− Комиссия Rocket <span class="muted small">${f.rocketIndex != null ? 'индекс ' + num(f.rocketIndex, 1) : 'нет цифр'}</span></td><td>${rub(f.rocketFee)}</td></tr>
       <tr><td>= После Rocket</td><td>${rub(f.afterRocket)}</td></tr>
       <tr><td>− Реклама «Литнет платит» <span class="muted small">${rub(f.litnetSpend)}${f.litnetDiscount ? ' − скидка ' + rub(f.litnetDiscount) : ''}</span></td><td>${rub(f.litnetSpend - f.litnetDiscount)}</td></tr>
       <tr><td>− Моя реклама (свой таргет, другое)</td><td>${rub(f.ownSpend)}</td></tr>
       <tr><td>− Налог <span class="muted small">${s.taxRate}% от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены книг'} (${rub(f.taxBase)})</span></td><td>${rub(f.tax)}</td></tr>
       <tr class="total"><td>Чистый доход</td><td class="${f.net >= 0 ? 'up' : 'down'}">${rub(f.net)}</td></tr>
     </table>
-    <div class="row" style="margin-top:10px"><button class="primary" data-act="month.edit" data-m="${sel}">Rocket и расходы за ${fmtMonth(sel)}</button></div>
-    ${f.rocketFee ? '' : '<div class="hint">Комиссию Rocket внесите после списания (до 20-го числа следующего месяца) — без неё чистый доход завышен.</div>'}
+    <div class="row" style="margin-top:10px"><button class="primary" data-act="month.edit" data-m="${sel}">Расходы на рекламу за ${fmtMonth(sel)}</button></div>
+    ${f.rocketFee ? '' : '<div class="hint">Цифры Rocket за прошедший месяц записываются на вкладке «Реклама». Пока их нет, чистый доход немного завышен.</div>'}
   </div>
   <div class="card"><h2>По месяцам</h2><div class="scroll"><table><tr><th>Месяц</th><th>Роялти</th><th>Rocket</th><th>Реклама</th><th>Налог</th><th>Чистый</th></tr>
     ${keys.map((k) => { const x = fin(c, k); return `<tr><td>${fmtMonthShort(k)}</td><td>${rub(x.royalty, 0)}</td><td>${rub(x.rocketFee, 0)}</td><td>${rub(x.adCost, 0)}</td><td>${rub(x.tax, 0)}</td><td class="${x.net >= 0 ? '' : 'down'}"><b>${rub(x.net, 0)}</b></td></tr>`; }).join('')}</table></div></div>
@@ -160,13 +159,14 @@ acts.copy = async (d) => {
 };
 
 // ---------- Rocket ----------
-function rocketCard(c, keys) {
+export function rocketCard(c, keys) {
   const r = rocketRows([...keys].reverse(), (k) => fin(c, k), c.monthsMap, c.today);
   const cur = r.rows.find((x) => !x.closed);
   const shown = [...r.rows].reverse().filter((x) => x.royalty > 0 || x.fee != null);
-  return `<div class="card"><div class="row between"><h2 style="margin:0">Rocket</h2>${r.missing.length ? `<span class="badge warn">не внесено: ${r.missing.length}</span>` : '<span class="badge good">всё внесено</span>'}</div>
-    ${r.missing.length ? `<div class="unpaid"><div class="small" style="font-weight:800;margin-bottom:6px">Не внесено:</div>${r.rows.filter((x) => r.missing.includes(x.month)).map((x) => `<div class="row between" style="padding:6px 0"><span>${fmtMonth(x.month)}<br><span class="small muted">списывают до ${fmtDate(x.chargeBy)}</span></span><button class="primary" data-act="rocket.edit" data-m="${x.month}">Внести</button></div>`).join('')}</div>` : ''}
-    ${cur ? `<p class="small muted" style="margin:10px 0 0">${fmtMonth(cur.month)} ещё идёт — комиссию за него внесите после списания, до ${fmtDate(cur.chargeBy)}. Цифры в кабинете Rocket до этого меняются.</p>` : ''}
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Литнет Rocket</h2>${r.missing.length ? `<span class="badge">нет цифр: ${r.missing.length} мес.</span>` : ''}</div>
+    <p class="small muted" style="margin:6px 0 0">Комиссию Литнет списывает из роялти сам. Здесь вы просто записываете цифры из кабинета Rocket за прошедший месяц — чтобы видеть, сколько продаж принесла реклама Литнета и во сколько она обошлась.</p>
+    ${r.missing.length ? `<div class="unpaid"><div class="small" style="font-weight:800;margin-bottom:6px">Нет цифр за:</div>${r.rows.filter((x) => r.missing.includes(x.month)).map((x) => `<div class="row between" style="padding:6px 0"><span>${fmtMonth(x.month)}<br><span class="small muted">итог в кабинете — после ${fmtDate(x.chargeBy)}</span></span><button class="primary" data-act="rocket.edit" data-m="${x.month}">Записать</button></div>`).join('')}</div>` : ''}
+    ${cur ? `<p class="small muted" style="margin:10px 0 0">${fmtMonth(cur.month)} ещё идёт — цифры за него запишите после ${fmtDate(cur.chargeBy)}, когда Литнет спишет комиссию и они перестанут меняться.</p>` : ''}
     ${shown.some((x) => x.fee != null) ? `<div class="scroll" style="margin-top:10px"><table><tr><th>Месяц</th><th>Индекс</th><th>Комиссия</th><th>≈ продаж через Rocket</th><th>Доля от роялти</th><th></th></tr>
       ${shown.filter((x) => x.closed).map((x) => `<tr><td>${fmtMonthShort(x.month)}</td><td>${x.index == null ? '—' : num(x.index, 1)}</td><td>${x.fee == null ? '<span class="muted">—</span>' : rub(x.fee, 0)}</td><td>${x.sales ?? '—'}</td><td>${x.share == null ? '—' : pct(x.share, 1)}</td><td><button class="link" data-act="rocket.edit" data-m="${x.month}">✎</button></td></tr>`).join('')}</table></div>
       <div class="hint">≈ продаж через Rocket = комиссия ÷ индекс: сколько продаж принесла реклама Литнета. Доля — сколько роялти ушло на комиссию.</div>` : ''}
@@ -182,6 +182,6 @@ acts['rocket.edit'] = (d) => {
     const idx = val('rocketIndex');
     if (idx != null && idx > c.settings.rocketCap) toast(`Индекс ${idx} выше обычного потолка ${c.settings.rocketCap} ₽ — проверьте цифру`);
     await app().store.put('months', { ...m, id: d.m, month: d.m, rocketIndex: idx, rocketFee: val('rocketFee') });
-    toast('Rocket сохранён');
+    toast('Цифры Rocket записаны');
   });
 };

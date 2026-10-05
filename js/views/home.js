@@ -1,6 +1,6 @@
 import { esc } from '../ui.js';
 import { rub, pct, fmtDate, fmtShort, fmtMonth, num } from '../format.js';
-import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, monthGoalStatus, monthKey, monthsBetween, taxRows, monthFinance, rocketRows } from '../calc.js';
+import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, monthGoalStatus, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
 import { dailyChart, EVENT_TYPES } from '../charts.js';
 import { acts } from '../ui.js';
 
@@ -80,8 +80,6 @@ function goalCard(c, st) {
 function taxReminder(c) {
   const keys = monthsBetween(monthKey(c.firstDate), monthKey(c.dataEnd));
   const t = taxRows(keys, (k) => monthFinance(k, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings }), c.monthsMap, c.dataEnd);
-  const rk = rocketRows(keys, (k) => monthFinance(k, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings }), c.monthsMap, c.today);
-  const rocketLine = rk.missing.length ? `<div class="card row between"><span>🚀 Внесите комиссию Rocket за ${rk.missing.map((k) => fmtMonth(k)).join(', ')}</span><button class="link" data-act="go" data-to="/money">внести</button></div>` : '';
-  if (!t.unpaid) return rocketLine;
-  return rocketLine + `<div class="card row between"><span>🧾 Налог к уплате: <b>${rub(t.unpaid, 0)}</b> <span class="small muted">за ${t.unpaidMonths.map((k) => fmtMonth(k)).join(', ')}</span></span><button class="link" data-act="go" data-to="/money">подробнее</button></div>`;
+  if (!t.unpaid) return '';
+  return `<div class="card row between"><span>🧾 Налог к уплате: <b>${rub(t.unpaid, 0)}</b> <span class="small muted">за ${t.unpaidMonths.map((k) => fmtMonth(k)).join(', ')}</span></span><button class="link" data-act="go" data-to="/money">подробнее</button></div>`;
 }

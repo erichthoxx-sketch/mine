@@ -1,6 +1,7 @@
 import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth } from '../format.js';
-import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, bookIdFor } from '../calc.js';
+import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, bookIdFor, monthsBetween } from '../calc.js';
+import { rocketCard } from './money.js';
 import { parseTargetReport, reportId } from '../parse.js';
 import { dailyChart, lineChart } from '../charts.js';
 import { chartInputs, chartLegend } from './home.js';
@@ -35,6 +36,7 @@ export function ads(a) {
   const c = a.ctx();
   const list = [...c.campaigns].sort((x, y) => (y.start || '').localeCompare(x.start || ''));
   const html = `${litnetCard(c)}
+  ${c.hasData ? rocketCard(c, monthsBetween(monthKey(c.firstDate), monthKey(c.today)).reverse()) : ''}
   <div class="row between" style="margin:14px 0 10px"><h2 style="margin:0">Кампании</h2><button class="primary" data-act="ad.new">+ Кампания</button></div>
   <p class="small"><a href="#" data-act="go" data-to="/data">📄 Скачать отчёт для нейросети →</a></p>
   <div class="card list">${list.length ? list.map((k) => {
