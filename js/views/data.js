@@ -194,9 +194,12 @@ acts['report.copy'] = async () => {
 const PLATFORMS = ['Литнет', 'Литмаркет', 'Литгород'];
 acts['sale.manual'] = (d) => {
   const c = app().ctx(), date = d?.date || c.today;
+  // площадки: основные + те, что уже встречались в ваших продажах
+  const platforms = [...new Set([...PLATFORMS, ...c.sales.map((x) => x.platform).filter(Boolean)])];
   openSheet('Добавить продажи вручную', `
     <div class="f2"><div><label for="md">Дата</label><input id="md" type="date" name="date" value="${date}" required></div>
-    <div><label for="mp">Площадка</label><input id="mp" name="platform" list="mpl" value="Литнет" required><datalist id="mpl">${PLATFORMS.map((p) => `<option value="${p}">`).join('')}</datalist></div></div>
+    <div><label for="mp">Площадка</label><select id="mp" name="platform">${platforms.map((p) => opt(p, p, 'Литнет')).join('')}<option value="">другая — впишу название</option></select></div></div>
+    <input name="platformOther" placeholder="название площадки, если её нет в списке" aria-label="Другая площадка" style="margin-top:6px">
     <label for="mb">Книга</label><select id="mb" name="bookId">${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}<option value="">другая — впишу название</option></select>
     <input name="bookTitle" placeholder="название, если книги нет в списке" style="margin-top:6px" aria-label="Название книги">
     <div class="f2"><div><label for="mk">Тип</label><select id="mk" name="kind">${opt('sale', 'продажи')}${opt('sub', 'подписки')}</select></div>
@@ -209,7 +212,9 @@ acts['sale.manual'] = (d) => {
     const qty = N(fd.get('qty')), royalty = N(fd.get('royalty')), gross = N(fd.get('gross'));
     if (!title) { toast('Выберите книгу или впишите название'); return false; }
     if ([qty, royalty].some((x) => x == null || Number.isNaN(x)) || (gross != null && Number.isNaN(gross))) { toast('Количество и суммы — числами'); return false; }
-    const row = manualSaleRow({ date: fd.get('date'), book: title, bookId: b?.id, kind: fd.get('kind'), qty, royalty, gross, platform: fd.get('platform') });
+    const platform = String(fd.get('platform') || fd.get('platformOther') || '').trim();
+    if (!platform) { toast('Выберите площадку или впишите название'); return false; }
+    const row = manualSaleRow({ date: fd.get('date'), book: title, bookId: b?.id, kind: fd.get('kind'), qty, royalty, gross, platform });
     if (!b) await app().store.put('books', { id: row.bookId, title, status: 'progress', startDate: '', lastChapterDate: '', priceHistory: [] });
     await app().store.put('sales', row);
     toast('Продажи добавлены');
