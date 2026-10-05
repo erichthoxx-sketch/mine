@@ -10,4 +10,4 @@ export const firebaseConfig = {
 };
 
 // Ключ входа Google для Диска (инструкция — docs/SETUP-WRITER.md). Пока «ВСТАВЬТЕ» — Диск не подключается.
-export const googleClientId = 'ВСТАВЬТЕ';
+export const googleClientId = '759769973589-8jf65e42gia3u2tsicoic455jis5ouad.apps.googleusercontent.com';
