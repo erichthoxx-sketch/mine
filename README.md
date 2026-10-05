@@ -3,7 +3,8 @@
 Личное веб-приложение: доход по дням и книгам из выгрузки Литнета, окупаемость рекламы, «Литнет платит», Rocket, налог, цели.
 Работает в браузере на телефоне и компьютере; данные в Firebase (бесплатно), вход по почте.
 
-- **Как настроить с нуля:** [docs/SETUP.md](docs/SETUP.md)
-- **Расчёты:** `js/calc.js` (все формулы), `js/parse.js` (разбор файлов). Тесты: `npm test`
+- **Доходы:** https://erichthoxx-sketch.github.io/mine/ — настройка: [docs/SETUP.md](docs/SETUP.md)
+- **Мастерская** (книги на Google Диске, идеи, планер, маркетинг): https://erichthoxx-sketch.github.io/mine/pisatel/ — подключение Диска: [docs/SETUP-WRITER.md](docs/SETUP-WRITER.md)
+- **Расчёты:** `js/calc.js` (доходы), `js/parse.js` (разбор файлов), `writer/js/wcalc.js` (знаки, конкурсы, прогнозы). Тесты: `npm test`
 - Пока Firebase не настроен, приложение запускается в пробном режиме (данные только в этом браузере).
 - Личные выгрузки (`Statistic*.csv`, `dohody*.csv`) в репозиторий не кладите — они в `.gitignore`.

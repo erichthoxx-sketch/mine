@@ -19,14 +19,14 @@ export const DEFAULT_SETTINGS = {
 };
 
 const clean = (o) => JSON.parse(JSON.stringify(o));
-const emptyData = () => ({ settings: { ...DEFAULT_SETTINGS }, books: [], sales: [], days: [], campaigns: [], reports: [], months: [] });
+const emptyData = (colls) => Object.fromEntries([['settings', { ...DEFAULT_SETTINGS }], ...colls.map((c) => [c, []])]);
 
 // На localhost (проверка при разработке) всегда пробный режим
 const isLocalDev = typeof location !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 export const firebaseConfigured = !isLocalDev && !Object.values(firebaseConfig).some((v) => String(v).includes('ВСТАВЬТЕ'));
 
 class Base {
-  constructor() { this.data = emptyData(); this.listeners = new Set(); this.user = null; this.mode = 'local'; this.sync = 'ok'; }
+  constructor(colls = COLLECTIONS) { this.colls = colls; this.data = emptyData(colls); this.listeners = new Set(); this.user = null; this.mode = 'local'; this.sync = 'ok'; }
   subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   emit() { this.version = (this.version || 0) + 1; this.listeners.forEach((f) => f(this.data)); }
   async putMany(coll, items) { for (let i = 0; i < items.length; i += 400) await this._write(coll, items.slice(i, i + 400), []); }
@@ -34,8 +34,9 @@ class Base {
   put(coll, item) { return this.putMany(coll, [item]); }
   remove(coll, id) { return this.removeMany(coll, [id]); }
   async replaceAll(backup) {
-    await this.saveSettings({ ...DEFAULT_SETTINGS, ...backup.settings });
-    for (const c of COLLECTIONS) {
+    await this.saveSettings({ ...(backup.settings || {}) });
+    for (const c of this.colls) {
+      if (!backup[c]) continue;
       const keep = new Set(backup[c].map((x) => String(x.id)));
       await this.removeMany(c, this.data[c].filter((x) => !keep.has(String(x.id))).map((x) => x.id));
       await this.putMany(c, backup[c]);
@@ -45,11 +46,11 @@ class Base {
 
 // ---------- пробный режим ----------
 class LocalStore extends Base {
-  constructor() { super(); this.mode = 'local'; this.key = 'authorTracker.v1'; }
+  constructor(colls, key = 'authorTracker.v1') { super(colls); this.mode = 'local'; this.key = key; }
   async init() {
     try {
       const raw = JSON.parse(localStorage.getItem(this.key) || 'null');
-      if (raw) this.data = { ...emptyData(), ...raw, settings: { ...DEFAULT_SETTINGS, ...raw.settings } };
+      if (raw) this.data = { ...emptyData(this.colls), ...raw, settings: { ...DEFAULT_SETTINGS, ...raw.settings } };
     } catch { /* пустое хранилище */ }
     this.user = { email: 'пробный режим' };
     this.emit();
@@ -72,7 +73,7 @@ class LocalStore extends Base {
 // ---------- Firebase ----------
 const FB = 'https://www.gstatic.com/firebasejs/10.12.2/';
 class FirebaseStore extends Base {
-  constructor() { super(); this.mode = 'firebase'; this.authReady = false; this.unsubs = []; }
+  constructor(colls) { super(colls); this.mode = 'firebase'; this.authReady = false; this.unsubs = []; }
   async init() {
     const [{ initializeApp }, A, F] = await Promise.all([
       import(FB + 'firebase-app.js'), import(FB + 'firebase-auth.js'), import(FB + 'firebase-firestore.js'),
@@ -92,7 +93,7 @@ class FirebaseStore extends Base {
   }
   _listen(uid) {
     const { collection, doc, onSnapshot } = this.F;
-    for (const c of COLLECTIONS) {
+    for (const c of this.colls) {
       this.unsubs.push(onSnapshot(collection(this.db, 'users', uid, c), { includeMetadataChanges: true }, (snap) => {
         this.data[c] = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
         // «сохраняется…», пока хотя бы в одной коллекции есть неподтверждённые записи
@@ -127,7 +128,8 @@ class FirebaseStore extends Base {
   signOut() { return this.A.signOut(this.auth); }
 }
 
-export function createStore() { return firebaseConfigured ? new FirebaseStore() : new LocalStore(); }
+// colls — какие коллекции нужны приложению; localKey — где хранить пробный режим
+export function createStore({ colls = COLLECTIONS, localKey } = {}) { return firebaseConfigured ? new FirebaseStore(colls) : new LocalStore(colls, localKey); }
 
 export function authErrorText(e) {
   const c = e?.code || '';

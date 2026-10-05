@@ -106,7 +106,7 @@ function render() {
   const syncText = store.mode === 'local' ? '' : store.sync === 'pending' ? 'сохраняется…' : store.sync === 'error' ? 'ошибка синхронизации' : navigator.onLine ? 'синхронизировано' : 'нет сети — сохранится позже';
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере. Синхронизация появится после настройки Firebase.</div>' : ''}
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
-  <button data-act="theme.toggle" aria-label="Тема" title="Тема">${theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '🌓'}</button></div>
+  <div class="row"><a class="btn" href="pisatel/">✦ Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '🌓'}</button></div></div>
   <main>${r.html}</main>
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h.slice(1)}" class="${tab === h ? 'on' : ''}"><b>${i}</b>${t}</a>`).join('')}</nav>`;
   afterFn = r.after || null;

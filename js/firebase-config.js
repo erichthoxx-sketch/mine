@@ -8,3 +8,6 @@ export const firebaseConfig = {
   messagingSenderId: '759769973589',
   appId: '1:759769973589:web:8681f61304ad87213b65dc',
 };
+
+// Ключ входа Google для Диска (инструкция — docs/SETUP-WRITER.md). Пока «ВСТАВЬТЕ» — Диск не подключается.
+export const googleClientId = 'ВСТАВЬТЕ';
