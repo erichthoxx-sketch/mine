@@ -6,7 +6,7 @@
   --font-body: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --bg: #f6f4f2; --surface: #ffffff; --surface-2: #f8eef2; --line: #ece4e7;
   --text: #1c1a1b; --text-2: #5c5257; --muted: #7d7277;
-  --accent: #b0466f; --link: #2f64a3; --accent-2: #f6c9d9; --accent-ink: #1c1a1b; --accent-soft: #fbe7ef; --btn-from: #f9d5e2; --btn-to: #f3bcd0;
+  --accent: #b0466f; --link: #0b6b4f; --accent-2: #f6c9d9; --accent-ink: #1c1a1b; --accent-soft: #fbe7ef; --btn-from: #f9d5e2; --btn-to: #f3bcd0;
   --bar: #eeaac4; --bar-unk: #f6dbe5; --ma: #1c1a1b; --ma3: #8a6fc9;
   --band: rgba(238, 170, 196, .18); --price: #8a5a00;
   --good: #1e7a4c; --bad: #b3263e; --warn: #9a5b00;
@@ -18,7 +18,7 @@
     color-scheme: dark;
     --bg: #161515; --surface: #201f1f; --surface-2: #2c2427; --line: #353032;
     --text: #f7f3f4; --text-2: #cfc4c8; --muted: #a2969b;
-    --accent: #f2b3ca; --link: #9cc3ee; --accent-2: #f2b3ca; --accent-ink: #1c1a1b; --accent-soft: #3a2a30; --btn-from: #f6c6d7; --btn-to: #eeaac4;
+    --accent: #f2b3ca; --link: #6fd0aa; --accent-2: #f2b3ca; --accent-ink: #1c1a1b; --accent-soft: #3a2a30; --btn-from: #f6c6d7; --btn-to: #eeaac4;
     --bar: #e79ab8; --bar-unk: #5a3a46; --ma: #f7f3f4; --ma3: #b79bff;
     --band: rgba(242, 179, 202, .12); --price: #e0b45a;
     --good: #5fd39b; --bad: #ff8fa0; --warn: #f0b85a;
@@ -30,7 +30,7 @@
   color-scheme: dark;
   --bg: #161515; --surface: #201f1f; --surface-2: #2c2427; --line: #353032;
   --text: #f7f3f4; --text-2: #cfc4c8; --muted: #a2969b;
-  --accent: #f2b3ca; --link: #9cc3ee; --accent-2: #f2b3ca; --accent-ink: #1c1a1b; --accent-soft: #3a2a30; --btn-from: #f6c6d7; --btn-to: #eeaac4;
+  --accent: #f2b3ca; --link: #6fd0aa; --accent-2: #f2b3ca; --accent-ink: #1c1a1b; --accent-soft: #3a2a30; --btn-from: #f6c6d7; --btn-to: #eeaac4;
   --bar: #e79ab8; --bar-unk: #5a3a46; --ma: #f7f3f4; --ma3: #b79bff;
   --band: rgba(242, 179, 202, .12); --price: #e0b45a;
   --good: #5fd39b; --bad: #ff8fa0; --warn: #f0b85a;
