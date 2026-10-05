@@ -265,7 +265,8 @@ export const DISCOUNT_NOTE = 'Скидка «Литнет платит» не у
 // Скидка предыдущего месяца — подтверждённая сумма, если введена, иначе рассчитанная.
 // Скидка уменьшает комиссию Литнета с продаж этого месяца и приходит в выплате следующего месяца.
 // Статус: «ожидается» (посчитана приложением) или «подтверждена» (сумма из отчёта Литнета).
-// В чистый доход идёт только подтверждённая (applied). payments — оплаты таргетологам, для справки.
+// Скидка считается автоматически и сразу идёт в чистый доход (applied); сумма из отчёта Литнета, если её когда-то ввели, заменяет расчёт.
+// payments — оплаты таргетологам, для справки.
 // confirmed: {месяц: {amount?}}
 export function litnetDiscounts(used, { threshold = 10000, pct = 0.2, forecastMonth = null, payments = {}, caps = {} } = {}, confirmed = {}) {
   const keys = [...new Set([...Object.keys(used), ...Object.keys(confirmed), ...Object.keys(payments)])].sort();
@@ -287,7 +288,7 @@ export function litnetDiscounts(used, { threshold = 10000, pct = 0.2, forecastMo
       month: k, spend, paid: payments[k] || 0, forecast: k === forecastMonth, prevDiscount: prev,
       qualified: ok, fee, capped: expected < raw, expected, confirmedAmount, discount,
       status: isConf ? 'confirmed' : 'expected',
-      applied: isConf ? discount : 0,
+      applied: discount, // считается автоматически и сразу идёт в чистый доход
       payoutMonth: addMonths(k, 1),
     };
   }
@@ -446,8 +447,7 @@ export const cpc = (r) => (r.clicks ? r.spend / r.clicks : null);
 // ---------- Rocket, налоги, чистый доход ----------
 // months[месяц] = { rocketIndex, rocketFee, litnetSpend?, extraAdSpend? }
 // Финансы месяца продаж.
-// Чистый = роялти + скидка (только подтверждённая) − Rocket − использованный рекламный бюджет − налог;
-// «чистый с ожидаемой скидкой» — для справки. Ожидаемая выплата Литнета за месяц продаж = роялти Литнета − Rocket + скидка
+// Чистый = роялти + скидка «Литнет платит» − Rocket − использованный рекламный бюджет − налог. Ожидаемая выплата Литнета за месяц продаж = роялти Литнета − Rocket + скидка
 // (подтверждённая, иначе ожидаемая). litnet: {месяц: {gross, royalty, fee}} — продажи Литнета (litnetMoneyByMonth).
 export function monthFinance(key, { sales, legacyDays, spend, discounts, months = {}, settings = {}, litnet = null }) {
   const ser = incomeSeries(sales, legacyDays, monthStart(key), monthEnd(key));
@@ -457,8 +457,8 @@ export function monthFinance(key, { sales, legacyDays, spend, discounts, months 
   const rocketFee = Number(m.rocketFee) || 0;
   const sp = spend[key] || { litnet: 0, own: 0, other: 0 };
   const dsc = discounts[key];
-  const discount = dsc?.applied || 0; // в чистый — только подтверждённая скидка
-  const expectedDiscount = dsc && dsc.status === 'expected' ? dsc.expected : 0;
+  const discount = dsc?.applied || 0; // скидка «Литнет платит» — автоматически, по оферте
+  const expectedDiscount = 0;
   const extra = Number(m.extraAdSpend) || 0;
   const ownSpend = r2(sp.own + sp.other + extra);
   const adSpend = r2(sp.litnet + ownSpend); // использованный рекламный бюджет за месяц

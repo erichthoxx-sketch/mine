@@ -283,7 +283,7 @@ test('расход по месяцам: бюджет ÷ дни кампании,
   assert.equal(r2(d['2026-10-12']), 588.24);
 });
 
-test('скидка «Литнет платит»: ожидается / подтверждена, в чистый — только подтверждённая', () => {
+test('скидка «Литнет платит» идёт в чистый автоматически; сумма из отчёта, если есть, заменяет расчёт', () => {
   const d = litnetDiscounts({ '2026-09': 12000, '2026-10': 15000 }, {}, { '2026-09': { amount: 2300 } });
   assert.equal(d['2026-09'].status, 'confirmed');
   assert.equal(d['2026-09'].expected, 2400);
@@ -291,10 +291,11 @@ test('скидка «Литнет платит»: ожидается / подт�
   assert.equal(d['2026-09'].applied, 2300);
   assert.equal(d['2026-10'].status, 'expected');
   assert.equal(d['2026-10'].expected, 2540); // (15000 − 2300) × 20 %
-  assert.equal(d['2026-10'].applied, 0);
+  assert.equal(d['2026-10'].applied, 2540);
   const f = monthFinance('2026-10', { sales: [], legacyDays: [], spend: { '2026-10': { litnet: 15000, own: 0, other: 0 } }, discounts: d, months: {}, settings: { taxRate: 4 } });
-  assert.equal(f.adCost, 15000);
-  assert.equal(f.expectedDiscount, 2540);
+  assert.equal(f.adSpend, 15000);
+  assert.equal(f.litnetDiscount, 2540);
+  assert.equal(f.net, -12460); // 0 + 2540 − 15000
 });
 
 test('ручной результат дня: строка с полной ценой из роялти и ключом без дублей', async () => {
@@ -401,7 +402,7 @@ test('«Литнет платит» по оферте: порог и скидк�
   const c2 = litnetDiscounts({ '2026-09': 15000, '2026-10': 20000 }, {}, { '2026-09': { amount: 2500 } });
   assert.equal(c2['2026-09'].discount, 2500); assert.equal(c2['2026-09'].confirmedAmount, 2500); assert.equal(c2['2026-09'].applied, 2500);
   assert.equal(c2['2026-10'].expected, 3500); // (20000 − 2500) × 20 %
-  assert.equal(c2['2026-10'].applied, 0);
+  assert.equal(c2['2026-10'].applied, 3500);
 });
 
 test('финансы месяца: чистый, ожидаемая выплата, сверка и деньги на руках', async () => {
@@ -415,8 +416,7 @@ test('финансы месяца: чистый, ожидаемая выплат
   assert.equal(f.litnetFee, 10901.85);
   assert.equal(f.adSpend, 8095.24); // использованный бюджет, не оплата
   assert.equal(f.tax, 1453.61);
-  assert.equal(f.net, 14949.55); // 25438,40 − 940 − 8095,24 − 1453,61 (ожидаемая скидка не учтена)
-  assert.equal(f.netExpected, 17349.55); // + 2400
+  assert.equal(f.net, 17349.55); // 25438,40 + 2400 − 940 − 8095,24 − 1453,61 — скидка учтена автоматически
   assert.equal(f.payoutExpected, 26898.4); // 25438,40 − 940 + 2400
   assert.equal(f.payoutDiscountExpected, true);
   assert.equal(f.payoutDiff, -98.4);

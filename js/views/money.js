@@ -29,20 +29,18 @@ export function money(a) {
     <table style="margin-top:8px">
       <tr><td><b>Доход до вычетов</b> <span class="muted small">(роялти)</span></td><td><b>${rub(f.royalty)}</b></td></tr>
       <tr><td>− Комиссия Rocket <span class="muted small">${f.rocketIndex != null ? 'индекс ' + num(f.rocketIndex, 1) + ' · записано вручную' : 'нет цифр'}</span>${f.rocketFee || f.rocketIndex != null ? ` <button class="link" data-act="rocket.edit" data-m="${sel}">изменить</button>` : ''}</td><td>${rub(f.rocketFee)}</td></tr>
-      <tr><td>+ Скидка «Литнет платит» <span class="muted small">${f.litnetDiscount ? 'подтверждена' : f.expectedDiscount ? `ожидается ${rub(f.expectedDiscount)}, пока не учтена` : 'нет'}</span>${dsc && (dsc.qualified || dsc.status === 'confirmed') ? ` <button class="link" data-act="disc.confirm" data-m="${sel}">${dsc.status === 'confirmed' ? 'изменить' : 'ввести'}</button>` : ''}</td><td>${rub(f.litnetDiscount)}</td></tr>
-      <tr><td>− Реклама: использованный бюджет <span class="muted small">«Литнет платит» ${rub(f.litnetSpend)}${f.ownSpend ? ` · своя ${rub(f.ownSpend)}` : ''}${c.litnetPayments?.[sel] ? ` · оплачено в этом месяце ${rub(c.litnetPayments[sel])}` : ''}</span></td><td>${rub(f.adSpend)}</td></tr>
+      <tr><td>+ Скидка от Литнета <span class="muted small">${dsc && dsc.discount > 0 ? `«Литнет платит», придёт с выплатой за ${fmtMonth(dsc.payoutMonth)}` : 'нет'}</span></td><td>${rub(f.litnetDiscount)}</td></tr>
+      <tr><td>− Реклама за месяц <span class="muted small">сколько открутилось${f.ownSpend ? ` · своя ${rub(f.ownSpend)}` : ''}</span></td><td>${rub(f.adSpend)}</td></tr>
       <tr><td>− Налог <span class="muted small">${s.taxRate}% от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены книг'} (${rub(f.taxBase)})</span></td><td>${rub(f.tax)}</td></tr>
-      <tr class="total"><td>Чистый доход${f.expectedDiscount ? `<span class="sub">с ожидаемой скидкой — ${rub(f.netExpected)}</span>` : ''}</td><td class="${f.net >= 0 ? 'up' : 'down'}">${rub(f.net)}</td></tr>
+      <tr class="total"><td>Чистый доход</td><td class="${f.net >= 0 ? 'up' : 'down'}">${rub(f.net)}</td></tr>
     </table>
     <h3>Выплата от Литнета за ${fmtMonth(sel)}</h3>
     <table>
-      <tr><td>Роялти Литнета − Rocket + скидка <span class="muted small">${f.payoutDiscountExpected ? 'скидка ожидаемая' : f.litnetDiscount ? 'скидка подтверждённая' : ''}</span></td><td>${f.payoutDiscountExpected ? '≈ ' : ''}${rub(f.payoutExpected)}</td></tr>
-      <tr><td>Фактически получено <button class="link" data-act="payout.edit" data-m="${sel}">${f.payoutActual == null ? 'ввести' : 'изменить'}</button></td><td>${f.payoutActual == null ? '<span class="muted">—</span>' : rub(f.payoutActual)}</td></tr>
-      ${f.payoutDiff != null ? `<tr><td>Разница</td><td class="${Math.abs(f.payoutDiff) < 1 ? '' : f.payoutDiff > 0 ? 'up' : 'down'}">${f.payoutDiff > 0 ? '+' : ''}${rub(f.payoutDiff)}</td></tr>` : ''}
+      <tr><td>Роялти − Rocket + скидка <span class="muted small">придёт в ${fmtMonthIn(addMonths(sel, 1))}</span></td><td>${f.payoutActual != null ? rub(f.payoutActual) : '≈ ' + rub(f.payoutExpected)}</td></tr>
     </table>
     <h3>Деньги на руках в ${fmtMonthIn(sel)}</h3>
     <table>
-      <tr><td>Пришла выплата <span class="muted small">за ${fmtMonth(addMonths(sel, -1))}${cash.receivedEstimated && cash.received != null ? ', ожидаемая' : ''}</span></td><td>${cash.received == null ? '<span class="muted">нет данных</span>' : `${cash.receivedEstimated ? '≈ ' : ''}${rub(cash.received)}`}</td></tr>
+      <tr><td>Пришла выплата <span class="muted small">за ${fmtMonth(addMonths(sel, -1))}</span></td><td>${cash.received == null ? '<span class="muted">нет данных</span>' : `${cash.receivedEstimated ? '≈ ' : ''}${rub(cash.received)}`}</td></tr>
       <tr><td>− Оплачено за рекламу в этом месяце</td><td>${rub(cash.paidAds)}</td></tr>
       <tr><td>− Налог <span class="muted small">за ${fmtMonth(addMonths(sel, -1))}, платится до 28-го</span></td><td>${rub(cash.taxPaid)}</td></tr>
       <tr class="total"><td>На руках</td><td class="${cash.cash == null ? '' : cash.cash >= 0 ? 'up' : 'down'}">${cash.cash == null ? '—' : rub(cash.cash)}</td></tr>
@@ -52,13 +50,13 @@ export function money(a) {
   </div>
   <div class="card"><h2>По месяцам</h2><div class="scroll"><table class="tight"><tr><th>Месяц</th><th>Роялти</th><th>Комиссия Литнета</th><th>Rocket</th><th>Скидка</th><th>Реклама</th><th>Налог</th><th>Чистый</th><th>Выплата</th><th>На руках</th></tr>
     ${keys.map((k) => { const x = fin(c, k), d = c.discounts[k], h = cashOf(c, k); return `<tr><td>${fmtMonthShort(k)}</td><td>${rub(x.royalty, 0)}</td><td>${rub(x.litnetFee, 0)}</td><td>${rub(x.rocketFee, 0)}</td>
-      <td>${x.litnetDiscount ? rub(x.litnetDiscount, 0) : x.expectedDiscount ? `<span class="muted">≈ ${rub(x.expectedDiscount, 0)}</span><span class="sub">ожидается</span>` : '—'}</td>
+      <td>${x.litnetDiscount ? rub(x.litnetDiscount, 0) : '—'}</td>
       <td>${rub(x.adSpend, 0)}${c.forecast && c.forecast.month === k && c.forecast.total ? `<span class="sub">прогноз ${rub(c.forecast.total, 0)}</span>` : ''}</td>
       <td>${rub(x.tax, 0)}</td>
-      <td class="${x.net >= 0 ? '' : 'down'}"><b>${rub(x.net, 0)}</b>${x.expectedDiscount ? `<span class="sub">с ожид. ${rub(x.netExpected, 0)}</span>` : ''}</td>
-      <td>${x.payoutActual != null ? rub(x.payoutActual, 0) : `<span class="muted">≈ ${rub(x.payoutExpected, 0)}</span>`}${x.payoutDiff != null && Math.abs(x.payoutDiff) >= 1 ? `<span class="sub">${x.payoutDiff > 0 ? '+' : ''}${rub(x.payoutDiff, 0)}</span>` : ''}</td>
-      <td>${h.cash == null ? '—' : `${h.receivedEstimated ? '≈ ' : ''}${rub(h.cash, 0)}`}</td></tr>`; }).join('')}</table></div>
-    <div class="hint">Реклама — использованный бюджет месяца. Чистый — со скидкой, только подтверждённой; серым — с ожидаемой. Выплата — за продажи месяца (≈ — ожидаемая, без ≈ — фактически получено). На руках — пришедшая в месяце выплата за прошлый месяц − оплаты рекламы − налог за прошлый месяц. ${DISCOUNT_NOTE}</div></div>
+      <td class="${x.net >= 0 ? '' : 'down'}"><b>${rub(x.net, 0)}</b></td>
+      <td>${x.payoutActual != null ? rub(x.payoutActual, 0) : `≈ ${rub(x.payoutExpected, 0)}`}</td>
+      <td>${h.cash == null ? '—' : `≈ ${rub(h.cash, 0)}`}</td></tr>`; }).join('')}</table></div>
+    <div class="hint">Всё считается само. Реклама — сколько открутилось за месяц. Скидка — от Литнета по программе «Литнет платит». Выплата — сколько Литнет перечислит за продажи месяца. На руках — пришедшая выплата за прошлый месяц минус оплаты рекламы и налог.</div></div>
   <div class="card"><div class="row between"><h2>Цели</h2><button class="primary" data-act="goal.all">Изменить цели</button></div>
     <p class="small muted">Старт: ${fmtMonth(s.goalStart)} — ${rub(s.goalAmount, 0)}, дальше +${s.goalGrowth}% в месяц; свои цели по месяцам — кнопка «Изменить цели». Факт — доход до вычетов (роялти).</p>
     <div class="chart" id="goalChart"></div>
@@ -72,17 +70,6 @@ export function money(a) {
 
 changes['money.month'] = (v) => { app().ui.month = v; app().rerender(); };
 
-// Сколько Литнет фактически перечислил за месяц продаж — для сверки с ожидаемой выплатой
-acts['payout.edit'] = (d) => {
-  const c = app().ctx(), m = c.monthsMap[d.m] || {}, f = fin(c, d.m);
-  openSheet(`Выплата Литнета за ${fmtMonth(d.m)}`, `<p class="small muted">Ожидается ${rub(f.payoutExpected)} (роялти − Rocket + скидка). Впишите, сколько пришло фактически, — приложение покажет разницу.</p>
-    <label for="pa">Фактически получено, ₽</label><input id="pa" name="v" inputmode="decimal" value="${m.payoutActual ?? ''}">`, async (fd) => {
-    const v = N(fd.get('v'));
-    if (Number.isNaN(v)) { toast('Сумма — числом'); return false; }
-    await app().store.put('months', { ...m, id: d.m, month: d.m, payoutActual: v });
-    toast('Сохранено');
-  });
-};
 
 acts['month.edit'] = (d) => {
   const c = app().ctx(), m = c.monthsMap[d.m] || {};

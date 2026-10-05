@@ -63,7 +63,7 @@ export function buildReportModel(d, from, to) {
     'Я автор любовных романов на платформе Литнет (litnet.com). Доход — роялти: 70 % от цены продажи или подписки.',
     '«Продажа» — покупка книги целиком, «подписка» — оплата доступа к книге в процессе написания (выкладка по главам).',
     `Продвижение: (1) «Литнет платит» — таргетированную рекламу запускает Литнет, я оплачиваю бюджет полностью (агентское вознаграждение за рекламу 0 %). Если использованный бюджет месяца (сколько рекламы реально открутилось) ≥ ${T(N0(s.litnetThreshold))} ₽, Литнет даёт скидку на свою комиссию с продаж этого месяца (комиссия = полная цена − роялти): скидка = (использованный бюджет − скидка прошлого месяца) × ${s.litnetPct} %, не больше комиссии минус 1 ₽. ${DISCOUNT_NOTE} (2) Литнет Rocket — за каждую продажу, которую привела реклама Литнета, из роялти списывается комиссия = индекс Rocket (не выше ${s.rocketCap} ₽). (3) Бесплатные баннеры и приоритетные показы в рекомендациях.`,
-    `Налог: ${s.taxRate} % от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены проданных книг'}. Чистый доход = роялти + скидка (только подтверждённая) − Rocket − использованный рекламный бюджет − налог. Ожидаемая выплата Литнета за месяц продаж = роялти − Rocket + скидка.`,
+    `Налог: ${s.taxRate} % от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены проданных книг'}. Чистый доход = роялти + скидка «Литнет платит» − Rocket − использованный рекламный бюджет − налог. Ожидаемая выплата Литнета за месяц продаж = роялти − Rocket + скидка.`,
     'Окупаемость кампании: база = средний доход в день до старта кампании (дни, когда не шла другая реклама этой книги); прирост = доход в день во время кампании − база; окупаемость в день = прирост − расход в день. Порог окупаемости — доход в день, при котором реклама выходит в ноль.',
   ]);
 
@@ -81,12 +81,12 @@ export function buildReportModel(d, from, to) {
   ]);
 
   h2('По месяцам');
-  table('Месяцы', ['Месяц', 'Роялти', 'Полная цена', 'Комиссия Литнета', 'Продажи, шт', 'Подписки, шт', 'Rocket, ₽', 'Индекс Rocket', 'Скидка «Литнет платит» (подтверждена)', 'Скидка ожидается (не учтена)', 'Реклама: использованный бюджет', 'Реклама: прогноз на весь месяц', 'Налог', 'Чистый', 'Чистый с ожидаемой скидкой', 'Выплата Литнета ожидается', 'Выплата получена', 'Цель', '% цели'],
+  table('Месяцы', ['Месяц', 'Роялти', 'Полная цена', 'Комиссия Литнета', 'Продажи, шт', 'Подписки, шт', 'Rocket, ₽', 'Индекс Rocket', 'Скидка «Литнет платит»', 'Реклама: использованный бюджет', 'Реклама: прогноз на весь месяц', 'Налог', 'Чистый', 'Выплата Литнета ожидается', 'Выплата получена', 'Цель', '% цели'],
     months.map((k) => {
       const f = finOf(k);
       const g = byMonth(incomeSeries(d.sales, d.legacyDays, k + '-01', monthEnd(k) > to ? to : monthEnd(k)))[0] || { saleQty: 0, subQty: 0 };
       const pl = planOf(k);
-      return [fmtMonth(k) + (k === monthKey(d.dataEnd) && d.dataEnd < monthEnd(k) ? ' (месяц идёт)' : ''), RUB(f.royalty), RUB(f.gross), RUB(f.litnetFee), N0(g.saleQty), N0(g.subQty), f.rocketFee ? RUB(f.rocketFee) : 'не внесено', f.rocketIndex != null ? N2(f.rocketIndex) : null, f.litnetDiscount ? RUB(f.litnetDiscount) : null, f.expectedDiscount ? RUB(f.expectedDiscount) : null, RUB(f.adSpend), d.forecast && d.forecast.month === k ? RUB(d.forecast.total) : null, RUB(f.tax), RUB(f.net), RUB(f.netExpected), RUB(f.payoutExpected), f.payoutActual != null ? RUB(f.payoutActual) : null, pl == null ? null : RUB(pl), pl ? PCT(f.royalty / pl, 0) : null];    }));
+      return [fmtMonth(k) + (k === monthKey(d.dataEnd) && d.dataEnd < monthEnd(k) ? ' (месяц идёт)' : ''), RUB(f.royalty), RUB(f.gross), RUB(f.litnetFee), N0(g.saleQty), N0(g.subQty), f.rocketFee ? RUB(f.rocketFee) : 'не внесено', f.rocketIndex != null ? N2(f.rocketIndex) : null, f.litnetDiscount ? RUB(f.litnetDiscount) : null, RUB(f.adSpend), d.forecast && d.forecast.month === k ? RUB(d.forecast.total) : null, RUB(f.tax), RUB(f.net), RUB(f.payoutExpected), f.payoutActual != null ? RUB(f.payoutActual) : null, pl == null ? null : RUB(pl), pl ? PCT(f.royalty / pl, 0) : null];    }));
 
   h2('По неделям (с понедельника)');
   table('Недели', ['Неделя', 'Роялти', 'Продажи, шт', 'Подписки, шт', 'В день', 'Реклама шла'],
@@ -136,7 +136,7 @@ export function buildReportModel(d, from, to) {
   if (lmonths.length) {
     h2('«Литнет платит» по месяцам');
     p(DISCOUNT_NOTE);
-    table('Литнет платит', ['Месяц', 'Оплачено', 'Использовано', 'Порог достигнут', 'Комиссия Литнета', 'Скидка (расчёт)', 'Скидка (подтверждена)', 'Статус', 'Придёт в выплате за'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k) + (x.forecast ? ' (прогноз)' : ''), RUB(x.paid), RUB(x.spend), x.qualified ? 'да' : 'нет', x.fee != null ? RUB(x.fee) : null, RUB(x.expected), x.status === 'confirmed' ? RUB(x.discount) : null, x.status === 'confirmed' ? 'подтверждена' : 'ожидается', fmtMonth(x.payoutMonth)]; }));
+    table('Литнет платит', ['Месяц', 'Оплачено', 'Использовано', 'Порог достигнут', 'Комиссия Литнета', 'Скидка', 'Придёт с выплатой за'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k) + (x.forecast ? ' (прогноз)' : ''), RUB(x.paid), RUB(x.spend), x.qualified ? 'да' : 'нет', x.fee != null ? RUB(x.fee) : null, RUB(x.discount), fmtMonth(x.payoutMonth)]; }));
   }
 
   const evDates = Object.keys(evBy).sort();
