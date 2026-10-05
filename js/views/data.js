@@ -1,7 +1,8 @@
 import { esc, acts, forms, changes, openSheet, opt, toast, N, download, readFile, closeSheet } from '../ui.js';
 import { rub, fmtDate, fmtMonth, num, parseNum } from '../format.js';
 import { decodeBuffer, parseStatistic, parseLegacy, makeBackup, readBackup, toCsv, csvDec } from '../parse.js';
-import { diffSales, inferPriceChanges, monthKey, r2 } from '../calc.js';
+import { diffSales, inferPriceChanges, monthKey, r2, addDays } from '../calc.js';
+import { buildMarketingReport } from '../report.js';
 
 const app = () => window.__app;
 const stamp = () => new Date().toISOString().slice(0, 10);
@@ -15,6 +16,7 @@ export function data(a) {
     <p class="small muted" style="margin-top:12px">Данные из старого трекера (dohody.csv) — для дней до начала выгрузки, плюс события и заметки:</p>
     <label class="btn" style="cursor:pointer">Выбрать dohody.csv<input type="file" accept=".csv,.txt" data-chg="imp.legacy" hidden></label>
     <div class="hint">Сейчас в базе: ${c.sales.length} строк продаж${c.hasData ? ` за ${fmtDate(c.firstDate)} – ${fmtDate(c.dataEnd)}` : ''}.</div></div>
+  ${reportCard(a)}
   <div class="card"><h2>Резервная копия</h2>
     <div class="row"><button class="primary" data-act="backup.save">Скачать копию (JSON)</button><label class="btn" style="cursor:pointer">Восстановить из копии<input type="file" accept=".json,application/json" data-chg="backup.restore" hidden></label></div>
     <h3>Экспорт в CSV (для Excel)</h3>
@@ -130,4 +132,29 @@ acts['export.csv'] = async (d) => {
   };
   const [rows, cols] = defs[k];
   await download(`${k}-${stamp()}.csv`, toCsv(rows, cols.map(([title, get]) => ({ title, get }))), 'text/csv');
+};
+
+// ---------- отчёт для нейросети ----------
+export function reportCard(a) {
+  const c = a.ctx();
+  if (!c.hasData) return '';
+  const r = a.ui.reportDays ?? 90;
+  const chip = (v, t) => `<button class="chip${r === v ? ' on' : ''}" data-act="report.period" data-v="${v}">${t}</button>`;
+  return `<div class="card" id="report"><h2>Отчёт для нейросети</h2>
+    <p class="small muted">Все цифры по продажам, книгам, рекламе, целям и событиям в одном файле — с пояснениями и готовым вопросом в конце. Загрузите файл или вставьте текст в чат с нейросетью и попросите советы.</p>
+    <div class="chips">${chip(30, '30 дней')}${chip(90, '90 дней')}${chip(180, '180 дней')}${chip(0, 'Всё время')}</div>
+    <div class="row"><button class="primary" data-act="report.dl">Скачать отчёт</button><button data-act="report.copy">Скопировать текст</button></div></div>`;
+}
+function makeReport() {
+  const a = app(), c = a.ctx(), days = a.ui.reportDays ?? 90;
+  const from = days ? (addDays(c.dataEnd, -(days - 1)) < c.firstDate ? c.firstDate : addDays(c.dataEnd, -(days - 1))) : c.firstDate;
+  const md = buildMarketingReport({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, c.dataEnd);
+  return { md, name: `otchet-${from}_${c.dataEnd}.md` };
+}
+acts['report.period'] = (d) => { app().ui.reportDays = Number(d.v); };
+acts['report.dl'] = async () => { const r = makeReport(); if (await download(r.name, r.md, 'text/markdown')) toast('Отчёт скачан'); };
+acts['report.copy'] = async () => {
+  const r = makeReport();
+  try { await navigator.clipboard.writeText(r.md); toast('Текст скопирован — вставьте его в чат с нейросетью'); }
+  catch { toast('Не получилось скопировать — скачайте файл кнопкой «Скачать отчёт»'); }
 };

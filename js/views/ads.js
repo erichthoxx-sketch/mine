@@ -36,6 +36,7 @@ export function ads(a) {
   const list = [...c.campaigns].sort((x, y) => (y.start || '').localeCompare(x.start || ''));
   const html = `${litnetCard(c)}
   <div class="row between" style="margin:14px 0 10px"><h2 style="margin:0">Кампании</h2><button class="primary" data-act="ad.new">+ Кампания</button></div>
+  <p class="small"><a href="#" data-act="go" data-to="/data">📄 Скачать отчёт для нейросети →</a></p>
   <div class="card list">${list.length ? list.map((k) => {
     const m = metricsFor(c, k);
     const badge = m.status === 'planned' ? '<span class="badge">запланирована</span>' : m.status === 'active' ? '<span class="badge good">идёт</span>' : '<span class="badge">завершена</span>';
