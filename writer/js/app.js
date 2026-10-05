@@ -4,6 +4,7 @@ import { installHandlers, esc, toast, acts, forms, watchForUpdates } from '../..
 import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
 import { written } from './wcalc.js';
 import * as drive from './drive.js';
+import { ic } from '../../js/icons.js';
 import { booksView, bookPage, refreshAll } from './views/books.js';
 import { ideasView } from './views/ideas.js';
 import { planView } from './views/plan.js';
@@ -48,7 +49,7 @@ function getCtx() {
   return cache;
 }
 
-const TABS = [['/', '📚', 'Книги'], ['/ideas', '💡', 'Идеи'], ['/plan', '🗓️', 'Планер'], ['/marketing', '💖', 'Маркетинг']];
+const TABS = [['/', 'books', 'Книги'], ['/ideas', 'ideas', 'Идеи'], ['/plan', 'plan', 'Планер'], ['/marketing', 'marketing', 'Маркетинг']];
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'book' && b) return { tab: '/', view: (x) => bookPage(x, decodeURIComponent(b)) };
@@ -83,10 +84,10 @@ function render() {
   try { r = view(app) || { html: '' }; } catch (e) { console.error(e); r = { html: `<div class="card"><p>Ошибка экрана: ${esc(e.message)}</p></div>` }; }
   const sync = store.mode === 'local' ? '' : store.sync === 'pending' ? 'сохраняется…' : store.sync === 'error' ? 'ошибка синхронизации' : navigator.onLine ? 'синхронизировано' : 'нет сети';
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере.</div>' : ''}
-  <div class="top"><div><h1>✦ Мастерская</h1><small>${esc(c.settings.pseudonym)}${sync ? ' · ' + sync : ''}</small></div>
-  <div class="row"><a class="btn" href="../">₽ Доходы</a><button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">⚙️</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '🌓'}</button></div></div>
+  <div class="top"><div><h1>Мастерская</h1><small>${esc(c.settings.pseudonym)}${sync ? ' · ' + sync : ''}</small></div>
+  <div class="row"><a class="btn" href="../">${ic('ruble')} Доходы</a><button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">${ic('settings')}</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
   <main>${r.html}</main>
-  <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}"><b>${i}</b>${t}</a>`).join('')}</nav>`;
+  <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}"><b>${ic(i)}</b>${t}</a>`).join('')}</nav>`;
   afterFn = r.after || null;
   afterFn?.();
 }

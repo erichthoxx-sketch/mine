@@ -163,3 +163,14 @@ dialog h2 { outline: none; padding-right: 8px; }
 .shots { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .shot { padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; width: 96px; height: 96px; min-height: 0; background: var(--surface-2); }
 .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* иконки: тонкие линии, цвет — от текста */
+.ic { flex: none; display: inline-block; vertical-align: -0.2em; }
+nav.tabs a b { display: flex; justify-content: center; height: 26px; align-items: center; }
+nav.tabs a .ic { width: 22px; height: 22px; }
+nav.tabs a.on { color: var(--text); }
+nav.tabs a.on .ic { color: var(--accent); stroke-width: 2; }
+.top .ic, button .ic, .btn .ic { width: 18px; height: 18px; }
+.tag .ic, .small .ic, td .ic, .item .ic, p .ic, b .ic { width: 1.05em; height: 1.05em; }
+nav.tabs a { color: var(--text-2); }
+nav.tabs a .ic { color: var(--text); }
+nav.tabs a.on .ic { color: var(--accent); }

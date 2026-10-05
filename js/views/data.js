@@ -68,7 +68,7 @@ changes['imp.stat'] = async (v, el) => {
   const perMonth = {};
   for (const s of r.rows) perMonth[monthKey(s.date)] = r2((perMonth[monthKey(s.date)] || 0) + s.royalty);
   const newBooks = [...new Map(r.rows.filter((s) => !c.booksById[s.bookId]).map((s) => [s.bookId, s.book])).entries()];
-  const check = fileTotal == null ? '' : Math.abs(fileTotal - r.total) < 0.01 ? `<div class="alert ok">✔ Сумма строк ${rub(r.total)} совпадает с «Итого» в файле.</div>` : `<div class="alert bad">⚠ Сумма строк ${rub(r.total)} не совпадает с «Итого» в файле (${rub(fileTotal)}).</div>`;
+  const check = fileTotal == null ? '' : Math.abs(fileTotal - r.total) < 0.01 ? `<div class="alert ok">✔︎ Сумма строк ${rub(r.total)} совпадает с «Итого» в файле.</div>` : `<div class="alert bad">⚠︎ Сумма строк ${rub(r.total)} не совпадает с «Итого» в файле (${rub(fileTotal)}).</div>`;
   openSheet('Импорт выгрузки', `<p>Период <b>${fmtDate(from)} – ${fmtDate(to)}</b>, строк: ${r.rows.length}, гонорар <b>${rub(r.total)}</b>.</p>${check}
     <table><tr><th>Месяц</th><th>Гонорар</th></tr>${Object.keys(perMonth).sort().map((k) => `<tr><td>${fmtMonth(k)}</td><td>${rub(perMonth[k])}</td></tr>`).join('')}</table>
     <h3>Что изменится</h3><ul><li>новых строк: <b>${d.added}</b></li><li>обновится: <b>${d.changed}</b></li><li>без изменений: ${d.same}</li>${newBooks.length ? `<li>новые книги: ${newBooks.map(([, t]) => esc(t)).join(', ')}</li>` : ''}</ul>
@@ -159,7 +159,7 @@ export function reportCard(a) {
 function reportModel() {
   const a = app(), c = a.ctx(), days = a.ui.reportDays ?? 90;
   const from = days ? (addDays(c.dataEnd, -(days - 1)) < c.firstDate ? c.firstDate : addDays(c.dataEnd, -(days - 1))) : c.firstDate;
-  return buildReportModel({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, c.dataEnd);
+  return buildReportModel({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, forecast: c.forecast, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, c.dataEnd);
 }
 let sheetjs;
 const loadSheetJs = () => (sheetjs ||= new Promise((res, rej) => {

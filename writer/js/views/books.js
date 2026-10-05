@@ -1,3 +1,4 @@
+import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate } from '../../../js/format.js';
 import { recordProgress, written, pace, forecastDate, charsAt, contestStatus, daysLeft } from '../wcalc.js';
@@ -10,7 +11,7 @@ export const PLATFORMS = ['Литнет', 'Литмаркет', 'Литгоро�
 const zn = (n) => num(n || 0) + ' зн.';
 
 export function driveBar(c) {
-  if (!drive.driveConfigured) return '<p class="small muted">Google Диск ещё не подключён к приложению — см. ⚙️ Настройки.</p>';
+  if (!drive.driveConfigured) return '<p class="small muted">Google Диск ещё не подключён к приложению — см. Настройки (шестерёнка вверху).</p>';
   if (!drive.isConnected()) return '<button class="primary" data-act="drive.connect">Подключить Google Диск</button>';
   if (!c.settings.wBooksFolder) return '<button class="primary" data-act="go" data-to="/settings">Выбрать папку с книгами</button>';
   return `<div class="row"><span class="badge good">● Google Диск подключён</span><button data-act="wbook.refresh">Обновить знаки</button></div>`;
@@ -64,7 +65,7 @@ export function bookPage(a, id) {
         <dt>Всего знаков (с пробелами)</dt><dd>${zn(b.chars)}</dd>
         <dt>Сегодня / за 7 дней</dt><dd><span class="up">+${num(written(h, c.today, 1))}</span> / <span class="up">+${num(written(h, c.today, 7))}</span></dd>
         <dt>Темп за 2 недели</dt><dd>${p ? num(Math.round(p)) + ' зн. в день' : '—'}</dd>
-        ${b.planChars ? `<dt>План ${zn(b.planChars)}</dt><dd>${(b.chars || 0) >= b.planChars ? 'набран ✔' : fc ? 'при таком темпе — к ' + fmtDate(fc) : 'темпа пока нет'}</dd>` : ''}
+        ${b.planChars ? `<dt>План ${zn(b.planChars)}</dt><dd>${(b.chars || 0) >= b.planChars ? 'набран ✔︎' : fc ? 'при таком темпе — к ' + fmtDate(fc) : 'темпа пока нет'}</dd>` : ''}
         <dt>Последняя правка файла</dt><dd>${b.modifiedTime ? fmtDate(b.modifiedTime.slice(0, 10)) : '—'}${b.countedAt ? ` <span class="muted small">· знаки обновлены ${fmtDate(b.countedAt.slice(0, 10))} ${b.countedAt.slice(11, 16)}</span>` : ''}</dd>
       </dl>
       ${b.fileId ? `<div class="row" style="margin-top:8px"><button data-act="wbook.refreshOne" data-id="${b.id}">Обновить знаки</button></div>` : ''}
@@ -72,7 +73,7 @@ export function bookPage(a, id) {
   </div>
   ${(b.tabs || []).length ? `<div class="card"><h2>Главы (вкладки документа)</h2><div class="scroll"><table><tr><th>Вкладка</th><th>Знаков</th></tr>${b.tabs.map((t) => `<tr><td>${esc(t.title)}</td><td>${num(t.chars)}</td></tr>`).join('')}<tr class="total"><td>Всего</td><td>${num(b.chars)}</td></tr></table></div></div>` : ''}
   ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${zn(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
-  ${ideas.length ? `<div class="card"><h2>Идеи к книге</h2>${ideas.map((x) => `<div class="item small">💡 ${esc(x.title || x.text.slice(0, 60))}</div>`).join('')}</div>` : ''}
+  ${ideas.length ? `<div class="card"><h2>Идеи к книге</h2>${ideas.map((x) => `<div class="item small">${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</div>`).join('')}</div>` : ''}
   <div class="card"><h2>О книге</h2>
   <form data-form="wbook.save" data-id="${b.id}">
     <label for="bt" style="margin-top:0">Название</label><input id="bt" name="title" value="${esc(b.title)}" required>
@@ -117,7 +118,7 @@ acts['wbook.new'] = () => {
   const c = app().ctx();
   const ready = drive.isConnected() && c.settings.wBooksFolder;
   openSheet('Новая книга', `
-    ${ready ? '<button type="button" class="primary wide" data-act="wbook.pick">Выбрать файл на Google Диске</button>' : `<p class="small muted">${drive.isConnected() ? 'Сначала выберите папку с книгами в ⚙️ Настройках.' : 'Подключите Google Диск, чтобы выбирать файлы книг.'}</p>`}
+    ${ready ? '<button type="button" class="primary wide" data-act="wbook.pick">Выбрать файл на Google Диске</button>' : `<p class="small muted">${drive.isConnected() ? 'Сначала выберите папку с книгами в Настройках (шестерёнка вверху).' : 'Подключите Google Диск, чтобы выбирать файлы книг.'}</p>`}
     <h3>Или создать новую книгу</h3>
     <label for="nb">Название</label><input id="nb" name="title">
     <label class="check"><input type="checkbox" name="mkdoc" ${ready ? 'checked' : 'disabled'}>Создать Google Документ в папке с книгами</label>`, async (fd) => {

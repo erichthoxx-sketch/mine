@@ -1,3 +1,4 @@
+import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, opt, toast, download, ask } from '../../../js/ui.js';
 import * as drive from '../drive.js';
 import { WCOLLS } from '../app.js';
@@ -6,7 +7,7 @@ const app = () => window.__app;
 
 export function settingsView(a) {
   const c = a.ctx(), s = c.settings, st = a.store;
-  const folder = (id, name, act, label) => `<div class="item"><div class="small muted">${label}</div><div class="row between"><b>${id ? '📁 ' + esc(name || id) : 'не выбрана'}</b><button data-act="${act}">${id ? 'Сменить' : 'Выбрать'}</button></div></div>`;
+  const folder = (id, name, act, label) => `<div class="item"><div class="small muted">${label}</div><div class="row between"><b>${id ? ic('folder') + ' ' + esc(name || id) : 'не выбрана'}</b><button data-act="${act}">${id ? 'Сменить' : 'Выбрать'}</button></div></div>`;
   const html = `<p><a href="#" data-act="go" data-to="/">← Назад</a></p>
   <div class="card"><h2>Google Диск</h2>
     ${!drive.driveConfigured ? '<p>Диск ещё не подключён к приложению: нужен ключ Google. Инструкция — docs/SETUP-WRITER.md; пришлите ключ Claude, он вставит.</p>'
@@ -35,7 +36,7 @@ async function chooseFolder(key, title) {
       if (!found.length && fd.get('create')) found = [await drive.createFolder(name, app().ctx().settings.wBooksFolder || undefined)];
       if (!found.length) { toast('Папка не найдена. Проверьте название.'); return false; }
       if (found.length === 1) { await app().store.saveSettings({ [key]: found[0].id, [key + 'Name']: found[0].name }); toast('Папка выбрана'); return; }
-      setTimeout(() => openSheet('Какая из папок?', `<div class="list">${found.map((f) => `<div class="item row between"><span>📁 ${esc(f.name)}</span><button type="button" class="primary" data-act="set.pickFolder" data-key="${key}" data-id="${f.id}" data-name="${esc(f.name)}">Эта</button></div>`).join('')}</div>`, null), 0);
+      setTimeout(() => openSheet('Какая из папок?', `<div class="list">${found.map((f) => `<div class="item row between"><span>${ic('folder')} ${esc(f.name)}</span><button type="button" class="primary" data-act="set.pickFolder" data-key="${key}" data-id="${f.id}" data-name="${esc(f.name)}">Эта</button></div>`).join('')}</div>`, null), 0);
     } catch (e) { toast(e.message); return false; }
   }, { submitText: 'Найти' });
 }

@@ -1,3 +1,4 @@
+import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, pct } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate } from '../wcalc.js';
@@ -14,7 +15,7 @@ export function planView(a) {
   const overdue = d.w_waiting.filter((x) => waitingStatus(x, c.today).overdue).length;
   const tab = (k, label, n) => `<button class="chip${t === k ? ' on' : ''}" data-act="plan.tab" data-v="${k}">${label}${n ? ` · ${n}` : ''}</button>`;
   const body = t === 'queue' ? queue(c) : t === 'waiting' ? waiting(c) : contests(c);
-  return { html: `<div class="chips">${tab('contests', 'Конкурсы', live)}${tab('queue', 'Что пишу дальше', d.w_queue.filter((x) => !x.done).length)}${tab('waiting', 'Жду ответа', overdue ? overdue + ' ⚠' : '')}</div>${body}` };
+  return { html: `<div class="chips">${tab('contests', 'Конкурсы', live)}${tab('queue', 'Что пишу дальше', d.w_queue.filter((x) => !x.done).length)}${tab('waiting', 'Жду ответа', overdue ? overdue + ' ⚠︎' : '')}</div>${body}` };
 }
 
 // ---------- конкурсы ----------
@@ -32,10 +33,10 @@ function contests(c) {
     return `<div class="card${over ? ' faded' : ''}">
       <div class="row between"><b>${esc(x.name)}</b>${badge}</div>
       <div class="small muted">${x.platform ? esc(x.platform) + ' · ' : ''}${CSTATUS[x.status] || CSTATUS.plan}${x.start ? ' · с ' + fmtDate(x.start) : ''}${x.end ? ' по ' + fmtDate(x.end) : ''}</div>
-      ${b ? `<div style="margin-top:8px"><div class="small">📚 ${esc(b.title)} — ${zn(s.chars)}${x.minChars ? ` из ${zn(x.minChars)}` : ''}${x.maxChars ? ` (не больше ${zn(x.maxChars)})` : ''}</div>
+      ${b ? `<div style="margin-top:8px"><div class="small">${ic('books')} ${esc(b.title)} — ${zn(s.chars)}${x.minChars ? ` из ${zn(x.minChars)}` : ''}${x.maxChars ? ` (не больше ${zn(x.maxChars)})` : ''}</div>
         ${s.progress != null ? `<div class="progress"><i style="width:${(s.progress * 100).toFixed(1)}%"></i></div>
-        <div class="small">${s.need ? `нужно ещё ${zn(s.need)} · это ~${zn(s.perDay)} в день` : 'объём набран ✔'}${s.need ? (s.onTrack ? ` · <span class="up">успеваю ✔ (прогноз ${fmtDate(s.forecast)})</span>` : ` · <span class="down">${s.forecast ? 'при нынешнем темпе — к ' + fmtDate(s.forecast) : 'темпа пока нет'} ⚠</span>`) : ''}</div>` : ''}
-        ${x.maxChars && s.chars > x.maxChars ? '<div class="small down">⚠ объём больше максимума конкурса</div>' : ''}</div>` : ''}
+        <div class="small">${s.need ? `нужно ещё ${zn(s.need)} · это ~${zn(s.perDay)} в день` : 'объём набран ✔︎'}${s.need ? (s.onTrack ? ` · <span class="up">успеваю ✔︎ (прогноз ${fmtDate(s.forecast)})</span>` : ` · <span class="down">${s.forecast ? 'при нынешнем темпе — к ' + fmtDate(s.forecast) : 'темпа пока нет'} ⚠︎</span>`) : ''}</div>` : ''}
+        ${x.maxChars && s.chars > x.maxChars ? '<div class="small down">⚠︎ объём больше максимума конкурса</div>' : ''}</div>` : ''}
       ${x.conditions ? `<details style="margin-top:8px"><summary>Условия</summary><p class="idea-text">${esc(x.conditions)}</p></details>` : ''}
       <div class="row" style="margin-top:8px">${x.url ? `<a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">Страница конкурса</a>` : ''}<button class="link" data-act="contest.edit" data-id="${x.id}">Изменить</button></div>
     </div>`;
@@ -69,7 +70,7 @@ function queue(c) {
     const b = x.bookId ? c.wbooksById[x.bookId] : null;
     const fc = b && b.planChars ? forecastDate(b.history, c.today, Number(b.planChars)) : null;
     return `<div class="item"><div class="row between"><span><b>${i + 1}. ${esc(x.title)}</b></span><span class="row"><button class="link" data-act="queue.move" data-id="${x.id}" data-dir="-1" aria-label="Выше">▲</button><button class="link" data-act="queue.move" data-id="${x.id}" data-dir="1" aria-label="Ниже">▼</button></span></div>
-      <div class="small muted">${b ? '📚 ' + esc(b.title) + ' · ' : ''}${x.due ? 'к ' + fmtDate(x.due) : 'без срока'}${fc ? ' · по темпу допишу к ' + fmtDate(fc) : ''}</div>
+      <div class="small muted">${b ? ic('books') + ' ' + esc(b.title) + ' · ' : ''}${x.due ? 'к ' + fmtDate(x.due) : 'без срока'}${fc ? ' · по темпу допишу к ' + fmtDate(fc) : ''}</div>
       ${x.note ? `<div class="small">${esc(x.note)}</div>` : ''}
       <div class="row"><button class="link" data-act="queue.done" data-id="${x.id}">✓ Готово</button><button class="link" data-act="queue.edit" data-id="${x.id}">Изменить</button></div></div>`;
   }).join('') : '<p class="muted">Очередь пуста.</p>'}</div>

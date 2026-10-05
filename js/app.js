@@ -2,9 +2,10 @@
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates } from './ui.js';
 import {
-  todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance,
+  todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast,
 } from './calc.js';
 import { fmtDate } from './format.js';
+import { ic } from './icons.js';
 import { home } from './views/home.js';
 import { day } from './views/day.js';
 import { books, bookPage } from './views/books.js';
@@ -53,12 +54,14 @@ function getCtx() {
   const monthsMap = Object.fromEntries(d.months.map((m) => [m.id, m]));
   const spend = spendByMonthChannel(d.campaigns, d.reports, monthsMap, today);
   const litnet = Object.fromEntries(Object.entries(spend).map(([k, v]) => [k, v.litnet]));
-  const discounts = litnetDiscounts(litnet, { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100 });
+  const confirmed = Object.fromEntries(d.months.filter((m) => m.litnetDiscountConfirmed).map((m) => [m.id, { amount: m.litnetDiscountAmount }]));
+  const discounts = litnetDiscounts(litnet, { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100 }, confirmed);
+  const forecast = monthSpendForecast(d.campaigns, d.reports, today);
   const booksById = Object.fromEntries(d.books.map((b) => [b.id, b]));
   cache = {
     data: d, settings: d.settings, today, sales: d.sales, legacyDays, books: d.books, booksById, campaigns: d.campaigns,
     firstDate: first, dataEnd, hasData, series, ma: movingAverage(series.map((x) => x.royalty), 7),
-    monthsMap, spend, discounts,
+    monthsMap, spend, discounts, forecast,
     titleOf: (id, fallback) => booksById[id]?.title || fallback,
   };
   cacheKey = key;
@@ -66,7 +69,7 @@ function getCtx() {
 }
 
 // ---------- маршруты ----------
-const TABS = [['#/', '📈', 'Главная'], ['#/day', '✏️', 'День'], ['#/books', '📚', 'Книги'], ['#/ads', '🎯', 'Реклама'], ['#/money', '💰', 'Финансы'], ['#/data', '⚙️', 'Данные']];
+const TABS = [['#/', 'home', 'Главная'], ['#/day', 'day', 'День'], ['#/books', 'books', 'Книги'], ['#/ads', 'ads', 'Реклама'], ['#/money', 'money', 'Финансы'], ['#/data', 'data', 'Данные']];
 function route() {
   const h = '#' + (ui.route || '/');
   const [, a, b] = h.split('/');
@@ -106,9 +109,9 @@ function render() {
   const syncText = store.mode === 'local' ? '' : store.sync === 'pending' ? 'сохраняется…' : store.sync === 'error' ? 'ошибка синхронизации' : navigator.onLine ? 'синхронизировано' : 'нет сети — сохранится позже';
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере. Синхронизация появится после настройки Firebase.</div>' : ''}
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
-  <div class="row"><a class="btn" href="pisatel/">✦ Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '🌓'}</button></div></div>
+  <div class="row"><a class="btn" href="pisatel/">${ic('sparkle')} Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
   <main>${r.html}</main>
-  <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h.slice(1)}" class="${tab === h ? 'on' : ''}"><b>${i}</b>${t}</a>`).join('')}</nav>`;
+  <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h.slice(1)}" class="${tab === h ? 'on' : ''}"><b>${ic(i)}</b>${t}</a>`).join('')}</nav>`;
   afterFn = r.after || null;
   afterFn?.();
 }
@@ -143,6 +146,23 @@ store.init().then(() => {
     store.saveSettings({ taxRate: 4, taxBase: 'gross', taxVersion: 2 }).then(() => toast('Ставка налога исправлена на 4 % (самозанятая, доход от физлиц)')).catch(() => { fixed = false; });
   };
   setTimeout(() => { store.subscribe(fixTax); fixTax(); }, 1500);
+  // Разовое исправление дат и базы двух кампаний (по просьбе: «тестовый» и «Таргет Альпийский»)
+  let campFixed = false;
+  const fixCampaigns = async () => {
+    if (campFixed || !store.user || !store.settingsLoaded || !store.loaded?.campaigns) return;
+    if (store.data.settings.campFix202610) { campFixed = true; return; }
+    campFixed = true;
+    const base = { baseMode: 'range', baseFrom: '2026-09-01', baseTo: '2026-09-13' };
+    const plan = { 'тестовый': { start: '2026-09-14', end: '2026-10-04', ...base }, 'таргет альпийский': { start: '2026-10-05', end: '2026-11-07', ...base } };
+    try {
+      for (const k of store.data.campaigns) {
+        const p = plan[(k.name || '').trim().toLowerCase()];
+        if (p) await store.put('campaigns', { ...k, ...p });
+      }
+      await store.saveSettings({ campFix202610: true });
+    } catch { campFixed = false; }
+  };
+  setTimeout(() => { store.subscribe(fixCampaigns); fixCampaigns(); }, 1500);
 }).catch((e) => {
   console.error(e);
   document.getElementById('app').innerHTML = `<div class="auth"><h1>Не удалось запустить</h1><p>${esc(e.message || e)}</p><p class="muted">Проверьте интернет и настройки Firebase.</p></div>`;

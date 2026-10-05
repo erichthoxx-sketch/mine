@@ -2,7 +2,7 @@
 // потом выводим её в нужный формат: Markdown, HTML, Excel, JSON. Чистые функции — проверены тестами.
 import {
   addDays, countDays, incomeSeries, sumSeries, byWeek, byMonth, booksBreakdown, priceAt, monthKey,
-  monthsBetween, monthFinance, campaignMetrics, ctr, cpc, buildPlan, r2, monthEnd,
+  monthsBetween, monthFinance, campaignMetrics, ctr, cpc, buildPlan, r2, monthEnd, chapterEffect,
 } from './calc.js';
 import { fmtDate, fmtMonth } from './format.js';
 
@@ -40,7 +40,7 @@ export function buildReportModel(d, from, to) {
   const prevKnown = prevSer.some((x) => x.known);
   const qty = ser.reduce((a, x) => a + x.qty, 0), saleQty = ser.reduce((a, x) => a + x.saleQty, 0), subQty = ser.reduce((a, x) => a + x.subQty, 0);
   const finOf = (k) => monthFinance(k, { sales: d.sales, legacyDays: d.legacyDays, spend: d.spend, discounts: d.discounts, months: d.monthsMap, settings: s });
-  const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays };
+  const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays, today: d.today };
   const months = monthsBetween(monthKey(from), monthKey(to));
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
   const planOf = (k) => plan.find((p) => p.month === k)?.plan ?? null;
@@ -80,12 +80,12 @@ export function buildReportModel(d, from, to) {
   ]);
 
   h2('По месяцам');
-  table('Месяцы', ['Месяц', 'Роялти', 'Полная цена', 'Продажи, шт', 'Подписки, шт', 'Rocket, ₽', 'Индекс Rocket', 'Реклама после скидки', 'Налог', 'Чистый', 'Цель', '% цели'],
+  table('Месяцы', ['Месяц', 'Роялти', 'Полная цена', 'Продажи, шт', 'Подписки, шт', 'Rocket, ₽', 'Индекс Rocket', 'Реклама после скидки', 'Скидка ожидается (не учтена)', 'Реклама: прогноз на весь месяц', 'Налог', 'Чистый', 'Цель', '% цели'],
     months.map((k) => {
       const f = finOf(k);
       const g = byMonth(incomeSeries(d.sales, d.legacyDays, k + '-01', monthEnd(k) > to ? to : monthEnd(k)))[0] || { saleQty: 0, subQty: 0 };
       const pl = planOf(k);
-      return [fmtMonth(k) + (k === monthKey(d.dataEnd) && d.dataEnd < monthEnd(k) ? ' (месяц идёт)' : ''), RUB(f.royalty), RUB(f.gross), N0(g.saleQty), N0(g.subQty), f.rocketFee ? RUB(f.rocketFee) : 'не внесено', f.rocketIndex != null ? N2(f.rocketIndex) : null, RUB(f.adCost), RUB(f.tax), RUB(f.net), pl == null ? null : RUB(pl), pl ? PCT(f.royalty / pl, 0) : null];
+      return [fmtMonth(k) + (k === monthKey(d.dataEnd) && d.dataEnd < monthEnd(k) ? ' (месяц идёт)' : ''), RUB(f.royalty), RUB(f.gross), N0(g.saleQty), N0(g.subQty), f.rocketFee ? RUB(f.rocketFee) : 'не внесено', f.rocketIndex != null ? N2(f.rocketIndex) : null, RUB(f.adCost), f.expectedDiscount ? RUB(f.expectedDiscount) : null, d.forecast && d.forecast.month === k ? RUB(d.forecast.total) : null, RUB(f.tax), RUB(f.net), pl == null ? null : RUB(pl), pl ? PCT(f.royalty / pl, 0) : null];
     }));
 
   h2('По неделям (с понедельника)');
@@ -97,6 +97,14 @@ export function buildReportModel(d, from, to) {
     booksBreakdown(d.sales, from, to).map((b) => { const bk = d.books.find((x) => x.id === b.bookId) || {}; return [title(b.bookId, b.title), bk.status === 'done' ? 'завершена' : 'в процессе', RUB2(priceAt(bk, d.today)), RUB(b.royalty), PCT(b.share, 0), N0(b.saleQty), RUB(b.saleRoyalty), N0(b.subQty), RUB(b.subRoyalty)]; }));
   const priceCh = d.books.flatMap((b) => (b.priceHistory || []).filter((x) => x.from >= from && x.from <= to).map((x) => [x.from, b.title, x.price])).sort((a, b) => a[0].localeCompare(b[0]));
   if (priceCh.length) table('Цены', ['С даты', 'Книга', 'Цена'], priceCh.map(([dt, t, pr]) => [fmtDate(dt), t, RUB2(pr)]));
+
+  const inProgress = d.books.filter((b) => b.status !== 'done');
+  if (inProgress.length) {
+    h2('Выкладка глав и подписки');
+    p('Среднее число подписок в день: в дни, когда я выкладывала главу этой книги, и в остальные дни (по книгам в процессе).');
+    table('Выкладка глав', ['Книга', 'Дней с выкладкой', 'Подписок в день — с выкладкой', 'Подписок в день — без выкладки'],
+      chapterEffect(d.sales, d.days, inProgress, from, to).map((x) => [x.title, N0(x.chapterDays), x.subsOn == null ? 'выкладок не отмечено' : N2(x.subsOn), N2(x.subsOff)]));
+  }
 
   h2('Рекламные кампании');
   if (!camps.length) p('В периоде кампаний не было.');
@@ -118,8 +126,8 @@ export function buildReportModel(d, from, to) {
       ['Стоимость одной продажи (все продажи)', RUB2(m.costPerSale)],
       ['Стоимость дополнительной продажи', RUB2(m.costPerExtraSale)],
     ]);
-    if (m.baseNotes?.includes('overlap')) p('⚠ В базе есть дни другой рекламы — база может быть завышена.');
-    if (m.baseNotes?.includes('few')) p('⚠ База посчитана по малому числу дней — оценка неточная.');
+    if (m.baseNotes?.includes('overlap')) p('⚠︎ В базе есть дни другой рекламы — база может быть завышена.');
+    if (m.baseNotes?.includes('few')) p('⚠︎ База посчитана по малому числу дней — оценка неточная.');
     const reps = d.reports.filter((r) => r.campaignId === k.id).sort((a, b) => a.start.localeCompare(b.start));
     if (reps.length) table(`Таргет ${i + 1}`, ['Период', 'Расход', 'Показы', 'Клики', 'CTR', 'CPC'], reps.map((r) => [`${fmtDate(r.start)} – ${fmtDate(r.end)}`, RUB2(r.spend), N0(r.impressions), N0(r.clicks), PCT(ctr(r), 2), RUB2(cpc(r))]));
   });
@@ -127,7 +135,8 @@ export function buildReportModel(d, from, to) {
   const lmonths = months.filter((k) => d.discounts[k]);
   if (lmonths.length) {
     h2('«Литнет платит»: расход и скидка');
-    table('Литнет платит', ['Месяц', 'Расход', 'Порог достигнут', 'Скидка', 'Расход после скидки'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k), RUB(x.spend), x.qualified ? 'да' : 'нет', RUB(x.discount), RUB(x.effective)]; }));
+    table('Литнет платит', ['Месяц', 'Расход (по сегодня)', 'Порог достигнут', 'Скидка', 'Статус скидки', 'Расход после скидки'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k), RUB(x.spend), x.qualified ? 'да' : 'нет', RUB(x.discount), x.status === 'confirmed' ? 'подтверждена' : x.status === 'expected' ? 'ожидается' : '—', RUB(x.effective)]; }));
+    if (d.forecast && d.forecast.litnet) p(`Прогноз расхода «Литнет платит» за ${fmtMonth(d.forecast.month)} по плану кампаний: ${cellText(RUB(d.forecast.litnet))}.`);
   }
 
   const evDates = Object.keys(evBy).sort();
@@ -249,7 +258,7 @@ export const buildMarketingReport = (d, from, to) => toMarkdown(buildReportModel
 export function buildTargetPrompt(d, k, alert, notes = []) {
   const s = d.settings;
   const title = (id) => d.books.find((b) => b.id === id)?.title || '';
-  const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays };
+  const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays, today: d.today };
   const m = campaignMetrics(k, mctx);
   const from = m.baseFrom && m.baseFrom < k.start ? m.baseFrom : addDays(k.start, -14);
   const ser = incomeSeries(d.sales, d.legacyDays, from, m.to || d.dataEnd, m.bookId);

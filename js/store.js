@@ -54,6 +54,7 @@ class LocalStore extends Base {
     } catch { /* пустое хранилище */ }
     this.user = { email: 'пробный режим' };
     this.settingsLoaded = true;
+    this.loaded = Object.fromEntries(this.colls.map((c) => [c, true]));
     this.emit();
   }
   _save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch { this.sync = 'error'; } this.emit(); }
@@ -97,6 +98,7 @@ class FirebaseStore extends Base {
     for (const c of this.colls) {
       this.unsubs.push(onSnapshot(collection(this.db, 'users', uid, c), { includeMetadataChanges: true }, (snap) => {
         this.data[c] = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+        if (!snap.metadata.fromCache) (this.loaded ||= {})[c] = true; // пришло с сервера — данные полные
         // «сохраняется…», пока хотя бы в одной коллекции есть неподтверждённые записи
         (this.pending ||= {})[c] = snap.metadata.hasPendingWrites;
         if (this.sync !== 'error') this.sync = Object.values(this.pending).some(Boolean) ? 'pending' : 'ok';

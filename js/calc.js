@@ -189,34 +189,45 @@ export function inferPriceChanges(sales, bookId) {
 }
 
 // ---------- расходы на рекламу ----------
-function spread(map, start, end, amount, cap) {
-  let e = end;
-  if (cap && e > cap && cap >= start) e = cap;
-  const n = countDays(start, e);
-  if (n <= 0 || !amount) return;
-  const per = amount / n;
-  for (const d of eachDay(start, e)) { const k = monthKey(d); map[k] = (map[k] || 0) + per; }
-}
-
-// Расход одной кампании по календарным месяцам. Недельный отчёт, конец которого ещё в будущем,
-// растягивается только до cap (обычно «сегодня»): выгрузка не может содержать будущих дней.
-export function campaignSpendByMonth(c, reports, cap = null) {
+// Расход кампании по дням. Где есть фактический расход из отчётов таргетологов — он (неделя делится по дням поровну),
+// иначе бюджет ÷ число дней кампании. Только дни не позже cap («сегодня»): будущие дни ещё не потрачены.
+export const budgetPerDay = (c) => (c.budget && c.start && c.end && c.end >= c.start ? Number(c.budget) / countDays(c.start, c.end) : 0);
+export function campaignDailySpend(c, reports, cap = null) {
   const out = {};
-  const rs = reports.filter((r) => r.campaignId === c.id);
-  if (rs.length) for (const r of rs) spread(out, r.start, r.end, r.spend, cap);
-  else if (c.budget && c.start && c.end) spread(out, c.start, c.end, c.budget, null);
-  for (const k of Object.keys(out)) out[k] = r2(out[k]);
+  const covered = new Set();
+  for (const r of reports) {
+    if (r.campaignId !== c.id || !r.start || !r.end || r.spend == null || r.spend === '') continue;
+    if (cap && r.start > cap) continue;
+    // отчёт, конец которого ещё в будущем, — его сумма за уже прошедшие дни
+    const e = cap && r.end > cap ? cap : r.end;
+    const n = countDays(r.start, e);
+    if (n <= 0) continue;
+    for (const d of eachDay(r.start, e)) { out[d] = (out[d] || 0) + Number(r.spend) / n; covered.add(d); }
+  }
+  const per = budgetPerDay(c);
+  if (per) {
+    const last = cap && cap < c.end ? cap : c.end;
+    if (last >= c.start) for (const d of eachDay(c.start, last)) if (!covered.has(d)) out[d] = (out[d] || 0) + per;
+  }
   return out;
 }
 
+// Расход одной кампании по календарным месяцам (сумма расходов по дням)
+export function campaignSpendByMonth(c, reports, cap = null) {
+  const out = {};
+  for (const [d, v] of Object.entries(campaignDailySpend(c, reports, cap))) { const k = monthKey(d); out[k] = (out[k] || 0) + v; }
+  for (const k of Object.keys(out)) out[k] = r2(out[k]);
+  return out;
+}
+const chOf = (c) => (c.channel === 'litnet' ? 'litnet' : c.channel === 'own' ? 'own' : 'other');
+
 // Расход по месяцам и каналам: {месяц: {litnet, own, other}}.
-// Для «Литнет платит» ручной ввод в months[месяц].litnetSpend перекрывает расчёт по отчётам.
+// Для «Литнет платит» ручной ввод в months[месяц].litnetSpend перекрывает расчёт.
 export function spendByMonthChannel(campaigns, reports, months = {}, cap = null) {
   const out = {};
   for (const c of campaigns) {
-    const ch = c.channel === 'litnet' ? 'litnet' : c.channel === 'own' ? 'own' : 'other';
     const sp = campaignSpendByMonth(c, reports, cap);
-    for (const [k, v] of Object.entries(sp)) { const e = (out[k] ||= { litnet: 0, own: 0, other: 0 }); e[ch] += v; }
+    for (const [k, v] of Object.entries(sp)) { const e = (out[k] ||= { litnet: 0, own: 0, other: 0 }); e[chOf(c)] += v; }
   }
   for (const [k, m] of Object.entries(months)) {
     if (m && m.litnetSpend !== undefined && m.litnetSpend !== null && m.litnetSpend !== '') {
@@ -227,29 +238,60 @@ export function spendByMonthChannel(campaigns, reports, months = {}, cap = null)
   return out;
 }
 
+// Прогноз расхода текущего месяца: уже потрачено (по сегодня) + оставшиеся дни кампаний в этом месяце по плану
+export function monthSpendForecast(campaigns, reports, today) {
+  const mk = monthKey(today), end = monthEnd(mk);
+  const out = { month: mk, litnet: 0, own: 0, other: 0 };
+  for (const c of campaigns) {
+    let v = campaignSpendByMonth(c, reports, today)[mk] || 0;
+    const per = budgetPerDay(c);
+    if (per && c.end > today) {
+      const from = addDays(today, 1) > c.start ? addDays(today, 1) : c.start;
+      const to = c.end < end ? c.end : end;
+      if (to >= from) v += per * countDays(from, to);
+    }
+    out[chOf(c)] += v;
+  }
+  out.litnet = r2(out.litnet); out.own = r2(out.own); out.other = r2(out.other);
+  out.total = r2(out.litnet + out.own + out.other);
+  return out;
+}
+
 // ---------- скидка «Литнет платит» ----------
-// скидка(м) = (расход(м) − скидка(м−1)) × pct, только если расход(м) ≥ порога
-export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2 } = {}) {
-  const keys = Object.keys(litnetSpend).sort();
+// скидка(м) = (расход(м) − скидка(м−1)) × pct, только если расход(м) ≥ порога.
+// Статус: «ожидается» (посчитана приложением) или «подтверждена» (отмечена вручную, можно с фактической суммой).
+// В чистый доход идёт только подтверждённая (applied); ожидаемая — для справки.
+// confirmed: {месяц: {amount?}} — подтверждённые месяцы
+export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2 } = {}, confirmed = {}) {
+  const keys = [...new Set([...Object.keys(litnetSpend), ...Object.keys(confirmed)])].sort();
   const out = {};
   if (!keys.length) return out;
   for (const k of monthsBetween(keys[0], keys[keys.length - 1])) {
     const spend = litnetSpend[k] || 0;
     const prev = out[addMonths(k, -1)]?.discount || 0;
     const ok = spend >= threshold;
-    const discount = ok ? r2(Math.max(0, (spend - prev) * pct)) : 0;
-    out[k] = { month: k, spend, prevDiscount: prev, qualified: ok, discount, effective: r2(spend - discount) };
+    const expected = ok ? r2(Math.max(0, (spend - prev) * pct)) : 0;
+    const conf = confirmed[k];
+    const isConf = !!conf;
+    const discount = isConf && conf.amount != null && conf.amount !== '' ? r2(Number(conf.amount)) : expected;
+    out[k] = {
+      month: k, spend, prevDiscount: prev, qualified: ok, expected, discount,
+      status: isConf ? 'confirmed' : expected ? 'expected' : 'none',
+      applied: isConf ? discount : 0,
+      effective: r2(spend - discount),
+    };
   }
   return out;
 }
 
 // Предупреждение: расход в текущем месяце идёт ниже порога
-export function litnetPace(spendSoFar, today, { threshold = 10000 } = {}) {
+export function litnetPace(spendSoFar, today, { threshold = 10000 } = {}, forecast = null) {
   const mk = monthKey(today);
   const dom = Number(today.slice(8, 10));
   const total = daysInMonth(mk);
   const left = total - dom;
-  const projected = r2((spendSoFar / dom) * total);
+  // прогноз: по плану кампаний (если известен), иначе по нынешнему темпу
+  const projected = forecast != null ? r2(forecast) : r2((spendSoFar / dom) * total);
   const remaining = Math.max(0, r2(threshold - spendSoFar));
   return {
     month: mk, spendSoFar, threshold, projected, daysLeft: left,
@@ -261,25 +303,32 @@ export function litnetPace(spendSoFar, today, { threshold = 10000 } = {}) {
 }
 
 // ---------- окупаемость кампании ----------
-// ctx: { sales, legacyDays, reports, dataEnd, baseDays }
+// Пересечения кампаний: [{id, name, from, to}] для каждой кампании
+export function campaignOverlaps(c, campaigns) {
+  if (!c.start) return [];
+  const cEnd = c.end || '9999-12-31';
+  return campaigns.filter((o) => o.id !== c.id && o.start && o.start <= cEnd && (o.end || '9999-12-31') >= c.start)
+    .map((o) => ({ id: o.id, name: o.name, from: o.start > c.start ? o.start : c.start, to: (o.end || '9999-12-31') < cEnd ? (o.end || cEnd) : cEnd }));
+}
+
+// ctx: { sales, legacyDays, reports, campaigns, dataEnd, baseDays, today? }
 export function campaignMetrics(c, ctx) {
   const dataEnd = ctx.dataEnd;
-  if (!c.start || c.start > dataEnd) return { status: 'planned' };
+  if (!c.start || c.start > dataEnd) return { status: 'planned', overlaps: campaignOverlaps(c, ctx.campaigns || []) };
   const end = c.end && c.end < dataEnd ? c.end : dataEnd;
   const days = countDays(c.start, end);
   const bookId = c.scope === 'all' ? null : c.bookId || null;
   const during = incomeSeries(ctx.sales, ctx.legacyDays, c.start, end, bookId);
   const avgDuring = avgSeries(during, 'royalty', false);
   const qtyDuring = during.reduce((a, x) => a + x.qty, 0);
+  const others = (ctx.campaigns || []).filter((o) => o.id !== c.id && o.start);
+  const adOn = (d) => others.some((o) => d >= o.start && d <= (o.end || '9999-12-31'));
 
   // база для сравнения
-  // Авто: последние N дней с данными до старта, в которые НЕ шла другая реклама этой книги
-  // (или реклама «всех книг»). Иначе реклама сравнивалась бы с рекламой.
+  // Ручная (сумма или свой период) — в приоритете. Авто: N дней до старта (по умолчанию 14),
+  // кроме дней, когда шла любая другая реклама; меньше 5 чистых дней — предупреждение.
   let baseline = null, baseQty = null, baseFrom = null, baseTo = null, baseSource = 'auto', baseDaysUsed = 0;
   const baseNotes = [];
-  const others = (ctx.campaigns || []).filter((o) => o.id !== c.id && o.start && o.start < c.start
-    && (!bookId || !o.bookId || o.scope === 'all' || o.bookId === bookId));
-  const adOn = (d) => others.some((o) => d >= o.start && d <= (o.end || '9999-12-31'));
   const mode = c.baseMode || 'auto';
   let picked = [];
   if (mode === 'value' && c.baseValue != null && c.baseValue !== '') {
@@ -290,9 +339,8 @@ export function campaignMetrics(c, ctx) {
     if (picked.some((x) => adOn(x.date))) baseNotes.push('overlap');
   } else {
     const n = c.baseDays || ctx.baseDays || 14;
-    const back = incomeSeries(ctx.sales, ctx.legacyDays, addDays(c.start, -120), addDays(c.start, -1), bookId).filter((x) => x.known).reverse();
-    picked = back.filter((x) => !adOn(x.date)).slice(0, n);
-    if (picked.length < Math.min(n, 3) && back.length) { picked = back.slice(0, n); baseNotes.push('overlap'); }
+    picked = incomeSeries(ctx.sales, ctx.legacyDays, addDays(c.start, -n), addDays(c.start, -1), bookId).filter((x) => x.known && !adOn(x.date));
+    if (picked.length < 5) baseNotes.push('few');
   }
   if (picked.length) {
     baseDaysUsed = picked.length;
@@ -300,39 +348,43 @@ export function campaignMetrics(c, ctx) {
     baseQty = picked.reduce((a, x) => a + x.qty, 0) / picked.length;
     baseFrom = picked.reduce((a, x) => (x.date < a ? x.date : a), picked[0].date);
     baseTo = picked.reduce((a, x) => (x.date > a ? x.date : a), picked[0].date);
-    if (picked.length < 7) baseNotes.push('few');
   }
 
-  // расход
-  const rs = ctx.reports.filter((r) => r.campaignId === c.id);
-  let spendTotal = 0, spendPerDay = 0, spendSource = 'budget';
-  if (rs.length) {
-    let cover = 0;
-    for (const r of rs) {
-      const a = r.start > c.start ? r.start : c.start;
-      const b = r.end < end ? r.end : end;
-      const n = countDays(a, b);
-      if (n <= 0) continue;
-      spendTotal += r.spend * (n / countDays(r.start, r.end));
-      cover += n;
+  // расход по дням (факт из отчётов, иначе бюджет ÷ дни)
+  const cap = ctx.today || null; // отчёт с будущим концом обрезаем только по «сегодня»
+  const mySpend = campaignDailySpend(c, ctx.reports, cap);
+  const spendTotal = during.reduce((a, x) => a + (mySpend[x.date] || 0), 0);
+  const spendPerDay = days ? spendTotal / days : 0;
+  const myReps = ctx.reports.filter((r) => r.campaignId === c.id && r.start && r.end);
+  const coveredDays = during.filter((x) => myReps.some((r) => x.date >= r.start && x.date <= r.end)).length;
+  const spendSource = !coveredDays ? 'budget' : coveredDays === days ? 'reports' : 'mixed';
+
+  // Прирост по дням. В дни пересечения с другими кампаниями прирост делится между ними
+  // пропорционально расходу в день (поровну, если расход неизвестен) — доход дня не считается дважды.
+  const overlaps = campaignOverlaps(c, others);
+  const otherSpend = overlaps.length ? others.filter((o) => overlaps.some((x) => x.id === o.id)).map((o) => ({ o, sp: campaignDailySpend(o, ctx.reports, cap) })) : [];
+  let upliftSum = 0, extraQtySum = 0, overlapDays = 0;
+  for (const x of during) {
+    let share = 1;
+    const act = otherSpend.filter(({ o }) => x.date >= o.start && x.date <= (o.end || '9999-12-31'));
+    if (act.length) {
+      overlapDays++;
+      const mine = mySpend[x.date] || 0;
+      const tot = mine + act.reduce((a, { sp }) => a + (sp[x.date] || 0), 0);
+      share = tot > 0 ? mine / tot : 1 / (act.length + 1);
     }
-    spendPerDay = cover ? spendTotal / cover : 0;
-    spendTotal = spendPerDay * days; // период без отчётов оцениваем по среднему
-    spendSource = 'reports';
-  } else {
-    const planned = c.end ? countDays(c.start, c.end) : days;
-    spendPerDay = c.budget && planned ? c.budget / planned : 0;
-    spendTotal = spendPerDay * days;
+    if (baseline != null) upliftSum += (x.royalty - baseline) * share;
+    if (baseQty != null) extraQtySum += (x.qty - baseQty) * share;
   }
-
-  const uplift = baseline == null ? null : avgDuring - baseline;
+  const uplift = baseline == null ? null : upliftSum / days;
   const payback = uplift == null ? null : uplift - spendPerDay;
-  const extraQtyPerDay = baseQty == null ? null : qtyDuring / days - baseQty;
+  const extraQtyPerDay = baseQty == null ? null : extraQtySum / days;
   return {
     status: c.end && c.end < dataEnd ? 'finished' : 'active',
     from: c.start, to: end, days, bookId,
     spendPerDay: r2(spendPerDay), spendTotal: r2(spendTotal), spendSource,
     avgDuring, baseline, baseFrom, baseTo, baseSource, baseDaysUsed, baseNotes,
+    overlaps, overlapDays,
     uplift: uplift == null ? null : r2(uplift),
     payback: payback == null ? null : r2(payback),
     paybackTotal: payback == null ? null : r2(payback * days),
@@ -357,7 +409,8 @@ export function monthFinance(key, { sales, legacyDays, spend, discounts, months 
   const m = months[key] || {};
   const rocketFee = Number(m.rocketFee) || 0;
   const sp = spend[key] || { litnet: 0, own: 0, other: 0 };
-  const discount = discounts[key]?.discount || 0;
+  const discount = discounts[key]?.applied || 0; // в чистый — только подтверждённая скидка
+  const expectedDiscount = discounts[key] && discounts[key].status === 'expected' ? discounts[key].expected : 0;
   const extra = Number(m.extraAdSpend) || 0;
   const adCost = r2(sp.litnet - discount + sp.own + sp.other + extra);
   const taxRate = (Number(settings.taxRate) || 0) / 100;
@@ -366,7 +419,7 @@ export function monthFinance(key, { sales, legacyDays, spend, discounts, months 
   return {
     month: key, royalty, gross, rocketIndex: m.rocketIndex ?? null, rocketFee,
     afterRocket: r2(royalty - rocketFee),
-    litnetSpend: sp.litnet, litnetDiscount: discount, ownSpend: r2(sp.own + sp.other + extra),
+    litnetSpend: sp.litnet, litnetDiscount: discount, expectedDiscount, ownSpend: r2(sp.own + sp.other + extra),
     adCost, taxBase: r2(base), tax,
     net: r2(royalty - rocketFee - adCost - tax),
   };
@@ -492,4 +545,15 @@ export function targetAlert(c, ctx, notes = []) {
   if (!reasons.length) return null;
   const recent = notes.filter((n) => n.campaignId === c.id && n.date >= lastFrom).length > 0;
   return { campaignId: c.id, name: c.name, last7: r2(last7), prev: prev == null ? null : r2(prev), drop, threshold: m.threshold, spendPerDay: m.spendPerDay, reasons, snoozed: recent, from: lastFrom, to: end };
+}
+
+// Подписки в дни выкладки глав и в остальные дни — по каждой книге (только дни с данными)
+export function chapterEffect(sales, days, books, from, to) {
+  return books.map((b) => {
+    const ser = incomeSeries(sales, [], from, to, b.id).filter((x) => x.known);
+    const ch = new Set(days.filter((d) => d.date >= from && d.date <= to && (d.events || []).some((e) => e.type === 'chapter' && e.bookId === b.id)).map((d) => d.date));
+    const on = ser.filter((x) => ch.has(x.date)), off = ser.filter((x) => !ch.has(x.date));
+    const avg = (a) => (a.length ? a.reduce((s, x) => s + x.subQty, 0) / a.length : null);
+    return { bookId: b.id, title: b.title, chapterDays: on.length, otherDays: off.length, subsOn: avg(on), subsOff: avg(off) };
+  });
 }

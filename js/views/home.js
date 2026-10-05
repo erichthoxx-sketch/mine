@@ -2,7 +2,7 @@ import { esc } from '../ui.js';
 import { rub, pct, fmtDate, fmtShort, fmtMonth, num } from '../format.js';
 import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, monthGoalStatus, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
 import { dailyChart, EVENT_TYPES } from '../charts.js';
-import { acts } from '../ui.js';
+import { acts, openSheet, toast } from '../ui.js';
 import { activeAlerts } from './ads.js';
 
 export function chartInputs(c, from, to) {
@@ -46,7 +46,8 @@ export function home(app) {
     <div class="stat"><div class="k">Этот месяц</div><div class="v">${rub(st.mtd)}</div><div class="s ${vs == null ? '' : vs >= 0 ? 'up' : 'down'}">${vs == null ? 'нет прошлого месяца' : (vs >= 0 ? '▲ ' : '▼ ') + pct(Math.abs(vs)) + ' к тому же сроку прошлого'}</div></div>
     <div class="stat"><div class="k">Прошлый месяц</div><div class="v">${rub(st.prevTotal)}</div><div class="s">за тот же срок: ${rub(st.prevSame)}</div></div>
   </div>
-  ${activeAlerts(c).map((a) => `<div class="card row between"><span>⚠ Таргет «${esc(a.name)}» просел — запросите отчёт у таргетологов</span><button class="link" data-act="go" data-to="/ads">открыть</button></div>`).join('')}
+  <div class="row" style="margin-bottom:12px"><button class="primary" data-act="chapter.quick">＋ Выкладка главы</button></div>
+  ${activeAlerts(c).map((a) => `<div class="card row between"><span>⚠︎ Таргет «${esc(a.name)}» просел — запросите отчёт у таргетологов</span><button class="link" data-act="go" data-to="/ads">открыть</button></div>`).join('')}
   ${taxReminder(c)}
   ${goalCard(c, st)}
   <div class="card">
@@ -76,12 +77,28 @@ function goalCard(c, st) {
   return `<div class="card"><div class="row between"><h2 style="margin:0">Цель: ${fmtMonth(g.month)}</h2><button class="link" data-act="go" data-to="/money">изменить</button></div>
     <div class="row between small" style="margin-top:8px"><span><b>${rub(g.fact, 0)}</b> из ${rub(g.plan, 0)}</span><span class="muted">${g.share == null ? '' : pct(g.share, 0)}</span></div>
     <div class="progress"><i style="width:${Math.min(100, (g.share || 0) * 100).toFixed(1)}%"></i></div>
-    <div class="small">${g.reached ? '✔ Цель месяца достигнута' : g.daysLeft === 0 ? `Месяц закончился: не хватило ${rub(g.plan - g.fact, 0)}` : `прогноз к концу месяца ≈ ${rub(g.forecast, 0)} ${g.onTrack ? '<span class="up">— успеваете</span>' : '<span class="down">— не хватает ' + rub(g.plan - g.forecast, 0) + '</span>'}${g.daysLeft > 0 ? ` · нужно ~${rub(g.needPerDay, 0)} в день` : ''}`}</div></div>`;
+    <div class="small">${g.reached ? '✔︎ Цель месяца достигнута' : g.daysLeft === 0 ? `Месяц закончился: не хватило ${rub(g.plan - g.fact, 0)}` : `прогноз к концу месяца ≈ ${rub(g.forecast, 0)} ${g.onTrack ? '<span class="up">— успеваете</span>' : '<span class="down">— не хватает ' + rub(g.plan - g.forecast, 0) + '</span>'}${g.daysLeft > 0 ? ` · нужно ~${rub(g.needPerDay, 0)} в день` : ''}`}</div></div>`;
 }
 
 function taxReminder(c) {
   const keys = monthsBetween(monthKey(c.firstDate), monthKey(c.dataEnd));
   const t = taxRows(keys, (k) => monthFinance(k, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings }), c.monthsMap, c.dataEnd);
   if (!t.unpaid) return '';
-  return `<div class="card row between"><span>🧾 Налог к уплате: <b>${rub(t.unpaid, 0)}</b> <span class="small muted">за ${t.unpaidMonths.map((k) => fmtMonth(k)).join(', ')}</span></span><button class="link" data-act="go" data-to="/money">подробнее</button></div>`;
+  return `<div class="card row between"><span>Налог к уплате: <b>${rub(t.unpaid, 0)}</b> <span class="small muted">за ${t.unpaidMonths.map((k) => fmtMonth(k)).join(', ')}</span></span><button class="link" data-act="go" data-to="/money">подробнее</button></div>`;
 }
+
+// Быстрая отметка: «сегодня выложила главу» — событие на сегодня, книга по умолчанию — в процессе
+acts['chapter.quick'] = () => {
+  const c = window.__app.ctx();
+  const books = [...c.books].sort((a, b) => (a.status === 'done') - (b.status === 'done'));
+  const def = books.find((b) => b.status !== 'done') || books[0];
+  openSheet('Выкладка главы', `<label for="cb">Книга</label><select id="cb" name="bookId">${books.map((b) => `<option value="${esc(b.id)}"${b.id === def?.id ? ' selected' : ''}>${esc(b.title)}${b.status === 'done' ? ' (завершена)' : ''}</option>`).join('')}</select>
+    <label for="ct">Какая глава (необязательно)</label><input id="ct" name="text" placeholder="например, глава 25">
+    <label for="cd">Дата</label><input id="cd" type="date" name="date" value="${c.today}">`, async (fd) => {
+    const date = fd.get('date') || c.today;
+    const doc = c.data.days.find((x) => x.id === date) || { id: date, date, events: [], note: '' };
+    const ev = { type: 'chapter', bookId: fd.get('bookId'), text: (fd.get('text') || '').trim() };
+    await window.__app.store.put('days', { ...doc, id: date, date, events: [...(doc.events || []), ev] });
+    toast('Выкладка отмечена');
+  }, { submitText: 'Отметить' });
+};

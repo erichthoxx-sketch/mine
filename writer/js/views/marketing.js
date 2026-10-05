@@ -17,7 +17,7 @@ function salesCard(c, wb) {
   const s30 = incomeSeries(d.sales, legacy, addDays(end, -29), end, incomeId);
   const mtd = incomeSeries(d.sales, legacy, monthKey(end) + '-01', end, incomeId);
   const camps = d.campaigns.filter((k) => (!incomeId || !k.bookId || k.bookId === incomeId) && k.start && k.start <= end && (!k.end || k.end >= addDays(end, -30)));
-  const ctx = { sales: d.sales, legacyDays: legacy, reports: d.reports, campaigns: d.campaigns, dataEnd: end, baseDays: c.settings.baseDays };
+  const ctx = { sales: d.sales, legacyDays: legacy, reports: d.reports, campaigns: d.campaigns, dataEnd: end, baseDays: c.settings.baseDays, today: c.today };
   return `<div class="card"><h2>Продажи${wb ? ': ' + esc(wb.title) : ''}</h2>
     <div class="grid3"><div><div class="small muted">за 30 дней</div><div class="big">${rub(sumSeries(s30), 0)}</div></div>
     <div><div class="small muted">в этом месяце</div><div class="big">${rub(sumSeries(mtd), 0)}</div></div>
@@ -35,7 +35,7 @@ export function marketingView(a) {
   ${salesCard(c, wb)}
   <div class="row between" style="margin:16px 0 10px"><h2 style="margin:0">Баннеры и обложки</h2>
     <label class="btn primary">+ Загрузить<input type="file" accept="image/*" multiple data-chg="mk.upload" hidden></label></div>
-  ${drive.isConnected() && c.settings.wMarketingFolder ? '' : '<p class="small muted">Оригиналы сохраняются в папку «Маркетинг» на Google Диске, когда Диск подключён и папка выбрана (⚙️ Настройки). Без этого сохранится только уменьшенная копия.</p>'}
+  ${drive.isConnected() && c.settings.wMarketingFolder ? '' : '<p class="small muted">Оригиналы сохраняются в папку «Маркетинг» на Google Диске, когда Диск подключён и папка выбрана (Настройки (шестерёнка вверху)). Без этого сохранится только уменьшенная копия.</p>'}
   ${media.length ? `<div class="gallery">${media.map((m) => `<button class="g-item" data-act="mk.open" data-id="${m.id}"><img src="${m.thumb}" alt="${esc(m.name || '')}"><span class="tag on">${MTYPES[m.type] || MTYPES.other}</span></button>`).join('')}</div>` : '<div class="card"><p class="muted">Пока пусто. Загрузите баннеры для рекламы и обложки — они будут под рукой с телефона.</p></div>'}`;
   return { html };
 }

@@ -1,3 +1,4 @@
+import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, opt, toast, uid, ask } from '../../../js/ui.js';
 import { fmtDate } from '../../../js/format.js';
 import * as drive from '../drive.js';
@@ -11,7 +12,7 @@ export function ideasView(a) {
   const tags = [...new Set(all.flatMap((x) => x.tags || []))].sort();
   const list = ui.ideaTag ? all.filter((x) => (x.tags || []).includes(ui.ideaTag) || x.bookId === ui.ideaTag) : all;
   const html = `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Идеи</h2><button class="primary" data-act="idea.new">+ Идея</button></div>
-  ${tags.length || c.wbooks.length ? `<div class="chips"><button class="chip${!ui.ideaTag ? ' on' : ''}" data-act="idea.filter" data-v="">все</button>${tags.map((t) => `<button class="chip${ui.ideaTag === t ? ' on' : ''}" data-act="idea.filter" data-v="${esc(t)}">#${esc(t)}</button>`).join('')}${c.wbooks.filter((b) => all.some((x) => x.bookId === b.id)).map((b) => `<button class="chip${ui.ideaTag === b.id ? ' on' : ''}" data-act="idea.filter" data-v="${b.id}">📚 ${esc(b.title.slice(0, 24))}</button>`).join('')}</div>` : ''}
+  ${tags.length || c.wbooks.length ? `<div class="chips"><button class="chip${!ui.ideaTag ? ' on' : ''}" data-act="idea.filter" data-v="">все</button>${tags.map((t) => `<button class="chip${ui.ideaTag === t ? ' on' : ''}" data-act="idea.filter" data-v="${esc(t)}">#${esc(t)}</button>`).join('')}${c.wbooks.filter((b) => all.some((x) => x.bookId === b.id)).map((b) => `<button class="chip${ui.ideaTag === b.id ? ' on' : ''}" data-act="idea.filter" data-v="${b.id}">${ic('books')} ${esc(b.title.slice(0, 24))}</button>`).join('')}</div>` : ''}
   ${list.length ? list.map((x) => ideaCard(c, x, ui.openIdea === x.id)).join('') : '<div class="card"><p class="muted">Идей пока нет. Запишите первую — она не потеряется и будет доступна с телефона.</p></div>'}`;
   return { html };
 }
@@ -22,7 +23,7 @@ function ideaCard(c, x, open) {
   return `<div class="card idea">
     <div class="row between"><b>${esc(x.title || 'Без названия')}</b><span class="small muted">${x.createdAt ? fmtDate(x.createdAt.slice(0, 10)) : ''}</span></div>
     ${x.text ? `<p class="idea-text">${esc(open ? x.text : x.text.slice(0, 220) + (x.text.length > 220 ? '…' : ''))}</p>` : ''}
-    <div class="tags">${(x.tags || []).map((t) => `<span class="tag">#${esc(t)}</span>`).join('')}${book ? `<span class="tag on">📚 ${esc(book.title)}</span>` : ''}${x.fileLink ? `<a class="tag on" href="${esc(x.fileLink)}" target="_blank" rel="noopener">📄 ${esc(x.fileName || 'документ')}</a>` : ''}</div>
+    <div class="tags">${(x.tags || []).map((t) => `<span class="tag">#${esc(t)}</span>`).join('')}${book ? `<span class="tag on">${ic('books')} ${esc(book.title)}</span>` : ''}${x.fileLink ? `<a class="tag on" href="${esc(x.fileLink)}" target="_blank" rel="noopener">${ic('doc')} ${esc(x.fileName || 'документ')}</a>` : ''}</div>
     <div class="row" style="margin-top:8px"><button class="link" data-act="idea.toggle" data-id="${x.id}">${open ? 'Свернуть' : `Комментарии (${comments.length})`}</button><button class="link" data-act="idea.edit" data-id="${x.id}">Изменить</button>
     ${!x.fileLink && drive.isConnected() && c.settings.wBooksFolder ? `<button class="link" data-act="idea.doc" data-id="${x.id}">Превратить в документ</button>` : ''}</div>
     ${open ? `<div class="comments">${comments.map((m, i) => `<div class="comment"><div class="small muted">${fmtDate((m.at || '').slice(0, 10))}</div><div>${esc(m.text)}</div><button class="link danger" data-act="idea.delComment" data-id="${x.id}" data-i="${i}">убрать</button></div>`).join('')}
