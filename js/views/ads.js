@@ -50,21 +50,21 @@ function campaignList(c, camps, alerts) {
   return `${cur.length ? `<div class="list">${cur.map((k) => miniCampaign(c, k, alerts)).join('')}</div>` : ''}
     ${past.length ? `<details style="margin-top:6px"><summary>Завершённые (${past.length})</summary><div class="list">${past.map((k) => miniCampaign(c, k, alerts)).join('')}</div></details>` : ''}`;
 }
-// «Литнет платит: расход и скидка»: порог и скидка — от фактического расхода месяца (текущий — прогноз),
-// оплаты таргетологам — для справки
+// «Литнет платит: оплата и скидка» — по оферте: 20 % от бюджета месяца, если он ≥ 10 000 ₽;
+// из бюджета вычитается скидка прошлого месяца; скидка не больше комиссии Литнета за месяц минус 1 ₽
 function discountTable(c, sel) {
   const dm = Object.keys(c.discounts).filter((k) => c.discounts[k].spend > 0 || c.discounts[k].status === 'confirmed').sort().reverse().slice(0, 6);
   if (!dm.length) return '';
   const th = rub(Number(c.settings.litnetThreshold), 0);
-  return `<h3>Литнет платит: расход и скидка</h3><div class="scroll"><table><tr><th>Месяц</th><th>Расход</th><th>Скидка</th><th class="muted">Оплачено</th></tr>${dm.map((k) => {
+  return `<h3>Литнет платит: оплата и скидка</h3><div class="scroll"><table><tr><th>Месяц</th><th>Оплачено</th><th>Скидка</th></tr>${dm.map((k) => {
     const d = c.discounts[k], ok = d.qualified || d.status === 'confirmed';
     const disc = ok
-      ? `${d.forecast && d.status !== 'confirmed' ? '≈ ' : ''}${rub(d.discount, 0)}<br>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'} <button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>`
-      : `0 ₽<br><span class="small muted">порог не достигнут</span>`;
-    const spendNote = d.forecast ? '<br><span class="small muted">прогноз</span>' : d.byPayment ? '<br><span class="small muted">порог выполнен оплатой</span>' : '';
-    return `<tr${k === sel ? ' class="sel"' : ''}><td>${fmtMonth(k)}</td><td>≈ ${rub(d.spend, 0)}${spendNote}</td><td>${disc}</td><td class="muted">${c.litnetPayments?.[k] ? rub(c.litnetPayments[k], 0) : '—'}</td></tr>`;
+      ? `${rub(d.discount, 0)}<br>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'} <button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>${d.capped ? '<br><span class="small muted">не больше комиссии Литнета</span>' : ''}`
+      : `0 ₽<br><span class="small muted">меньше ${th}</span>`;
+    const note = d.prevDiscount && ok ? `<br><span class="small muted">− скидка прошлого месяца ${rub(d.prevDiscount, 0)}</span>` : '';
+    return `<tr${k === sel ? ' class="sel"' : ''}><td>${fmtMonth(k)}</td><td>${rub(d.spend, 0)}${note}</td><td>${disc}</td></tr>`;
   }).join('')}</table></div>
-    <div class="hint">Расход — сколько бюджета пришлось на дни кампаний в этом месяце (как в «По месяцам»), текущий месяц — прогноз до конца месяца. Скидка = (расход − скидка прошлого месяца) × ${c.settings.litnetPct} %. Порог ${th} выполнен, если столько потрачено или оплачено таргетологам в этом месяце. В чистый доход скидка идёт после подтверждения.</div>`;
+    <div class="hint">По оферте: скидка ${c.settings.litnetPct} % от бюджета месяца, если он не меньше ${th}. Из бюджета вычитается скидка прошлого месяца («скидка на скидку не начисляется»). Скидка не больше комиссии Литнета за месяц минус 1 ₽ и уменьшает комиссию за этот месяц. В чистый доход идёт после подтверждения. Если реклама идёт через сторонних таргетологов по п. 21 оферты (15 %, от 50 000 ₽), поменяйте процент и порог в «Данные» → «Настройки».</div>`;
 }
 
 // переключатель месяца для сводок: текущий и прошедшие месяцы с рекламой
@@ -90,8 +90,8 @@ export function ads(a) {
   const sp = c.spend[mk] || { litnet: 0, own: 0, other: 0 }, monthNow = sp.litnet + sp.own + sp.other;
   const disc = c.discounts[mk];
   const discTxt = !disc || (!disc.spend && disc.status !== 'confirmed') ? '' : disc.qualified || disc.status === 'confirmed'
-    ? ` · скидка Литнета ${disc.status === 'confirmed' ? 'подтверждена' : 'ожидается'} ${disc.forecast && disc.status !== 'confirmed' ? '≈ ' : ''}${rub(disc.discount, 0)}`
-    : ' · скидка Литнета: порог не достигнут';
+    ? ` · скидка ${disc.status === 'confirmed' ? 'подтверждена' : 'ожидается'} ${rub(disc.discount, 0)}`
+    : ' · меньше порога, скидки нет';
   // месяц: стрелки ‹ › и выпадающий список — компактно, сколько бы месяцев ни набралось
   const i = months.indexOf(mk), older = months[i + 1], newer = months[i - 1];
   const chips = months.length > 1 ? `<div class="mnav">
@@ -103,7 +103,7 @@ export function ads(a) {
   <div class="card"><div class="row between"><h2 style="margin:0">Платная реклама</h2><button data-act="report.dl" title="Скачать отчёт для анализа">Отчёт</button></div>
     ${chips}
     ${summaryBody(c, all, { past })}
-    <p class="small" style="margin:10px 0 0">${past ? `В ${fmtMonthIn(mk)} потрачено ≈ ${rub(monthNow, 0)}` : `В ${fmtMonthIn(mk)}: ≈ ${rub(monthNow, 0)} по сегодня${c.forecast?.total ? ` · прогноз на месяц ≈ ${rub(c.forecast.total, 0)}` : ''}`}${discTxt}</p>
+    <p class="small" style="margin:10px 0 0">В ${fmtMonthIn(mk)}: ${c.litnetPayments?.[mk] ? `оплачено «Литнет платит» ${rub(c.litnetPayments[mk], 0)}${discTxt}` : `по «Литнет платит» оплат нет`}${past ? '' : ` · израсходовано по дням ≈ ${rub(monthNow, 0)} по сегодня`}</p>
     ${open.map((x) => `<div class="alert" style="margin-top:10px">⚠︎ «${esc(x.name)}»: ${esc(alertText(x))}. Запросите отчёт у таргетологов.<div class="row" style="margin-top:8px"><button class="primary" data-act="note.new" data-id="${x.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${x.campaignId}">Скопировать отчёт</button></div></div>`).join('')}
     <div class="hint">Расход по дням — бюджет ÷ дни кампании (оценка). «Доход сверх обычного» — сколько книга зарабатывает больше, чем в дни без рекламы.</div>
   </div>

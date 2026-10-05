@@ -5,7 +5,7 @@ import { fmtDate } from '../format.js';
 import { goalChart } from '../charts.js';
 
 const app = () => window.__app;
-const fin = (c, k) => monthFinance(k, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings });
+const fin = (c, k) => monthFinance(k, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings, litnetPayments: c.litnetPayments });
 
 export function money(a) {
   const c = a.ctx(), ui = a.ui;

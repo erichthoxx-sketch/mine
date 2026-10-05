@@ -2,7 +2,7 @@
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates } from './ui.js';
 import {
-  todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth, litnetDiscountBase, monthKey,
+  todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth, litnetFeeByMonth, monthKey,
 } from './calc.js';
 import { fmtDate } from './format.js';
 import { ic } from './icons.js';
@@ -56,11 +56,13 @@ function getCtx() {
   const monthsMap = Object.fromEntries(d.months.map((m) => [m.id, m]));
   const spend = spendByMonthChannel(d.campaigns, d.reports, monthsMap, today);
   const forecast = monthSpendForecast(d.campaigns, d.reports, today);
-  // скидка и порог — от фактического расхода календарного месяца (текущий — по прогнозу на весь месяц);
-  // оплаты таргетологам — только для справки
+  // «Литнет платит»: порог и скидка — от оплаты таргетологам за месяц (дата оплаты, иначе старт кампании).
+  // Скидка не больше комиссии Литнета за месяц минус 1 ₽ — проверяем по закрытым месяцам, где есть продажи.
   const litnetPayments = litnetPaymentsByMonth(d.campaigns);
   const confirmed = Object.fromEntries(d.months.filter((m) => m.litnetDiscountConfirmed).map((m) => [m.id, { amount: m.litnetDiscountAmount }]));
-  const discounts = litnetDiscounts(litnetDiscountBase(spend, forecast, today), { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100, forecastMonth: monthKey(today), payments: litnetPayments }, confirmed);
+  const fees = litnetFeeByMonth(litnetSales);
+  const caps = Object.fromEntries(Object.entries(fees).filter(([k]) => k < monthKey(today)));
+  const discounts = litnetDiscounts(litnetPayments, { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100, caps }, confirmed);
   const booksById = Object.fromEntries(d.books.map((b) => [b.id, b]));
   cache = {
     data: d, settings: d.settings, today, sales: d.sales, legacyDays, books: d.books, booksById, campaigns: d.campaigns,

@@ -39,7 +39,7 @@ export function buildReportModel(d, from, to) {
   const roy = sumSeries(ser), prevRoy = sumSeries(prevSer);
   const prevKnown = prevSer.some((x) => x.known);
   const qty = ser.reduce((a, x) => a + x.qty, 0), saleQty = ser.reduce((a, x) => a + x.saleQty, 0), subQty = ser.reduce((a, x) => a + x.subQty, 0);
-  const finOf = (k) => monthFinance(k, { sales: d.sales, legacyDays: d.legacyDays, spend: d.spend, discounts: d.discounts, months: d.monthsMap, settings: s });
+  const finOf = (k) => monthFinance(k, { sales: d.sales, legacyDays: d.legacyDays, spend: d.spend, discounts: d.discounts, months: d.monthsMap, settings: s, litnetPayments: d.litnetPayments });
   const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays, today: d.today };
   const months = monthsBetween(monthKey(from), monthKey(to));
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
@@ -61,7 +61,7 @@ export function buildReportModel(d, from, to) {
   list([
     'Я автор любовных романов на платформе Литнет (litnet.com). Доход — роялти: 70 % от цены продажи или подписки.',
     '«Продажа» — покупка книги целиком, «подписка» — оплата доступа к книге в процессе написания (выкладка по главам).',
-    `Продвижение: (1) «Литнет платит» — таргетированную рекламу ведут таргетологи Литнета, я оплачиваю бюджет; если расход за календарный месяц ≥ ${T(N0(s.litnetThreshold))} ₽, начисляется скидка ${s.litnetPct} % (скидка = (расход месяца − скидка прошлого месяца) × ${s.litnetPct} %). (2) Литнет Rocket — за каждую продажу, которую привела реклама Литнета, из роялти списывается комиссия = индекс Rocket (не выше ${s.rocketCap} ₽). (3) Бесплатные баннеры и приоритетные показы в рекомендациях.`,
+    `Продвижение: (1) «Литнет платит» — таргетированную рекламу ведут таргетологи Литнета, я оплачиваю бюджет; если бюджет месяца ≥ ${T(N0(s.litnetThreshold))} ₽, начисляется скидка ${s.litnetPct} % на комиссию Литнета за этот месяц (скидка = (бюджет месяца − скидка прошлого месяца) × ${s.litnetPct} %, не больше комиссии минус 1 ₽). (2) Литнет Rocket — за каждую продажу, которую привела реклама Литнета, из роялти списывается комиссия = индекс Rocket (не выше ${s.rocketCap} ₽). (3) Бесплатные баннеры и приоритетные показы в рекомендациях.`,
     `Налог: ${s.taxRate} % от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены проданных книг'}. Чистый доход = роялти − Rocket − реклама (с учётом скидки) − налог.`,
     'Окупаемость кампании: база = средний доход в день до старта кампании (дни, когда не шла другая реклама этой книги); прирост = доход в день во время кампании − база; окупаемость в день = прирост − расход в день. Порог окупаемости — доход в день, при котором реклама выходит в ноль.',
   ]);
@@ -134,9 +134,8 @@ export function buildReportModel(d, from, to) {
 
   const lmonths = months.filter((k) => d.discounts[k]);
   if (lmonths.length) {
-    h2('«Литнет платит»: расход и скидка');
-    table('Литнет платит: расход и скидка', ['Месяц', 'Расход за месяц', 'Порог достигнут', 'Скидка', 'Статус скидки', 'Оплачено таргетологам (справка)'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k) + (x.forecast ? ' (прогноз)' : ''), RUB(x.spend), x.qualified ? (x.byPayment ? 'да, оплатой' : 'да') : 'нет, порог не достигнут', RUB(x.discount), x.status === 'confirmed' ? 'подтверждена' : x.status === 'expected' ? 'ожидается' : '—', d.litnetPayments?.[k] ? RUB(d.litnetPayments[k]) : '—']; }));
-    if (d.forecast && d.forecast.litnet) p(`Прогноз расхода «Литнет платит» за ${fmtMonth(d.forecast.month)} по плану кампаний: ${cellText(RUB(d.forecast.litnet))}.`);
+    h2('«Литнет платит»: оплата и скидка');
+    table('Литнет платит: оплата и скидка', ['Месяц', 'Оплачено (бюджет месяца)', 'Скидка прошлого месяца', 'Порог достигнут', 'Скидка', 'Статус скидки'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k), RUB(x.spend), RUB(x.prevDiscount), x.qualified ? 'да' : 'нет', RUB(x.discount), x.status === 'confirmed' ? 'подтверждена' : x.status === 'expected' ? 'ожидается' : '—']; }));
   }
 
   const evDates = Object.keys(evBy).sort();

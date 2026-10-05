@@ -263,7 +263,8 @@ export function monthSpendForecast(campaigns, reports, today) {
 // В чистый доход идёт только подтверждённая (applied); ожидаемая — для справки.
 // confirmed: {месяц: {amount?}} — подтверждённые месяцы
 // payments: {месяц: оплата таргетологам} — оплата ≥ порога тоже выполняет порог (меньше 10 000 ₽ программа не берёт)
-export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2, forecastMonth = null, payments = {} } = {}, confirmed = {}) {
+// caps: {месяц: предел скидки} — комиссия Литнета за месяц минус 1 ₽ (только для закрытых месяцев с данными)
+export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2, forecastMonth = null, payments = {}, caps = {} } = {}, confirmed = {}) {
   const keys = [...new Set([...Object.keys(litnetSpend), ...Object.keys(confirmed)])].sort();
   const out = {};
   if (!keys.length) return out;
@@ -272,12 +273,14 @@ export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2, for
     const prev = out[addMonths(k, -1)]?.discount || 0;
     const paid = payments[k] || 0;
     const ok = spend > 0 && (spend >= threshold || paid >= threshold);
-    const expected = ok ? r2(Math.max(0, (spend - prev) * pct)) : 0;
+    const raw = ok ? r2(Math.max(0, (spend - prev) * pct)) : 0;
+    const cap = caps[k] != null ? Math.max(0, r2(caps[k] - 1)) : null;
+    const expected = cap != null && raw > cap ? cap : raw;
     const conf = confirmed[k];
     const isConf = !!conf;
     const discount = isConf && conf.amount != null && conf.amount !== '' ? r2(Number(conf.amount)) : expected;
     out[k] = {
-      month: k, spend, paid, forecast: k === forecastMonth, prevDiscount: prev, qualified: ok, byPayment: ok && spend < threshold, expected, discount,
+      month: k, spend, paid, forecast: k === forecastMonth, prevDiscount: prev, qualified: ok, byPayment: ok && spend < threshold, capped: expected < raw, expected, discount,
       status: isConf ? 'confirmed' : expected ? 'expected' : 'none',
       applied: isConf ? discount : 0,
       effective: r2(spend - discount),
@@ -286,14 +289,17 @@ export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2, for
   return out;
 }
 
-// Расход «Литнет платит» для проверки порога и скидки: фактический расход календарных месяцев
-// (расход в день × дни кампании в месяце, как в таблице «По месяцам»); текущий месяц — прогноз на весь месяц.
-// Будущие месяцы не считаются — скидка за них появится, когда месяц начнётся.
-export function litnetDiscountBase(spend, forecast, today) {
-  const cur = monthKey(today), out = {};
-  for (const [k, v] of Object.entries(spend)) if (k < cur && v.litnet) out[k] = v.litnet;
-  const f = forecast?.litnet || spend[cur]?.litnet || 0;
-  if (f) out[cur] = r2(f);
+// Комиссия Литнета (основное агентское вознаграждение) по месяцам: полная цена − роялти, только продажи Литнета.
+// По оферте скидка не больше этой комиссии минус 1 ₽.
+export function litnetFeeByMonth(sales) {
+  const out = {};
+  for (const x of sales) {
+    if (x.platform && x.platform.toLowerCase() !== 'литнет') continue;
+    if (x.gross == null || x.royalty == null || !x.date) continue;
+    const k = monthKey(x.date);
+    out[k] = (out[k] || 0) + Number(x.gross) - Number(x.royalty);
+  }
+  for (const k of Object.keys(out)) out[k] = r2(out[k]);
   return out;
 }
 
@@ -421,13 +427,15 @@ export const cpc = (r) => (r.clicks ? r.spend / r.clicks : null);
 
 // ---------- Rocket, налоги, чистый доход ----------
 // months[месяц] = { rocketIndex, rocketFee, litnetSpend?, extraAdSpend? }
-export function monthFinance(key, { sales, legacyDays, spend, discounts, months = {}, settings = {} }) {
+// litnetPayments: {месяц: оплата таргетологам} — если передано, расход «Литнет платит» в месяце = оплата
+export function monthFinance(key, { sales, legacyDays, spend, discounts, months = {}, settings = {}, litnetPayments = null }) {
   const ser = incomeSeries(sales, legacyDays, monthStart(key), monthEnd(key));
   const royalty = sumSeries(ser);
   const gross = sumSeries(ser, 'gross');
   const m = months[key] || {};
   const rocketFee = Number(m.rocketFee) || 0;
-  const sp = spend[key] || { litnet: 0, own: 0, other: 0 };
+  const sp = { ...(spend[key] || { litnet: 0, own: 0, other: 0 }) };
+  if (litnetPayments && !(m.litnetSpend != null && m.litnetSpend !== '')) sp.litnet = litnetPayments[key] || 0;
   const discount = discounts[key]?.applied || 0; // в чистый — только подтверждённая скидка
   const expectedDiscount = discounts[key] && discounts[key].status === 'expected' ? discounts[key].expected : 0;
   const extra = Number(m.extraAdSpend) || 0;
