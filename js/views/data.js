@@ -22,9 +22,9 @@ export function data(a) {
     <div class="row">${[['sales', 'Продажи'], ['daily', 'Доход по дням'], ['monthly', 'Итоги по месяцам'], ['campaigns', 'Кампании'], ['reports', 'Отчёты таргетологов'], ['days', 'События и заметки']].map(([k, t]) => `<button data-act="export.csv" data-k="${k}">${t}</button>`).join('')}</div>
     <div class="hint">Совет: раз в месяц скачивайте резервную копию и кладите в надёжное место.</div></div>
   <div class="card"><h2>Настройки</h2>
-  <form data-form="settings">
-    <div class="f2"><div><label style="margin-top:0">Налог, % (самозанятая: 4 %)</label><input name="taxRate" inputmode="decimal" value="${s.taxRate}"></div>
-    <div><label style="margin-top:0">Налог считать от</label><select name="taxBase">${opt('gross', 'полной цены книг', s.taxBase)}${opt('royalty', 'роялти', s.taxBase)}</select></div></div>
+  <form data-form="settings" class="settings-form">
+    <div class="f2"><div><label class="first">Налог, % (самозанятая: 4 %)</label><input name="taxRate" inputmode="decimal" value="${s.taxRate}"></div>
+    <div><label class="first">Налог считать от</label><select name="taxBase">${opt('gross', 'полной цены книг', s.taxBase)}${opt('royalty', 'роялти', s.taxBase)}</select></div></div>
     <div class="hint">Самозанятая с агентским договором Литнета: 4 % со всей цены, которую заплатили читатели (физлица), а не с суммы, пришедшей на карту.</div>
     <div class="f2"><div><label>«Литнет платит»: порог, ₽ в месяц</label><input name="litnetThreshold" inputmode="decimal" value="${s.litnetThreshold}"></div><div><label>Скидка, %</label><input name="litnetPct" inputmode="decimal" value="${s.litnetPct}"></div></div>
     <div class="f2"><div><label>База кампании по умолчанию, дней до старта</label><input name="baseDays" inputmode="numeric" value="${s.baseDays}"></div><div><label>Потолок индекса Rocket, ₽</label><input name="rocketCap" inputmode="decimal" value="${s.rocketCap}"></div></div>

@@ -212,3 +212,14 @@ table.tight { font-size: 13px; }
 table.tight th { white-space: nowrap; font-size: 12px; }
 table.tight td { white-space: nowrap; vertical-align: top; }
 .sub { color: var(--muted); font-size: 12px; font-weight: 400; display: block; }
+/* пары полей: поля выровнены по низу, длинные подписи не сдвигают их; ничего не вылезает за колонку */
+.f2 > * { min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.f2 input, .f2 select { min-width: 0; max-width: 100%; }
+/* настройки на телефоне — по одному полю в строке */
+@media (max-width: 560px) {
+  .settings-form .f2 { grid-template-columns: 1fr; gap: 0; }
+  .settings-form .f2 > * { display: block; }
+  .settings-form .f2 label { margin-top: 12px; }
+  .settings-form .f2:first-child > :first-child label { margin-top: 0; }
+}
+.settings-form label.first { margin-top: 0; }
