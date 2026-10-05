@@ -1,6 +1,6 @@
 // Запуск приложения: вход, маршруты, общий контекст расчётов.
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
-import { installHandlers, esc, toast, acts, forms } from './ui.js';
+import { installHandlers, esc, toast, acts, forms, watchForUpdates } from './ui.js';
 import {
   todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance,
 } from './calc.js';
@@ -128,6 +128,7 @@ window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() =
 window.addEventListener('online', render); window.addEventListener('offline', render);
 
 installHandlers(() => render());
+watchForUpdates();
 applyTheme();
 store.subscribe(() => safeRender());
 store.init().then(() => {

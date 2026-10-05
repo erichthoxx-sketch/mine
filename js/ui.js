@@ -92,3 +92,24 @@ export const readFile = (file) => new Promise((res, rej) => { const r = new File
 
 export const opt = (value, label, sel) => `<option value="${esc(value)}"${String(sel) === String(value) ? ' selected' : ''}>${esc(label)}</option>`;
 export const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+
+// Автообновление: если на сайте вышла новая версия, а браузер показывает старую из памяти — перезагружаем.
+// Версия зашита в адрес скриптов (папка vXXXXXXXX), её сравниваем со свежей страницей.
+export function watchForUpdates() {
+  const mine = /\/v([0-9a-f]{8})\//.exec(import.meta.url)?.[1];
+  if (!mine) return; // локальная проверка — без версий
+  const check = async () => {
+    try {
+      const html = await (await fetch(location.pathname, { cache: 'no-store' })).text();
+      const live = /["/]v([0-9a-f]{8})\//.exec(html)?.[1]; // src="vXXXX/…" или "../vXXXX/…"
+      if (live && live !== mine) {
+        const key = 'reloadedFor';
+        if (sessionStorage.getItem(key) === live) return; // не зацикливаемся
+        sessionStorage.setItem(key, live);
+        location.reload();
+      }
+    } catch { /* нет сети — проверим в следующий раз */ }
+  };
+  check();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+}

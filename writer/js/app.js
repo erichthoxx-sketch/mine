@@ -1,6 +1,6 @@
 // Писательское приложение: книги (Google Диск), идеи, планер, маркетинг. Вход и база — общие с приложением доходов.
 import { createStore, authErrorText } from '../../js/store.js';
-import { installHandlers, esc, toast, acts, forms } from '../../js/ui.js';
+import { installHandlers, esc, toast, acts, forms, watchForUpdates } from '../../js/ui.js';
 import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
 import { written } from './wcalc.js';
 import * as drive from './drive.js';
@@ -103,6 +103,7 @@ document.addEventListener('focusout', () => { if (pending) setTimeout(() => { co
 window.addEventListener('online', render); window.addEventListener('offline', render);
 
 installHandlers(() => render());
+watchForUpdates();
 applyTheme();
 store.subscribe(() => safeRender());
 drive.preload().catch(() => {});
