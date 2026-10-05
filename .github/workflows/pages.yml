@@ -31,7 +31,7 @@ jobs:
           cp -r css js _site/$V/
           cp -r writer/js _site/$V/writer/
           cp manifest.webmanifest heart.svg heart-180.png heart-512.png _site/
-          cp writer/manifest.webmanifest writer/quill.svg writer/quill-180.png writer/quill-512.png _site/pisatel/
+          cp writer/manifest.webmanifest writer/feather.svg writer/feather-180.png writer/feather-512.png _site/pisatel/
           sed "s#css/style.css#$V/css/style.css#; s#js/app.js#$V/js/app.js#" index.html > _site/index.html
           sed "s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/writer/js/app.js#" writer/index.html > _site/pisatel/index.html
           grep -q "$V/js/app.js" _site/index.html
