@@ -130,7 +130,19 @@ window.addEventListener('online', render); window.addEventListener('offline', re
 installHandlers(() => render());
 applyTheme();
 store.subscribe(() => safeRender());
-store.init().then(() => render()).catch((e) => {
+store.init().then(() => {
+  render();
+  // Разовое исправление: раньше по умолчанию стояло 6 %, для самозанятой при агентском договоре с Литнетом — 4 % с полной цены
+  let fixed = false;
+  const fixTax = () => {
+    if (fixed || !store.user || !store.settingsLoaded) return; // ждём настоящие настройки из базы, чтобы ничего не затереть
+    const s = store.data.settings;
+    if (s.taxVersion === 2) { fixed = true; return; }
+    fixed = true;
+    store.saveSettings({ taxRate: 4, taxBase: 'gross', taxVersion: 2 }).then(() => toast('Ставка налога исправлена на 4 % (самозанятая, доход от физлиц)')).catch(() => { fixed = false; });
+  };
+  setTimeout(() => { store.subscribe(fixTax); fixTax(); }, 1500);
+}).catch((e) => {
   console.error(e);
   document.getElementById('app').innerHTML = `<div class="auth"><h1>Не удалось запустить</h1><p>${esc(e.message || e)}</p><p class="muted">Проверьте интернет и настройки Firebase.</p></div>`;
 });

@@ -452,3 +452,6 @@ export function taxRows(keys, finOf, monthsMap, dataEnd) {
   });
   return { rows, unpaid: r2(rows.filter((x) => x.closed && !x.paid).reduce((a, x) => a + x.tax, 0)), unpaidMonths: rows.filter((x) => x.closed && !x.paid && x.tax > 0).map((x) => x.month) };
 }
+
+// НПД (самозанятые): налог за месяц надо оплатить до 28-го числа следующего месяца
+export const npdDeadline = (key) => `${addMonths(key, 1)}-28`;

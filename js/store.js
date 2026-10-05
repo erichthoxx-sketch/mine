@@ -6,7 +6,7 @@ import { firebaseConfig } from './firebase-config.js';
 
 export const DEFAULT_SETTINGS = {
   pseudonym: 'Лана Фрейтаг',
-  taxRate: 6,            // %
+  taxRate: 4,            // % — самозанятая (НПД): 4 % с доходов от физлиц
   taxBase: 'gross',      // gross — от полной цены книг; royalty — от роялти
   litnetThreshold: 10000,
   litnetPct: 20,
@@ -53,6 +53,7 @@ class LocalStore extends Base {
       if (raw) this.data = { ...emptyData(this.colls), ...raw, settings: { ...DEFAULT_SETTINGS, ...raw.settings } };
     } catch { /* пустое хранилище */ }
     this.user = { email: 'пробный режим' };
+    this.settingsLoaded = true;
     this.emit();
   }
   _save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch { this.sync = 'error'; } this.emit(); }
@@ -102,8 +103,9 @@ class FirebaseStore extends Base {
         this.emit();
       }, (e) => { this.sync = 'error'; this.error = e; this.emit(); }));
     }
-    this.unsubs.push(onSnapshot(doc(this.db, 'users', uid, 'meta', 'settings'), (d) => {
+    this.unsubs.push(onSnapshot(doc(this.db, 'users', uid, 'meta', 'settings'), { includeMetadataChanges: true }, (d) => {
       this.data.settings = { ...DEFAULT_SETTINGS, ...(d.exists() ? d.data() : {}) };
+      this.settingsLoaded = !d.metadata?.fromCache || d.exists();
       this.emit();
     }));
   }

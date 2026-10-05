@@ -1,6 +1,6 @@
 import { esc, acts, forms, openSheet, opt, toast, N, changes } from '../ui.js';
 import { rub, fmtMonth, fmtMonthShort, pct, num } from '../format.js';
-import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, goalRows, daysInMonth, taxRows, monthEnd } from '../calc.js';
+import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline } from '../calc.js';
 import { fmtDate } from '../format.js';
 import { goalChart } from '../charts.js';
 
@@ -115,8 +115,9 @@ function taxCard(c, sel, keys) {
   return `<div class="card tax"><div class="row between"><h2 style="margin:0">Налог к уплате</h2>${t.unpaid ? `<span class="badge bad">не оплачено: ${rub(t.unpaid, 0)}</span>` : '<span class="badge good">долгов нет</span>'}</div>
     <div class="small muted" style="margin-top:6px">${fmtMonth(sel)}${going ? ' — месяц ещё идёт, сумма вырастет' : ''}</div>
     <div class="tax-sum">${rub(r.tax)}</div>
-    <div class="small muted">${s.taxRate}% от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены проданных книг'}: ${rub(r.base)}</div>
-    <div class="row" style="margin-top:10px">${r.paid ? `<span class="badge good">✔ оплачен${r.paidAt ? ' ' + fmtDate(r.paidAt) : ''}</span><button class="link" data-act="tax.unpay" data-m="${sel}">отменить</button>` : going ? '' : `<button class="primary" data-act="tax.pay" data-m="${sel}">Отметить оплаченным</button>`}</div>
+    <div class="small muted">${s.taxRate}% от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены, которую заплатили читатели'}: ${rub(r.base)}</div>
+    ${!r.paid && r.tax ? `<div class="small" style="margin-top:4px">${going ? 'Оплатить' : 'Оплатить до'} <b>${fmtDate(npdDeadline(sel))}</b>${going ? ' — после конца месяца' : ''}</div>` : ''}
+    <div class="row" style="margin-top:10px"><button data-act="tax.check" data-m="${sel}">🧾 Какой чек пробить</button>${r.paid ? `<span class="badge good">✔ оплачен${r.paidAt ? ' ' + fmtDate(r.paidAt) : ''}</span><button class="link" data-act="tax.unpay" data-m="${sel}">отменить</button>` : going ? '' : `<button class="primary" data-act="tax.pay" data-m="${sel}">Отметить оплаченным</button>`}</div>
     ${t.unpaidMonths.filter((k) => k !== sel || going).length ? `<div class="unpaid"><div class="small" style="font-weight:800;margin-bottom:6px">Не оплачено:</div>${t.rows.filter((x) => t.unpaidMonths.includes(x.month)).map((x) => `<div class="row between" style="padding:4px 0"><span>${fmtMonth(x.month)} — <b>${rub(x.tax, 0)}</b></span><button class="primary" data-act="tax.pay" data-m="${x.month}">Оплачено ✓</button></div>`).join('')}</div>` : ''}
     <details style="margin-top:10px"><summary>По всем месяцам</summary><div class="scroll"><table><tr><th>Месяц</th><th>С суммы</th><th>Налог</th><th>Статус</th></tr>
     ${[...t.rows].reverse().map((x) => `<tr><td>${fmtMonthShort(x.month)}</td><td>${rub(x.base, 0)}</td><td><b>${rub(x.tax, 0)}</b></td><td>${x.paid ? `<span class="up">✔ ${x.paidAt ? fmtDate(x.paidAt) : 'оплачен'}</span>` : !x.closed ? '<span class="muted">идёт</span>' : x.tax ? `<button class="link" data-act="tax.pay" data-m="${x.month}">оплатила</button>` : '—'}</td></tr>`).join('')}</table></div></details>
@@ -130,4 +131,28 @@ acts['tax.pay'] = async (d) => {
 acts['tax.unpay'] = async (d) => {
   const c = app().ctx(), m = c.monthsMap[d.m] || {};
   await app().store.put('months', { ...m, id: d.m, month: d.m, taxPaid: false, taxPaidAt: '' });
+};
+
+// Подсказка для «Мой налог»: какие поля заполнить
+acts['tax.check'] = (d) => {
+  const c = app().ctx(), f = fin(c, d.m), s = c.settings;
+  const sumTxt = f.taxBase.toFixed(2).replace('.', ',');
+  const name = `Продажа электронных книг читателям через Литнет (агентский договор), ${fmtMonth(d.m)}`;
+  const going = monthEnd(d.m) > c.dataEnd;
+  const field = (label, value, copy) => `<div class="item"><div class="small muted">${label}</div><div class="row between"><b style="overflow-wrap:anywhere">${esc(value)}</b>${copy ? `<button type="button" class="link" data-act="copy" data-text="${esc(copy)}">копировать</button>` : ''}</div></div>`;
+  openSheet(`Чек в «Мой налог» — ${fmtMonth(d.m)}`, `
+    ${going ? '<div class="alert">Месяц ещё идёт — сумма вырастет. Чек лучше пробить после конца месяца, когда загрузите полную выгрузку Литнета.</div>' : ''}
+    <p class="small">Приложение «Мой налог» → <b>«Новая продажа»</b> (+ внизу), заполните так:</p>
+    <div class="list">
+      ${field('Наименование', name, name)}
+      ${field('Сумма', rub(f.taxBase), sumTxt)}
+      ${field('Покупатель', 'Физическое лицо')}
+      ${field('Дата продажи', fmtDate(going ? c.dataEnd : monthEnd(d.m)) + (going ? ' (пока)' : ' — последний день месяца'))}
+    </div>
+    <p class="small">Налог с этого чека: <b>${rub(f.tax)}</b> (${s.taxRate}% от суммы). Оплатить до <b>${fmtDate(npdDeadline(d.m))}</b>. Чек пробить — до 9-го числа следующего месяца.</p>
+    <p class="hint">Почему сумма больше, чем пришло на карту: по агентскому договору Литнет продаёт ваши книги читателям от вашего имени, поэтому доход — вся цена, которую заплатили читатели (${rub(f.taxBase)}), а не ${rub(f.royalty)} после комиссии. Покупатели — физлица, поэтому ставка 4 %. «Мой налог» может показать сумму налога чуть меньше — это значит, что работает налоговый вычет 10 000 ₽ для самозанятых, всё правильно.</p>
+    <p class="hint">Это подсказка по ответу юриста и закону о самозанятых (422-ФЗ), а не официальная консультация.</p>`, null);
+};
+acts.copy = async (d) => {
+  try { await navigator.clipboard.writeText(d.text); toast('Скопировано'); } catch { toast('Не получилось скопировать — выделите текст вручную'); }
 };
