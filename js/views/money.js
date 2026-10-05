@@ -1,6 +1,7 @@
 import { esc, acts, forms, openSheet, opt, toast, N, changes } from '../ui.js';
 import { rub, fmtMonth, fmtMonthShort, pct, num } from '../format.js';
-import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, goalRows, daysInMonth } from '../calc.js';
+import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, goalRows, daysInMonth, taxRows, monthEnd } from '../calc.js';
+import { fmtDate } from '../format.js';
 import { goalChart } from '../charts.js';
 
 const app = () => window.__app;
@@ -22,6 +23,7 @@ export function money(a) {
   const forecast = curRow && monthKey(c.dataEnd) === cur && dom ? (curRow.fact / dom) * daysInMonth(cur) : null;
 
   const html = `
+  ${taxCard(c, sel, keys)}
   <div class="card"><div class="row between"><h2 style="margin:0">Итоги месяца</h2><select id="mSel" data-chg="money.month" style="width:auto">${keys.map((k) => opt(k, fmtMonth(k), sel)).join('')}</select></div>
     <table style="margin-top:8px">
       <tr><td><b>Доход до вычетов</b> <span class="muted small">(роялти)</span></td><td><b>${rub(f.royalty)}</b></td></tr>
@@ -65,7 +67,7 @@ acts['month.edit'] = (d) => {
     const idx = N(fd.get('rocketIndex'));
     if (idx != null && !Number.isNaN(idx) && idx > c.settings.rocketCap) toast(`Индекс ${idx} выше обычного потолка ${c.settings.rocketCap} ₽ — проверьте цифру`);
     const val = (n) => { const v = N(fd.get(n)); return v == null || Number.isNaN(v) ? null : v; };
-    await app().store.put('months', { id: d.m, month: d.m, rocketIndex: val('rocketIndex'), rocketFee: val('rocketFee'), litnetSpend: val('litnetSpend'), extraAdSpend: val('extraAdSpend') });
+    await app().store.put('months', { ...m, id: d.m, month: d.m, rocketIndex: val('rocketIndex'), rocketFee: val('rocketFee'), litnetSpend: val('litnetSpend'), extraAdSpend: val('extraAdSpend') });
     toast('Сохранено');
   });
 };
@@ -102,4 +104,29 @@ acts['goal.all'] = () => {
     await app().store.saveSettings(patch);
     toast('Цели сохранены');
   });
+};
+
+// ---------- налог к уплате ----------
+function taxCard(c, sel, keys) {
+  const s = c.settings;
+  const t = taxRows([...keys].reverse(), (k) => fin(c, k), c.monthsMap, c.dataEnd);
+  const r = t.rows.find((x) => x.month === sel);
+  const going = !r.closed;
+  return `<div class="card tax"><div class="row between"><h2 style="margin:0">Налог к уплате</h2>${t.unpaid ? `<span class="badge bad">не оплачено: ${rub(t.unpaid, 0)}</span>` : '<span class="badge good">долгов нет</span>'}</div>
+    <div class="small muted" style="margin-top:6px">${fmtMonth(sel)}${going ? ' — месяц ещё идёт, сумма вырастет' : ''}</div>
+    <div class="tax-sum">${rub(r.tax)}</div>
+    <div class="small muted">${s.taxRate}% от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены проданных книг'}: ${rub(r.base)}</div>
+    <div class="row" style="margin-top:10px">${r.paid ? `<span class="badge good">✔ оплачен${r.paidAt ? ' ' + fmtDate(r.paidAt) : ''}</span><button class="link" data-act="tax.unpay" data-m="${sel}">отменить</button>` : going ? '' : `<button class="primary" data-act="tax.pay" data-m="${sel}">Отметить оплаченным</button>`}</div>
+    <details style="margin-top:10px"><summary>По всем месяцам</summary><div class="scroll"><table><tr><th>Месяц</th><th>С суммы</th><th>Налог</th><th>Статус</th></tr>
+    ${[...t.rows].reverse().map((x) => `<tr><td>${fmtMonthShort(x.month)}</td><td>${rub(x.base, 0)}</td><td><b>${rub(x.tax, 0)}</b></td><td>${x.paid ? `<span class="up">✔ ${x.paidAt ? fmtDate(x.paidAt) : 'оплачен'}</span>` : !x.closed ? '<span class="muted">идёт</span>' : x.tax ? `<button class="link" data-act="tax.pay" data-m="${x.month}">оплатила</button>` : '—'}</td></tr>`).join('')}</table></div></details>
+    <div class="hint">Ставку и с чего считать налог можно поменять в «Данные» → «Настройки».</div></div>`;
+}
+acts['tax.pay'] = async (d) => {
+  const c = app().ctx(), m = c.monthsMap[d.m] || {};
+  await app().store.put('months', { ...m, id: d.m, month: d.m, taxPaid: true, taxPaidAt: c.today });
+  toast(`Налог за ${fmtMonth(d.m)} отмечен оплаченным`);
+};
+acts['tax.unpay'] = async (d) => {
+  const c = app().ctx(), m = c.monthsMap[d.m] || {};
+  await app().store.put('months', { ...m, id: d.m, month: d.m, taxPaid: false, taxPaidAt: '' });
 };

@@ -443,3 +443,12 @@ export function monthGoalStatus(planAmount, fact, dataEnd) {
     needPerDay: left > 0 ? r2(Math.max(0, planAmount - fact) / left) : Math.max(0, r2(planAmount - fact)),
   };
 }
+
+// Налог по месяцам: сколько, с какой суммы, оплачен ли. unpaid — сумма неоплаченного за закончившиеся месяцы.
+export function taxRows(keys, finOf, monthsMap, dataEnd) {
+  const rows = keys.map((k) => {
+    const f = finOf(k), m = monthsMap[k] || {};
+    return { month: k, base: f.taxBase, tax: f.tax, paid: !!m.taxPaid, paidAt: m.taxPaidAt || '', closed: monthEnd(k) <= dataEnd };
+  });
+  return { rows, unpaid: r2(rows.filter((x) => x.closed && !x.paid).reduce((a, x) => a + x.tax, 0)), unpaidMonths: rows.filter((x) => x.closed && !x.paid && x.tax > 0).map((x) => x.month) };
+}

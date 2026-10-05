@@ -256,3 +256,13 @@ test('цель месяца: прогноз и сколько нужно в де
   assert.equal(g.needPerDay, 1904.76);
   assert.equal(monthGoalStatus(50000, 52000, '2026-10-20').reached, true);
 });
+
+test('налог к уплате по месяцам и неоплаченный остаток', async () => {
+  const { taxRows } = await import('../js/calc.js');
+  const fin = { '2026-08': { taxBase: 10000, tax: 600 }, '2026-09': { taxBase: 36340.25, tax: 2180.42 }, '2026-10': { taxBase: 5000, tax: 300 } };
+  const t = taxRows(['2026-08', '2026-09', '2026-10'], (k) => fin[k], { '2026-08': { taxPaid: true, taxPaidAt: '2026-09-20' } }, '2026-10-05');
+  assert.equal(t.unpaid, 2180.42); // октябрь ещё идёт, август оплачен
+  assert.deepEqual(t.unpaidMonths, ['2026-09']);
+  assert.equal(t.rows[0].paidAt, '2026-09-20');
+  assert.equal(t.rows[2].closed, false);
+});
