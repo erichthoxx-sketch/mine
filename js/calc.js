@@ -268,7 +268,10 @@ export const DISCOUNT_NOTE = 'Скидка «Литнет платит» не у
 // Скидка считается автоматически и сразу идёт в чистый доход (applied); сумма из отчёта Литнета, если её когда-то ввели, заменяет расчёт.
 // payments — оплаты таргетологам, для справки.
 // confirmed: {месяц: {amount?}}
-export function litnetDiscounts(used, { threshold = 10000, pct = 0.2, forecastMonth = null, payments = {}, caps = {} } = {}, confirmed = {}) {
+// Текущий (незакрытый) месяц forecastMonth: порог проверяется по прогнозу на весь месяц (used), а в чистый и выплату идёт
+// скидка на сегодня = (использовано на сегодня − скидка прошлого месяца) × pct, не больше комиссии Литнета на сегодня минус 1 ₽
+// (toDate: {used, fee}); прогноз скидки на весь месяц — отдельно (forecastDiscount), в чистый не входит.
+export function litnetDiscounts(used, { threshold = 10000, pct = 0.2, forecastMonth = null, payments = {}, caps = {}, toDate = null } = {}, confirmed = {}) {
   const keys = [...new Set([...Object.keys(used), ...Object.keys(confirmed), ...Object.keys(payments)])].sort();
   const out = {};
   if (!keys.length) return out;
@@ -283,9 +286,19 @@ export function litnetDiscounts(used, { threshold = 10000, pct = 0.2, forecastMo
     const conf = confirmed[k];
     const isConf = !!conf;
     const confirmedAmount = isConf && conf.amount != null && conf.amount !== '' ? r2(Number(conf.amount)) : null;
-    const discount = confirmedAmount != null ? confirmedAmount : expected;
+    const isCur = k === forecastMonth;
+    let discount = confirmedAmount != null ? confirmedAmount : expected;
+    let forecastDiscount = null, usedToDate = null;
+    if (isCur && confirmedAmount == null) {
+      // на сегодня: от уже открутившегося бюджета, предел — комиссия на сегодня
+      forecastDiscount = expected;
+      usedToDate = r2(toDate?.used || 0);
+      const now = ok ? r2(Math.max(0, (usedToDate - prev) * pct)) : 0;
+      const capNow = toDate && toDate.fee != null ? Math.max(0, r2(toDate.fee - 1)) : null;
+      discount = capNow != null && now > capNow ? capNow : now;
+    }
     out[k] = {
-      month: k, spend, paid: payments[k] || 0, forecast: k === forecastMonth, prevDiscount: prev,
+      month: k, spend, paid: payments[k] || 0, forecast: isCur, usedToDate, forecastDiscount, prevDiscount: prev,
       qualified: ok, fee, capped: expected < raw, expected, confirmedAmount, discount,
       status: isConf ? 'confirmed' : 'expected',
       applied: discount, // считается автоматически и сразу идёт в чистый доход

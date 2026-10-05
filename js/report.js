@@ -136,7 +136,7 @@ export function buildReportModel(d, from, to) {
   if (lmonths.length) {
     h2('«Литнет платит» по месяцам');
     p(DISCOUNT_NOTE);
-    table('Литнет платит', ['Месяц', 'Оплачено', 'Использовано', 'Порог достигнут', 'Комиссия Литнета', 'Скидка', 'Придёт с выплатой за'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k) + (x.forecast ? ' (прогноз)' : ''), RUB(x.paid), RUB(x.spend), x.qualified ? 'да' : 'нет', x.fee != null ? RUB(x.fee) : null, RUB(x.discount), fmtMonth(x.payoutMonth)]; }));
+    table('Литнет платит', ['Месяц', 'Оплачено', 'Использовано на сегодня', 'Использовано (прогноз на месяц)', 'Порог достигнут', 'Комиссия Литнета', 'Скидка (в чистом)', 'Скидка: прогноз на месяц', 'Придёт с выплатой за'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k) + (x.forecast ? ' (месяц идёт)' : ''), RUB(x.paid), RUB(x.forecast ? x.usedToDate : x.spend), x.forecast ? RUB(x.spend) : null, x.qualified ? 'да' : 'нет', x.fee != null ? RUB(x.fee) : null, RUB(x.discount), x.forecastDiscount != null ? RUB(x.forecastDiscount) : null, fmtMonth(x.payoutMonth)]; }));
   }
 
   const evDates = Object.keys(evBy).sort();

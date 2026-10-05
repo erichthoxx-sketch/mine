@@ -54,8 +54,9 @@ function campaignList(c, camps, alerts) {
 // если не меньше порога; минус скидка прошлого месяца; не больше комиссии Литнета. Подробная таблица — в отчёте.
 function discountMonth(c, k) {
   const d = c.discounts[k], now = k === monthKey(c.today), th = rub(Number(c.settings.litnetThreshold), 0);
+  if (now && d.qualified) return `<div class="item row between"><span><b>${fmtMonth(k)}</b><span class="sub">на сегодня, от уже открутившейся рекламы · прогноз на месяц ≈ ${rub(d.forecastDiscount ?? d.discount, 0)} · придёт с выплатой за ${fmtMonth(d.payoutMonth)}</span></span><b class="up">+${rub(d.discount, 0)}</b></div>`;
   return d.discount > 0
-    ? `<div class="item row between"><span><b>${fmtMonth(k)}</b><span class="sub">придёт с выплатой за ${fmtMonth(d.payoutMonth)}${now ? ' · по прогнозу' : ''}</span></span><b class="up">${now ? '≈ ' : ''}+${rub(d.discount, 0)}</b></div>`
+    ? `<div class="item row between"><span><b>${fmtMonth(k)}</b><span class="sub">придёт с выплатой за ${fmtMonth(d.payoutMonth)}</span></span><b class="up">+${rub(d.discount, 0)}</b></div>`
     : `<div class="item row between"><span><b>${fmtMonth(k)}</b><span class="sub">реклама открутилась на ${rub(d.spend, 0)}, нужно от ${th}</span></span><span class="muted">нет</span></div>`;
 }
 function discountTable(c) {
@@ -90,7 +91,7 @@ export function ads(a) {
   const sp = c.spend[mk] || { litnet: 0, own: 0, other: 0 }, monthNow = sp.litnet + sp.own + sp.other;
   const disc = c.discounts[mk];
   const discTxt = !disc || (!disc.spend && disc.status !== 'confirmed') ? '' : disc.qualified || disc.status === 'confirmed'
-    ? ` · скидка Литнета ${disc.forecast ? '≈ ' : ''}${rub(disc.discount, 0)}, придёт с выплатой за ${fmtMonth(disc.payoutMonth)}`
+    ? ` · скидка Литнета ${rub(disc.discount, 0)}${disc.forecastDiscount != null ? ` на сегодня (прогноз на месяц ≈ ${rub(disc.forecastDiscount, 0)})` : ''}, придёт с выплатой за ${fmtMonth(disc.payoutMonth)}`
     : ` · «Литнет платит»: использовано меньше ${rub(Number(c.settings.litnetThreshold), 0)}, скидки нет`;
   // при открытии — только текущий месяц; другой месяц выбирается строкой внизу страницы
   const shown = past ? `<div class="small" style="margin:6px 0 0">Показан ${fmtMonth(mk)} · <button class="link" style="padding:0" data-act="ads.month" data-v="${cur}">вернуться к текущему</button></div>` : '';

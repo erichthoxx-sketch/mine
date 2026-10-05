@@ -62,7 +62,7 @@ function getCtx() {
   const confirmed = Object.fromEntries(d.months.filter((m) => m.litnetDiscountConfirmed).map((m) => [m.id, { amount: m.litnetDiscountAmount }]));
   const litnetMoney = litnetMoneyByMonth(litnetSales);
   const caps = Object.fromEntries(Object.entries(litnetMoney).filter(([k]) => k < monthKey(today)).map(([k, v]) => [k, v.fee]));
-  const discounts = litnetDiscounts(litnetDiscountBase(spend, forecast, today), { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100, forecastMonth: monthKey(today), payments: litnetPayments, caps }, confirmed);
+  const discounts = litnetDiscounts(litnetDiscountBase(spend, forecast, today), { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100, forecastMonth: monthKey(today), payments: litnetPayments, caps, toDate: { used: spend[monthKey(today)]?.litnet || 0, fee: litnetMoney[monthKey(today)]?.fee ?? 0 } }, confirmed);
   const booksById = Object.fromEntries(d.books.map((b) => [b.id, b]));
   cache = {
     data: d, settings: d.settings, today, sales: d.sales, legacyDays, books: d.books, booksById, campaigns: d.campaigns,

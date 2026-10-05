@@ -395,6 +395,11 @@ test('«Литнет платит» по оферте: порог и скидк�
   assert.equal(sep.paid, 10000); assert.equal(sep.fee, 10901.85); assert.equal(sep.payoutMonth, '2026-10');
   assert.equal(oct.forecast, true); assert.equal(oct.payoutMonth, '2026-11');
   assert.ok(Math.abs(oct.expected - 3557.42) < 0.01); // (17 787,11 − 0) × 20 %
+  // текущий месяц: в чистый — скидка на сегодня от уже открутившегося бюджета, прогноз — отдельно
+  const t = litnetDiscounts(used, { forecastMonth: '2026-10', toDate: { used: 3081.19, fee: 5000 } })['2026-10'];
+  assert.equal(t.forecastDiscount, 3557.42); assert.equal(t.usedToDate, 3081.19);
+  assert.equal(t.discount, 616.24); assert.equal(t.applied, 616.24); // 3 081,19 × 20 %
+  assert.equal(litnetDiscounts(used, { forecastMonth: '2026-10', toDate: { used: 3081.19, fee: 300 } })['2026-10'].discount, 299); // не больше комиссии на сегодня − 1 ₽
   // предел: комиссия минус 1 ₽
   const capped = litnetDiscounts({ '2026-09': 20000 }, { caps: { '2026-09': 1500 } });
   assert.equal(capped['2026-09'].expected, 1499); assert.equal(capped['2026-09'].capped, true);

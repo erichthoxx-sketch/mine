@@ -29,7 +29,7 @@ export function money(a) {
     <table style="margin-top:8px">
       <tr><td><b>Доход до вычетов</b> <span class="muted small">(роялти)</span></td><td><b>${rub(f.royalty)}</b></td></tr>
       <tr><td>− Комиссия Rocket <span class="muted small">${f.rocketIndex != null ? 'индекс ' + num(f.rocketIndex, 1) + ' · записано вручную' : 'нет цифр'}</span>${f.rocketFee || f.rocketIndex != null ? ` <button class="link" data-act="rocket.edit" data-m="${sel}">изменить</button>` : ''}</td><td>${rub(f.rocketFee)}</td></tr>
-      <tr><td>+ Скидка от Литнета <span class="muted small">${dsc && dsc.discount > 0 ? `«Литнет платит», придёт с выплатой за ${fmtMonth(dsc.payoutMonth)}` : 'нет'}</span></td><td>${rub(f.litnetDiscount)}</td></tr>
+      <tr><td>+ Скидка от Литнета <span class="muted small">${dsc && dsc.forecastDiscount != null && dsc.qualified ? `на сегодня · прогноз на месяц ≈ ${rub(dsc.forecastDiscount, 0)}, в чистый не входит` : dsc && dsc.discount > 0 ? `«Литнет платит», придёт с выплатой за ${fmtMonth(dsc.payoutMonth)}` : 'нет'}</span></td><td>${rub(f.litnetDiscount)}</td></tr>
       <tr><td>− Реклама за месяц <span class="muted small">сколько открутилось${f.ownSpend ? ` · своя ${rub(f.ownSpend)}` : ''}</span></td><td>${rub(f.adSpend)}</td></tr>
       <tr><td>− Налог <span class="muted small">${s.taxRate}% от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены книг'} (${rub(f.taxBase)})</span></td><td>${rub(f.tax)}</td></tr>
       <tr class="total"><td>Чистый доход</td><td class="${f.net >= 0 ? 'up' : 'down'}">${rub(f.net)}</td></tr>
@@ -50,7 +50,7 @@ export function money(a) {
   </div>
   <div class="card"><h2>По месяцам</h2><div class="scroll"><table class="tight"><tr><th>Месяц</th><th>Роялти</th><th>Комиссия Литнета</th><th>Rocket</th><th>Скидка</th><th>Реклама</th><th>Налог</th><th>Чистый</th><th>Выплата</th><th>На руках</th></tr>
     ${keys.map((k) => { const x = fin(c, k), d = c.discounts[k], h = cashOf(c, k); return `<tr><td>${fmtMonthShort(k)}</td><td>${rub(x.royalty, 0)}</td><td>${rub(x.litnetFee, 0)}</td><td>${rub(x.rocketFee, 0)}</td>
-      <td>${x.litnetDiscount ? rub(x.litnetDiscount, 0) : '—'}</td>
+      <td>${x.litnetDiscount ? rub(x.litnetDiscount, 0) : '—'}${d && d.forecastDiscount != null && d.qualified ? `<span class="sub">прогноз ${rub(d.forecastDiscount, 0)}</span>` : ''}</td>
       <td>${rub(x.adSpend, 0)}${c.forecast && c.forecast.month === k && c.forecast.total ? `<span class="sub">прогноз ${rub(c.forecast.total, 0)}</span>` : ''}</td>
       <td>${rub(x.tax, 0)}</td>
       <td class="${x.net >= 0 ? '' : 'down'}"><b>${rub(x.net, 0)}</b></td>
