@@ -35,7 +35,7 @@ export function day(a) {
     <div class="day-title"><input id="dd" type="date" value="${date}" data-chg="day.date" aria-label="Дата"><div class="small muted">${WD[wd]}${date === c.today ? ' · сегодня' : ''}${date === c.dataEnd ? ' · последний день с данными' : ''}</div></div>
     <button data-act="day.shift" data-n="1" aria-label="Следующий день">→</button>
   </div>
-  <div class="row" style="margin-bottom:12px"><button class="primary" data-act="event.quick" data-date="${date}">＋ Событие</button><button data-act="sale.manual" data-date="${date}">Добавить продажи вручную</button>${date !== c.today ? '<button class="link" data-act="day.today">к сегодня</button>' : ''}${date !== c.dataEnd ? `<button class="link" data-act="day.open" data-date="${c.dataEnd}">к последнему дню с данными</button>` : ''}</div>
+  <div class="row" style="margin-bottom:12px"><button class="primary" data-act="event.quick" data-date="${date}">+ Событие</button><button data-act="sale.manual" data-date="${date}">Добавить продажи вручную</button>${date !== c.today ? '<button class="link" data-act="day.today">к сегодня</button>' : ''}${date !== c.dataEnd ? `<button class="link" data-act="day.open" data-date="${c.dataEnd}">к последнему дню с данными</button>` : ''}</div>
   <div class="card">
     ${noData && !st.royalty ? `<p class="muted" style="margin:0">Выгрузки Литнета за ${fmtDate(date)} ещё нет. Загрузите её на вкладке «Данные» или добавьте продажи вручную.</p>` : `
     <div class="k small muted">Доход за день</div>
@@ -53,7 +53,7 @@ export function day(a) {
   ${manual.length ? `<div class="card"><h2>Добавлено вручную</h2>${manual.map((x) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(c.titleOf(x.bookId, x.book))}${x.platform && x.platform !== 'Литнет' ? ' · ' + esc(x.platform) : ''} · ${x.kind === 'sub' ? 'подписки' : 'продажи'} ${x.qty} шт. · ${rub(x.royalty)}</span><button class="link danger" data-act="day.delManual" data-id="${esc(x.id)}">убрать</button></div>`).join('')}</div>` : ''}
   <div class="card"><h2>События дня</h2>
     ${(doc.events || []).length ? (doc.events).map((e, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="pill-ev"><i style="background:${(EVENT_TYPES[e.type] || EVENT_TYPES.note).color}"></i><span>${esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)}${e.bookId ? ' · ' + esc(c.titleOf(e.bookId, '')) : ''}${e.text ? ': ' + esc(e.text) : ''}</span></span><button class="link danger" data-act="day.delEv" data-i="${i}">убрать</button></div>`).join('') : '<p class="muted">Событий нет.</p>'}
-    <div style="margin-top:8px"><button data-act="event.quick" data-date="${date}">＋ Событие</button></div>
+    <div style="margin-top:8px"><button data-act="event.quick" data-date="${date}">+ Событие</button></div>
   </div>
   <div class="card"><h2>Заметка</h2><form data-form="day.note"><textarea name="note" placeholder="Что важно запомнить об этом дне">${esc(doc.note || '')}</textarea><div style="margin-top:10px"><button class="primary" type="submit">Сохранить заметку</button></div></form></div>
   ${recent.length ? `<details class="card"><summary>Последние записи</summary><div class="list">${recent.map((d) => `<a class="item" href="#" data-act="day.open" data-date="${d.date}"><b>${fmtDate(d.date)}</b> ${(d.events || []).map((e) => esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)).join(', ')} <span class="muted">${esc(d.note || '').slice(0, 80)}</span></a>`).join('')}</div></details>` : ''}`;

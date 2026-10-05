@@ -223,3 +223,6 @@ table.tight td { white-space: nowrap; vertical-align: top; }
   .settings-form .f2:first-child > :first-child label { margin-top: 0; }
 }
 .settings-form label.first { margin-top: 0; }
+/* текст кнопок и ссылок-кнопок рядом — одного размера и насыщенности */
+:is(main, dialog) :is(button, .btn):not(.chip), :is(main, dialog) button.link { font-size: 14px; font-weight: 700; }
+:is(main, dialog) button.link { line-height: 1.3; }
