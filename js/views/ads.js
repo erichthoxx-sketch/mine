@@ -61,8 +61,7 @@ function discountTable(c, sel) {
     const disc = ok
       ? `${rub(d.discount, 0)}<br>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'} <button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>${d.capped ? '<br><span class="small muted">не больше комиссии Литнета</span>' : ''}`
       : `0 ₽<br><span class="small muted">меньше ${th}</span>`;
-    const note = d.prevDiscount && ok ? `<br><span class="small muted">− скидка прошлого месяца ${rub(d.prevDiscount, 0)}</span>` : '';
-    return `<tr${k === sel ? ' class="sel"' : ''}><td>${fmtMonth(k)}</td><td>${rub(d.spend, 0)}${note}</td><td>${disc}</td></tr>`;
+    return `<tr${k === sel ? ' class="sel"' : ''}><td>${fmtMonth(k)}</td><td>${rub(d.spend, 0)}</td><td>${disc}</td></tr>`;
   }).join('')}</table></div>
     <div class="hint">По оферте: скидка ${c.settings.litnetPct} % от бюджета месяца, если он не меньше ${th}. Из бюджета вычитается скидка прошлого месяца («скидка на скидку не начисляется»). Скидка не больше комиссии Литнета за месяц минус 1 ₽ и уменьшает комиссию за этот месяц. В чистый доход идёт после подтверждения.</div>`;
 }
