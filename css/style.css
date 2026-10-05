@@ -244,3 +244,7 @@ input[type="date"]::-webkit-datetime-edit, input[type="month"]::-webkit-datetime
 .day-title input[type="date"]::-webkit-date-and-time-value { text-align: center; }
 .day-title input[type="date"]::-webkit-datetime-edit { display: inline-flex; justify-content: center; width: 100%; }
 .list .item.sel { background: var(--accent-soft); border-radius: 14px; }
+/* строки «название — сумма»: длинное название переносится, сумма всегда справа в своей колонке */
+.item.row.between, .item > .row.between:first-child { flex-wrap: nowrap; align-items: flex-start; }
+.item.row.between > :first-child, .item > .row.between:first-child > :first-child { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.item.row.between > :last-child:not(:first-child), .item > .row.between:first-child > :last-child:not(:first-child) { flex: 0 0 auto; text-align: right; white-space: nowrap; }
