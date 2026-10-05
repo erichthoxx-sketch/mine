@@ -156,10 +156,13 @@ export function reportCard(a) {
     <p class="hint" style="margin:-2px 0 10px">${FORMATS[f].hint}</p>
     <div class="row"><button class="primary" data-act="report.dl">Скачать отчёт</button><button data-act="report.copy">Скопировать текст</button></div></div>`;
 }
-function reportModel() {
+// period {from, to} — отчёт за конкретный период (например, месяц со вкладки «Реклама»)
+function reportModel(period = null) {
   const a = app(), c = a.ctx(), days = a.ui.reportDays ?? 90;
-  const from = days ? (addDays(c.dataEnd, -(days - 1)) < c.firstDate ? c.firstDate : addDays(c.dataEnd, -(days - 1))) : c.firstDate;
-  return buildReportModel({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, litnetPayments: c.litnetPayments, forecast: c.forecast, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, c.dataEnd);
+  let from = days ? (addDays(c.dataEnd, -(days - 1)) < c.firstDate ? c.firstDate : addDays(c.dataEnd, -(days - 1))) : c.firstDate;
+  let to = c.dataEnd;
+  if (period) { from = period.from < c.firstDate ? c.firstDate : period.from; to = period.to < c.dataEnd ? period.to : c.dataEnd; }
+  return buildReportModel({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, litnetPayments: c.litnetPayments, forecast: c.forecast, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, to);
 }
 let sheetjs;
 const loadSheetJs = () => (sheetjs ||= new Promise((res, rej) => {
@@ -170,8 +173,9 @@ const loadSheetJs = () => (sheetjs ||= new Promise((res, rej) => {
 }));
 acts['report.period'] = (d) => { app().ui.reportDays = Number(d.v); };
 acts['report.fmt'] = (d) => { app().ui.reportFmt = d.v; };
-acts['report.dl'] = async () => {
-  const m = reportModel(), f = app().ui.reportFmt || 'md';
+acts['report.dl'] = async (d) => {
+  if (d?.from && d.from > app().ctx().dataEnd) { toast('За этот месяц ещё нет данных продаж'); return; }
+  const m = reportModel(d?.from ? { from: d.from, to: d.to } : null), f = app().ui.reportFmt || 'md';
   const name = `otchet-${m.from}_${m.to}`;
   let ok;
   if (f === 'xlsx') {

@@ -195,12 +195,11 @@ tr.sel td { background: var(--accent-soft); }
 .card > .row.between:first-child > .row > :is(button, .btn):not(.link) { min-height: 34px; padding: 6px 14px; font-size: 14px; font-weight: 700; background: var(--surface); border-color: var(--btn-to); color: var(--text); }
 /* все кнопки — на страницах и в окнах — одного аккуратного размера, как «Отчёт» */
 :is(main, dialog) :is(button, .btn):not(.link):not(.chip):not(.wide) { min-height: 34px; padding: 6px 14px; font-size: 14px; }
-/* выбор месяца: ‹ месяц ›, без длинной ленты */
-.mnav { display: flex; align-items: center; gap: 2px; margin: 8px 0 2px; }
-.mnav select { width: auto; min-height: 32px; padding: 4px 8px; border: 0; background: transparent; font-weight: 700; cursor: pointer; }
-.mnav button.link { font-size: 20px; line-height: 1; padding: 2px 8px; font-weight: 700; }
-.mnav button.link:disabled { opacity: .25; }
-.mnav button.link:last-child:not([aria-label]) { font-size: 13px; margin-left: auto; }
+/* выбор месяца внизу «Рекламы»: одна тихая строка */
+.archive { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; max-width: 860px; margin: 6px auto 0; padding: 4px 4px 0; font-size: 14px; color: var(--muted); }
+.archive label { margin: 0; color: var(--muted); font-size: 14px; font-weight: 600; }
+.archive select { width: auto; min-height: 30px; padding: 2px 6px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--text); font-weight: 700; cursor: pointer; }
+.archive button.link { margin-left: auto; font-size: 14px; }
 /* окна: скругление не ломается полосой прокрутки — прокручивается содержимое внутри, кнопки всегда видны внизу */
 dialog { padding: 0; overflow: hidden; }
 #sheetForm { max-height: calc(100vh - 34px); max-height: calc(100dvh - 34px); overflow-y: auto; overscroll-behavior: contain; padding: 18px 18px 0; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }

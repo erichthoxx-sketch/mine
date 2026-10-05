@@ -92,16 +92,16 @@ export function ads(a) {
   const discTxt = !disc || (!disc.spend && disc.status !== 'confirmed') ? '' : disc.qualified || disc.status === 'confirmed'
     ? ` · скидка ${disc.status === 'confirmed' ? 'подтверждена' : 'ожидается'} ${rub(disc.discount, 0)}`
     : ' · меньше порога, скидки нет';
-  // месяц: стрелки ‹ › и выпадающий список — компактно, сколько бы месяцев ни набралось
-  const i = months.indexOf(mk), older = months[i + 1], newer = months[i - 1];
-  const chips = months.length > 1 ? `<div class="mnav">
-      <button class="link" data-act="ads.month" data-v="${older || ''}" ${older ? '' : 'disabled'} aria-label="Предыдущий месяц">‹</button>
-      <select data-chg="ads.month" aria-label="Месяц">${months.map((k) => opt(k, fmtMonth(k), mk)).join('')}</select>
-      <button class="link" data-act="ads.month" data-v="${newer || ''}" ${newer ? '' : 'disabled'} aria-label="Следующий месяц">›</button>
-      ${past ? `<button class="link" data-act="ads.month" data-v="${cur}">к текущему</button>` : ''}</div>` : '';
+  // при открытии — только текущий месяц; другой месяц выбирается строкой внизу страницы
+  const shown = past ? `<div class="small" style="margin:6px 0 0">Показан ${fmtMonth(mk)} · <button class="link" style="padding:0" data-act="ads.month" data-v="${cur}">вернуться к текущему</button></div>` : '';
+  const archive = months.length > 1 || c.hasData ? `<div class="archive">
+      <label for="adm">Месяц</label>
+      <select id="adm" data-chg="ads.month">${months.map((k) => opt(k, fmtMonth(k) + (k === cur ? ' (текущий)' : ''), mk)).join('')}</select>
+      <button class="link" data-act="report.dl" data-from="${mk}-01" data-to="${monthEnd(mk)}">Скачать отчёт за ${fmtMonth(mk)}</button>
+    </div>` : '';
   const html = `
   <div class="card"><div class="row between"><h2 style="margin:0">Платная реклама</h2><button data-act="report.dl" title="Скачать отчёт для анализа">Отчёт</button></div>
-    ${chips}
+    ${shown}
     ${summaryBody(c, all, { past })}
     <p class="small" style="margin:10px 0 0">В ${fmtMonthIn(mk)}: ${c.litnetPayments?.[mk] ? `оплачено «Литнет платит» ${rub(c.litnetPayments[mk], 0)}${discTxt}` : `по «Литнет платит» оплат нет`}${past ? '' : ` · израсходовано по дням ≈ ${rub(monthNow, 0)} по сегодня`}</p>
     ${open.map((x) => `<div class="alert" style="margin-top:10px">⚠︎ «${esc(x.name)}»: ${esc(alertText(x))}. Запросите отчёт у таргетологов.<div class="row" style="margin-top:8px"><button class="primary" data-act="note.new" data-id="${x.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${x.campaignId}">Скопировать отчёт</button></div></div>`).join('')}
@@ -117,12 +117,13 @@ export function ads(a) {
   ${c.hasData ? rocketCard(c, monthsBetween(monthKey(c.firstDate), monthKey(c.today)).reverse()) : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Другие расходы на рекламу</h2><button data-act="extra.new">+ Расход</button></div>
     ${extras.length ? `<div class="list">${extras.sort((x, y) => (y.start || '').localeCompare(x.start || '')).slice(0, 12).map((k) => `<div class="item row between"><span><b>${esc(k.name)}</b><br><span class="small muted">${fmtDate(k.start)}${k.end && k.end !== k.start ? '–' + fmtDate(k.end) : ''}</span></span><span class="row"><b>${rub(k.budget || 0, 0)}</b><button class="link danger" data-act="extra.del" data-id="${k.id}">убрать</button></span></div>`).join('')}</div>` : '<p class="muted">Баннеры, услуги, рассылки — всё, что не кампания. Учитывается в расходах месяца и в чистом доходе.</p>'}
-  </div>`;
+  </div>
+  ${archive}`;
   return { html };
 }
 
-acts['ads.month'] = (d) => { if (d.v) app().ui.adMonth = d.v; };
-changes['ads.month'] = (v) => { app().ui.adMonth = v; app().rerender(); };
+acts['ads.month'] = (d) => { if (d.v) app().ui.adMonth = d.v; window.scrollTo(0, 0); };
+changes['ads.month'] = (v) => { app().ui.adMonth = v; app().rerender(); window.scrollTo(0, 0); };
 
 acts['extra.new'] = () => {
   const c = app().ctx();

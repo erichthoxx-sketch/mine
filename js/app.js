@@ -27,7 +27,7 @@ const app = {
     applyTheme(); render();
   },
   rerender: () => render(),
-  go(path) { ui.route = path; ui.baseTry = null; render(); window.scrollTo(0, 0); },
+  go(path) { setRoute(path); render(); window.scrollTo(0, 0); },
   ctx: () => getCtx(),
   fin: (m) => { const c = getCtx(); return monthFinance(m, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings }); },
 };
@@ -133,7 +133,12 @@ function safeRender() {
   render();
 }
 document.addEventListener('focusout', () => { if (pending) setTimeout(() => { if (!document.activeElement?.closest?.('main') || !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { pending = false; render(); } }, 150); });
-acts.go = (d) => { ui.route = d.to; ui.baseTry = null; window.scrollTo(0, 0); }; // «примерка» базы сбрасывается при уходе
+// «примерка» базы сбрасывается при уходе; месяц на «Рекламе» — когда уходим с рекламы (открывается текущий)
+function setRoute(path) {
+  ui.route = path; ui.baseTry = null;
+  if (path !== '/ads' && !path.startsWith('/ad/')) ui.adMonth = null;
+}
+acts.go = (d) => { setRoute(d.to); window.scrollTo(0, 0); };
 let rt;
 window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => afterFn?.(), 150); });
 window.addEventListener('online', render); window.addEventListener('offline', render);
