@@ -159,7 +159,7 @@ export function reportCard(a) {
 function reportModel() {
   const a = app(), c = a.ctx(), days = a.ui.reportDays ?? 90;
   const from = days ? (addDays(c.dataEnd, -(days - 1)) < c.firstDate ? c.firstDate : addDays(c.dataEnd, -(days - 1))) : c.firstDate;
-  return buildReportModel({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, forecast: c.forecast, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, c.dataEnd);
+  return buildReportModel({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, litnetPayments: c.litnetPayments, forecast: c.forecast, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, c.dataEnd);
 }
 let sheetjs;
 const loadSheetJs = () => (sheetjs ||= new Promise((res, rej) => {

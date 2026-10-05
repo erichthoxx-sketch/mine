@@ -372,18 +372,40 @@ test('выкладка глав: подписки в дни выкладки и 
   assert.equal(r.subsOff, 3); // (2 + 4) / 2
 });
 
-test('«Литнет платит»: оплаты по месяцам и скидка от оплаты', async () => {
-  const { litnetPaymentsByMonth } = await import('../js/calc.js');
+test('«Литнет платит»: скидка от фактического расхода месяца, текущий — по прогнозу', async () => {
+  const { litnetPaymentsByMonth, litnetDiscountBase, monthSpendForecast } = await import('../js/calc.js');
   const camps = [
-    { channel: 'litnet', budget: 20000, start: '2026-10-05', end: '2026-11-07' },
-    { channel: 'litnet', budget: 10000, start: '2026-09-14', end: '2026-10-04', paidAt: '2026-09-12' },
-    { channel: 'own', budget: 5000, start: '2026-10-01', end: '2026-10-10' },
+    { id: 'a', channel: 'litnet', budget: 20000, start: '2026-10-05', end: '2026-11-07' },
+    { id: 't', channel: 'litnet', budget: 10000, start: '2026-09-14', end: '2026-10-04', paidAt: '2026-09-12' },
+    { id: 'o', channel: 'own', budget: 5000, start: '2026-10-01', end: '2026-10-10' },
   ];
-  const pay = litnetPaymentsByMonth(camps);
-  assert.deepEqual(pay, { '2026-10': 20000, '2026-09': 10000 });
-  const d = litnetDiscounts(pay);
-  assert.equal(d['2026-09'].expected, 2000);
-  assert.equal(d['2026-10'].expected, 3600); // (20000 − 2000) × 20 %
+  // оплаты — только для справки
+  assert.deepEqual(litnetPaymentsByMonth(camps), { '2026-10': 20000, '2026-09': 10000 });
+  const today = '2026-10-05';
+  const spend = spendByMonthChannel(camps, [], {}, today);
+  const base = litnetDiscountBase(spend, monthSpendForecast(camps, [], today), today);
+  assert.ok(Math.abs(base['2026-09'] - 8095.24) < 0.01); // 10000 / 21 × 17
+  assert.ok(Math.abs(base['2026-10'] - 17787.11) < 0.01); // 10000/21 × 4 + 20000/34 × 27
+  assert.equal(base['2026-11'], undefined); // будущие месяцы не считаются
+  const d = litnetDiscounts(base, { forecastMonth: '2026-10' });
+  assert.equal(d['2026-09'].qualified, false);
+  assert.equal(d['2026-09'].discount, 0);
+  assert.equal(d['2026-10'].forecast, true);
+  assert.equal(d['2026-10'].status, 'expected');
+  assert.ok(Math.abs(d['2026-10'].expected - 3557.42) < 0.01); // (17 787,11 − 0) × 20 %
+});
+
+test('метрики кампании за календарный месяц (period)', () => {
+  const sales = [];
+  for (const dt of ['2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14', '2026-09-15', '2026-10-01', '2026-10-02'])
+    sales.push({ date: dt, book: 'К', bookId: 'k', kind: 'sale', qty: 1, royalty: 100 });
+  const c = { id: 't', channel: 'litnet', budget: 2100, start: '2026-09-14', end: '2026-10-04' };
+  const ctx = { sales, legacyDays: [], reports: [], campaigns: [c], dataEnd: '2026-10-02', today: '2026-10-02' };
+  const sep = campaignMetrics(c, { ...ctx, period: { from: '2026-09-01', to: '2026-09-30' } });
+  assert.equal(sep.days, 17); assert.equal(sep.spendTotal, 1700);
+  const oct = campaignMetrics(c, { ...ctx, period: { from: '2026-10-01', to: '2026-10-31' } });
+  assert.equal(oct.days, 2); assert.equal(oct.spendTotal, 200);
+  assert.equal(campaignMetrics(c, { ...ctx, period: { from: '2026-11-01', to: '2026-11-30' } }).status, 'planned');
 });
 
 test('сводка кампании: бюджет израсходован и сколько реклама вернула', async () => {

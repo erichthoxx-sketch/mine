@@ -189,3 +189,7 @@ nav.tabs a.on .ic { color: var(--accent); }
 main a:not(.btn):not(.item):not(.tag):not(.cover-tile) { color: var(--accent); text-decoration: none; font-weight: 700; }
 .btn.back { min-height: 34px; padding: 6px 14px; font-size: 14px; }
 .btn.small-btn { min-height: 34px; padding: 6px 14px; font-size: 14px; }
+tr.sel td { background: var(--accent-soft); }
+/* кнопки в заголовках карточек — одного размера и вида, как «Отчёт» */
+.card > .row.between:first-child > :is(button, .btn):not(.link),
+.card > .row.between:first-child > .row > :is(button, .btn):not(.link) { min-height: 34px; padding: 6px 14px; font-size: 14px; font-weight: 700; background: var(--surface); border-color: var(--btn-to); color: var(--text); }

@@ -1,6 +1,6 @@
 import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthIn } from '../format.js';
-import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, bookIdFor, monthsBetween } from '../calc.js';
+import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween } from '../calc.js';
 import { rocketCard } from './money.js';
 import { targetAlert, campaignProgress, adGroupSummary } from '../calc.js';
 import { buildTargetPrompt } from '../report.js';
@@ -21,13 +21,16 @@ export function metricsFor(c, k) {
 const bar = (label, right, share, good) => `<div class="bar-row"><div class="row between small"><span>${label}</span><span>${right}</span></div><div class="progress ${good ? 'ok' : ''}"><i style="width:${Math.min(100, Math.max(0, share || 0) * 100).toFixed(1)}%"></i></div></div>`;
 const payTxt = (v) => (v == null ? '<span class="muted">нет базы</span>' : `<span class="${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '▲ +' : '▼ '}${rub(v, 0)}</span>`);
 
-function summaryBody(c, s, { showBudget = true } = {}) {
-  return `<div class="tiles">
-      <div><div class="k">Окупаемость в день сейчас</div><div class="v">${s.live ? (s.perDayPayback == null ? '<span class="muted">ждём данные</span>' : payTxt(s.perDayPayback)) : '<span class="muted">не идёт</span>'}</div><div class="s">${s.live ? `расход ≈ ${rub(s.perDaySpend, 0)}/день${s.perDayUplift != null ? `, доход сверх обычного ${rub(s.perDayUplift, 0)}/день` : ''}` : 'сейчас кампаний нет'}</div></div>
+function summaryBody(c, s, { showBudget = true, past = null } = {}) {
+  // прошедший месяц — итог месяца; текущий — как идёт сейчас
+  const t1 = past
+    ? `<div><div class="k">Окупилась за ${fmtMonth(past)}</div><div class="v">${s.returned == null ? '<span class="muted">нет данных</span>' : payTxt(s.returned - s.spent)}</div><div class="s">${s.returned == null ? (s.spent ? `потрачено ≈ ${rub(s.spent, 0)}` : 'рекламы не было') : `потрачено ≈ ${rub(s.spent, 0)}, доход сверх обычного ${rub(Math.max(0, s.returned), 0)}`}</div></div>`
+    : `<div><div class="k">Окупаемость в день сейчас</div><div class="v">${s.live ? (s.perDayPayback == null ? '<span class="muted">ждём данные</span>' : payTxt(s.perDayPayback)) : '<span class="muted">не идёт</span>'}</div><div class="s">${s.live ? `расход ≈ ${rub(s.perDaySpend, 0)}/день${s.perDayUplift != null ? `, доход сверх обычного ${rub(s.perDayUplift, 0)}/день` : ''}` : 'сейчас кампаний нет'}</div></div>`;
+  return `<div class="tiles">${t1}
       <div><div class="k">Реклама вернула доходом</div><div class="v">${s.returnShare == null ? '—' : pct(Math.max(0, s.returnShare), 0)}</div><div class="s">${s.returned == null ? 'появится, когда будут данные' : `${rub(Math.max(0, s.returned), 0)} сверх обычного дохода`}</div></div>
     </div>
     ${s.returnShare != null ? bar('Вернула от потраченного', `<b>${rub(Math.max(0, s.returned), 0)}</b> из ${rub(s.spent, 0)}`, s.returnShare, s.returnShare >= 1) : ''}
-    ${showBudget && s.paid ? bar('Бюджет идущих кампаний израсходован <span class="muted">≈ по плану</span>', `<b>${rub(s.plannedSpent, 0)}</b> из ${rub(s.paid, 0)}`, s.budgetShare) : ''}`;
+    ${showBudget && !past && s.paid ? bar('Бюджет идущих кампаний израсходован <span class="muted">≈ по плану</span>', `<b>${rub(s.plannedSpent, 0)}</b> из ${rub(s.paid, 0)}`, s.budgetShare) : ''}`;
 }
 
 function miniCampaign(c, k, alerts) {
@@ -47,11 +50,28 @@ function campaignList(c, camps, alerts) {
   return `${cur.length ? `<div class="list">${cur.map((k) => miniCampaign(c, k, alerts)).join('')}</div>` : ''}
     ${past.length ? `<details style="margin-top:6px"><summary>Завершённые (${past.length})</summary><div class="list">${past.map((k) => miniCampaign(c, k, alerts)).join('')}</div></details>` : ''}`;
 }
-function discountTable(c) {
-  const dm = Object.keys(c.discounts).filter((k) => c.discounts[k].spend > 0).sort().reverse().slice(0, 6);
+// «Литнет платит: расход и скидка»: порог и скидка — от фактического расхода месяца (текущий — прогноз),
+// оплаты таргетологам — для справки
+function discountTable(c, sel) {
+  const dm = Object.keys(c.discounts).filter((k) => c.discounts[k].spend > 0 || c.discounts[k].status === 'confirmed').sort().reverse().slice(0, 6);
   if (!dm.length) return '';
-  return `<h3>Скидка «Литнет платит»</h3><div class="scroll"><table><tr><th>Месяц</th><th>Оплачено</th><th>Скидка</th><th></th></tr>${dm.map((k) => { const d = c.discounts[k]; return `<tr><td>${fmtMonth(k)}</td><td>${rub(d.spend, 0)}</td><td>${d.qualified || d.status === 'confirmed' ? `${rub(d.discount, 0)}<br>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'}` : '<span class="muted">нет</span>'}</td><td>${d.qualified || d.status === 'confirmed' ? `<button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>` : ''}</td></tr>`; }).join('')}</table></div>
-    <div class="hint">Скидка = (оплата таргетологам за месяц − скидка прошлого месяца) × ${c.settings.litnetPct} %. В чистый доход идёт после подтверждения.</div>`;
+  const th = rub(Number(c.settings.litnetThreshold), 0);
+  return `<h3>Литнет платит: расход и скидка</h3><div class="scroll"><table><tr><th>Месяц</th><th>Расход</th><th>Скидка</th><th class="muted">Оплачено</th></tr>${dm.map((k) => {
+    const d = c.discounts[k], ok = d.qualified || d.status === 'confirmed';
+    const disc = ok
+      ? `${d.forecast && d.status !== 'confirmed' ? '≈ ' : ''}${rub(d.discount, 0)}<br>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'} <button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>`
+      : `0 ₽<br><span class="small muted">порог не достигнут</span>`;
+    return `<tr${k === sel ? ' class="sel"' : ''}><td>${fmtMonth(k)}</td><td>≈ ${rub(d.spend, 0)}${d.forecast ? '<br><span class="small muted">прогноз</span>' : ''}</td><td>${disc}</td><td class="muted">${c.litnetPayments?.[k] ? rub(c.litnetPayments[k], 0) : '—'}</td></tr>`;
+  }).join('')}</table></div>
+    <div class="hint">Расход — сколько бюджета пришлось на дни кампаний в этом месяце (как в «По месяцам»), текущий месяц — прогноз до конца месяца. Скидка = (расход − скидка прошлого месяца) × ${c.settings.litnetPct} %, если расход ≥ ${th}. «Оплачено» — оплаты таргетологам, для справки. В чистый доход скидка идёт после подтверждения.</div>`;
+}
+
+// переключатель месяца для сводок: текущий и прошедшие месяцы с рекламой
+function adMonths(c) {
+  const starts = c.campaigns.map((k) => k.start).filter(Boolean).sort();
+  const cur = monthKey(c.today);
+  if (!starts.length || monthKey(starts[0]) > cur) return [cur];
+  return monthsBetween(monthKey(starts[0]), cur).reverse();
 }
 
 export function ads(a) {
@@ -62,22 +82,30 @@ export function ads(a) {
   const open = alerts.filter((x) => !x.snoozed);
   const litnet = real.filter((k) => k.channel === 'litnet'), own = real.filter((k) => k.channel === 'own');
   const extras = c.campaigns.filter((k) => k.oneOff || (k.channel !== 'litnet' && k.channel !== 'own'));
-  const all = adGroupSummary(c.campaigns, ctx), sL = adGroupSummary(litnet, ctx), sO = adGroupSummary(own, ctx);
-  const mk = monthKey(c.today), sp = c.spend[mk] || { litnet: 0, own: 0, other: 0 }, monthNow = sp.litnet + sp.own + sp.other;
+  const months = adMonths(c), cur = months[0];
+  const mk = months.includes(a.ui.adMonth) ? a.ui.adMonth : cur, past = mk === cur ? null : mk;
+  const mctx = { ...ctx, period: { from: mk + '-01', to: monthEnd(mk) } };
+  const all = adGroupSummary(c.campaigns, mctx), sL = adGroupSummary(litnet, mctx), sO = adGroupSummary(own, mctx);
+  const sp = c.spend[mk] || { litnet: 0, own: 0, other: 0 }, monthNow = sp.litnet + sp.own + sp.other;
   const disc = c.discounts[mk];
+  const discTxt = !disc || (!disc.spend && disc.status !== 'confirmed') ? '' : disc.qualified || disc.status === 'confirmed'
+    ? ` · скидка Литнета ${disc.status === 'confirmed' ? 'подтверждена' : 'ожидается'} ${disc.forecast && disc.status !== 'confirmed' ? '≈ ' : ''}${rub(disc.discount, 0)}`
+    : ' · скидка Литнета: порог не достигнут';
+  const chips = months.length > 1 ? `<div class="chips" style="margin-top:10px">${months.slice(0, 6).map((k) => `<button class="chip${k === mk ? ' on' : ''}" data-act="ads.month" data-v="${k}">${fmtMonth(k)}</button>`).join('')}</div>` : '';
   const html = `
-  <div class="card"><div class="row between"><h2 style="margin:0">Платная реклама</h2><a href="#" class="btn small-btn" data-act="go" data-to="/data">Отчёт</a></div>
-    ${summaryBody(c, all)}
-    <p class="small" style="margin:10px 0 0">В ${fmtMonthIn(mk)}: ≈ ${rub(monthNow, 0)} по сегодня${c.forecast?.total ? ` · до конца месяца по плану ≈ ${rub(c.forecast.total, 0)}` : ''}${disc && disc.status === 'expected' ? ` · скидка Литнета ожидается ${rub(disc.expected, 0)}` : ''}</p>
+  <div class="card"><div class="row between"><h2 style="margin:0">Платная реклама</h2><button data-act="report.dl" title="Скачать отчёт для анализа">Отчёт</button></div>
+    ${chips}
+    ${summaryBody(c, all, { past })}
+    <p class="small" style="margin:10px 0 0">${past ? `В ${fmtMonthIn(mk)} потрачено ≈ ${rub(monthNow, 0)}` : `В ${fmtMonthIn(mk)}: ≈ ${rub(monthNow, 0)} по сегодня${c.forecast?.total ? ` · прогноз на месяц ≈ ${rub(c.forecast.total, 0)}` : ''}`}${discTxt}</p>
     ${open.map((x) => `<div class="alert" style="margin-top:10px">⚠︎ «${esc(x.name)}»: ${esc(alertText(x))}. Запросите отчёт у таргетологов.<div class="row" style="margin-top:8px"><button class="primary" data-act="note.new" data-id="${x.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${x.campaignId}">Скопировать отчёт</button></div></div>`).join('')}
     <div class="hint">Расход по дням — бюджет ÷ дни кампании (оценка). «Доход сверх обычного» — сколько книга зарабатывает больше, чем в дни без рекламы.</div>
   </div>
   <div class="card"><div class="row between"><h2 style="margin:0">Таргет «Литнет платит»</h2><button class="primary" data-act="ad.new" data-ch="litnet">+ Кампания</button></div>
-    ${litnet.length ? summaryBody(c, sL) + campaignList(c, litnet, alerts) : '<p class="muted">Кампаний пока нет. Добавьте оплату таргетологам как кампанию: книга, даты, сумма.</p>'}
-    ${discountTable(c)}
+    ${litnet.length ? summaryBody(c, sL, { past }) + campaignList(c, litnet, alerts) : '<p class="muted">Кампаний пока нет. Добавьте оплату таргетологам как кампанию: книга, даты, сумма.</p>'}
+    ${discountTable(c, mk)}
   </div>
   <div class="card"><div class="row between"><h2 style="margin:0">Мой таргет</h2><button data-act="ad.new" data-ch="own">+ Кампания</button></div>
-    ${own.length ? summaryBody(c, sO) + campaignList(c, own, alerts) : '<p class="muted">Здесь будут кампании, которые вы ведёте сами. Добавьте кампанию с бюджетом и датами — окупаемость посчитается так же.</p>'}
+    ${own.length ? summaryBody(c, sO, { past }) + campaignList(c, own, alerts) : '<p class="muted">Здесь будут кампании, которые вы ведёте сами. Добавьте кампанию с бюджетом и датами — окупаемость посчитается так же.</p>'}
   </div>
   ${c.hasData ? rocketCard(c, monthsBetween(monthKey(c.firstDate), monthKey(c.today)).reverse()) : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Другие расходы на рекламу</h2><button data-act="extra.new">+ Расход</button></div>
@@ -85,6 +113,8 @@ export function ads(a) {
   </div>`;
   return { html };
 }
+
+acts['ads.month'] = (d) => { app().ui.adMonth = d.v; };
 
 acts['extra.new'] = () => {
   const c = app().ctx();
@@ -174,7 +204,7 @@ acts['ad.new'] = (d) => {
     <div class="f2"><div><label>Книга</label><select name="bookId"><option value="">Все книги</option>${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}</select></div><div><label>Канал</label><select name="channel">${Object.entries(CHANNELS).map(([v, t]) => opt(v, t, ch)).join('')}</select></div></div>
     <div class="f2"><div><label>Начало</label><input type="date" name="start" value="${c.today}" required></div><div><label>Конец</label><input type="date" name="end"></div></div>
     <div class="f2"><div><label>Бюджет (оплата таргетологам), ₽</label><input name="budget" inputmode="decimal"></div><div><label>Дата оплаты</label><input type="date" name="paidAt"></div></div>
-    <div class="hint">Дата оплаты — для скидки «Литнет платит». Пусто — считается датой старта.</div>`, async (fd) => {
+    <div class="hint">Дата оплаты — для справки в таблице скидки. Скидка считается от расхода по дням кампании.</div>`, async (fd) => {
     const id = 'k' + uid();
     await app().store.put('campaigns', { id, name: fd.get('name').trim(), bookId: fd.get('bookId') || '', scope: fd.get('bookId') ? 'book' : 'all', channel: fd.get('channel'), start: fd.get('start'), end: fd.get('end') || '', budget: N(fd.get('budget')), paidAt: fd.get('paidAt') || '', baseMode: 'auto' });
     app().go('/ad/' + id);

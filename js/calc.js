@@ -262,7 +262,7 @@ export function monthSpendForecast(campaigns, reports, today) {
 // Статус: «ожидается» (посчитана приложением) или «подтверждена» (отмечена вручную, можно с фактической суммой).
 // В чистый доход идёт только подтверждённая (applied); ожидаемая — для справки.
 // confirmed: {месяц: {amount?}} — подтверждённые месяцы
-export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2 } = {}, confirmed = {}) {
+export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2, forecastMonth = null } = {}, confirmed = {}) {
   const keys = [...new Set([...Object.keys(litnetSpend), ...Object.keys(confirmed)])].sort();
   const out = {};
   if (!keys.length) return out;
@@ -275,12 +275,23 @@ export function litnetDiscounts(litnetSpend, { threshold = 10000, pct = 0.2 } = 
     const isConf = !!conf;
     const discount = isConf && conf.amount != null && conf.amount !== '' ? r2(Number(conf.amount)) : expected;
     out[k] = {
-      month: k, spend, prevDiscount: prev, qualified: ok, expected, discount,
+      month: k, spend, forecast: k === forecastMonth, prevDiscount: prev, qualified: ok, expected, discount,
       status: isConf ? 'confirmed' : expected ? 'expected' : 'none',
       applied: isConf ? discount : 0,
       effective: r2(spend - discount),
     };
   }
+  return out;
+}
+
+// Расход «Литнет платит» для проверки порога и скидки: фактический расход календарных месяцев
+// (расход в день × дни кампании в месяце, как в таблице «По месяцам»); текущий месяц — прогноз на весь месяц.
+// Будущие месяцы не считаются — скидка за них появится, когда месяц начнётся.
+export function litnetDiscountBase(spend, forecast, today) {
+  const cur = monthKey(today), out = {};
+  for (const [k, v] of Object.entries(spend)) if (k < cur && v.litnet) out[k] = v.litnet;
+  const f = forecast?.litnet || spend[cur]?.litnet || 0;
+  if (f) out[cur] = r2(f);
   return out;
 }
 
@@ -316,9 +327,13 @@ export function campaignMetrics(c, ctx) {
   const dataEnd = ctx.dataEnd;
   if (!c.start || c.start > dataEnd) return { status: 'planned', overlaps: campaignOverlaps(c, ctx.campaigns || []) };
   const end = c.end && c.end < dataEnd ? c.end : dataEnd;
-  const days = countDays(c.start, end);
   const bookId = c.scope === 'all' ? null : c.bookId || null;
-  const during = incomeSeries(ctx.sales, ctx.legacyDays, c.start, end, bookId);
+  // ctx.period {from, to} — считать только дни этого периода (например, календарного месяца); база — та же
+  const pFrom = ctx.period && ctx.period.from > c.start ? ctx.period.from : c.start;
+  const pTo = ctx.period && ctx.period.to < end ? ctx.period.to : end;
+  if (pTo < pFrom) return { status: 'planned', overlaps: campaignOverlaps(c, ctx.campaigns || []) };
+  const days = countDays(pFrom, pTo);
+  const during = incomeSeries(ctx.sales, ctx.legacyDays, pFrom, pTo, bookId);
   const avgDuring = avgSeries(during, 'royalty', false);
   const qtyDuring = during.reduce((a, x) => a + x.qty, 0);
   const others = (ctx.campaigns || []).filter((o) => o.id !== c.id && o.start && !o.oneOff); // разовые расходы — не кампании
@@ -383,7 +398,7 @@ export function campaignMetrics(c, ctx) {
   const extraQtyPerDay = baseQty == null ? null : extraQtySum / days;
   return {
     status: c.end && c.end < dataEnd ? 'finished' : 'active',
-    from: c.start, to: end, days, bookId,
+    from: pFrom, to: pTo, days, bookId,
     spendPerDay: r2(spendPerDay), spendTotal: r2(spendTotal), spendSource,
     avgDuring, baseline, baseFrom, baseTo, baseSource, baseDaysUsed, baseNotes,
     overlaps, overlapDays,
@@ -602,6 +617,8 @@ export function adGroupSummary(camps, ctx) {
   let up = 0, hasUp = false, ret = 0, hasRet = false, spentWithData = 0;
   for (const k of camps) {
     if (!k.start || k.start > today) continue;
+    const per = ctx.period;
+    if (per && (k.start > per.to || (k.end && k.end < per.from))) continue;
     if (k.oneOff) { r.spent += Number(k.budget) || 0; continue; }
     const m = campaignMetrics(k, ctx);
     const noData = m.status === 'planned'; // уже идёт по датам, но выгрузки за эти дни ещё нет
@@ -609,7 +626,7 @@ export function adGroupSummary(camps, ctx) {
       r.spent += m.spendTotal;
       if (m.uplift != null) { ret += m.uplift * m.days; hasRet = true; spentWithData += m.spendTotal; }
     }
-    const live = !k.end || k.end >= today;
+    const live = (!k.end || k.end >= today) && (!per || per.to >= today);
     if (live) {
       r.live++;
       r.perDaySpend += noData ? budgetPerDay(k) : m.spendPerDay;

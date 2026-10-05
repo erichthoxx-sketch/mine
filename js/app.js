@@ -2,7 +2,7 @@
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates } from './ui.js';
 import {
-  todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth,
+  todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth, litnetDiscountBase, monthKey,
 } from './calc.js';
 import { fmtDate } from './format.js';
 import { ic } from './icons.js';
@@ -55,17 +55,19 @@ function getCtx() {
   const series = hasData ? incomeSeries(d.sales, legacyDays, first, dataEnd) : [];
   const monthsMap = Object.fromEntries(d.months.map((m) => [m.id, m]));
   const spend = spendByMonthChannel(d.campaigns, d.reports, monthsMap, today);
-  const litnet = litnetPaymentsByMonth(d.campaigns); // скидка — от оплат таргетологам за месяц
-  const confirmed = Object.fromEntries(d.months.filter((m) => m.litnetDiscountConfirmed).map((m) => [m.id, { amount: m.litnetDiscountAmount }]));
-  const discounts = litnetDiscounts(litnet, { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100 }, confirmed);
   const forecast = monthSpendForecast(d.campaigns, d.reports, today);
+  // скидка и порог — от фактического расхода календарного месяца (текущий — по прогнозу на весь месяц);
+  // оплаты таргетологам — только для справки
+  const litnetPayments = litnetPaymentsByMonth(d.campaigns);
+  const confirmed = Object.fromEntries(d.months.filter((m) => m.litnetDiscountConfirmed).map((m) => [m.id, { amount: m.litnetDiscountAmount }]));
+  const discounts = litnetDiscounts(litnetDiscountBase(spend, forecast, today), { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100, forecastMonth: monthKey(today) }, confirmed);
   const booksById = Object.fromEntries(d.books.map((b) => [b.id, b]));
   cache = {
     data: d, settings: d.settings, today, sales: d.sales, legacyDays, books: d.books, booksById, campaigns: d.campaigns,
     // для выбора в формах — без снятых с продажи; сначала книги в процессе
     activeBooks: d.books.filter((b) => b.status !== 'removed').sort((a, b) => (a.status === 'done') - (b.status === 'done') || a.title.localeCompare(b.title)),
     firstDate: first, dataEnd, hasData, series, ma: movingAverage(series.map((x) => x.royalty), 7),
-    monthsMap, spend, discounts, forecast,
+    monthsMap, spend, discounts, forecast, litnetPayments,
     titleOf: (id, fallback) => booksById[id]?.title || fallback,
   };
   cacheKey = key;

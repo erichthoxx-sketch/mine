@@ -135,7 +135,7 @@ export function buildReportModel(d, from, to) {
   const lmonths = months.filter((k) => d.discounts[k]);
   if (lmonths.length) {
     h2('«Литнет платит»: расход и скидка');
-    table('Литнет платит', ['Месяц', 'Оплачено таргетологам', 'Порог достигнут', 'Скидка', 'Статус скидки', 'Оплата после скидки'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k), RUB(x.spend), x.qualified ? 'да' : 'нет', RUB(x.discount), x.status === 'confirmed' ? 'подтверждена' : x.status === 'expected' ? 'ожидается' : '—', RUB(x.effective)]; }));
+    table('Литнет платит: расход и скидка', ['Месяц', 'Расход за месяц', 'Порог достигнут', 'Скидка', 'Статус скидки', 'Оплачено таргетологам (справка)'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k) + (x.forecast ? ' (прогноз)' : ''), RUB(x.spend), x.qualified ? 'да' : 'нет, порог не достигнут', RUB(x.discount), x.status === 'confirmed' ? 'подтверждена' : x.status === 'expected' ? 'ожидается' : '—', d.litnetPayments?.[k] ? RUB(d.litnetPayments[k]) : '—']; }));
     if (d.forecast && d.forecast.litnet) p(`Прогноз расхода «Литнет платит» за ${fmtMonth(d.forecast.month)} по плану кампаний: ${cellText(RUB(d.forecast.litnet))}.`);
   }
 
