@@ -27,7 +27,7 @@ export function money(a) {
   <div class="card"><div class="row between"><h2 style="margin:0">Итоги месяца</h2><select id="mSel" data-chg="money.month" style="width:auto">${keys.map((k) => opt(k, fmtMonth(k), sel)).join('')}</select></div>
     <table style="margin-top:8px">
       <tr><td><b>Доход до вычетов</b> <span class="muted small">(роялти)</span></td><td><b>${rub(f.royalty)}</b></td></tr>
-      <tr><td>− Комиссия Rocket <span class="muted small">${f.rocketIndex != null ? 'индекс ' + num(f.rocketIndex, 1) : 'нет цифр'}</span></td><td>${rub(f.rocketFee)}</td></tr>
+      <tr><td>− Комиссия Rocket <span class="muted small">${f.rocketIndex != null ? 'индекс ' + num(f.rocketIndex, 1) + ' · записано вручную' : 'нет цифр'}</span>${f.rocketFee || f.rocketIndex != null ? ` <button class="link" data-act="rocket.edit" data-m="${sel}">изменить</button>` : ''}</td><td>${rub(f.rocketFee)}</td></tr>
       <tr><td>= После Rocket</td><td>${rub(f.afterRocket)}</td></tr>
       <tr><td>− Реклама «Литнет платит» <span class="muted small">${rub(f.litnetSpend)}${f.litnetDiscount ? ' − скидка ' + rub(f.litnetDiscount) : ''}${f.expectedDiscount ? ` · ожидается скидка ${rub(f.expectedDiscount)}, не учтена` : ''}</span></td><td>${rub(f.litnetSpend - f.litnetDiscount)}</td></tr>
       <tr><td>− Моя реклама (свой таргет, другое)</td><td>${rub(f.ownSpend)}</td></tr>
@@ -157,8 +157,8 @@ export function rocketCard(c, keys) {
     <p class="small muted" style="margin:6px 0 0">Комиссию Литнет списывает из роялти сам. Здесь вы просто записываете цифры из кабинета Rocket за прошедший месяц — чтобы видеть, сколько продаж принесла реклама Литнета и во сколько она обошлась.</p>
     ${r.missing.length ? `<div class="unpaid"><div class="small" style="font-weight:800;margin-bottom:6px">Нет цифр за:</div>${r.rows.filter((x) => r.missing.includes(x.month)).map((x) => `<div class="row between" style="padding:6px 0"><span>${fmtMonth(x.month)}<br><span class="small muted">итог в кабинете — после ${fmtDate(x.chargeBy)}</span></span><button class="primary" data-act="rocket.edit" data-m="${x.month}">Записать</button></div>`).join('')}</div>` : ''}
     ${cur ? `<p class="small muted" style="margin:10px 0 0">${fmtMonth(cur.month)} ещё идёт. Когда он закончится, здесь появится кнопка «Записать» — цифры за месяц лучше вносить после ${fmtDate(cur.chargeBy)}, когда Литнет спишет комиссию и они перестанут меняться.</p>` : ''}
-    ${shown.some((x) => x.fee != null) ? `<div class="scroll" style="margin-top:10px"><table><tr><th>Месяц</th><th>Индекс</th><th>Комиссия</th><th>≈ продаж через Rocket</th><th>Доля от роялти</th><th></th></tr>
-      ${shown.filter((x) => x.closed).map((x) => `<tr><td>${fmtMonthShort(x.month)}</td><td>${x.index == null ? '—' : num(x.index, 1)}</td><td>${x.fee == null ? '<span class="muted">—</span>' : rub(x.fee, 0)}</td><td>${x.sales ?? '—'}</td><td>${x.share == null ? '—' : pct(x.share, 1)}</td><td><button class="link" data-act="rocket.edit" data-m="${x.month}">✎</button></td></tr>`).join('')}</table></div>
+    ${shown.some((x) => x.fee != null || x.index != null) ? `<div class="scroll" style="margin-top:10px"><table><tr><th>Месяц</th><th>Индекс</th><th>Комиссия</th><th>≈ продаж через Rocket</th><th>Доля от роялти</th><th></th></tr>
+      ${shown.filter((x) => x.closed || x.fee != null || x.index != null).map((x) => `<tr><td>${fmtMonthShort(x.month)}${x.closed ? '' : ' <span class="small muted">(идёт)</span>'}</td><td>${x.index == null ? '—' : num(x.index, 1)}</td><td>${x.fee == null ? '<span class="muted">—</span>' : rub(x.fee, 0)}</td><td>${x.sales ?? '—'}</td><td>${x.share == null ? '—' : pct(x.share, 1)}</td><td><button class="link" data-act="rocket.edit" data-m="${x.month}">✎</button></td></tr>`).join('')}</table></div>
       <div class="hint">≈ продаж через Rocket = комиссия ÷ индекс: сколько продаж принесла реклама Литнета. Доля — сколько роялти ушло на комиссию.</div>` : ''}
   </div>`;
 }
@@ -167,11 +167,19 @@ acts['rocket.edit'] = (d) => {
   openSheet(`Rocket — ${fmtMonth(d.m)}`, `<p class="small muted">Цифры из кабинета Rocket за ${fmtMonth(d.m)} (фильтр «прошлый месяц»): «Индекс» и «Комиссия Rocket».</p>
     <div class="f2"><div><label for="ri">Индекс Rocket</label><input id="ri" name="rocketIndex" inputmode="decimal" value="${m.rocketIndex ?? ''}" placeholder="например 34,9"></div>
     <div><label for="rf">Комиссия, ₽</label><input id="rf" name="rocketFee" inputmode="decimal" value="${m.rocketFee ?? ''}" placeholder="например 3 730"></div></div>
-    <div class="hint">Если продаж через Rocket не было — комиссия 0.</div>`, async (fd) => {
+    <div class="hint">Если продаж через Rocket не было — комиссия 0.</div>
+    ${m.rocketFee != null || m.rocketIndex != null ? `<p><button type="button" class="link danger" data-act="rocket.clear" data-m="${d.m}">Очистить цифры за ${fmtMonth(d.m)}</button></p>` : ''}`, async (fd) => {
     const val = (n) => { const v = N(fd.get(n)); return v == null || Number.isNaN(v) ? null : v; };
     const idx = val('rocketIndex');
     if (idx != null && idx > c.settings.rocketCap) toast(`Индекс ${idx} выше обычного потолка ${c.settings.rocketCap} ₽ — проверьте цифру`);
     await app().store.put('months', { ...m, id: d.m, month: d.m, rocketIndex: idx, rocketFee: val('rocketFee') });
     toast('Цифры Rocket записаны');
   });
+};
+
+acts['rocket.clear'] = async (d) => {
+  const m = app().ctx().monthsMap[d.m] || {};
+  await app().store.put('months', { ...m, id: d.m, month: d.m, rocketIndex: null, rocketFee: null });
+  document.getElementById('sheet').close();
+  toast(`Цифры Rocket за ${fmtMonth(d.m)} очищены`);
 };
