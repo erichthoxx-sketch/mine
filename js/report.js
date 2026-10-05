@@ -244,3 +244,55 @@ export function toXlsxBook(m, XLSX) {
 
 // Совместимость: прежний вызов — сразу Markdown
 export const buildMarketingReport = (d, from, to) => toMarkdown(buildReportModel(d, from, to));
+
+// Запрос к нейросети по одной кампании: что насторожило, цифры, продажи по дням, отчёты таргетологов и примечания
+export function buildTargetPrompt(d, k, alert, notes = []) {
+  const s = d.settings;
+  const title = (id) => d.books.find((b) => b.id === id)?.title || '';
+  const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays };
+  const m = campaignMetrics(k, mctx);
+  const from = m.baseFrom && m.baseFrom < k.start ? m.baseFrom : addDays(k.start, -14);
+  const ser = incomeSeries(d.sales, d.legacyDays, from, m.to || d.dataEnd, m.bookId);
+  const myNotes = notes.filter((n) => n.campaignId === k.id).sort((a, b) => a.date.localeCompare(b.date));
+  const shots = myNotes.reduce((a, n) => a + (n.images || []).length, 0);
+  const L = [];
+  L.push(`Я автор любовных романов на Литнете (роялти 70 % от цены). Помоги разобраться с рекламной кампанией и подскажи, что делать.`);
+  L.push('');
+  L.push(`## Кампания «${k.name}»`);
+  L.push(`- Канал: ${CH[k.channel] || k.channel}; книга: ${k.bookId ? title(k.bookId) : 'все книги'}; период: ${fmtDate(k.start)} – ${k.end ? fmtDate(k.end) : 'без даты окончания'}; бюджет: ${k.budget ? cellText(RUB(k.budget)) : 'не указан'}.`);
+  if (m.status !== 'planned') {
+    L.push(`- Расход в день: ${cellText(RUB(m.spendPerDay))}. Доход по книге в день до рекламы (база): ${m.baseline == null ? 'нет данных' : cellText(RUB(m.baseline))}. Во время рекламы: ${cellText(RUB(m.avgDuring))}.`);
+    L.push(`- Окупаемость в день (прирост − расход): ${cellText(RUB(m.payback))}. Порог окупаемости: доход ${cellText(RUB(m.threshold))} в день.`);
+  }
+  if (alert) {
+    L.push('');
+    L.push('## Что насторожило');
+    if (alert.reasons.includes('drop')) L.push(`- За последние 7 дней (${fmtDate(alert.from)} – ${fmtDate(alert.to)}) доход по книге в среднем ${cellText(RUB(alert.last7))} в день — на ${cellText(PCT(alert.drop, 0))} меньше, чем неделей раньше (${cellText(RUB(alert.prev))}).`);
+    if (alert.reasons.includes('below')) L.push(`- Доход в день (${cellText(RUB(alert.last7))}) ниже порога окупаемости (${cellText(RUB(alert.threshold))}) — реклама сейчас работает в минус.`);
+  }
+  const reps = d.reports.filter((r) => r.campaignId === k.id).sort((a, b) => a.start.localeCompare(b.start));
+  if (reps.length) {
+    L.push('');
+    L.push('## Цифры таргетологов');
+    L.push('| Период | Расход | Показы | Клики | CTR | CPC |', '|---|---|---|---|---|---|');
+    for (const r of reps) L.push(`| ${fmtDate(r.start)} – ${fmtDate(r.end)} | ${cellText(RUB2(r.spend))} | ${cellText(N0(r.impressions))} | ${cellText(N0(r.clicks))} | ${cellText(PCT(ctr(r), 2))} | ${cellText(RUB2(cpc(r)))} |`);
+  }
+  if (myNotes.length) {
+    L.push('');
+    L.push('## Отчёты таргетологов и мои примечания');
+    for (const n of myNotes) L.push(`- ${fmtDate(n.date)}: ${n.note || '(без примечания)'}${(n.images || []).length ? ` — скриншот${n.images.length > 1 ? 'ы' : ''} отчёта прикладываю` : ''}`);
+  }
+  L.push('');
+  L.push('## Доход по книге по дням');
+  L.push('| Дата | Роялти | Шт | Реклама шла |', '|---|---|---|---|');
+  for (const x of ser) L.push(`| ${fmtDate(x.date)} | ${x.known ? cellText(RUB2(x.royalty)) : 'нет данных'} | ${x.qty} | ${x.date >= k.start && x.date <= (k.end || '9999') ? 'да' : 'нет'} |`);
+  L.push('');
+  L.push('## Вопросы');
+  L.push(`1. Почему результат кампании ухудшился? Посмотри на динамику продаж${shots ? ' и на скриншоты отчёта таргетологов (показы, клики, CTR, цена клика)' : ''}.`);
+  L.push('2. Стоит ли продолжать, поменять бюджет, креативы или аудиторию, или остановить кампанию?');
+  L.push('3. Что конкретно спросить и попросить у таргетологов Литнета (какие цифры, какие изменения)?');
+  L.push('4. Что я могу сделать сама: цена, скидка, выкладка глав, аннотация, обложка?');
+  L.push('Ответь конкретно и по приоритету.');
+  if (shots) { L.push(''); L.push(`(К сообщению приложено скриншотов: ${shots}.)`); }
+  return L.join('\n') + '\n';
+}

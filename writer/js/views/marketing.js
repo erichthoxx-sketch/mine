@@ -1,7 +1,7 @@
 import { esc, acts, changes, openSheet, opt, toast, uid, ask } from '../../../js/ui.js';
 import { rub, fmtDate } from '../../../js/format.js';
 import { incomeSeries, sumSeries, addDays, monthKey, campaignMetrics } from '../../../js/calc.js';
-import { resizeImage } from '../img.js';
+import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 
 const app = () => window.__app;

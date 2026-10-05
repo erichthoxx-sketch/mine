@@ -278,3 +278,25 @@ test('Rocket: не внесённые закончившиеся месяцы, �
   assert.deepEqual(r.missing, []); // август без продаж, сентябрь внесён, октябрь идёт
   assert.deepEqual(rocketRows(['2026-09'], (k) => fin[k], {}, '2026-10-05').missing, ['2026-09']);
 });
+
+test('сигнал по таргету: падение продаж и доход ниже порога, отложен после отчёта', async () => {
+  const { targetAlert } = await import('../js/calc.js');
+  const sales = [];
+  for (let i = 0; i < 14; i++) sales.push(mk(addDays('2026-09-01', i), 100, 1, 100)); // до рекламы 100 ₽/день
+  for (let i = 0; i < 7; i++) sales.push(mk(addDays('2026-09-15', i), 100, 6, 600)); // первая неделя рекламы
+  for (let i = 0; i < 7; i++) sales.push(mk(addDays('2026-09-22', i), 100, 3, 300)); // вторая — упало вдвое
+  const c = { id: 'k', start: '2026-09-15', end: '2026-10-15', budget: 6200, bookId: bookIdFor('А'), scope: 'book' };
+  const ctx = { sales, legacyDays: [], reports: [], campaigns: [c], dataEnd: '2026-09-28', baseDays: 14 };
+  const a = targetAlert(c, ctx);
+  assert.equal(a.last7, 300);
+  assert.equal(a.prev, 600);
+  assert.equal(a.drop, 0.5);
+  assert.ok(a.reasons.includes('drop'));
+  assert.ok(!a.reasons.includes('below')); // порог: 100 база + 200 расход/день = 300, не ниже
+  assert.equal(a.snoozed, false);
+  assert.equal(targetAlert(c, ctx, [{ campaignId: 'k', date: '2026-09-27' }]).snoozed, true);
+  // всё хорошо — сигнала нет
+  assert.equal(targetAlert(c, { ...ctx, dataEnd: '2026-09-21' }), null);
+  // меньше 10 дней кампании — рано судить
+  assert.equal(targetAlert(c, { ...ctx, dataEnd: '2026-09-20' }), null);
+});

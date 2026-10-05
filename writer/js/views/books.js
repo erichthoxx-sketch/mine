@@ -1,7 +1,7 @@
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate } from '../../../js/format.js';
 import { recordProgress, written, pace, forecastDate, charsAt, contestStatus, daysLeft } from '../wcalc.js';
-import { resizeImage } from '../img.js';
+import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 
 const app = () => window.__app;

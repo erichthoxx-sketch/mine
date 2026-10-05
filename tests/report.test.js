@@ -39,3 +39,22 @@ test('ячейки отчёта: форматирование', () => {
   assert.equal(cellText(PCT(0.0194, 2)), '1,94 %');
   assert.equal(cellText(null), '—');
 });
+
+test('запрос по таргету: что насторожило, примечания, вопросы', async () => {
+  const { buildTargetPrompt } = await import('../js/report.js');
+  const { targetAlert, addDays } = await import('../js/calc.js');
+  const b = bookIdFor('Альпийский развод');
+  const sales = [];
+  for (let i = 0; i < 14; i++) sales.push({ date: addDays('2026-09-01', i), book: 'Альпийский развод', bookId: b, kind: 'sale', price: 100, qty: 1, royalty: 100 });
+  for (let i = 0; i < 7; i++) sales.push({ date: addDays('2026-09-15', i), book: 'Альпийский развод', bookId: b, kind: 'sale', price: 100, qty: 6, royalty: 600 });
+  for (let i = 0; i < 7; i++) sales.push({ date: addDays('2026-09-22', i), book: 'Альпийский развод', bookId: b, kind: 'sale', price: 100, qty: 3, royalty: 300 });
+  const k = { id: 'k', name: 'Таргет Альпийский', channel: 'litnet', start: '2026-09-15', end: '2026-10-15', budget: 6200, bookId: b, scope: 'book' };
+  const d = { sales, legacyDays: [], books: [{ id: b, title: 'Альпийский развод' }], campaigns: [k], reports: [], settings: DEFAULT_SETTINGS, dataEnd: '2026-09-28' };
+  const alert = targetAlert(k, { ...d, baseDays: 14 });
+  const t = buildTargetPrompt(d, k, alert, [{ campaignId: 'k', date: '2026-09-28', note: 'CTR упал, сменили креатив', images: ['data:x'] }]);
+  assert.ok(t.includes('## Что насторожило'));
+  assert.ok(t.includes('на 50 % меньше'));
+  assert.ok(t.includes('28.09.2026: CTR упал, сменили креатив — скриншот отчёта прикладываю'));
+  assert.ok(t.includes('Что конкретно спросить'));
+  assert.ok(t.includes('(К сообщению приложено скриншотов: 1.)'));
+});

@@ -472,3 +472,24 @@ export function rocketRows(keys, finOf, monthsMap, today) {
   });
   return { rows, missing: rows.filter((x) => x.closed && x.fee == null && x.royalty > 0).map((x) => x.month) };
 }
+
+// Сигнал «таргет ухудшился»: по книге кампании за последние 7 дней доход упал на 25 %+ к предыдущим дням кампании
+// или опустился ниже порога окупаемости. Если отчёт таргетологов добавлен за последние 7 дней — сигнал «отложен».
+export function targetAlert(c, ctx, notes = []) {
+  const m = campaignMetrics(c, ctx);
+  if (m.status !== 'active' || m.days < 10) return null;
+  const end = m.to;
+  const lastFrom = addDays(end, -6);
+  const prevFrom = addDays(end, -13) > c.start ? addDays(end, -13) : c.start;
+  const prevTo = addDays(end, -7);
+  const avg = (from, to) => { const s = incomeSeries(ctx.sales, ctx.legacyDays, from, to, m.bookId); return s.length ? s.reduce((a, x) => a + x.royalty, 0) / s.length : null; };
+  const last7 = avg(lastFrom, end);
+  const prev = countDays(prevFrom, prevTo) >= 3 ? avg(prevFrom, prevTo) : null;
+  const drop = prev ? 1 - last7 / prev : null;
+  const reasons = [];
+  if (drop != null && drop >= 0.25) reasons.push('drop');
+  if (m.threshold != null && last7 < m.threshold) reasons.push('below');
+  if (!reasons.length) return null;
+  const recent = notes.filter((n) => n.campaignId === c.id && n.date >= lastFrom).length > 0;
+  return { campaignId: c.id, name: c.name, last7: r2(last7), prev: prev == null ? null : r2(prev), drop, threshold: m.threshold, spendPerDay: m.spendPerDay, reasons, snoozed: recent, from: lastFrom, to: end };
+}

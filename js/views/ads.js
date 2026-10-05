@@ -2,6 +2,9 @@ import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth } from '../format.js';
 import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, bookIdFor, monthsBetween } from '../calc.js';
 import { rocketCard } from './money.js';
+import { targetAlert } from '../calc.js';
+import { buildTargetPrompt } from '../report.js';
+import { resizeImage } from '../img.js';
 import { parseTargetReport, reportId } from '../parse.js';
 import { dailyChart, lineChart } from '../charts.js';
 import { chartInputs, chartLegend } from './home.js';
@@ -35,13 +38,16 @@ function litnetCard(c) {
 export function ads(a) {
   const c = a.ctx();
   const list = [...c.campaigns].sort((x, y) => (y.start || '').localeCompare(x.start || ''));
-  const html = `${litnetCard(c)}
+  const alerts = c.campaigns.map((k) => targetAlert(k, actx(c), c.data.adnotes || [])).filter(Boolean);
+  const html = `${alertsBlock(c, alerts)}
+  ${litnetCard(c)}
   ${c.hasData ? rocketCard(c, monthsBetween(monthKey(c.firstDate), monthKey(c.today)).reverse()) : ''}
   <div class="row between" style="margin:14px 0 10px"><h2 style="margin:0">Кампании</h2><button class="primary" data-act="ad.new">+ Кампания</button></div>
   <p class="small"><a href="#" data-act="go" data-to="/data">📄 Скачать отчёт для нейросети →</a></p>
   <div class="card list">${list.length ? list.map((k) => {
     const m = metricsFor(c, k);
-    const badge = m.status === 'planned' ? '<span class="badge">запланирована</span>' : m.status === 'active' ? '<span class="badge good">идёт</span>' : '<span class="badge">завершена</span>';
+    const al = alerts.find((x) => x.campaignId === k.id && !x.snoozed);
+    const badge = al ? '<span class="badge bad">⚠ проверить</span>' : m.status === 'planned' ? '<span class="badge">запланирована</span>' : m.status === 'active' ? '<span class="badge good">идёт</span>' : '<span class="badge">завершена</span>';
     const pay = m.payback == null ? '<span class="muted">нет базы для сравнения</span>' : `<span class="${m.payback >= 0 ? 'up' : 'down'}">${m.payback >= 0 ? '▲ окупается' : '▼ не окупается'}: ${rub(m.payback, 0)}/день</span>`;
     return `<a class="item" href="#" data-act="go" data-to="/ad/${k.id}"><div class="row between"><b>${esc(k.name)}</b>${badge}</div>
       <div class="small muted">${esc(CHANNELS[k.channel] || '')} · ${esc(k.bookId ? c.titleOf(k.bookId, '') : 'все книги')} · ${fmtDate(k.start)}–${fmtDate(k.end) || '…'}</div>
@@ -75,7 +81,8 @@ export function adPage(a, id) {
   const html = `<p><a href="#" data-act="go" data-to="/ads">← Вся реклама</a></p>
   <div class="card"><h2>${esc(k.name)}</h2>${metricsHtml}</div>
   <div class="card"><h2>Доход вокруг кампании</h2><div class="chart" id="chart"></div><div id="legend"></div></div>
-  <div class="card"><h2>Недельные отчёты таргетологов</h2>
+  ${notesSection(c, k)}
+  <div class="card"><h2>Цифры таргетологов по неделям <span class="small muted">(необязательно)</span></h2>
     ${reps.length ? `<div class="scroll"><table><tr><th>Неделя</th><th>Расход</th><th>Показы</th><th>Клики</th><th>CPC</th><th>CTR</th><th></th></tr>${reps.map((r) => `<tr><td>${fmtShort(r.start)}–${fmtDate(r.end)}</td><td>${rub(r.spend)}</td><td>${num(r.impressions)}</td><td>${num(r.clicks)}</td><td>${r.clicks ? rub(cpc(r)) : '—'}</td><td>${r.impressions ? pct(ctr(r), 2) : '—'}</td><td><button class="link danger" data-act="rep.del" data-id="${r.id}">убрать</button></td></tr>`).join('')}</table></div>` : '<p class="muted">Отчётов пока нет.</p>'}
     <div class="row" style="margin-top:10px"><button class="primary" data-act="rep.new" data-id="${k.id}">+ Отчёт</button><button data-act="rep.paste" data-id="${k.id}">Вставить таблицу</button></div>
     ${chronological.length ? `<h3>Цена клика (CPC), ₽</h3><div class="chart" id="cpc"></div><h3>CTR, %</h3><div class="chart" id="ctr"></div>` : ''}
@@ -155,4 +162,58 @@ acts['rep.paste'] = (d) => {
     await app().store.putMany('reports', r.rows.map((x) => ({ id: reportId(d.id, x.start), campaignId: d.id, start: x.start, end: x.end, spend: x.spend, impressions: x.impressions, clicks: x.clicks })));
     toast(`Добавлено недель: ${r.rows.length}`);
   });
+};
+
+// ---------- сигналы по таргету, отчёты-скриншоты, запрос для нейросети ----------
+const actx = (c) => ({ sales: c.sales, legacyDays: c.legacyDays, reports: c.data.reports, campaigns: c.campaigns, dataEnd: c.dataEnd, baseDays: c.settings.baseDays });
+export const activeAlerts = (c) => c.campaigns.map((k) => targetAlert(k, actx(c), c.data.adnotes || [])).filter((a) => a && !a.snoozed);
+function alertText(a) {
+  const t = [];
+  if (a.reasons.includes('drop')) t.push(`продажи книги за последние 7 дней упали на ${pct(a.drop, 0)} (${rub(a.last7, 0)} в день против ${rub(a.prev, 0)})`);
+  if (a.reasons.includes('below')) t.push(`доход ${rub(a.last7, 0)} в день — ниже порога окупаемости ${rub(a.threshold, 0)}`);
+  return t.join('; ');
+}
+function alertsBlock(c, alerts) {
+  const open = alerts.filter((a) => !a.snoozed);
+  if (!open.length) return '';
+  return open.map((a) => `<div class="card alert-card"><div class="row between"><b>⚠ ${esc(a.name)}</b><span class="badge bad">таргет просел</span></div>
+    <p class="small" style="margin:8px 0">${esc(alertText(a))}. Запросите отчёт у таргетологов: скриншот с показами, кликами и ценой клика.</p>
+    <div class="row"><button class="primary" data-act="note.new" data-id="${a.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${a.campaignId}">Запрос для нейросети</button></div></div>`).join('');
+}
+function notesSection(c, k) {
+  const notes = (c.data.adnotes || []).filter((n) => n.campaignId === k.id).sort((a, b) => b.date.localeCompare(a.date));
+  const a = targetAlert(k, actx(c), c.data.adnotes || []);
+  return `<div class="card"><h2>Отчёты таргетологов и примечания</h2>
+    ${a ? `<div class="alert${a.snoozed ? ' ok' : ''}">${a.snoozed ? 'Отчёт уже добавлен — сигнал отложен на неделю. ' : '⚠ '}${esc(alertText(a))}.</div>` : '<p class="small muted">Сейчас всё в порядке. Если продажи по книге просядут, здесь появится подсказка запросить отчёт.</p>'}
+    ${notes.map((n) => `<div class="item"><div class="row between"><b>${fmtDate(n.date)}</b><button class="link danger" data-act="note.del" data-id="${n.id}">убрать</button></div>
+      ${n.note ? `<div class="idea-text">${esc(n.note)}</div>` : ''}
+      ${(n.images || []).length ? `<div class="shots">${n.images.map((src, i) => `<button class="shot" data-act="note.img" data-id="${n.id}" data-i="${i}"><img src="${src}" alt="скриншот отчёта"></button>`).join('')}</div>` : ''}</div>`).join('')}
+    <div class="row" style="margin-top:10px"><button class="primary" data-act="note.new" data-id="${k.id}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${k.id}">Запрос для нейросети</button></div>
+    <div class="hint">«Запрос для нейросети» копирует текст с цифрами кампании, продажами по дням и вашими примечаниями. Скриншоты приложите к сообщению сами (нажмите на скриншот — откроется крупно, его можно сохранить).</div></div>`;
+}
+acts['note.new'] = (d) => {
+  const c = app().ctx();
+  openSheet('Отчёт таргетологов', `<label for="nd">Дата</label><input id="nd" type="date" name="date" value="${c.today}" required>
+    <label for="ni">Скриншоты отчёта (до 3)</label><input id="ni" type="file" name="img" accept="image/*" multiple>
+    <label for="nn">Примечания</label><textarea id="nn" name="note" placeholder="что сказали таргетологи, что поменяли, ваши наблюдения"></textarea>`, async (fd) => {
+    const files = fd.getAll('img').filter((f) => f && f.size).slice(0, 3);
+    const note = (fd.get('note') || '').trim();
+    if (!files.length && !note) { toast('Добавьте скриншот или примечание'); return false; }
+    toast('Сохраняю…');
+    const images = [];
+    for (const f of files) images.push(await resizeImage(f, 1200, 0.8));
+    await app().store.put('adnotes', { id: 'n' + uid(), campaignId: d.id, date: fd.get('date'), note, images });
+    toast('Отчёт сохранён');
+  });
+};
+acts['note.del'] = async (d) => { if (await ask('Убрать этот отчёт?', 'Убрать')) await app().store.remove('adnotes', d.id); };
+acts['note.img'] = (d) => {
+  const n = (app().ctx().data.adnotes || []).find((x) => x.id === d.id);
+  openSheet(`Отчёт от ${fmtDate(n.date)}`, `<img src="${n.images[Number(d.i)]}" alt="скриншот отчёта" style="width:100%;border-radius:12px"><p class="hint">Чтобы сохранить: на телефоне — долгое нажатие на картинку, на компьютере — правая кнопка мыши.</p>`, null);
+};
+acts['ai.prompt'] = async (d) => {
+  const c = app().ctx(), k = c.campaigns.find((x) => x.id === d.id);
+  const text = buildTargetPrompt({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, settings: c.settings, dataEnd: c.dataEnd }, k, targetAlert(k, actx(c), []), c.data.adnotes || []);
+  try { await navigator.clipboard.writeText(text); toast('Запрос скопирован — вставьте его в чат с нейросетью и приложите скриншоты'); }
+  catch { openSheet('Запрос для нейросети', `<p class="small muted">Выделите текст и скопируйте:</p><textarea style="min-height:300px" readonly>${esc(text)}</textarea>`, null); }
 };

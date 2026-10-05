@@ -110,7 +110,7 @@ export function parseLegacy(text) {
 }
 
 // ---- резервная копия ----
-export const COLLECTIONS = ['books', 'sales', 'days', 'campaigns', 'reports', 'months'];
+export const COLLECTIONS = ['books', 'sales', 'days', 'campaigns', 'reports', 'months', 'adnotes'];
 export function makeBackup(data) {
   const out = { app: 'author-income-tracker', version: 1, exportedAt: new Date().toISOString(), settings: data.settings || {} };
   for (const c of COLLECTIONS) out[c] = data[c] || [];

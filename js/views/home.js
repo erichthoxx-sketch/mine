@@ -3,6 +3,7 @@ import { rub, pct, fmtDate, fmtShort, fmtMonth, num } from '../format.js';
 import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, monthGoalStatus, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
 import { dailyChart, EVENT_TYPES } from '../charts.js';
 import { acts } from '../ui.js';
+import { activeAlerts } from './ads.js';
 
 export function chartInputs(c, from, to) {
   const i0 = c.series.findIndex((d) => d.date >= from);
@@ -45,6 +46,7 @@ export function home(app) {
     <div class="stat"><div class="k">Этот месяц</div><div class="v">${rub(st.mtd)}</div><div class="s ${vs == null ? '' : vs >= 0 ? 'up' : 'down'}">${vs == null ? 'нет прошлого месяца' : (vs >= 0 ? '▲ ' : '▼ ') + pct(Math.abs(vs)) + ' к тому же сроку прошлого'}</div></div>
     <div class="stat"><div class="k">Прошлый месяц</div><div class="v">${rub(st.prevTotal)}</div><div class="s">за тот же срок: ${rub(st.prevSame)}</div></div>
   </div>
+  ${activeAlerts(c).map((a) => `<div class="card row between"><span>⚠ Таргет «${esc(a.name)}» просел — запросите отчёт у таргетологов</span><button class="link" data-act="go" data-to="/ads">открыть</button></div>`).join('')}
   ${taxReminder(c)}
   ${goalCard(c, st)}
   <div class="card">
