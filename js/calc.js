@@ -455,3 +455,20 @@ export function taxRows(keys, finOf, monthsMap, dataEnd) {
 
 // НПД (самозанятые): налог за месяц надо оплатить до 28-го числа следующего месяца
 export const npdDeadline = (key) => `${addMonths(key, 1)}-28`;
+
+// Rocket по месяцам. Комиссию списывают до 20-го числа следующего месяца, поэтому вносим за закончившиеся месяцы.
+// ≈ продаж через Rocket = комиссия ÷ индекс; доля — сколько роялти съела комиссия.
+export function rocketRows(keys, finOf, monthsMap, today) {
+  const rows = keys.map((k) => {
+    const f = finOf(k), m = monthsMap[k] || {};
+    const fee = m.rocketFee != null && m.rocketFee !== '' ? Number(m.rocketFee) : null;
+    const index = m.rocketIndex != null && m.rocketIndex !== '' ? Number(m.rocketIndex) : null;
+    return {
+      month: k, royalty: f.royalty, qty: f.qty ?? null, fee, index,
+      sales: fee != null && index ? Math.round(fee / index) : null,
+      share: fee != null && f.royalty ? fee / f.royalty : null,
+      closed: monthEnd(k) < today, chargeBy: `${addMonths(k, 1)}-20`,
+    };
+  });
+  return { rows, missing: rows.filter((x) => x.closed && x.fee == null && x.royalty > 0).map((x) => x.month) };
+}

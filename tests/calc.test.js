@@ -266,3 +266,15 @@ test('налог к уплате по месяцам и неоплаченный
   assert.equal(t.rows[0].paidAt, '2026-09-20');
   assert.equal(t.rows[2].closed, false);
 });
+
+test('Rocket: не внесённые закончившиеся месяцы, продажи через Rocket и доля комиссии', async () => {
+  const { rocketRows } = await import('../js/calc.js');
+  const fin = { '2026-08': { royalty: 0 }, '2026-09': { royalty: 25438.4 }, '2026-10': { royalty: 5000 } };
+  const r = rocketRows(['2026-08', '2026-09', '2026-10'], (k) => fin[k], { '2026-09': { rocketIndex: 34.9, rocketFee: 3730 } }, '2026-10-05');
+  const sep = r.rows[1];
+  assert.equal(sep.sales, 107); // 3730 / 34,9
+  assert.equal(Math.round(sep.share * 1000) / 10, 14.7);
+  assert.equal(sep.chargeBy, '2026-10-20');
+  assert.deepEqual(r.missing, []); // август без продаж, сентябрь внесён, октябрь идёт
+  assert.deepEqual(rocketRows(['2026-09'], (k) => fin[k], {}, '2026-10-05').missing, ['2026-09']);
+});

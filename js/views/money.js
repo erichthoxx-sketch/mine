@@ -1,6 +1,6 @@
 import { esc, acts, forms, openSheet, opt, toast, N, changes } from '../ui.js';
 import { rub, fmtMonth, fmtMonthShort, pct, num } from '../format.js';
-import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline } from '../calc.js';
+import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline, rocketRows } from '../calc.js';
 import { fmtDate } from '../format.js';
 import { goalChart } from '../charts.js';
 
@@ -24,6 +24,7 @@ export function money(a) {
 
   const html = `
   ${taxCard(c, sel, keys)}
+  ${rocketCard(c, keys)}
   <div class="card"><div class="row between"><h2 style="margin:0">Итоги месяца</h2><select id="mSel" data-chg="money.month" style="width:auto">${keys.map((k) => opt(k, fmtMonth(k), sel)).join('')}</select></div>
     <table style="margin-top:8px">
       <tr><td><b>Доход до вычетов</b> <span class="muted small">(роялти)</span></td><td><b>${rub(f.royalty)}</b></td></tr>
@@ -156,4 +157,31 @@ acts['tax.check'] = (d) => {
 };
 acts.copy = async (d) => {
   try { await navigator.clipboard.writeText(d.text); toast('Скопировано'); } catch { toast('Не получилось скопировать — выделите текст вручную'); }
+};
+
+// ---------- Rocket ----------
+function rocketCard(c, keys) {
+  const r = rocketRows([...keys].reverse(), (k) => fin(c, k), c.monthsMap, c.today);
+  const cur = r.rows.find((x) => !x.closed);
+  const shown = [...r.rows].reverse().filter((x) => x.royalty > 0 || x.fee != null);
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Rocket</h2>${r.missing.length ? `<span class="badge warn">не внесено: ${r.missing.length}</span>` : '<span class="badge good">всё внесено</span>'}</div>
+    ${r.missing.length ? `<div class="unpaid"><div class="small" style="font-weight:800;margin-bottom:6px">Не внесено:</div>${r.rows.filter((x) => r.missing.includes(x.month)).map((x) => `<div class="row between" style="padding:6px 0"><span>${fmtMonth(x.month)}<br><span class="small muted">списывают до ${fmtDate(x.chargeBy)}</span></span><button class="primary" data-act="rocket.edit" data-m="${x.month}">Внести</button></div>`).join('')}</div>` : ''}
+    ${cur ? `<p class="small muted" style="margin:10px 0 0">${fmtMonth(cur.month)} ещё идёт — комиссию за него внесите после списания, до ${fmtDate(cur.chargeBy)}. Цифры в кабинете Rocket до этого меняются.</p>` : ''}
+    ${shown.some((x) => x.fee != null) ? `<div class="scroll" style="margin-top:10px"><table><tr><th>Месяц</th><th>Индекс</th><th>Комиссия</th><th>≈ продаж через Rocket</th><th>Доля от роялти</th><th></th></tr>
+      ${shown.filter((x) => x.closed).map((x) => `<tr><td>${fmtMonthShort(x.month)}</td><td>${x.index == null ? '—' : num(x.index, 1)}</td><td>${x.fee == null ? '<span class="muted">—</span>' : rub(x.fee, 0)}</td><td>${x.sales ?? '—'}</td><td>${x.share == null ? '—' : pct(x.share, 1)}</td><td><button class="link" data-act="rocket.edit" data-m="${x.month}">✎</button></td></tr>`).join('')}</table></div>
+      <div class="hint">≈ продаж через Rocket = комиссия ÷ индекс: сколько продаж принесла реклама Литнета. Доля — сколько роялти ушло на комиссию.</div>` : ''}
+  </div>`;
+}
+acts['rocket.edit'] = (d) => {
+  const c = app().ctx(), m = c.monthsMap[d.m] || {};
+  openSheet(`Rocket — ${fmtMonth(d.m)}`, `<p class="small muted">Цифры из кабинета Rocket за ${fmtMonth(d.m)} (фильтр «прошлый месяц»): «Индекс» и «Комиссия Rocket».</p>
+    <div class="f2"><div><label for="ri">Индекс Rocket</label><input id="ri" name="rocketIndex" inputmode="decimal" value="${m.rocketIndex ?? ''}" placeholder="например 34,9"></div>
+    <div><label for="rf">Комиссия, ₽</label><input id="rf" name="rocketFee" inputmode="decimal" value="${m.rocketFee ?? ''}" placeholder="например 3 730"></div></div>
+    <div class="hint">Если продаж через Rocket не было — комиссия 0.</div>`, async (fd) => {
+    const val = (n) => { const v = N(fd.get(n)); return v == null || Number.isNaN(v) ? null : v; };
+    const idx = val('rocketIndex');
+    if (idx != null && idx > c.settings.rocketCap) toast(`Индекс ${idx} выше обычного потолка ${c.settings.rocketCap} ₽ — проверьте цифру`);
+    await app().store.put('months', { ...m, id: d.m, month: d.m, rocketIndex: idx, rocketFee: val('rocketFee') });
+    toast('Rocket сохранён');
+  });
 };
