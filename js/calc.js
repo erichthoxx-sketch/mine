@@ -273,17 +273,34 @@ export function campaignMetrics(c, ctx) {
   const qtyDuring = during.reduce((a, x) => a + x.qty, 0);
 
   // база для сравнения
-  let baseline = null, baseQty = null, baseFrom = null, baseTo = null, baseSource = 'auto';
+  // Авто: последние N дней с данными до старта, в которые НЕ шла другая реклама этой книги
+  // (или реклама «всех книг»). Иначе реклама сравнивалась бы с рекламой.
+  let baseline = null, baseQty = null, baseFrom = null, baseTo = null, baseSource = 'auto', baseDaysUsed = 0;
+  const baseNotes = [];
+  const others = (ctx.campaigns || []).filter((o) => o.id !== c.id && o.start && o.start < c.start
+    && (!bookId || !o.bookId || o.scope === 'all' || o.bookId === bookId));
+  const adOn = (d) => others.some((o) => d >= o.start && d <= (o.end || '9999-12-31'));
   const mode = c.baseMode || 'auto';
+  let picked = [];
   if (mode === 'value' && c.baseValue != null && c.baseValue !== '') {
     baseline = Number(c.baseValue); baseSource = 'manual';
+  } else if (mode === 'range' && c.baseFrom && c.baseTo) {
+    baseSource = 'range';
+    picked = incomeSeries(ctx.sales, ctx.legacyDays, c.baseFrom, c.baseTo, bookId).filter((x) => x.known);
+    if (picked.some((x) => adOn(x.date))) baseNotes.push('overlap');
   } else {
-    if (mode === 'range' && c.baseFrom && c.baseTo) { baseFrom = c.baseFrom; baseTo = c.baseTo; baseSource = 'range'; }
-    else { const n = c.baseDays || ctx.baseDays || 14; baseFrom = addDays(c.start, -n); baseTo = addDays(c.start, -1); }
-    const b = incomeSeries(ctx.sales, ctx.legacyDays, baseFrom, baseTo, bookId);
-    baseline = avgSeries(b, 'royalty', true);
-    const known = b.filter((x) => x.known);
-    baseQty = known.length ? known.reduce((a, x) => a + x.qty, 0) / known.length : null;
+    const n = c.baseDays || ctx.baseDays || 14;
+    const back = incomeSeries(ctx.sales, ctx.legacyDays, addDays(c.start, -120), addDays(c.start, -1), bookId).filter((x) => x.known).reverse();
+    picked = back.filter((x) => !adOn(x.date)).slice(0, n);
+    if (picked.length < Math.min(n, 3) && back.length) { picked = back.slice(0, n); baseNotes.push('overlap'); }
+  }
+  if (picked.length) {
+    baseDaysUsed = picked.length;
+    baseline = r2(picked.reduce((a, x) => a + x.royalty, 0) / picked.length);
+    baseQty = picked.reduce((a, x) => a + x.qty, 0) / picked.length;
+    baseFrom = picked.reduce((a, x) => (x.date < a ? x.date : a), picked[0].date);
+    baseTo = picked.reduce((a, x) => (x.date > a ? x.date : a), picked[0].date);
+    if (picked.length < 7) baseNotes.push('few');
   }
 
   // расход
@@ -315,7 +332,7 @@ export function campaignMetrics(c, ctx) {
     status: c.end && c.end < dataEnd ? 'finished' : 'active',
     from: c.start, to: end, days, bookId,
     spendPerDay: r2(spendPerDay), spendTotal: r2(spendTotal), spendSource,
-    avgDuring, baseline, baseFrom, baseTo, baseSource,
+    avgDuring, baseline, baseFrom, baseTo, baseSource, baseDaysUsed, baseNotes,
     uplift: uplift == null ? null : r2(uplift),
     payback: payback == null ? null : r2(payback),
     paybackTotal: payback == null ? null : r2(payback * days),
@@ -402,4 +419,15 @@ export function diffSales(existing, incoming, replacePeriod = true) {
     removeIds = existing.filter((s) => s.date >= from && s.date <= to && !inIds.has(s.id)).map((s) => s.id);
   }
   return { added, changed, same, removeIds };
+}
+
+// Ручной результат дня (пока нет выгрузки Литнета). Полная цена восстанавливается из роялти 70 %.
+// Когда загрузите выгрузку за этот период, ручные строки заменятся точными (галочка «убрать старые строки»).
+export function manualSaleRow({ date, book, bookId, kind, qty, royalty }) {
+  const q = Math.max(1, Number(qty) || 1);
+  return {
+    id: `${date}_${hashStr(book.trim().toLowerCase())}_m${kind === 'sub' ? 'p' : 's'}`,
+    date, book, bookId: bookId || bookIdFor(book), kind: kind === 'sub' ? 'sub' : 'sale',
+    price: r2(royalty / 0.7 / q), qty: Number(qty) || 0, royalty: r2(royalty), manual: true,
+  };
 }

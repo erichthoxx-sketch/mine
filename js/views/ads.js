@@ -9,7 +9,7 @@ const app = () => window.__app;
 export const CHANNELS = { litnet: 'Литнет платит', own: 'Свой таргет', other: 'Другое' };
 
 export function metricsFor(c, k) {
-  return campaignMetrics(k, { sales: c.sales, legacyDays: c.legacyDays, reports: c.data.reports, dataEnd: c.dataEnd, baseDays: c.settings.baseDays });
+  return campaignMetrics(k, { sales: c.sales, legacyDays: c.legacyDays, reports: c.data.reports, campaigns: c.campaigns, dataEnd: c.dataEnd, baseDays: c.settings.baseDays });
 }
 
 function litnetCard(c) {
@@ -58,7 +58,9 @@ export function adPage(a, id) {
   const metricsHtml = m.status === 'planned' ? '<p class="muted">Кампания ещё не началась (или нет данных продаж за её период).</p>' : `
     <dl class="dl">
       <dt>Расход в день ${m.spendSource === 'reports' ? '(по отчётам)' : '(бюджет ÷ дни)'}</dt><dd>${rub(m.spendPerDay)}</dd>
-      <dt>База: средний доход в день ${m.baseFrom ? `(${fmtDate(m.baseFrom)}–${fmtDate(m.baseTo)})` : '(вручную)'}</dt><dd>${m.baseline == null ? '<span class="muted">нет данных до старта — задайте базу вручную</span>' : rub(m.baseline)}</dd>
+      <dt>База: средний доход в день ${m.baseSource === 'manual' ? '(вручную)' : m.baseFrom ? `(${m.baseDaysUsed} дн. с данными, ${fmtDate(m.baseFrom)}–${fmtDate(m.baseTo)}${m.baseSource === 'auto' && !m.baseNotes.includes('overlap') ? ', без дней другой рекламы' : ''})` : ''}</dt><dd>${m.baseline == null ? '<span class="muted">нет данных до старта — загрузите выгрузку за прошлые дни или задайте базу вручную</span>' : rub(m.baseline)}</dd>
+      ${m.baseNotes?.includes('overlap') ? '<dd class="alert">⚠ В базе есть дни, когда шла другая реклама этой книги, поэтому база завышена, а окупаемость занижена. Задайте ниже «свой период» без рекламы или базу вручную.</dd>' : ''}
+      ${m.baseNotes?.includes('few') ? `<dd class="alert">⚠ База посчитана всего по ${m.baseDaysUsed} дн. — цифра неточная. Загрузите выгрузку Литнета за более ранние дни.</dd>` : ''}
       <dt>Средний доход в день во время кампании (${m.days} дн.)</dt><dd>${rub(m.avgDuring)}</dd>
       <dt>Прирост к базе</dt><dd class="${m.uplift == null ? '' : m.uplift >= 0 ? 'up' : 'down'}">${m.uplift == null ? '—' : rub(m.uplift)}</dd>
       <dt>Окупаемость в день (прирост − расход)</dt><dd class="${m.payback == null ? '' : m.payback >= 0 ? 'up' : 'down'}">${m.payback == null ? '—' : (m.payback >= 0 ? '▲ ' : '▼ ') + rub(m.payback)}</dd>
@@ -72,7 +74,7 @@ export function adPage(a, id) {
   <div class="card"><h2>Доход вокруг кампании</h2><div class="chart" id="chart"></div><div id="legend"></div></div>
   <div class="card"><h2>Недельные отчёты таргетологов</h2>
     ${reps.length ? `<div class="scroll"><table><tr><th>Неделя</th><th>Расход</th><th>Показы</th><th>Клики</th><th>CPC</th><th>CTR</th><th></th></tr>${reps.map((r) => `<tr><td>${fmtShort(r.start)}–${fmtDate(r.end)}</td><td>${rub(r.spend)}</td><td>${num(r.impressions)}</td><td>${num(r.clicks)}</td><td>${r.clicks ? rub(cpc(r)) : '—'}</td><td>${r.impressions ? pct(ctr(r), 2) : '—'}</td><td><button class="link danger" data-act="rep.del" data-id="${r.id}">убрать</button></td></tr>`).join('')}</table></div>` : '<p class="muted">Отчётов пока нет.</p>'}
-    <div class="row" style="margin-top:10px"><button class="primary" data-act="rep.new" data-id="${k.id}">+ Неделя</button><button data-act="rep.paste" data-id="${k.id}">Вставить таблицу</button></div>
+    <div class="row" style="margin-top:10px"><button class="primary" data-act="rep.new" data-id="${k.id}">+ Отчёт</button><button data-act="rep.paste" data-id="${k.id}">Вставить таблицу</button></div>
     ${chronological.length ? `<h3>Цена клика (CPC), ₽</h3><div class="chart" id="cpc"></div><h3>CTR, %</h3><div class="chart" id="ctr"></div>` : ''}
   </div>
   <div class="card"><h2>Настройки кампании</h2>
@@ -135,7 +137,7 @@ acts['rep.new'] = (d) => {
   const c = app().ctx();
   const last = c.data.reports.filter((r) => r.campaignId === d.id).sort((x, y) => y.end.localeCompare(x.end))[0];
   const start = last ? addDays(last.end, 1) : (c.campaigns.find((k) => k.id === d.id)?.start || c.today);
-  openSheet('Недельный отчёт', `<div class="f2"><div><label>Неделя с</label><input type="date" name="start" value="${start}" required></div><div><label>по</label><input type="date" name="end" value="${addDays(start, 6)}" required></div></div>
+  openSheet('Отчёт за неделю или день', `<div class="hint">Для результата за один день поставьте одинаковые даты «с» и «по».</div><div class="f2"><div><label>С</label><input type="date" name="start" value="${start}" required></div><div><label>по</label><input type="date" name="end" value="${addDays(start, 6)}" required></div></div>
     <label>Расход, ₽</label><input name="spend" inputmode="decimal" required><div class="f2"><div><label>Показы</label><input name="impressions" inputmode="numeric" required></div><div><label>Клики</label><input name="clicks" inputmode="numeric" required></div></div>
     <div class="hint">CPC и CTR посчитаются сами.</div>`, async (fd) => {
     const [spend, impressions, clicks] = ['spend', 'impressions', 'clicks'].map((n) => N(fd.get(n)));

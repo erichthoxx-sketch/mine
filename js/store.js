@@ -21,7 +21,9 @@ export const DEFAULT_SETTINGS = {
 const clean = (o) => JSON.parse(JSON.stringify(o));
 const emptyData = () => ({ settings: { ...DEFAULT_SETTINGS }, books: [], sales: [], days: [], campaigns: [], reports: [], months: [] });
 
-export const firebaseConfigured = !Object.values(firebaseConfig).some((v) => String(v).includes('ВСТАВЬТЕ'));
+// На localhost (проверка при разработке) всегда пробный режим
+const isLocalDev = typeof location !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+export const firebaseConfigured = !isLocalDev && !Object.values(firebaseConfig).some((v) => String(v).includes('ВСТАВЬТЕ'));
 
 class Base {
   constructor() { this.data = emptyData(); this.listeners = new Set(); this.user = null; this.mode = 'local'; this.sync = 'ok'; }

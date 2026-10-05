@@ -203,3 +203,46 @@ test('история цен: предложение из продаж и цен�
   assert.equal(priceAt({ priceHistory: ch }, '2026-09-05'), 109.85);
   assert.equal(priceAt({ priceHistory: ch }, '2026-08-01'), null);
 });
+
+test('база пропускает дни другой рекламы этой книги', () => {
+  const sales = [];
+  // 01–14.09 без рекламы: 100 ₽/день; 15–30.09 шла прошлая реклама: 500 ₽/день; с 01.10 новая кампания: 400 ₽/день
+  for (let i = 0; i < 14; i++) sales.push(mk(addDays('2026-09-01', i), 100, 1, 100));
+  for (let i = 0; i < 16; i++) sales.push(mk(addDays('2026-09-15', i), 100, 5, 500));
+  for (let i = 0; i < 5; i++) sales.push(mk(addDays('2026-10-01', i), 100, 4, 400));
+  const prev = { id: 'old', start: '2026-09-15', end: '2026-09-30', bookId: bookIdFor('А'), scope: 'book' };
+  const cur = { id: 'new', start: '2026-10-01', end: '2026-10-05', bookId: bookIdFor('А'), scope: 'book', budget: 500 };
+  const ctx = { sales, legacyDays: [], reports: [], campaigns: [prev, cur], dataEnd: '2026-10-05', baseDays: 14 };
+  const m = campaignMetrics(cur, ctx);
+  assert.equal(m.baseline, 100); // а не 500 из дней прошлой рекламы
+  assert.equal(m.baseFrom, '2026-09-01');
+  assert.equal(m.baseTo, '2026-09-14');
+  assert.equal(m.payback, 400 - 100 - 100);
+  assert.deepEqual(m.baseNotes, []);
+  // без списка других кампаний — старое поведение (база = дни прошлой рекламы)
+  assert.equal(campaignMetrics(cur, { ...ctx, campaigns: [] }).baseline, 500);
+  // реклама другой книги базу не трогает
+  const other = { ...prev, bookId: bookIdFor('Б') };
+  assert.equal(campaignMetrics(cur, { ...ctx, campaigns: [other, cur] }).baseFrom, '2026-09-17');
+});
+
+test('база: мало данных и вынужденное пересечение помечаются', () => {
+  const sales = [];
+  for (let i = 0; i < 4; i++) sales.push(mk(addDays('2026-10-01', i), 100, 5, 500));
+  for (let i = 0; i < 3; i++) sales.push(mk(addDays('2026-10-05', i), 100, 4, 400));
+  const prev = { id: 'old', start: '2026-09-14', end: '2026-10-04', bookId: bookIdFor('А'), scope: 'book' };
+  const cur = { id: 'new', start: '2026-10-05', end: '2026-11-07', bookId: bookIdFor('А'), scope: 'book', budget: 1000 };
+  const m = campaignMetrics(cur, { sales, legacyDays: [], reports: [], campaigns: [prev, cur], dataEnd: '2026-10-07', baseDays: 14 });
+  assert.equal(m.baseline, 500);
+  assert.ok(m.baseNotes.includes('overlap'));
+  assert.ok(m.baseNotes.includes('few'));
+});
+
+test('ручной результат дня: строка с полной ценой из роялти и ключом без дублей', async () => {
+  const { manualSaleRow } = await import('../js/calc.js');
+  const r = manualSaleRow({ date: '2026-10-06', book: 'А', kind: 'sale', qty: 3, royalty: 354.9 });
+  assert.equal(r.price, 169);
+  assert.equal(r.id, manualSaleRow({ date: '2026-10-06', book: 'А', kind: 'sale', qty: 5, royalty: 1 }).id);
+  assert.notEqual(r.id, manualSaleRow({ date: '2026-10-06', book: 'А', kind: 'sub', qty: 3, royalty: 1 }).id);
+  assert.equal(incomeSeries([r], [], '2026-10-06', '2026-10-06')[0].royalty, 354.9);
+});

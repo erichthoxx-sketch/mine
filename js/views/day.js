@@ -1,6 +1,7 @@
 import { esc, acts, forms, changes, opt, toast } from '../ui.js';
 import { rub, fmtDate } from '../format.js';
-import { incomeSeries, booksBreakdown } from '../calc.js';
+import { incomeSeries, booksBreakdown, manualSaleRow } from '../calc.js';
+import { N } from '../ui.js';
 import { EVENT_TYPES } from '../charts.js';
 
 const app = () => window.__app;
@@ -12,6 +13,7 @@ export function day(a) {
   const doc = dayDoc(c, date);
   const inc = incomeSeries(c.sales, c.legacyDays, date, date)[0];
   const bb = booksBreakdown(c.sales, date, date);
+  const manual = c.sales.filter((s) => s.date === date && s.manual);
   const recent = c.data.days.filter((d) => (d.events?.length || d.note)).sort((x, y) => y.date.localeCompare(x.date)).slice(0, 30);
   const html = `
   <div class="card">
@@ -20,6 +22,14 @@ export function day(a) {
     <h3>Доход за день</h3>
     <div class="stat" style="border:0;padding:0"><div class="v">${rub(inc.royalty)}</div><div class="s">${inc.qty} шт.: продажи ${inc.saleQty}, подписки ${inc.subQty}${c.legacyDays.some((d) => d.date === date && d.income != null && !c.sales.some((s) => s.date === date)) ? ' · из старого трекера' : ''}</div></div>
     ${bb.map((b) => `<div class="row between small"><span>${esc(c.titleOf(b.bookId, b.title))}</span><span>${rub(b.royalty)}</span></div>`).join('')}
+  </div>
+  <div class="card"><h2>Результат дня вручную</h2>
+    <p class="small muted">Если выгрузки Литнета за этот день ещё нет. Когда загрузите выгрузку, ручные цифры заменятся точными.</p>
+    ${manual.length ? manual.map((s) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(c.titleOf(s.bookId, s.book))} · ${s.kind === 'sub' ? 'подписки' : 'продажи'} ${s.qty} шт. · ${rub(s.royalty)}</span><button class="link danger" data-act="day.delManual" data-id="${esc(s.id)}">убрать</button></div>`).join('') : ''}
+    <form data-form="day.manual"><div class="f2"><div><label>Книга</label><select name="bookId" required>${c.books.map((b) => opt(b.id, b.title)).join('')}</select></div>
+      <div><label>Тип</label><select name="kind">${opt('sale', 'продажи')}${opt('sub', 'подписки')}</select></div></div>
+      <div class="f2"><div><label>Количество, шт.</label><input name="qty" inputmode="numeric" required></div><div><label>Гонорар, ₽</label><input name="royalty" inputmode="decimal" required></div></div>
+      <div style="margin-top:12px"><button class="primary" type="submit">Сохранить результат</button></div></form>
   </div>
   <div class="card"><h2>События дня</h2>
     ${(doc.events || []).length ? (doc.events).map((e, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="pill-ev"><i style="background:${(EVENT_TYPES[e.type] || EVENT_TYPES.note).color}"></i><span>${esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)}${e.bookId ? ' · ' + esc(c.titleOf(e.bookId, '')) : ''}${e.text ? ': ' + esc(e.text) : ''}</span></span><button class="link danger" data-act="day.delEv" data-i="${i}">убрать</button></div>`).join('') : '<p class="muted">Событий нет.</p>'}
@@ -57,3 +67,13 @@ forms['day.note'] = async (fd) => {
   await save({ ...doc, id: date, date, note: (fd.get('note') || '').trim() });
   toast('Заметка сохранена');
 };
+
+forms['day.manual'] = async (fd) => {
+  const c = app().ctx(), date = app().ui.day || c.today;
+  const b = c.booksById[fd.get('bookId')];
+  const qty = N(fd.get('qty')), royalty = N(fd.get('royalty'));
+  if (!b || qty == null || royalty == null || Number.isNaN(qty) || Number.isNaN(royalty)) { toast('Заполните количество и гонорар числами'); return; }
+  await app().store.put('sales', manualSaleRow({ date, book: b.title, bookId: b.id, kind: fd.get('kind'), qty, royalty }));
+  toast('Результат сохранён');
+};
+acts['day.delManual'] = (d) => app().store.remove('sales', d.id);
