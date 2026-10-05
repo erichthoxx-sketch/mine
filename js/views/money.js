@@ -14,7 +14,7 @@ export function money(a) {
   const sel = ui.month && keys.includes(ui.month) ? ui.month : cur;
   const f = fin(c, sel);
   const s = c.settings;
-  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: 13, overrides: s.planOverrides || {} });
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
   const factBy = Object.fromEntries(byMonth(c.series).map((g) => [g.key, g.royalty]));
   const rows = goalRows(plan, factBy, cur).map((r) => ({ ...r, label: fmtMonth(r.month), short: fmtMonthShort(r.month) }));
   const curRow = rows.find((r) => r.partial);
@@ -37,8 +37,8 @@ export function money(a) {
   </div>
   <div class="card"><h2>По месяцам</h2><div class="scroll"><table><tr><th>Месяц</th><th>Роялти</th><th>Rocket</th><th>Реклама</th><th>Налог</th><th>Чистый</th></tr>
     ${keys.map((k) => { const x = fin(c, k); return `<tr><td>${fmtMonthShort(k)}</td><td>${rub(x.royalty, 0)}</td><td>${rub(x.rocketFee, 0)}</td><td>${rub(x.adCost, 0)}</td><td>${rub(x.tax, 0)}</td><td class="${x.net >= 0 ? '' : 'down'}"><b>${rub(x.net, 0)}</b></td></tr>`; }).join('')}</table></div></div>
-  <div class="card"><h2>Цели</h2>
-    <p class="small muted">План: ${rub(s.goalAmount, 0)} в ${fmtMonth(s.goalStart)}, дальше +${s.goalGrowth}% в месяц. Факт — доход до вычетов (роялти).</p>
+  <div class="card"><div class="row between"><h2>Цели</h2><button class="primary" data-act="goal.all">Изменить цели</button></div>
+    <p class="small muted">Старт: ${fmtMonth(s.goalStart)} — ${rub(s.goalAmount, 0)}, дальше +${s.goalGrowth}% в месяц; свои цели по месяцам — кнопка «Изменить цели». Факт — доход до вычетов (роялти).</p>
     <div class="chart" id="goalChart"></div>
     <div class="legend"><span><i style="background:var(--bar)"></i>факт (светлый — месяц ещё идёт)</span><span><i class="ln"></i>план</span><span><i class="ln3"></i>среднее за 3 месяца</span></div>
     ${forecast != null ? `<div class="alert ${forecast >= curRow.plan ? 'ok' : ''}">${fmtMonth(cur)}: пока ${rub(curRow.fact, 0)}, при таком темпе к концу месяца ≈ ${rub(forecast, 0)} (план ${rub(curRow.plan, 0)}).</div>` : ''}
@@ -78,5 +78,28 @@ acts['goal.edit'] = (d) => {
     const o = { ...(s.planOverrides || {}) };
     if (v == null || Number.isNaN(v)) delete o[d.m]; else o[d.m] = v;
     await app().store.saveSettings({ planOverrides: o });
+  });
+};
+
+// Все цели разом: формула роста + ручные суммы по месяцам
+acts['goal.all'] = () => {
+  const s = app().ctx().settings;
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: {} });
+  const ov = s.planOverrides || {};
+  openSheet('Цели по месяцам', `
+    <p class="small muted">Впишите свою цель в любой месяц. Пустое поле — цель считается по формуле роста (серое число).</p>
+    <div class="f2"><div><label for="gs">Первый месяц</label><input id="gs" type="month" name="goalStart" value="${s.goalStart}"></div>
+    <div><label for="ga">Цель первого месяца, ₽</label><input id="ga" name="goalAmount" inputmode="decimal" value="${s.goalAmount}"></div></div>
+    <div class="f2"><div><label for="gg">Рост в месяц, %</label><input id="gg" name="goalGrowth" inputmode="decimal" value="${s.goalGrowth}"></div>
+    <div><label for="gm">Месяцев в плане</label><input id="gm" name="goalMonths" inputmode="numeric" value="${Number(s.goalMonths) || 13}"></div></div>
+    <h3>Мои цели</h3>
+    <div class="scroll"><table>${plan.map((p) => `<tr><td><label for="p_${p.month}" style="margin:0">${fmtMonth(p.month)}</label></td><td><input id="p_${p.month}" name="p_${p.month}" inputmode="decimal" value="${ov[p.month] ?? ''}" placeholder="${num(p.auto)}" style="max-width:150px"></td></tr>`).join('')}</table></div>
+    <label class="check"><input type="checkbox" name="reset">Сбросить все мои цели к формуле</label>`, async (fd) => {
+    const n = (k) => { const v = N(fd.get(k)); return v == null || Number.isNaN(v) ? undefined : v; };
+    const o = fd.get('reset') ? {} : { ...ov };
+    if (!fd.get('reset')) for (const p of plan) { const v = n('p_' + p.month); if (v === undefined) delete o[p.month]; else o[p.month] = v; }
+    const patch = { goalStart: fd.get('goalStart') || s.goalStart, goalAmount: n('goalAmount') ?? s.goalAmount, goalGrowth: n('goalGrowth') ?? s.goalGrowth, goalMonths: Math.min(36, Math.max(1, Math.round(n('goalMonths') ?? 13))), planOverrides: o };
+    await app().store.saveSettings(patch);
+    toast('Цели сохранены');
   });
 };

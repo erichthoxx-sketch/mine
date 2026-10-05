@@ -431,3 +431,15 @@ export function manualSaleRow({ date, book, bookId, kind, qty, royalty }) {
     price: r2(royalty / 0.7 / q), qty: Number(qty) || 0, royalty: r2(royalty), manual: true,
   };
 }
+
+// Цель текущего месяца: сколько сделано, прогноз, сколько нужно в день до конца месяца
+export function monthGoalStatus(planAmount, fact, dataEnd) {
+  const mk = monthKey(dataEnd), dim = daysInMonth(mk), dom = Number(dataEnd.slice(8, 10));
+  const left = dim - dom;
+  const forecast = dom ? r2((fact / dom) * dim) : 0;
+  return {
+    month: mk, plan: planAmount, fact, share: planAmount ? fact / planAmount : null,
+    forecast, daysLeft: left, reached: fact >= planAmount, onTrack: forecast >= planAmount,
+    needPerDay: left > 0 ? r2(Math.max(0, planAmount - fact) / left) : Math.max(0, r2(planAmount - fact)),
+  };
+}

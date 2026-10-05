@@ -1,6 +1,6 @@
 import { esc } from '../ui.js';
 import { rub, pct, fmtDate, fmtShort, fmtMonth, num } from '../format.js';
-import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries } from '../calc.js';
+import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, monthGoalStatus, monthKey } from '../calc.js';
 import { dailyChart, EVENT_TYPES } from '../charts.js';
 import { acts } from '../ui.js';
 
@@ -45,6 +45,7 @@ export function home(app) {
     <div class="stat"><div class="k">Этот месяц</div><div class="v">${rub(st.mtd)}</div><div class="s ${vs == null ? '' : vs >= 0 ? 'up' : 'down'}">${vs == null ? 'нет прошлого месяца' : (vs >= 0 ? '▲ ' : '▼ ') + pct(Math.abs(vs)) + ' к тому же сроку прошлого'}</div></div>
     <div class="stat"><div class="k">Прошлый месяц</div><div class="v">${rub(st.prevTotal)}</div><div class="s">за тот же срок: ${rub(st.prevSame)}</div></div>
   </div>
+  ${goalCard(c, st)}
   <div class="card">
     <div class="chips">${rangeBtn(30, '30 дней')}${rangeBtn(90, '90 дней')}${rangeBtn(180, '180 дней')}${rangeBtn(0, 'Всё время')}</div>
     <div class="chart" id="chart"></div>${chartLegend(inp)}
@@ -62,3 +63,15 @@ export function home(app) {
 }
 acts['home.range'] = (d, el, e) => { window.__app.ui.range = Number(d.v); };
 acts['home.table'] = (d) => { window.__app.ui.table = d.v; };
+
+function goalCard(c, st) {
+  const s = c.settings;
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
+  const p = plan.find((x) => x.month === monthKey(c.dataEnd));
+  if (!p) return '';
+  const g = monthGoalStatus(p.plan, st.mtd, c.dataEnd);
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Цель: ${fmtMonth(g.month)}</h2><button class="link" data-act="go" data-to="/money">изменить</button></div>
+    <div class="row between small" style="margin-top:8px"><span><b>${rub(g.fact, 0)}</b> из ${rub(g.plan, 0)}</span><span class="muted">${g.share == null ? '' : pct(g.share, 0)}</span></div>
+    <div class="progress"><i style="width:${Math.min(100, (g.share || 0) * 100).toFixed(1)}%"></i></div>
+    <div class="small">${g.reached ? '✔ Цель месяца достигнута' : g.daysLeft === 0 ? `Месяц закончился: не хватило ${rub(g.plan - g.fact, 0)}` : `прогноз к концу месяца ≈ ${rub(g.forecast, 0)} ${g.onTrack ? '<span class="up">— успеваете</span>' : '<span class="down">— не хватает ' + rub(g.plan - g.forecast, 0) + '</span>'}${g.daysLeft > 0 ? ` · нужно ~${rub(g.needPerDay, 0)} в день` : ''}`}</div></div>`;
+}

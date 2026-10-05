@@ -246,3 +246,13 @@ test('ручной результат дня: строка с полной це�
   assert.notEqual(r.id, manualSaleRow({ date: '2026-10-06', book: 'А', kind: 'sub', qty: 3, royalty: 1 }).id);
   assert.equal(incomeSeries([r], [], '2026-10-06', '2026-10-06')[0].royalty, 354.9);
 });
+
+test('цель месяца: прогноз и сколько нужно в день', async () => {
+  const { monthGoalStatus } = await import('../js/calc.js');
+  const g = monthGoalStatus(50000, 10000, '2026-10-10');
+  assert.equal(g.forecast, 31000);
+  assert.equal(g.onTrack, false);
+  assert.equal(g.daysLeft, 21);
+  assert.equal(g.needPerDay, 1904.76);
+  assert.equal(monthGoalStatus(50000, 52000, '2026-10-20').reached, true);
+});
