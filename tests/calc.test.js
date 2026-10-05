@@ -74,7 +74,6 @@ test('скидка «Литнет платит»: (расход − скидка
   assert.equal(d['2026-10'].discount, 0); // ниже порога
   assert.equal(d['2026-10'].qualified, false);
   assert.equal(d['2026-11'].discount, 2000); // прошлой скидки не было
-  assert.equal(d['2026-09'].effective, 12480);
 });
 
 test('предупреждение о пороге', () => {
@@ -372,30 +371,63 @@ test('выкладка глав: подписки в дни выкладки и 
   assert.equal(r.subsOff, 3); // (2 + 4) / 2
 });
 
-test('«Литнет платит»: скидка от оплаты месяца, минус скидка прошлого, не больше комиссии', async () => {
-  const { litnetPaymentsByMonth, litnetFeeByMonth } = await import('../js/calc.js');
+test('«Литнет платит» по оферте: порог и скидка от использованного бюджета, предел — комиссия Литнета', async () => {
+  const { litnetPaymentsByMonth, litnetDiscountBase, litnetMoneyByMonth, monthSpendForecast } = await import('../js/calc.js');
   const camps = [
     { id: 'a', channel: 'litnet', budget: 20000, start: '2026-10-05', end: '2026-11-07' },
     { id: 't', channel: 'litnet', budget: 10000, start: '2026-09-14', end: '2026-10-04', paidAt: '2026-09-12' },
     { id: 'o', channel: 'own', budget: 5000, start: '2026-10-01', end: '2026-10-10' },
   ];
-  const pay = litnetPaymentsByMonth(camps);
+  const today = '2026-10-05';
+  const pay = litnetPaymentsByMonth(camps); // оплаты — только для справки
   assert.deepEqual(pay, { '2026-10': 20000, '2026-09': 10000 });
-  const d = litnetDiscounts(pay);
-  assert.equal(d['2026-09'].expected, 2000);
-  assert.equal(d['2026-10'].expected, 3600); // (20000 − 2000) × 20 %
-  assert.equal(litnetDiscounts({ '2026-09': 9000 })['2026-09'].discount, 0);
-  // предел: комиссия Литнета за месяц минус 1 ₽
-  const fee = litnetFeeByMonth([{ date: '2026-09-02', gross: 3000, royalty: 2100 }, { date: '2026-09-03', gross: 1000, royalty: 700, platform: 'Литмаркет' }]);
-  assert.deepEqual(fee, { '2026-09': 900 });
-  const c = litnetDiscounts(pay, { caps: fee });
-  assert.equal(c['2026-09'].expected, 899); assert.equal(c['2026-09'].capped, true);
-  assert.equal(c['2026-10'].expected, 4000 - 179.8); // (20000 − 899) × 20 %
+  const spend = spendByMonthChannel(camps, [], {}, today);
+  const used = litnetDiscountBase(spend, monthSpendForecast(camps, [], today), today);
+  assert.ok(Math.abs(used['2026-09'] - 8095.24) < 0.01); // 10000 / 21 × 17
+  assert.ok(Math.abs(used['2026-10'] - 17787.11) < 0.01); // прогноз: 10000/21 × 4 + 20000/34 × 27
+  assert.equal(used['2026-11'], undefined);
+  const money = litnetMoneyByMonth([{ date: '2026-09-02', price: 3634.025, qty: 10, royalty: 25438.4 }, { date: '2026-09-03', price: 1000, qty: 1, royalty: 700, platform: 'Литмаркет' }]);
+  assert.deepEqual(money, { '2026-09': { gross: 36340.25, royalty: 25438.4, fee: 10901.85 } });
+  const d = litnetDiscounts(used, { forecastMonth: '2026-10', payments: pay, caps: { '2026-09': money['2026-09'].fee } });
+  const sep = d['2026-09'], oct = d['2026-10'];
+  assert.equal(sep.qualified, false); assert.equal(sep.discount, 0); assert.equal(sep.status, 'expected');
+  assert.equal(sep.paid, 10000); assert.equal(sep.fee, 10901.85); assert.equal(sep.payoutMonth, '2026-10');
+  assert.equal(oct.forecast, true); assert.equal(oct.payoutMonth, '2026-11');
+  assert.ok(Math.abs(oct.expected - 3557.42) < 0.01); // (17 787,11 − 0) × 20 %
+  // предел: комиссия минус 1 ₽
+  const capped = litnetDiscounts({ '2026-09': 20000 }, { caps: { '2026-09': 1500 } });
+  assert.equal(capped['2026-09'].expected, 1499); assert.equal(capped['2026-09'].capped, true);
+  // скидка прошлого месяца: подтверждённая сумма вместо расчётной
+  const c2 = litnetDiscounts({ '2026-09': 15000, '2026-10': 20000 }, {}, { '2026-09': { amount: 2500 } });
+  assert.equal(c2['2026-09'].discount, 2500); assert.equal(c2['2026-09'].confirmedAmount, 2500); assert.equal(c2['2026-09'].applied, 2500);
+  assert.equal(c2['2026-10'].expected, 3500); // (20000 − 2500) × 20 %
+  assert.equal(c2['2026-10'].applied, 0);
 });
 
-test('финансы месяца: расход «Литнет платит» = оплата месяца', () => {
-  const f = monthFinance('2026-09', { sales: [], legacyDays: [], spend: { '2026-09': { litnet: 8095.24, own: 0, other: 0 } }, discounts: {}, litnetPayments: { '2026-09': 10000 } });
-  assert.equal(f.litnetSpend, 10000);
+test('финансы месяца: чистый, ожидаемая выплата, сверка и деньги на руках', async () => {
+  const { monthCash } = await import('../js/calc.js');
+  const sales = [{ date: '2026-09-10', book: 'К', bookId: 'k', kind: 'sale', qty: 10, price: 3634.025, royalty: 25438.4 }];
+  const spend = { '2026-09': { litnet: 8095.24, own: 0, other: 0 }, '2026-10': { litnet: 3081, own: 500, other: 0 } };
+  const discounts = litnetDiscounts({ '2026-09': 12000 }, {}, {}); // ожидается 2400
+  const months = { '2026-09': { rocketFee: 940, payoutActual: 26800 } };
+  const settings = { taxRate: 4, taxBase: 'gross' };
+  const f = monthFinance('2026-09', { sales, legacyDays: [], spend, discounts, months, settings });
+  assert.equal(f.litnetFee, 10901.85);
+  assert.equal(f.adSpend, 8095.24); // использованный бюджет, не оплата
+  assert.equal(f.tax, 1453.61);
+  assert.equal(f.net, 14949.55); // 25438,40 − 940 − 8095,24 − 1453,61 (ожидаемая скидка не учтена)
+  assert.equal(f.netExpected, 17349.55); // + 2400
+  assert.equal(f.payoutExpected, 26898.4); // 25438,40 − 940 + 2400
+  assert.equal(f.payoutDiscountExpected, true);
+  assert.equal(f.payoutDiff, -98.4);
+  const finOf = (k) => monthFinance(k, { sales, legacyDays: [], spend, discounts, months, settings });
+  const cash = monthCash('2026-10', finOf, { payments: { '2026-10': 20000 }, spend, months });
+  assert.equal(cash.received, 26800); assert.equal(cash.receivedEstimated, false);
+  assert.equal(cash.paidAds, 20500); assert.equal(cash.taxPaid, 1453.61);
+  assert.equal(cash.cash, 4846.39);
+  // до начала данных выплата неизвестна
+  const early = monthCash('2026-09', finOf, { payments: { '2026-09': 10000 }, spend, months, firstMonth: '2026-09' });
+  assert.equal(early.received, null); assert.equal(early.cash, null);
 });
 
 test('метрики кампании за календарный месяц (period)', () => {

@@ -3,6 +3,7 @@
 import {
   addDays, countDays, incomeSeries, sumSeries, byWeek, byMonth, booksBreakdown, priceAt, monthKey,
   monthsBetween, monthFinance, campaignMetrics, ctr, cpc, buildPlan, r2, monthEnd, chapterEffect,
+  DISCOUNT_NOTE,
 } from './calc.js';
 import { fmtDate, fmtMonth } from './format.js';
 
@@ -39,7 +40,7 @@ export function buildReportModel(d, from, to) {
   const roy = sumSeries(ser), prevRoy = sumSeries(prevSer);
   const prevKnown = prevSer.some((x) => x.known);
   const qty = ser.reduce((a, x) => a + x.qty, 0), saleQty = ser.reduce((a, x) => a + x.saleQty, 0), subQty = ser.reduce((a, x) => a + x.subQty, 0);
-  const finOf = (k) => monthFinance(k, { sales: d.sales, legacyDays: d.legacyDays, spend: d.spend, discounts: d.discounts, months: d.monthsMap, settings: s, litnetPayments: d.litnetPayments });
+  const finOf = (k) => monthFinance(k, { sales: d.sales, legacyDays: d.legacyDays, spend: d.spend, discounts: d.discounts, months: d.monthsMap, settings: s, litnet: d.litnetMoney });
   const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays, today: d.today };
   const months = monthsBetween(monthKey(from), monthKey(to));
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
@@ -61,8 +62,8 @@ export function buildReportModel(d, from, to) {
   list([
     'Я автор любовных романов на платформе Литнет (litnet.com). Доход — роялти: 70 % от цены продажи или подписки.',
     '«Продажа» — покупка книги целиком, «подписка» — оплата доступа к книге в процессе написания (выкладка по главам).',
-    `Продвижение: (1) «Литнет платит» — таргетированную рекламу ведут таргетологи Литнета, я оплачиваю бюджет; если бюджет месяца ≥ ${T(N0(s.litnetThreshold))} ₽, начисляется скидка ${s.litnetPct} % на комиссию Литнета за этот месяц (скидка = (бюджет месяца − скидка прошлого месяца) × ${s.litnetPct} %, не больше комиссии минус 1 ₽). (2) Литнет Rocket — за каждую продажу, которую привела реклама Литнета, из роялти списывается комиссия = индекс Rocket (не выше ${s.rocketCap} ₽). (3) Бесплатные баннеры и приоритетные показы в рекомендациях.`,
-    `Налог: ${s.taxRate} % от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены проданных книг'}. Чистый доход = роялти − Rocket − реклама (с учётом скидки) − налог.`,
+    `Продвижение: (1) «Литнет платит» — таргетированную рекламу запускает Литнет, я оплачиваю бюджет полностью (агентское вознаграждение за рекламу 0 %). Если использованный бюджет месяца (сколько рекламы реально открутилось) ≥ ${T(N0(s.litnetThreshold))} ₽, Литнет даёт скидку на свою комиссию с продаж этого месяца (комиссия = полная цена − роялти): скидка = (использованный бюджет − скидка прошлого месяца) × ${s.litnetPct} %, не больше комиссии минус 1 ₽. ${DISCOUNT_NOTE} (2) Литнет Rocket — за каждую продажу, которую привела реклама Литнета, из роялти списывается комиссия = индекс Rocket (не выше ${s.rocketCap} ₽). (3) Бесплатные баннеры и приоритетные показы в рекомендациях.`,
+    `Налог: ${s.taxRate} % от ${s.taxBase === 'royalty' ? 'роялти' : 'полной цены проданных книг'}. Чистый доход = роялти + скидка (только подтверждённая) − Rocket − использованный рекламный бюджет − налог. Ожидаемая выплата Литнета за месяц продаж = роялти − Rocket + скидка.`,
     'Окупаемость кампании: база = средний доход в день до старта кампании (дни, когда не шла другая реклама этой книги); прирост = доход в день во время кампании − база; окупаемость в день = прирост − расход в день. Порог окупаемости — доход в день, при котором реклама выходит в ноль.',
   ]);
 
@@ -80,13 +81,12 @@ export function buildReportModel(d, from, to) {
   ]);
 
   h2('По месяцам');
-  table('Месяцы', ['Месяц', 'Роялти', 'Полная цена', 'Продажи, шт', 'Подписки, шт', 'Rocket, ₽', 'Индекс Rocket', 'Реклама после скидки', 'Скидка ожидается (не учтена)', 'Реклама: прогноз на весь месяц', 'Налог', 'Чистый', 'Цель', '% цели'],
+  table('Месяцы', ['Месяц', 'Роялти', 'Полная цена', 'Комиссия Литнета', 'Продажи, шт', 'Подписки, шт', 'Rocket, ₽', 'Индекс Rocket', 'Скидка «Литнет платит» (подтверждена)', 'Скидка ожидается (не учтена)', 'Реклама: использованный бюджет', 'Реклама: прогноз на весь месяц', 'Налог', 'Чистый', 'Чистый с ожидаемой скидкой', 'Выплата Литнета ожидается', 'Выплата получена', 'Цель', '% цели'],
     months.map((k) => {
       const f = finOf(k);
       const g = byMonth(incomeSeries(d.sales, d.legacyDays, k + '-01', monthEnd(k) > to ? to : monthEnd(k)))[0] || { saleQty: 0, subQty: 0 };
       const pl = planOf(k);
-      return [fmtMonth(k) + (k === monthKey(d.dataEnd) && d.dataEnd < monthEnd(k) ? ' (месяц идёт)' : ''), RUB(f.royalty), RUB(f.gross), N0(g.saleQty), N0(g.subQty), f.rocketFee ? RUB(f.rocketFee) : 'не внесено', f.rocketIndex != null ? N2(f.rocketIndex) : null, RUB(f.adCost), f.expectedDiscount ? RUB(f.expectedDiscount) : null, d.forecast && d.forecast.month === k ? RUB(d.forecast.total) : null, RUB(f.tax), RUB(f.net), pl == null ? null : RUB(pl), pl ? PCT(f.royalty / pl, 0) : null];
-    }));
+      return [fmtMonth(k) + (k === monthKey(d.dataEnd) && d.dataEnd < monthEnd(k) ? ' (месяц идёт)' : ''), RUB(f.royalty), RUB(f.gross), RUB(f.litnetFee), N0(g.saleQty), N0(g.subQty), f.rocketFee ? RUB(f.rocketFee) : 'не внесено', f.rocketIndex != null ? N2(f.rocketIndex) : null, f.litnetDiscount ? RUB(f.litnetDiscount) : null, f.expectedDiscount ? RUB(f.expectedDiscount) : null, RUB(f.adSpend), d.forecast && d.forecast.month === k ? RUB(d.forecast.total) : null, RUB(f.tax), RUB(f.net), RUB(f.netExpected), RUB(f.payoutExpected), f.payoutActual != null ? RUB(f.payoutActual) : null, pl == null ? null : RUB(pl), pl ? PCT(f.royalty / pl, 0) : null];    }));
 
   h2('По неделям (с понедельника)');
   table('Недели', ['Неделя', 'Роялти', 'Продажи, шт', 'Подписки, шт', 'В день', 'Реклама шла'],
@@ -134,8 +134,9 @@ export function buildReportModel(d, from, to) {
 
   const lmonths = months.filter((k) => d.discounts[k]);
   if (lmonths.length) {
-    h2('«Литнет платит»: оплата и скидка');
-    table('Литнет платит: оплата и скидка', ['Месяц', 'Оплачено (бюджет месяца)', 'Скидка прошлого месяца', 'Порог достигнут', 'Скидка', 'Статус скидки'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k), RUB(x.spend), RUB(x.prevDiscount), x.qualified ? 'да' : 'нет', RUB(x.discount), x.status === 'confirmed' ? 'подтверждена' : x.status === 'expected' ? 'ожидается' : '—']; }));
+    h2('«Литнет платит» по месяцам');
+    p(DISCOUNT_NOTE);
+    table('Литнет платит', ['Месяц', 'Оплачено', 'Использовано', 'Порог достигнут', 'Комиссия Литнета', 'Скидка (расчёт)', 'Скидка (подтверждена)', 'Статус', 'Придёт в выплате за'], lmonths.map((k) => { const x = d.discounts[k]; return [fmtMonth(k) + (x.forecast ? ' (прогноз)' : ''), RUB(x.paid), RUB(x.spend), x.qualified ? 'да' : 'нет', x.fee != null ? RUB(x.fee) : null, RUB(x.expected), x.status === 'confirmed' ? RUB(x.discount) : null, x.status === 'confirmed' ? 'подтверждена' : 'ожидается', fmtMonth(x.payoutMonth)]; }));
   }
 
   const evDates = Object.keys(evBy).sort();

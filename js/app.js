@@ -2,7 +2,7 @@
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates } from './ui.js';
 import {
-  todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth, litnetFeeByMonth, monthKey,
+  todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth, litnetMoneyByMonth, litnetDiscountBase, monthKey,
 } from './calc.js';
 import { fmtDate } from './format.js';
 import { ic } from './icons.js';
@@ -56,20 +56,20 @@ function getCtx() {
   const monthsMap = Object.fromEntries(d.months.map((m) => [m.id, m]));
   const spend = spendByMonthChannel(d.campaigns, d.reports, monthsMap, today);
   const forecast = monthSpendForecast(d.campaigns, d.reports, today);
-  // «Литнет платит»: порог и скидка — от оплаты таргетологам за месяц (дата оплаты, иначе старт кампании).
-  // Скидка не больше комиссии Литнета за месяц минус 1 ₽ — проверяем по закрытым месяцам, где есть продажи.
+  // «Литнет платит» по оферте: порог и скидка — от использованного бюджета месяца (текущий — прогноз на весь месяц);
+  // скидка не больше комиссии Литнета за месяц минус 1 ₽ (проверяем по закрытым месяцам). Оплаты — для справки.
   const litnetPayments = litnetPaymentsByMonth(d.campaigns);
   const confirmed = Object.fromEntries(d.months.filter((m) => m.litnetDiscountConfirmed).map((m) => [m.id, { amount: m.litnetDiscountAmount }]));
-  const fees = litnetFeeByMonth(litnetSales);
-  const caps = Object.fromEntries(Object.entries(fees).filter(([k]) => k < monthKey(today)));
-  const discounts = litnetDiscounts(litnetPayments, { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100, caps }, confirmed);
+  const litnetMoney = litnetMoneyByMonth(litnetSales);
+  const caps = Object.fromEntries(Object.entries(litnetMoney).filter(([k]) => k < monthKey(today)).map(([k, v]) => [k, v.fee]));
+  const discounts = litnetDiscounts(litnetDiscountBase(spend, forecast, today), { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100, forecastMonth: monthKey(today), payments: litnetPayments, caps }, confirmed);
   const booksById = Object.fromEntries(d.books.map((b) => [b.id, b]));
   cache = {
     data: d, settings: d.settings, today, sales: d.sales, legacyDays, books: d.books, booksById, campaigns: d.campaigns,
     // для выбора в формах — без снятых с продажи; сначала книги в процессе
     activeBooks: d.books.filter((b) => b.status !== 'removed').sort((a, b) => (a.status === 'done') - (b.status === 'done') || a.title.localeCompare(b.title)),
     firstDate: first, dataEnd, hasData, series, ma: movingAverage(series.map((x) => x.royalty), 7),
-    monthsMap, spend, discounts, forecast, litnetPayments,
+    monthsMap, spend, discounts, forecast, litnetPayments, litnetMoney,
     titleOf: (id, fallback) => booksById[id]?.title || fallback,
   };
   cacheKey = key;

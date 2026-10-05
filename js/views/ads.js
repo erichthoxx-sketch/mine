@@ -1,6 +1,6 @@
 import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthIn } from '../format.js';
-import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween } from '../calc.js';
+import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween, DISCOUNT_NOTE } from '../calc.js';
 import { rocketCard } from './money.js';
 import { targetAlert, campaignProgress, adGroupSummary } from '../calc.js';
 import { buildTargetPrompt } from '../report.js';
@@ -50,20 +50,22 @@ function campaignList(c, camps, alerts) {
   return `${cur.length ? `<div class="list">${cur.map((k) => miniCampaign(c, k, alerts)).join('')}</div>` : ''}
     ${past.length ? `<details style="margin-top:6px"><summary>Завершённые (${past.length})</summary><div class="list">${past.map((k) => miniCampaign(c, k, alerts)).join('')}</div></details>` : ''}`;
 }
-// «Литнет платит: оплата и скидка» — по оферте: 20 % от бюджета месяца, если он ≥ 10 000 ₽;
-// из бюджета вычитается скидка прошлого месяца; скидка не больше комиссии Литнета за месяц минус 1 ₽
+// «Литнет платит» по месяцам — по оферте: порог и скидка от использованного бюджета, предел — комиссия Литнета минус 1 ₽
 function discountTable(c, sel) {
-  const dm = Object.keys(c.discounts).filter((k) => c.discounts[k].spend > 0 || c.discounts[k].status === 'confirmed').sort().reverse().slice(0, 6);
+  const dm = Object.keys(c.discounts).filter((k) => { const d = c.discounts[k]; return d.spend > 0 || d.paid > 0 || d.status === 'confirmed'; }).sort().reverse().slice(0, 12);
   if (!dm.length) return '';
-  const th = rub(Number(c.settings.litnetThreshold), 0);
-  return `<h3>Литнет платит: оплата и скидка</h3><div class="scroll"><table><tr><th>Месяц</th><th>Оплачено</th><th>Скидка</th></tr>${dm.map((k) => {
-    const d = c.discounts[k], ok = d.qualified || d.status === 'confirmed';
-    const disc = ok
-      ? `${rub(d.discount, 0)}<br>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'} <button class="link" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'подтвердить'}</button>${d.capped ? '<br><span class="small muted">не больше комиссии Литнета</span>' : ''}`
-      : `0 ₽<br><span class="small muted">меньше ${th}</span>`;
-    return `<tr${k === sel ? ' class="sel"' : ''}><td>${fmtMonth(k)}</td><td>${rub(d.spend, 0)}</td><td>${disc}</td></tr>`;
+  const cur = monthKey(c.today), th = rub(Number(c.settings.litnetThreshold), 0);
+  return `<h3>Литнет платит по месяцам</h3><div class="scroll"><table class="tight"><tr><th>Месяц</th><th>Оплачено</th><th>Использовано</th><th>Порог</th><th>Комиссия Литнета</th><th>Скидка (расчёт)</th><th>Скидка (подтв.)</th><th>Статус</th><th>Придёт в выплате</th></tr>${dm.map((k) => {
+    const d = c.discounts[k];
+    const used = k === cur
+      ? `≈ ${rub(c.spend[k]?.litnet || 0, 0)}<br><span class="small muted">по сегодня, прогноз ${rub(d.spend, 0)}</span>`
+      : `≈ ${rub(d.spend, 0)}`;
+    const fee = d.fee != null ? rub(d.fee, 0) : c.litnetMoney?.[k] ? `<span class="muted">пока ${rub(c.litnetMoney[k].fee, 0)}</span>` : '—';
+    const calc = `${rub(d.expected, 0)}${d.capped ? '<br><span class="small muted">ограничена комиссией</span>' : ''}`;
+    const conf = `${d.status === 'confirmed' ? rub(d.discount, 0) + ' ' : ''}<button class="link" style="padding:0" data-act="disc.confirm" data-m="${k}">${d.status === 'confirmed' ? 'изм.' : 'ввести'}</button>`;
+    return `<tr${k === sel ? ' class="sel"' : ''}><td>${fmtMonth(k)}</td><td>${d.paid ? rub(d.paid, 0) : '—'}</td><td>${used}</td><td>${d.qualified ? 'да' : '<span class="muted">нет</span>'}</td><td>${fee}</td><td>${calc}</td><td>${conf}</td><td>${d.status === 'confirmed' ? '<span class="badge good">подтверждена</span>' : '<span class="badge">ожидается</span>'}</td><td>за ${fmtMonth(d.payoutMonth)}</td></tr>`;
   }).join('')}</table></div>
-    <div class="hint">По оферте: скидка ${c.settings.litnetPct} % от бюджета месяца, если он не меньше ${th}. Из бюджета вычитается скидка прошлого месяца («скидка на скидку не начисляется»). Скидка не больше комиссии Литнета за месяц минус 1 ₽ и уменьшает комиссию за этот месяц. В чистый доход идёт после подтверждения.</div>`;
+    <div class="hint">${DISCOUNT_NOTE} По оферте: скидка ${c.settings.litnetPct} % от использованного за месяц бюджета (сколько рекламы открутилось), если он не меньше ${th}; из бюджета вычитается скидка прошлого месяца; скидка не больше комиссии Литнета за месяц минус 1 ₽. Текущий месяц — по прогнозу. «Оплачено» — оплаты таргетологам, для справки. В чистый доход идёт подтверждённая скидка.</div>`;
 }
 
 // переключатель месяца для сводок: текущий и прошедшие месяцы с рекламой
@@ -89,8 +91,8 @@ export function ads(a) {
   const sp = c.spend[mk] || { litnet: 0, own: 0, other: 0 }, monthNow = sp.litnet + sp.own + sp.other;
   const disc = c.discounts[mk];
   const discTxt = !disc || (!disc.spend && disc.status !== 'confirmed') ? '' : disc.qualified || disc.status === 'confirmed'
-    ? ` · скидка ${disc.status === 'confirmed' ? 'подтверждена' : 'ожидается'} ${rub(disc.discount, 0)}`
-    : ' · меньше порога, скидки нет';
+    ? ` · скидка Литнета ${disc.status === 'confirmed' ? 'подтверждена' : 'ожидается'} ${disc.forecast && disc.status !== 'confirmed' ? '≈ ' : ''}${rub(disc.discount, 0)}, придёт в выплате за ${fmtMonth(disc.payoutMonth)}`
+    : ` · «Литнет платит»: использовано меньше ${rub(Number(c.settings.litnetThreshold), 0)}, скидки нет`;
   // при открытии — только текущий месяц; другой месяц выбирается строкой внизу страницы
   const shown = past ? `<div class="small" style="margin:6px 0 0">Показан ${fmtMonth(mk)} · <button class="link" style="padding:0" data-act="ads.month" data-v="${cur}">вернуться к текущему</button></div>` : '';
   const archive = months.length > 1 || c.hasData ? `<div class="archive">
@@ -102,7 +104,7 @@ export function ads(a) {
   <div class="card"><div class="row between"><h2 style="margin:0">Платная реклама</h2><button data-act="report.dl" title="Скачать отчёт для анализа">Отчёт</button></div>
     ${shown}
     ${summaryBody(c, all, { past })}
-    <p class="small" style="margin:10px 0 0">В ${fmtMonthIn(mk)}: ${c.litnetPayments?.[mk] ? `оплачено «Литнет платит» ${rub(c.litnetPayments[mk], 0)}${discTxt}` : `по «Литнет платит» оплат нет`}${past ? '' : ` · израсходовано по дням ≈ ${rub(monthNow, 0)} по сегодня`}</p>
+    <p class="small" style="margin:10px 0 0">В ${fmtMonthIn(mk)}: использовано ≈ ${rub(monthNow, 0)}${past ? '' : ' по сегодня'}${!past && c.forecast?.total ? `, прогноз на месяц ≈ ${rub(c.forecast.total, 0)}` : ''}${discTxt}</p>
     ${open.map((x) => `<div class="alert" style="margin-top:10px">⚠︎ «${esc(x.name)}»: ${esc(alertText(x))}. Запросите отчёт у таргетологов.<div class="row" style="margin-top:8px"><button class="primary" data-act="note.new" data-id="${x.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${x.campaignId}">Скопировать отчёт</button></div></div>`).join('')}
     <div class="hint">Расход по дням — бюджет ÷ дни кампании (оценка). «Доход сверх обычного» — сколько книга зарабатывает больше, чем в дни без рекламы.</div>
   </div>
@@ -310,12 +312,12 @@ acts['ai.prompt'] = async (d) => {
 
 acts['disc.confirm'] = (d) => {
   const c = app().ctx(), m = c.monthsMap[d.m] || {}, x = c.discounts[d.m];
-  openSheet(`Скидка «Литнет платит» — ${fmtMonth(d.m)}`, `<p class="small muted">Приложение посчитало скидку ${rub(x.expected)}. Когда Литнет её начислит, отметьте здесь — тогда она войдёт в чистый доход.</p>
-    <label class="check"><input type="checkbox" name="ok" checked>Скидка подтверждена</label>
-    <label for="da">Фактическая сумма скидки, ₽ (если отличается)</label><input id="da" name="amount" inputmode="decimal" value="${m.litnetDiscountAmount ?? ''}" placeholder="${num(x.expected, 2)}">`, async (fd) => {
+  openSheet(`Скидка «Литнет платит» — ${fmtMonth(d.m)}`, `<p class="small muted">Приложение посчитало ${rub(x.expected)}. Впишите сумму скидки из отчёта Литнета — тогда она станет «подтверждена» и войдёт в чистый доход. Пусто — снова «ожидается».</p>
+    <label for="da">Скидка по отчёту Литнета, ₽</label><input id="da" name="amount" inputmode="decimal" value="${m.litnetDiscountConfirmed ? (m.litnetDiscountAmount ?? x.discount) : ''}" placeholder="${num(x.expected, 2)}">`, async (fd) => {
     const v = N(fd.get('amount'));
-    await app().store.put('months', { ...m, id: d.m, month: d.m, litnetDiscountConfirmed: !!fd.get('ok'), litnetDiscountAmount: v == null || Number.isNaN(v) ? null : v });
-    toast(fd.get('ok') ? 'Скидка подтверждена' : 'Скидка снова «ожидается»');
+    if (Number.isNaN(v)) { toast('Сумма — числом'); return false; }
+    await app().store.put('months', { ...m, id: d.m, month: d.m, litnetDiscountConfirmed: v != null, litnetDiscountAmount: v });
+    toast(v != null ? 'Скидка подтверждена' : 'Скидка снова «ожидается»');
   });
 };
 

@@ -81,7 +81,7 @@ function goalCard(c, st) {
 
 function taxReminder(c) {
   const keys = monthsBetween(monthKey(c.firstDate), monthKey(c.dataEnd));
-  const t = taxRows(keys, (k) => monthFinance(k, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings, litnetPayments: c.litnetPayments }), c.monthsMap, c.dataEnd);
+  const t = taxRows(keys, (k) => monthFinance(k, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings, litnet: c.litnetMoney }), c.monthsMap, c.dataEnd);
   if (!t.unpaid) return '';
   return `<div class="card row between"><span>Налог к уплате: <b>${rub(t.unpaid, 0)}</b> <span class="small muted">за ${t.unpaidMonths.map((k) => fmtMonth(k)).join(', ')}</span></span><button class="link" data-act="go" data-to="/money">подробнее</button></div>`;
 }

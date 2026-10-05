@@ -162,7 +162,7 @@ function reportModel(period = null) {
   let from = days ? (addDays(c.dataEnd, -(days - 1)) < c.firstDate ? c.firstDate : addDays(c.dataEnd, -(days - 1))) : c.firstDate;
   let to = c.dataEnd;
   if (period) { from = period.from < c.firstDate ? c.firstDate : period.from; to = period.to < c.dataEnd ? period.to : c.dataEnd; }
-  return buildReportModel({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, litnetPayments: c.litnetPayments, forecast: c.forecast, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, to);
+  return buildReportModel({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, litnetPayments: c.litnetPayments, litnetMoney: c.litnetMoney, forecast: c.forecast, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, to);
 }
 let sheetjs;
 const loadSheetJs = () => (sheetjs ||= new Promise((res, rej) => {
