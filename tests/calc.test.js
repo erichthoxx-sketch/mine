@@ -355,3 +355,27 @@ test('выкладка глав: подписки в дни выкладки и 
   assert.equal(r.subsOn, 6);
   assert.equal(r.subsOff, 3); // (2 + 4) / 2
 });
+
+test('«Литнет платит»: оплаты по месяцам и скидка от оплаты', async () => {
+  const { litnetPaymentsByMonth } = await import('../js/calc.js');
+  const camps = [
+    { channel: 'litnet', budget: 20000, start: '2026-10-05', end: '2026-11-07' },
+    { channel: 'litnet', budget: 10000, start: '2026-09-14', end: '2026-10-04', paidAt: '2026-09-12' },
+    { channel: 'own', budget: 5000, start: '2026-10-01', end: '2026-10-10' },
+  ];
+  const pay = litnetPaymentsByMonth(camps);
+  assert.deepEqual(pay, { '2026-10': 20000, '2026-09': 10000 });
+  const d = litnetDiscounts(pay);
+  assert.equal(d['2026-09'].expected, 2000);
+  assert.equal(d['2026-10'].expected, 3600); // (20000 − 2000) × 20 %
+});
+
+test('сводка кампании: бюджет израсходован и сколько реклама вернула', async () => {
+  const { campaignProgress } = await import('../js/calc.js');
+  const c = { start: '2026-10-05', end: '2026-11-07', budget: 20000 };
+  const p = campaignProgress(c, { uplift: 400, days: 2, spendTotal: 1176.47 }, '2026-10-06');
+  assert.equal(p.day, 2); assert.equal(p.total, 34); assert.equal(p.daysLeft, 32);
+  assert.equal(p.spentToDate, 1176.47);
+  assert.equal(p.returned, 800);
+  assert.equal(Math.round(p.returnShare * 100), 68);
+});

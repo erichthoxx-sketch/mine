@@ -557,3 +557,33 @@ export function chapterEffect(sales, days, books, from, to) {
     return { bookId: b.id, title: b.title, chapterDays: on.length, otherDays: off.length, subsOn: avg(on), subsOff: avg(off) };
   });
 }
+
+// «Литнет платит»: оплата таргетологам — бюджет кампании, вносится разом (дата оплаты, по умолчанию — старт).
+// Скидка считается от оплат календарного месяца; меньше 10 000 ₽ программа не берёт, так что порог выполняется оплатой.
+export function litnetPaymentsByMonth(campaigns) {
+  const out = {};
+  for (const c of campaigns) {
+    if (c.channel !== 'litnet' || !c.budget) continue;
+    const d = c.paidAt || c.start;
+    if (!d) continue;
+    const k = monthKey(d);
+    out[k] = r2((out[k] || 0) + Number(c.budget));
+  }
+  return out;
+}
+
+// Сводка по кампании «как идёт таргет»: бюджет израсходован на X %, реклама вернула Y % потраченного
+export function campaignProgress(c, m, today) {
+  const total = c.start && c.end ? countDays(c.start, c.end) : null;
+  const elapsedEnd = c.end && c.end < today ? c.end : today;
+  const elapsed = c.start && c.start <= today ? countDays(c.start, elapsedEnd) : 0;
+  const budget = Number(c.budget) || null;
+  const spentToDate = budget && total ? r2(budget / total * elapsed) : (m.spendTotal ?? null);
+  const returned = m.uplift == null ? null : r2(m.uplift * m.days); // доход сверх базы, приписанный кампании
+  return {
+    day: elapsed, total, daysLeft: total ? Math.max(0, total - elapsed) : null,
+    budget, spentToDate, left: budget && spentToDate != null ? r2(budget - spentToDate) : null,
+    spentShare: budget && spentToDate != null ? spentToDate / budget : null,
+    returned, returnShare: returned != null && m.spendTotal ? returned / m.spendTotal : null,
+  };
+}
