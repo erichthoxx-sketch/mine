@@ -159,6 +159,53 @@ export function bookMonthStats(sales, bookId, key, dataEnd) {
   };
 }
 
+// Подробная аналитика книги за месяц: всё, что видно по продажам, событиям, ценам и рекламе.
+// ctx: { sales, days, campaigns, reports, dataEnd, today, baseDays }
+export function bookInsights(book, key, ctx) {
+  const m = bookMonthStats(ctx.sales, book.id, key, ctx.dataEnd);
+  if (!m) return null;
+  const known = m.daily;
+  const best = known.reduce((a, x) => (x.royalty > (a?.royalty || 0) ? x : a), null);
+  const ser = incomeSeries(ctx.sales, [], m.from, m.to, book.id);
+  const activeDays = ser.filter((x) => x.qty > 0).length;
+  // дни недели — по последним 8 неделям до конца периода (за месяц слишком мало точек)
+  const wFrom = addDays(m.to, -55);
+  const wser = incomeSeries(ctx.sales, [], wFrom, m.to, book.id).filter((x) => x.known);
+  const wd = Array.from({ length: 7 }, () => ({ sum: 0, n: 0 }));
+  for (const x of wser) { const d = new Date(x.date + 'T00:00:00Z').getUTCDay(); wd[d].sum += x.royalty; wd[d].n++; }
+  const weekdays = [1, 2, 3, 4, 5, 6, 0].map((d) => ({ day: d, avg: wd[d].n ? r2(wd[d].sum / wd[d].n) : null }));
+  // цены, действовавшие в месяце: средний доход в день и продажи при каждой цене
+  const hist = [...(book.priceHistory || [])].sort((a, b) => a.from.localeCompare(b.from));
+  const prices = [];
+  hist.forEach((p, i) => {
+    const pEnd = hist[i + 1] ? addDays(hist[i + 1].from, -1) : m.to;
+    const from = p.from > m.from ? p.from : m.from, to = pEnd < m.to ? pEnd : m.to;
+    if (to < from) return;
+    const ps = incomeSeries(ctx.sales, [], from, to, book.id);
+    const n = countDays(from, to);
+    prices.push({ price: p.price, from, to, days: n, royalty: sumSeries(ps), avgPerDay: r2(sumSeries(ps) / n), saleQty: ps.reduce((a, x) => a + x.saleQty, 0), subQty: ps.reduce((a, x) => a + x.subQty, 0) });
+  });
+  const ch = chapterEffect(ctx.sales, ctx.days || [], [book], m.from, m.to)[0];
+  // реклама, которая шла в этом месяце на эту книгу или на все книги
+  const period = { from: m.from, to: m.to };
+  const ads = (ctx.campaigns || []).filter((k) => !k.oneOff && k.start && k.start <= m.to && (!k.end || k.end >= m.from) && (k.scope === 'all' || !k.bookId || k.bookId === book.id))
+    .map((k) => {
+      const met = campaignMetrics(k, { ...ctx, legacyDays: [], period });
+      const has = met.status !== 'planned';
+      return { id: k.id, name: k.name, allBooks: k.scope === 'all' || !k.bookId, days: has ? met.days : 0, spend: has ? met.spendTotal : 0, returned: has && met.uplift != null ? r2(met.uplift * met.days) : null, payback: has ? met.payback : null };
+    });
+  const all = incomeSeries(ctx.sales, [], ctx.firstDate || m.from, ctx.dataEnd, book.id);
+  const months = byMonth(all).filter((g) => g.qty > 0);
+  const years = {};
+  for (const g of months) { const y = g.key.slice(0, 4); const e = (years[y] ||= { year: y, royalty: 0, saleQty: 0, subQty: 0 }); e.royalty += g.royalty; e.saleQty += g.saleQty; e.subQty += g.subQty; }
+  return {
+    ...m, best: best && best.royalty > 0 ? best : null, activeDays, perUnit: m.qty ? r2(m.royalty / m.qty) : null,
+    weekdays, weekFrom: wFrom, prices, chapters: ch && ch.chapterDays ? ch : null, ads,
+    history: months.reverse(), years: Object.values(years).map((y) => ({ ...y, royalty: r2(y.royalty) })).sort((a, b) => b.year.localeCompare(a.year)),
+    allTime: { royalty: r2(months.reduce((a, g) => a + g.royalty, 0)), qty: months.reduce((a, g) => a + g.saleQty + g.subQty, 0) },
+  };
+}
+
 // ---------- главный экран ----------
 export function dashboardStats(sales, legacyDays, today) {
   const last = lastSaleDate(sales);

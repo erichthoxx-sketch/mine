@@ -533,3 +533,20 @@ test('книга за месяц: доход, продажи, сравнение
   assert.equal(m.daily.length, 5);
   assert.equal(bookMonthStats(sales, 'k', '2026-11', '2026-10-05'), null); // месяц ещё не начался по данным
 });
+
+test('аналитика книги: лучший день, цены в месяце, дни недели, главы', async () => {
+  const { bookInsights } = await import('../js/calc.js');
+  const s = (date, kind, qty, royalty) => ({ date, book: 'К', bookId: 'k', kind, price: royalty / 0.7 / qty, qty, royalty });
+  const sales = [s('2026-10-01', 'sale', 2, 200), s('2026-10-02', 'sub', 3, 90), s('2026-10-05', 'sale', 1, 100)];
+  const book = { id: 'k', title: 'К', priceHistory: [{ from: '2026-09-01', price: 149 }, { from: '2026-10-03', price: 159 }] };
+  const days = [{ date: '2026-10-02', events: [{ type: 'chapter', bookId: 'k' }] }];
+  const x = bookInsights(book, '2026-10', { sales, days, campaigns: [], reports: [], dataEnd: '2026-10-05', today: '2026-10-06', firstDate: '2026-10-01' });
+  assert.equal(x.royalty, 390); assert.deepEqual(x.best, { date: '2026-10-01', royalty: 200 });
+  assert.equal(x.activeDays, 3); assert.equal(x.perUnit, 65); // 390 / 6
+  assert.equal(x.prices.length, 2);
+  assert.deepEqual([x.prices[0].price, x.prices[0].from, x.prices[0].to, x.prices[0].royalty], [149, '2026-10-01', '2026-10-02', 290]);
+  assert.deepEqual([x.prices[1].price, x.prices[1].days, x.prices[1].avgPerDay], [159, 3, 33.33]);
+  assert.equal(x.chapters.chapterDays, 1); assert.equal(x.chapters.subsOn, 3);
+  assert.equal(x.weekdays.find((w) => w.day === 4).avg, 200); // 01.10.2026 — четверг
+  assert.equal(x.allTime.royalty, 390); assert.equal(x.years[0].year, '2026');
+});
