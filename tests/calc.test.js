@@ -520,3 +520,16 @@ test('Rocket: продажи через Rocket и доля от всех про�
   assert.equal(r.rows[0].sales, 122); assert.equal(r.rows[0].total, 295);
   assert.ok(Math.abs(r.rows[0].salesShare - 122 / 295) < 1e-9);
 });
+
+test('книга за месяц: доход, продажи, сравнение с тем же сроком прошлого месяца', async () => {
+  const { bookMonthStats } = await import('../js/calc.js');
+  const s = (date, kind, qty, royalty) => ({ date, book: 'К', bookId: 'k', kind, price: royalty / 0.7 / qty, qty, royalty });
+  const sales = [s('2026-09-02', 'sale', 2, 200), s('2026-09-20', 'sale', 1, 100), s('2026-10-01', 'sale', 3, 300), s('2026-10-02', 'sub', 4, 100)];
+  const m = bookMonthStats(sales, 'k', '2026-10', '2026-10-05');
+  assert.equal(m.royalty, 400); assert.equal(m.saleQty, 3); assert.equal(m.subQty, 4);
+  assert.equal(m.days, 5); assert.equal(m.avgPerDay, 80); assert.equal(m.partial, true);
+  assert.equal(m.prevSame, 200); // 1–5 сентября
+  assert.equal(m.vsPrev, 1); // +100 %
+  assert.equal(m.daily.length, 5);
+  assert.equal(bookMonthStats(sales, 'k', '2026-11', '2026-10-05'), null); // месяц ещё не начался по данным
+});

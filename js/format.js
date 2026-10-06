@@ -51,6 +51,8 @@ export function fmtMonth(key) {
   const [y, m] = key.split('-');
   return `${MONTHS[+m - 1]} ${y}`;
 }
+// «Октябрь 2026» — с заглавной, для начала предложения и заголовков
+export const fmtMonthCap = (key) => { const t = fmtMonth(key); return t.charAt(0).toUpperCase() + t.slice(1); };
 export function fmtMonthShort(key) {
   const [y, m] = key.split('-');
   return `${MONTHS[+m - 1].slice(0, 3)} ${y.slice(2)}`;

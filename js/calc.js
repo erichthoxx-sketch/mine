@@ -138,6 +138,27 @@ export function booksBreakdown(sales, from, to) {
   return arr.map((e) => ({ ...e, share: total ? e.royalty / total : 0 })).sort((a, b) => b.royalty - a.royalty);
 }
 
+// Книга за календарный месяц: доход, продажи/подписки, в день, сравнение с тем же сроком прошлого месяца, доход по дням.
+// Месяц, который ещё идёт, считается по последний день с данными (dataEnd).
+export function bookMonthStats(sales, bookId, key, dataEnd) {
+  const from = monthStart(key), end = monthEnd(key) < dataEnd ? monthEnd(key) : dataEnd;
+  if (end < from) return null;
+  const ser = incomeSeries(sales, [], from, end, bookId);
+  const royalty = sumSeries(ser);
+  const saleQty = ser.reduce((a, x) => a + x.saleQty, 0), subQty = ser.reduce((a, x) => a + x.subQty, 0);
+  const n = countDays(from, end);
+  const pk = addMonths(key, -1);
+  const pEnd = addDays(monthStart(pk), Math.min(n, daysInMonth(pk)) - 1);
+  const prevSame = sumSeries(incomeSeries(sales, [], monthStart(pk), pEnd, bookId));
+  const prevAny = sales.some((x) => x.bookId === bookId && x.date >= monthStart(pk) && x.date <= monthEnd(pk));
+  return {
+    month: key, from, to: end, days: n, partial: end < monthEnd(key),
+    royalty, saleQty, subQty, qty: saleQty + subQty, avgPerDay: r2(royalty / n),
+    prevSame: prevAny ? prevSame : null, vsPrev: prevAny && prevSame ? royalty / prevSame - 1 : null,
+    daily: ser.map((x) => ({ date: x.date, royalty: x.royalty })),
+  };
+}
+
 // ---------- главный экран ----------
 export function dashboardStats(sales, legacyDays, today) {
   const last = lastSaleDate(sales);

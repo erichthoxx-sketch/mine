@@ -137,6 +137,7 @@ document.addEventListener('focusout', () => { if (pending) setTimeout(() => { if
 function setRoute(path) {
   ui.route = path; ui.baseTry = null;
   if (path !== '/ads' && !path.startsWith('/ad/')) ui.adMonth = null;
+  if (path !== '/books' && !path.startsWith('/book/')) ui.booksMonth = null;
 }
 acts.go = (d) => { setRoute(d.to); window.scrollTo(0, 0); };
 let rt;

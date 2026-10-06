@@ -1,5 +1,5 @@
 import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask } from '../ui.js';
-import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthIn } from '../format.js';
+import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthCap, fmtMonthIn } from '../format.js';
 import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween, DISCOUNT_NOTE } from '../calc.js';
 import { rocketCard } from './money.js';
 import { targetAlert, campaignProgress, adGroupSummary } from '../calc.js';
@@ -54,10 +54,10 @@ function campaignList(c, camps, alerts) {
 // если не меньше порога; минус скидка прошлого месяца; не больше комиссии Литнета. Подробная таблица — в отчёте.
 function discountMonth(c, k) {
   const d = c.discounts[k], now = k === monthKey(c.today), th = rub(Number(c.settings.litnetThreshold), 0);
-  if (now && d.qualified) return `<div class="item row between"><span><b>${fmtMonth(k)}</b><span class="sub">на сегодня, от уже открутившейся рекламы · прогноз на месяц ≈ ${rub(d.forecastDiscount ?? d.discount, 0)} · придёт с выплатой за ${fmtMonth(d.payoutMonth)}</span></span><b class="up">+${rub(d.discount, 0)}</b></div>`;
+  if (now && d.qualified) return `<div class="item row between"><span><b>${fmtMonthCap(k)}</b><span class="sub">на сегодня, от уже открутившейся рекламы · прогноз на месяц ≈ ${rub(d.forecastDiscount ?? d.discount, 0)} · придёт с выплатой за ${fmtMonth(d.payoutMonth)}</span></span><b class="up">+${rub(d.discount, 0)}</b></div>`;
   return d.discount > 0
-    ? `<div class="item row between"><span><b>${fmtMonth(k)}</b><span class="sub">придёт с выплатой за ${fmtMonth(d.payoutMonth)}</span></span><b class="up">+${rub(d.discount, 0)}</b></div>`
-    : `<div class="item row between"><span><b>${fmtMonth(k)}</b><span class="sub">реклама открутилась на ${rub(d.spend, 0)}, нужно от ${th}</span></span><span class="muted">нет</span></div>`;
+    ? `<div class="item row between"><span><b>${fmtMonthCap(k)}</b><span class="sub">придёт с выплатой за ${fmtMonth(d.payoutMonth)}</span></span><b class="up">+${rub(d.discount, 0)}</b></div>`
+    : `<div class="item row between"><span><b>${fmtMonthCap(k)}</b><span class="sub">реклама открутилась на ${rub(d.spend, 0)}, нужно от ${th}</span></span><span class="muted">нет</span></div>`;
 }
 function discountTable(c) {
   const dm = Object.keys(c.discounts).filter((k) => { const d = c.discounts[k]; return d.spend > 0 || d.paid > 0; }).sort().reverse();

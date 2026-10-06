@@ -34,7 +34,9 @@ export function home(app) {
   const dayLabel = c.dataEnd === c.today ? 'Сегодня' : `Последний день · ${fmtShort(c.dataEnd)}`;
   const from = ui.range ? (addDays(c.dataEnd, -(ui.range - 1)) < c.firstDate ? c.firstDate : addDays(c.dataEnd, -(ui.range - 1))) : c.firstDate;
   const inp = chartInputs(c, from, c.dataEnd);
-  const bb = booksBreakdown(c.sales, from, c.dataEnd).map((b) => ({ ...b, title: c.titleOf(b.bookId, b.title) }));
+  // «По книгам» — только текущий месяц
+  const bkFrom = monthKey(c.today) + '-01';
+  const bb = booksBreakdown(c.sales, bkFrom, c.today).map((b) => ({ ...b, title: c.titleOf(b.bookId, b.title) }));
   const rangeBtn = (v, t) => `<button class="chip${ui.range === v ? ' on' : ''}" data-act="home.range" data-v="${v}">${t}</button>`;
   const rows = ui.table === 'months' ? byMonth(c.series).reverse() : byWeek(c.series).reverse().slice(0, 26);
   const label = (g) => (ui.table === 'months' ? fmtMonth(g.key) : `${fmtShort(g.from)}–${fmtDate(g.to)}`);
@@ -54,7 +56,8 @@ export function home(app) {
     <div class="chart" id="chart"></div>${chartLegend(inp)}
     <div class="hint">Данные до ${fmtDate(c.dataEnd)}. Светлые столбцы — дни до начала данных выгрузки.</div>
   </div>
-  <div class="card"><h2>По книгам</h2><div class="hint" style="margin:-6px 0 8px">${fmtDate(from)} – ${fmtDate(c.dataEnd)}</div>
+  <div class="card"><div class="row between"><h2 style="margin:0">По книгам · ${fmtMonth(monthKey(c.today))}</h2><button class="link" data-act="go" data-to="/books">все книги</button></div>
+    ${bb.length ? '' : `<p class="muted">За ${fmtMonth(monthKey(c.today))} продаж пока нет — загрузите свежую выгрузку на вкладке «Данные».</p>`}
     ${bb.map((b) => `<div class="item" style="padding:8px 0"><div class="row between"><span>${esc(b.title)}</span><b>${rub(b.royalty)}</b></div><div class="small muted">продажи ${rub(b.saleRoyalty)} (${b.saleQty} шт.) · подписки ${rub(b.subRoyalty)} (${b.subQty} шт.)</div><div class="bar-share"><i style="width:${(b.share * 100).toFixed(1)}%"></i></div></div>`).join('')}
   </div>
   <div class="card"><div class="row between"><h2>Таблица</h2><div class="chips"><button class="chip${ui.table !== 'months' ? ' on' : ''}" data-act="home.table" data-v="weeks">Недели</button><button class="chip${ui.table === 'months' ? ' on' : ''}" data-act="home.table" data-v="months">Месяцы</button></div></div>
