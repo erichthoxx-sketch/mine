@@ -58,7 +58,7 @@ export function home(app) {
   </div>
   <div class="card"><div class="row between"><h2 style="margin:0">По книгам · ${fmtMonth(monthKey(c.today))}</h2><button class="link" data-act="go" data-to="/books">все книги</button></div>
     ${bb.length ? '' : `<p class="muted">За ${fmtMonth(monthKey(c.today))} продаж пока нет — загрузите свежую выгрузку на вкладке «Данные».</p>`}
-    ${bb.map((b) => `<a class="item book-link" href="#" data-act="book.open" data-id="${esc(b.bookId)}" style="padding:8px 0"><div class="row between"><span>${esc(b.title)} <span class="go">›</span></span><b>${rub(b.royalty)}</b></div><div class="small muted">продажи ${rub(b.saleRoyalty)} (${b.saleQty} шт.) · подписки ${rub(b.subRoyalty)} (${b.subQty} шт.)</div><div class="bar-share"><i style="width:${(b.share * 100).toFixed(1)}%"></i></div></a>`).join('')}
+    ${bb.map((b) => `<a class="item book-link" href="#" data-act="book.open" data-id="${esc(b.bookId)}" style="padding:8px 0"><div class="row between"><span>${esc(b.title)}</span><b>${rub(b.royalty)}</b></div><div class="small muted">продажи ${rub(b.saleRoyalty)} (${b.saleQty} шт.) · подписки ${rub(b.subRoyalty)} (${b.subQty} шт.)</div><div class="bar-share"><i style="width:${(b.share * 100).toFixed(1)}%"></i></div></a>`).join('')}
   </div>
   <div class="card"><div class="row between"><h2>Таблица</h2><div class="chips"><button class="chip${ui.table !== 'months' ? ' on' : ''}" data-act="home.table" data-v="weeks">Недели</button><button class="chip${ui.table === 'months' ? ' on' : ''}" data-act="home.table" data-v="months">Месяцы</button></div></div>
     <div class="scroll"><table><tr><th>Период</th><th>Доход</th><th>Прод./подп.</th><th>В день</th></tr>
