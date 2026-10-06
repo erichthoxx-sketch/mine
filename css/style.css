@@ -296,6 +296,6 @@ a.item.book-link { display: block; color: inherit; text-decoration: none; cursor
 .demo { padding-top: calc(6px + env(safe-area-inset-top)); }
 .demo + .top { padding-top: 12px; }
 /* окна и экран входа — не под часами */
-dialog { margin-top: max(16px, env(safe-area-inset-top)); max-height: calc(100dvh - 32px - env(safe-area-inset-top)); }
-#sheetForm { max-height: calc(100dvh - 34px - env(safe-area-inset-top)); }
+dialog { max-height: calc(100dvh - 32px - 2 * env(safe-area-inset-top)); }
+#sheetForm { max-height: calc(100dvh - 34px - 2 * env(safe-area-inset-top)); }
 .auth { padding-top: calc(24px + env(safe-area-inset-top)); }
