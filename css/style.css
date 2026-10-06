@@ -271,3 +271,11 @@ details.year > summary { display: flex; justify-content: space-between; gap: 10p
 details.year > summary span { color: var(--link); }
 details.year > summary span::before { content: '▸ '; }
 details.year[open] > summary span::before { content: '▾ '; }
+/* сворачиваемые карточки: заголовок + краткая сводка, раскрываются по нажатию */
+details.fold > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; color: var(--text); font-weight: 400; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold .fold-t { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+details.fold .fold-t::after { content: ' ▸'; color: var(--link); font-size: 14px; }
+details.fold[open] .fold-t::after { content: ' ▾'; }
+details.fold .fold-s { font-size: 13px; color: var(--muted); }
+details.fold[open] > summary { margin-bottom: 10px; }
