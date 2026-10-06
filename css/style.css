@@ -168,12 +168,12 @@ dialog h2 { outline: none; padding-right: 8px; }
 nav.tabs a b { display: flex; justify-content: center; height: 26px; align-items: center; }
 nav.tabs a .ic { width: 22px; height: 22px; }
 nav.tabs a.on { color: var(--text); }
-nav.tabs a.on .ic { color: var(--accent); stroke-width: 2; }
+nav.tabs a.on .ic { color: var(--link); stroke-width: 2; }
 .top .ic, button .ic, .btn .ic { width: 18px; height: 18px; }
 .tag .ic, .small .ic, td .ic, .item .ic, p .ic, b .ic { width: 1.05em; height: 1.05em; }
 nav.tabs a { color: var(--text-2); }
 nav.tabs a .ic { color: var(--text); }
-nav.tabs a.on .ic { color: var(--accent); }
+nav.tabs a.on .ic { color: var(--link); }
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 6px; }
 .tiles > div { background: var(--surface-2); border-radius: 16px; padding: 10px 12px; min-width: 0; }
 .tiles .k { font-size: 12px; color: var(--text-2); } .tiles .v { font-family: var(--font-display); font-size: 18px; font-weight: 600; margin-top: 2px; } .tiles .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
