@@ -265,3 +265,9 @@ input[type="date"]::-webkit-datetime-edit, input[type="month"]::-webkit-datetime
 .wd i { display: block; width: 70%; max-width: 34px; background: var(--bar); border-radius: 4px 4px 0 0; }
 .wd span { font-size: 12px; font-weight: 700; }
 .wd small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+/* история продаж по годам */
+details.year { border-top: 1px solid var(--line); padding: 8px 0; }
+details.year > summary { display: flex; justify-content: space-between; gap: 10px; color: var(--text); }
+details.year > summary span { color: var(--link); }
+details.year > summary span::before { content: '▸ '; }
+details.year[open] > summary span::before { content: '▾ '; }

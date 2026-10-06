@@ -103,11 +103,16 @@ export function bookPage(a, id) {
   <div class="card"><h2>По дням недели</h2>
     <div class="wd">${m.weekdays.map((w) => `<div><i style="height:${w.avg ? Math.max(4, (w.avg / wmax) * 60).toFixed(0) : 0}px" title="${WDS[w.day]}: ${w.avg == null ? 'нет данных' : rub(w.avg, 0)}"></i><span>${WDS[w.day]}</span><small>${w.avg == null ? '—' : rub(w.avg, 0)}</small></div>`).join('')}</div>
     <div class="hint">Средний доход книги по дням недели за 8 недель по ${fmtDate(m.to)}.</div></div>` : ''}
-  ${x && x.history.length ? `<div class="card"><h2>История продаж</h2>
-    <div class="kv"><div><span>За всё время</span><b>${rub(x.allTime.royalty, 0)} · ${x.allTime.qty} шт.</b></div>${x.years.map((y) => `<div><span>${y.year} год</span><b>${rub(y.royalty, 0)}</b></div>`).join('')}</div>
-    <div class="scroll"><table><tr><th>Месяц</th><th>Доход</th><th>Продажи</th><th>Подписки</th><th>В день</th></tr>
-    ${x.history.map((g) => `<tr${g.key === mk ? ' class="sel"' : ''}><td><button class="link" style="padding:0" data-act="books.month" data-v="${g.key}">${fmtMonthShort(g.key)}</button></td><td>${rub(g.royalty, 0)}</td><td>${g.saleQty}</td><td>${g.subQty}</td><td>${rub(g.avgPerDay, 0)}</td></tr>`).join('')}</table></div>
-    <div class="hint">Нажмите на месяц — аналитика выше покажет его. Месяц, который ещё идёт, — по последний день с данными.</div></div>` : ''}
+  ${x && x.history.length ? (() => {
+    // по годам: год выбранного месяца раскрыт, остальные свёрнуты (в заголовке — итог года)
+    const row = (g) => `<tr${g.key === mk ? ' class="sel"' : ''}><td><button class="link" style="padding:0" data-act="books.month" data-v="${g.key}">${fmtMonthShort(g.key)}</button></td><td>${rub(g.royalty, 0)}</td><td>${g.saleQty}</td><td>${g.subQty}</td><td>${rub(g.avgPerDay, 0)}</td></tr>`;
+    const table = (rows) => `<div class="scroll"><table><tr><th>Месяц</th><th>Доход</th><th>Продажи</th><th>Подписки</th><th>В день</th></tr>${rows.map(row).join('')}</table></div>`;
+    const yearSum = (y) => `${rub(y.royalty, 0)} · ${y.saleQty + y.subQty} шт.`;
+    return `<div class="card"><h2>История продаж</h2>
+      <div class="kv"><div><span>За всё время</span><b>${rub(x.allTime.royalty, 0)} · ${x.allTime.qty} шт.</b></div></div>
+      ${x.years.map((y) => `<details class="year" ${y.year === mk.slice(0, 4) ? 'open' : ''}><summary><span>${y.year} год</span><b>${yearSum(y)}</b></summary>${table(x.history.filter((g) => g.key.startsWith(y.year)))}</details>`).join('')}
+      <div class="hint">Нажмите на месяц — аналитика выше покажет его. Месяц, который ещё идёт, — по последний день с данными.</div></div>`;
+  })() : ''}
   <div class="card"><h2>О книге</h2><form data-form="book.save" data-id="${b.id}">
     <label style="margin-top:0">Название</label><input name="title" value="${esc(b.title)}" required>
     <div class="f2"><div><label>Статус</label><select name="status">${Object.entries(STATUS).map(([k, v]) => opt(k, v, b.status || 'progress')).join('')}</select></div>
