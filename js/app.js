@@ -186,6 +186,22 @@ store.init().then(() => {
       await store.saveSettings({ baseAuto202610: true });
     } catch { baseFixed = false; }
   };
+  // Отчёт таргетологов по кампании «тестовый» (фактический расход по неделям) — вносим разово, если его ещё нет
+  let repFixed = false;
+  const fixReports = async () => {
+    if (repFixed || !store.user || !store.settingsLoaded || !store.loaded?.campaigns || !store.loaded?.reports) return;
+    if (store.data.settings.rep202610) { repFixed = true; return; }
+    repFixed = true;
+    try {
+      const k = store.data.campaigns.find((x) => (x.name || '').trim().toLowerCase() === 'тестовый');
+      if (k && !store.data.reports.some((r) => r.campaignId === k.id)) {
+        const weeks = [['2026-09-14', '2026-09-20', 2718.72, 16815, 327], ['2026-09-21', '2026-09-27', 2983.02, 25792, 372], ['2026-09-28', '2026-10-04', 1835.25, 19269, 221]];
+        for (const [start, end, spend, impressions, clicks] of weeks) await store.put('reports', { id: `r_${k.id}_${start}`, campaignId: k.id, start, end, spend, impressions, clicks });
+      }
+      await store.saveSettings({ rep202610: true });
+    } catch { repFixed = false; }
+  };
+  setTimeout(() => { store.subscribe(fixReports); fixReports(); }, 3000);
   setTimeout(() => { store.subscribe(fixBase); fixBase(); }, 2500);
   setTimeout(() => { store.subscribe(fixCampaigns); fixCampaigns(); }, 1500);
 }).catch((e) => {
