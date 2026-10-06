@@ -6,5 +6,5 @@
   "display": "standalone",
   "background_color": "#fcfcfb",
   "theme_color": "#f6f4f2",
-  "icons": [{ "src": "heart.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }, { "src": "heart-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }, { "src": "heart-180.png", "sizes": "180x180", "type": "image/png" }]
+  "icons": [{ "src": "heart-line.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }, { "src": "heart-line-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }, { "src": "heart-line-180.png", "sizes": "180x180", "type": "image/png" }]
 }

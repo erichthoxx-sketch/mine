@@ -30,7 +30,7 @@ jobs:
           mkdir -p _site/$V/writer _site/pisatel
           cp -r css js _site/$V/
           cp -r writer/js _site/$V/writer/
-          cp manifest.webmanifest heart.svg heart-180.png heart-512.png _site/
+          cp manifest.webmanifest heart-line.svg heart-line-180.png heart-line-512.png _site/
           cp writer/manifest.webmanifest writer/star.svg writer/star-180.png writer/star-512.png _site/pisatel/
           sed "s#css/style.css#$V/css/style.css#; s#js/app.js#$V/js/app.js#" index.html > _site/index.html
           sed "s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/writer/js/app.js#" writer/index.html > _site/pisatel/index.html
