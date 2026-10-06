@@ -280,3 +280,7 @@ a.item.book-link { display: block; color: inherit; text-decoration: none; cursor
   .archive select { justify-self: start; max-width: 100%; }
   .archive button.link { grid-column: 1 / -1; margin-left: 0; justify-self: start; padding: 6px 0; text-align: left; }
 }
+/* «Налог к уплате» на главной: текст слева, кнопка всегда справа */
+.taxline { flex-wrap: nowrap; }
+.taxline > span { flex: 1 1 auto; min-width: 0; }
+.taxline > :last-child { flex: 0 0 auto; }

@@ -88,7 +88,7 @@ function taxReminder(c) {
   const keys = monthsBetween(monthKey(c.firstDate), monthKey(c.dataEnd));
   const t = taxRows(keys, (k) => monthFinance(k, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings, litnet: c.litnetMoney }), c.monthsMap, c.dataEnd);
   if (!t.unpaid) return '';
-  return `<div class="card row between"><span>Налог к уплате: <b>${rub(t.unpaid, 0)}</b> <span class="small muted">за ${t.unpaidMonths.map((k) => fmtMonth(k)).join(', ')}</span></span>${t.unpaidMonths.length === 1 ? `<button data-act="tax.check" data-m="${t.unpaidMonths[0]}">Чек</button>` : '<button class="link" data-act="go" data-to="/money">подробнее</button>'}</div>`;
+  return `<div class="card row between taxline"><span>Налог к уплате: <b>${rub(t.unpaid, 0)}</b> <span class="small muted">за ${t.unpaidMonths.map((k) => fmtMonth(k)).join(', ')}</span></span>${t.unpaidMonths.length === 1 ? `<button data-act="tax.check" data-m="${t.unpaidMonths[0]}">Чек</button>` : '<button class="link" data-act="go" data-to="/money">подробнее</button>'}</div>`;
 }
 
 // Быстрая отметка: «сегодня выложила главу» — событие на сегодня, книга по умолчанию — в процессе
