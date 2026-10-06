@@ -146,6 +146,7 @@ window.addEventListener('online', render); window.addEventListener('offline', re
 
 installHandlers(() => render());
 watchForUpdates();
+try { sessionStorage.removeItem('staleReload'); } catch { /* нет доступа к памяти браузера */ }
 applyTheme();
 store.subscribe(() => safeRender());
 store.init().then(() => {
