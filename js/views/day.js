@@ -36,23 +36,23 @@ export function day(a) {
     <button data-act="day.shift" data-n="1" aria-label="Следующий день">→</button>
   </div>
   <div class="row" style="margin-bottom:12px"><button class="primary" data-act="event.quick" data-date="${date}">+ Событие</button><button data-act="sale.manual" data-date="${date}">Добавить продажи вручную</button>${date !== c.today ? '<button class="link" data-act="day.today">к сегодня</button>' : ''}${date !== c.dataEnd ? `<button class="link" data-act="day.open" data-date="${c.dataEnd}">к последнему дню с данными</button>` : ''}</div>
-  <div class="card">
+  <a class="card tap" href="#" data-act="go" data-to="/" title="График дохода на главной">
     ${noData && !st.royalty ? `<p class="muted" style="margin:0">Выгрузки Литнета за ${fmtDate(date)} ещё нет. Загрузите её на вкладке «Данные» или добавьте продажи вручную.</p>` : `
     <div class="k small muted">Доход за день</div>
     <div class="day-sum">${rub(st.royalty)}</div>
     <div class="chips" style="margin:6px 0">${chg(st.vsAvg, `среднему за 7 дн. (${rub(st.avg7, 0)})`)}${chg(st.vsWeek, `${WD_ACC[wd]} (${rub(st.weekAgo, 0)})`)}</div>
     <div class="small">${st.qty} шт.: продажи ${st.saleQty} (${rub(st.saleRoyalty, 0)}) · подписки ${st.subQty} (${rub(st.subRoyalty, 0)})</div>`}
-  </div>
-  ${plan ? `<div class="card"><h2>Цель ${fmtMonth(mk)}</h2>
+  </a>
+  ${plan ? `<a class="card tap" href="#" data-act="goal.all" data-m="${mk}"><h2>Цель ${fmtMonth(mk)}</h2>
     <div class="row between small"><span>К ${fmtShort(date)}: <b>${rub(mtd, 0)}</b> из ${rub(plan.plan, 0)}</span><span class="muted">${pct(mtd / plan.plan, 0)}</span></div>
     <div class="progress"><i style="width:${Math.min(100, (mtd / plan.plan) * 100).toFixed(1)}%"></i></div>
-    <div class="small">Чтобы идти в ногу с целью, нужно ≈ ${rub(perDayPlan, 0)} в день — этот день ${st.royalty >= perDayPlan ? '<span class="up">выше нормы ✔︎</span>' : `<span class="down">ниже на ${rub(perDayPlan - st.royalty, 0)}</span>`}.</div></div>` : ''}
-  ${bb.length ? `<div class="card"><h2>По книгам</h2>${bb.map((b) => `<div class="item" style="padding:8px 0"><div class="row between"><span>${esc(c.titleOf(b.bookId, b.title))}</span><b>${rub(b.royalty)}</b></div>
-    <div class="small muted">продажи ${b.saleQty} · подписки ${b.subQty}</div><div class="bar-share"><i style="width:${((b.royalty / maxBook) * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>` : ''}
-  ${adsOn.length ? `<div class="card"><h2>Реклама в этот день</h2>${adsOn.map((k) => { const sp = campaignDailySpend(k, c.data.reports, null)[date]; const dn = k.oneOff ? null : countDays(k.start, date); return `<div class="item row between"><span><b>${esc(k.name)}</b><br><span class="small muted">${k.oneOff ? 'разовый расход' : `день ${dn}${k.end ? ' из ' + countDays(k.start, k.end) : ''}`}${k.bookId ? ' · ' + esc(c.titleOf(k.bookId, '')) : ''}</span></span><span class="small">${sp ? '≈ ' + rub(sp, 0) : ''}</span></div>`; }).join('')}</div>` : ''}
+    <div class="small">Чтобы идти в ногу с целью, нужно ≈ ${rub(perDayPlan, 0)} в день — этот день ${st.royalty >= perDayPlan ? '<span class="up">выше нормы ✔︎</span>' : `<span class="down">ниже на ${rub(perDayPlan - st.royalty, 0)}</span>`}.</div></a>` : ''}
+  ${bb.length ? `<div class="card"><h2>По книгам</h2>${bb.map((b) => `<a class="item book-link" href="#" data-act="day.book" data-id="${esc(b.bookId)}" data-m="${mk}" style="padding:8px 0"><div class="row between"><span>${esc(c.titleOf(b.bookId, b.title))}</span><b>${rub(b.royalty)}</b></div>
+    <div class="small muted">продажи ${b.saleQty} · подписки ${b.subQty}</div><div class="bar-share"><i style="width:${((b.royalty / maxBook) * 100).toFixed(1)}%"></i></div></a>`).join('')}</div>` : ''}
+  ${adsOn.length ? `<div class="card"><h2>Реклама в этот день</h2><div class="list">${adsOn.map((k) => { const sp = campaignDailySpend(k, c.data.reports, null)[date]; const dn = k.oneOff ? null : countDays(k.start, date); return `<a class="item row between" href="#" data-act="go" data-to="${k.oneOff ? '/ads' : '/ad/' + k.id}"><span><b>${esc(k.name)}</b><br><span class="small muted">${k.oneOff ? 'разовый расход' : `день ${dn}${k.end ? ' из ' + countDays(k.start, k.end) : ''}`}${k.bookId ? ' · ' + esc(c.titleOf(k.bookId, '')) : ''}</span></span><span class="small">${sp ? '≈ ' + rub(sp, 0) : ''}</span></a>`; }).join('')}</div></div>` : ''}
   ${manual.length ? `<div class="card"><h2>Добавлено вручную</h2>${manual.map((x) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(c.titleOf(x.bookId, x.book))}${x.platform && x.platform !== 'Литнет' ? ' · ' + esc(x.platform) : ''} · ${x.kind === 'sub' ? 'подписки' : 'продажи'} ${x.qty} шт. · ${rub(x.royalty)}</span><button class="link danger" data-act="day.delManual" data-id="${esc(x.id)}">убрать</button></div>`).join('')}</div>` : ''}
   <div class="card"><h2>События дня</h2>
-    ${(doc.events || []).length ? (doc.events).map((e, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="pill-ev"><i style="background:${(EVENT_TYPES[e.type] || EVENT_TYPES.note).color}"></i><span>${esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)}${e.bookId ? ' · ' + esc(c.titleOf(e.bookId, '')) : ''}${e.text ? ': ' + esc(e.text) : ''}</span></span><button class="link danger" data-act="day.delEv" data-i="${i}">убрать</button></div>`).join('') : '<p class="muted">Событий нет.</p>'}
+    ${(doc.events || []).length ? (doc.events).map((e, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="pill-ev tap-ev" data-act="event.edit" data-date="${date}" data-i="${i}" role="button" tabindex="0"><i style="background:${(EVENT_TYPES[e.type] || EVENT_TYPES.note).color}"></i><span>${esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)}${e.bookId ? ' · ' + esc(c.titleOf(e.bookId, '')) : ''}${e.text ? ': ' + esc(e.text) : ''}</span></span><button class="link danger" data-act="day.delEv" data-i="${i}">убрать</button></div>`).join('') : '<p class="muted">Событий нет.</p>'}
     <div style="margin-top:8px"><button data-act="event.quick" data-date="${date}">+ Событие</button></div>
   </div>
   <div class="card"><h2>Заметка</h2><form data-form="day.note"><textarea name="note" placeholder="Что важно запомнить об этом дне">${esc(doc.note || '')}</textarea><div style="margin-top:10px"><button class="primary" type="submit">Сохранить заметку</button></div></form></div>
@@ -97,6 +97,25 @@ forms['day.manual'] = async (fd) => {
 acts['day.delManual'] = (d) => app().store.remove('sales', d.id);
 
 // Событие на выбранный день: можно добавлять сколько угодно, по одному нажатию
+// книга из «По книгам» дня — её аналитика за месяц этого дня
+acts['day.book'] = (d) => { const a = app(); a.ui.booksMonth = d.m; a.go('/book/' + d.id); };
+// нажали на событие — поправить его
+acts['event.edit'] = (d) => {
+  const c = app().ctx(), date = d.date, i = Number(d.i);
+  const doc = dayDoc(c, date), e = (doc.events || [])[i];
+  if (!e) return;
+  openSheet(`Событие — ${fmtDate(date)}`, `<label for="et">Что произошло</label><select id="et" name="type">${Object.entries(EVENT_TYPES).map(([k, v]) => opt(k, v.label, e.type)).join('')}</select>
+    <label for="eb">Книга (необязательно)</label><select id="eb" name="bookId"><option value="">—</option>${c.activeBooks.map((b) => opt(b.id, b.title, e.bookId || '')).join('')}</select>
+    <label for="ex">Пояснение</label><input id="ex" name="text" value="${esc(e.text || '')}">`, async (fd) => {
+    const type = fd.get('type'), text = (fd.get('text') || '').trim();
+    if (type === 'other' && !text) { toast('Для «Другое» напишите, что произошло'); return false; }
+    const ev = { type, text };
+    if (fd.get('bookId')) ev.bookId = fd.get('bookId');
+    const events = [...(doc.events || [])]; events[i] = ev;
+    await save({ ...doc, id: date, date, events });
+    toast('Событие изменено');
+  });
+};
 acts['event.quick'] = (d) => {
   const c = app().ctx(), date = d.date || app().ui.day || c.today;
   const books = c.activeBooks, def = books.find((b) => b.status !== 'done');

@@ -186,7 +186,7 @@ nav.tabs a.on .ic { color: var(--link); }
 .day-sum { font-family: var(--font-display); font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .chip-stat { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); }
 /* ссылки — аккуратно, без подчёркивания; «назад» — маленькая кнопка */
-main a:not(.btn):not(.item):not(.tag):not(.cover-tile) { color: var(--link); text-decoration: none; font-weight: 700; }
+main a:not(.btn):not(.item):not(.tag):not(.cover-tile):not(.tap) { color: var(--link); text-decoration: none; font-weight: 700; }
 .btn.back { min-height: 34px; padding: 6px 14px; font-size: 14px; }
 .btn.small-btn { min-height: 34px; padding: 6px 14px; font-size: 14px; }
 tr.sel td { background: var(--accent-soft); }
@@ -299,3 +299,8 @@ a.item.book-link { display: block; color: inherit; text-decoration: none; cursor
 dialog { max-height: calc(100dvh - 32px - 2 * env(safe-area-inset-top)); }
 #sheetForm { max-height: calc(100dvh - 34px - 2 * env(safe-area-inset-top)); }
 .auth { padding-top: calc(24px + env(safe-area-inset-top)); }
+/* кликабельные карточки и строки на «Дне» */
+main a.card.tap { display: block; color: inherit; font-weight: inherit; text-decoration: none; cursor: pointer; transition: box-shadow .15s; }
+main a.card.tap:hover { box-shadow: 0 2px 14px rgba(60, 30, 45, .1); }
+.tap-ev { cursor: pointer; }
+.tap-ev:hover span { text-decoration: underline; text-decoration-color: var(--line); }
