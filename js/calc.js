@@ -186,6 +186,14 @@ export function bookInsights(book, key, ctx) {
     prices.push({ price: p.price, from, to, days: n, royalty: sumSeries(ps), avgPerDay: r2(sumSeries(ps) / n), saleQty: ps.reduce((a, x) => a + x.saleQty, 0), subQty: ps.reduce((a, x) => a + x.subQty, 0) });
   });
   const ch = chapterEffect(ctx.sales, ctx.days || [], [book], m.from, m.to)[0];
+  // прочие события месяца (скидки, акции, конкурсы, заметки…) по этой книге или без книги — с доходом книги в тот день
+  const dayRoy = new Map(m.daily.map((d) => [d.date, d.royalty]));
+  const events = [];
+  for (const d of ctx.days || []) {
+    if (d.date < m.from || d.date > monthEnd(key)) continue;
+    for (const e of d.events || []) if (e.type !== 'chapter' && (!e.bookId || e.bookId === book.id)) events.push({ date: d.date, type: e.type, text: e.text || '', royalty: dayRoy.has(d.date) ? dayRoy.get(d.date) : null });
+  }
+  events.sort((a, b) => a.date.localeCompare(b.date));
   // реклама, которая шла в этом месяце на эту книгу или на все книги
   const period = { from: m.from, to: m.to };
   const ads = (ctx.campaigns || []).filter((k) => !k.oneOff && k.start && k.start <= m.to && (!k.end || k.end >= m.from) && (k.scope === 'all' || !k.bookId || k.bookId === book.id))
@@ -200,7 +208,7 @@ export function bookInsights(book, key, ctx) {
   for (const g of months) { const y = g.key.slice(0, 4); const e = (years[y] ||= { year: y, royalty: 0, saleQty: 0, subQty: 0 }); e.royalty += g.royalty; e.saleQty += g.saleQty; e.subQty += g.subQty; }
   return {
     ...m, best: best && best.royalty > 0 ? best : null, activeDays, perUnit: m.qty ? r2(m.royalty / m.qty) : null,
-    weekdays, weekFrom: wFrom, prices, chapters: ch && ch.chapterDays ? ch : null, ads,
+    weekdays, weekFrom: wFrom, prices, chapters: ch && ch.chapterDays ? ch : null, events, ads: ads.filter((k) => k.days > 0),
     history: months.reverse(), years: Object.values(years).map((y) => ({ ...y, royalty: r2(y.royalty) })).sort((a, b) => b.year.localeCompare(a.year)),
     allTime: { royalty: r2(months.reduce((a, g) => a + g.royalty, 0)), qty: months.reduce((a, g) => a + g.saleQty + g.subQty, 0) },
   };

@@ -1,7 +1,7 @@
 import { esc, acts, forms, changes, openSheet, opt, toast, N, ask } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthShort } from '../format.js';
 import { priceAt, bookIdFor, inferPriceChanges, bookMonthStats, bookInsights, monthKey, monthEnd, monthsBetween, movingAverage, daysInMonth } from '../calc.js';
-import { dailyChart } from '../charts.js';
+import { dailyChart, EVENT_TYPES } from '../charts.js';
 
 const app = () => window.__app;
 const STATUS = { progress: 'В процессе', done: 'Завершена', removed: 'Снята с продажи' };
@@ -90,17 +90,15 @@ export function bookPage(a, id) {
     </div>
     <div class="chart" id="bookChart"></div>` : `<p class="muted">За ${fmtMonth(mk)} продаж этой книги нет.</p>`}
   </div>
-  ${m ? `<div class="card"><h2>Что влияло</h2>
-    <h3 style="margin-top:0">Цена</h3>
-    ${m.prices.length ? `<div class="list">${m.prices.map((p) => `<div class="item row between"><span>${rub(p.price)}<span class="sub">${fmtShort(p.from)}–${fmtShort(p.to)} · ${p.days} дн. · продажи ${p.saleQty}, подписки ${p.subQty}</span></span><b>${rub(p.avgPerDay, 0)} в день</b></div>`).join('')}</div>
-      ${m.prices.length > 1 ? '<div class="hint">Сравните доход в день при разных ценах — так видно, какая цена выгоднее.</div>' : ''}` : '<p class="small muted">История цен не заполнена — добавьте её ниже, тогда здесь будет сравнение цен.</p>'}
-    <h3>Выкладка глав</h3>
-    ${m.chapters ? `<p class="small" style="margin:0">Глав выложено: <b>${m.chapters.chapterDays}</b> дн. · подписок в дни выкладки — <b>${num(m.chapters.subsOn ?? 0, 1)}</b> в день, в остальные — <b>${num(m.chapters.subsOff ?? 0, 1)}</b>.</p>` : '<p class="small muted" style="margin:0">В этом месяце выкладка глав не отмечена (вкладка «День» → «+ Событие»).</p>'}
-    <h3>Реклама</h3>
-    ${m.ads.length ? `<div class="list">${m.ads.map((k) => `<a class="item row between" href="#" data-act="go" data-to="/ad/${k.id}"><span>${esc(k.name)}<span class="sub">${k.allBooks ? 'на все книги · ' : ''}${k.days ? `${k.days} дн. в этом месяце · потрачено ≈ ${rub(k.spend, 0)}` : 'данных за этот месяц пока нет'}</span></span><b>${k.returned == null ? '—' : `<span class="${k.returned - k.spend >= 0 ? 'up' : 'down'}">${k.returned - k.spend >= 0 ? '+' : ''}${rub(k.returned - k.spend, 0)}</span>`}</b></a>`).join('')}</div>
-      <div class="hint">Справа — сколько реклама принесла сверх обычного дохода за вычетом расхода в этом месяце. Для рекламы «на все книги» считается по всем книгам.</div>` : '<p class="small muted" style="margin:0">В этом месяце реклама не шла.</p>'}
-  </div>
-  <div class="card"><h2>По дням недели</h2>
+  ${m && (m.prices.length || m.chapters || m.events.length || m.ads.length) ? `<div class="card"><h2>Что влияло</h2>
+    ${m.prices.length ? `<h3 style="margin-top:0">Цена</h3><div class="list">${m.prices.map((p) => `<div class="item row between"><span>${rub(p.price)}<span class="sub">${fmtShort(p.from)}–${fmtShort(p.to)} · ${p.days} дн. · продажи ${p.saleQty}, подписки ${p.subQty}</span></span><b>${rub(p.avgPerDay, 0)} в день</b></div>`).join('')}</div>
+      ${m.prices.length > 1 ? '<div class="hint">Сравните доход в день при разных ценах — так видно, какая цена выгоднее.</div>' : ''}` : ''}
+    ${m.chapters ? `<h3>Выкладка глав</h3><p class="small" style="margin:0">Глав выложено: <b>${m.chapters.chapterDays}</b> дн. · подписок в дни выкладки — <b>${num(m.chapters.subsOn ?? 0, 1)}</b> в день, в остальные — <b>${num(m.chapters.subsOff ?? 0, 1)}</b>.</p>` : ''}
+    ${m.events.length ? `<h3>События</h3><div class="list">${m.events.map((e) => `<div class="item row between"><span>${EVENT_TYPES[e.type]?.label || 'Событие'}${e.text ? ` · ${esc(e.text)}` : ''}<span class="sub">${fmtDate(e.date)}</span></span><b>${e.royalty == null ? '' : rub(e.royalty, 0)}</b></div>`).join('')}</div><div class="hint">Справа — доход книги в этот день (в среднем в этом месяце ${rub(m.avgPerDay, 0)} в день).</div>` : ''}
+    ${m.ads.length ? `<h3>Реклама</h3><div class="list">${m.ads.map((k) => `<a class="item row between" href="#" data-act="go" data-to="/ad/${k.id}"><span>${esc(k.name)}<span class="sub">${k.allBooks ? 'на все книги · ' : ''}${k.days} дн. в этом месяце · потрачено ≈ ${rub(k.spend, 0)}</span></span><b>${k.returned == null ? '—' : `<span class="${k.returned - k.spend >= 0 ? 'up' : 'down'}">${k.returned - k.spend >= 0 ? '+' : ''}${rub(k.returned - k.spend, 0)}</span>`}</b></a>`).join('')}</div>
+      <div class="hint">Справа — сколько реклама принесла сверх обычного дохода за вычетом расхода в этом месяце. Для рекламы «на все книги» считается по всем книгам.</div>` : ''}
+  </div>` : ''}
+  ${m ? `  <div class="card"><h2>По дням недели</h2>
     <div class="wd">${m.weekdays.map((w) => `<div><i style="height:${w.avg ? Math.max(4, (w.avg / wmax) * 60).toFixed(0) : 0}px" title="${WDS[w.day]}: ${w.avg == null ? 'нет данных' : rub(w.avg, 0)}"></i><span>${WDS[w.day]}</span><small>${w.avg == null ? '—' : rub(w.avg, 0)}</small></div>`).join('')}</div>
     <div class="hint">Средний доход книги по дням недели за 8 недель по ${fmtDate(m.to)}.</div></div>` : ''}
   ${x && x.history.length ? (() => {
