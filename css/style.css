@@ -271,3 +271,6 @@ details.year > summary { display: flex; justify-content: space-between; gap: 10p
 details.year > summary span { color: var(--link); }
 details.year > summary span::before { content: '▸ '; }
 details.year[open] > summary span::before { content: '▾ '; }
+a.item.book-link { display: block; color: inherit; text-decoration: none; cursor: pointer; }
+a.item.book-link .go { color: var(--link); font-weight: 700; }
+a.item.book-link:hover .go { margin-left: 2px; }
