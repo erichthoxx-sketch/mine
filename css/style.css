@@ -322,3 +322,5 @@ td, th { font-variant-numeric: tabular-nums; }
 details > summary { font-size: 15px; }
 /* поля ввода — 16 px: иначе iPhone увеличивает страницу при нажатии */
 input, select, textarea, .archive select { font-size: 16px; }
+/* пункты выпадающих списков — читаемы в любой теме (у прозрачного списка браузер рисует белый фон) */
+select option { background-color: var(--surface); color: var(--text); }
