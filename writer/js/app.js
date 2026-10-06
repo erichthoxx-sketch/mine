@@ -33,7 +33,8 @@ function getCtx() {
   const d = store.data, today = todayISO();
   const key = [store.version || 0, today].join('|');
   if (cache && key === cacheKey) return cache;
-  const wbooks = [...d.w_books].sort((a, b) => (a.status === 'done') - (b.status === 'done') || (a.title || '').localeCompare(b.title || '', 'ru'));
+  const rank = (x) => (x.status === 'done' ? 2 : x.status === 'idea' ? 1 : 0); // в процессе → идеи → завершённые
+  const wbooks = [...d.w_books].sort((a, b) => rank(a) - rank(b) || (a.title || '').localeCompare(b.title || '', 'ru'));
   const incomeById = Object.fromEntries(d.books.map((b) => [b.id, b]));
   cache = {
     data: d, settings: d.settings, today, wbooks,

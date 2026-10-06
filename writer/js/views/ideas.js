@@ -20,7 +20,7 @@ export function ideasView(a) {
 function ideaCard(c, x, open) {
   const book = x.bookId ? c.wbooksById[x.bookId] : null;
   const comments = x.comments || [];
-  return `<div class="card idea">
+  return `<div class="card idea" id="idea-${x.id}">
     <div class="row between"><b>${esc(x.title || 'Без названия')}</b><span class="small muted">${x.createdAt ? fmtDate(x.createdAt.slice(0, 10)) : ''}</span></div>
     ${x.text ? `<p class="idea-text">${esc(open ? x.text : x.text.slice(0, 220) + (x.text.length > 220 ? '…' : ''))}</p>` : ''}
     <div class="tags">${(x.tags || []).map((t) => `<span class="tag">#${esc(t)}</span>`).join('')}${book ? `<span class="tag on">${ic('books')} ${esc(book.title)}</span>` : ''}${x.fileLink ? `<a class="tag on" href="${esc(x.fileLink)}" target="_blank" rel="noopener">${ic('doc')} ${esc(x.fileName || 'документ')}</a>` : ''}</div>
@@ -41,10 +41,18 @@ function ideaForm(c, x = {}) {
 const fromForm = (fd) => ({ title: (fd.get('title') || '').trim(), text: (fd.get('text') || '').trim(), tags: tagsOf(fd.get('tags')), bookId: fd.get('bookId') || '', fileLink: (fd.get('fileLink') || '').trim() });
 
 acts['idea.filter'] = (d) => { app().ui.ideaTag = d.v; };
+acts['idea.newFor'] = (d) => acts['idea.new'](d); // «+ Идея» на странице книги — книга уже выбрана
+// со страницы книги: идеи этой книги, нужная — раскрыта
+acts['idea.open'] = (d) => {
+  const a = app();
+  a.ui.ideaTag = d.book || ''; a.ui.openIdea = d.id || null;
+  a.go('/ideas');
+  if (d.id) setTimeout(() => document.getElementById('idea-' + d.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50);
+};
 acts['idea.toggle'] = (d) => { app().ui.openIdea = app().ui.openIdea === d.id ? null : d.id; };
-acts['idea.new'] = () => {
+acts['idea.new'] = (d) => {
   const c = app().ctx();
-  openSheet('Новая идея', ideaForm(c), async (fd) => {
+  openSheet('Новая идея', ideaForm(c, d?.book ? { bookId: d.book } : {}), async (fd) => {
     const v = fromForm(fd);
     if (!v.title && !v.text) { toast('Напишите хотя бы пару слов'); return false; }
     await app().store.put('w_ideas', { id: 'i' + uid(), ...v, comments: [], createdAt: new Date().toISOString() });

@@ -6,7 +6,7 @@ import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 
 const app = () => window.__app;
-export const STATUS = { progress: 'В процессе', done: 'Завершена' };
+export const STATUS = { idea: 'Идея', progress: 'В процессе', done: 'Завершена' };
 export const PLATFORMS = ['Литнет', 'Литмаркет', 'Литгород'];
 const zn = (n) => num(n || 0) + ' зн.';
 
@@ -22,13 +22,13 @@ function tile(c, b) {
   return `<a href="#" class="cover-tile" data-act="go" data-to="/book/${b.id}">
     <div class="cover">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}</div>
     <div class="ct-title">${esc(b.title)}</div>
-    <div class="tags"><span class="tag ${b.status === 'done' ? '' : 'on'}">${STATUS[b.status] || STATUS.progress}</span>${(b.platforms || []).map((p) => `<span class="tag">${esc(p)}</span>`).join('')}</div>
+    <div class="tags"><span class="tag ${b.status === 'progress' || !b.status ? 'on' : ''}">${STATUS[b.status] || STATUS.progress}</span>${(b.platforms || []).map((p) => `<span class="tag">${esc(p)}</span>`).join('')}</div>
     <div class="ct-num">${zn(b.chars)}${today ? ` <span class="up">+${num(today)}</span>` : ''}</div></a>`;
 }
 
 export function booksView(a) {
   const c = a.ctx();
-  const active = c.wbooks.filter((b) => b.status !== 'done').length;
+  const active = c.wbooks.filter((b) => b.status !== 'done' && b.status !== 'idea').length;
   const html = `
   <div class="card">
     <div class="grid3">
@@ -73,7 +73,9 @@ export function bookPage(a, id) {
   </div>
   ${(b.tabs || []).length ? `<div class="card"><h2>Главы (вкладки документа)</h2><div class="scroll"><table><tr><th>Вкладка</th><th>Знаков</th></tr>${b.tabs.map((t) => `<tr><td>${esc(t.title)}</td><td>${num(t.chars)}</td></tr>`).join('')}<tr class="total"><td>Всего</td><td>${num(b.chars)}</td></tr></table></div></div>` : ''}
   ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${zn(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
-  ${ideas.length ? `<div class="card"><h2>Идеи к книге</h2>${ideas.map((x) => `<div class="item small">${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</div>`).join('')}</div>` : ''}
+  <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
+    ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
+      <div class="card-foot"><button class="link" data-act="idea.open" data-book="${b.id}">Все идеи к книге</button></div>` : '<p class="small muted" style="margin:8px 0 0">Идей к этой книге пока нет.</p>'}</div>
   <div class="card"><h2>О книге</h2>
   <form data-form="wbook.save" data-id="${b.id}">
     <label for="bt" style="margin-top:0">Название</label><input id="bt" name="title" value="${esc(b.title)}" required>
