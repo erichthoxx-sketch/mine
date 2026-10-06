@@ -187,6 +187,7 @@ export function adPage(a, id) {
     <div class="f2"><div><label>Бюджет (оплата), ₽</label><input name="budget" inputmode="decimal" value="${k.budget ?? ''}"></div><div><label>Дата оплаты</label><input type="date" name="paidAt" value="${k.paidAt || ''}"></div></div>
     <div class="f2">
     <div><label>Сравнивать доход</label><select name="scope">${opt('book', 'только этой книги', k.scope || 'book')}${opt('all', 'всех книг', k.scope)}</select></div></div>
+    <div class="hint">Реклама ведёт на одну книгу — выбирайте «только этой книги»: так выкладка глав и акции других книг не исказят окупаемость. «Всех книг» — если реклама вела на страницу автора или на несколько книг сразу.</div>
 
     <div class="row between" style="margin-top:14px"><button class="primary" type="submit">Сохранить</button><button type="button" class="danger" data-act="ad.del" data-id="${k.id}">Удалить</button></div>
   </form></div>`;
