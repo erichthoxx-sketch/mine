@@ -608,10 +608,13 @@ export function rocketRows(keys, finOf, monthsMap, today) {
     return {
       month: k, royalty: f.royalty, qty: f.qty ?? null, fee, index,
       sales: fee != null && index ? Math.round(fee / index) : null,
+      // «Все продажи, шт» из кабинета Rocket — от них честная доля продаж через Rocket
+      total: m.rocketTotal != null && m.rocketTotal !== '' ? Number(m.rocketTotal) : null,
       share: fee != null && f.royalty ? fee / f.royalty : null,
       closed: monthEnd(k) < today, chargeBy: `${addMonths(k, 1)}-20`,
     };
   });
+  for (const x of rows) x.salesShare = x.sales != null && x.total ? x.sales / x.total : null;
   return { rows, missing: rows.filter((x) => x.closed && x.fee == null && x.royalty > 0).map((x) => x.month) };
 }
 

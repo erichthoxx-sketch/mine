@@ -513,3 +513,10 @@ test('сводка: кампания уже идёт по датам, но вы�
   assert.equal(s.paid, 20000);
   assert.equal(s.plannedSpent, 1176.47); // 2 дня по плану
 });
+
+test('Rocket: продажи через Rocket и доля от всех продаж по кабинету', async () => {
+  const { rocketRows } = await import('../js/calc.js');
+  const r = rocketRows(['2026-09'], () => ({ royalty: 25438.4 }), { '2026-09': { rocketIndex: 34.9, rocketFee: 4260, rocketTotal: 295 } }, '2026-10-06');
+  assert.equal(r.rows[0].sales, 122); assert.equal(r.rows[0].total, 295);
+  assert.ok(Math.abs(r.rows[0].salesShare - 122 / 295) < 1e-9);
+});
