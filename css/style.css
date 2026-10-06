@@ -291,5 +291,11 @@ a.item.book-link { display: block; color: inherit; text-decoration: none; cursor
 .taxline .tl-s { font-size: 13px; color: var(--muted); }
 /* ссылка внизу карточки */
 .card-foot { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; text-align: center; }
-/* шапка — белая полоса во всю ширину: сливается со строкой состояния телефона (часы, «островок») */
-.top { background: var(--surface); box-shadow: 0 0 0 100vmax var(--surface); clip-path: inset(0 -100vmax); padding-bottom: 10px; margin-bottom: 4px; }
+/* приложение с ярлыка заходит под часы и «островок» iPhone: шапку опускаем ниже них */
+.top { padding-top: calc(12px + env(safe-area-inset-top)); }
+.demo { padding-top: calc(6px + env(safe-area-inset-top)); }
+.demo + .top { padding-top: 12px; }
+/* окна и экран входа — не под часами */
+dialog { margin-top: max(16px, env(safe-area-inset-top)); max-height: calc(100dvh - 32px - env(safe-area-inset-top)); }
+#sheetForm { max-height: calc(100dvh - 34px - env(safe-area-inset-top)); }
+.auth { padding-top: calc(24px + env(safe-area-inset-top)); }
