@@ -111,19 +111,19 @@ export function bookPage(a, id) {
       ${x.years.map((y) => `<details class="year" ${y.year === mk.slice(0, 4) ? 'open' : ''}><summary><span>${y.year} год</span><b>${yearSum(y)}</b></summary>${table(x.history.filter((g) => g.key.startsWith(y.year)))}</details>`).join('')}
       <div class="hint">Нажмите на месяц — аналитика выше покажет его. Месяц, который ещё идёт, — по последний день с данными.</div></div>`;
   })() : ''}
-  <details class="card fold" ${b.startDate ? '' : 'open'}><summary><span class="fold-t">О книге</span><span class="fold-s">${STATUS[b.status] || STATUS.progress}${b.startDate ? ` · старт ${fmtDate(b.startDate)}` : ''}${b.lastChapterDate ? ` · последняя глава ${fmtDate(b.lastChapterDate)}` : ''}</span></summary><form data-form="book.save" data-id="${b.id}">
+  <div class="card"><h2>О книге</h2><form data-form="book.save" data-id="${b.id}">
     <label style="margin-top:0">Название</label><input name="title" value="${esc(b.title)}" required>
     <div class="f2"><div><label>Статус</label><select name="status">${Object.entries(STATUS).map(([k, v]) => opt(k, v, b.status || 'progress')).join('')}</select></div>
     <div><label>Дата старта</label><input type="date" name="startDate" value="${b.startDate || ''}"></div></div>
     <label>Дата последней главы</label><input type="date" name="lastChapterDate" value="${b.lastChapterDate || ''}">
     <div class="row between" style="margin-top:14px"><button class="primary" type="submit">Сохранить</button><button type="button" class="danger" data-act="book.del" data-id="${b.id}">Удалить книгу</button></div>
-  </form></details>
-  <details class="card fold" ${hist.length ? '' : 'open'}><summary><span class="fold-t">История цен</span><span class="fold-s">${hist.length ? `сейчас ${priceAt(b, c.today) != null ? rub(priceAt(b, c.today)) : rub(hist[0].price)} · ${hist.length} ${hist.length === 1 ? 'запись' : hist.length < 5 ? 'записи' : 'записей'}` : 'не заполнена'}</span></summary>
+  </form></div>
+  <div class="card"><h2>История цен</h2>
     <p class="small muted">Дата — с какого дня действует цена. Смены цены отмечены на графиках пунктирными линиями.</p>
     ${hist.length ? `<table><tr><th>С даты</th><th>Цена</th><th></th></tr>${hist.map((p) => `<tr><td>${fmtDate(p.from)}</td><td>${rub(p.price)}</td><td><button class="link danger" data-act="book.delPrice" data-id="${b.id}" data-from="${p.from}">убрать</button></td></tr>`).join('')}</table>` : '<p class="muted">История пока пуста.</p>'}
     <form data-form="book.addPrice" data-id="${b.id}"><div class="f2"><div><label>С даты</label><input type="date" name="from" value="${c.today}" required></div><div><label>Цена, ₽</label><input name="price" inputmode="decimal" required></div></div>
     <div class="row" style="margin-top:12px"><button class="primary" type="submit">Добавить цену</button><button type="button" data-act="book.infer" data-id="${b.id}">Подтянуть из продаж</button></div></form>
-  </details>
+  </div>
   <div class="archive">
     <label for="bkm">Месяц</label>
     <select id="bkm" data-chg="books.month">${months.map((k) => opt(k, fmtMonth(k) + (k === cur ? ' (текущий)' : ''), mk)).join('')}</select>
