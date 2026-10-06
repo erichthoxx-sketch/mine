@@ -59,7 +59,6 @@ export function home(app) {
   <div class="card"><h2>По книгам · ${fmtMonth(monthKey(c.today))}</h2>
     ${bb.length ? '' : `<p class="muted">За ${fmtMonth(monthKey(c.today))} продаж пока нет — загрузите свежую выгрузку на вкладке «Данные».</p>`}
     ${bb.map((b) => `<a class="item book-link" href="#" data-act="book.open" data-id="${esc(b.bookId)}" style="padding:8px 0"><div class="row between"><span>${esc(b.title)}</span><b>${rub(b.royalty)}</b></div><div class="small muted">${[b.saleQty ? `продажи ${b.saleQty} шт. · ${rub(b.saleRoyalty, 0)}` : '', b.subQty ? `подписки ${b.subQty} шт. · ${rub(b.subRoyalty, 0)}` : ''].filter(Boolean).join(' · ')}</div><div class="bar-share"><i style="width:${(b.share * 100).toFixed(1)}%"></i></div></a>`).join('')}
-    <div class="card-foot"><button class="link" data-act="go" data-to="/books">Все книги и аналитика</button></div>
   </div>
   <div class="card"><div class="row between"><h2>Таблица</h2><div class="chips"><button class="chip${ui.table !== 'months' ? ' on' : ''}" data-act="home.table" data-v="weeks">Недели</button><button class="chip${ui.table === 'months' ? ' on' : ''}" data-act="home.table" data-v="months">Месяцы</button></div></div>
     <div class="scroll"><table><tr><th>Период</th><th>Доход</th><th>Прод./подп.</th><th>В день</th></tr>

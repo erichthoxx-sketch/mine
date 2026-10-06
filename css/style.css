@@ -304,3 +304,21 @@ main a.card.tap { display: block; color: inherit; font-weight: inherit; text-dec
 main a.card.tap:hover { box-shadow: 0 2px 14px rgba(60, 30, 45, .1); }
 .tap-ev { cursor: pointer; }
 .tap-ev:hover span { text-decoration: underline; text-decoration-color: var(--line); }
+/* ---------- единая типографика ----------
+   заголовки — Unbounded; важные числа — Unbounded: 20 px в плитках, 28 px — главное число экрана;
+   текст — Nunito 15 px, подписи 13 px, мелкие метки 12 px; жирность — 700 (без 650/800) */
+.stat .v, .tiles .v, .taxline .tl-v { font-family: var(--font-display); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tax-sum, .day-sum { font-size: 28px; }
+.kv b { font-family: var(--font-display); font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; }
+h3 { font-weight: 700; }
+.sub-h { font-weight: 700; margin-bottom: 6px; }
+tr.total td { font-weight: 700; }
+.card p.muted, .card > p:not(.small):not(.hint) { font-size: 15px; }
+.list .item, .list a.item { font-size: 15px; }
+.list .item b { font-weight: 700; }
+td, th { font-variant-numeric: tabular-nums; }
+.stat .s, .tiles .s, .kv span, .tl-k, .tl-s { line-height: 1.35; }
+.card { font-size: 15px; }
+details > summary { font-size: 15px; }
+/* поля ввода — 16 px: иначе iPhone увеличивает страницу при нажатии */
+input, select, textarea, .archive select { font-size: 16px; }
