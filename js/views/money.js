@@ -93,7 +93,7 @@ acts['goal.edit'] = (d) => {
 };
 
 // Все цели разом: формула роста + ручные суммы по месяцам
-acts['goal.all'] = () => {
+acts['goal.all'] = (d) => {
   const s = app().ctx().settings;
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: {} });
   const ov = s.planOverrides || {};
@@ -113,6 +113,8 @@ acts['goal.all'] = () => {
     await app().store.saveSettings(patch);
     toast('Цели сохранены');
   });
+  // открыто с карточки цели — сразу к полю этого месяца
+  if (d?.m) setTimeout(() => { const el = document.getElementById('p_' + d.m); if (el) { el.scrollIntoView({ block: 'center' }); el.focus({ preventScroll: true }); } }, 60);
 };
 
 // ---------- налог к уплате ----------
