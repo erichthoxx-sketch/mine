@@ -36,7 +36,7 @@ async function chooseFolder(key, title) {
       if (!found.length && fd.get('create')) found = [await drive.createFolder(name, app().ctx().settings.wBooksFolder || undefined)];
       if (!found.length) { toast('Папка не найдена. Проверьте название.'); return false; }
       if (found.length === 1) { await app().store.saveSettings({ [key]: found[0].id, [key + 'Name']: found[0].name }); toast('Папка выбрана'); return; }
-      setTimeout(() => openSheet('Какая из папок?', `<div class="list">${found.map((f) => `<div class="item row between"><span>${ic('folder')} ${esc(f.name)}</span><button type="button" class="primary" data-act="set.pickFolder" data-key="${key}" data-id="${f.id}" data-name="${esc(f.name)}">Эта</button></div>`).join('')}</div>`, null), 0);
+      setTimeout(() => openSheet('Какая из папок?', `<div class="list">${found.map((f) => `<div class="item row between pick"><span>${ic('folder')} ${esc(f.name)}</span><button type="button" data-act="set.pickFolder" data-key="${key}" data-id="${f.id}" data-name="${esc(f.name)}">Выбрать</button></div>`).join('')}</div>`, null), 0);
     } catch (e) { toast(e.message); return false; }
   }, { submitText: 'Найти' });
 }
