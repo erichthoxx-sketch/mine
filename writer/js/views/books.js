@@ -51,7 +51,9 @@ export function bookPage(a, id) {
   const p = pace(h, c.today);
   const fc = b.planChars ? forecastDate(h, c.today, Number(b.planChars)) : null;
   const contests = c.data.w_contests.filter((x) => x.bookId === b.id);
-  const ideas = c.data.w_ideas.filter((x) => x.bookId === b.id);
+  // идеи к книге — самые свежие сверху; на странице книги не больше 8
+  const ideas = c.data.w_ideas.filter((x) => x.bookId === b.id).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
+  const IDEAS_MAX = 8;
   const extra = (b.platforms || []).filter((x) => !PLATFORMS.includes(x)).join(', ');
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/">← Все книги</a></p>
   <div class="card book-head">
@@ -74,8 +76,8 @@ export function bookPage(a, id) {
   ${(b.tabs || []).length ? `<div class="card"><h2>Главы (вкладки документа)</h2><div class="scroll"><table><tr><th>Вкладка</th><th>Знаков</th></tr>${b.tabs.map((t) => `<tr><td>${esc(t.title)}</td><td>${num(t.chars)}</td></tr>`).join('')}<tr class="total"><td>Всего</td><td>${num(b.chars)}</td></tr></table></div></div>` : ''}
   ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${zn(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
-    ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
-      <div class="card-foot"><button class="link" data-act="idea.open" data-book="${b.id}">Все идеи к книге</button></div>` : '<p class="small muted" style="margin:8px 0 0">Идей к этой книге пока нет.</p>'}</div>
+    ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
+      ${ideas.length > IDEAS_MAX ? `<div style="margin-top:10px"><button data-act="idea.open" data-book="${b.id}">Все идеи к книге (${ideas.length})</button></div>` : ''}` : '<p class="small muted" style="margin:8px 0 0">Идей к этой книге пока нет.</p>'}</div>
   <div class="card"><h2>О книге</h2>
   <form data-form="wbook.save" data-id="${b.id}">
     <label for="bt" style="margin-top:0">Название</label><input id="bt" name="title" value="${esc(b.title)}" required>
