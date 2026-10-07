@@ -96,7 +96,7 @@ export function bookPage(a, id) {
   const p = pace(h, c.today);
   const contests = c.data.w_contests.filter((x) => x.bookId === b.id);
   // идеи к книге — самые свежие сверху; на странице книги не больше 8
-  const ideas = c.data.w_ideas.filter((x) => x.bookId === b.id).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
+  const ideas = c.data.w_ideas.filter((x) => x.bookId === b.id && !x.deletedAt).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
   const IDEAS_MAX = 8;
   const extra = (b.platforms || []).filter((x) => !PLATFORMS.includes(x)).join(', ');
   const chs = chapterList(b), pm = pubMap(b), pfs = pubPlatforms(b), outN = Object.keys(chapterOutDates(b, c.today)).length;

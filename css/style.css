@@ -371,6 +371,14 @@ label.inline-num { display: flex; align-items: center; justify-content: space-be
 label.inline-num input { width: 84px; text-align: center; margin: 0; }
 .checks.dow { gap: 4px 10px; }
 .wbar + .wbar { margin-top: 8px; }
-/* активная вкладка в тёмной теме — нежно-розовая (цвет акцента), в светлой — изумрудная как раньше */
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) nav.tabs a.on, :root:not([data-theme="light"]) nav.tabs a.on .ic { color: var(--accent); } }
-:root[data-theme="dark"] nav.tabs a.on, :root[data-theme="dark"] nav.tabs a.on .ic { color: var(--accent); }
+/* маленькая иконка-кнопка (урна у идеи) */
+button.icon-btn { min-height: 0; width: 30px; height: 30px; padding: 0; margin-left: 6px; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; background: transparent; border: 0; border-radius: 50%; color: var(--muted); box-shadow: none; }
+button.icon-btn .ic { width: 17px; height: 17px; }
+button.icon-btn:hover, button.icon-btn:active { color: var(--bad); background: var(--surface-2); }
+.trash-link { text-align: center; margin: 18px 0 6px; }
+.trash-link .link { color: var(--muted); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.trash-link .ic { width: 15px; height: 15px; }
+.idea-head > span:last-child { display: inline-flex; align-items: center; white-space: nowrap; }
+button.icon-btn { opacity: .55; } button.icon-btn:hover, button.icon-btn:active { opacity: 1; }
+#toast:has(.toast-undo) { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+#toast[hidden] { display: none !important; }

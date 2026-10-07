@@ -18,7 +18,8 @@ const matches = (x, q, c) => {
 export function ideasView(a) {
   const c = a.ctx(), ui = a.ui;
   const q = ui.ideaQ || '', fb = ui.ideaBook || '', fs = ui.ideaSt || 'active';
-  const all = [...c.data.w_ideas].sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
+  const trash = c.data.w_ideas.filter((x) => x.deletedAt);
+  const all = c.data.w_ideas.filter((x) => !x.deletedAt).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
   const list = all.filter((x) => (fs === 'all' ? true : fs === 'active' ? ACTIVE(x) : x.status === fs)
     && (!fb || (fb === '-' ? !x.bookId : x.bookId === fb)) && matches(x, q, c));
   // группы по книгам: где идея свежее — выше; «Без книги» — в конце
@@ -40,7 +41,8 @@ export function ideasView(a) {
     const open = openAll || items.some((x) => x.id === ui.openIdea);
     return `<details class="card idea-group" ${open ? 'open' : ''}><summary><span>${b ? ic('books') + ' ' + esc(b.title) : 'Без книги'}</span><span class="muted small">${items.length}</span></summary>
       <div class="list">${items.map((x) => ideaRow(c, x, ui.openIdea === x.id)).join('')}</div></details>`;
-  }).join('') : `<div class="card"><p class="muted" style="margin:0">${all.length ? 'Ничего не нашлось — попробуйте другое слово или сбросьте фильтры.' : 'Идей пока нет. Запишите первую — она не потеряется и будет доступна с телефона.'}</p></div>`}`;
+  }).join('') : `<div class="card"><p class="muted" style="margin:0">${all.length ? 'Ничего не нашлось — попробуйте другое слово или сбросьте фильтры.' : 'Идей пока нет. Запишите первую — она не потеряется и будет доступна с телефона.'}</p></div>`}
+  ${trash.length ? `<div class="trash-link"><button class="link" data-act="idea.trash">${ic('trash')} Удалённые (${trash.length})</button></div>` : ''}`;
   return { html };
 }
 
@@ -48,15 +50,13 @@ export function ideasView(a) {
 function ideaRow(c, x, open) {
   const comments = x.comments || [];
   const st = x.status || 'new';
-  const head = `<div class="row between idea-head" role="button" tabindex="0" data-act="idea.toggle" data-id="${x.id}"><span><b>${esc(x.title || (x.text || '').slice(0, 60) || 'Без названия')}</b>${st !== 'new' ? ` <span class="badge">${IST[st]}</span>` : ''}</span><span class="small muted">${x.createdAt ? fmtDate(x.createdAt.slice(0, 10)) : ''}${comments.length ? ` · ${comments.length} комм.` : ''}</span></div>`;
+  const head = `<div class="row between idea-head" role="button" tabindex="0" data-act="idea.toggle" data-id="${x.id}"><span><b>${esc(x.title || (x.text || '').slice(0, 60) || 'Без названия')}</b>${st !== 'new' ? ` <span class="badge">${IST[st]}</span>` : ''}</span><span class="small muted">${x.createdAt ? fmtDate(x.createdAt.slice(0, 10)) : ''}${comments.length ? ` · ${comments.length} комм.` : ''}<button class="icon-btn" data-act="idea.quickDel" data-id="${x.id}" aria-label="Удалить идею" title="Удалить">${ic('trash')}</button></span></div>`;
   if (!open) return `<div class="item idea" id="idea-${x.id}">${head}${x.text ? `<div class="small muted idea-snip">${esc(x.text.slice(0, 120))}${x.text.length > 120 ? '…' : ''}</div>` : ''}</div>`;
   return `<div class="item idea open" id="idea-${x.id}">${head}
     ${x.text ? `<p class="idea-text">${esc(x.text)}</p>` : ''}
     <div class="tags">${(x.tags || []).map((t) => `<span class="tag">#${esc(t)}</span>`).join('')}${x.fileLink ? `<a class="tag on" href="${esc(x.fileLink)}" target="_blank" rel="noopener">${ic('doc')} ${esc(x.fileName || 'документ')}</a>` : ''}</div>
     <div class="row" style="margin-top:8px"><select data-chg="idea.setSt" data-id="${x.id}" aria-label="Статус идеи" style="width:auto">${Object.entries(IST).map(([k, v]) => opt(k, v, st)).join('')}</select>
-      <button class="link" data-act="idea.edit" data-id="${x.id}">Изменить</button>
-      <button class="link danger" data-act="idea.quickDel" data-id="${x.id}">Удалить</button>
-      ${!x.fileLink && drive.isConnected() && c.settings.wBooksFolder ? `<button class="link" data-act="idea.doc" data-id="${x.id}">Превратить в документ</button>` : ''}</div>
+      <button class="link" data-act="idea.edit" data-id="${x.id}">Изменить</button>      ${!x.fileLink && drive.isConnected() && c.settings.wBooksFolder ? `<button class="link" data-act="idea.doc" data-id="${x.id}">Превратить в документ</button>` : ''}</div>
     <div class="comments">${comments.map((m, i) => `<div class="comment"><div class="small muted">${fmtDate((m.at || '').slice(0, 10))}</div><div>${esc(m.text)}</div><button class="link danger" data-act="idea.delComment" data-id="${x.id}" data-i="${i}">убрать</button></div>`).join('')}
       <form data-form="idea.comment" data-id="${x.id}" class="row"><input name="text" placeholder="Комментарий" style="flex:1" aria-label="Комментарий"><button class="primary" type="submit">Добавить</button></form></div>
   </div>`;
@@ -102,15 +102,37 @@ acts['idea.edit'] = (d) => {
   });
 };
 acts['idea.del'] = async (d) => {
-  if (!(await ask('Удалить идею вместе с комментариями?'))) return;
-  await app().store.remove('w_ideas', d.id);
+  await acts['idea.quickDel'](d);
 };
-// быстрое удаление: без вопроса, но с «Вернуть» в подсказке
+// быстрое удаление (урна у идеи): идея уходит в «Удалённые», оттуда её можно вернуть
 acts['idea.quickDel'] = async (d) => {
   const x = app().ctx().data.w_ideas.find((i) => i.id === d.id);
   if (!x) return;
-  await app().store.remove('w_ideas', x.id);
-  toast('Идея удалена', { undo: async () => { await app().store.put('w_ideas', x); toast('Идея возвращена'); } });
+  await app().store.put('w_ideas', { ...x, deletedAt: new Date().toISOString() });
+  toast('Идея в удалённых', { undo: async () => { await app().store.put('w_ideas', { ...x, deletedAt: '' }); } });
+};
+// «Удалённые» — внизу страницы идей, неприметной ссылкой
+function trashSheet() {
+  const list = app().ctx().data.w_ideas.filter((x) => x.deletedAt).sort((x, y) => y.deletedAt.localeCompare(x.deletedAt));
+  openSheet('Удалённые идеи', list.length ? `<div class="list">${list.map((x) => `<div class="item row between"><span><b>${esc(x.title || (x.text || '').slice(0, 60) || 'Без названия')}</b><span class="sub">удалена ${fmtDate(x.deletedAt.slice(0, 10))}</span></span>
+      <span class="row" style="flex-wrap:nowrap"><button data-act="idea.restore" data-id="${x.id}">Вернуть</button><button class="icon-btn" data-act="idea.purge" data-id="${x.id}" aria-label="Удалить навсегда" title="Удалить навсегда">${ic('trash')}</button></span></div>`).join('')}</div>
+    <p style="margin-top:12px"><button class="link danger" data-act="idea.purgeAll">Очистить всё</button></p>` : '<p class="muted">Здесь пусто.</p>', null);
+}
+acts['idea.trash'] = () => trashSheet();
+acts['idea.restore'] = async (d) => {
+  const x = app().ctx().data.w_ideas.find((i) => i.id === d.id);
+  await app().store.put('w_ideas', { ...x, deletedAt: '' });
+  toast('Идея возвращена'); trashSheet();
+};
+acts['idea.purge'] = async (d) => {
+  if (!(await ask('Удалить идею навсегда?', 'Удалить'))) return;
+  await app().store.remove('w_ideas', d.id); trashSheet();
+};
+acts['idea.purgeAll'] = async () => {
+  const list = app().ctx().data.w_ideas.filter((x) => x.deletedAt);
+  if (!(await ask(`Удалить навсегда ${list.length} шт.?`, 'Удалить'))) return;
+  for (const x of list) await app().store.remove('w_ideas', x.id);
+  trashSheet();
 };
 forms['idea.comment'] = async (fd, f) => {
   const text = (fd.get('text') || '').trim();
