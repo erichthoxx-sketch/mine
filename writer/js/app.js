@@ -7,12 +7,13 @@ import * as drive from './drive.js';
 import { ic } from '../../js/icons.js';
 import { booksView, bookPage, refreshAll } from './views/books.js';
 import { ideasView } from './views/ideas.js';
+import { homeView } from './views/home.js';
 import { planView } from './views/plan.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 
 export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media'];
-const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days'], localKey: 'authorWriter.v1' });
+const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'active', openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts' };
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* ок */ }
@@ -50,13 +51,13 @@ function getCtx() {
   return cache;
 }
 
-const TABS = [['/', 'books', 'Книги'], ['/ideas', 'ideas', 'Идеи'], ['/plan', 'plan', 'Планер'], ['/marketing', 'marketing', 'Маркетинг']];
+const TABS = [['/', 'house', 'Главная'], ['/books', 'books', 'Книги'], ['/ideas', 'ideas', 'Идеи'], ['/plan', 'plan', 'Планер'], ['/marketing', 'marketing', 'Маркетинг']];
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
-  if (a === 'book' && b) return { tab: '/', view: (x) => bookPage(x, decodeURIComponent(b)) };
+  if (a === 'book' && b) return { tab: '/books', view: (x) => bookPage(x, decodeURIComponent(b)) };
   if (a === 'mk' && b) return { tab: '/marketing', view: (x) => bookMarketing(x, decodeURIComponent(b)) };
-  const map = { '': booksView, ideas: ideasView, plan: planView, marketing: marketingView, settings: settingsView };
-  return { tab: '/' + (a || ''), view: map[a || ''] || booksView };
+  const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, marketing: marketingView, settings: settingsView };
+  return { tab: '/' + (a || ''), view: map[a || ''] || homeView };
 }
 
 function authScreen() {

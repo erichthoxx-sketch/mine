@@ -28,13 +28,6 @@ function contestTags(c, b) {
   const l = liveContests(c, b);
   return l.length ? `<div class="tags">${l.map((x) => `<span class="tag on">Конкурс${x.end ? ` · ${daysTo(x.end, c.today)} дн.` : ''}</span>`).join('')}</div>` : '';
 }
-// напоминания: конкурсы, которые заканчиваются в ближайшую неделю
-function contestReminders(c) {
-  const soon = c.data.w_contests.filter((x) => x.end && x.status !== 'done' && x.end >= c.today && daysTo(x.end, c.today) <= 7).sort((a, b) => a.end.localeCompare(b.end));
-  return soon.map((x) => { const b = x.bookId ? c.wbooksById[x.bookId] : null; const s2 = contestStatus(x, b, c.today); const n = daysTo(x.end, c.today);
-    return `<div class="alert" style="margin-bottom:10px">⏳ Конкурс «${esc(x.name)}»: ${n === 0 ? 'заканчивается сегодня' : `до конца ${n} дн.`}${b ? ` · ${esc(b.title)}` : ''}${s2.need ? ` · нужно ещё ${zn(s2.need)}` : ''} <button class="link" data-act="go" data-to="/plan" style="padding:0">в планер</button></div>`; }).join('');
-}
-
 function tile(c, b) {
   const today = writtenToday(b, c.today);
   return `<a href="#" class="cover-tile" data-act="go" data-to="/book/${b.id}">
@@ -49,7 +42,6 @@ export function booksView(a) {
   const c = a.ctx();
   const active = c.wbooks.filter((b) => b.status !== 'done' && b.status !== 'idea').length;
   const html = `
-  ${contestReminders(c)}
   <div class="card">
     <div class="grid3">
       <div><div class="k small muted">Сегодня написано</div><div class="big">${num(c.writtenToday)}</div><div class="small muted">знаков</div></div>
@@ -66,7 +58,7 @@ export function booksView(a) {
 export function bookPage(a, id) {
   const c = a.ctx();
   const b = c.wbooksById[id];
-  if (!b) return { html: '<div class="card"><p>Книга не найдена.</p><a href="#" data-act="go" data-to="/">← Все книги</a></div>' };
+  if (!b) return { html: '<div class="card"><p>Книга не найдена.</p><a href="#" data-act="go" data-to="/books">← Все книги</a></div>' };
   const h = b.history || {};
   const p = pace(h, c.today);
   const fc = b.planChars ? forecastDate(h, c.today, Number(b.planChars)) : null;
@@ -75,7 +67,7 @@ export function bookPage(a, id) {
   const ideas = c.data.w_ideas.filter((x) => x.bookId === b.id).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
   const IDEAS_MAX = 8;
   const extra = (b.platforms || []).filter((x) => !PLATFORMS.includes(x)).join(', ');
-  const html = `<p><a class="btn back" href="#" data-act="go" data-to="/">← Все книги</a></p>
+  const html = `<p><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a></p>
   <div class="card book-head">
     <div class="cover big">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}
       <label class="btn small-btn">${b.cover ? 'Сменить обложку' : 'Загрузить обложку'}<input type="file" accept="image/*" data-chg="wbook.cover" data-id="${b.id}" hidden></label></div>
@@ -252,6 +244,6 @@ changes['wbook.cover'] = async (v, el) => {
 acts['wbook.del'] = async (d) => {
   if (!(await ask('Убрать книгу из приложения? Файл на Google Диске останется.', 'Убрать'))) return;
   await app().store.remove('w_books', d.id);
-  app().go('/');
+  app().go('/books');
 };
 export { daysLeft };
