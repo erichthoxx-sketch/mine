@@ -1,6 +1,6 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
-import { num, fmtDate } from '../../../js/format.js';
+import { num, fmtDate, plural } from '../../../js/format.js';
 import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft } from '../wcalc.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
@@ -44,9 +44,9 @@ export function booksView(a) {
   const html = `
   <div class="card">
     <div class="grid3">
-      <div><div class="k small muted">Сегодня написано</div><div class="big">${num(c.writtenToday)}</div><div class="small muted">знаков</div></div>
-      <div><div class="k small muted">За 7 дней</div><div class="big">${num(c.writtenWeek)}</div><div class="small muted">знаков</div></div>
-      <div><div class="k small muted">В работе</div><div class="big">${active}</div><div class="small muted">книг</div></div>
+      <div><div class="k small muted">Сегодня написано</div><div class="big">${num(c.writtenToday)}</div><div class="small muted">${plural(c.writtenToday, ['знак', 'знака', 'знаков'])}</div></div>
+      <div><div class="k small muted">За 7 дней</div><div class="big">${num(c.writtenWeek)}</div><div class="small muted">${plural(c.writtenWeek, ['знак', 'знака', 'знаков'])}</div></div>
+      <div><div class="k small muted">В работе</div><div class="big">${active}</div><div class="small muted">${plural(active, ['книга', 'книги', 'книг'])}</div></div>
     </div>
     <div style="margin-top:12px">${driveBar(c)}</div>
   </div>

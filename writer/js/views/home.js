@@ -1,6 +1,6 @@
 // Главная Мастерской: всё актуальное за текущий месяц по книгам и напоминания обо всём, у чего есть дата
 import { esc } from '../../../js/ui.js';
-import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap } from '../../../js/format.js';
+import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
 import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate } from '../wcalc.js';
@@ -81,10 +81,10 @@ export function homeView(a) {
   const html = `
   <h2>${fmtMonthCap(mk)}</h2>
   <div class="grid4">
-    <div class="stat"><div class="k">Написано за месяц</div><div class="v">${num(sum('wrote'))}</div><div class="s">знаков · сегодня +${num(sum('today'))}</div></div>
+    <div class="stat"><div class="k">Написано за месяц</div><div class="v">${num(sum('wrote'))}</div><div class="s">${plural(sum('wrote'), ['знак', 'знака', 'знаков'])} · сегодня +${num(sum('today'))}</div></div>
     <div class="stat"><div class="k">Глав выложено</div><div class="v">${sum('chapters')}</div><div class="s">в ${fmtMonthIn(mk)}</div></div>
     <div class="stat"><div class="k">Доход за ${fmtMonth(mk).split(' ')[0]}</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div></div>
-    <div class="stat"><div class="k">В работе</div><div class="v">${c.wbooks.filter((b) => (b.status || 'progress') === 'progress').length}</div><div class="s">книг</div></div>
+    <div class="stat"><div class="k">В работе</div><div class="v">${inWork.length}</div><div class="s">${plural(inWork.length, ['книга', 'книги', 'книг'])}</div></div>
   </div>
   ${rem.length ? `<div class="card"><h2>Напоминания</h2><div class="list">${rem.map((r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}</span></a>`).join('')}</div></div>` : ''}
   ${inWork.length ? `<h2 style="margin-top:18px">В работе</h2>${inWork.map((r) => workCard(c, r)).join('')}` : ''}

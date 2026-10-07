@@ -570,3 +570,9 @@ test('бюджет рекламы на следующий месяц под це
   // цель ниже обычного дохода — реклама не обязательна
   assert.equal(budgetPlan({ sales, legacyDays: [], campaigns, reports: [], settings: { ...settings, goalAmount: 20000 }, today: '2026-10-10', dataEnd: day(39) }).status, 'enough');
 });
+
+test('окончания по числу', async () => {
+  const { plural } = await import('../js/format.js');
+  const f = ['книга', 'книги', 'книг'];
+  assert.deepEqual([0, 1, 2, 4, 5, 11, 12, 21, 22, 25, 101, 111].map((n) => plural(n, f)), ['книг', 'книга', 'книги', 'книги', 'книг', 'книг', 'книг', 'книга', 'книги', 'книг', 'книга', 'книг']);
+});

@@ -65,3 +65,12 @@ export function parseNum(s) {
   if (t === '' || !/^-?\d*\.?\d+$/.test(t)) return NaN;
   return parseFloat(t);
 }
+
+// Окончание по числу: plural(1, ['книга', 'книги', 'книг']) → «книга», 3 → «книги», 5 → «книг»
+export function plural(n, [one, few, many]) {
+  const a = Math.abs(Math.trunc(Number(n) || 0)), d = a % 10, h = a % 100;
+  if (h >= 11 && h <= 14) return many;
+  if (d === 1) return one;
+  if (d >= 2 && d <= 4) return few;
+  return many;
+}
