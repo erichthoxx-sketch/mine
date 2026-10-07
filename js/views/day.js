@@ -1,3 +1,4 @@
+import { ic } from '../icons.js';
 import { esc, acts, forms, changes, opt, toast, openSheet } from '../ui.js';
 import { rub, fmtDate, fmtShort, fmtMonth, pct } from '../format.js';
 import { incomeSeries, booksBreakdown, manualSaleRow, dayStats, sumSeries, buildPlan, monthKey, daysInMonth, campaignDailySpend, countDays, addDays } from '../calc.js';
@@ -50,9 +51,9 @@ export function day(a) {
   ${bb.length ? `<div class="card"><h2>По книгам</h2>${bb.map((b) => `<a class="item book-link" href="#" data-act="day.book" data-id="${esc(b.bookId)}" data-m="${mk}" style="padding:8px 0"><div class="row between"><span>${esc(c.titleOf(b.bookId, b.title))}</span><b>${rub(b.royalty)}</b></div>
     <div class="small muted">продажи ${b.saleQty} · подписки ${b.subQty}</div><div class="bar-share"><i style="width:${((b.royalty / maxBook) * 100).toFixed(1)}%"></i></div></a>`).join('')}</div>` : ''}
   ${adsOn.length ? `<div class="card"><h2>Реклама в этот день</h2><div class="list">${adsOn.map((k) => { const sp = campaignDailySpend(k, c.data.reports, null)[date]; const dn = k.oneOff ? null : countDays(k.start, date); return `<a class="item row between" href="#" data-act="go" data-to="${k.oneOff ? '/ads' : '/ad/' + k.id}"><span><b>${esc(k.name)}</b><br><span class="small muted">${k.oneOff ? 'разовый расход' : `день ${dn}${k.end ? ' из ' + countDays(k.start, k.end) : ''}`}${k.bookId ? ' · ' + esc(c.titleOf(k.bookId, '')) : ''}</span></span><span class="small">${sp ? '≈ ' + rub(sp, 0) : ''}</span></a>`; }).join('')}</div></div>` : ''}
-  ${manual.length ? `<div class="card"><h2>Добавлено вручную</h2>${manual.map((x) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(c.titleOf(x.bookId, x.book))}${x.platform && x.platform !== 'Литнет' ? ' · ' + esc(x.platform) : ''} · ${x.kind === 'sub' ? 'подписки' : 'продажи'} ${x.qty} шт. · ${rub(x.royalty)}</span><button class="link danger" data-act="day.delManual" data-id="${esc(x.id)}">убрать</button></div>`).join('')}</div>` : ''}
+  ${manual.length ? `<div class="card"><h2>Добавлено вручную</h2>${manual.map((x) => `<div class="drow"><span>${esc(c.titleOf(x.bookId, x.book))}${x.platform && x.platform !== 'Литнет' ? ' · ' + esc(x.platform) : ''} · ${x.kind === 'sub' ? 'подписки' : 'продажи'} ${x.qty} шт. · ${rub(x.royalty)}</span><button class="icon-btn" data-act="day.delManual" data-id="${esc(x.id)}" aria-label="Удалить" title="Удалить">${ic('trash')}</button></div>`).join('')}</div>` : ''}
   <div class="card"><h2>События дня</h2>
-    ${(doc.events || []).length ? (doc.events).map((e, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="pill-ev tap-ev" data-act="event.edit" data-date="${date}" data-i="${i}" role="button" tabindex="0"><i style="background:${(EVENT_TYPES[e.type] || EVENT_TYPES.note).color}"></i><span>${esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)}${e.bookId ? ' · ' + esc(c.titleOf(e.bookId, '')) : ''}${e.text ? ': ' + esc(e.text) : ''}</span></span><button class="link danger" data-act="day.delEv" data-i="${i}">убрать</button></div>`).join('') : '<p class="muted">Событий нет.</p>'}
+    ${(doc.events || []).length ? (doc.events).map((e, i) => `<div class="drow"><span class="pill-ev tap-ev" data-act="event.edit" data-date="${date}" data-i="${i}" role="button" tabindex="0"><span>${esc((EVENT_TYPES[e.type] || EVENT_TYPES.note).label)}${e.bookId ? ' · ' + esc(c.titleOf(e.bookId, '')) : ''}${e.text ? ': ' + esc(e.text) : ''}</span></span><button class="icon-btn" data-act="day.delEv" data-i="${i}" aria-label="Удалить событие" title="Удалить">${ic('trash')}</button></div>`).join('') : '<p class="muted">Событий нет.</p>'}
     <div style="margin-top:8px"><button data-act="event.quick" data-date="${date}">+ Событие</button></div>
   </div>
   <div class="card"><h2>Заметка</h2><form data-form="day.note"><textarea name="note" placeholder="Что важно запомнить об этом дне">${esc(doc.note || '')}</textarea><div style="margin-top:10px"><button class="primary" type="submit">Сохранить заметку</button></div></form></div>
@@ -72,6 +73,7 @@ acts['day.delEv'] = async (d) => {
   const c = app().ctx(), date = app().ui.day || c.today, doc = dayDoc(c, date);
   const events = (doc.events || []).filter((_, i) => i !== Number(d.i));
   await save({ ...doc, events });
+  toast('Событие удалено', { undo: () => save(doc) });
 };
 forms['day.addEv'] = async (fd) => {
   const c = app().ctx(), date = app().ui.day || c.today, doc = dayDoc(c, date);
@@ -94,7 +96,11 @@ forms['day.manual'] = async (fd) => {
   await app().store.put('sales', manualSaleRow({ date, book: b.title, bookId: b.id, kind: fd.get('kind'), qty, royalty }));
   toast('Результат сохранён');
 };
-acts['day.delManual'] = (d) => app().store.remove('sales', d.id);
+acts['day.delManual'] = async (d) => {
+  const row = app().ctx().sales.find((x) => x.id === d.id);
+  await app().store.remove('sales', d.id);
+  if (row) toast('Продажи удалены', { undo: () => app().store.put('sales', row) });
+};
 
 // Событие на выбранный день: можно добавлять сколько угодно, по одному нажатию
 // книга из «По книгам» дня — её аналитика за месяц этого дня
