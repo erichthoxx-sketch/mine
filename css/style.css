@@ -353,3 +353,16 @@ main a.card.wcard { display: flex; gap: 14px; align-items: flex-start; color: in
 /* кнопки и ссылки-кнопки всегда основным шрифтом и в одну строку — как в «Доходах» */
 button, .btn { font-family: var(--font-body); white-space: nowrap; }
 label.btn { cursor: pointer; }
+/* выкладка глав по площадкам */
+table.pub-t td, table.pub-t th { white-space: nowrap; }
+table.pub-t td:first-child { white-space: normal; }
+table.pub-t td, table.pub-t th { padding-left: 4px; padding-right: 4px; }
+table.pub-t th { font-size: 12px; }
+table.pub-t .r { text-align: right; }
+.pc { text-align: center; }
+button.pill { min-height: 0; padding: 2px 7px; font-size: 12px; border-radius: 999px; background: transparent; border: 1px solid var(--line); color: var(--text-2); font-variant-numeric: tabular-nums; }
+button.pill.done { border-color: var(--link); color: var(--link); background: color-mix(in srgb, var(--link) 8%, var(--surface)); }
+button.pill.wait { border-color: var(--warn); color: var(--text); background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }
+.pick-list { max-height: 38vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 4px 10px; }
+.pick-list label.check { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0; }
+@media (max-width: 420px) { table.pub-t.many .r { display: none; } }

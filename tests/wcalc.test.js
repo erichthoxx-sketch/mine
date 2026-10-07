@@ -81,3 +81,18 @@ test('написано за 7 дней — от начала недели', asyn
   assert.equal(writtenWeek({ chars: 20000, weekStart: { date: '2026-10-07', chars: 12000 }, history: { '2026-10-07': 20000 } }, '2026-10-07'), 8000);
   assert.equal(writtenWeek({ chars: 20000, history: { '2026-09-30': 15000, '2026-10-07': 20000 } }, '2026-10-07'), 5000); // без версий — по истории
 });
+
+test('выкладка глав: старое поле, площадки, отложенная публикация', async () => {
+  const { pubMap, pubState, chapterOutDates, plannedPubs, pubPlatforms } = await import('../writer/js/wcalc.js');
+  const b = { platforms: ['Литмаркет', 'Литнет'], published: { 'Глава 1': '2026-10-01' }, pub: { 'Глава 2': { 'Литнет': { date: '2026-10-10', planned: true }, 'Литмаркет': { date: '2026-10-05' } }, 'Глава 1': { 'Литмаркет': { date: '2026-10-02' } } } };
+  const m = pubMap(b);
+  assert.deepEqual(Object.keys(m['Глава 1']).sort(), ['Литмаркет', 'Литнет']);
+  assert.equal(pubState(m['Глава 2']['Литнет'], '2026-10-07'), 'wait');
+  assert.equal(pubState(m['Глава 2']['Литнет'], '2026-10-10'), 'done');
+  assert.deepEqual(chapterOutDates(b, '2026-10-07'), { 'Глава 1': '2026-10-01', 'Глава 2': '2026-10-05' });
+  assert.deepEqual(plannedPubs(b, '2026-10-07'), [{ ch: 'Глава 2', pf: 'Литнет', date: '2026-10-10' }]);
+  assert.deepEqual(plannedPubs(b, '2026-10-10'), []);
+  assert.deepEqual(pubPlatforms(b), ['Литнет', 'Литмаркет']);
+  // снятая отметка (null) убирает и старую
+  assert.equal(pubMap({ published: { 'Глава 1': '2026-10-01' }, pub: { 'Глава 1': { 'Литнет': null } } })['Глава 1'], undefined);
+});

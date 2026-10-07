@@ -31,5 +31,7 @@ export async function removeEvent(src) {
 
 export const startEvent = (c, b, date) => setEvent(`w:${b.id}:start`, date, { type: 'start', text: `Начала выкладку «${b.title}»`, ...bookFields(c, b) });
 export const finishEvent = (c, b, date) => setEvent(`w:${b.id}:finish`, date, { type: 'finish', text: `«${b.title}» завершена`, ...bookFields(c, b) });
-export const chapterEvent = (c, b, title, date) => setEvent(`w:${b.id}:ch:${title}`, date, { type: 'chapter', text: title, ...bookFields(c, b) });
-export const chapterUnset = (b, title) => removeEvent(`w:${b.id}:ch:${title}`);
+// выкладка главы: на Литнете — ключ без площадки (как раньше), на других площадках — с площадкой
+const chKey = (b, title, pf) => `w:${b.id}:ch:${title}${pf && pf !== 'Литнет' ? ':' + pf : ''}`;
+export const chapterEvent = (c, b, title, date, pf = 'Литнет') => setEvent(chKey(b, title, pf), date, { type: 'chapter', text: pf && pf !== 'Литнет' ? `${title} · ${pf}` : title, ...bookFields(c, b) });
+export const chapterUnset = (b, title, pf = 'Литнет') => removeEvent(chKey(b, title, pf));

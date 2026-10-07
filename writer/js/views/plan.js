@@ -1,8 +1,8 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, pct } from '../../../js/format.js';
-import { contestStatus, waitingStatus, forecastDate } from '../wcalc.js';
-import { PLATFORMS } from './books.js';
+import { contestStatus, waitingStatus, forecastDate, chapterOutDates } from '../wcalc.js';
+import { PLATFORMS, chapterList } from './books.js';
 import { startEvent, finishEvent, chapterEvent, removeEvent } from '../sync.js';
 
 const app = () => window.__app;
@@ -27,8 +27,8 @@ function booksPlan(c, list) {
   if (!list.length) return '<div class="card"><p class="muted" style="margin:0">Книг в работе нет. Поставьте книге статус «В процессе» — она появится здесь.</p></div>';
   return list.map((b) => {
     const fc = b.planChars ? forecastDate(b.history, c.today, Number(b.planChars)) : null;
-    const tabs = b.tabs || [], pub = b.published || {};
-    const pubN = tabs.filter((t) => pub[t.title]).length;
+    const tabs = chapterList(b), out = chapterOutDates(b, c.today);
+    const pubN = Object.keys(out).length;
     const cs = c.data.w_contests.filter((x) => x.bookId === b.id && !(x.end && x.end < c.today) && x.status !== 'done');
     return `<div class="card">
       <div class="row between"><b>${esc(b.title)}</b><span class="small muted">${zn(b.chars)}</span></div>
@@ -37,7 +37,7 @@ function booksPlan(c, list) {
         <div><span>Допишу к</span><b>${b.finishBy ? `${fmtDate(b.finishBy)}` : '—'}</b>${b.finishBy ? `<span>${leftTxt(dleft(b.finishBy, c.today))}${fc ? ` · по темпу ${fmtDate(fc)}` : ''}</span>` : fc ? `<span>по темпу — ${fmtDate(fc)}</span>` : ''}</div>
         <div><span>Выкладка до</span><b>${b.publishUntil ? fmtDate(b.publishUntil) : '—'}</b>${b.publishUntil ? `<span>${leftTxt(dleft(b.publishUntil, c.today))}</span>` : ''}</div>
         <div><span>Начало выкладки</span><b>${b.publishStart ? fmtDate(b.publishStart) : '—'}</b></div>
-        <div><span>Глав выложено</span><b>${tabs.length ? `${pubN} из ${tabs.length}` : Object.keys(pub).length || '—'}</b></div>
+        <div><span>Глав выложено</span><b>${tabs.length ? `${pubN} из ${tabs.length}` : '—'}</b></div>
       </div>
       <div class="row"><button class="primary" data-act="ch.publish" data-id="${b.id}">Выложила главу</button><button data-act="wb.dates" data-id="${b.id}">Сроки</button><button data-act="wb.finish" data-id="${b.id}">Книга завершена</button></div>
     </div>`;
@@ -64,22 +64,8 @@ acts['wb.finish'] = (d) => {
     toast('Поздравляю с завершением!');
   }, { submitText: 'Завершена' });
 };
-// «Выложила главу»: выбрать вкладку документа (или вписать название) — глава отмечается и попадает в «Доходы»
-acts['ch.publish'] = (d) => {
-  const c = app().ctx(), b = c.wbooksById[d.id];
-  const pub = b.published || {};
-  const left = (b.tabs || []).filter((t) => !pub[t.title]);
-  openSheet(`Выложила главу — ${b.title}`, `${left.length ? `<label for="ct">Глава</label><select id="ct" name="tab">${left.map((t) => opt(t.title, t.title, left[0].title)).join('')}<option value="">другая — впишу</option></select>` : ''}
-    <label for="cx">${left.length ? 'Или название главы' : 'Название главы'}</label><input id="cx" name="text" placeholder="например, Глава 25">
-    <label for="cd">Дата</label><input id="cd" type="date" name="date" value="${c.today}" required>`, async (fd) => {
-    const title = (fd.get('text') || '').trim() || fd.get('tab') || '';
-    if (!title) { toast('Выберите или впишите главу'); return false; }
-    const date = fd.get('date') || c.today;
-    await app().store.put('w_books', { ...b, published: { ...pub, [title]: date } });
-    await chapterEvent(c, b, title, date);
-    toast('Глава отмечена — и в «Доходах» тоже');
-  }, { submitText: 'Отметить' });
-};
+// «Выложила главу» — тот же лист, что на странице книги: главы × площадки, сразу или отложенно
+acts['ch.publish'] = (d) => acts['pub.mark']({ id: d.id });
 
 // ---------- конкурсы ----------
 function contests(c) {

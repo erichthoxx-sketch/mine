@@ -40,6 +40,18 @@ function bookRow(c, b) {
     <span class="mk-info"><b>${esc(b.title)}</b>
       <span class="sub">Тексты ${promoFilled(b)}/${Object.keys(PROMO).length} · Таргет: ${t} креат., ${d} объявл. · Издательство: рукопись ${mark(man)} синопсис ${mark(syn)}</span></span></a>`;
 }
+// сводка готовности маркетинга — для страницы книги
+export function mkSummary(c, b) {
+  return {
+    texts: promoFilled(b), textsAll: Object.keys(PROMO).length,
+    banners: mediaOf(c, b, ['banner', 'cover']).length,
+    creatives: mediaOf(c, b, ['target']).length, ads: directOf(b).ads.length,
+    manuscript: !!b.fileId || mediaOf(c, b, ['manuscript']).length > 0,
+    synopsis: !!(b.synopsis || '').trim() || mediaOf(c, b, ['synopsis']).length > 0,
+    annotation: !!(promoOf(b).annotation || '').trim(),
+  };
+}
+acts['mk.go'] = (d) => { app().ui.mTab = d.tab || 'texts'; app().go('/mk/' + d.id); };
 changes['mk.q'] = (v) => { app().ui.mQ = v.trim(); app().rerender(); };
 acts['mk.st'] = (d) => { app().ui.mSt = d.v; };
 

@@ -139,3 +139,38 @@ export function waitingStatus(item, today) {
 }
 
 export { r2 };
+
+// ---- выкладка глав по площадкам ----
+// b.pub = { 'Глава 3': { 'Литнет': { date: '2026-10-07', planned: true } } }
+// planned — отложенная публикация: до даты глава «запланирована», с этого дня считается выложенной сама.
+// Старое поле b.published = { 'Глава 3': '2026-10-07' } — это выкладка на Литнете.
+export const MAIN_PF = 'Литнет';
+export function pubMap(b) {
+  const m = {};
+  for (const [ch, date] of Object.entries(b?.published || {})) if (date) m[ch] = { [MAIN_PF]: { date } };
+  for (const [ch, pfs] of Object.entries(b?.pub || {})) {
+    m[ch] = { ...(m[ch] || {}) };
+    for (const [pf, v] of Object.entries(pfs || {})) { if (v && v.date) m[ch][pf] = v; else delete m[ch][pf]; }
+    if (!Object.keys(m[ch]).length) delete m[ch];
+  }
+  return m;
+}
+// состояние одной отметки: done — выложена (в т. ч. отложенная, чей день настал), wait — запланирована
+export const pubState = (v, today) => (!v || !v.date ? null : v.date <= today ? 'done' : 'wait');
+// площадки книги для выкладки: сначала Литнет (если есть), затем остальные
+export const pubPlatforms = (b) => { const p = (b?.platforms || []).length ? [...b.platforms] : [MAIN_PF]; return p.includes(MAIN_PF) ? [MAIN_PF, ...p.filter((x) => x !== MAIN_PF)] : p; };
+// дата выкладки главы — первая дата, когда она вышла хоть на одной площадке (к сегодняшнему дню)
+export function chapterOutDates(b, today) {
+  const out = {};
+  for (const [ch, pfs] of Object.entries(pubMap(b))) {
+    const ds = Object.values(pfs).filter((v) => pubState(v, today) === 'done').map((v) => v.date).sort();
+    if (ds.length) out[ch] = ds[0];
+  }
+  return out;
+}
+// запланированные отложенные публикации (ещё не вышли)
+export function plannedPubs(b, today) {
+  const r = [];
+  for (const [ch, pfs] of Object.entries(pubMap(b))) for (const [pf, v] of Object.entries(pfs)) if (pubState(v, today) === 'wait') r.push({ ch, pf, date: v.date });
+  return r.sort((x, y) => x.date.localeCompare(y.date));
+}

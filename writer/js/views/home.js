@@ -3,8 +3,8 @@ import { esc } from '../../../js/ui.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate } from '../wcalc.js';
-import { STATUS } from './books.js';
+import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs } from '../wcalc.js';
+import { STATUS, chapterList } from './books.js';
 
 const zn = (n) => num(n || 0) + ' зн.';
 const dleft = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
@@ -27,6 +27,8 @@ export function reminders(c) {
     if (b.publishUntil) add(b.publishUntil, `Закончить выкладку «${b.title}»`, '', '/plan');
     if (b.publishStart && b.publishStart >= t) add(b.publishStart, `Начать выкладку «${b.title}»`, '', '/plan', 7);
   }
+  // отложенные публикации глав: выйдут сами, просто напоминание
+  for (const b of c.wbooks) for (const x of plannedPubs(b, t)) add(x.date, `Выйдет ${x.ch} — ${x.pf}`, `«${esc(b.title)}» · отложенная публикация`, '/book/' + b.id, 7);
   for (const x of d.w_queue) if (!x.done && x.due) add(x.due, x.title, x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди «Что пишу дальше»', '/plan');
   for (const x of d.w_waiting) {
     if (x.done) continue;
@@ -49,7 +51,7 @@ function bar(label, share, right, hint = '') {
 }
 function workCard(c, r) {
   const b = r.b, t = c.today, fc = b.planChars ? forecastDate(b.history || {}, t, Number(b.planChars)) : null;
-  const tabs = (b.tabs || []).filter((x) => x.counted !== false), pubN = Object.keys(b.published || {}).length;
+  const tabs = chapterList(b), pubN = Object.keys(chapterOutDates(b, c.today)).length;
   const parts = [];
   if (b.planChars) parts.push(bar('Объём', (b.chars || 0) / b.planChars, `${num(b.chars || 0)} из ${num(b.planChars)} · ${Math.round(((b.chars || 0) / b.planChars) * 100)} %`, fc ? `по темпу допишу к ${fmtDate(fc)}${b.finishBy ? (fc <= b.finishBy ? ' — успеваю к сроку' : ` — срок ${fmtDate(b.finishBy)}, не успеваю`) : ''}` : (b.finishBy ? `срок ${fmtDate(b.finishBy)}` : '')));
   else parts.push(`<div class="small">${zn(b.chars)}${b.finishBy ? ` · допишу к ${fmtDate(b.finishBy)} (${when(dleft(b.finishBy, t))})` : ''} <span class="muted">· план по объёму — в карточке книги</span></div>`);
@@ -70,7 +72,7 @@ export function homeView(a) {
     const h = b.history || {};
     const startVal = charsAt(h, addDays(from, -1)) ?? (Object.keys(h).sort().find((k) => k >= from) ? h[Object.keys(h).sort().find((k) => k >= from)] : null);
     const wrote = startVal != null && b.chars != null ? Math.max(0, b.chars - startVal) : 0;
-    const chapters = Object.values(b.published || {}).filter((dt) => dt >= from && dt <= t).length;
+    const chapters = Object.values(chapterOutDates(b, t)).filter((dt) => dt >= from && dt <= t).length;
     const incomeId = c.incomeIdOf(b);
     const income = incomeId ? sumSeries(incomeSeries(c.data.sales, [], from, t, incomeId)) : null;
     const contests = c.data.w_contests.filter((x) => x.bookId === b.id && x.status !== 'done' && !(x.end && x.end < t));
