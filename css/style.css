@@ -428,3 +428,14 @@ button.drive-chip .ic { width: 15px; height: 15px; }
 .home-h { margin: 0 0 10px; gap: 10px; }
 .home-h button.drive-chip { min-height: 32px; padding: 4px 12px 4px 10px; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .drow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); } .drow > span { flex: 1; min-width: 0; } .drow .icon-btn { margin-left: 0; }
+/* корзина идей: строка разворачивается, кнопки справа */
+.trash-item summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
+.trash-item summary::-webkit-details-marker { display: none; }
+.trash-item .ti-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.trash-item .ti-btns { display: flex; align-items: center; gap: 2px; flex: none; }
+.trash-item .ti-btns button:not(.icon-btn) { min-height: 34px; padding: 4px 12px; font-size: 14px; }
+.trash-item .ti-body { padding: 6px 0 2px; }
+.trash-item[open] .ti-main b::after { content: ''; }
+.trash-item[hidden] { display: none !important; }
+details.trash-item > summary, details.trash-item > summary b { color: var(--text); }
+details.trash-item > summary .sub { color: var(--muted); }

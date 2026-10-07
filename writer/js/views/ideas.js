@@ -112,13 +112,33 @@ acts['idea.quickDel'] = async (d) => {
   toast('Идея в удалённых', { undo: async () => { await app().store.put('w_ideas', { ...x, deletedAt: '' }); } });
 };
 // «Удалённые» — внизу страницы идей, неприметной ссылкой
+let trashQ = '';
 function trashSheet() {
-  const list = app().ctx().data.w_ideas.filter((x) => x.deletedAt).sort((x, y) => y.deletedAt.localeCompare(x.deletedAt));
-  openSheet('Удалённые идеи', list.length ? `<div class="list">${list.map((x) => `<div class="item row between"><span><b>${esc(x.title || (x.text || '').slice(0, 60) || 'Без названия')}</b><span class="sub">удалена ${fmtDate(x.deletedAt.slice(0, 10))}</span></span>
-      <span class="row" style="flex-wrap:nowrap"><button data-act="idea.restore" data-id="${x.id}">Вернуть</button><button class="icon-btn" data-act="idea.purge" data-id="${x.id}" aria-label="Удалить навсегда" title="Удалить навсегда">${ic('trash')}</button></span></div>`).join('')}</div>
+  const c = app().ctx();
+  const list = app().store.data.w_ideas.filter((x) => x.deletedAt).sort((x, y) => y.deletedAt.localeCompare(x.deletedAt));
+  const row = (x) => {
+    const b = x.bookId ? c.wbooksById[x.bookId] : null, comments = x.comments || [];
+    const hay = [x.title, x.text, ...(x.tags || []), ...comments.map((m) => m.text), b ? b.title : ''].join(' ').toLowerCase();
+    return `<details class="item trash-item" data-hay="${esc(hay)}"><summary><span class="ti-main"><b>${esc(x.title || (x.text || '').slice(0, 60) || 'Без названия')}</b><span class="sub">${b ? esc(b.title) + ' · ' : ''}удалена ${fmtDate(x.deletedAt.slice(0, 10))}</span></span>
+      <span class="ti-btns"><button data-act="idea.restore" data-id="${x.id}">Вернуть</button><button class="icon-btn" data-act="idea.purge" data-id="${x.id}" aria-label="Удалить навсегда" title="Удалить навсегда">${ic('trash')}</button></span></summary>
+      <div class="ti-body">${x.text ? `<p class="idea-text">${esc(x.text)}</p>` : '<p class="small muted">Текста нет.</p>'}
+        ${(x.tags || []).length ? `<div class="tags">${x.tags.map((t) => `<span class="tag">#${esc(t)}</span>`).join('')}</div>` : ''}
+        ${comments.length ? `<div class="comments">${comments.map((m) => `<div class="comment"><div class="small muted">${fmtDate((m.at || '').slice(0, 10))}</div><div>${esc(m.text)}</div></div>`).join('')}</div>` : ''}
+        <div class="small muted">создана ${x.createdAt ? fmtDate(x.createdAt.slice(0, 10)) : '—'}</div></div></details>`;
+  };
+  openSheet('Удалённые идеи', list.length ? `${list.length > 1 || trashQ ? `<input type="search" id="trq" value="${esc(trashQ)}" placeholder="Поиск по удалённым" aria-label="Поиск по удалённым" style="margin-bottom:8px">` : ''}
+    <div class="list trash-list">${list.map(row).join('')}</div><p class="small muted" data-trempty hidden>Ничего не нашлось.</p>
     <p style="margin-top:12px"><button class="link danger" data-act="idea.purgeAll">Очистить всё</button></p>` : '<p class="muted">Здесь пусто.</p>', null);
+  const inp = document.getElementById('trq');
+  const filt = () => {
+    const q = (inp?.value || '').trim().toLowerCase(); trashQ = q;
+    let n = 0;
+    document.querySelectorAll('dialog[open] .trash-item').forEach((el) => { const ok = q.split(/\s+/).every((w) => el.dataset.hay.includes(w)); el.hidden = !ok; if (ok) n++; });
+    const e = document.querySelector('dialog[open] [data-trempty]'); if (e) e.hidden = n > 0;
+  };
+  if (inp) { inp.addEventListener('input', filt); filt(); }
 }
-acts['idea.trash'] = () => trashSheet();
+acts['idea.trash'] = () => { trashQ = ''; trashSheet(); };
 acts['idea.restore'] = async (d) => {
   const x = app().ctx().data.w_ideas.find((i) => i.id === d.id);
   await app().store.put('w_ideas', { ...x, deletedAt: '' });
