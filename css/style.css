@@ -349,6 +349,7 @@ details.idea-group[open] > summary span:first-child::before { content: '▾'; }
 main a.card.wcard { display: flex; gap: 14px; align-items: flex-start; color: inherit; font-weight: inherit; text-decoration: none; }
 .wcard-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
 .wbar .progress { margin: 4px 0 2px; }
-/* тихая пометка: без рамки и заливки, точка-маркер слева */
-.note-soft { display: flex; gap: 8px; align-items: baseline; margin-top: 10px; font-size: 13px; color: var(--muted); }
-.note-soft::before { content: ''; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); transform: translateY(-1px); }
+/* мягкая плашка-предупреждение: лёгкая тёплая заливка, тонкая рамка, точка слева */
+.note-soft { display: flex; gap: 10px; align-items: baseline; margin-top: 12px; padding: 10px 14px; border-radius: 14px; font-size: 14px; color: var(--text-2);
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 22%, transparent); }
+.note-soft::before { content: ''; flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); transform: translateY(-1px); }
