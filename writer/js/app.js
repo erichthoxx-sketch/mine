@@ -2,7 +2,7 @@
 import { createStore, authErrorText } from '../../js/store.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates } from '../../js/ui.js';
 import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
-import { written } from './wcalc.js';
+import { written, writtenToday } from './wcalc.js';
 import * as drive from './drive.js';
 import { ic } from '../../js/icons.js';
 import { booksView, bookPage, refreshAll } from './views/books.js';
@@ -42,7 +42,7 @@ function getCtx() {
     incomeBooks: d.books, incomeById,
     // книга доходов для книги-рукописи: выбранная вручную или совпадающая по названию
     incomeIdOf: (b) => b.incomeBookId || (incomeById[bookIdFor(b.title || '')] ? bookIdFor(b.title) : ''),
-    writtenToday: wbooks.reduce((a, b) => a + written(b.history, today, 1), 0),
+    writtenToday: wbooks.reduce((a, b) => a + writtenToday(b, today), 0),
     writtenWeek: wbooks.reduce((a, b) => a + written(b.history, today, 7), 0),
     dataEnd: (() => { const l = lastSaleDate(d.sales); return l && l < today ? l : today; })(),
   };

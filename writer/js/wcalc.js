@@ -6,8 +6,8 @@ export function countChars(text) {
   return (text || '').replace(/[\r\n\u000b\u000c\u2028\u2029]/g, '').length;
 }
 
-// Какие вкладки считаются текстом книги: «Пролог», «Глава …», «Эпилог». Синопсис, персонажи, заметки — нет.
-export const isBookTab = (title) => /^\s*(пролог|глава|эпилог)/i.test(title || '');
+// Какие вкладки считаются текстом книги: «Пролог», «Глава …», «Эпилог», «От автора». Синопсис, персонажи, заметки — нет.
+export const isBookTab = (title) => /^\s*(пролог|глава|эпилог|от автора)/i.test(title || '');
 
 // Google Документ (Docs API, includeTabsContent=true) → {total, tabs:[{title, chars, counted}]}.
 // В сумму идут только вкладки книги (isBookTab); если таких нет — весь документ, как раньше.
@@ -75,6 +75,11 @@ export function written(history, today, days = 1) {
     return first > addDays(today, -days) ? now - history[first] : 0;
   }
   return now - before;
+}
+// Написано сегодня: знаков сейчас − знаков на начало сегодняшнего дня (dayStart считается по истории версий файла)
+export function writtenToday(book, today) {
+  if (book.dayStart && book.dayStart.date === today && book.chars != null) return Math.max(0, book.chars - book.dayStart.chars);
+  return written(book.history, today, 1);
 }
 // Прирост с прошлого обновления (если оно было раньше вчерашнего дня): {date, gain}
 export function lastGain(history, today) {

@@ -68,3 +68,10 @@ test('жду ответа: просрочка', () => {
   assert.equal(waitingStatus({ since: '2026-09-20', remindDays: 14, done: true }, '2026-10-05').overdue, false);
   assert.equal(waitingStatus({ since: '2026-10-01' }, '2026-10-05').overdue, false);
 });
+
+test('написано сегодня — от начала дня; вкладка «От автора» считается', async () => {
+  const { writtenToday, isBookTab } = await import('../writer/js/wcalc.js');
+  assert.equal(writtenToday({ chars: 12000, dayStart: { date: '2026-10-07', chars: 10500 }, history: { '2026-10-01': 5000 } }, '2026-10-07'), 1500);
+  assert.equal(writtenToday({ chars: 12000, dayStart: { date: '2026-10-06', chars: 10500 }, history: { '2026-10-06': 10500, '2026-10-07': 12000 } }, '2026-10-07'), 1500); // старое начало дня — по истории
+  assert.ok(isBookTab('От автора')); assert.ok(isBookTab('Эпилог')); assert.ok(isBookTab('Глава 12. Гроза')); assert.ok(!isBookTab('Синопсис'));
+});

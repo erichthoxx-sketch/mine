@@ -159,6 +159,33 @@ export async function countFile(file) {
   return { total: charsFromDocxXml(xml), tabs: [] };
 }
 
+// Сколько знаков было в файле на начало сегодняшнего дня — по истории версий Google Диска.
+// Возвращает разницу «сейчас − начало дня» в знаках текста файла, или null, если узнать нельзя.
+// Правки сегодня не было — 0. Считаем одинаково для обеих версий, поэтому разница честная.
+export async function writtenSinceMidnight(file, today) {
+  if (isLocalDev) return null;
+  const midnight = new Date(today + 'T00:00:00').toISOString();
+  const j = await (await gfetch(`${DRIVE}/${file.id}/revisions?fields=revisions(id,modifiedTime,exportLinks)&pageSize=1000`)).json();
+  const revs = (j.revisions || []).sort((a, b) => a.modifiedTime.localeCompare(b.modifiedTime));
+  if (!revs.length) return null;
+  const last = revs[revs.length - 1];
+  if (last.modifiedTime < midnight) return 0; // сегодня файл не меняли
+  const before = [...revs].reverse().find((r) => r.modifiedTime < midnight);
+  if (!before) return null; // файл создан сегодня — считать от нуля нечестно
+  const textOf = async (rev) => {
+    if (file.mimeType === MIME.doc) {
+      const url = rev.exportLinks?.['text/plain'];
+      if (!url) throw new Error('нет выгрузки версии');
+      return countPlain(await (await gfetch(url)).text());
+    }
+    const buf = await (await gfetch(`${DRIVE}/${file.id}/revisions/${rev.id}?alt=media`)).arrayBuffer();
+    const Zip = await loadJsZip();
+    return charsFromDocxXml(await (await Zip.loadAsync(buf)).file('word/document.xml').async('string'));
+  };
+  return (await textOf(last)) - (await textOf(before));
+}
+const countPlain = (t) => (t || '').replace(/^\uFEFF/, '').replace(/[\r\n\u000b\u000c\u2028\u2029]/g, '').length;
+
 function multipart(meta, body, mime) {
   const b = 'pinkboundary' + Math.random().toString(36).slice(2);
   const blob = new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: ${mime}\r\n\r\n`, body, `\r\n--${b}--`]);
