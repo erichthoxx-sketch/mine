@@ -13,7 +13,7 @@ import { settingsView } from './views/settings.js';
 
 export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days'], localKey: 'authorWriter.v1' });
-const ui = { route: '/', planTab: 'contests', ideaTag: '', openIdea: null, mBook: '' };
+const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'active', openIdea: null, mBook: '' };
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* ок */ }
 
