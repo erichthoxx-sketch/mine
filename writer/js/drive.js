@@ -139,7 +139,7 @@ export async function fileMeta(id) {
 }
 
 let jszip;
-const loadJsZip = () => (jszip ||= new Promise((res, rej) => {
+export const loadJsZip = () => (jszip ||= new Promise((res, rej) => {
   const s = document.createElement('script');
   s.src = new URL('../../js/vendor/jszip.min.js', import.meta.url).href; // библиотека лежит в самом приложении
   s.onload = () => res(window.JSZip); s.onerror = () => { jszip = null; rej(new Error('Не загрузился модуль для Word')); };
@@ -159,30 +159,40 @@ export async function countFile(file) {
   return { total: charsFromDocxXml(xml), tabs: [] };
 }
 
-// Сколько знаков было в файле на начало сегодняшнего дня — по истории версий Google Диска.
-// Возвращает разницу «сейчас − начало дня» в знаках текста файла, или null, если узнать нельзя.
-// Правки сегодня не было — 0. Считаем одинаково для обеих версий, поэтому разница честная.
-export async function writtenSinceMidnight(file, today) {
-  if (isLocalDev) return null;
-  const midnight = new Date(today + 'T00:00:00').toISOString();
+// Сколько знаков прибавилось в файле с начала каждого из дней dates (по истории версий Google Диска).
+// Возвращает {дата: прирост | null}. Правок после полуночи этой даты не было — 0; узнать нельзя — null.
+// Обе версии считаются одинаково (выгрузка текста), поэтому разница честная.
+export async function gainsSince(file, dates) {
+  const out = Object.fromEntries(dates.map((d) => [d, null]));
+  if (isLocalDev) return out;
   const j = await (await gfetch(`${DRIVE}/${file.id}/revisions?fields=revisions(id,modifiedTime,exportLinks)&pageSize=1000`)).json();
   const revs = (j.revisions || []).sort((a, b) => a.modifiedTime.localeCompare(b.modifiedTime));
-  if (!revs.length) return null;
+  if (!revs.length) return out;
   const last = revs[revs.length - 1];
-  if (last.modifiedTime < midnight) return 0; // сегодня файл не меняли
-  const before = [...revs].reverse().find((r) => r.modifiedTime < midnight);
-  if (!before) return null; // файл создан сегодня — считать от нуля нечестно
+  const memo = new Map();
   const textOf = async (rev) => {
+    if (memo.has(rev.id)) return memo.get(rev.id);
+    let n;
     if (file.mimeType === MIME.doc) {
       const url = rev.exportLinks?.['text/plain'];
       if (!url) throw new Error('нет выгрузки версии');
-      return countPlain(await (await gfetch(url)).text());
+      n = countPlain(await (await gfetch(url)).text());
+    } else {
+      const buf = await (await gfetch(`${DRIVE}/${file.id}/revisions/${rev.id}?alt=media`)).arrayBuffer();
+      const Zip = await loadJsZip();
+      n = charsFromDocxXml(await (await Zip.loadAsync(buf)).file('word/document.xml').async('string'));
     }
-    const buf = await (await gfetch(`${DRIVE}/${file.id}/revisions/${rev.id}?alt=media`)).arrayBuffer();
-    const Zip = await loadJsZip();
-    return charsFromDocxXml(await (await Zip.loadAsync(buf)).file('word/document.xml').async('string'));
+    memo.set(rev.id, n);
+    return n;
   };
-  return (await textOf(last)) - (await textOf(before));
+  for (const d of dates) {
+    const midnight = new Date(d + 'T00:00:00').toISOString();
+    if (last.modifiedTime < midnight) { out[d] = 0; continue; } // после этой даты файл не меняли
+    const before = [...revs].reverse().find((r) => r.modifiedTime < midnight);
+    if (!before) continue; // файл появился позже — честно не посчитать
+    out[d] = (await textOf(last)) - (await textOf(before));
+  }
+  return out;
 }
 const countPlain = (t) => (t || '').replace(/^\uFEFF/, '').replace(/[\r\n\u000b\u000c\u2028\u2029]/g, '').length;
 
@@ -204,6 +214,19 @@ export async function createFolder(name, parentId) {
   return (await gfetch(`${DRIVE}?fields=${FIELDS}&supportsAllDrives=true`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, mimeType: MIME.folder, parents: parentId ? [parentId] : [] }) })).json();
 }
 
+// Папка name внутри parentId: найти или создать
+export async function ensureFolder(name, parentId) {
+  if (isLocalDev) return mock.ensureFolder(name, parentId);
+  const found = await listQuery(`mimeType='${MIME.folder}' and name='${q(name)}' and '${parentId}' in parents and trashed=false`);
+  return found[0] || createFolder(name, parentId);
+}
+// Файл с Диска как Blob (Google Документ — в формате Word)
+export async function fileBlob(file) {
+  if (isLocalDev) return new Blob([`(пробный файл) ${file.name}`], { type: 'text/plain' });
+  if (file.mimeType === MIME.doc) return (await gfetch(`${DRIVE}/${file.id}/export?mimeType=${encodeURIComponent(MIME.docx)}`)).blob();
+  return (await gfetch(`${DRIVE}/${file.id}?alt=media&supportsAllDrives=true`)).blob();
+}
+
 // ---------- пробный «диск» для проверки на localhost ----------
 const mock = (() => {
   const t = '2026-10-05T10:00:00Z';
@@ -223,6 +246,7 @@ const mock = (() => {
       const n = /name contains '([^']*)'/.exec(s);
       return files.filter((f) => f.mimeType === MIME.folder && (!n || f.name.includes(n[1]))).map(link);
     },
+    ensureFolder(name, parent) { const f = files.find((x) => x.mimeType === MIME.folder && x.name === name && x.parents.includes(parent)); return link(f || this.create({ name, mimeType: MIME.folder, parents: [parent] })); },
     search: (n) => files.filter((f) => isDoc(f.mimeType) && f.name.toLowerCase().includes(n.toLowerCase())).map(link),
     meta: (id) => link(files.find((f) => f.id === id) || { id, name: '?', mimeType: MIME.doc, parents: [] }),
     count: (f) => counts[f.id] || { total: 1000, tabs: [] },

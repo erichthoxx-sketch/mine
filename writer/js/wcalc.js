@@ -81,6 +81,11 @@ export function writtenToday(book, today) {
   if (book.dayStart && book.dayStart.date === today && book.chars != null) return Math.max(0, book.chars - book.dayStart.chars);
   return written(book.history, today, 1);
 }
+// Написано за 7 дней (сегодня и 6 дней до него): от начала недели по истории версий файла
+export function writtenWeek(book, today) {
+  if (book.weekStart && book.weekStart.date === today && book.weekStart.chars != null && book.chars != null) return Math.max(0, book.chars - book.weekStart.chars);
+  return written(book.history, today, 7);
+}
 // Прирост с прошлого обновления (если оно было раньше вчерашнего дня): {date, gain}
 export function lastGain(history, today) {
   const now = charsAt(history, today);

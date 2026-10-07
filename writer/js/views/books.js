@@ -1,7 +1,7 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate } from '../../../js/format.js';
-import { recordProgress, written, writtenToday, pace, forecastDate, charsAt, contestStatus, daysLeft } from '../wcalc.js';
+import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft } from '../wcalc.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 import { addDays } from '../../../js/calc.js';
@@ -85,7 +85,7 @@ export function bookPage(a, id) {
       ${b.webViewLink ? `<a class="btn primary" href="${esc(b.webViewLink)}" target="_blank" rel="noopener" style="margin:12px 0">✎ Открыть в Google Документах</a>` : ''}
       <dl class="dl">
         <dt>Всего знаков (с пробелами)</dt><dd>${zn(b.chars)}</dd>
-        <dt>Сегодня / за 7 дней</dt><dd><span class="up">+${num(writtenToday(b, c.today))}</span> / <span class="up">+${num(written(h, c.today, 7))}</span></dd>
+        <dt>Сегодня / за 7 дней</dt><dd><span class="up">+${num(writtenToday(b, c.today))}</span> / <span class="up">+${num(writtenWeek(b, c.today))}</span></dd>
         <dt>Темп за 2 недели</dt><dd>${p ? num(Math.round(p)) + ' зн. в день' : '—'}</dd>
         ${b.planChars ? `<dt>План ${zn(b.planChars)}</dt><dd>${(b.chars || 0) >= b.planChars ? 'набран ✔︎' : fc ? 'при таком темпе — к ' + fmtDate(fc) : 'темпа пока нет'}</dd>` : ''}
         <dt>Последняя правка файла</dt><dd>${b.modifiedTime ? fmtDate(b.modifiedTime.slice(0, 10)) : '—'}${b.countedAt ? ` <span class="muted small">· знаки обновлены ${fmtDate(b.countedAt.slice(0, 10))} ${b.countedAt.slice(11, 16)}</span>` : ''}</dd>
@@ -121,23 +121,22 @@ export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
-  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && charsAt(b.history, c.today) != null && (b.history || {})[c.today] != null) return false;
+  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.weekStart?.date === c.today) return false;
   const r = await drive.countFile(meta);
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
   const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
-  // начало дня: один раз в день узнаём по истории версий файла, сколько знаков было в полночь
+  // начало дня и начало недели: раз в день узнаём по истории версий файла, сколько знаков было в полночь
   let dayStart = b.dayStart && b.dayStart.date === c.today ? b.dayStart : null;
-  if (!dayStart) {
-    let todayGain = null;
-    try { todayGain = await drive.writtenSinceMidnight(meta, c.today); } catch { todayGain = null; }
-    if (todayGain != null) dayStart = { date: c.today, chars: r.total - Math.max(0, todayGain) };
-    else {
-      // истории версий нет — берём вчерашнюю запись, если она есть; иначе считаем от текущего значения
-      const prev = Object.keys(b.history || {}).filter((k) => k < c.today).sort().pop();
-      dayStart = { date: c.today, chars: !ruleChanged && prev && prev >= addDays(c.today, -1) ? b.history[prev] : r.total };
-    }
+  let weekStart = b.weekStart && b.weekStart.date === c.today ? b.weekStart : null;
+  if (!dayStart || !weekStart) {
+    const wFrom = addDays(c.today, -6);
+    let g = {};
+    try { g = await drive.gainsSince(meta, [c.today, wFrom]); } catch { g = {}; }
+    const prev = Object.keys(b.history || {}).filter((k) => k < c.today).sort().pop();
+    if (!dayStart) dayStart = { date: c.today, chars: g[c.today] != null ? r.total - Math.max(0, g[c.today]) : (!ruleChanged && prev && prev >= addDays(c.today, -1) ? b.history[prev] : r.total) };
+    if (!weekStart) weekStart = { date: c.today, from: wFrom, chars: g[wFrom] != null ? r.total - Math.max(0, g[wFrom]) : null };
   }
-  await a.store.put('w_books', { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, dayStart, countRule: COUNT_RULE });
+  await a.store.put('w_books', { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, dayStart, weekStart, countRule: COUNT_RULE });
   return true;
 }
 export async function refreshAll(a, { quiet = false } = {}) {

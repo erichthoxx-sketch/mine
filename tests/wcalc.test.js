@@ -75,3 +75,9 @@ test('написано сегодня — от начала дня; вкладк
   assert.equal(writtenToday({ chars: 12000, dayStart: { date: '2026-10-06', chars: 10500 }, history: { '2026-10-06': 10500, '2026-10-07': 12000 } }, '2026-10-07'), 1500); // старое начало дня — по истории
   assert.ok(isBookTab('От автора')); assert.ok(isBookTab('Эпилог')); assert.ok(isBookTab('Глава 12. Гроза')); assert.ok(!isBookTab('Синопсис'));
 });
+
+test('написано за 7 дней — от начала недели', async () => {
+  const { writtenWeek } = await import('../writer/js/wcalc.js');
+  assert.equal(writtenWeek({ chars: 20000, weekStart: { date: '2026-10-07', chars: 12000 }, history: { '2026-10-07': 20000 } }, '2026-10-07'), 8000);
+  assert.equal(writtenWeek({ chars: 20000, history: { '2026-09-30': 15000, '2026-10-07': 20000 } }, '2026-10-07'), 5000); // без версий — по истории
+});
