@@ -1,7 +1,9 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, scheduleDates, planBySchedule } from '../wcalc.js';
+import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten } from '../wcalc.js';
+import { goalTitle, goalToday } from './goals.js';
+import { writtenChart, growthChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
 import { resizeImage } from '../../../js/img.js';
@@ -116,6 +118,16 @@ export function bookPage(a, id) {
     return `<td class="pc"><button class="${cls}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? (v.past ? '✓' : dm(v.date)) : st === 'wait' ? '⏱ ' + dm(v.date) : '—'}</button></td>`;
   };
   const sch = bookSchedule(b, c.today);
+  // цели по книге и данные для графиков
+  const bookGoals = c.data.w_goals.filter((g) => !g.done && g.bookId === b.id).map((g) => ({ g, st: goalStatus(g, b, c.today) }));
+  const fin = bookGoals.find((x) => x.g.type === 'finish' && x.st.active);
+  const daily = bookGoals.find((x) => x.g.type === 'daily' && x.st.active);
+  const target = (fin && fin.st.perDay) || (daily && daily.st.perDay) || null;
+  const series = dailyWritten(b, addDays(c.today, -29), c.today, c.today);
+  const pts = Object.keys(h).filter((k) => k >= addDays(c.today, -90) && k <= c.today).sort().map((k) => ({ date: k, value: h[k] }));
+  if (b.chars != null && (!pts.length || pts[pts.length - 1].date < c.today)) pts.push({ date: c.today, value: b.chars });
+  const wch = writtenChapters(b), planCh = Number(fin?.g.chapters || b.planChapters) || null;
+  const growthGoal = fin && fin.g.deadline && planCh && wch && !fin.st.finished ? { date: fin.g.deadline, value: Math.round(((b.chars || 0) / wch) * planCh), label: 'цель' } : null;
 
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a></p>
   <div class="card book-head">
@@ -139,6 +151,11 @@ export function bookPage(a, id) {
     <label class="inline-num">Глав в книге, примерно <input type="number" min="1" inputmode="numeric" value="${b.planChapters || ''}" placeholder="—" data-chg="wb.planCh" data-id="${b.id}"></label>
     ${progressBlock(c, b)}
   </div>
+  <div class="card"><div class="row between"><h2 style="margin:0">Цели и динамика</h2><button class="small-btn" data-act="goal.new" data-book="${b.id}">+ Цель</button></div>
+    ${bookGoals.length ? `<div class="plist" style="margin-top:4px">${bookGoals.map(({ g, st }) => `<a class="pitem tap" href="#" data-act="goal.edit" data-id="${g.id}"><span class="dot k-goal"${st.doneToday ? ' style="opacity:.4"' : ''}></span><span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}${g.deadline ? ` · до ${fmtDate(g.deadline)}` : ''}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:6px 0 0">Целей по книге нет. Например: «дописать к 15 октября» — посчитаю, сколько писать в день, и буду напоминать.</p>'}
+    <h3 style="margin:14px 0 4px">Знаки по дням</h3><div class="chart" id="bchart1"></div>
+    <h3 style="margin:14px 0 4px">Рост книги</h3><div class="chart" id="bchart2"></div>
+    ${growthGoal ? `<div class="small muted chart-cap">пунктир — путь к цели: ${num(growthGoal.value)} зн. к ${fmtDate(growthGoal.date)}</div>` : ''}</div>
   <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div>
     ${planned.length ? `<div class="alert alert-thin">Отложено: ${planned.map((x) => `${esc(x.ch)} — ${esc(x.pf)}, ${dm(x.date)}`).join('; ')}. В этот день глава сама станет выложенной.</div>` : ''}
     ${chs.length ? `<div class="scroll" style="margin-top:8px"><table class="pub-t${pfs.length > 2 ? " many" : ""}"><tr><th>Глава</th><th class="r">Знаков</th>${pfs.map((x) => `<th>${esc(x)}</th>`).join('')}</tr>
@@ -175,7 +192,7 @@ export function bookPage(a, id) {
     <label for="bn">Заметки</label><textarea id="bn" name="note">${esc(b.note || '')}</textarea>
     <div class="row between" style="margin-top:14px"><button class="primary" type="submit">Сохранить</button><button type="button" class="danger" data-act="wbook.del" data-id="${b.id}">Убрать из приложения</button></div>
   </form></div>`;
-  return { html };
+  return { html, after: () => { writtenChart(document.getElementById('bchart1'), { days: series, target }); growthChart(document.getElementById('bchart2'), { points: pts, goal: growthGoal }); } };
 }
 
 // ---------- обновление знаков ----------
@@ -184,7 +201,7 @@ export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
-  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.weekStart?.date === c.today && b.monthStart?.date === c.today) return false;
+  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled) return false;
   const r = await drive.countFile(meta);
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
   const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
@@ -192,16 +209,22 @@ export async function refreshOne(a, b, force = false) {
   let dayStart = b.dayStart && b.dayStart.date === c.today ? b.dayStart : null;
   let weekStart = b.weekStart && b.weekStart.date === c.today ? b.weekStart : null;
   let monthStart = b.monthStart && b.monthStart.date === c.today ? b.monthStart : null;
-  if (!dayStart || !weekStart || !monthStart) {
+  // один раз восстанавливаем историю знаков за 3 недели по версиям документа — для графиков
+  let filled = !!b.histFilled;
+  const fill = !b.histFilled ? Array.from({ length: 21 }, (_, i) => addDays(c.today, -i)) : [];
+  if (!dayStart || !weekStart || !monthStart || fill.length) {
     const wFrom = addDays(c.today, -6), mFrom = c.today.slice(0, 8) + '01';
     let g = {};
-    try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom])]); } catch { g = {}; }
+    try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom, ...fill])]); } catch { g = {}; }
+    // на конец дня d−1 было «сейчас − прирост с полуночи d»
+    for (const d of fill) { const k = addDays(d, -1); if (g[d] != null && history[k] == null) history[k] = Math.max(0, r.total - Math.max(0, g[d])); }
+    if (fill.some((d) => g[d] != null)) filled = true;
     const prev = Object.keys(b.history || {}).filter((k) => k < c.today).sort().pop();
     if (!dayStart) dayStart = { date: c.today, chars: g[c.today] != null ? r.total - Math.max(0, g[c.today]) : (!ruleChanged && prev && prev >= addDays(c.today, -1) ? b.history[prev] : r.total) };
     if (!weekStart) weekStart = { date: c.today, from: wFrom, chars: g[wFrom] != null ? r.total - Math.max(0, g[wFrom]) : null };
     if (!monthStart) monthStart = { date: c.today, from: mFrom, chars: g[mFrom] != null ? r.total - Math.max(0, g[mFrom]) : null };
   }
-  await a.store.put('w_books', { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, dayStart, weekStart, monthStart, countRule: COUNT_RULE });
+  await a.store.put('w_books', { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, dayStart, weekStart, monthStart, countRule: COUNT_RULE, histFilled: filled });
   return true;
 }
 export async function refreshAll(a, { quiet = false } = {}) {

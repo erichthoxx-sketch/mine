@@ -3,8 +3,10 @@ import { esc } from '../../../js/ui.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth } from '../wcalc.js';
+import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll } from '../wcalc.js';
 import { STATUS, progressBlock, daysTxt, driveChip } from './books.js';
+import { goalTitle, goalToday, activeGoals } from './goals.js';
+import { writtenChart } from '../wcharts.js';
 
 const zn = (n) => num(n || 0) + ' зн.';
 const dleft = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
@@ -30,6 +32,11 @@ export function reminders(c) {
     // в день выкладки по графику: напоминание, только если в этот день ничего не выложено и не стоит на таймере
     if (s.next && s.next.date === t) add(s.next.date, `Выложить ${s.next.ch ? `«${s.next.ch}»` : 'следующую главу'} — ${s.next.pf}`, `«${esc(b.title)}» · по графику: ${daysTxt(b.pubDays)}`, '/book/' + b.id, 0);
     if (b.publishStart && b.publishStart >= t) add(b.publishStart, `Начать выкладку «${b.title}»`, '', '/plan', 7);
+  }
+  // цели: в день цели, пока норма не набрана / не отмечено «Сделала»
+  for (const g of activeGoals(c)) {
+    const st = goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t);
+    if (st.active && st.todayDay && !st.doneToday) add(t, `Цель: ${goalTitle(c, g)}`, goalToday(c, g, st), '/plan', 0);
   }
   for (const x of d.w_queue) if (!x.done && x.due) add(x.due, x.title, x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди «Что пишу дальше»', '/plan');
   for (const x of d.w_waiting) {
@@ -74,6 +81,13 @@ export function homeView(a) {
   }).filter((r) => (r.b.status || 'progress') === 'progress' || r.wrote || r.chapters || r.income);
   const sum = (k) => rows.reduce((s, r) => s + (r[k] || 0), 0);
   const inWork = rows.filter((r) => (r.b.status || 'progress') === 'progress'), others = rows.filter((r) => (r.b.status || 'progress') !== 'progress');
+  // знаки по дням за 30 дней — все книги; пунктир — сумма норм по активным целям на сегодня
+  const series = dailyWrittenAll(c.wbooks, addDays(t, -29), t, t);
+  const target = activeGoals(c).reduce((s2, g) => { const st = goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t); return s2 + (st.active && st.perDay ? st.perDay : 0); }, 0) || null;
+  const known = series.filter((x) => x.known), avg7 = series.slice(-7).filter((x) => x.known);
+  const best = known.reduce((m, x) => (x.value > (m?.value || 0) ? x : m), null);
+  const chartCard = known.length ? `<div class="card"><h2>Знаки по дням</h2><div class="chart" id="wchart"></div>
+    <div class="small muted chart-cap">${[avg7.length ? `в среднем ${num(Math.round(avg7.reduce((a2, x) => a2 + x.value, 0) / avg7.length))} зн. в день за неделю` : '', best && best.value ? `лучший день — ${fmtDate(best.date).slice(0, 5)}: ${num(best.value)}` : '', target ? `пунктир — норма по целям (${num(target)})` : ''].filter(Boolean).join(' · ')}</div></div>` : '';
   const html = `
   <div class="row between home-h"><h2 style="margin:0">${fmtMonthCap(mk)}</h2>${driveChip(c)}</div>
   <div class="grid4">
@@ -83,8 +97,9 @@ export function homeView(a) {
     <div class="stat"><div class="k">В работе</div><div class="v">${inWork.length}</div><div class="s">${plural(inWork.length, ['книга', 'книги', 'книг'])}</div></div>
   </div>
   ${rem.length ? `<div class="card"><h2>Напоминания</h2><div class="list">${rem.map((r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}</span></a>`).join('')}</div></div>` : ''}
+  ${chartCard}
   ${inWork.length ? `<h2 style="margin-top:18px">В работе</h2>${inWork.map((r) => workCard(c, r)).join('')}` : ''}
   ${others.length ? `<div class="card"><h2>Другие книги в ${fmtMonthIn(mk)}</h2><div class="list">${others.map((r) => `<a class="item row between" href="#" data-act="go" data-to="/book/${r.b.id}"><span>${esc(r.b.title)}<span class="sub">${[r.wrote ? `+${num(r.wrote)} зн.` : '', r.chapters ? `глав ${r.chapters}` : '', STATUS[r.b.status] || ''].filter(Boolean).join(' · ')}</span></span><b>${r.income != null ? rub(r.income, 0) : ''}</b></a>`).join('')}</div></div>` : ''}`;
-  return { html };
+  return { html, after: () => writtenChart(document.getElementById('wchart'), { days: series, target }) };
 }
 export { ic };

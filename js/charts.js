@@ -14,20 +14,20 @@ export const EVENT_TYPES = {
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function niceMax(v) {
+export function niceMax(v) {
   if (v <= 0) return 1;
   const p = 10 ** Math.floor(Math.log10(v));
   for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p;
   return 10 * p;
 }
-function ticks(max, n = 4) { return Array.from({ length: n + 1 }, (_, i) => (max / n) * i); }
+export function ticks(max, n = 4) { return Array.from({ length: n + 1 }, (_, i) => (max / n) * i); }
 
 function tooltipHost(el) {
   let t = el.querySelector('.tip');
   if (!t) { t = document.createElement('div'); t.className = 'tip'; t.hidden = true; el.appendChild(t); }
   return t;
 }
-function bindTip(el, svg, W, plotL, plotR, count, html) {
+export function bindTip(el, svg, W, plotL, plotR, count, html) {
   const tip = tooltipHost(el);
   const show = (ev) => {
     const r = svg.getBoundingClientRect();

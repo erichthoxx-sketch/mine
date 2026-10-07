@@ -439,3 +439,14 @@ button.drive-chip .ic { width: 15px; height: 15px; }
 .trash-item[hidden] { display: none !important; }
 details.trash-item > summary, details.trash-item > summary b { color: var(--text); }
 details.trash-item > summary .sub { color: var(--muted); }
+/* цели и графики Мастерской */
+.target { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 4; fill: none; }
+.bar.hit { fill: var(--link); opacity: .85; }
+.goal-dot { fill: var(--accent); }
+.goals .goal + .goal { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+.goal .goal-t { color: var(--text); text-decoration: none; }
+.goal .progress { margin: 8px 0 6px; }
+.goal.ok .small:first-of-type { color: var(--good); }
+.k-goal { background: var(--accent); }
+.chart-cap { margin-top: 6px; }
+.cursor[hidden] { display: none; }

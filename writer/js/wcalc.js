@@ -257,3 +257,69 @@ export function bookSchedule(b, today) {
   const queue = chs.filter((t) => !pm[t.title]?.[pf]?.date).map((t) => t.title);
   return { pf, planCh, written, out, marked, remaining, free: remaining == null ? free : free.slice(0, remaining), queue, untilAuto, until: b.publishUntil || untilAuto, finishAuto, finish: b.finishBy || finishAuto, next, doneWriting: !!planCh && written >= planCh };
 }
+
+// ---- знаки по дням: прирост за каждый день (по истории; сегодня — по началу дня) ----
+// known=false — в этот день записи не было (прирост мог «уехать» в следующий день с записью)
+export function dailyWritten(book, from, to, today) {
+  const h = book.history || {}, out = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    if (d === today) { out.push({ date: d, value: writtenToday(book, today), known: true }); continue; }
+    const now = h[d], prev = charsAt(h, addDays(d, -1));
+    out.push(now != null && prev != null ? { date: d, value: Math.max(0, now - prev), known: true } : { date: d, value: 0, known: false });
+  }
+  return out;
+}
+// сумма по нескольким книгам
+export function dailyWrittenAll(books, from, to, today) {
+  const rows = books.map((b) => dailyWritten(b, from, to, today));
+  return rows.length ? rows[0].map((r, i) => ({ date: r.date, value: rows.reduce((s, x) => s + x[i].value, 0), known: rows.some((x) => x[i].known) })) : [];
+}
+
+// ---- цели ----
+// g = { type: 'finish' | 'daily' | 'custom', bookId, title, deadline, days:[1..7], perDay (знаков, для daily), checks:{date:true}, done }
+export const GOAL_TYPES = { finish: 'Дописать книгу к сроку', daily: 'Писать N знаков в день', custom: 'Своя цель' };
+const isGoalDay = (g, d) => { const days = (g.days || []).map(Number); return !days.length || days.includes(dowOf(d)); };
+// сколько дней цели осталось с today по deadline включительно
+export function goalDaysLeft(g, today) {
+  if (!g.deadline) return null;
+  let n = 0;
+  for (let d = today; d <= g.deadline && n < 1000; d = addDays(d, 1)) if (isGoalDay(g, d)) n++;
+  return n;
+}
+export function goalStatus(g, book, today) {
+  const r = { active: !g.done && !(g.deadline && g.deadline < today), todayDay: isGoalDay(g, today), daysLeft: goalDaysLeft(g, today), progress: null, needToday: null, doneToday: false, perDay: null, perDayCh: null, left: null, streak: 0 };
+  const wt = book ? writtenToday(book, today) : 0;
+  if (g.type === 'finish' && book) {
+    const planCh = Number(g.chapters || book.planChapters) || null, written = writtenChapters(book);
+    const avg = written ? (book.chars || 0) / written : null;
+    r.left = planCh ? Math.max(0, planCh - written) : null;
+    r.progress = planCh ? Math.min(1, written / planCh) : null;
+    if (r.left != null && r.daysLeft) {
+      r.perDayCh = r.left / r.daysLeft;
+      r.perDay = avg ? Math.round(r.perDayCh * avg) : null;
+    }
+    if (r.left === 0) { r.doneToday = true; r.active = false; r.finished = true; }
+  } else if (g.type === 'daily') {
+    r.perDay = Number(g.perDay) || null;
+  }
+  if (g.type === 'custom') r.doneToday = !!(g.checks || {})[today];
+  else if (r.perDay) {
+    // сегодня: начало дня приходится на прирост, знаки до начала цели не считаем
+    r.needToday = Math.max(0, r.perDay - wt);
+    r.doneToday = r.doneToday || wt >= r.perDay * 0.95;
+    // серия: дни цели подряд, когда норма выполнена (сегодня — если уже выполнена)
+    if (book) {
+      for (let d = r.doneToday ? today : addDays(today, -1), i = 0; i < 365; i++, d = addDays(d, -1)) {
+        if (g.createdAt && d < g.createdAt.slice(0, 10)) break;
+        if (!isGoalDay(g, d)) continue;
+        const v = dailyWritten(book, d, d, today)[0];
+        if (v.known && v.value >= r.perDay * 0.95) r.streak++; else break;
+      }
+    }
+  }
+  if (g.type === 'custom' && g.deadline && g.createdAt) {
+    const all = goalDaysLeft({ ...g }, g.createdAt.slice(0, 10)) || 1;
+    r.progress = Math.min(1, Object.keys(g.checks || {}).length / all);
+  }
+  return r;
+}

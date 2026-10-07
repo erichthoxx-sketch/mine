@@ -3,6 +3,8 @@ import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../../../j
 import { num, fmtDate, pct } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
 import { reminders } from './home.js';
+import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
+import { goalStatus } from '../wcalc.js';
 import { addDays } from '../../../js/calc.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
 import { startEvent, finishEvent, chapterEvent, removeEvent } from '../sync.js';
@@ -55,8 +57,9 @@ export function planItems(c, from, to) {
     const remind = addDays(x.since, Number(x.remindDays) || 14), s = waitingStatus(x, t);
     add(remind < t ? t : remind, 'waitans', `Напомнить о себе: ${esc(x.who)}`, `${s.days} дн. без ответа${x.what ? ' · ' + esc(x.what.slice(0, 50)) : ''}`, { to: x.contactId ? '/link/' + x.contactId : '/links' });
   }
+  for (const g of activeGoals(c)) if (g.deadline) add(g.deadline, 'goal', `Срок цели: ${esc(goalTitle(c, g))}`, '', { act: 'goal.edit', id: g.id });
   for (const r of reminders(c)) if (r.to === '../') add(r.date < t ? t : r.date, 'money', r.title, `${r.sub} · в «Доходах»`, { href: '../' });
-  const ord = { pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
+  const ord = { goal: -1, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
   return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
 }
 function itemHtml(c, x) {
@@ -85,6 +88,9 @@ export function planView(a) {
     return `<button class="wday${day === t ? ' today' : ''}${day === sel ? ' on' : ''}" data-act="plan.day" data-v="${day}"><span class="wk-d">${DOW[dowI(day)]}</span><span class="wk-n">${Number(day.slice(8, 10))}</span><span class="wk-dots">${kinds.map((k) => `<i class="k-${k}"></i>`).join('')}</span></button>`;
   }).join('');
   const dayList = by[sel] || [];
+  // цели — только на сегодня: что осталось по норме, своя цель — с кнопкой «Сделала»
+  const goalRows = sel === t ? activeGoals(c).map((g) => ({ g, s: goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t) })).filter((x) => x.s.active && x.s.todayDay) : [];
+  const goalHtml = goalRows.map(({ g, s }) => `<div class="pitem"><span class="dot k-goal"${s.doneToday ? ' style="opacity:.4"' : ''}></span><a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${s.doneToday ? '✓ ' : ''}${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, s)}</span></a>${g.type === 'custom' ? `<span class="pi-btns"><button class="${s.doneToday ? '' : 'primary'}" data-act="goal.check" data-id="${g.id}">${s.doneToday ? '✓' : 'Сделала'}</button></span>` : ''}</div>`).join('');
   // дальше: следующие 14 дней после выбранного
   const nextDays = Object.keys(by).filter((k) => k > sel && k <= addDays(sel, 14)).sort();
   const inWork = c.wbooks.filter((b) => (b.status || 'progress') === 'progress');
@@ -98,7 +104,9 @@ export function planView(a) {
     <div class="wstrip">${strip}</div>
   </div>
   <div class="card"><h2 style="margin:0 0 6px">${dayName(sel, t)}</h2>
-    ${dayList.length ? `<div class="plist">${dayList.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">Дел на этот день нет.</p>'}</div>
+    ${dayList.length || goalHtml ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">Дел на этот день нет.</p>'}</div>
+  <div class="psec-h"><h2>Цели <span class="muted">${activeGoals(c).length || ''}</span></h2><button class="small-btn" data-act="goal.new">+ Цель</button></div>
+  ${goalsSection(c)}
   ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 6px">Дальше</h2>${nextDays.map((k) => `<div class="pday"><div class="pday-h">${dayName(k, t)}</div><div class="plist">${by[k].map((x) => itemHtml(c, x)).join('')}</div></div>`).join('')}</div>` : ''}
   <div class="psec-h"><h2>Книги в работе <span class="muted">${inWork.length || ''}</span></h2></div>
   ${booksPlan(c, inWork)}

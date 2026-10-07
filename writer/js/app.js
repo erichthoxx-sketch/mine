@@ -13,7 +13,7 @@ import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
 
-export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links'];
+export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'active', openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
 let theme = 'auto';
@@ -97,6 +97,7 @@ function render() {
   afterFn?.();
 }
 acts.go = (d) => { ui.route = d.to; window.scrollTo(0, 0); };
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => afterFn?.(), 150); });
 acts['theme.toggle'] = () => app.setTheme({ auto: 'light', light: 'dark', dark: 'auto' }[theme]);
 
 let pending = false;
