@@ -3,6 +3,7 @@ import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../../../j
 import { num, fmtDate, pct } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate } from '../wcalc.js';
 import { PLATFORMS } from './books.js';
+import { startEvent, finishEvent, chapterEvent, removeEvent } from '../sync.js';
 
 const app = () => window.__app;
 const zn = (n) => num(n || 0) + ' зн.';
@@ -14,9 +15,71 @@ export function planView(a) {
   const live = d.w_contests.filter((x) => !(x.end && x.end < c.today) && x.status !== 'done').length;
   const overdue = d.w_waiting.filter((x) => waitingStatus(x, c.today).overdue).length;
   const tab = (k, label, n) => `<button class="chip${t === k ? ' on' : ''}" data-act="plan.tab" data-v="${k}">${label}${n ? ` · ${n}` : ''}</button>`;
-  const body = t === 'queue' ? queue(c) : t === 'waiting' ? waiting(c) : contests(c);
-  return { html: `<div class="chips">${tab('contests', 'Конкурсы', live)}${tab('queue', 'Что пишу дальше', d.w_queue.filter((x) => !x.done).length)}${tab('waiting', 'Жду ответа', overdue ? overdue + ' ⚠︎' : '')}</div>${body}` };
+  const inWork = c.wbooks.filter((b) => (b.status || 'progress') === 'progress');
+  const body = t === 'queue' ? queue(c) : t === 'waiting' ? waiting(c) : t === 'contests' ? contests(c) : booksPlan(c, inWork);
+  return { html: `<div class="chips">${tab('books', 'Книги в работе', inWork.length)}${tab('contests', 'Конкурсы', live)}${tab('queue', 'Что пишу дальше', d.w_queue.filter((x) => !x.done).length)}${tab('waiting', 'Жду ответа', overdue ? overdue + ' ⚠︎' : '')}</div>${body}` };
 }
+
+// ---------- книги в работе: когда допишу, до какого числа выкладка, главы; всё связано с «Доходами» ----------
+const dleft = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
+const leftTxt = (n) => (n < 0 ? `просрочено на ${-n} дн.` : n === 0 ? 'сегодня' : `осталось ${n} дн.`);
+function booksPlan(c, list) {
+  if (!list.length) return '<div class="card"><p class="muted" style="margin:0">Книг в работе нет. Поставьте книге статус «В процессе» — она появится здесь.</p></div>';
+  return list.map((b) => {
+    const fc = b.planChars ? forecastDate(b.history, c.today, Number(b.planChars)) : null;
+    const tabs = b.tabs || [], pub = b.published || {};
+    const pubN = tabs.filter((t) => pub[t.title]).length;
+    const cs = c.data.w_contests.filter((x) => x.bookId === b.id && !(x.end && x.end < c.today) && x.status !== 'done');
+    return `<div class="card">
+      <div class="row between"><b>${esc(b.title)}</b><span class="small muted">${zn(b.chars)}</span></div>
+      ${cs.length ? `<div class="tags" style="margin-top:4px">${cs.map((x) => `<span class="tag on">Конкурс «${esc(x.name)}» · ${leftTxt(dleft(x.end, c.today))}</span>`).join('')}</div>` : ''}
+      <div class="kv">
+        <div><span>Допишу к</span><b>${b.finishBy ? `${fmtDate(b.finishBy)}` : '—'}</b>${b.finishBy ? `<span>${leftTxt(dleft(b.finishBy, c.today))}${fc ? ` · по темпу ${fmtDate(fc)}` : ''}</span>` : fc ? `<span>по темпу — ${fmtDate(fc)}</span>` : ''}</div>
+        <div><span>Выкладка до</span><b>${b.publishUntil ? fmtDate(b.publishUntil) : '—'}</b>${b.publishUntil ? `<span>${leftTxt(dleft(b.publishUntil, c.today))}</span>` : ''}</div>
+        <div><span>Начало выкладки</span><b>${b.publishStart ? fmtDate(b.publishStart) : '—'}</b></div>
+        <div><span>Глав выложено</span><b>${tabs.length ? `${pubN} из ${tabs.length}` : Object.keys(pub).length || '—'}</b></div>
+      </div>
+      <div class="row"><button class="primary" data-act="ch.publish" data-id="${b.id}">Выложила главу</button><button data-act="wb.dates" data-id="${b.id}">Сроки</button><button data-act="wb.finish" data-id="${b.id}">Книга завершена</button></div>
+    </div>`;
+  }).join('') + '<div class="hint">«Выложила главу», начало выкладки и завершение книги сами отмечаются событиями в приложении «Доходы» — на графиках и в аналитике книги.</div>';
+}
+acts['wb.dates'] = (d) => {
+  const c = app().ctx(), b = c.wbooksById[d.id];
+  openSheet(`Сроки — ${b.title}`, `<label for="fb">Допишу к</label><input id="fb" type="date" name="finishBy" value="${b.finishBy || ''}">
+    <div class="f2"><div><label for="ps">Начало выкладки</label><input id="ps" type="date" name="publishStart" value="${b.publishStart || ''}"></div><div><label for="pu">Выкладка до</label><input id="pu" type="date" name="publishUntil" value="${b.publishUntil || ''}"></div></div>
+    <div class="hint">Начало выкладки отметится событием «Старт книги» в «Доходах».</div>`, async (fd) => {
+    const patch = { finishBy: fd.get('finishBy') || '', publishStart: fd.get('publishStart') || '', publishUntil: fd.get('publishUntil') || '' };
+    await app().store.put('w_books', { ...b, ...patch });
+    if (patch.publishStart) await startEvent(c, { ...b, ...patch }, patch.publishStart); else await removeEvent(`w:${b.id}:start`);
+    toast('Сроки сохранены');
+  });
+};
+acts['wb.finish'] = (d) => {
+  const c = app().ctx(), b = c.wbooksById[d.id];
+  openSheet(`Книга завершена — ${b.title}`, `<label for="fd">Дата завершения</label><input id="fd" type="date" name="date" value="${c.today}" required>
+    <div class="hint">Книга получит статус «Завершена», а в «Доходах» появится событие «Завершение книги».</div>`, async (fd) => {
+    const date = fd.get('date') || c.today;
+    await app().store.put('w_books', { ...b, status: 'done', finishedAt: date });
+    await finishEvent(c, b, date);
+    toast('Поздравляю с завершением!');
+  }, { submitText: 'Завершена' });
+};
+// «Выложила главу»: выбрать вкладку документа (или вписать название) — глава отмечается и попадает в «Доходы»
+acts['ch.publish'] = (d) => {
+  const c = app().ctx(), b = c.wbooksById[d.id];
+  const pub = b.published || {};
+  const left = (b.tabs || []).filter((t) => !pub[t.title]);
+  openSheet(`Выложила главу — ${b.title}`, `${left.length ? `<label for="ct">Глава</label><select id="ct" name="tab">${left.map((t) => opt(t.title, t.title, left[0].title)).join('')}<option value="">другая — впишу</option></select>` : ''}
+    <label for="cx">${left.length ? 'Или название главы' : 'Название главы'}</label><input id="cx" name="text" placeholder="например, Глава 25">
+    <label for="cd">Дата</label><input id="cd" type="date" name="date" value="${c.today}" required>`, async (fd) => {
+    const title = (fd.get('text') || '').trim() || fd.get('tab') || '';
+    if (!title) { toast('Выберите или впишите главу'); return false; }
+    const date = fd.get('date') || c.today;
+    await app().store.put('w_books', { ...b, published: { ...pub, [title]: date } });
+    await chapterEvent(c, b, title, date);
+    toast('Глава отмечена — и в «Доходах» тоже');
+  }, { submitText: 'Отметить' });
+};
 
 // ---------- конкурсы ----------
 function contests(c) {

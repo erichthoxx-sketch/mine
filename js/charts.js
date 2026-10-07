@@ -5,6 +5,7 @@ export const EVENT_TYPES = {
   chapter: { label: 'Выкладка главы', color: 'var(--ev-chapter)' },
   discount: { label: 'Скидка', color: 'var(--ev-discount)' },
   start: { label: 'Старт книги', color: 'var(--ev-start)' },
+  finish: { label: 'Завершение книги', color: 'var(--ev-start)' },
   promo: { label: 'Акция Литнета', color: 'var(--ev-promo)' },
   contest: { label: 'Итоги конкурса', color: 'var(--ev-contest)' },
   note: { label: 'Заметка', color: 'var(--ev-note)' },

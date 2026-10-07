@@ -4,6 +4,7 @@ import { num, fmtDate } from '../../../js/format.js';
 import { recordProgress, written, pace, forecastDate, charsAt, contestStatus, daysLeft } from '../wcalc.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
+import { finishEvent, removeEvent, chapterEvent, chapterUnset } from '../sync.js';
 
 const app = () => window.__app;
 export const STATUS = { idea: 'Идея', progress: 'В процессе', done: 'Завершена' };
@@ -19,12 +20,27 @@ export function driveBar(c) {
     ${fresh ? '' : '<div class="small muted" style="margin-top:6px">Google даёт доступ на час — нажмите «Обновить с Диска», знаки подтянутся.</div>'}`;
 }
 
+// активные конкурсы книги: метка «Конкурс · N дн.»
+const liveContests = (c, b) => c.data.w_contests.filter((x) => x.bookId === b.id && x.status !== 'done' && !(x.end && x.end < c.today));
+const daysTo = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
+function contestTags(c, b) {
+  const l = liveContests(c, b);
+  return l.length ? `<div class="tags">${l.map((x) => `<span class="tag on">Конкурс${x.end ? ` · ${daysTo(x.end, c.today)} дн.` : ''}</span>`).join('')}</div>` : '';
+}
+// напоминания: конкурсы, которые заканчиваются в ближайшую неделю
+function contestReminders(c) {
+  const soon = c.data.w_contests.filter((x) => x.end && x.status !== 'done' && x.end >= c.today && daysTo(x.end, c.today) <= 7).sort((a, b) => a.end.localeCompare(b.end));
+  return soon.map((x) => { const b = x.bookId ? c.wbooksById[x.bookId] : null; const s2 = contestStatus(x, b, c.today); const n = daysTo(x.end, c.today);
+    return `<div class="alert" style="margin-bottom:10px">⏳ Конкурс «${esc(x.name)}»: ${n === 0 ? 'заканчивается сегодня' : `до конца ${n} дн.`}${b ? ` · ${esc(b.title)}` : ''}${s2.need ? ` · нужно ещё ${zn(s2.need)}` : ''} <button class="link" data-act="go" data-to="/plan" style="padding:0">в планер</button></div>`; }).join('');
+}
+
 function tile(c, b) {
   const today = written(b.history, c.today, 1);
   return `<a href="#" class="cover-tile" data-act="go" data-to="/book/${b.id}">
     <div class="cover">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}</div>
     <div class="ct-title">${esc(b.title)}</div>
     <div class="tags"><span class="tag ${b.status === 'progress' || !b.status ? 'on' : ''}">${STATUS[b.status] || STATUS.progress}</span>${(b.platforms || []).map((p) => `<span class="tag">${esc(p)}</span>`).join('')}</div>
+    ${contestTags(c, b)}
     <div class="ct-num">${zn(b.chars)}${today ? ` <span class="up">+${num(today)}</span>` : ''}</div></a>`;
 }
 
@@ -32,6 +48,7 @@ export function booksView(a) {
   const c = a.ctx();
   const active = c.wbooks.filter((b) => b.status !== 'done' && b.status !== 'idea').length;
   const html = `
+  ${contestReminders(c)}
   <div class="card">
     <div class="grid3">
       <div><div class="k small muted">Сегодня написано</div><div class="big">${num(c.writtenToday)}</div><div class="small muted">знаков</div></div>
@@ -75,7 +92,8 @@ export function bookPage(a, id) {
       ${b.fileId ? `<div class="row" style="margin-top:8px"><button data-act="wbook.refreshOne" data-id="${b.id}">Обновить знаки</button></div>` : ''}
     </div>
   </div>
-  ${(b.tabs || []).length ? `<div class="card"><h2>Главы (вкладки документа)</h2><div class="scroll"><table><tr><th>Вкладка</th><th>Знаков</th></tr>${b.tabs.map((t) => `<tr><td>${esc(t.title)}</td><td>${num(t.chars)}</td></tr>`).join('')}<tr class="total"><td>Всего</td><td>${num(b.chars)}</td></tr></table></div></div>` : ''}
+  ${(b.tabs || []).length ? `<div class="card"><h2>Главы (вкладки документа)</h2><div class="scroll"><table><tr><th>Вкладка</th><th>Знаков</th><th>Выложена</th></tr>${b.tabs.map((t) => { const p2 = (b.published || {})[t.title]; return `<tr><td>${esc(t.title)}</td><td>${num(t.chars)}</td><td>${p2 ? `${fmtDate(p2)} <button class="link" style="padding:0" data-act="ch.unpub" data-id="${b.id}" data-t="${esc(t.title)}">отменить</button>` : `<button class="link" style="padding:0" data-act="ch.pubOne" data-id="${b.id}" data-t="${esc(t.title)}">сегодня</button>`}</td></tr>`; }).join('')}<tr class="total"><td>Всего</td><td>${num(b.chars)}</td><td>${Object.keys(b.published || {}).length}</td></tr></table></div>
+    <div class="hint">Отметка «выложена» сразу появляется событием «Выкладка главы» в приложении «Доходы».</div></div>` : ''}
   ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${zn(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
@@ -185,8 +203,22 @@ forms['wbook.save'] = async (fd, f) => {
     const m = N(fd.get('manualChars'));
     if (m != null && !Number.isNaN(m)) { patch.chars = m; patch.history = recordProgress(b.history, c.today, m); }
   }
+  if (patch.status === 'done' && b.status !== 'done') { patch.finishedAt = b.finishedAt || c.today; await finishEvent(c, { ...b, ...patch }, patch.finishedAt); }
+  if (patch.status !== 'done' && b.status === 'done') { patch.finishedAt = ''; await removeEvent(`w:${b.id}:finish`); }
   await app().store.put('w_books', { ...b, ...patch });
-  toast('Сохранено');
+  toast(patch.status === 'done' && b.status !== 'done' ? 'Сохранено — завершение отмечено в «Доходах»' : 'Сохранено');
+};
+acts['ch.pubOne'] = async (d) => {
+  const c = app().ctx(), b = c.wbooksById[d.id];
+  await app().store.put('w_books', { ...b, published: { ...(b.published || {}), [d.t]: c.today } });
+  await chapterEvent(c, b, d.t, c.today);
+  toast('Глава отмечена — и в «Доходах» тоже');
+};
+acts['ch.unpub'] = async (d) => {
+  const c = app().ctx(), b = c.wbooksById[d.id];
+  const published = { ...(b.published || {}) }; delete published[d.t];
+  await app().store.put('w_books', { ...b, published });
+  await chapterUnset(b, d.t);
 };
 changes['wbook.cover'] = async (v, el) => {
   const file = el.files[0]; el.value = '';
