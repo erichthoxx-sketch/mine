@@ -350,3 +350,6 @@ main a.card.wcard { display: flex; gap: 14px; align-items: flex-start; color: in
 .wcard-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
 .wbar .progress { margin: 4px 0 2px; }
 .alert.alert-thin { margin-top: 8px; padding: 6px 12px; font-size: 14px; line-height: 1.35; }
+/* кнопки и ссылки-кнопки всегда основным шрифтом и в одну строку — как в «Доходах» */
+button, .btn { font-family: var(--font-body); white-space: nowrap; }
+label.btn { cursor: pointer; }
