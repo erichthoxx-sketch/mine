@@ -419,3 +419,11 @@ button.wday.today .wk-n { color: var(--link); }
 .week .wstrip button.wday { border-color: transparent; }
 .week .wstrip button.wday.today { border-color: var(--line); }
 .week .wstrip button.wday.on { border-color: var(--accent-2); background: var(--accent-soft); }
+/* Google Диск: точка-маркер и аккуратная кнопка «Обновить» на Главной */
+.ddot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; flex: none; }
+.ddot.on { background: #3b82c4; } .ddot.off { background: var(--bad); }
+h2 .ddot { margin-left: 6px; position: relative; top: -2px; }
+button.drive-chip { min-height: 32px; padding: 4px 12px 4px 10px; font-size: 13px; font-weight: 600; gap: 6px; color: var(--text-2); }
+button.drive-chip .ic { width: 15px; height: 15px; }
+.home-h { margin: 0 0 10px; gap: 10px; }
+.home-h button.drive-chip { min-height: 32px; padding: 4px 12px 4px 10px; font-size: 13px; font-weight: 600; color: var(--text-2); }

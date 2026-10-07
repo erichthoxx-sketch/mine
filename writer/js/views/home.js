@@ -4,7 +4,7 @@ import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '..
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
 import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth } from '../wcalc.js';
-import { STATUS, progressBlock, daysTxt } from './books.js';
+import { STATUS, progressBlock, daysTxt, driveChip } from './books.js';
 
 const zn = (n) => num(n || 0) + ' зн.';
 const dleft = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
@@ -76,7 +76,7 @@ export function homeView(a) {
   const sum = (k) => rows.reduce((s, r) => s + (r[k] || 0), 0);
   const inWork = rows.filter((r) => (r.b.status || 'progress') === 'progress'), others = rows.filter((r) => (r.b.status || 'progress') !== 'progress');
   const html = `
-  <h2>${fmtMonthCap(mk)}</h2>
+  <div class="row between home-h"><h2 style="margin:0">${fmtMonthCap(mk)}</h2>${driveChip(c)}</div>
   <div class="grid4">
     <div class="stat"><div class="k">Написано за месяц</div><div class="v">${num(sum('wrote'))}</div><div class="s">${plural(sum('wrote'), ['знак', 'знака', 'знаков'])} · сегодня +${num(sum('today'))}</div></div>
     <div class="stat"><div class="k">Глав выложено</div><div class="v">${sum('chapters')}</div><div class="s">в ${fmtMonthIn(mk)}</div></div>

@@ -20,6 +20,22 @@ setTimeout(function () {
   var b = document.querySelector('#app .boot');
   if (b) b.innerHTML = 'Не получилось загрузить приложение. <button onclick="window.__stale()">Обновить</button>';
 }, 12000);
+// Вышла новая версия — сами переходим на неё: при открытии и когда приложение возвращается из фона
+window.__V = '__APPV__';
+(function () {
+  if (window.__V.indexOf('__') === 0) return; // локальная разработка
+  var url = (location.pathname.indexOf('/pisatel/') >= 0 ? '../' : '') + 'version.txt';
+  function check() {
+    fetch(url + '?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (v) {
+      v = (v || '').trim();
+      if (!v || v === window.__V) return;
+      try { if (sessionStorage.getItem('appV') === v) return; sessionStorage.setItem('appV', v); } catch (e) {}
+      location.replace(location.pathname + '?v=' + v);
+    }).catch(function () {});
+  }
+  window.addEventListener('load', check);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+})();
 </script>
 <link rel="manifest" href="manifest.webmanifest?v=3">
 <link rel="icon" href="heart-line.svg" type="image/svg+xml">

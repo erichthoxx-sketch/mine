@@ -14,13 +14,20 @@ export const STATUS = { idea: 'Идея', progress: 'В процессе', done:
 export const PLATFORMS = ['Литнет', 'Литмаркет', 'Литгород', 'Литрес'];
 const zn = (n) => num(n || 0) + ' зн.';
 
+// Google Диск: подключён — точка-маркер; не подключён или нет папки — нужная кнопка
+export const driveReady = (c) => drive.driveConfigured && drive.isConnected() && !!c.settings.wBooksFolder;
 export function driveBar(c) {
-  if (!drive.driveConfigured) return '<p class="small muted">Google Диск ещё не подключён к приложению — см. Настройки (шестерёнка вверху).</p>';
-  if (!drive.isConnected()) return '<button class="primary" data-act="drive.connect">Подключить Google Диск</button>';
-  if (!c.settings.wBooksFolder) return '<button class="primary" data-act="go" data-to="/settings">Выбрать папку с книгами</button>';
-  const fresh = drive.hasFreshToken();
-  return `<div class="row"><span class="badge good">● Google Диск подключён</span><button data-act="wbook.refresh">Обновить с Диска</button></div>
-    ${fresh ? '' : '<div class="small muted" style="margin-top:6px">Google даёт доступ на час — нажмите «Обновить с Диска», знаки подтянутся.</div>'}`;
+  if (!drive.driveConfigured) return '<p class="small muted" style="margin:12px 0 0">Google Диск ещё не подключён к приложению — см. Настройки (шестерёнка вверху).</p>';
+  if (!drive.isConnected()) return '<div style="margin-top:12px"><button class="primary" data-act="drive.connect">Подключить Google Диск</button></div>';
+  if (!c.settings.wBooksFolder) return '<div style="margin-top:12px"><button class="primary" data-act="go" data-to="/settings">Выбрать папку с книгами</button></div>';
+  return '';
+}
+// маленькая точка: синяя — Диск подключён, красная — нет
+export const driveDot = (c) => `<span class="ddot ${driveReady(c) ? 'on' : 'off'}" title="${driveReady(c) ? 'Google Диск подключён' : 'Google Диск не подключён'}" aria-label="${driveReady(c) ? 'Google Диск подключён' : 'Google Диск не подключён'}"></span>`;
+// для Главной: точка + «обновить» одной аккуратной кнопкой
+export function driveChip(c) {
+  if (!driveReady(c)) return `<button class="drive-chip" data-act="${drive.isConnected() ? 'go' : 'drive.connect'}" data-to="/settings">${driveDot(c)}Диск</button>`;
+  return `<button class="drive-chip" data-act="wbook.refresh" title="Обновить знаки с Google Диска">${driveDot(c)}${ic('refresh')}Обновить</button>`;
 }
 
 // активные конкурсы книги: метка «Конкурс · N дн.»
@@ -50,9 +57,9 @@ export function booksView(a) {
       <div><div class="k small muted">За 7 дней</div><div class="big">${num(c.writtenWeek)}</div><div class="small muted">${plural(c.writtenWeek, ['знак', 'знака', 'знаков'])}</div></div>
       <div><div class="k small muted">В работе</div><div class="big">${active}</div><div class="small muted">${plural(active, ['книга', 'книги', 'книг'])}</div></div>
     </div>
-    <div style="margin-top:12px">${driveBar(c)}</div>
+    ${driveBar(c)}
   </div>
-  <div class="row between" style="margin:16px 0 10px"><h2 style="margin:0">Книги</h2><button class="primary" data-act="wbook.new">+ Книга</button></div>
+  <div class="row between" style="margin:16px 0 10px"><h2 style="margin:0">Книги ${driveDot(c)}</h2><button class="primary" data-act="wbook.new">+ Книга</button></div>
   ${c.wbooks.length ? `<div class="covers">${c.wbooks.map((b) => tile(c, b)).join('')}</div>` : '<div class="card"><p>Книг пока нет. Нажмите «+ Книга» и выберите файл на Google Диске — или добавьте книгу без файла.</p></div>'}`;
   return { html };
 }

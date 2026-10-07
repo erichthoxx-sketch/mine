@@ -76,9 +76,9 @@ export function disconnect() {
 }
 
 async function gfetch(url, opts = {}) {
-  if (!loadToken()) throw new NeedAuth(ls.get('gdrive.consented') ? 'Google просит обновить доступ — нажмите «Обновить с Диска».' : 'Подключите Google Диск (кнопка вверху).');
+  if (!loadToken()) throw new NeedAuth(ls.get('gdrive.consented') ? 'Google просит обновить доступ — нажмите «Обновить» на Главной.' : 'Подключите Google Диск (кнопка вверху).');
   const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token.access_token } });
-  if (r.status === 401) { token = null; ls.del('gdrive.token'); throw new NeedAuth('Google просит обновить доступ — нажмите «Обновить с Диска».'); }
+  if (r.status === 401) { token = null; ls.del('gdrive.token'); throw new NeedAuth('Google просит обновить доступ — нажмите «Обновить» на Главной.'); }
   if (!r.ok) {
     let msg = '';
     try { msg = (await r.json())?.error?.message || ''; } catch { /* ок */ }
