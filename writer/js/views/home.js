@@ -3,7 +3,7 @@ import { esc } from '../../../js/ui.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule } from '../wcalc.js';
+import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth } from '../wcalc.js';
 import { STATUS, progressBlock, daysTxt } from './books.js';
 
 const zn = (n) => num(n || 0) + ' зн.';
@@ -66,9 +66,7 @@ export function homeView(a) {
   const rem = reminders(c);
   // по книгам за месяц: написано (по истории знаков), глав выложено, доход по связанной книге «Доходов»
   const rows = c.wbooks.map((b) => {
-    const h = b.history || {};
-    const startVal = charsAt(h, addDays(from, -1)) ?? (Object.keys(h).sort().find((k) => k >= from) ? h[Object.keys(h).sort().find((k) => k >= from)] : null);
-    const wrote = startVal != null && b.chars != null ? Math.max(0, b.chars - startVal) : 0;
+    const wrote = writtenMonth(b, t);
     const chapters = Object.values(chapterOutDates(b, t)).filter((dt) => dt >= from && dt <= t).length;
     const incomeId = c.incomeIdOf(b);
     const income = incomeId ? sumSeries(incomeSeries(c.data.sales, [], from, t, incomeId)) : null;

@@ -117,3 +117,11 @@ test('график выкладки: пн/ср/пт, «выложить до» �
   // без плана глав «до» не считается
   assert.equal(bookSchedule({ ...b, planChapters: null }, '2026-10-07').untilAuto, null);
 });
+
+test('написано за месяц: история началась в этом месяце — по версиям файла, не меньше сегодняшнего', async () => {
+  const { writtenMonth } = await import('../writer/js/wcalc.js');
+  const t = '2026-10-07';
+  assert.equal(writtenMonth({ chars: 300000, history: { '2026-09-28': 250000, [t]: 300000 } }, t), 50000);
+  assert.equal(writtenMonth({ chars: 300000, history: { [t]: 300000 }, monthStart: { date: t, chars: 240000 } }, t), 60000);
+  assert.equal(writtenMonth({ chars: 300000, history: { [t]: 300000 }, dayStart: { date: t, chars: 261225 } }, t), 38775);
+});

@@ -177,22 +177,24 @@ export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
-  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.weekStart?.date === c.today) return false;
+  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.weekStart?.date === c.today && b.monthStart?.date === c.today) return false;
   const r = await drive.countFile(meta);
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
   const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
   // начало дня и начало недели: раз в день узнаём по истории версий файла, сколько знаков было в полночь
   let dayStart = b.dayStart && b.dayStart.date === c.today ? b.dayStart : null;
   let weekStart = b.weekStart && b.weekStart.date === c.today ? b.weekStart : null;
-  if (!dayStart || !weekStart) {
-    const wFrom = addDays(c.today, -6);
+  let monthStart = b.monthStart && b.monthStart.date === c.today ? b.monthStart : null;
+  if (!dayStart || !weekStart || !monthStart) {
+    const wFrom = addDays(c.today, -6), mFrom = c.today.slice(0, 8) + '01';
     let g = {};
-    try { g = await drive.gainsSince(meta, [c.today, wFrom]); } catch { g = {}; }
+    try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom])]); } catch { g = {}; }
     const prev = Object.keys(b.history || {}).filter((k) => k < c.today).sort().pop();
     if (!dayStart) dayStart = { date: c.today, chars: g[c.today] != null ? r.total - Math.max(0, g[c.today]) : (!ruleChanged && prev && prev >= addDays(c.today, -1) ? b.history[prev] : r.total) };
     if (!weekStart) weekStart = { date: c.today, from: wFrom, chars: g[wFrom] != null ? r.total - Math.max(0, g[wFrom]) : null };
+    if (!monthStart) monthStart = { date: c.today, from: mFrom, chars: g[mFrom] != null ? r.total - Math.max(0, g[mFrom]) : null };
   }
-  await a.store.put('w_books', { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, dayStart, weekStart, countRule: COUNT_RULE });
+  await a.store.put('w_books', { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, dayStart, weekStart, monthStart, countRule: COUNT_RULE });
   return true;
 }
 export async function refreshAll(a, { quiet = false } = {}) {

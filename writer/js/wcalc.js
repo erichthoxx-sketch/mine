@@ -86,6 +86,17 @@ export function writtenWeek(book, today) {
   if (book.weekStart && book.weekStart.date === today && book.weekStart.chars != null && book.chars != null) return Math.max(0, book.chars - book.weekStart.chars);
   return written(book.history, today, 7);
 }
+// Написано за текущий месяц: по истории знаков, а если история началась уже в этом месяце —
+// по истории версий файла (monthStart, считается при обновлении); не меньше, чем написано сегодня
+export function writtenMonth(book, today) {
+  const h = book.history || {}, from = today.slice(0, 8) + '01', keys = Object.keys(h).sort();
+  const now = book.chars ?? charsAt(h, today);
+  if (now == null) return 0;
+  if (keys.some((k) => k < from)) return Math.max(0, now - charsAt(h, addDays(from, -1)));
+  if (book.monthStart && book.monthStart.date === today && book.monthStart.chars != null) return Math.max(0, now - book.monthStart.chars);
+  const first = keys.find((k) => k >= from);
+  return Math.max(first ? Math.max(0, now - h[first]) : 0, writtenToday(book, today));
+}
 // Прирост с прошлого обновления (если оно было раньше вчерашнего дня): {date, gain}
 export function lastGain(history, today) {
   const now = charsAt(history, today);
