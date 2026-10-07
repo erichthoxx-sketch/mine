@@ -69,7 +69,7 @@ function discountTable(c) {
 }
 
 // «Бюджет на следующий месяц»: сколько вложить в рекламу, чтобы выйти на цель месяца
-function budgetCard(c) {
+export function budgetCard(c) {
   const b = budgetPlan({ sales: c.sales, legacyDays: c.legacyDays, campaigns: c.campaigns, reports: c.data.reports, settings: c.settings, today: c.today, dataEnd: c.dataEnd });
   if (b.status === 'nodata') return '';
   const head = `<h2>Бюджет на ${fmtMonth(b.month)}</h2>
@@ -126,7 +126,6 @@ export function ads(a) {
     ${open.map((x) => `<div class="alert" style="margin-top:10px">⚠︎ «${esc(x.name)}»: ${esc(alertText(x))}. Запросите отчёт у таргетологов.<div class="row" style="margin-top:8px"><button class="primary" data-act="note.new" data-id="${x.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${x.campaignId}">Скопировать отчёт</button></div></div>`).join('')}
     <div class="hint">Расход по дням — бюджет ÷ дни кампании (оценка). «Доход сверх обычного» — сколько книга зарабатывает больше, чем в дни без рекламы.</div>
   </div>
-  ${past ? '' : budgetCard(c)}
   <div class="card"><div class="row between"><h2 style="margin:0">Таргет «Литнет платит»</h2><button class="primary" data-act="ad.new" data-ch="litnet">+ Кампания</button></div>
     ${litnet.length ? summaryBody(c, sL, { past }) + campaignList(c, litnet, alerts) : '<p class="muted">Кампаний пока нет. Добавьте оплату таргетологам как кампанию: книга, даты, сумма.</p>'}
     ${discountTable(c)}

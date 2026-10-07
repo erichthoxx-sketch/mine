@@ -3,6 +3,7 @@ import { rub, fmtMonth, fmtMonthCap, fmtMonthShort, fmtMonthIn, pct, num } from 
 import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline, rocketRows, monthCash, addMonths, DISCOUNT_NOTE } from '../calc.js';
 import { fmtDate } from '../format.js';
 import { goalChart } from '../charts.js';
+import { budgetCard } from './ads.js';
 
 const app = () => window.__app;
 const fin = (c, k) => monthFinance(k, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings, litnet: c.litnetMoney });
@@ -57,6 +58,7 @@ export function money(a) {
       <td>${x.payoutActual != null ? rub(x.payoutActual, 0) : `≈ ${rub(x.payoutExpected, 0)}`}</td>
       <td>${h.cash == null ? '—' : `≈ ${rub(h.cash, 0)}`}</td></tr>`; }).join('')}</table></div>
     <div class="hint">Всё считается само. Реклама — сколько открутилось за месяц. Скидка — от Литнета по программе «Литнет платит». Выплата — сколько Литнет перечислит за продажи месяца. На руках — пришедшая выплата за прошлый месяц минус оплаты рекламы и налог.</div></div>
+  ${budgetCard(c)}
   <div class="card"><div class="row between"><h2>Цели</h2><button class="primary" data-act="goal.all">Изменить цели</button></div>
     <p class="small muted">Старт: ${fmtMonth(s.goalStart)} — ${rub(s.goalAmount, 0)}, дальше +${s.goalGrowth}% в месяц; свои цели по месяцам — кнопка «Изменить цели». Факт — доход до вычетов (роялти).</p>
     <div class="chart" id="goalChart"></div>
