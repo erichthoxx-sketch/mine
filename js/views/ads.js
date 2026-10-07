@@ -2,7 +2,7 @@ import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask } from '.
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthCap, fmtMonthIn } from '../format.js';
 import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween, DISCOUNT_NOTE } from '../calc.js';
 import { rocketCard } from './money.js';
-import { targetAlert, campaignProgress, adGroupSummary } from '../calc.js';
+import { targetAlert, campaignProgress, adGroupSummary, budgetPlan } from '../calc.js';
 import { buildTargetPrompt } from '../report.js';
 import { resizeImage } from '../img.js';
 import { parseTargetReport, reportId } from '../parse.js';
@@ -68,6 +68,24 @@ function discountTable(c) {
     <div class="hint">Считается само. ${DISCOUNT_NOTE}</div>`;
 }
 
+// «Бюджет на следующий месяц»: сколько вложить в рекламу, чтобы выйти на цель месяца
+function budgetCard(c) {
+  const b = budgetPlan({ sales: c.sales, legacyDays: c.legacyDays, campaigns: c.campaigns, reports: c.data.reports, settings: c.settings, today: c.today, dataEnd: c.dataEnd });
+  if (b.status === 'nodata') return '';
+  const head = `<h2>Бюджет на ${fmtMonth(b.month)}</h2>
+    <div class="kv"><div><span>Цель на ${fmtMonth(b.month)}</span><b>${rub(b.goal, 0)}</b></div><div><span>Без рекламы обычно</span><b>≈ ${rub(b.organicMonth, 0)}</b></div></div>`;
+  const hint = `<div class="hint">Обычный доход — средний за ${b.organicDays} дн. без рекламы (${rub(b.organicPerDay, 0)} в день). Отдача — сколько дохода сверх обычного приносил 1 ₽ в прошлых кампаниях. Это оценка: с ростом бюджета отдача обычно немного падает.</div>`;
+  let body;
+  if (b.status === 'enough') body = `<p style="margin:0">Цель достижима и без рекламы. Реклама — чтобы вырасти сверх цели.</p>`;
+  else if (b.status === 'noroi') body = `<p style="margin:0">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>. Отдача рекламы пока неизвестна — посчитаю бюджет, когда появятся данные по первой кампании.</p>`;
+  else if (b.status === 'unprofitable') body = `<p style="margin:0">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>, но реклама пока возвращала ${rub(b.roi, 2)} на каждый 1 ₽ — меньше, чем стоила. Увеличивать бюджет невыгодно: сначала стоит поменять кампанию (книгу, креативы, аудиторию).</p>`;
+  else body = `<p style="margin:0 0 6px">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>. Реклама приносила ≈ <b>${rub(b.roi, 2)}</b> дохода на каждый 1 ₽.</p>
+    <div class="tiles"><div><div class="k">Рекомендуемый бюджет</div><div class="v">${rub(b.budget, 0)}</div><div class="s">скидка Литнета вернёт ≈ ${rub(b.discount, 0)} → обойдётся ≈ ${rub(b.cost, 0)}</div></div>
+      <div><div class="k">Ожидаемый доход от рекламы</div><div class="v">≈ ${rub(b.extraIncome, 0)}</div><div class="s">сверх обычного · в плюсе ≈ ${rub(b.profit, 0)}</div></div></div>
+    ${b.lowData ? '<div class="alert" style="margin-top:8px">Данных пока мало — оценка грубая. Она уточнится сама после следующих кампаний.</div>' : ''}`;
+  return `<div class="card">${head}${body}${hint}</div>`;
+}
+
 // переключатель месяца для сводок: текущий и прошедшие месяцы с рекламой
 function adMonths(c) {
   const starts = c.campaigns.map((k) => k.start).filter(Boolean).sort();
@@ -108,6 +126,7 @@ export function ads(a) {
     ${open.map((x) => `<div class="alert" style="margin-top:10px">⚠︎ «${esc(x.name)}»: ${esc(alertText(x))}. Запросите отчёт у таргетологов.<div class="row" style="margin-top:8px"><button class="primary" data-act="note.new" data-id="${x.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${x.campaignId}">Скопировать отчёт</button></div></div>`).join('')}
     <div class="hint">Расход по дням — бюджет ÷ дни кампании (оценка). «Доход сверх обычного» — сколько книга зарабатывает больше, чем в дни без рекламы.</div>
   </div>
+  ${past ? '' : budgetCard(c)}
   <div class="card"><div class="row between"><h2 style="margin:0">Таргет «Литнет платит»</h2><button class="primary" data-act="ad.new" data-ch="litnet">+ Кампания</button></div>
     ${litnet.length ? summaryBody(c, sL, { past }) + campaignList(c, litnet, alerts) : '<p class="muted">Кампаний пока нет. Добавьте оплату таргетологам как кампанию: книга, даты, сумма.</p>'}
     ${discountTable(c)}

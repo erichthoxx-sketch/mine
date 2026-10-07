@@ -550,3 +550,23 @@ test('аналитика книги: лучший день, цены в меся
   assert.equal(x.weekdays.find((w) => w.day === 4).avg, 200); // 01.10.2026 — четверг
   assert.equal(x.allTime.royalty, 390); assert.equal(x.years[0].year, '2026');
 });
+
+test('бюджет рекламы на следующий месяц под цель', async () => {
+  const { budgetPlan } = await import('../js/calc.js');
+  // 30 дней без рекламы по 1000 ₽, потом 10 дней рекламы по 3000 ₽ при расходе 500 ₽/день
+  const sales = [];
+  const day = (i) => { const d = new Date(Date.UTC(2026, 8, 1 + i)); return d.toISOString().slice(0, 10); };
+  for (let i = 0; i < 40; i++) sales.push({ date: day(i), book: 'К', bookId: 'k', kind: 'sale', price: 100, qty: i < 30 ? 10 : 30, royalty: i < 30 ? 1000 : 3000 });
+  const campaigns = [{ id: 'c', channel: 'litnet', scope: 'all', start: day(30), end: day(39), budget: 5000 }];
+  const settings = { goalStart: '2026-11', goalAmount: 90000, goalGrowth: 10, goalMonths: 3, litnetThreshold: 10000, litnetPct: 20, baseDays: 14 };
+  const r = budgetPlan({ sales, legacyDays: [], campaigns, reports: [], settings, today: '2026-10-10', dataEnd: day(39) });
+  assert.equal(r.month, '2026-11'); assert.equal(r.goal, 90000);
+  assert.equal(r.organicPerDay, 1000); assert.equal(r.organicMonth, 30000);
+  assert.ok(Math.abs(r.roi - 4) < 1e-9); // +2000 ₽ в день на 500 ₽ рекламы
+  assert.equal(r.gap, 60000);
+  assert.equal(r.budget, 15000); // 60 000 ÷ 4
+  assert.equal(r.discount, 3000); assert.equal(r.cost, 12000); assert.equal(r.profit, 48000);
+  assert.equal(r.status, 'ok');
+  // цель ниже обычного дохода — реклама не обязательна
+  assert.equal(budgetPlan({ sales, legacyDays: [], campaigns, reports: [], settings: { ...settings, goalAmount: 20000 }, today: '2026-10-10', dataEnd: day(39) }).status, 'enough');
+});

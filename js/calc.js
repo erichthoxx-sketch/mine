@@ -801,3 +801,39 @@ export function dayStats(sales, legacyDays, date) {
     vsWeek: wk.known && wk.royalty ? day.royalty / wk.royalty - 1 : null,
   };
 }
+
+// ---------- сколько вкладывать в рекламу в следующем месяце, чтобы выйти на цель ----------
+// Обычный доход в день — по дням без рекламы (последние 90 дней с данными); отдача рекламы — сколько ₽ дохода
+// сверх обычного приносил 1 ₽ рекламы в прошлых кампаниях. Бюджет = (цель − обычный доход за месяц) ÷ отдача.
+// ctx: { sales, legacyDays, campaigns, reports, settings, today, dataEnd }
+export function budgetPlan(ctx) {
+  const s = ctx.settings || {};
+  const next = addMonths(monthKey(ctx.today), 1), days = daysInMonth(next);
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
+  const goal = plan.find((p) => p.month === next)?.plan ?? null;
+  // обычный доход: дни без любой рекламы
+  const camps = (ctx.campaigns || []).filter((k) => !k.oneOff && k.start);
+  const adOn = (d) => camps.some((k) => d >= k.start && d <= (k.end || '9999-12-31'));
+  const clean = incomeSeries(ctx.sales, ctx.legacyDays || [], addDays(ctx.dataEnd, -89), ctx.dataEnd).filter((x) => x.known && !adOn(x.date));
+  const organicPerDay = clean.length ? r2(clean.reduce((a, x) => a + x.royalty, 0) / clean.length) : null;
+  // отдача рекламы по прошлым кампаниям
+  const sum = adGroupSummary(camps, { sales: ctx.sales, legacyDays: ctx.legacyDays || [], reports: ctx.reports || [], campaigns: ctx.campaigns || [], dataEnd: ctx.dataEnd, baseDays: s.baseDays, today: ctx.today });
+  const roi = sum.returnShare != null && sum.returned != null ? sum.returnShare : null; // ₽ дохода сверх обычного на 1 ₽ рекламы
+  const spentWithData = roi ? r2(sum.returned / roi) : 0;
+  const out = { month: next, days, goal, organicPerDay, organicDays: clean.length, organicMonth: organicPerDay == null ? null : r2(organicPerDay * days), roi, spentWithData, threshold: Number(s.litnetThreshold) || 10000, pct: (Number(s.litnetPct) || 20) / 100 };
+  if (goal == null || organicPerDay == null) return { ...out, status: 'nodata' };
+  out.gap = r2(goal - out.organicMonth);
+  if (out.gap <= 0) return { ...out, status: 'enough', budget: 0 };
+  if (roi == null) return { ...out, status: 'noroi' };
+  if (roi < 1) return { ...out, status: 'unprofitable' };
+  const raw = out.gap / roi;
+  // «Литнет платит» принимает от порога; округляем вверх до тысячи
+  out.budget = Math.max(out.threshold, Math.ceil(raw / 1000) * 1000);
+  out.extraIncome = r2(out.budget * roi);
+  out.discount = out.budget >= out.threshold ? r2(out.budget * out.pct) : 0; // скидка Литнета вернётся с выплатой
+  out.cost = r2(out.budget - out.discount);
+  out.profit = r2(out.extraIncome - out.cost);
+  out.lowData = spentWithData < 10000 || out.organicDays < 7; // мало данных — оценка грубая
+  out.status = 'ok';
+  return out;
+}

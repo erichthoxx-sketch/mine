@@ -3,9 +3,9 @@
 import {
   addDays, countDays, incomeSeries, sumSeries, byWeek, byMonth, booksBreakdown, priceAt, monthKey,
   monthsBetween, monthFinance, campaignMetrics, ctr, cpc, buildPlan, r2, monthEnd, chapterEffect,
-  DISCOUNT_NOTE,
+  DISCOUNT_NOTE, budgetPlan,
 } from './calc.js';
-import { fmtDate, fmtMonth } from './format.js';
+import { fmtDate, fmtMonth, fmtMonthIn } from './format.js';
 
 // ---------- ячейки: значение + тип, чтобы Excel получил числа, а текст — красивое форматирование ----------
 const cellOf = (t) => (v) => (v == null || Number.isNaN(v) ? null : { v: r2(v), t });
@@ -149,6 +149,20 @@ export function buildReportModel(d, from, to) {
   table('По дням', ['Дата', 'День', 'Роялти', 'Шт', 'Продажи, шт', 'Подписки, шт', 'Среднее 7 дн.', 'Реклама', 'События'],
     ser.map((x, i) => [fmtDate(x.date), ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][new Date(x.date + 'T00:00:00Z').getUTCDay()], x.known ? RUB2(x.royalty) : 'нет данных', N0(x.qty), N0(x.saleQty), N0(x.subQty), RUB(ma[i]), adOn(x.date).join(', '), (evBy[x.date] || []).join('; ')]));
 
+  // бюджет рекламы на следующий месяц под цель
+  const bp = budgetPlan({ sales: d.sales, legacyDays: d.legacyDays, campaigns: d.campaigns, reports: d.reports, settings: s, today: d.today, dataEnd: d.dataEnd });
+  if (bp.status !== 'nodata') {
+    h2(`Рекламный бюджет на ${fmtMonth(bp.month)} и цель`);
+    table('Бюджет и цель', ['Показатель', 'Значение'], [
+      [`Цель на ${fmtMonth(bp.month)}`, RUB(bp.goal)],
+      [`Обычный доход без рекламы (средний за ${bp.organicDays} дн. без рекламы)`, `${cellText(RUB(bp.organicPerDay))} в день ≈ ${cellText(RUB(bp.organicMonth))} за месяц`],
+      ['Не хватает до цели', bp.gap > 0 ? RUB(bp.gap) : 'не хватает 0 — цель достижима без рекламы'],
+      ['Отдача рекламы в прошлых кампаниях', bp.roi == null ? 'пока неизвестна' : `${cellText(N2(bp.roi))} ₽ дохода сверх обычного на 1 ₽ рекламы`],
+      ['Рекомендуемый бюджет (расчёт приложения)', bp.status === 'ok' ? `${cellText(RUB(bp.budget))} (скидка Литнета ≈ ${cellText(RUB(bp.discount))}, обойдётся ≈ ${cellText(RUB(bp.cost))}, доход сверх обычного ≈ ${cellText(RUB(bp.extraIncome))})` : bp.status === 'unprofitable' ? 'увеличивать невыгодно — реклама пока возвращала меньше, чем стоила' : bp.status === 'enough' ? 'не обязателен' : 'нет данных об отдаче'],
+    ]);
+    if (bp.lowData) p('⚠︎ Данных о рекламе пока мало — расчёт бюджета грубый.');
+  }
+
   h2('Что я прошу');
   p('Ты — опытный маркетолог в сфере самиздата и платформ электронных книг. Проанализируй данные выше и ответь:');
   B.push({ type: 'olist', items: [
@@ -156,6 +170,7 @@ export function buildReportModel(d, from, to) {
     'Как события (выкладка глав, скидки, акции, смена цен) влияют на продажи и подписки? Какой ритм выкладки и какие цены выглядят выгоднее?',
     'Какие книги тянут доход, а какие стоит продвигать или перезапускать?',
     'Успеваю ли я к целям по доходу и что конкретно сделать в ближайшие 2–4 недели, чтобы их выполнить? Учитывай порог «Литнет платит» и комиссию Rocket.',
+    `На сколько и как увеличить рекламный бюджет в ${bp.month ? fmtMonthIn(bp.month) : 'следующем месяце'}, чтобы выйти на цель и расти дальше (+${s.goalGrowth} % в месяц)? Проверь расчёт приложения из раздела «Рекламный бюджет»: насколько реалистична отдача при росте бюджета, как распределить бюджет по книгам и по времени, какой минимум (порог «Литнет платит» ${T(N0(s.litnetThreshold))} ₽ в месяц) и какой разумный максимум?`,
     'Каких данных не хватает для более точных выводов?',
   ] });
   p('Дай конкретный план действий по приоритету, без общих советов.');
