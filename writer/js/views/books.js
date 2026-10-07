@@ -205,38 +205,48 @@ export async function refreshOne(a, b, force = false) {
   const r = await drive.countFile(meta);
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
   const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
-  // начало дня и начало недели: раз в день узнаём по истории версий файла, сколько знаков было в полночь
+  // шаг 1: знаки и главы сохраняем сразу — они видны, даже если история версий долгая или недоступна
+  const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE };
+  await a.store.put('w_books', base);
+  // шаг 2: начало дня / недели / месяца и (один раз) история за 2 недели — по версиям документа
   let dayStart = b.dayStart && b.dayStart.date === c.today ? b.dayStart : null;
   let weekStart = b.weekStart && b.weekStart.date === c.today ? b.weekStart : null;
   let monthStart = b.monthStart && b.monthStart.date === c.today ? b.monthStart : null;
-  // один раз восстанавливаем историю знаков за 3 недели по версиям документа — для графиков
-  let filled = !!b.histFilled;
-  const fill = !b.histFilled ? Array.from({ length: 21 }, (_, i) => addDays(c.today, -i)) : [];
+  let filled = !!b.histFilled || meta.mimeType !== drive.MIME.doc; // Word-файлы не восстанавливаем — это тяжело
+  const fill = !filled ? Array.from({ length: 14 }, (_, i) => addDays(c.today, -i)) : [];
   if (!dayStart || !weekStart || !monthStart || fill.length) {
     const wFrom = addDays(c.today, -6), mFrom = c.today.slice(0, 8) + '01';
     let g = {};
     try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom, ...fill])]); } catch { g = {}; }
+    const h2 = { ...history };
     // на конец дня d−1 было «сейчас − прирост с полуночи d»
-    for (const d of fill) { const k = addDays(d, -1); if (g[d] != null && history[k] == null) history[k] = Math.max(0, r.total - Math.max(0, g[d])); }
+    for (const d of fill) { const k = addDays(d, -1); if (g[d] != null && h2[k] == null) h2[k] = Math.max(0, r.total - Math.max(0, g[d])); }
     if (fill.some((d) => g[d] != null)) filled = true;
     const prev = Object.keys(b.history || {}).filter((k) => k < c.today).sort().pop();
     if (!dayStart) dayStart = { date: c.today, chars: g[c.today] != null ? r.total - Math.max(0, g[c.today]) : (!ruleChanged && prev && prev >= addDays(c.today, -1) ? b.history[prev] : r.total) };
     if (!weekStart) weekStart = { date: c.today, from: wFrom, chars: g[wFrom] != null ? r.total - Math.max(0, g[wFrom]) : null };
     if (!monthStart) monthStart = { date: c.today, from: mFrom, chars: g[mFrom] != null ? r.total - Math.max(0, g[mFrom]) : null };
-  }
-  await a.store.put('w_books', { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, dayStart, weekStart, monthStart, countRule: COUNT_RULE, histFilled: filled });
+    const cur = a.ctx().wbooksById[b.id] || base;
+    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled });
+  } else if (filled !== !!b.histFilled) await a.store.put('w_books', { ...base, histFilled: filled });
   return true;
 }
 export async function refreshAll(a, { quiet = false } = {}) {
   const list = a.ctx().wbooks.filter((b) => b.fileId);
   let n = 0;
-  try {
-    for (const b of list) if (await refreshOne(a, b)) n++;
-    if (!quiet) toast(n ? `Знаки обновлены: ${n} кн.` : 'Изменений в файлах нет');
-  } catch (e) { if (!quiet || e instanceof drive.NeedAuth) toast(e.message); }
+  const fails = [];
+  // каждая книга отдельно: ошибка в одной не мешает остальным
+  for (const b of list) {
+    try { if (await refreshOne(a, b)) n++; } catch (e) {
+      if (e instanceof drive.NeedAuth) { toast(e.message); return; }
+      fails.push(`«${b.title}»: ${e.message}`);
+    }
+  }
+  if (fails.length) toast(`Не обновилось — ${fails.join('; ')}`);
+  else if (!quiet) toast(n ? `Знаки обновлены: ${n} кн.` : 'Изменений в файлах нет');
 }
 acts['wbook.refresh'] = async () => { try { await drive.ensureToken(); } catch (e) { toast(e.message); return; } await refreshAll(app()); app().rerender(); };
-acts['wbook.refreshOne'] = async (d) => { try { await drive.ensureToken(); await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast('Знаки обновлены'); } catch (e) { toast(e.message); } };
+acts['wbook.refreshOne'] = async (d) => { try { await drive.ensureToken(); toast('Считаю знаки…'); await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast('Знаки обновлены'); } catch (e) { toast('Не получилось: ' + e.message); } };
 acts['drive.connect'] = async () => {
   try { await drive.connect(); toast('Google Диск подключён'); refreshAll(app(), { quiet: true }); } catch (e) { toast(e.message); }
 };
@@ -294,7 +304,8 @@ acts['wbook.addFile'] = async (d) => {
   const b = { id, title: f.name.replace(/\.docx$/i, ''), fileId: f.id, mimeType: f.mimeType, webViewLink: f.webViewLink, modifiedTime: '', status: 'progress', platforms: ['Литнет'], chars: 0, history: {}, createdAt: new Date().toISOString() };
   await app().store.put('w_books', b);
   picked.splice(Number(d.i), 1); pickSheet();
-  try { await refreshOne(app(), b, true); toast(`«${b.title}» добавлена`); } catch (e) { toast(e.message); }
+  toast('Считаю знаки…');
+  try { await refreshOne(app(), b, true); toast(`«${b.title}» добавлена`); } catch (e) { toast(`«${b.title}» добавлена, но знаки не посчитались: ${e.message}. Нажмите «Обновить знаки» на странице книги.`); }
 };
 
 // ---------- карточка книги ----------
