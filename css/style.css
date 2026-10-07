@@ -371,3 +371,6 @@ label.inline-num { display: flex; align-items: center; justify-content: space-be
 label.inline-num input { width: 84px; text-align: center; margin: 0; }
 .checks.dow { gap: 4px 10px; }
 .wbar + .wbar { margin-top: 8px; }
+/* активная вкладка в тёмной теме — нежно-розовая (цвет акцента), в светлой — изумрудная как раньше */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) nav.tabs a.on, :root:not([data-theme="light"]) nav.tabs a.on .ic { color: var(--accent); } }
+:root[data-theme="dark"] nav.tabs a.on, :root[data-theme="dark"] nav.tabs a.on .ic { color: var(--accent); }
