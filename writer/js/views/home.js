@@ -27,11 +27,10 @@ export function reminders(c) {
     if (b.finishBy && !s.doneWriting) add(b.finishBy, `Дописать «${b.title}»`, s.planCh ? `глав ${s.written} из ≈${s.planCh}` : '', '/book/' + b.id);
     if (s.until && s.remaining !== 0) add(s.until, `Закончить выкладку «${b.title}»`, b.publishUntil ? '' : 'посчитано по графику', '/book/' + b.id);
     // день выкладки по графику: напоминание, только если глава ещё не отмечена и не стоит на таймере
-    if (s.next) add(s.next.date, `Выложить ${s.next.ch ? `«${s.next.ch}»` : 'следующую главу'} — ${s.next.pf}`, `«${esc(b.title)}» · по графику: ${daysTxt(b.pubDays)}`, '/book/' + b.id, 1);
+    // в день выкладки по графику: напоминание, только если в этот день ничего не выложено и не стоит на таймере
+    if (s.next && s.next.date === t) add(s.next.date, `Выложить ${s.next.ch ? `«${s.next.ch}»` : 'следующую главу'} — ${s.next.pf}`, `«${esc(b.title)}» · по графику: ${daysTxt(b.pubDays)}`, '/book/' + b.id, 0);
     if (b.publishStart && b.publishStart >= t) add(b.publishStart, `Начать выкладку «${b.title}»`, '', '/plan', 7);
   }
-  // отложенные публикации глав: выйдут сами, просто напоминание
-  for (const b of c.wbooks) for (const x of plannedPubs(b, t)) add(x.date, `Выйдет ${x.ch} — ${x.pf}`, `«${esc(b.title)}» · отложенная публикация`, '/book/' + b.id, 7);
   for (const x of d.w_queue) if (!x.done && x.due) add(x.due, x.title, x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди «Что пишу дальше»', '/plan');
   for (const x of d.w_waiting) {
     if (x.done) continue;
