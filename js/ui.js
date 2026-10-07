@@ -7,10 +7,17 @@ export const forms = {};  // <form data-form="имя"> → forms.имя(FormData
 export const changes = {}; // data-chg="имя" → changes.имя(value, element)
 
 let toastTimer;
-export function toast(msg) {
+// toast(msg, { undo }) — с кнопкой «Вернуть» (держится дольше)
+export function toast(msg, opts = {}) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+  if (opts.undo) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'toast-undo'; b.textContent = 'Вернуть';
+    b.onclick = async () => { t.hidden = true; await opts.undo(); };
+    t.append(' ', b);
+  }
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, opts.undo ? 6000 : 3500);
 }
 
 // Число из поля ввода: пусто → null, «1 234,5» → 1234.5, мусор → NaN

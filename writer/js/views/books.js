@@ -1,7 +1,7 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW } from '../wcalc.js';
+import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, scheduleDates, planBySchedule } from '../wcalc.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
 import { resizeImage } from '../../../js/img.js';
@@ -289,6 +289,10 @@ acts['pub.mark'] = (d) => {
   const firstFree = chs.find((t) => !pubState((pm[t.title] || {})[pfs[0]], c.today));
   const pre = new Set(d.ch ? [d.ch] : firstFree ? [firstFree.title] : []);
   const cur = d.ch && d.pf ? (pm[d.ch] || {})[d.pf] : null, curSt = pubState(cur, c.today);
+  const hasSch = !!(b.publishStart && (b.pubDays || []).length);
+  // первый день графика после сегодняшнего — дата по умолчанию для отложенной
+  const nextSlot = () => (hasSch ? scheduleDates(b.publishStart, b.pubDays, addDays(c.today, 1), 1)[0] : null) || addDays(c.today, 1);
+  const pickList = (fd) => { const firstN = N(fd.get('firstN')); return [...(firstN > 0 ? chs.slice(0, firstN).map((t) => t.title) : fd.getAll('ch')), ...String(fd.get('chx') || '').split(',').map((x) => x.trim()).filter(Boolean)]; };
   const stOf = (t) => pfs.map((x) => { const st = pubState((pm[t] || {})[x], c.today); return st ? `${x} ${st === 'done' ? '✓' : '⏱ ' + dm(pm[t][x].date)}` : ''; }).filter(Boolean).join(' · ');
   openSheet(`Выкладка — ${b.title}`, `
     ${chs.length ? `<label style="margin-top:0">Главы</label><div class="pick-list">${chs.map((t) => `<label class="check"><input type="checkbox" name="ch" value="${esc(t.title)}"${pre.has(t.title) ? ' checked' : ''}><span>${esc(t.title)}${stOf(t.title) ? ` <span class="small muted">· ${stOf(t.title)}</span>` : ''}</span></label>`).join('')}</div>` : ''}
@@ -297,28 +301,51 @@ acts['pub.mark'] = (d) => {
     <label>Площадки</label><div class="checks">${pfs.map((x) => `<label class="check"><input type="checkbox" name="pf" value="${esc(x)}"${(d.pf ? d.pf === x : x === pfs[0]) ? ' checked' : ''}>${esc(x)}</label>`).join('')}</div>
     <div class="f2"><div><label for="pmd">Что сделала</label><select id="pmd" name="mode">${opt('done', 'Выложила', curSt === 'wait' ? 'plan' : 'done')}${opt('plan', 'Запланировала (отложенная)', curSt === 'wait' ? 'plan' : 'done')}${opt('past', 'Уже выложено раньше — без событий', '')}${opt('clear', 'Снять отметку', '')}</select></div>
     <div><label for="pdt">Дата</label><input id="pdt" type="date" name="date" value="${cur?.date || c.today}"></div></div>
+    ${hasSch ? `<div data-sch hidden><label class="check"><input type="checkbox" name="bySch" checked>По графику (${daysTxt(b.pubDays)}): каждой главе — свой день, начиная с даты</label><div class="small muted" data-preview></div></div>` : ''}
     <div class="hint">Отложенная публикация: до указанной даты глава отмечена ⏱, а в этот день сама станет выложенной. Событие «Выкладка главы» сразу ставится на эту дату в «Доходах». «Уже выложено раньше» — для глав, что вышли до начала учёта: они отметятся выложенными, но событий в «Доходах» не будет, дата не нужна.</div>`, async (fd) => {
-    const firstN = N(fd.get('firstN'));
-    const list = [...(firstN > 0 ? chs.slice(0, firstN).map((t) => t.title) : fd.getAll('ch')), ...String(fd.get('chx') || '').split(',').map((x) => x.trim()).filter(Boolean)];
+    const list = pickList(fd);
     const plats = fd.getAll('pf'), mode = fd.get('mode'), date = fd.get('date') || c.today;
     if (!list.length) { toast('Выберите главу'); return false; }
     if (!plats.length) { toast('Выберите площадку'); return false; }
     if (mode === 'plan' && date <= c.today) { toast('Для отложенной публикации выберите дату позже сегодняшней'); return false; }
+    // по графику: у каждой главы своя дата (для каждой площадки — свои свободные дни)
+    const bySch = mode === 'plan' && hasSch && fd.get('bySch') && list.length > 1;
+    const dateOf = {};
+    for (const x of plats) {
+      const plan = bySch ? planBySchedule(b, list, date, x) : null;
+      if (bySch && !plan) { toast('Не хватило дней графика — проверьте даты в «Сроках»'); return false; }
+      dateOf[x] = Object.fromEntries(list.map((ch) => [ch, plan ? plan.find((p) => p.ch === ch).date : date]));
+    }
     const next = pubMap(b);
     for (const ch of list) {
       next[ch] = { ...(next[ch] || {}) };
       for (const x of plats) {
         if (mode === 'clear') { delete next[ch][x]; await chapterUnset(b, ch, x); continue; }
         if (mode === 'past') { next[ch][x] = { date: PAST, past: true }; await chapterUnset(b, ch, x); continue; }
-        next[ch][x] = mode === 'plan' ? { date, planned: true } : { date };
-        await chapterEvent(c, b, ch, date, x);
+        const dt = dateOf[x][ch];
+        next[ch][x] = mode === 'plan' ? { date: dt, planned: true } : { date: dt };
+        await chapterEvent(c, b, ch, dt, x);
       }
       if (!Object.keys(next[ch]).length) delete next[ch];
     }
     await app().store.put('w_books', { ...b, pub: next, published: null });
-    const n = list.length;
-    toast(mode === 'past' ? `Отмечено выложенными: ${n} — без событий в «Доходах»` : mode === 'clear' ? 'Отметка снята' : mode === 'plan' ? `Запланировано на ${dm(date)} — в «Доходах» тоже` : `${n > 1 ? 'Главы отмечены' : 'Глава отмечена'} — и в «Доходах» тоже`);
+    const n = list.length, dts = Object.values(dateOf[plats[0]] || {}).sort();
+    toast(mode === 'past' ? `Отмечено выложенными: ${n} — без событий в «Доходах»` : mode === 'clear' ? 'Отметка снята' : mode === 'plan' ? (bySch ? `Запланировано ${n} ${plural(n, ['глава', 'главы', 'глав'])} по графику: ${dm(dts[0])} – ${dm(dts[dts.length - 1])}` : `Запланировано на ${dm(date)} — в «Доходах» тоже`) : `${n > 1 ? 'Главы отмечены' : 'Глава отмечена'} — и в «Доходах» тоже`);
   }, { submitText: 'Сохранить' });
+  // живая подсказка: какая глава в какой день выйдет; при выборе «Запланировала» — дата = ближайший день графика
+  const form = document.querySelector('dialog[open] form');
+  if (!form) return;
+  const upd = (e) => {
+    const fd = new FormData(form), mode = fd.get('mode'), box = form.querySelector('[data-sch]');
+    if (e?.target?.name === 'mode' && mode === 'plan' && (form.elements.date.value || '') <= c.today) form.elements.date.value = nextSlot();
+    if (!box) return;
+    const list = pickList(fd), on = mode === 'plan' && list.length > 1;
+    box.hidden = !on;
+    if (!on) return;
+    const plan = fd.get('bySch') ? planBySchedule(b, list, fd.get('date') || nextSlot(), (fd.getAll('pf')[0]) || pfs[0]) : null;
+    box.querySelector('[data-preview]').textContent = plan ? plan.map((p) => `${p.ch} — ${dm(p.date)}`).join(' · ') : fd.get('bySch') ? '' : `все на ${dm(fd.get('date'))}`;
+  };
+  form.addEventListener('change', upd); form.addEventListener('input', upd); upd();
 };
 changes['wbook.cover'] = async (v, el) => {
   const file = el.files[0]; el.value = '';

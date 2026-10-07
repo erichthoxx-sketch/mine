@@ -206,6 +206,16 @@ export function scheduleDates(start, days, from, n) {
   for (let i = 0; i < 730 && out.length < n; i++, d = addDays(d, 1)) if (set.has(dowOf(d))) out.push(d);
   return out;
 }
+// Отложить несколько глав по графику: каждой — свой день выкладки начиная с from;
+// дни, где на этой площадке уже стоит другая глава, пропускаем
+export function planBySchedule(b, list, from, pf) {
+  const pm = pubMap(b), mine = new Set(list);
+  const busy = new Set(Object.entries(pm).filter(([ch]) => !mine.has(ch)).map(([, x]) => x[pf]?.date).filter(Boolean));
+  const order = chapterList(b).map((t) => t.title);
+  const sorted = [...list].sort((x, y) => (order.indexOf(x) + 1 || 1e9) - (order.indexOf(y) + 1 || 1e9));
+  const dates = scheduleDates(b.publishStart, b.pubDays, from, sorted.length + busy.size + 1).filter((d) => !busy.has(d));
+  return dates.length < sorted.length ? null : sorted.map((ch, i) => ({ ch, date: dates[i] }));
+}
 // План выкладки и написания книги — всё считается само, ручные даты (publishUntil, finishBy) имеют приоритет.
 // slot «закрыт», если между прошлым днём графика и этим днём на основной площадке что-то вышло или стоит на таймере.
 export function bookSchedule(b, today) {

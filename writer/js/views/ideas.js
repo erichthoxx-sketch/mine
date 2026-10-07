@@ -55,6 +55,7 @@ function ideaRow(c, x, open) {
     <div class="tags">${(x.tags || []).map((t) => `<span class="tag">#${esc(t)}</span>`).join('')}${x.fileLink ? `<a class="tag on" href="${esc(x.fileLink)}" target="_blank" rel="noopener">${ic('doc')} ${esc(x.fileName || 'документ')}</a>` : ''}</div>
     <div class="row" style="margin-top:8px"><select data-chg="idea.setSt" data-id="${x.id}" aria-label="Статус идеи" style="width:auto">${Object.entries(IST).map(([k, v]) => opt(k, v, st)).join('')}</select>
       <button class="link" data-act="idea.edit" data-id="${x.id}">Изменить</button>
+      <button class="link danger" data-act="idea.quickDel" data-id="${x.id}">Удалить</button>
       ${!x.fileLink && drive.isConnected() && c.settings.wBooksFolder ? `<button class="link" data-act="idea.doc" data-id="${x.id}">Превратить в документ</button>` : ''}</div>
     <div class="comments">${comments.map((m, i) => `<div class="comment"><div class="small muted">${fmtDate((m.at || '').slice(0, 10))}</div><div>${esc(m.text)}</div><button class="link danger" data-act="idea.delComment" data-id="${x.id}" data-i="${i}">убрать</button></div>`).join('')}
       <form data-form="idea.comment" data-id="${x.id}" class="row"><input name="text" placeholder="Комментарий" style="flex:1" aria-label="Комментарий"><button class="primary" type="submit">Добавить</button></form></div>
@@ -103,6 +104,13 @@ acts['idea.edit'] = (d) => {
 acts['idea.del'] = async (d) => {
   if (!(await ask('Удалить идею вместе с комментариями?'))) return;
   await app().store.remove('w_ideas', d.id);
+};
+// быстрое удаление: без вопроса, но с «Вернуть» в подсказке
+acts['idea.quickDel'] = async (d) => {
+  const x = app().ctx().data.w_ideas.find((i) => i.id === d.id);
+  if (!x) return;
+  await app().store.remove('w_ideas', x.id);
+  toast('Идея удалена', { undo: async () => { await app().store.put('w_ideas', x); toast('Идея возвращена'); } });
 };
 forms['idea.comment'] = async (fd, f) => {
   const text = (fd.get('text') || '').trim();

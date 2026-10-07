@@ -118,6 +118,17 @@ test('график выкладки: пн/ср/пт, «выложить до» �
   assert.equal(bookSchedule({ ...b, planChapters: null }, '2026-10-07').untilAuto, null);
 });
 
+test('отложить главы по графику: каждой свой день, занятые дни пропускаются', async () => {
+  const { planBySchedule } = await import('../writer/js/wcalc.js');
+  const tabs = ['Глава 12', 'Глава 13', 'Глава 14', 'Глава 15'].map((title) => ({ title, chars: 1 }));
+  const b = { platforms: ['Литнет'], tabs, publishStart: '2026-09-01', pubDays: [1, 3, 5], pub: { 'Глава 12': { 'Литнет': { date: '2026-10-09', planned: true } } } };
+  // пт 09.10 занята Главой 12 → 13-я на пн 12.10, 14-я на ср 14.10, 15-я на пт 16.10
+  assert.deepEqual(planBySchedule(b, ['Глава 15', 'Глава 13', 'Глава 14'], '2026-10-08', 'Литнет'), [
+    { ch: 'Глава 13', date: '2026-10-12' }, { ch: 'Глава 14', date: '2026-10-14' }, { ch: 'Глава 15', date: '2026-10-16' }]);
+  // перепланировать саму Главу 12 — её день свободен для неё
+  assert.equal(planBySchedule(b, ['Глава 12', 'Глава 13'], '2026-10-08', 'Литнет')[0].date, '2026-10-09');
+});
+
 test('написано за месяц: история началась в этом месяце — по версиям файла, не меньше сегодняшнего', async () => {
   const { writtenMonth } = await import('../writer/js/wcalc.js');
   const t = '2026-10-07';
