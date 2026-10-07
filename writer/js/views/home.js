@@ -3,7 +3,7 @@ import { esc } from '../../../js/ui.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { charsAt, writtenToday, contestStatus, waitingStatus } from '../wcalc.js';
+import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate } from '../wcalc.js';
 import { STATUS } from './books.js';
 
 const zn = (n) => num(n || 0) + ' зн.';
@@ -42,6 +42,26 @@ export function reminders(c) {
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// карточка книги в работе: обложка, прогресс по объёму, выкладка, сроки, месяц
+function bar(label, share, right, hint = '') {
+  const pctv = Math.max(0, Math.min(1, share || 0));
+  return `<div class="wbar"><div class="row between small"><span>${label}</span><span>${right}</span></div><div class="progress"><i style="width:${(pctv * 100).toFixed(1)}%"></i></div>${hint ? `<div class="small muted">${hint}</div>` : ''}</div>`;
+}
+function workCard(c, r) {
+  const b = r.b, t = c.today, fc = b.planChars ? forecastDate(b.history || {}, t, Number(b.planChars)) : null;
+  const tabs = (b.tabs || []).filter((x) => x.counted !== false), pubN = Object.keys(b.published || {}).length;
+  const parts = [];
+  if (b.planChars) parts.push(bar('Объём', (b.chars || 0) / b.planChars, `${num(b.chars || 0)} из ${num(b.planChars)} · ${Math.round(((b.chars || 0) / b.planChars) * 100)} %`, fc ? `по темпу допишу к ${fmtDate(fc)}${b.finishBy ? (fc <= b.finishBy ? ' — успеваю к сроку' : ` — срок ${fmtDate(b.finishBy)}, не успеваю`) : ''}` : (b.finishBy ? `срок ${fmtDate(b.finishBy)}` : '')));
+  else parts.push(`<div class="small">${zn(b.chars)}${b.finishBy ? ` · допишу к ${fmtDate(b.finishBy)} (${when(dleft(b.finishBy, t))})` : ''} <span class="muted">· план по объёму — в карточке книги</span></div>`);
+  if (tabs.length) parts.push(bar('Выкладка', pubN / tabs.length, `глав ${pubN} из ${tabs.length}`, b.publishUntil ? `выкладка до ${fmtDate(b.publishUntil)} (${when(dleft(b.publishUntil, t))})` : ''));
+  else if (b.publishStart && b.publishUntil) { const all = dleft(b.publishUntil, b.publishStart) || 1; parts.push(bar('Выкладка', dleft(t, b.publishStart) / all, `до ${fmtDate(b.publishUntil)}`)); }
+  return `<a class="card wcard tap" href="#" data-act="go" data-to="/book/${b.id}">
+    <span class="mk-cover big">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
+    <span class="wcard-body"><span class="row between"><b>${esc(b.title)}</b>${r.contests.map((x) => `<span class="badge">конкурс · ${x.end ? when(dleft(x.end, t)) : ''}</span>`).join('')}</span>
+      ${parts.join('')}
+      <span class="small">В ${fmtMonthIn(monthKey(t)).split(' ')[0]}: +${num(r.wrote)} зн.${r.today ? ` (сегодня +${num(r.today)})` : ''} · глав ${r.chapters}${r.income != null ? ` · доход ${rub(r.income, 0)}` : ''}</span></span></a>`;
+}
+
 export function homeView(a) {
   const c = a.ctx(), t = c.today, mk = monthKey(t), from = mk + '-01';
   const rem = reminders(c);
@@ -57,23 +77,20 @@ export function homeView(a) {
     return { b, wrote, today: writtenToday(b, t), chapters, income, contests };
   }).filter((r) => (r.b.status || 'progress') === 'progress' || r.wrote || r.chapters || r.income);
   const sum = (k) => rows.reduce((s, r) => s + (r[k] || 0), 0);
+  const inWork = rows.filter((r) => (r.b.status || 'progress') === 'progress'), others = rows.filter((r) => (r.b.status || 'progress') !== 'progress');
   const html = `
   <h2>${fmtMonthCap(mk)}</h2>
   <div class="grid4">
     <div class="stat"><div class="k">Написано за месяц</div><div class="v">${num(sum('wrote'))}</div><div class="s">знаков · сегодня +${num(sum('today'))}</div></div>
     <div class="stat"><div class="k">Глав выложено</div><div class="v">${sum('chapters')}</div><div class="s">в ${fmtMonthIn(mk)}</div></div>
-    <div class="stat"><div class="k">Доход за месяц</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div><div class="s">все книги, до вычетов (роялти) — как «Этот месяц» в «Доходах»</div></div>
+    <div class="stat"><div class="k">Доход за ${fmtMonth(mk).split(' ')[0]}</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div></div>
     <div class="stat"><div class="k">В работе</div><div class="v">${c.wbooks.filter((b) => (b.status || 'progress') === 'progress').length}</div><div class="s">книг</div></div>
   </div>
   <div class="card"><h2>Напоминания</h2>
     ${rem.length ? `<div class="list">${rem.map((r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}</span></a>`).join('')}</div>`
     : '<p class="muted" style="margin:0">На ближайшие две недели ничего срочного. Сроки книг, конкурсы и очередь — в Планере.</p>'}</div>
-  <div class="card"><h2>Книги в этом месяце</h2>
-    ${rows.length ? `<div class="list">${rows.map((r) => `<a class="item" href="#" data-act="go" data-to="/book/${r.b.id}"><div class="row between"><b>${esc(r.b.title)}</b><span class="small muted">${STATUS[r.b.status] || STATUS.progress}</span></div>
-      <div class="small">написано +${num(r.wrote)} зн.${r.today ? ` (сегодня +${num(r.today)})` : ''} · глав выложено ${r.chapters}${r.income != null ? ` · доход ${rub(r.income, 0)}` : ''}</div>
-      ${r.contests.length ? `<div class="small muted">${r.contests.map((x) => `конкурс «${esc(x.name)}»${x.end ? ' до ' + fmtDate(x.end) : ''}`).join(' · ')}</div>` : ''}</a>`).join('')}</div>`
-    : '<p class="muted" style="margin:0">В этом месяце пока нет книг в работе.</p>'}
-    <div class="hint">Написано — по знакам вкладок книги (Пролог, Главы, Эпилог, От автора); доход — по книге, связанной в карточке книги («Книга в приложении доходов»).</div></div>`;
+  ${inWork.length ? `<h2 style="margin-top:18px">В работе</h2>${inWork.map((r) => workCard(c, r)).join('')}` : ''}
+  ${others.length ? `<div class="card"><h2>Другие книги в ${fmtMonthIn(mk)}</h2><div class="list">${others.map((r) => `<a class="item row between" href="#" data-act="go" data-to="/book/${r.b.id}"><span>${esc(r.b.title)}<span class="sub">${[r.wrote ? `+${num(r.wrote)} зн.` : '', r.chapters ? `глав ${r.chapters}` : '', STATUS[r.b.status] || ''].filter(Boolean).join(' · ')}</span></span><b>${r.income != null ? rub(r.income, 0) : ''}</b></a>`).join('')}</div></div>` : ''}`;
   return { html };
 }
 export { ic };

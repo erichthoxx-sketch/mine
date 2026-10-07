@@ -345,3 +345,7 @@ details.idea-group[open] > summary span:first-child::before { content: '▾'; }
 .mk-cover.big { width: 60px; height: 84px; }
 .mk-info { display: flex; flex-direction: column; min-width: 0; }
 .list a.item.mk-row { display: flex; }
+/* Мастерская, главная: карточки книг в работе */
+main a.card.wcard { display: flex; gap: 14px; align-items: flex-start; color: inherit; font-weight: inherit; text-decoration: none; }
+.wcard-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+.wbar .progress { margin: 4px 0 2px; }
