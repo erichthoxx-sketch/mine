@@ -62,7 +62,7 @@ export function homeView(a) {
   <div class="grid4">
     <div class="stat"><div class="k">Написано за месяц</div><div class="v">${num(sum('wrote'))}</div><div class="s">знаков · сегодня +${num(sum('today'))}</div></div>
     <div class="stat"><div class="k">Глав выложено</div><div class="v">${sum('chapters')}</div><div class="s">в ${fmtMonthIn(mk)}</div></div>
-    <div class="stat"><div class="k">Доход книг</div><div class="v">${rub(sum('income'), 0)}</div><div class="s">роялти за месяц, по «Доходам»</div></div>
+    <div class="stat"><div class="k">Доход за месяц</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div><div class="s">все книги, до вычетов (роялти) — как «Этот месяц» в «Доходах»</div></div>
     <div class="stat"><div class="k">В работе</div><div class="v">${c.wbooks.filter((b) => (b.status || 'progress') === 'progress').length}</div><div class="s">книг</div></div>
   </div>
   <div class="card"><h2>Напоминания</h2>
