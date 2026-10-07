@@ -82,7 +82,7 @@ export function budgetCard(c) {
   else body = `<p style="margin:0 0 6px">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>. Реклама приносила ≈ <b>${rub(b.roi, 2)}</b> дохода на каждый 1 ₽.</p>
     <div class="tiles"><div><div class="k">Рекомендуемый бюджет</div><div class="v">${rub(b.budget, 0)}</div><div class="s">скидка Литнета вернёт ≈ ${rub(b.discount, 0)} → обойдётся ≈ ${rub(b.cost, 0)}</div></div>
       <div><div class="k">Ожидаемый доход от рекламы</div><div class="v">≈ ${rub(b.extraIncome, 0)}</div><div class="s">сверх обычного · в плюсе ≈ ${rub(b.profit, 0)}</div></div></div>
-    ${b.lowData ? '<div class="alert" style="margin-top:8px">Данных пока мало — оценка грубая. Она уточнится сама после следующих кампаний.</div>' : ''}`;
+    ${b.lowData ? '<div class="note-soft">Оценка пока примерная — данных мало. Уточнится сама после следующих кампаний.</div>' : ''}`;
   return `<div class="card">${head}${body}${hint}</div>`;
 }
 
