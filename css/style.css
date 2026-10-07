@@ -382,3 +382,40 @@ button.icon-btn:hover, button.icon-btn:active { color: var(--bad); background: v
 button.icon-btn { opacity: .55; } button.icon-btn:hover, button.icon-btn:active { opacity: 1; }
 #toast:has(.toast-undo) { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 #toast[hidden] { display: none !important; }
+/* ---------- Планер ---------- */
+.week { padding: 10px 10px 12px; }
+.wk-head { padding: 0 4px 6px; }
+.wk-head > .link { font-size: 22px; line-height: 1; padding: 0 8px; min-height: 0; }
+.wstrip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.wstrip button.wday { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 0; padding: 6px 0 5px; border-radius: 14px; border: 1px solid transparent; background: transparent; box-shadow: none; color: var(--text); font-weight: 600; }
+button.wday .wk-d { font-size: 11px; color: var(--muted); font-weight: 600; }
+button.wday .wk-n { font-size: 16px; }
+.wstrip button.wday.today { border-color: var(--line); }
+button.wday.today .wk-n { color: var(--link); }
+.wstrip button.wday.on { background: var(--accent-soft); border-color: var(--accent-2); }
+.wk-dots { display: flex; gap: 3px; height: 6px; }
+.wk-dots i { width: 5px; height: 5px; border-radius: 50%; display: block; }
+.plist { display: flex; flex-direction: column; }
+.pitem { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.plist .pitem:first-child { border-top: 0; }
+.pitem .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.pi-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pi-t { font-size: 15px; font-weight: 600; }
+.pi-s { font-size: 13px; color: var(--muted); }
+.pi-btns { display: flex; gap: 6px; flex: none; }
+.pi-btns button { min-height: 34px; padding: 4px 12px; font-size: 14px; }
+.pday + .pday { margin-top: 8px; }
+.pday-h { font-size: 13px; font-weight: 700; color: var(--text-2); margin: 6px 0 0; }
+.k-pub { background: var(--link); } .k-wait { background: var(--warn); } .k-done { background: var(--line); }
+.k-contest { background: var(--accent); } .k-book { background: #9a8ad6; } .k-queue { background: var(--text-2); }
+.k-waitans { background: var(--bad); } .k-money { background: #c9a227; }
+.psec-h { display: flex; align-items: center; justify-content: space-between; margin: 22px 0 8px; }
+.psec-h h2 { margin: 0; font-size: 18px; }
+.psec-h h2 .muted { font-weight: 600; font-size: 15px; margin-left: 4px; }
+.psec-h .small-btn { min-height: 34px; padding: 4px 12px; font-size: 14px; }
+.pbook + .pbook { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+.pbook-t { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; margin-bottom: 6px; }
+.wstrip button.wday { padding: 6px 0 5px; border-radius: 14px; }
+.week .wstrip button.wday { border-color: transparent; }
+.week .wstrip button.wday.today { border-color: var(--line); }
+.week .wstrip button.wday.on { border-color: var(--accent-2); background: var(--accent-soft); }

@@ -1,7 +1,8 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, pct } from '../../../js/format.js';
-import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW } from '../wcalc.js';
+import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
+import { reminders } from './home.js';
 import { addDays } from '../../../js/calc.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
 import { startEvent, finishEvent, chapterEvent, removeEvent } from '../sync.js';
@@ -10,30 +11,117 @@ const app = () => window.__app;
 const zn = (n) => num(n || 0) + ' зн.';
 const CSTATUS = { plan: 'Собираюсь', in: 'Участвую', sent: 'Подала', done: 'Итоги' };
 
-export function planView(a) {
-  const c = a.ctx(), t = a.ui.planTab;
-  const d = c.data;
-  const live = d.w_contests.filter((x) => !(x.end && x.end < c.today) && x.status !== 'done').length;
-  const overdue = d.w_waiting.filter((x) => waitingStatus(x, c.today).overdue).length;
-  const tab = (k, label, n) => `<button class="chip${t === k ? ' on' : ''}" data-act="plan.tab" data-v="${k}">${label}${n ? ` · ${n}` : ''}</button>`;
-  const inWork = c.wbooks.filter((b) => (b.status || 'progress') === 'progress');
-  const body = t === 'queue' ? queue(c) : t === 'waiting' ? waiting(c) : t === 'contests' ? contests(c) : booksPlan(c, inWork);
-  return { html: `<div class="chips">${tab('books', 'Книги в работе', inWork.length)}${tab('contests', 'Конкурсы', live)}${tab('queue', 'Что пишу дальше', d.w_queue.filter((x) => !x.done).length)}${tab('waiting', 'Жду ответа', overdue ? overdue + ' ⚠︎' : '')}</div>${body}` };
+// ---------- Планер: неделя → дела на выбранный день → ближайшие две недели → разделы ----------
+const MONG = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const DOWF = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье'];
+const dowI = (d) => (new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7;
+const dayName = (d, today) => {
+  const n = dleft(d, today), base = `${DOWF[dowI(d)]}, ${Number(d.slice(8, 10))} ${MONG[Number(d.slice(5, 7)) - 1]}`;
+  return n === 0 ? `Сегодня · ${base}` : n === 1 ? `Завтра · ${base}` : n === -1 ? `Вчера · ${base}` : base[0].toUpperCase() + base.slice(1);
+};
+const monday = (d) => addDays(d, -dowI(d));
+
+// Все дела с датами в диапазоне [from, to]: выкладка глав по графику, отложенные главы, конкурсы, сроки книг, очередь, «жду ответа», «Доходы»
+export function planItems(c, from, to) {
+  const out = [], t = c.today, d = c.data;
+  const add = (date, kind, title, sub, extra = {}) => { if (date && date >= from && date <= to) out.push({ date, kind, title, sub, ...extra }); };
+  for (const b of c.wbooks) {
+    if ((b.status || 'progress') !== 'progress') continue;
+    const s = bookSchedule(b, t), pm = pubMap(b), bt = esc(b.title);
+    // отложенные главы (на всех площадках)
+    for (const [ch, pfs] of Object.entries(pm)) for (const [pf, v] of Object.entries(pfs)) {
+      if (!v?.date || v.past) continue;
+      if (v.date > t) add(v.date, 'wait', `⏱ ${esc(ch)} — выйдет сама`, `${bt} · ${esc(pf)}`, { to: '/book/' + b.id });
+      else if (v.date >= from) add(v.date, 'done', `✓ ${esc(ch)} — выложена`, `${bt} · ${esc(pf)}`, { to: '/book/' + b.id });
+    }
+    // свободные дни графика: какую главу выкладывать
+    s.free.forEach((date, i) => {
+      const ch = s.queue[i];
+      add(date, 'pub', `Выложить ${ch ? `«${esc(ch)}»` : 'новую главу'}`, `${bt} · ${esc(s.pf)}${ch ? '' : ' · глава ещё не написана'}`, { book: b.id, ch, pf: s.pf });
+    });
+    if (b.finishBy && !s.doneWriting) add(b.finishBy, 'book', `Дописать «${bt}»`, s.planCh ? `глав ${s.written} из ≈${s.planCh}` : '', { to: '/book/' + b.id });
+    else if (s.finishAuto) add(s.finishAuto, 'book', `По темпу допишу «${bt}»`, s.planCh ? `глав ${s.written} из ≈${s.planCh}` : '', { to: '/book/' + b.id });
+    if (s.until && s.remaining !== 0) add(s.until, 'book', `Последняя глава «${bt}»`, b.publishUntil ? 'срок выкладки' : 'по графику', { to: '/book/' + b.id });
+  }
+  for (const x of d.w_contests) {
+    if (x.status === 'done') continue;
+    const b = x.bookId ? c.wbooksById[x.bookId] : null, st = contestStatus(x, b, t);
+    add(x.end, 'contest', `Конкурс «${esc(x.name)}» — окончание`, [b ? esc(b.title) : '', st.need ? `не хватает ${zn(st.need)}` : st.need === 0 ? 'объём ✓' : ''].filter(Boolean).join(' · '), { act: 'contest.edit', id: x.id });
+    if (x.start && x.start >= t) add(x.start, 'contest', `Конкурс «${esc(x.name)}» — старт`, b ? esc(b.title) : '', { act: 'contest.edit', id: x.id });
+  }
+  for (const x of d.w_queue) if (!x.done && x.due) add(x.due < t ? t : x.due, 'queue', esc(x.title), `${x.due < t ? 'просрочено · ' : ''}${x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди'}`, { act: 'queue.edit', id: x.id });
+  for (const x of d.w_waiting) {
+    if (x.done) continue;
+    const remind = addDays(x.since, Number(x.remindDays) || 14), s = waitingStatus(x, t);
+    add(remind < t ? t : remind, 'waitans', `Напомнить о себе: ${esc(x.who)}`, `жду ${s.days} дн.${x.what ? ' · ' + esc(x.what.slice(0, 50)) : ''}`, { act: 'wait.edit', id: x.id });
+  }
+  for (const r of reminders(c)) if (r.to === '../') add(r.date < t ? t : r.date, 'money', r.title, `${r.sub} · в «Доходах»`, { href: '../' });
+  const ord = { pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
+  return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
+}
+function itemHtml(c, x) {
+  const body = `<span class="dot k-${x.kind}"></span><span class="pi-body"><span class="pi-t">${x.title}</span>${x.sub ? `<span class="pi-s">${x.sub}</span>` : ''}</span>`;
+  if (x.kind === 'pub') {
+    const today = x.date <= c.today;
+    return `<div class="pitem">${body}<span class="pi-btns">${today ? `<button class="primary" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="done">Выложила</button>` : ''}<button data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="plan" data-date="${x.date}" title="Поставить на таймер">⏱</button></span></div>`;
+  }
+  if (x.href) return `<a class="pitem tap" href="${x.href}">${body}</a>`;
+  if (x.to) return `<a class="pitem tap" href="#" data-act="go" data-to="${x.to}">${body}</a>`;
+  return `<a class="pitem tap" href="#" data-act="${x.act}" data-id="${x.id}">${body}</a>`;
 }
 
-// ---------- книги в работе: когда допишу, до какого числа выкладка, главы; всё связано с «Доходами» ----------
+export function planView(a) {
+  const c = a.ctx(), t = c.today, d = c.data, ui = a.ui;
+  const sel = ui.planDay && ui.planDay >= addDays(t, -60) ? ui.planDay : t;
+  const wk = monday(addDays(t, 7 * (ui.planWeek || 0)));
+  const items = planItems(c, wk < t ? wk : t, addDays(sel > t ? sel : t, 21));
+  const by = {};
+  for (const x of items) (by[x.date] ||= []).push(x);
+  // неделя
+  const strip = Array.from({ length: 7 }, (_, i) => {
+    const day = addDays(wk, i), list = by[day] || [];
+    const kinds = [...new Set(list.map((x) => x.kind))].slice(0, 3);
+    return `<button class="wday${day === t ? ' today' : ''}${day === sel ? ' on' : ''}" data-act="plan.day" data-v="${day}"><span class="wk-d">${DOW[i]}</span><span class="wk-n">${Number(day.slice(8, 10))}</span><span class="wk-dots">${kinds.map((k) => `<i class="k-${k}"></i>`).join('')}</span></button>`;
+  }).join('');
+  const dayList = by[sel] || [];
+  // дальше: следующие 14 дней после выбранного
+  const nextDays = Object.keys(by).filter((k) => k > sel && k <= addDays(sel, 14)).sort();
+  const inWork = c.wbooks.filter((b) => (b.status || 'progress') === 'progress');
+  const live = d.w_contests.filter((x) => !(x.end && x.end < t) && x.status !== 'done');
+  const qTodo = d.w_queue.filter((x) => !x.done), wOpen = d.w_waiting.filter((x) => !x.done);
+  const html = `
+  <div class="card week">
+    <div class="row between wk-head"><button class="link" data-act="plan.week" data-v="-1" aria-label="Прошлая неделя">‹</button>
+      <span class="small muted">${Number(wk.slice(8, 10))} ${MONG[Number(wk.slice(5, 7)) - 1]} – ${Number(addDays(wk, 6).slice(8, 10))} ${MONG[Number(addDays(wk, 6).slice(5, 7)) - 1]}${ui.planWeek ? ' · <button class="link" data-act="plan.week" data-v="0">к сегодня</button>' : ''}</span>
+      <button class="link" data-act="plan.week" data-v="1" aria-label="Следующая неделя">›</button></div>
+    <div class="wstrip">${strip}</div>
+  </div>
+  <div class="card"><h2 style="margin:0 0 6px">${dayName(sel, t)}</h2>
+    ${dayList.length ? `<div class="plist">${dayList.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">Дел на этот день нет.</p>'}</div>
+  ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 6px">Дальше</h2>${nextDays.map((k) => `<div class="pday"><div class="pday-h">${dayName(k, t)}</div><div class="plist">${by[k].map((x) => itemHtml(c, x)).join('')}</div></div>`).join('')}</div>` : ''}
+  <div class="psec-h"><h2>Книги в работе <span class="muted">${inWork.length || ''}</span></h2></div>
+  ${booksPlan(c, inWork)}
+  <div class="psec-h"><h2>Конкурсы <span class="muted">${live.length || ''}</span></h2><button class="small-btn" data-act="contest.new">+ Конкурс</button></div>
+  ${contests(c)}
+  <div class="psec-h"><h2>Что пишу дальше <span class="muted">${qTodo.length || ''}</span></h2><button class="small-btn" data-act="queue.new">+ В очередь</button></div>
+  ${queue(c)}
+  <div class="psec-h"><h2>Жду ответа <span class="muted">${wOpen.length || ''}</span></h2><button class="small-btn" data-act="wait.new">+ Жду</button></div>
+  ${waiting(c)}`;
+  return { html };
+}
+acts['plan.day'] = (d) => { app().ui.planDay = d.v; };
+acts['plan.week'] = (d) => { const u = app().ui; u.planWeek = d.v === '0' ? 0 : (u.planWeek || 0) + Number(d.v); u.planDay = d.v === '0' ? null : monday(addDays(app().ctx().today, 7 * u.planWeek)); if (u.planWeek === 0) u.planDay = null; };
+
+// ---------- книги в работе: коротко — что дальше, сколько выложено, кнопки ----------
 const dleft = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
 const leftTxt = (n) => (n < 0 ? `просрочено на ${-n} дн.` : n === 0 ? 'сегодня' : `осталось ${n} дн.`);
 function booksPlan(c, list) {
-  if (!list.length) return '<div class="card"><p class="muted" style="margin:0">Книг в работе нет. Поставьте книге статус «В процессе» — она появится здесь.</p></div>';
-  return list.map((b) => {
-    const s = bookSchedule(b, c.today);
-    return `<div class="card">
-      <div class="row between"><a href="#" data-act="go" data-to="/book/${b.id}"><b>${esc(b.title)}</b></a><span class="small muted">${zn(b.chars)}</span></div>
+  if (!list.length) return '<div class="card"><p class="muted small" style="margin:0">Книг в работе нет. Поставьте книге статус «В процессе» — она появится здесь.</p></div>';
+  return `<div class="card plist-card">${list.map((b) => `<div class="pbook">
+      <a href="#" class="pbook-t" data-act="go" data-to="/book/${b.id}"><span class="mk-cover">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span><b>${esc(b.title)}</b></a>
       ${progressBlock(c, b)}
       <div class="row"><button class="primary" data-act="ch.publish" data-id="${b.id}">Выложила главу</button><button data-act="wb.dates" data-id="${b.id}">Сроки</button><button data-act="wb.finish" data-id="${b.id}">Книга завершена</button></div>
-    </div>`;
-  }).join('') + '<div class="hint">«Выложила главу», начало выкладки и завершение книги сами отмечаются событиями в приложении «Доходы» — на графиках и в аналитике книги.</div>';
+    </div>`).join('')}</div>`;
 }
 // Сроки: график выкладки (начало + дни недели) и примерное число глав — даты «выкладка до» и «допишу к» считаются сами;
 // поставить свою дату можно, но не обязательно
@@ -75,8 +163,7 @@ function contests(c) {
     const ex = (x.end && x.end < c.today) || x.status === 'done', ey = (y.end && y.end < c.today) || y.status === 'done';
     return ex - ey || (x.end || '9999').localeCompare(y.end || '9999');
   });
-  return `<div class="row between" style="margin:6px 0 10px"><h2 style="margin:0">Конкурсы</h2><button class="primary" data-act="contest.new">+ Конкурс</button></div>
-  ${list.length ? list.map((x) => {
+  return `${list.length ? list.map((x) => {
     const b = x.bookId ? c.wbooksById[x.bookId] : null;
     const s = contestStatus(x, b, c.today);
     const over = s.ended || x.status === 'done';
@@ -91,7 +178,7 @@ function contests(c) {
       ${x.conditions ? `<details style="margin-top:8px"><summary>Условия</summary><p class="idea-text">${esc(x.conditions)}</p></details>` : ''}
       <div class="row" style="margin-top:8px">${x.url ? `<a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">Страница конкурса</a>` : ''}<button class="link" data-act="contest.edit" data-id="${x.id}">Изменить</button></div>
     </div>`;
-  }).join('') : '<div class="card"><p class="muted">Добавьте конкурс: даты, условия и книгу — приложение посчитает, сколько осталось дней и успеваете ли вы по объёму.</p></div>'}`;
+  }).join('') : '<div class="card"><p class="muted small" style="margin:0">Добавьте конкурс: даты, условия и книгу — приложение посчитает, сколько осталось дней и проходит ли книга по объёму.</p></div>'}`;
 }
 function contestForm(c, x = {}) {
   return `<label for="cn">Название</label><input id="cn" name="name" value="${esc(x.name || '')}" required>
@@ -116,15 +203,14 @@ acts['contest.del'] = async (d) => { if (await ask('Удалить конкур�
 function queue(c) {
   const list = [...c.data.w_queue].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const todo = list.filter((x) => !x.done), done = list.filter((x) => x.done);
-  return `<div class="row between" style="margin:6px 0 10px"><h2 style="margin:0">Что пишу дальше</h2><button class="primary" data-act="queue.new">+ В очередь</button></div>
-  <div class="card list">${todo.length ? todo.map((x, i) => {
+  return `<div class="card list">${todo.length ? todo.map((x, i) => {
     const b = x.bookId ? c.wbooksById[x.bookId] : null;
     const fc = b && b.planChars ? forecastDate(b.history, c.today, Number(b.planChars)) : null;
     return `<div class="item"><div class="row between"><span><b>${i + 1}. ${esc(x.title)}</b></span><span class="row"><button class="link" data-act="queue.move" data-id="${x.id}" data-dir="-1" aria-label="Выше">▲</button><button class="link" data-act="queue.move" data-id="${x.id}" data-dir="1" aria-label="Ниже">▼</button></span></div>
       <div class="small muted">${b ? ic('books') + ' ' + esc(b.title) + ' · ' : ''}${x.due ? 'к ' + fmtDate(x.due) : 'без срока'}${fc ? ' · по темпу допишу к ' + fmtDate(fc) : ''}</div>
       ${x.note ? `<div class="small">${esc(x.note)}</div>` : ''}
       <div class="row"><button class="link" data-act="queue.done" data-id="${x.id}">✓ Готово</button><button class="link" data-act="queue.edit" data-id="${x.id}">Изменить</button></div></div>`;
-  }).join('') : '<p class="muted">Очередь пуста.</p>'}</div>
+  }).join('') : '<p class="muted small" style="margin:0">Очередь пуста.</p>'}</div>
   ${done.length ? `<details class="card"><summary>Сделано (${done.length})</summary>${done.map((x) => `<div class="item small row between"><span>✓ ${esc(x.title)}</span><button class="link" data-act="queue.undo" data-id="${x.id}">вернуть</button></div>`).join('')}</details>` : ''}`;
 }
 function queueForm(c, x = {}) {
@@ -157,13 +243,12 @@ acts['queue.move'] = async (d) => {
 function waiting(c) {
   const list = [...c.data.w_waiting].sort((a, b) => (a.since || '').localeCompare(b.since || ''));
   const open = list.filter((x) => !x.done), done = list.filter((x) => x.done);
-  return `<div class="row between" style="margin:6px 0 10px"><h2 style="margin:0">Жду ответа</h2><button class="primary" data-act="wait.new">+ Жду</button></div>
-  ${open.length ? open.map((x) => {
+  return `${open.length ? open.map((x) => {
     const s = waitingStatus(x, c.today);
     return `<div class="card${s.overdue ? ' alert-card' : ''}"><div class="row between"><b>${esc(x.who)}</b><span class="badge ${s.overdue ? 'bad' : ''}">жду ${s.days} дн.</span></div>
       <div>${esc(x.what || '')}</div><div class="small muted">с ${fmtDate(x.since)}${s.overdue ? ' · пора напомнить о себе' : ` · напомнить через ${Math.max(0, (Number(x.remindDays) || 14) - s.days)} дн.`}</div>
       <div class="row" style="margin-top:6px"><button class="link" data-act="wait.answer" data-id="${x.id}">Ответ получен</button><button class="link" data-act="wait.nudge" data-id="${x.id}">Напомнила — ждать снова</button><button class="link" data-act="wait.edit" data-id="${x.id}">Изменить</button></div></div>`;
-  }).join('') : '<div class="card"><p class="muted">Ни от кого не жду ответа.</p></div>'}
+  }).join('') : '<div class="card"><p class="muted small" style="margin:0">Ни от кого не жду ответа.</p></div>'}
   ${done.length ? `<details class="card"><summary>Ответы получены (${done.length})</summary>${done.map((x) => `<div class="item small"><b>${esc(x.who)}</b>: ${esc(x.what || '')}${x.answer ? `<br>→ ${esc(x.answer)}` : ''}</div>`).join('')}</details>` : ''}`;
 }
 function waitForm(c, x = {}) {

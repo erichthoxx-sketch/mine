@@ -290,6 +290,7 @@ acts['pub.mark'] = (d) => {
   const pre = new Set(d.ch ? [d.ch] : firstFree ? [firstFree.title] : []);
   const cur = d.ch && d.pf ? (pm[d.ch] || {})[d.pf] : null, curSt = pubState(cur, c.today);
   const hasSch = !!(b.publishStart && (b.pubDays || []).length);
+  const defMode = d.mode || (curSt === 'wait' ? 'plan' : 'done');
   // первый день графика после сегодняшнего — дата по умолчанию для отложенной
   const nextSlot = () => (hasSch ? scheduleDates(b.publishStart, b.pubDays, addDays(c.today, 1), 1)[0] : null) || addDays(c.today, 1);
   const pickList = (fd) => { const firstN = N(fd.get('firstN')); return [...(firstN > 0 ? chs.slice(0, firstN).map((t) => t.title) : fd.getAll('ch')), ...String(fd.get('chx') || '').split(',').map((x) => x.trim()).filter(Boolean)]; };
@@ -299,8 +300,8 @@ acts['pub.mark'] = (d) => {
     ${chs.length > 3 ? `<label for="pfn">Или первые N глав по порядку</label><input id="pfn" name="firstN" inputmode="numeric" placeholder="например, 12 — пролог и 11 глав">` : ''}
     <label for="pcx">${chs.length ? 'Или другая глава' : 'Глава'}</label><input id="pcx" name="chx" placeholder="например, Глава 25">
     <label>Площадки</label><div class="checks">${pfs.map((x) => `<label class="check"><input type="checkbox" name="pf" value="${esc(x)}"${(d.pf ? d.pf === x : x === pfs[0]) ? ' checked' : ''}>${esc(x)}</label>`).join('')}</div>
-    <div class="f2"><div><label for="pmd">Что сделала</label><select id="pmd" name="mode">${opt('done', 'Выложила', curSt === 'wait' ? 'plan' : 'done')}${opt('plan', 'Запланировала (отложенная)', curSt === 'wait' ? 'plan' : 'done')}${opt('past', 'Уже выложено раньше — без событий', '')}${opt('clear', 'Снять отметку', '')}</select></div>
-    <div><label for="pdt">Дата</label><input id="pdt" type="date" name="date" value="${cur?.date || c.today}"></div></div>
+    <div class="f2"><div><label for="pmd">Что сделала</label><select id="pmd" name="mode">${opt('done', 'Выложила', defMode)}${opt('plan', 'Запланировала (отложенная)', defMode)}${opt('past', 'Уже выложено раньше — без событий', '')}${opt('clear', 'Снять отметку', '')}</select></div>
+    <div><label for="pdt">Дата</label><input id="pdt" type="date" name="date" value="${cur?.date || d.date || (defMode === 'plan' ? nextSlot() : c.today)}"></div></div>
     ${hasSch ? `<div data-sch hidden><label class="check"><input type="checkbox" name="bySch" checked>По графику (${daysTxt(b.pubDays)}): каждой главе — свой день, начиная с даты</label><div class="small muted" data-preview></div></div>` : ''}
     <div class="hint">Отложенная публикация: до указанной даты глава отмечена ⏱, а в этот день сама станет выложенной. Событие «Выкладка главы» сразу ставится на эту дату в «Доходах». «Уже выложено раньше» — для глав, что вышли до начала учёта: они отметятся выложенными, но событий в «Доходах» не будет, дата не нужна.</div>`, async (fd) => {
     const list = pickList(fd);

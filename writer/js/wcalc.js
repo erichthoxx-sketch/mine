@@ -253,5 +253,7 @@ export function bookSchedule(b, today) {
   // следующая глава к выкладке: первая без отметки на основной площадке
   const nextCh = chs.find((t) => !pm[t.title]?.[pf]?.date)?.title || null;
   const next = (remaining == null || remaining > 0) && free[0] ? { date: free[0], ch: nextCh, pf } : null;
-  return { pf, planCh, written, out, marked, remaining, untilAuto, until: b.publishUntil || untilAuto, finishAuto, finish: b.finishBy || finishAuto, next, doneWriting: !!planCh && written >= planCh };
+  // свободные дни графика (с сегодня) и главы без отметки на основной площадке — по порядку
+  const queue = chs.filter((t) => !pm[t.title]?.[pf]?.date).map((t) => t.title);
+  return { pf, planCh, written, out, marked, remaining, free: remaining == null ? free : free.slice(0, remaining), queue, untilAuto, until: b.publishUntil || untilAuto, finishAuto, finish: b.finishBy || finishAuto, next, doneWriting: !!planCh && written >= planCh };
 }
