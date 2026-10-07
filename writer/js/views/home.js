@@ -36,7 +36,7 @@ export function reminders(c) {
   for (const x of d.w_waiting) {
     if (x.done) continue;
     const s = waitingStatus(x, t), remind = addDays(x.since, Number(x.remindDays) || 14);
-    add(remind, `Напомнить о себе: ${x.who}`, `жду ${s.days} дн.${x.what ? ' · ' + esc(x.what.slice(0, 60)) : ''}`, '/plan', 3);
+    add(remind, `Напомнить о себе: ${x.who}`, `${s.days} дн. без ответа${x.what ? ' · ' + esc(x.what.slice(0, 60)) : ''}`, x.contactId ? '/link/' + x.contactId : '/links', 3);
   }
   // из «Доходов»: налог за прошлый месяц (до 28-го), цифры Rocket (после 20-го), конец рекламных кампаний
   const prev = addMonths(monthKey(t), -1), mPrev = (d.months || []).find((m) => m.id === prev) || {};

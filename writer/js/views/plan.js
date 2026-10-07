@@ -53,7 +53,7 @@ export function planItems(c, from, to) {
   for (const x of d.w_waiting) {
     if (x.done) continue;
     const remind = addDays(x.since, Number(x.remindDays) || 14), s = waitingStatus(x, t);
-    add(remind < t ? t : remind, 'waitans', `Напомнить о себе: ${esc(x.who)}`, `жду ${s.days} дн.${x.what ? ' · ' + esc(x.what.slice(0, 50)) : ''}`, { act: 'wait.edit', id: x.id });
+    add(remind < t ? t : remind, 'waitans', `Напомнить о себе: ${esc(x.who)}`, `${s.days} дн. без ответа${x.what ? ' · ' + esc(x.what.slice(0, 50)) : ''}`, { to: x.contactId ? '/link/' + x.contactId : '/links' });
   }
   for (const r of reminders(c)) if (r.to === '../') add(r.date < t ? t : r.date, 'money', r.title, `${r.sub} · в «Доходах»`, { href: '../' });
   const ord = { pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
@@ -88,7 +88,7 @@ export function planView(a) {
   const nextDays = Object.keys(by).filter((k) => k > sel && k <= addDays(sel, 14)).sort();
   const inWork = c.wbooks.filter((b) => (b.status || 'progress') === 'progress');
   const live = d.w_contests.filter((x) => !(x.end && x.end < t) && x.status !== 'done');
-  const qTodo = d.w_queue.filter((x) => !x.done), wOpen = d.w_waiting.filter((x) => !x.done);
+  const qTodo = d.w_queue.filter((x) => !x.done);
   const html = `
   <div class="card week">
     <div class="row between wk-head"><button class="link" data-act="plan.week" data-v="-1" aria-label="Прошлая неделя">‹</button>
@@ -104,9 +104,7 @@ export function planView(a) {
   <div class="psec-h"><h2>Конкурсы <span class="muted">${live.length || ''}</span></h2><button class="small-btn" data-act="contest.new">+ Конкурс</button></div>
   ${contests(c)}
   <div class="psec-h"><h2>Что пишу дальше <span class="muted">${qTodo.length || ''}</span></h2><button class="small-btn" data-act="queue.new">+ В очередь</button></div>
-  ${queue(c)}
-  <div class="psec-h"><h2>Жду ответа <span class="muted">${wOpen.length || ''}</span></h2><button class="small-btn" data-act="wait.new">+ Жду</button></div>
-  ${waiting(c)}`;
+  ${queue(c)}`;
   return { html };
 }
 acts['plan.day'] = (d) => { app().ui.planDay = d.v; };
@@ -239,33 +237,4 @@ acts['queue.move'] = async (d) => {
   await app().store.putMany('w_queue', list.map((x, k) => ({ ...x, order: k + 1 })));
 };
 
-// ---------- жду ответа ----------
-function waiting(c) {
-  const list = [...c.data.w_waiting].sort((a, b) => (a.since || '').localeCompare(b.since || ''));
-  const open = list.filter((x) => !x.done), done = list.filter((x) => x.done);
-  return `${open.length ? open.map((x) => {
-    const s = waitingStatus(x, c.today);
-    return `<div class="card${s.overdue ? ' alert-card' : ''}"><div class="row between"><b>${esc(x.who)}</b><span class="badge ${s.overdue ? 'bad' : ''}">жду ${s.days} дн.</span></div>
-      <div>${esc(x.what || '')}</div><div class="small muted">с ${fmtDate(x.since)}${s.overdue ? ' · пора напомнить о себе' : ` · напомнить через ${Math.max(0, (Number(x.remindDays) || 14) - s.days)} дн.`}</div>
-      <div class="row" style="margin-top:6px"><button class="link" data-act="wait.answer" data-id="${x.id}">Ответ получен</button><button class="link" data-act="wait.nudge" data-id="${x.id}">Напомнила — ждать снова</button><button class="link" data-act="wait.edit" data-id="${x.id}">Изменить</button></div></div>`;
-  }).join('') : '<div class="card"><p class="muted small" style="margin:0">Ни от кого не жду ответа.</p></div>'}
-  ${done.length ? `<details class="card"><summary>Ответы получены (${done.length})</summary>${done.map((x) => `<div class="item small"><b>${esc(x.who)}</b>: ${esc(x.what || '')}${x.answer ? `<br>→ ${esc(x.answer)}` : ''}</div>`).join('')}</details>` : ''}`;
-}
-function waitForm(c, x = {}) {
-  return `<label for="ww">От кого</label><input id="ww" name="who" value="${esc(x.who || '')}" required placeholder="редактор, издательство, площадка…">
-  <label for="wq">По какому вопросу</label><textarea id="wq" name="what">${esc(x.what || '')}</textarea>
-  <div class="f2"><div><label for="wsi">Жду с</label><input id="wsi" type="date" name="since" value="${x.since || c.today}" required></div><div><label for="wr">Напомнить через, дней</label><input id="wr" name="remindDays" inputmode="numeric" value="${x.remindDays ?? 14}"></div></div>`;
-}
-const waitFrom = (fd) => ({ who: fd.get('who').trim(), what: (fd.get('what') || '').trim(), since: fd.get('since'), remindDays: N(fd.get('remindDays')) || 14 });
-acts['wait.new'] = () => openSheet('Жду ответа', waitForm(app().ctx()), async (fd) => { await app().store.put('w_waiting', { id: 'a' + uid(), ...waitFrom(fd), done: false }); });
-acts['wait.edit'] = (d) => {
-  const x = app().ctx().data.w_waiting.find((i) => i.id === d.id);
-  openSheet('Жду ответа', waitForm(app().ctx(), x) + `<p><button type="button" class="link danger" data-act="wait.del" data-id="${x.id}">Удалить</button></p>`, async (fd) => { await app().store.put('w_waiting', { ...x, ...waitFrom(fd) }); });
-};
-acts['wait.del'] = async (d) => { if (await ask('Удалить?')) await app().store.remove('w_waiting', d.id); };
-acts['wait.nudge'] = (d) => { const x = app().ctx().data.w_waiting.find((i) => i.id === d.id); return app().store.put('w_waiting', { ...x, since: app().ctx().today }); };
-acts['wait.answer'] = (d) => {
-  const x = app().ctx().data.w_waiting.find((i) => i.id === d.id);
-  openSheet('Ответ получен', `<label for="wa">Что ответили (необязательно)</label><textarea id="wa" name="answer"></textarea>`, async (fd) => { await app().store.put('w_waiting', { ...x, done: true, answer: (fd.get('answer') || '').trim(), answeredAt: app().ctx().today }); });
-};
 export { pct };

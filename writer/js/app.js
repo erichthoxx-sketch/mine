@@ -11,10 +11,11 @@ import { homeView } from './views/home.js';
 import { planView } from './views/plan.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
+import { linksView, linkPage } from './views/links.js';
 
-export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media'];
+export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
-const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'active', openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts' };
+const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'active', openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* ок */ }
 
@@ -51,12 +52,13 @@ function getCtx() {
   return cache;
 }
 
-const TABS = [['/', 'house', 'Главная'], ['/books', 'books', 'Книги'], ['/ideas', 'ideas', 'Идеи'], ['/plan', 'plan', 'Планер'], ['/marketing', 'marketing', 'Маркетинг']];
+const TABS = [['/', 'house', 'Главная'], ['/books', 'books', 'Книги'], ['/ideas', 'ideas', 'Идеи'], ['/plan', 'plan', 'Планер'], ['/marketing', 'marketing', 'Маркетинг'], ['/links', 'links', 'Связи']];
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'book' && b) return { tab: '/books', view: (x) => bookPage(x, decodeURIComponent(b)) };
+  if (a === 'link' && b) return { tab: '/links', view: (x) => linkPage(x, decodeURIComponent(b)) };
   if (a === 'mk' && b) return { tab: '/marketing', view: (x) => bookMarketing(x, decodeURIComponent(b)) };
-  const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, marketing: marketingView, settings: settingsView };
+  const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, marketing: marketingView, links: linksView, settings: settingsView };
   return { tab: '/' + (a || ''), view: map[a || ''] || homeView };
 }
 
