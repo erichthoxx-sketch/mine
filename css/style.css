@@ -338,3 +338,10 @@ details.idea-group > summary::-webkit-details-marker { display: none; }
 details.idea-group > summary { list-style: none; cursor: pointer; }
 details.idea-group > summary span:first-child::before { content: '▸'; color: var(--link); font-size: 13px; margin-right: 2px; }
 details.idea-group[open] > summary span:first-child::before { content: '▾'; }
+/* маркетинг: список книг с обложками */
+.mk-row { display: flex; align-items: center; gap: 12px; }
+.mk-cover { flex: 0 0 auto; width: 44px; height: 62px; border-radius: 8px; overflow: hidden; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); color: var(--muted); }
+.mk-cover img { width: 100%; height: 100%; object-fit: cover; }
+.mk-cover.big { width: 60px; height: 84px; }
+.mk-info { display: flex; flex-direction: column; min-width: 0; }
+.list a.item.mk-row { display: flex; }
