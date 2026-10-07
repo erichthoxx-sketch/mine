@@ -81,6 +81,7 @@ acts['idea.delComment'] = async (d) => {
 };
 acts['idea.doc'] = async (d) => {
   const c = app().ctx(), x = c.data.w_ideas.find((i) => i.id === d.id);
+  try { await drive.ensureToken(); } catch (e) { toast(e.message); return; }
   try {
     const body = [x.title, x.text, ...(x.comments || []).map((m) => '— ' + m.text)].filter(Boolean).join('\n\n');
     const f = await drive.createDoc('Идея: ' + (x.title || x.text.slice(0, 40)), c.settings.wIdeasFolder || c.settings.wBooksFolder, body);

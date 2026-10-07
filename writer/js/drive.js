@@ -24,7 +24,10 @@ function loadToken() {
   try { const t = JSON.parse(ls.get('gdrive.token') || 'null'); token = t && t.exp > Date.now() ? t : null; } catch { token = null; }
   return token;
 }
-export const isConnected = () => (isLocalDev ? !!ls.get('gdrive.mock') : !!loadToken());
+// «Подключён» — если доступ к Диску уже давали на этом устройстве. Сам ключ Google живёт ~1 час;
+// когда он истёк, следующее нажатие любой кнопки Диска тихо берёт новый (без экрана согласия).
+export const isConnected = () => (isLocalDev ? !!ls.get('gdrive.mock') : !!loadToken() || !!ls.get('gdrive.consented'));
+export const hasFreshToken = () => (isLocalDev ? !!ls.get('gdrive.mock') : !!loadToken());
 
 let gis;
 export function preload() {
@@ -37,10 +40,17 @@ export function preload() {
   }));
 }
 
+// Свежий ключ Google: если есть — сразу; если истёк — короткое окно Google без вопросов (уже разрешено).
+// Вызывать в начале обработчика нажатия, до других ожиданий, — иначе браузер заблокирует окно.
+export async function ensureToken() {
+  if (isLocalDev || loadToken()) return;
+  await connect();
+}
+
 // Вызывать только по нажатию кнопки — иначе браузер заблокирует окно Google
 export async function connect() {
   if (isLocalDev) { ls.set('gdrive.mock', '1'); return; }
-  await preload();
+  if (!window.google?.accounts?.oauth2) await preload();
   await new Promise((res, rej) => {
     const client = window.google.accounts.oauth2.initTokenClient({
       client_id: googleClientId,
@@ -49,23 +59,26 @@ export async function connect() {
         if (r.error) { rej(new Error(r.error_description || r.error)); return; }
         token = { access_token: r.access_token, exp: Date.now() + (Number(r.expires_in) - 60) * 1000 };
         ls.set('gdrive.token', JSON.stringify(token)); ls.set('gdrive.consented', '1');
+        // запоминаем почту Google — в следующий раз окно не спрашивает, какой аккаунт
+        if (!ls.get('gdrive.email')) fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', { headers: { Authorization: 'Bearer ' + r.access_token } }).then((x) => x.json()).then((j) => { if (j?.user?.emailAddress) ls.set('gdrive.email', j.user.emailAddress); }).catch(() => {});
         res();
       },
       error_callback: (e) => rej(new Error(e?.type === 'popup_closed' ? 'Окно Google закрыто — нажмите ещё раз.' : (e?.message || 'Google не дал доступ'))),
     });
-    client.requestAccessToken({ prompt: ls.get('gdrive.consented') ? '' : 'consent' });
+    const hint = ls.get('gdrive.email');
+    client.requestAccessToken({ prompt: ls.get('gdrive.consented') ? '' : 'consent', ...(hint ? { login_hint: hint, hint } : {}) });
   });
 }
 export function disconnect() {
   if (isLocalDev) { ls.del('gdrive.mock'); return; }
   if (token && window.google?.accounts?.oauth2) window.google.accounts.oauth2.revoke(token.access_token, () => {});
-  token = null; ls.del('gdrive.token');
+  token = null; ls.del('gdrive.token'); ls.del('gdrive.consented'); ls.del('gdrive.email');
 }
 
 async function gfetch(url, opts = {}) {
-  if (!loadToken()) throw new NeedAuth('Подключите Google Диск (кнопка вверху).');
+  if (!loadToken()) throw new NeedAuth(ls.get('gdrive.consented') ? 'Google просит обновить доступ — нажмите «Обновить с Диска».' : 'Подключите Google Диск (кнопка вверху).');
   const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token.access_token } });
-  if (r.status === 401) { token = null; ls.del('gdrive.token'); throw new NeedAuth('Google просит подтвердить вход — нажмите «Подключить Google Диск».'); }
+  if (r.status === 401) { token = null; ls.del('gdrive.token'); throw new NeedAuth('Google просит обновить доступ — нажмите «Обновить с Диска».'); }
   if (!r.ok) {
     let msg = '';
     try { msg = (await r.json())?.error?.message || ''; } catch { /* ок */ }
@@ -74,7 +87,9 @@ async function gfetch(url, opts = {}) {
   return r;
 }
 const DRIVE = 'https://www.googleapis.com/drive/v3/files';
-const FIELDS = 'id,name,mimeType,modifiedTime,webViewLink,parents';
+const FIELDS = 'id,name,mimeType,modifiedTime,webViewLink,parents,shortcutDetails(targetId,targetMimeType)';
+const SHORTCUT = 'application/vnd.google-apps.shortcut';
+const isDoc = (m) => m === MIME.doc || m === MIME.docx;
 const q = (s) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
 async function listQuery(query) {
@@ -99,13 +114,23 @@ export async function listDocsTree(folderId, depth = 6) {
     const next = [];
     for (const f of level) {
       for (const x of await listQuery(`'${f.id}' in parents and trashed=false`)) {
-        if (x.mimeType === MIME.folder) next.push({ id: x.id, path: f.path ? `${f.path} / ${x.name}` : x.name });
-        else if (x.mimeType === MIME.doc || x.mimeType === MIME.docx) docs.push({ ...x, path: f.path });
+        // ярлыки (shortcut) ведут на настоящий файл или папку — идём по ним тоже
+        const sc = x.mimeType === SHORTCUT ? x.shortcutDetails : null;
+        const mime = sc ? sc.targetMimeType : x.mimeType, id = sc ? sc.targetId : x.id;
+        if (mime === MIME.folder) next.push({ id, path: f.path ? `${f.path} / ${x.name}` : x.name });
+        else if (isDoc(mime)) docs.push({ ...x, id, mimeType: mime, path: f.path });
       }
     }
     level = next;
   }
   return docs.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+}
+
+// Поиск документов по названию по всему Диску (включая «Доступные мне»)
+export async function searchDocs(name) {
+  if (isLocalDev) return mock.search(name);
+  const found = await listQuery(`name contains '${q(name)}' and (mimeType='${MIME.doc}' or mimeType='${MIME.docx}') and trashed=false`);
+  return found.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 }
 
 export async function fileMeta(id) {
@@ -171,6 +196,7 @@ const mock = (() => {
       const n = /name contains '([^']*)'/.exec(s);
       return files.filter((f) => f.mimeType === MIME.folder && (!n || f.name.includes(n[1]))).map(link);
     },
+    search: (n) => files.filter((f) => isDoc(f.mimeType) && f.name.toLowerCase().includes(n.toLowerCase())).map(link),
     meta: (id) => link(files.find((f) => f.id === id) || { id, name: '?', mimeType: MIME.doc, parents: [] }),
     count: (f) => counts[f.id] || { total: 1000, tabs: [] },
     create(meta) { const f = { id: 'm' + Math.random().toString(36).slice(2, 8), modifiedTime: new Date().toISOString(), mimeType: meta.mimeType || 'image/jpeg', ...meta }; files.push(f); return link(f); },

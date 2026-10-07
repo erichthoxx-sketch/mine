@@ -44,7 +44,7 @@ export function marketingView(a) {
 export async function saveMedia(file, { type = 'banner', bookId = '', thumb } = {}) {
   const c = app().ctx();
   const item = { id: 'm' + uid(), name: file.name, type, bookId, thumb: thumb || await resizeImage(file, 600), createdAt: new Date().toISOString() };
-  if (drive.isConnected() && c.settings.wMarketingFolder) {
+  if (drive.hasFreshToken() && c.settings.wMarketingFolder) {
     try { const f = await drive.uploadFile(file, file.name, c.settings.wMarketingFolder); item.driveId = f.id; item.webViewLink = f.webViewLink; } catch (e) { toast('На Диск не загрузилось: ' + e.message); }
   }
   await app().store.put('w_media', item);

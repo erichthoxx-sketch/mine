@@ -115,11 +115,13 @@ store.init().then(() => {
   render();
   // при открытии один раз обновляем знаки книг, если Диск подключён
   const tryRefresh = () => {
-    if (autoRefreshed || !store.user || !drive.isConnected() || !store.data.w_books.length) return;
+    if (autoRefreshed || !store.user || !drive.hasFreshToken() || !store.data.w_books.length) return;
     autoRefreshed = true;
     refreshAll(app, { quiet: true }).catch(() => {});
   };
   store.subscribe(tryRefresh); tryRefresh();
+  // вернулись в приложение — подтягиваем знаки, если доступ к Диску ещё действует
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && drive.hasFreshToken()) refreshAll(app, { quiet: true }).catch(() => {}); });
 }).catch((e) => {
   console.error(e);
   document.getElementById('app').innerHTML = `<div class="auth"><h1>Не удалось запустить</h1><p>${esc(e.message || e)}</p></div>`;

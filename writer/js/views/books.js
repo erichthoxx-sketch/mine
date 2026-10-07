@@ -14,7 +14,9 @@ export function driveBar(c) {
   if (!drive.driveConfigured) return '<p class="small muted">Google Диск ещё не подключён к приложению — см. Настройки (шестерёнка вверху).</p>';
   if (!drive.isConnected()) return '<button class="primary" data-act="drive.connect">Подключить Google Диск</button>';
   if (!c.settings.wBooksFolder) return '<button class="primary" data-act="go" data-to="/settings">Выбрать папку с книгами</button>';
-  return `<div class="row"><span class="badge good">● Google Диск подключён</span><button data-act="wbook.refresh">Обновить знаки</button></div>`;
+  const fresh = drive.hasFreshToken();
+  return `<div class="row"><span class="badge good">● Google Диск подключён</span><button data-act="wbook.refresh">Обновить с Диска</button></div>
+    ${fresh ? '' : '<div class="small muted" style="margin-top:6px">Google даёт доступ на час — нажмите «Обновить с Диска», знаки подтянутся.</div>'}`;
 }
 
 function tile(c, b) {
@@ -111,8 +113,8 @@ export async function refreshAll(a, { quiet = false } = {}) {
     if (!quiet) toast(n ? `Знаки обновлены: ${n} кн.` : 'Изменений в файлах нет');
   } catch (e) { if (!quiet || e instanceof drive.NeedAuth) toast(e.message); }
 }
-acts['wbook.refresh'] = () => refreshAll(app());
-acts['wbook.refreshOne'] = async (d) => { try { await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast('Знаки обновлены'); } catch (e) { toast(e.message); } };
+acts['wbook.refresh'] = async () => { try { await drive.ensureToken(); } catch (e) { toast(e.message); return; } await refreshAll(app()); app().rerender(); };
+acts['wbook.refreshOne'] = async (d) => { try { await drive.ensureToken(); await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast('Знаки обновлены'); } catch (e) { toast(e.message); } };
 acts['drive.connect'] = async () => {
   try { await drive.connect(); toast('Google Диск подключён'); refreshAll(app(), { quiet: true }); } catch (e) { toast(e.message); }
 };
@@ -137,11 +139,25 @@ acts['wbook.new'] = () => {
   }, { submitText: 'Создать' });
 };
 let picked = [];
-function pickSheet() {
-  openSheet('Файлы в папке с книгами', picked.length ? `<p class="small muted">Нажмите «Добавить» у файлов-книг. Остальные файлы (синопсисы, черновики) просто пропустите.</p><div class="list">${picked.map((f, i) => `<div class="item row between"><span><b>${esc(f.name)}</b><br><span class="small muted">${f.mimeType === drive.MIME.docx ? 'Word' : 'Google Документ'}${f.path ? ' · ' + esc(f.path) : ''}</span></span><button type="button" class="primary" data-act="wbook.addFile" data-i="${i}">Добавить</button></div>`).join('')}</div>` : '<p>Все документы из папки уже добавлены.</p>', null);
+function pickSheet(title = 'Файлы в папке с книгами') {
+  openSheet(title, `${picked.length ? `<p class="small muted">Нажмите «Добавить» у файлов-книг. Остальные файлы (синопсисы, черновики) просто пропустите.</p><div class="list">${picked.map((f, i) => `<div class="item row between pick"><span><b>${esc(f.name)}</b><br><span class="small muted">${f.mimeType === drive.MIME.docx ? 'Word' : 'Google Документ'}${f.path ? ' · ' + esc(f.path) : ''}</span></span><button type="button" data-act="wbook.addFile" data-i="${i}">Добавить</button></div>`).join('')}</div>` : '<p>Новых документов не нашлось.</p>'}
+    <h3>Нет нужной книги?</h3>
+    <p class="small muted">Если файл лежит в другой папке или им поделились с вами — найдите его по названию на всём Диске.</p>
+    <div class="row"><input id="ws" placeholder="часть названия" style="flex:1" aria-label="Название книги"><button type="button" data-act="wbook.search">Найти</button></div>`, null);
 }
+acts['wbook.search'] = async () => {
+  const qv = (document.getElementById('ws')?.value || '').trim();
+  if (!qv) { toast('Впишите часть названия'); return; }
+  try { await drive.ensureToken(); } catch (e) { toast(e.message); return; }
+  try {
+    const have = new Set(app().ctx().wbooks.map((b) => b.fileId));
+    picked = (await drive.searchDocs(qv)).filter((f) => !have.has(f.id));
+    pickSheet(`Найдено по «${qv}»`);
+  } catch (e) { toast(e.message); }
+};
 acts['wbook.pick'] = async () => {
   const c = app().ctx();
+  try { await drive.ensureToken(); } catch (e) { toast(e.message); return; }
   closeSheet(); toast('Загружаю список файлов…');
   try {
     const have = new Set(c.wbooks.map((b) => b.fileId));

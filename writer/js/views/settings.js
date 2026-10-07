@@ -17,7 +17,7 @@ export function settingsView(a) {
       ${folder(s.wIdeasFolder, s.wIdeasFolderName, 'set.ideasFolder', 'Папка для документов из идей (по умолчанию — папка с книгами)')}
       <button class="danger" data-act="set.disconnect" style="margin-top:10px">Отключить Диск на этом устройстве</button>`
     : '<p>На этом устройстве Диск не подключён.</p><button class="primary" data-act="drive.connect">Подключить Google Диск</button>'}
-    <p class="hint">Подключать нужно на каждом устройстве один раз. Google иногда просит подтвердить вход заново — это одно нажатие.</p></div>
+    <p class="hint">Подключать нужно на каждом устройстве один раз. Google даёт браузерным приложениям доступ на час — после этого кнопка «Обновить с Диска» продлевает его одним нажатием, без повторного разрешения.</p></div>
   <div class="card"><h2>Резервная копия мастерской</h2><p class="small muted">Книги, идеи, планер и галерея (без самих файлов Диска — они и так на Диске).</p>
     <div class="row"><button class="primary" data-act="set.backup">Скачать копию</button><label class="btn">Восстановить<input type="file" accept=".json" data-chg="set.restore" hidden></label></div></div>
   <div class="card"><h2>Оформление и аккаунт</h2>
@@ -31,6 +31,7 @@ async function chooseFolder(key, title) {
   openSheet(title, `<label for="fq">Название папки (или его часть)</label><input id="fq" name="q" value="${key === 'wMarketingFolder' ? 'Маркетинг' : 'Литнет'}" required>
     ${key === 'wMarketingFolder' ? '<label class="check"><input type="checkbox" name="create">Если такой папки нет — создать её в папке с книгами</label>' : ''}`, async (fd) => {
     const name = fd.get('q').trim();
+    try { await drive.ensureToken(); } catch (e) { toast(e.message); return false; }
     try {
       let found = await drive.findFolders(name);
       if (!found.length && fd.get('create')) found = [await drive.createFolder(name, app().ctx().settings.wBooksFolder || undefined)];
