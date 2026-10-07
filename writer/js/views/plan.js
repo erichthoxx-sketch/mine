@@ -73,7 +73,8 @@ function itemHtml(c, x) {
 export function planView(a) {
   const c = a.ctx(), t = c.today, d = c.data, ui = a.ui;
   const sel = ui.planDay && ui.planDay >= addDays(t, -60) ? ui.planDay : t;
-  const wk = monday(addDays(t, 7 * (ui.planWeek || 0)));
+  // полоска из 7 дней: сегодня — посередине (три дня до и три после); стрелки листают на неделю
+  const wk = addDays(t, 7 * (ui.planWeek || 0) - 3);
   const items = planItems(c, wk < t ? wk : t, addDays(sel > t ? sel : t, 21));
   const by = {};
   for (const x of items) (by[x.date] ||= []).push(x);
@@ -81,7 +82,7 @@ export function planView(a) {
   const strip = Array.from({ length: 7 }, (_, i) => {
     const day = addDays(wk, i), list = by[day] || [];
     const kinds = [...new Set(list.map((x) => x.kind))].slice(0, 3);
-    return `<button class="wday${day === t ? ' today' : ''}${day === sel ? ' on' : ''}" data-act="plan.day" data-v="${day}"><span class="wk-d">${DOW[i]}</span><span class="wk-n">${Number(day.slice(8, 10))}</span><span class="wk-dots">${kinds.map((k) => `<i class="k-${k}"></i>`).join('')}</span></button>`;
+    return `<button class="wday${day === t ? ' today' : ''}${day === sel ? ' on' : ''}" data-act="plan.day" data-v="${day}"><span class="wk-d">${DOW[dowI(day)]}</span><span class="wk-n">${Number(day.slice(8, 10))}</span><span class="wk-dots">${kinds.map((k) => `<i class="k-${k}"></i>`).join('')}</span></button>`;
   }).join('');
   const dayList = by[sel] || [];
   // дальше: следующие 14 дней после выбранного
@@ -108,7 +109,7 @@ export function planView(a) {
   return { html };
 }
 acts['plan.day'] = (d) => { app().ui.planDay = d.v; };
-acts['plan.week'] = (d) => { const u = app().ui; u.planWeek = d.v === '0' ? 0 : (u.planWeek || 0) + Number(d.v); u.planDay = d.v === '0' ? null : monday(addDays(app().ctx().today, 7 * u.planWeek)); if (u.planWeek === 0) u.planDay = null; };
+acts['plan.week'] = (d) => { const u = app().ui; u.planWeek = d.v === '0' ? 0 : (u.planWeek || 0) + Number(d.v); u.planDay = d.v === '0' ? null : addDays(app().ctx().today, 7 * u.planWeek); if (u.planWeek === 0) u.planDay = null; };
 
 // ---------- книги в работе: коротко — что дальше, сколько выложено, кнопки ----------
 const dleft = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
