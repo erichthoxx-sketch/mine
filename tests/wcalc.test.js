@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { countChars, charsFromDocsJson, charsFromDocxXml, recordProgress, charsAt, written, pace, forecastDate, contestStatus, waitingStatus } from '../writer/js/wcalc.js';
+import { countChars, charsFromDocsJson, charsFromDocxXml, recordProgress, charsAt, written, lastGain, pace, forecastDate, contestStatus, waitingStatus } from '../writer/js/wcalc.js';
 
 test('знаки с пробелами без переносов строк', () => {
   assert.equal(countChars('Он ушёл.\nА я — нет.\n'), 18);
@@ -18,6 +18,10 @@ test('Google Документ: вкладки-главы считаются от
   const r = charsFromDocsJson(doc);
   assert.deepEqual(r.tabs.map((t) => [t.title, t.chars]), [['Глава 1', 15], ['Глава 2', 3], ['Глава 2.1', 2]]);
   assert.equal(r.total, 20);
+  // считаются только «Пролог», «Глава …», «Эпилог»; синопсис и заметки — нет
+  const withNotes = { tabs: [{ tabProperties: { title: 'Синопсис' }, documentTab: { body: { content: [para('очень длинный синопсис\n')] } } }, { tabProperties: { title: 'Пролог' }, documentTab: { body: { content: [para('abc\n')] } } }, ...doc.tabs] };
+  const r2 = charsFromDocsJson(withNotes);
+  assert.equal(r2.total, 23); assert.equal(r2.tabs[0].counted, false); assert.equal(r2.tabs[1].counted, true);
   // старый документ без вкладок
   assert.equal(charsFromDocsJson({ title: 'X', body: { content: [para('abc\n')] } }).total, 3);
 });
@@ -33,7 +37,9 @@ test('история и прирост', () => {
   h = recordProgress(h, '2026-10-03', 4000);
   h = recordProgress(h, '2026-10-05', 10000);
   assert.equal(charsAt(h, '2026-10-04'), 4000);
-  assert.equal(written(h, '2026-10-05', 1), 6000); // сегодня: 10000 − на конец 04.10 (4000)
+  assert.equal(written(h, '2026-10-05', 1), 0); // прошлое обновление — 03.10: прирост за 2 дня не «сегодня»
+  assert.deepEqual(lastGain(h, '2026-10-05'), { date: '2026-10-03', gain: 6000 });
+  assert.equal(written(recordProgress(h, '2026-10-06', 10500), '2026-10-06', 1), 500); // вчера была запись — считается
   assert.equal(written(h, '2026-10-06', 1), 0); // сегодня ещё не писала
   assert.equal(written(h, '2026-10-05', 7), 9000); // за неделю от первой записи
   assert.equal(written({ '2026-10-05': 50000 }, '2026-10-05', 1), 0); // первая запись — не «написано сегодня»

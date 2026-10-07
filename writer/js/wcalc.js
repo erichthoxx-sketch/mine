@@ -6,7 +6,11 @@ export function countChars(text) {
   return (text || '').replace(/[\r\n\u000b\u000c\u2028\u2029]/g, '').length;
 }
 
-// Google Документ (Docs API, includeTabsContent=true) → {total, tabs:[{title, chars}]}. Каждая вкладка — глава.
+// Какие вкладки считаются текстом книги: «Пролог», «Глава …», «Эпилог». Синопсис, персонажи, заметки — нет.
+export const isBookTab = (title) => /^\s*(пролог|глава|эпилог)/i.test(title || '');
+
+// Google Документ (Docs API, includeTabsContent=true) → {total, tabs:[{title, chars, counted}]}.
+// В сумму идут только вкладки книги (isBookTab); если таких нет — весь документ, как раньше.
 export function charsFromDocsJson(doc) {
   const textOf = (content) => {
     let t = '';
@@ -25,8 +29,10 @@ export function charsFromDocsJson(doc) {
     }
   };
   if (doc.tabs?.length) walk(doc.tabs);
-  else tabs.push({ title: doc.title || 'Документ', chars: countChars(textOf(doc.body?.content)) });
-  return { total: tabs.reduce((a, t) => a + t.chars, 0), tabs };
+  else return { total: countChars(textOf(doc.body?.content)), tabs: [{ title: doc.title || 'Документ', chars: countChars(textOf(doc.body?.content)), counted: true }] };
+  const any = tabs.some((t) => isBookTab(t.title));
+  for (const t of tabs) t.counted = any ? isBookTab(t.title) : true;
+  return { total: tabs.filter((t) => t.counted).reduce((a, t) => a + t.chars, 0), tabs };
 }
 
 // Word (.docx): word/document.xml → число знаков (текст в <w:t>, табуляция = 1 знак)
@@ -52,10 +58,16 @@ export function charsAt(history, date) {
   for (const k of Object.keys(history || {}).sort()) { if (k <= date) v = history[k]; else break; }
   return v;
 }
-// Прирост за последние `days` дней, считая сегодня: сейчас − на конец дня (today − days)
+// Прирост за последние `days` дней, считая сегодня: сейчас − на конец дня (today − days).
+// «Сегодня» (days = 1) — только если есть запись за вчера: если знаки не обновлялись несколько дней,
+// прирост за эти дни нельзя приписать сегодняшнему дню (он виден отдельно — lastGain).
 export function written(history, today, days = 1) {
   const now = charsAt(history, today);
   if (now == null) return 0;
+  if (days === 1) {
+    const prev = Object.keys(history || {}).filter((k) => k < today).sort().pop();
+    if (prev && prev < addDays(today, -1)) return 0;
+  }
   const before = charsAt(history, addDays(today, -days));
   if (before == null) {
     const first = Object.keys(history || {}).sort()[0];
@@ -63,6 +75,13 @@ export function written(history, today, days = 1) {
     return first > addDays(today, -days) ? now - history[first] : 0;
   }
   return now - before;
+}
+// Прирост с прошлого обновления (если оно было раньше вчерашнего дня): {date, gain}
+export function lastGain(history, today) {
+  const now = charsAt(history, today);
+  const prev = Object.keys(history || {}).filter((k) => k < today).sort().pop();
+  if (now == null || !prev || prev >= addDays(today, -1)) return null;
+  return { date: prev, gain: now - history[prev] };
 }
 // Темп: знаков в день за последние `window` дней (не меньше 0)
 export function pace(history, today, window = 14) {

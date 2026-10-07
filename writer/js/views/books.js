@@ -1,7 +1,7 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate } from '../../../js/format.js';
-import { recordProgress, written, pace, forecastDate, charsAt, contestStatus, daysLeft } from '../wcalc.js';
+import { recordProgress, written, lastGain, pace, forecastDate, charsAt, contestStatus, daysLeft } from '../wcalc.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 import { finishEvent, removeEvent, chapterEvent, chapterUnset } from '../sync.js';
@@ -55,6 +55,7 @@ export function booksView(a) {
       <div><div class="k small muted">За 7 дней</div><div class="big">${num(c.writtenWeek)}</div><div class="small muted">знаков</div></div>
       <div><div class="k small muted">В работе</div><div class="big">${active}</div><div class="small muted">книг</div></div>
     </div>
+    ${(() => { const g = c.wbooks.map((b) => lastGain(b.history, c.today)).filter((x) => x && x.gain); if (!g.length) return ''; const from = g.map((x) => x.date).sort()[0]; const sum = g.reduce((a2, x) => a2 + x.gain, 0); return `<div class="small muted" style="margin-top:8px">С прошлого обновления (${fmtDate(from)}): ${sum > 0 ? '+' : ''}${num(sum)} зн. — знаки не обновлялись несколько дней, поэтому это не «сегодня».</div>`; })()}
     <div style="margin-top:12px">${driveBar(c)}</div>
   </div>
   <div class="row between" style="margin:16px 0 10px"><h2 style="margin:0">Книги</h2><button class="primary" data-act="wbook.new">+ Книга</button></div>
@@ -92,8 +93,8 @@ export function bookPage(a, id) {
       ${b.fileId ? `<div class="row" style="margin-top:8px"><button data-act="wbook.refreshOne" data-id="${b.id}">Обновить знаки</button></div>` : ''}
     </div>
   </div>
-  ${(b.tabs || []).length ? `<div class="card"><h2>Главы (вкладки документа)</h2><div class="scroll"><table><tr><th>Вкладка</th><th>Знаков</th><th>Выложена</th></tr>${b.tabs.map((t) => { const p2 = (b.published || {})[t.title]; return `<tr><td>${esc(t.title)}</td><td>${num(t.chars)}</td><td>${p2 ? `${fmtDate(p2)} <button class="link" style="padding:0" data-act="ch.unpub" data-id="${b.id}" data-t="${esc(t.title)}">отменить</button>` : `<button class="link" style="padding:0" data-act="ch.pubOne" data-id="${b.id}" data-t="${esc(t.title)}">сегодня</button>`}</td></tr>`; }).join('')}<tr class="total"><td>Всего</td><td>${num(b.chars)}</td><td>${Object.keys(b.published || {}).length}</td></tr></table></div>
-    <div class="hint">Отметка «выложена» сразу появляется событием «Выкладка главы» в приложении «Доходы».</div></div>` : ''}
+  ${(b.tabs || []).length ? `<div class="card"><h2>Главы (вкладки документа)</h2><div class="scroll"><table><tr><th>Вкладка</th><th>Знаков</th><th>Выложена</th></tr>${b.tabs.map((t) => { const p2 = (b.published || {})[t.title]; if (t.counted === false) return `<tr class="muted"><td>${esc(t.title)}</td><td>${num(t.chars)}</td><td><span class="small">не текст книги — не считается</span></td></tr>`; return `<tr><td>${esc(t.title)}</td><td>${num(t.chars)}</td><td>${p2 ? `${fmtDate(p2)} <button class="link" style="padding:0" data-act="ch.unpub" data-id="${b.id}" data-t="${esc(t.title)}">отменить</button>` : `<button class="link" style="padding:0" data-act="ch.pubOne" data-id="${b.id}" data-t="${esc(t.title)}">сегодня</button>`}</td></tr>`; }).join('')}<tr class="total"><td>Всего</td><td>${num(b.chars)}</td><td>${Object.keys(b.published || {}).length}</td></tr></table></div>
+    <div class="hint">В знаки книги идут только вкладки «Пролог», «Глава …» и «Эпилог» — синопсис, персонажи и заметки не считаются. Отметка «выложена» сразу появляется событием «Выкладка главы» в приложении «Доходы».</div></div>` : ''}
   ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${zn(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
@@ -115,12 +116,16 @@ export function bookPage(a, id) {
 }
 
 // ---------- обновление знаков ----------
+const COUNT_RULE = 2; // 2 — считаются только вкладки «Пролог», «Глава …», «Эпилог»
 export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
-  if (!force && meta.modifiedTime === b.modifiedTime && charsAt(b.history, c.today) != null && (b.history || {})[c.today] != null) return false;
+  const ruleChanged = (b.countRule || 1) < COUNT_RULE;
+  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && charsAt(b.history, c.today) != null && (b.history || {})[c.today] != null) return false;
   const r = await drive.countFile(meta);
-  await a.store.put('w_books', { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history: recordProgress(b.history, c.today, r.total) });
+  // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
+  const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
+  await a.store.put('w_books', { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE });
   return true;
 }
 export async function refreshAll(a, { quiet = false } = {}) {
