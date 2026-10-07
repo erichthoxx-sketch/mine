@@ -277,7 +277,7 @@ export function dailyWrittenAll(books, from, to, today) {
 
 // ---- цели ----
 // g = { type: 'finish' | 'daily' | 'custom', bookId, title, deadline, days:[1..7], perDay (знаков, для daily), checks:{date:true}, done }
-export const GOAL_TYPES = { finish: 'Дописать книгу к сроку', daily: 'Писать N знаков в день', custom: 'Своя цель' };
+export const GOAL_TYPES = { finish: 'Главы к сроку (по главе в день)', daily: 'Писать N знаков в день', custom: 'Своя цель' };
 const isGoalDay = (g, d) => { const days = (g.days || []).map(Number); return !days.length || days.includes(dowOf(d)); };
 // сколько дней цели осталось с today по deadline включительно
 export function goalDaysLeft(g, today) {
@@ -290,20 +290,34 @@ export function goalStatus(g, book, today) {
   const r = { active: !g.done && !(g.deadline && g.deadline < today), todayDay: isGoalDay(g, today), daysLeft: goalDaysLeft(g, today), progress: null, needToday: null, doneToday: false, perDay: null, perDayCh: null, left: null, streak: 0 };
   const wt = book ? writtenToday(book, today) : 0;
   if (g.type === 'finish' && book) {
-    const planCh = Number(g.chapters || book.planChapters) || null, written = writtenChapters(book);
-    const avg = written ? (book.chars || 0) / written : null;
-    r.left = planCh ? Math.max(0, planCh - written) : null;
-    r.progress = planCh ? Math.min(1, written / planCh) : null;
-    if (r.left != null && r.daysLeft) {
-      r.perDayCh = r.left / r.daysLeft;
-      r.perDay = avg ? Math.round(r.perDayCh * avg) : null;
+    // «главы к сроку»: глава засчитывается, когда отмечена выложенной или поставлена на таймер (на основной площадке)
+    const pf = pubPlatforms(book)[0], pm = pubMap(book);
+    const planCh = Number(g.chapters || book.planChapters) || null;
+    const marks = Object.values(pm).map((x) => x[pf]).filter((v) => v && v.date);
+    const marked = marks.length;
+    // в какой день отмечена: at (когда нажала), иначе дата выкладки (не для таймера и не для «уже выложено раньше»)
+    const dayOf = (v) => v.at || (v.planned || v.past ? null : v.date);
+    const byDay = {};
+    for (const v of marks) { const d = dayOf(v); if (d) byDay[d] = (byDay[d] || 0) + 1; }
+    r.unit = 'ch';
+    r.perDayCh = Number(g.perDay) || 1;
+    r.todayCh = byDay[today] || 0;
+    r.left = planCh ? Math.max(0, planCh - marked) : null;
+    r.progress = planCh ? Math.min(1, marked / planCh) : null;
+    r.needToday = Math.max(0, r.perDayCh - r.todayCh);
+    r.doneToday = r.todayCh >= r.perDayCh;
+    if (r.left != null && r.daysLeft) r.needPerDay = r.left / r.daysLeft; // сколько нужно в день, чтобы успеть
+    for (let d = r.doneToday ? today : addDays(today, -1), i = 0; i < 365; i++, d = addDays(d, -1)) {
+      if (g.createdAt && d < g.createdAt.slice(0, 10)) break;
+      if (!isGoalDay(g, d)) continue;
+      if ((byDay[d] || 0) >= r.perDayCh) r.streak++; else break;
     }
     if (r.left === 0) { r.doneToday = true; r.active = false; r.finished = true; }
   } else if (g.type === 'daily') {
     r.perDay = Number(g.perDay) || null;
   }
   if (g.type === 'custom') r.doneToday = !!(g.checks || {})[today];
-  else if (r.perDay) {
+  else if (g.type === 'daily' && r.perDay) {
     // сегодня: начало дня приходится на прирост, знаки до начала цели не считаем
     r.needToday = Math.max(0, r.perDay - wt);
     r.doneToday = r.doneToday || wt >= r.perDay * 0.95;

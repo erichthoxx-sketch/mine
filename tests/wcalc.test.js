@@ -137,21 +137,26 @@ test('написано за месяц: история началась в эт�
   assert.equal(writtenMonth({ chars: 300000, history: { [t]: 300000 }, dayStart: { date: t, chars: 261225 } }, t), 38775);
 });
 
-test('цели: дописать к сроку — глав в день и знаков в день; своя цель — отметки', async () => {
+test('цели: главы к сроку считаются по отметкам (выложила / на таймере); своя цель — отметки', async () => {
   const { goalStatus, goalDaysLeft, dailyWritten } = await import('../writer/js/wcalc.js');
   const t = '2026-10-07';
   const tabs = Array.from({ length: 19 }, (_, i) => ({ title: 'Глава ' + (i + 1), chars: 16000 }));
-  const book = { tabs, chars: 304000, planChapters: 25, history: { '2026-10-06': 290000, [t]: 304000 }, dayStart: { date: t, chars: 290000 } };
-  // 7..15 октября — 9 дней, осталось 6 глав → 0,67 главы в день
-  const g = { type: 'finish', bookId: 'b', deadline: '2026-10-15' };
+  const pub = {};
+  for (let i = 1; i <= 11; i++) pub['Глава ' + i] = { 'Литнет': { date: '2000-01-01', past: true } };
+  pub['Глава 12'] = { 'Литнет': { date: t, at: t } };
+  const book = { platforms: ['Литнет'], tabs, chars: 304000, planChapters: 25, pub, history: { '2026-10-06': 290000, [t]: 304000 }, dayStart: { date: t, chars: 290000 } };
+  const g = { type: 'finish', bookId: 'b', deadline: '2026-10-15', perDay: 1 };
   assert.equal(goalDaysLeft(g, t), 9);
-  const s = goalStatus(g, book, t);
-  assert.equal(s.left, 6); assert.ok(Math.abs(s.perDayCh - 6 / 9) < 1e-9); assert.equal(s.perDay, Math.round((6 / 9) * 16000));
-  assert.equal(s.doneToday, true); // сегодня +14 000 ≥ 10 667
-  // только будни
+  let s = goalStatus(g, book, t);
+  assert.equal(s.left, 13); assert.equal(s.todayCh, 1); assert.equal(s.doneToday, true);
+  assert.ok(Math.abs(s.needPerDay - 13 / 9) < 1e-9); // по главе в день к 15.10 не успеть
+  // главу 13 поставила на таймер сегодня — засчитывается сегодня
+  s = goalStatus({ ...g, perDay: 2 }, { ...book, pub: { ...pub, 'Глава 13': { 'Литнет': { date: '2026-10-09', planned: true, at: t } } } }, t);
+  assert.equal(s.todayCh, 2); assert.equal(s.doneToday, true);
+  // ничего не отметила
+  s = goalStatus(g, { ...book, pub: { 'Глава 1': { 'Литнет': { date: '2000-01-01', past: true } } } }, t);
+  assert.equal(s.doneToday, false); assert.equal(s.needToday, 1);
   assert.equal(goalDaysLeft({ ...g, days: [1, 2, 3, 4, 5] }, t), 7);
-  // своя цель
   assert.equal(goalStatus({ type: 'custom', checks: { [t]: true } }, null, t).doneToday, true);
-  // знаки по дням
   assert.deepEqual(dailyWritten(book, '2026-10-06', t, t).map((x) => [x.value, x.known]), [[0, false], [14000, true]]);
 });

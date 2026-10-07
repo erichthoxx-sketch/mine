@@ -83,7 +83,7 @@ export function homeView(a) {
   const inWork = rows.filter((r) => (r.b.status || 'progress') === 'progress'), others = rows.filter((r) => (r.b.status || 'progress') !== 'progress');
   // знаки по дням за 30 дней — все книги; пунктир — сумма норм по активным целям на сегодня
   const series = dailyWrittenAll(c.wbooks, addDays(t, -29), t, t);
-  const target = activeGoals(c).reduce((s2, g) => { const st = goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t); return s2 + (st.active && st.perDay ? st.perDay : 0); }, 0) || null;
+  const target = activeGoals(c).reduce((s2, g) => { const st = goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t); return s2 + (g.type === 'daily' && st.active && st.perDay ? st.perDay : 0); }, 0) || null;
   const known = series.filter((x) => x.known), avg7 = series.slice(-7).filter((x) => x.known);
   const best = known.reduce((m, x) => (x.value > (m?.value || 0) ? x : m), null);
   const chartCard = known.length ? `<div class="card"><h2>Знаки по дням</h2><div class="chart" id="wchart"></div>

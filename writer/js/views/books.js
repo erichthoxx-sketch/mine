@@ -122,12 +122,12 @@ export function bookPage(a, id) {
   const bookGoals = c.data.w_goals.filter((g) => !g.done && g.bookId === b.id).map((g) => ({ g, st: goalStatus(g, b, c.today) }));
   const fin = bookGoals.find((x) => x.g.type === 'finish' && x.st.active);
   const daily = bookGoals.find((x) => x.g.type === 'daily' && x.st.active);
-  const target = (fin && fin.st.perDay) || (daily && daily.st.perDay) || null;
+  const target = (daily && daily.st.perDay) || null;
   const series = dailyWritten(b, addDays(c.today, -29), c.today, c.today);
   const pts = Object.keys(h).filter((k) => k >= addDays(c.today, -90) && k <= c.today).sort().map((k) => ({ date: k, value: h[k] }));
   if (b.chars != null && (!pts.length || pts[pts.length - 1].date < c.today)) pts.push({ date: c.today, value: b.chars });
   const wch = writtenChapters(b), planCh = Number(fin?.g.chapters || b.planChapters) || null;
-  const growthGoal = fin && fin.g.deadline && planCh && wch && !fin.st.finished ? { date: fin.g.deadline, value: Math.round(((b.chars || 0) / wch) * planCh), label: 'цель' } : null;
+  const growthGoal = null;
 
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a></p>
   <div class="card book-head">
@@ -354,7 +354,8 @@ acts['pub.mark'] = (d) => {
         if (mode === 'clear') { delete next[ch][x]; await chapterUnset(b, ch, x); continue; }
         if (mode === 'past') { next[ch][x] = { date: PAST, past: true }; await chapterUnset(b, ch, x); continue; }
         const dt = dateOf[x][ch];
-        next[ch][x] = mode === 'plan' ? { date: dt, planned: true } : { date: dt };
+        // at — когда отметила (для цели «по главе в день»)
+        next[ch][x] = mode === 'plan' ? { date: dt, planned: true, at: c.today } : { date: dt, at: c.today };
         await chapterEvent(c, b, ch, dt, x);
       }
       if (!Object.keys(next[ch]).length) delete next[ch];

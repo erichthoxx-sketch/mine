@@ -42,7 +42,6 @@ export function planItems(c, from, to) {
       add(date, 'pub', `Выложить ${ch ? `«${esc(ch)}»` : 'новую главу'}`, `${bt} · ${esc(s.pf)}${ch ? '' : ' · глава ещё не написана'}`, { book: b.id, ch, pf: s.pf });
     });
     if (b.finishBy && !s.doneWriting) add(b.finishBy, 'book', `Дописать «${bt}»`, s.planCh ? `глав ${s.written} из ≈${s.planCh}` : '', { to: '/book/' + b.id });
-    else if (s.finishAuto) add(s.finishAuto, 'book', `По темпу допишу «${bt}»`, s.planCh ? `глав ${s.written} из ≈${s.planCh}` : '', { to: '/book/' + b.id });
     if (s.until && s.remaining !== 0) add(s.until, 'book', `Последняя глава «${bt}»`, b.publishUntil ? 'срок выкладки' : 'по графику', { to: '/book/' + b.id });
   }
   for (const x of d.w_contests) {
@@ -57,10 +56,18 @@ export function planItems(c, from, to) {
     const remind = addDays(x.since, Number(x.remindDays) || 14), s = waitingStatus(x, t);
     add(remind < t ? t : remind, 'waitans', `Напомнить о себе: ${esc(x.who)}`, `${s.days} дн. без ответа${x.what ? ' · ' + esc(x.what.slice(0, 50)) : ''}`, { to: x.contactId ? '/link/' + x.contactId : '/links' });
   }
-  for (const g of activeGoals(c)) if (g.deadline) add(g.deadline, 'goal', `Срок цели: ${esc(goalTitle(c, g))}`, '', { act: 'goal.edit', id: g.id });
+  for (const g of activeGoals(c)) if (g.deadline) add(g.deadline, 'goal', `Срок цели: ${esc(g.bookId && c.wbooksById[g.bookId] ? '«' + c.wbooksById[g.bookId].title + '»' : goalTitle(c, g))}`, '', { act: 'goal.edit', id: g.id });
   for (const r of reminders(c)) if (r.to === '../') add(r.date < t ? t : r.date, 'money', r.title, `${r.sub} · в «Доходах»`, { href: '../' });
   const ord = { goal: -1, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
   return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
+}
+// компактная строка для «Дальше»: только суть, книга — если книг в работе несколько
+const strip = (h) => String(h).replace(/<[^>]+>/g, '');
+function shortItem(c, x, multi) {
+  const book = multi && x.sub ? ` <span class="muted">· ${x.sub.split(' · ')[0]}</span>` : '';
+  const t = x.kind === 'pub' ? `Выложить ${x.ch ? `«${esc(x.ch)}»` : 'главу'}` : x.kind === 'wait' ? x.title.replace(' — выйдет сама', '') : x.title;
+  const attrs = x.kind === 'pub' ? `data-act="day.pick" data-v="${x.date}"` : x.href ? '' : x.to ? `data-act="go" data-to="${x.to}"` : `data-act="${x.act}" data-id="${x.id}"`;
+  return `<a class="aitem tap" href="${x.href || '#'}" ${attrs}><i class="k-${x.kind}"></i>${t}${book}</a>`;
 }
 function itemHtml(c, x) {
   const body = `<span class="dot k-${x.kind}"></span><span class="pi-body"><span class="pi-t">${x.title}</span>${x.sub ? `<span class="pi-s">${x.sub}</span>` : ''}</span>`;
@@ -92,7 +99,8 @@ export function planView(a) {
   const goalRows = sel === t ? activeGoals(c).map((g) => ({ g, s: goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t) })).filter((x) => x.s.active && x.s.todayDay) : [];
   const goalHtml = goalRows.map(({ g, s }) => `<div class="pitem"><span class="dot k-goal"${s.doneToday ? ' style="opacity:.4"' : ''}></span><a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${s.doneToday ? '✓ ' : ''}${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, s)}</span></a>${g.type === 'custom' ? `<span class="pi-btns"><button class="${s.doneToday ? '' : 'primary'}" data-act="goal.check" data-id="${g.id}">${s.doneToday ? '✓' : 'Сделала'}</button></span>` : ''}</div>`).join('');
   // дальше: следующие 14 дней после выбранного
-  const nextDays = Object.keys(by).filter((k) => k > sel && k <= addDays(sel, 14)).sort();
+  const nextDays = Object.keys(by).filter((k) => k > sel && k <= addDays(sel, 10)).sort();
+  const multi = c.wbooks.filter((b) => (b.status || 'progress') === 'progress').length > 1;
   const inWork = c.wbooks.filter((b) => (b.status || 'progress') === 'progress');
   const live = d.w_contests.filter((x) => !(x.end && x.end < t) && x.status !== 'done');
   const qTodo = d.w_queue.filter((x) => !x.done);
@@ -107,7 +115,7 @@ export function planView(a) {
     ${dayList.length || goalHtml ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">Дел на этот день нет.</p>'}</div>
   <div class="psec-h"><h2>Цели <span class="muted">${activeGoals(c).length || ''}</span></h2><button class="small-btn" data-act="goal.new">+ Цель</button></div>
   ${goalsSection(c)}
-  ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 6px">Дальше</h2>${nextDays.map((k) => `<div class="pday"><div class="pday-h">${dayName(k, t)}</div><div class="plist">${by[k].map((x) => itemHtml(c, x)).join('')}</div></div>`).join('')}</div>` : ''}
+  ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 4px">Дальше</h2><div class="agenda">${nextDays.map((k) => `<div class="arow"><span class="ad">${DOW[dowI(k)]} ${Number(k.slice(8, 10))}</span><span class="ai">${by[k].map((x) => shortItem(c, x, multi)).join('')}</span></div>`).join('')}</div></div>` : ''}
   <div class="psec-h"><h2>Книги в работе <span class="muted">${inWork.length || ''}</span></h2></div>
   ${booksPlan(c, inWork)}
   <div class="psec-h"><h2>Конкурсы <span class="muted">${live.length || ''}</span></h2><button class="small-btn" data-act="contest.new">+ Конкурс</button></div>
@@ -117,6 +125,7 @@ export function planView(a) {
   return { html };
 }
 acts['plan.day'] = (d) => { app().ui.planDay = d.v; };
+acts['day.pick'] = (d) => { app().ui.planDay = d.v; window.scrollTo(0, 0); };
 acts['plan.week'] = (d) => { const u = app().ui; u.planWeek = d.v === '0' ? 0 : (u.planWeek || 0) + Number(d.v); u.planDay = d.v === '0' ? null : addDays(app().ctx().today, 7 * u.planWeek); if (u.planWeek === 0) u.planDay = null; };
 
 // ---------- книги в работе: коротко — что дальше, сколько выложено, кнопки ----------
