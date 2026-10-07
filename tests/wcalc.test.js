@@ -96,3 +96,24 @@ test('выкладка глав: старое поле, площадки, отл
   // снятая отметка (null) убирает и старую
   assert.equal(pubMap({ published: { 'Глава 1': '2026-10-01' }, pub: { 'Глава 1': { 'Литнет': null } } })['Глава 1'], undefined);
 });
+
+test('график выкладки: пн/ср/пт, «выложить до» и следующая глава считаются сами', async () => {
+  const { scheduleDates, bookSchedule } = await import('../writer/js/wcalc.js');
+  // 2026-10-05 — понедельник
+  assert.deepEqual(scheduleDates('2026-10-05', [1, 3, 5], '2026-10-05', 4), ['2026-10-05', '2026-10-07', '2026-10-09', '2026-10-12']);
+  const tabs = ['Пролог', 'Глава 1', 'Глава 2', 'Глава 3'].map((title) => ({ title, chars: 10000 }));
+  const b = { platforms: ['Литнет'], tabs, chars: 40000, planChapters: 6, publishStart: '2026-10-05', pubDays: [1, 3, 5],
+    pub: { 'Пролог': { 'Литнет': { date: '2026-10-05' } }, 'Глава 1': { 'Литнет': { date: '2026-10-09', planned: true } } } };
+  const s = bookSchedule(b, '2026-10-07');
+  // ср 07.10 не закрыта (ничего не выходило после пн) → напоминание о Главе 2
+  assert.deepEqual(s.next, { date: '2026-10-07', ch: 'Глава 2', pf: 'Литнет' });
+  // осталось 4 главы: 07.10, (09.10 занята таймером), 12.10, 14.10, 16.10
+  assert.equal(s.remaining, 4); assert.equal(s.untilAuto, '2026-10-16');
+  // выложила в ср заранее во вторник — среда закрыта
+  const b2 = { ...b, pub: { ...b.pub, 'Глава 2': { 'Литнет': { date: '2026-10-06' } } } };
+  assert.equal(bookSchedule(b2, '2026-10-07').next.date, '2026-10-12');
+  // ручная дата важнее
+  assert.equal(bookSchedule({ ...b, publishUntil: '2026-12-01' }, '2026-10-07').until, '2026-12-01');
+  // без плана глав «до» не считается
+  assert.equal(bookSchedule({ ...b, planChapters: null }, '2026-10-07').untilAuto, null);
+});

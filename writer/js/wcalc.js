@@ -174,3 +174,63 @@ export function plannedPubs(b, today) {
   for (const [ch, pfs] of Object.entries(pubMap(b))) for (const [pf, v] of Object.entries(pfs)) if (pubState(v, today) === 'wait') r.push({ ch, pf, date: v.date });
   return r.sort((x, y) => x.date.localeCompare(y.date));
 }
+
+// главы книги: вкладки документа, которые считаются, плюс главы, отмеченные вручную (книга без файла)
+export function chapterList(b) {
+  const tabs = (b.tabs || []).filter((t) => t.counted !== false).map((t) => ({ title: t.title, chars: t.chars }));
+  const have = new Set(tabs.map((t) => t.title));
+  return [...tabs, ...Object.keys(pubMap(b)).filter((t) => !have.has(t)).map((title) => ({ title, chars: null }))];
+}
+// написанные главы — вкладки «Пролог», «Глава …», «Эпилог» («От автора» главой не считаем)
+export const writtenChapters = (b) => (b.tabs || []).filter((t) => t.counted !== false && /^\s*(пролог|глава|эпилог)/i.test(t.title)).length;
+
+// ---- график выкладки: начало + дни недели (1 — пн … 7 — вс) ----
+export const DOW = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+const dowOf = (d) => ((new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7) + 1;
+// даты выкладки по графику с from (включительно), не больше n штук / не дальше 2 лет
+export function scheduleDates(start, days, from, n) {
+  const set = new Set((days || []).map(Number)), out = [];
+  if (!start || !set.size) return out;
+  let d = from > start ? from : start;
+  for (let i = 0; i < 730 && out.length < n; i++, d = addDays(d, 1)) if (set.has(dowOf(d))) out.push(d);
+  return out;
+}
+// План выкладки и написания книги — всё считается само, ручные даты (publishUntil, finishBy) имеют приоритет.
+// slot «закрыт», если между прошлым днём графика и этим днём на основной площадке что-то вышло или стоит на таймере.
+export function bookSchedule(b, today) {
+  const pf = pubPlatforms(b)[0], pm = pubMap(b), chs = chapterList(b);
+  const marks = Object.values(pm).map((x) => x[pf]?.date).filter(Boolean).sort();
+  const planCh = Number(b.planChapters) || null, written = writtenChapters(b);
+  const out = Object.keys(chapterOutDates(b, today)).length;
+  const marked = Object.values(pm).filter((x) => x[pf]?.date).length; // выложены или на таймере на основной площадке
+  const days = b.pubDays || [];
+  // свободные дни графика начиная с сегодня
+  const back = scheduleDates(b.publishStart, days, addDays(today, -8), 8).filter((d) => d < today).pop() || addDays(today, -1);
+  const free = [];
+  let prev = back;
+  for (const d of scheduleDates(b.publishStart, days, today, 400)) {
+    if (!marks.some((m) => m > prev && m <= d)) free.push(d);
+    prev = d;
+    if (free.length >= 300) break;
+  }
+  const remaining = planCh ? Math.max(0, planCh - marked) : null;
+  const lastMark = marks[marks.length - 1] || null;
+  let untilAuto = null;
+  if (planCh && b.publishStart && days.length) {
+    const last = remaining > 0 ? free[remaining - 1] : null;
+    untilAuto = [last, lastMark].filter(Boolean).sort().pop() || null;
+  }
+  // дописать: средний размер главы × план глав, по темпу письма
+  let finishAuto = null;
+  if (planCh && written) {
+    if (written >= planCh) finishAuto = null;
+    else {
+      const avg = (b.chars || 0) / written;
+      finishAuto = forecastDate(b.history || {}, today, Math.round(avg * planCh));
+    }
+  }
+  // следующая глава к выкладке: первая без отметки на основной площадке
+  const nextCh = chs.find((t) => !pm[t.title]?.[pf]?.date)?.title || null;
+  const next = (remaining == null || remaining > 0) && free[0] ? { date: free[0], ch: nextCh, pf } : null;
+  return { pf, planCh, written, out, marked, remaining, untilAuto, until: b.publishUntil || untilAuto, finishAuto, finish: b.finishBy || finishAuto, next, doneWriting: !!planCh && written >= planCh };
+}

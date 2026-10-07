@@ -1,8 +1,9 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, pct } from '../../../js/format.js';
-import { contestStatus, waitingStatus, forecastDate, chapterOutDates } from '../wcalc.js';
-import { PLATFORMS, chapterList } from './books.js';
+import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW } from '../wcalc.js';
+import { addDays } from '../../../js/calc.js';
+import { PLATFORMS, progressBlock, daysTxt } from './books.js';
 import { startEvent, finishEvent, chapterEvent, removeEvent } from '../sync.js';
 
 const app = () => window.__app;
@@ -26,31 +27,32 @@ const leftTxt = (n) => (n < 0 ? `просрочено на ${-n} дн.` : n === 
 function booksPlan(c, list) {
   if (!list.length) return '<div class="card"><p class="muted" style="margin:0">Книг в работе нет. Поставьте книге статус «В процессе» — она появится здесь.</p></div>';
   return list.map((b) => {
-    const fc = b.planChars ? forecastDate(b.history, c.today, Number(b.planChars)) : null;
-    const tabs = chapterList(b), out = chapterOutDates(b, c.today);
-    const pubN = Object.keys(out).length;
-    const cs = c.data.w_contests.filter((x) => x.bookId === b.id && !(x.end && x.end < c.today) && x.status !== 'done');
+    const s = bookSchedule(b, c.today);
     return `<div class="card">
-      <div class="row between"><b>${esc(b.title)}</b><span class="small muted">${zn(b.chars)}</span></div>
-      ${cs.length ? `<div class="tags" style="margin-top:4px">${cs.map((x) => `<span class="tag on">Конкурс «${esc(x.name)}» · ${leftTxt(dleft(x.end, c.today))}</span>`).join('')}</div>` : ''}
-      <div class="kv">
-        <div><span>Допишу к</span><b>${b.finishBy ? `${fmtDate(b.finishBy)}` : '—'}</b>${b.finishBy ? `<span>${leftTxt(dleft(b.finishBy, c.today))}${fc ? ` · по темпу ${fmtDate(fc)}` : ''}</span>` : fc ? `<span>по темпу — ${fmtDate(fc)}</span>` : ''}</div>
-        <div><span>Выкладка до</span><b>${b.publishUntil ? fmtDate(b.publishUntil) : '—'}</b>${b.publishUntil ? `<span>${leftTxt(dleft(b.publishUntil, c.today))}</span>` : ''}</div>
-        <div><span>Начало выкладки</span><b>${b.publishStart ? fmtDate(b.publishStart) : '—'}</b></div>
-        <div><span>Глав выложено</span><b>${tabs.length ? `${pubN} из ${tabs.length}` : '—'}</b></div>
-      </div>
+      <div class="row between"><a href="#" data-act="go" data-to="/book/${b.id}"><b>${esc(b.title)}</b></a><span class="small muted">${zn(b.chars)}</span></div>
+      ${progressBlock(c, b)}
       <div class="row"><button class="primary" data-act="ch.publish" data-id="${b.id}">Выложила главу</button><button data-act="wb.dates" data-id="${b.id}">Сроки</button><button data-act="wb.finish" data-id="${b.id}">Книга завершена</button></div>
     </div>`;
   }).join('') + '<div class="hint">«Выложила главу», начало выкладки и завершение книги сами отмечаются событиями в приложении «Доходы» — на графиках и в аналитике книги.</div>';
 }
+// Сроки: график выкладки (начало + дни недели) и примерное число глав — даты «выкладка до» и «допишу к» считаются сами;
+// поставить свою дату можно, но не обязательно
 acts['wb.dates'] = (d) => {
   const c = app().ctx(), b = c.wbooksById[d.id];
-  openSheet(`Сроки — ${b.title}`, `<label for="fb">Допишу к</label><input id="fb" type="date" name="finishBy" value="${b.finishBy || ''}">
-    <div class="f2"><div><label for="ps">Начало выкладки</label><input id="ps" type="date" name="publishStart" value="${b.publishStart || ''}"></div><div><label for="pu">Выкладка до</label><input id="pu" type="date" name="publishUntil" value="${b.publishUntil || ''}"></div></div>
-    <div class="hint">Начало выкладки отметится событием «Старт книги» в «Доходах».</div>`, async (fd) => {
-    const patch = { finishBy: fd.get('finishBy') || '', publishStart: fd.get('publishStart') || '', publishUntil: fd.get('publishUntil') || '' };
+  const s = bookSchedule({ ...b, publishUntil: '', finishBy: '' }, c.today), days = new Set((b.pubDays || []).map(Number));
+  openSheet(`Сроки — ${b.title}`, `
+    <div class="f2"><div><label for="ps" style="margin-top:0">Начало выкладки</label><input id="ps" type="date" name="publishStart" value="${b.publishStart || ''}"></div>
+    <div><label for="pc" style="margin-top:0">Глав в книге, примерно</label><input id="pc" name="planChapters" inputmode="numeric" value="${b.planChapters || ''}"></div></div>
+    <label>Дни выкладки</label><div class="checks dow">${DOW.map((x, i) => `<label class="check"><input type="checkbox" name="dow" value="${i + 1}"${days.has(i + 1) ? ' checked' : ''}>${x}</label>`).join('')}</div>
+    <div class="f2"><div><label for="pu">Выкладка до</label><input id="pu" type="date" name="publishUntil" value="${b.publishUntil || ''}"><div class="small muted">${s.untilAuto ? `сама считаю: ${fmtDate(s.untilAuto)}` : 'посчитаю сама по графику'}</div></div>
+    <div><label for="fb">Допишу к</label><input id="fb" type="date" name="finishBy" value="${b.finishBy || ''}"><div class="small muted">${s.finishAuto ? `по темпу: ${fmtDate(s.finishAuto)}` : 'посчитаю по темпу письма'}</div></div></div>
+    <div class="hint">Даты можно не заполнять — они считаются сами по графику, числу глав и темпу письма. Своя дата заменит расчёт. В дни выкладки на Главной появится напоминание выложить главу, если она ещё не отмечена и не стоит на таймере. Начало выкладки отметится событием «Старт книги» в «Доходах» (если выкладка началась больше недели назад — событие не ставлю).</div>`, async (fd) => {
+    const patch = { publishStart: fd.get('publishStart') || '', pubDays: fd.getAll('dow').map(Number), planChapters: N(fd.get('planChapters')) || null, publishUntil: fd.get('publishUntil') || '', finishBy: fd.get('finishBy') || '' };
     await app().store.put('w_books', { ...b, ...patch });
-    if (patch.publishStart) await startEvent(c, { ...b, ...patch }, patch.publishStart); else await removeEvent(`w:${b.id}:start`);
+    // старт давно прошедшей выкладки событием не ставим — оно уже неактуально (если не стояло раньше)
+    const had = (app().store.data.days || []).some((x) => (x.events || []).some((e) => e.src === `w:${b.id}:start`));
+    if (patch.publishStart && (had || patch.publishStart >= addDays(c.today, -7))) await startEvent(c, { ...b, ...patch }, patch.publishStart);
+    else if (!patch.publishStart) await removeEvent(`w:${b.id}:start`);
     toast('Сроки сохранены');
   });
 };

@@ -3,8 +3,8 @@ import { esc } from '../../../js/ui.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs } from '../wcalc.js';
-import { STATUS, chapterList } from './books.js';
+import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule } from '../wcalc.js';
+import { STATUS, progressBlock, daysTxt } from './books.js';
 
 const zn = (n) => num(n || 0) + ' зн.';
 const dleft = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
@@ -23,8 +23,11 @@ export function reminders(c) {
   }
   for (const b of c.wbooks) {
     if ((b.status || 'progress') !== 'progress') continue;
-    if (b.finishBy) add(b.finishBy, `Дописать «${b.title}»`, b.planChars ? `${zn(b.chars)} из ${zn(b.planChars)}` : zn(b.chars), '/plan');
-    if (b.publishUntil) add(b.publishUntil, `Закончить выкладку «${b.title}»`, '', '/plan');
+    const s = bookSchedule(b, t);
+    if (b.finishBy && !s.doneWriting) add(b.finishBy, `Дописать «${b.title}»`, s.planCh ? `глав ${s.written} из ≈${s.planCh}` : '', '/book/' + b.id);
+    if (s.until && s.remaining !== 0) add(s.until, `Закончить выкладку «${b.title}»`, b.publishUntil ? '' : 'посчитано по графику', '/book/' + b.id);
+    // день выкладки по графику: напоминание, только если глава ещё не отмечена и не стоит на таймере
+    if (s.next) add(s.next.date, `Выложить ${s.next.ch ? `«${s.next.ch}»` : 'следующую главу'} — ${s.next.pf}`, `«${esc(b.title)}» · по графику: ${daysTxt(b.pubDays)}`, '/book/' + b.id, 1);
     if (b.publishStart && b.publishStart >= t) add(b.publishStart, `Начать выкладку «${b.title}»`, '', '/plan', 7);
   }
   // отложенные публикации глав: выйдут сами, просто напоминание
@@ -50,17 +53,11 @@ function bar(label, share, right, hint = '') {
   return `<div class="wbar"><div class="row between small"><span>${label}</span><span>${right}</span></div><div class="progress"><i style="width:${(pctv * 100).toFixed(1)}%"></i></div>${hint ? `<div class="small muted">${hint}</div>` : ''}</div>`;
 }
 function workCard(c, r) {
-  const b = r.b, t = c.today, fc = b.planChars ? forecastDate(b.history || {}, t, Number(b.planChars)) : null;
-  const tabs = chapterList(b), pubN = Object.keys(chapterOutDates(b, c.today)).length;
-  const parts = [];
-  if (b.planChars) parts.push(bar('Объём', (b.chars || 0) / b.planChars, `${num(b.chars || 0)} из ${num(b.planChars)} · ${Math.round(((b.chars || 0) / b.planChars) * 100)} %`, fc ? `по темпу допишу к ${fmtDate(fc)}${b.finishBy ? (fc <= b.finishBy ? ' — успеваю к сроку' : ` — срок ${fmtDate(b.finishBy)}, не успеваю`) : ''}` : (b.finishBy ? `срок ${fmtDate(b.finishBy)}` : '')));
-  else parts.push(`<div class="small">${zn(b.chars)}${b.finishBy ? ` · допишу к ${fmtDate(b.finishBy)} (${when(dleft(b.finishBy, t))})` : ''} <span class="muted">· план по объёму — в карточке книги</span></div>`);
-  if (tabs.length) parts.push(bar('Выкладка', pubN / tabs.length, `глав ${pubN} из ${tabs.length}`, b.publishUntil ? `выкладка до ${fmtDate(b.publishUntil)} (${when(dleft(b.publishUntil, t))})` : ''));
-  else if (b.publishStart && b.publishUntil) { const all = dleft(b.publishUntil, b.publishStart) || 1; parts.push(bar('Выкладка', dleft(t, b.publishStart) / all, `до ${fmtDate(b.publishUntil)}`)); }
+  const b = r.b, t = c.today;
   return `<a class="card wcard tap" href="#" data-act="go" data-to="/book/${b.id}">
     <span class="mk-cover big">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
-    <span class="wcard-body"><span class="row between"><b>${esc(b.title)}</b>${r.contests.map((x) => `<span class="badge">конкурс · ${x.end ? when(dleft(x.end, t)) : ''}</span>`).join('')}</span>
-      ${parts.join('')}
+    <span class="wcard-body"><span class="row between"><b>${esc(b.title)}</b></span>
+      ${progressBlock(c, b)}
       <span class="small">В ${fmtMonthIn(monthKey(t)).split(' ')[0]}: +${num(r.wrote)} зн.${r.today ? ` (сегодня +${num(r.today)})` : ''} · глав ${r.chapters}${r.income != null ? ` · доход ${rub(r.income, 0)}` : ''}</span></span></a>`;
 }
 
