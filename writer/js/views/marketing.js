@@ -1,42 +1,49 @@
 import { esc, acts, changes, openSheet, opt, toast, uid, ask } from '../../../js/ui.js';
-import { rub, fmtDate } from '../../../js/format.js';
-import { incomeSeries, sumSeries, addDays, monthKey, campaignMetrics } from '../../../js/calc.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 
 const app = () => window.__app;
 export const MTYPES = { banner: 'Баннер', cover: 'Обложка', other: 'Другое' };
 
-function salesCard(c, wb) {
-  const d = c.data;
-  const legacy = d.days.filter((x) => x.income != null);
-  const incomeId = wb ? c.incomeIdOf(wb) : null;
-  if (wb && !incomeId) return `<div class="card"><p class="small muted">Книга «${esc(wb.title)}» не связана с книгой в приложении доходов. Откройте книгу и выберите её в поле «Книга в приложении доходов».</p></div>`;
-  if (!d.sales.length) return '<div class="card"><p class="small muted">Продаж пока нет — загрузите выгрузку Литнета в приложении доходов.</p></div>';
-  const end = c.dataEnd;
-  const s30 = incomeSeries(d.sales, legacy, addDays(end, -29), end, incomeId);
-  const mtd = incomeSeries(d.sales, legacy, monthKey(end) + '-01', end, incomeId);
-  const camps = d.campaigns.filter((k) => !k.oneOff && (!incomeId || !k.bookId || k.bookId === incomeId) && k.start && k.start <= end && (!k.end || k.end >= addDays(end, -30)));
-  const ctx = { sales: d.sales, legacyDays: legacy, reports: d.reports, campaigns: d.campaigns, dataEnd: end, baseDays: c.settings.baseDays, today: c.today };
-  return `<div class="card"><h2>Продажи${wb ? ': ' + esc(wb.title) : ''}</h2>
-    <div class="grid3"><div><div class="small muted">за 30 дней</div><div class="big">${rub(sumSeries(s30), 0)}</div></div>
-    <div><div class="small muted">в этом месяце</div><div class="big">${rub(sumSeries(mtd), 0)}</div></div>
-    <div><div class="small muted">в день (30 дн.)</div><div class="big">${rub(sumSeries(s30) / 30, 0)}</div></div></div>
-    <div class="small muted" style="margin-top:6px">данные по ${fmtDate(end)} · ${s30.reduce((a, x) => a + x.qty, 0)} шт. за 30 дней</div>
-    ${camps.length ? `<h3>Реклама</h3>${camps.map((k) => { const m = campaignMetrics(k, ctx); return `<div class="item small"><b>${esc(k.name)}</b> · ${fmtDate(k.start)}–${fmtDate(k.end) || '…'}${m.payback == null ? '' : ` · <span class="${m.payback >= 0 ? 'up' : 'down'}">${m.payback >= 0 ? '▲ окупается' : '▼ не окупается'} ${rub(m.payback, 0)}/день</span>`}</div>`; }).join('')}` : ''}
-    <div style="margin-top:10px"><a class="btn" href="../">Подробно в приложении доходов →</a></div></div>`;
+// Тексты для продвижения книги: всё, что нужно под рукой для постов, рекламы и конкурсов
+const PROMO = { annotation: 'Аннотация', short: 'Короткий анонс для поста', tags: 'Теги и хэштеги', quotes: 'Цитаты для постов' };
+const promoOf = (b) => b.promo || {};
+const filled = (b) => Object.keys(PROMO).filter((k) => (promoOf(b)[k] || '').trim()).length;
+
+function bookSelect(c, sel) {
+  const grp = (st, label) => { const l = c.wbooks.filter((b) => (b.status || 'progress') === st); return l.length ? `<optgroup label="${label}">${l.map((b) => opt(b.id, b.title, sel)).join('')}</optgroup>` : ''; };
+  return `<select data-chg="mk.book" aria-label="Книга"><option value="">Все книги</option>${grp('progress', 'В процессе')}${grp('idea', 'Идеи')}${grp('done', 'Завершённые')}</select>`;
+}
+
+function promoCard(c, b) {
+  const p = promoOf(b);
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Тексты для продвижения</h2><button data-act="mk.promo" data-id="${b.id}">Изменить</button></div>
+    <div class="list">${Object.entries(PROMO).map(([k, label]) => {
+      const v = (p[k] || '').trim();
+      return `<div class="item"><div class="row between"><span class="small muted">${label}</span>${v ? `<button class="link" style="padding:0" data-act="copy" data-text="${esc(v)}">копировать</button>` : ''}</div>
+        ${v ? `<div class="idea-text">${esc(v)}</div>` : '<div class="small muted">не заполнено</div>'}</div>`;
+    }).join('')}</div></div>`;
+}
+
+// обзор по всем книгам: что уже готово для продвижения
+function overview(c) {
+  if (!c.wbooks.length) return '';
+  return `<div class="card"><h2>Готовность к продвижению</h2><div class="list">${c.wbooks.map((b) => {
+    const n = filled(b), media = c.data.w_media.filter((m) => m.bookId === b.id).length;
+    return `<a class="item row between" href="#" data-act="mk.pick" data-v="${b.id}"><span>${esc(b.title)}<span class="sub">тексты ${n} из ${Object.keys(PROMO).length} · картинок ${media}</span></span><span class="badge ${n === Object.keys(PROMO).length ? 'good' : ''}">${n === Object.keys(PROMO).length ? 'готово' : 'дополнить'}</span></a>`;
+  }).join('')}</div></div>`;
 }
 
 export function marketingView(a) {
   const c = a.ctx(), sel = a.ui.mBook;
   const wb = sel ? c.wbooksById[sel] : null;
   const media = [...c.data.w_media].filter((m) => !sel || m.bookId === sel).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
-  const html = `<div class="chips"><button class="chip${!sel ? ' on' : ''}" data-act="mk.book" data-v="">Все книги</button>${c.wbooks.map((b) => `<button class="chip${sel === b.id ? ' on' : ''}" data-act="mk.book" data-v="${b.id}">${esc(b.title.slice(0, 26))}</button>`).join('')}</div>
-  ${salesCard(c, wb)}
+  const html = `<div class="card">${bookSelect(c, sel)}</div>
+  ${wb ? promoCard(c, wb) : overview(c)}
   <div class="row between" style="margin:16px 0 10px"><h2 style="margin:0">Баннеры и обложки</h2>
     <label class="btn primary">+ Загрузить<input type="file" accept="image/*" multiple data-chg="mk.upload" hidden></label></div>
   ${drive.isConnected() && c.settings.wMarketingFolder ? '' : '<p class="small muted">Оригиналы сохраняются в папку «Маркетинг» на Google Диске, когда Диск подключён и папка выбрана (Настройки (шестерёнка вверху)). Без этого сохранится только уменьшенная копия.</p>'}
-  ${media.length ? `<div class="gallery">${media.map((m) => `<button class="g-item" data-act="mk.open" data-id="${m.id}"><img src="${m.thumb}" alt="${esc(m.name || '')}"><span class="tag on">${MTYPES[m.type] || MTYPES.other}</span></button>`).join('')}</div>` : '<div class="card"><p class="muted">Пока пусто. Загрузите баннеры для рекламы и обложки — они будут под рукой с телефона.</p></div>'}`;
+  ${media.length ? `<div class="gallery">${media.map((m) => `<button class="g-item" data-act="mk.open" data-id="${m.id}"><img src="${m.thumb}" alt="${esc(m.name || '')}"><span class="tag on">${MTYPES[m.type] || MTYPES.other}</span></button>`).join('')}</div>` : '<div class="card"><p class="muted" style="margin:0">Пока пусто. Загрузите баннеры для рекламы и обложки — они будут под рукой с телефона.</p></div>'}`;
   return { html };
 }
 
@@ -50,7 +57,16 @@ export async function saveMedia(file, { type = 'banner', bookId = '', thumb } = 
   await app().store.put('w_media', item);
   return item;
 }
-acts['mk.book'] = (d) => { app().ui.mBook = d.v; };
+changes['mk.book'] = (v) => { app().ui.mBook = v; app().rerender(); };
+acts['mk.pick'] = (d) => { app().ui.mBook = d.v; window.scrollTo(0, 0); };
+acts['mk.promo'] = (d) => {
+  const b = app().ctx().wbooksById[d.id], p = promoOf(b);
+  openSheet(`Тексты — ${b.title}`, Object.entries(PROMO).map(([k, label]) => `<label for="pr_${k}">${label}</label><textarea id="pr_${k}" name="${k}" style="min-height:${k === 'annotation' || k === 'quotes' ? 140 : 80}px">${esc(p[k] || '')}</textarea>`).join('') + '<div class="hint">Цитаты — каждая с новой строки.</div>', async (fd) => {
+    const promo = Object.fromEntries(Object.keys(PROMO).map((k) => [k, (fd.get(k) || '').trim()]));
+    await app().store.put('w_books', { ...b, promo });
+    toast('Тексты сохранены');
+  });
+};
 changes['mk.upload'] = async (v, el) => {
   const files = [...el.files]; el.value = '';
   if (!files.length) return;
@@ -71,4 +87,7 @@ acts['mk.open'] = (d) => {
 acts['mk.del'] = async (d) => {
   if (!(await ask('Убрать картинку из галереи? Оригинал на Google Диске останется.', 'Убрать'))) return;
   await app().store.remove('w_media', d.id);
+};
+acts.copy ||= async (d) => {
+  try { await navigator.clipboard.writeText(d.text); toast('Скопировано'); } catch { toast('Не получилось скопировать — выделите текст вручную'); }
 };
