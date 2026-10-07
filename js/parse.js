@@ -137,3 +137,38 @@ export function toCsv(rows, columns) {
 }
 export const csvDec = (n) => (n === null || n === undefined ? '' : String(n).replace('.', ','));
 export { hashStr };
+
+// ---- распознанный текст скриншота продаж (Литнет) → цифры для «Добавить продажи вручную» ----
+// Ищем строки с «продаж…»/«подпис…»: в строке таблицы обычно «цена · кол-во · доход» — три последних числа.
+// Если строка короче — «N шт» и сумма «… ₽». Отдельно — итоговые «начислено / доход / гонорар».
+export function parseSalesText(text, bookTitle = '') {
+  const res = { sale: { qty: 0, royalty: 0, gross: 0, n: 0 }, sub: { qty: 0, royalty: 0, gross: 0, n: 0 }, royalty: null };
+  const words = String(bookTitle || '').toLowerCase().split(/[^a-zа-яё0-9]+/i).filter((w) => w.length > 3);
+  const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const toNums = (l) => [...l.matchAll(/\d+(?:[.,]\d{1,2})?/g)].map((m) => Number(m[0].replace(',', '.')));
+  const numsOf = (l) => toNums(l.replace(/(\d)[\s ](?=\d{3}(?!\d))/g, '$1'));
+  // строка таблицы: цена · кол-во · доход; доход — разумная доля от цены×кол-во
+  const row = (n) => { if (n.length < 3) return null; const [price, qty, roy] = n.slice(-3);
+    return Number.isInteger(qty) && qty > 0 && roy > 0 && roy <= price * qty * 1.01 && roy >= price * qty * 0.2 ? { price, qty, roy } : null; };
+  // если есть строки с названием книги — берём только их
+  const own = words.length ? lines.filter((l) => words.some((w) => l.toLowerCase().includes(w))) : [];
+  const pool = own.length ? own : lines;
+  for (const l of pool) {
+    const low = l.toLowerCase();
+    const kind = /подпис/.test(low) ? 'sub' : /продаж/.test(low) ? 'sale' : null;
+    if (!kind) continue;
+    const e = res[kind];
+    const r = row(toNums(l)) || row(numsOf(l));
+    if (r) { e.qty += r.qty; e.royalty += r.roy; e.gross += r.price * r.qty; e.n++; continue; }
+    const q = /(\d+)\s*(шт|штук|продаж|подпис)/i.exec(l), m = /(\d[\d\s.,]*)\s*(₽|руб|р\.)/i.exec(l);
+    if (q) e.qty += Number(q[1]);
+    if (m) e.royalty += Number(m[1].replace(/\s/g, '').replace(',', '.'));
+    if (q || m) e.n++;
+  }
+  for (const l of lines) {
+    const low = l.toLowerCase();
+    if (/(начислен|гонорар|роялти|ваш доход|к выплате)/.test(low)) { const n = numsOf(l); if (n.length) res.royalty = n[n.length - 1]; }
+  }
+  for (const k of ['sale', 'sub']) { const e = res[k]; e.royalty = Math.round(e.royalty * 100) / 100; e.gross = Math.round(e.gross * 100) / 100; }
+  return res;
+}

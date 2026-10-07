@@ -1,6 +1,6 @@
 import { esc, acts, forms, changes, openSheet, opt, toast, N, download, readFile, closeSheet } from '../ui.js';
 import { rub, fmtDate, fmtMonth, num, parseNum } from '../format.js';
-import { decodeBuffer, parseStatistic, parseLegacy, makeBackup, readBackup, toCsv, csvDec } from '../parse.js';
+import { decodeBuffer, parseStatistic, parseLegacy, parseSalesText, makeBackup, readBackup, toCsv, csvDec } from '../parse.js';
 import { diffSales, inferPriceChanges, monthKey, r2, addDays, manualSaleRow } from '../calc.js';
 import { buildReportModel, toMarkdown, toHtml, toJson, toXlsxBook } from '../report.js';
 
@@ -206,6 +206,8 @@ acts['sale.manual'] = (d) => {
     <input name="platformOther" placeholder="название площадки, если её нет в списке" aria-label="Другая площадка" style="margin-top:6px">
     <label for="mb">Книга</label><select id="mb" name="bookId">${c.activeBooks.map((b) => opt(b.id, b.title)).join('')}<option value="">Другая — впишу название</option></select>
     <input name="bookTitle" placeholder="название, если книги нет в списке" style="margin-top:6px" aria-label="Название книги">
+    <div class="row" style="margin-top:10px"><label class="btn">Заполнить по скриншоту<input type="file" accept="image/*" data-chg="sale.ocr" hidden></label><span class="small muted" data-ocr-st></span></div>
+    <div data-ocr-extra></div>
     <div class="f2"><div><label for="mk">Тип</label><select id="mk" name="kind">${opt('sale', 'продажи')}${opt('sub', 'подписки')}</select></div>
     <div><label for="mq">Количество, шт.</label><input id="mq" name="qty" inputmode="numeric" required></div></div>
     <div class="f2"><div><label for="mr">Мне начислено, ₽</label><input id="mr" name="royalty" inputmode="decimal" required></div>
@@ -221,6 +223,45 @@ acts['sale.manual'] = (d) => {
     const row = manualSaleRow({ date: fd.get('date'), book: title, bookId: b?.id, kind: fd.get('kind'), qty, royalty, gross, platform });
     if (!b) await app().store.put('books', { id: row.bookId, title, status: 'progress', startDate: '', lastChapterDate: '', priceHistory: [] });
     await app().store.put('sales', row);
+    // со скриншота пришли и продажи, и подписки — вторую строку добавляем отдельно
+    const xq = N(fd.get('xQty')), xr = N(fd.get('xRoyalty')), xg = N(fd.get('xGross'));
+    if (fd.get('xAdd') && xq > 0 && xr > 0) await app().store.put('sales', manualSaleRow({ date: fd.get('date'), book: title, bookId: row.bookId, kind: fd.get('xKind'), qty: xq, royalty: xr, gross: xg || null, platform }));
     toast('Продажи добавлены');
   }, { submitText: 'Добавить' });
+};
+
+// распознавание скриншота продаж: Tesseract.js грузится только по требованию
+let tess;
+const loadTesseract = () => tess || (tess = new Promise((ok, fail) => {
+  if (window.Tesseract) return ok(window.Tesseract);
+  const sc = document.createElement('script');
+  sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+  sc.onload = () => ok(window.Tesseract); sc.onerror = () => { tess = null; fail(new Error('load')); };
+  document.head.appendChild(sc);
+}));
+changes['sale.ocr'] = async (v, el) => {
+  const file = el.files[0]; el.value = '';
+  if (!file) return;
+  const form = el.closest('form'), st = form.querySelector('[data-ocr-st]'), extra = form.querySelector('[data-ocr-extra]');
+  const set = (n, val) => { const f = form.elements[n]; if (f) f.value = val; };
+  st.textContent = 'Читаю скриншот…';
+  try {
+    const T = await loadTesseract();
+    const { data } = await T.recognize(file, 'rus+eng', { logger: (m) => { if (m.status === 'recognizing text') st.textContent = `Читаю скриншот… ${Math.round(m.progress * 100)} %`; } });
+    const b = app().ctx().booksById[form.elements.bookId.value];
+    const r = parseSalesText(data.text, b ? b.title : form.elements.bookTitle.value);
+    const kinds = ['sale', 'sub'].filter((k) => r[k].qty > 0 || r[k].royalty > 0);
+    if (!kinds.length && r.royalty == null) { st.textContent = 'Не нашла цифр продаж — впишите вручную.'; extra.innerHTML = ''; return; }
+    const main = kinds[0] || 'sale', m = r[main];
+    set('kind', main);
+    if (m.qty) set('qty', m.qty);
+    set('royalty', String(m.royalty || r.royalty || '').replace('.', ','));
+    if (m.gross) set('gross', String(m.gross).replace('.', ','));
+    const x = kinds[1] && r[kinds[1]];
+    extra.innerHTML = x ? `<label class="check" style="margin-top:8px"><input type="checkbox" name="xAdd" checked> и ${kinds[1] === 'sub' ? 'подписки' : 'продажи'}: ${x.qty} шт., ${rub(x.royalty)} — тоже добавить</label>
+      <input type="hidden" name="xKind" value="${kinds[1]}"><input type="hidden" name="xQty" value="${x.qty}"><input type="hidden" name="xRoyalty" value="${x.royalty}"><input type="hidden" name="xGross" value="${x.gross || ''}">` : '';
+    st.textContent = 'Заполнила — проверьте цифры перед сохранением.';
+  } catch (e) {
+    st.textContent = 'Не получилось распознать (нужен интернет). Впишите вручную.';
+  }
 };

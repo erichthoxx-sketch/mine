@@ -83,3 +83,19 @@ test('КОНТРОЛЬ: сентябрь 2026 по настоящему Statisti
   assert.equal(r.rows.reduce((a, s) => a + s.qty, 0), 252);
   assert.equal(sept.find((d) => d.date === '2026-09-25').royalty, 2089.43);
 });
+
+test('скриншот продаж: строки таблицы «цена · кол-во · доход» по книге', async () => {
+  const { parseSalesText } = await import('../js/parse.js');
+  const text = `Статистика продаж
+Альпийский развод. Он оставил меня умирать Продажа 169,00 7 828,10
+Альпийский развод. Он оставил меня умирать Подписка 30,00 2 42,00
+Звериная тропа для двоих Подписка 39,00 5 136,50
+Итого 1 006,60`;
+  const r = parseSalesText(text, 'Альпийский развод. Он оставил меня умирать');
+  assert.deepEqual([r.sale.qty, r.sale.royalty, r.sale.gross], [7, 828.1, 1183]);
+  assert.deepEqual([r.sub.qty, r.sub.royalty], [2, 42]);
+  const all = parseSalesText(text);
+  assert.equal(all.sub.qty, 7);
+  const short = parseSalesText('Продажи: 12 шт\nНачислено 1 420,50 ₽');
+  assert.equal(short.sale.qty, 12); assert.equal(short.royalty, 1420.5);
+});
