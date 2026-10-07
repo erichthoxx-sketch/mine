@@ -71,7 +71,7 @@ function discountTable(c) {
 // «Бюджет на следующий месяц»: сколько вложить в рекламу, чтобы выйти на цель месяца
 export function budgetCard(c) {
   const b = budgetPlan({ sales: c.sales, legacyDays: c.legacyDays, campaigns: c.campaigns, reports: c.data.reports, settings: c.settings, today: c.today, dataEnd: c.dataEnd });
-  if (b.status === 'nodata') return '';
+  if (b.status === 'nodata') return `<div class="card"><h2>Бюджет на ${fmtMonth(b.month)}</h2><p class="muted" style="margin:0">${b.goal == null ? `Чтобы посчитать бюджет, задайте цель на ${fmtMonth(b.month)} в блоке «Цели» ниже.` : 'Пока не хватает данных о доходе без рекламы — бюджет посчитается, когда появится выгрузка за несколько дней.'}</p></div>`;
   const head = `<h2>Бюджет на ${fmtMonth(b.month)}</h2>
     <div class="kv"><div><span>Цель на ${fmtMonth(b.month)}</span><b>${rub(b.goal, 0)}</b></div><div><span>Без рекламы обычно</span><b>≈ ${rub(b.organicMonth, 0)}</b></div></div>`;
   const hint = `<div class="hint">Обычный доход — средний за ${b.organicDays} дн. без рекламы (${rub(b.organicPerDay, 0)} в день). Отдача — сколько дохода сверх обычного приносил 1 ₽ в прошлых кампаниях. Это оценка: с ростом бюджета отдача обычно немного падает.</div>`;

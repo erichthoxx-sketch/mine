@@ -815,12 +815,19 @@ export function budgetPlan(ctx) {
   const camps = (ctx.campaigns || []).filter((k) => !k.oneOff && k.start);
   const adOn = (d) => camps.some((k) => d >= k.start && d <= (k.end || '9999-12-31'));
   const clean = incomeSeries(ctx.sales, ctx.legacyDays || [], addDays(ctx.dataEnd, -89), ctx.dataEnd).filter((x) => x.known && !adOn(x.date));
-  const organicPerDay = clean.length ? r2(clean.reduce((a, x) => a + x.royalty, 0) / clean.length) : null;
+  let organicPerDay = clean.length >= 3 ? r2(clean.reduce((a, x) => a + x.royalty, 0) / clean.length) : null;
+  let organicDays = clean.length;
+  if (organicPerDay == null) {
+    // дней без рекламы почти нет — берём «обычный доход» (базу) последней кампании, у которой она посчитана
+    const mctx = { sales: ctx.sales, legacyDays: ctx.legacyDays || [], reports: ctx.reports || [], campaigns: ctx.campaigns || [], dataEnd: ctx.dataEnd, baseDays: s.baseDays, today: ctx.today };
+    const withBase = [...camps].sort((a, b) => b.start.localeCompare(a.start)).map((k) => campaignMetrics(k, mctx)).find((m) => m.baseline != null);
+    if (withBase) { organicPerDay = withBase.baseline; organicDays = withBase.baseDaysUsed; }
+  }
   // отдача рекламы по прошлым кампаниям
   const sum = adGroupSummary(camps, { sales: ctx.sales, legacyDays: ctx.legacyDays || [], reports: ctx.reports || [], campaigns: ctx.campaigns || [], dataEnd: ctx.dataEnd, baseDays: s.baseDays, today: ctx.today });
   const roi = sum.returnShare != null && sum.returned != null ? sum.returnShare : null; // ₽ дохода сверх обычного на 1 ₽ рекламы
   const spentWithData = roi ? r2(sum.returned / roi) : 0;
-  const out = { month: next, days, goal, organicPerDay, organicDays: clean.length, organicMonth: organicPerDay == null ? null : r2(organicPerDay * days), roi, spentWithData, threshold: Number(s.litnetThreshold) || 10000, pct: (Number(s.litnetPct) || 20) / 100 };
+  const out = { month: next, days, goal, organicPerDay, organicDays, organicMonth: organicPerDay == null ? null : r2(organicPerDay * days), roi, spentWithData, threshold: Number(s.litnetThreshold) || 10000, pct: (Number(s.litnetPct) || 20) / 100 };
   if (goal == null || organicPerDay == null) return { ...out, status: 'nodata' };
   out.gap = r2(goal - out.organicMonth);
   if (out.gap <= 0) return { ...out, status: 'enough', budget: 0 };
