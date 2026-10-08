@@ -597,3 +597,79 @@ a.side-card:hover { border-color: var(--accent-2); }
 .tb-more { margin-top: 12px; padding: 0; font-size: 14px; }
 .tb-empty { margin-top: 10px; font-size: 15px; color: var(--good); }
 .today-banner.calm { padding-bottom: 16px; }
+
+/* ---------- Мастерская: дела на сегодня — в левом меню, под разделами ---------- */
+.nav-today { display: none; }
+@media (min-width: 1180px) {
+  html.app-writer nav.tabs { width: 272px; }
+  html.app-writer #app { padding-left: 292px; }
+  html.app-writer .demo { margin-left: -292px; }
+  html.app-writer.nav-mini #app { padding-left: 96px; }
+  html.app-writer.nav-mini .demo { margin-left: -96px; }
+  html.app-writer.nav-mini nav.tabs { width: 76px; }
+  .nav-today { display: block; margin: 22px 2px 12px; padding: 16px 14px 12px; border-radius: 18px; background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent-2) 45%, var(--line)); }
+  html.nav-mini .nav-today { display: none; }
+  .nt-date { font-size: 13px; font-weight: 700; color: var(--text-2); margin-bottom: 8px; }
+  .nt-item { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); cursor: pointer; }
+  .nt-date + .nt-item { border-top: 0; }
+  .nt-item > i { width: 7px; height: 7px; border-radius: 50%; flex: none; margin-top: 7px; }
+  .nt-body { min-width: 0; flex: 1; }
+  .nt-t { font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--text); }
+  .nt-s { font-size: 12px; color: var(--muted); line-height: 1.4; margin-top: 2px; }
+  .nt-btns { display: flex; gap: 6px; margin-top: 8px; }
+  button.nt-btn { min-height: 28px; padding: 2px 12px; font-size: 13px; margin-top: 8px; }
+  .nt-btns button.nt-btn { margin-top: 0; }
+  .nt-btns button.nt-btn:first-child { background: linear-gradient(135deg, var(--btn-from), var(--btn-to)); border-color: var(--btn-to); color: var(--accent-ink); }
+  .nt-more { padding: 6px 0 0; font-size: 13px; }
+  .nt-empty { font-size: 13px; color: var(--good); }
+}
+
+/* ---------- редактор главы ---------- */
+.ed-bar { position: sticky; top: 0; z-index: 6; background: var(--bg); padding: 8px 0 10px; margin: -4px 0 12px; border-bottom: 1px solid var(--line); }
+.ed-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ed-nav .btn.back { min-height: 34px; padding: 4px 14px; font-size: 14px; }
+.ed-chapter { display: flex; align-items: center; gap: 4px; }
+.ed-chapter select { width: auto; max-width: 260px; min-height: 34px; padding: 4px 30px 4px 12px; font-weight: 700; }
+.ed-status { font-size: 13px; color: var(--muted); margin-left: auto; }
+.ed-auto { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); margin: 0; }
+.ed-nav > button.primary { min-height: 34px; padding: 4px 16px; font-size: 14px; }
+.ed-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 10px; position: static; padding: 0; background: none; }
+.ed-tools .ed-style { width: auto; min-height: 34px; padding: 4px 30px 4px 12px; font-size: 14px; }
+button.ed-ic { min-width: 34px; width: auto; min-height: 34px; padding: 0 9px; border-radius: 10px; font-size: 15px; background: transparent; border: 1px solid transparent !important; color: var(--text) !important; font-weight: 600; }
+button.ed-ic:hover { background: var(--surface-2); }
+button.ed-ic .ic { width: 18px; height: 18px; }
+.ed-sep { width: 1px; height: 22px; background: var(--line); margin: 0 6px; }
+.ed-find { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.ed-find input { width: 200px; min-height: 34px; }
+.ed-find[hidden] { display: none; }
+.ed-paper { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 48px 56px 64px; }
+.editor { --ed-zoom: 1; min-height: 70vh; border: 0; border-radius: 0; background: transparent; padding: 0; max-width: 760px; margin: 0 auto;
+  font-family: Georgia, 'Times New Roman', serif; font-size: calc(18px * var(--ed-zoom)); line-height: 1.6; color: var(--text); outline: none; overflow-wrap: anywhere; caret-color: var(--accent); }
+.editor p { margin: 0; text-indent: 0; }
+.editor h1, .editor h2, .editor h3, .editor h4, .editor h5, .editor h6 { font-family: inherit; margin: .9em 0 .5em; line-height: 1.3; }
+.editor h1 { font-size: 1.8em; } .editor h2 { font-size: 1.45em; } .editor h3 { font-size: 1.2em; } .editor h4 { font-size: 1.08em; } .editor h5 { font-size: 1em; }
+.editor h6 { font-size: 1.1em; font-weight: 400; color: var(--text-2); }
+.ed-stats { position: sticky; bottom: calc(64px + env(safe-area-inset-bottom)); display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; padding: 10px 0; font-size: 13px; color: var(--muted); background: linear-gradient(transparent, var(--bg) 35%); }
+.ed-stats b { color: var(--text); }
+@media (max-width: 700px) { .ed-paper { padding: 20px 16px 40px; border-radius: 14px; } .ed-status { width: 100%; order: 9; margin-left: 0; } }
+@media (min-width: 1180px) { .ed-stats { bottom: 0; } }
+/* режим фокуса: только текст */
+html.ed-focus nav.tabs, html.ed-focus .top, html.ed-focus .demo, html.ed-focus .ed-tools, html.ed-focus .ed-draft { display: none !important; }
+html.ed-focus #app { padding-left: 0 !important; padding-right: 0 !important; }
+html.ed-focus body { padding-bottom: 0; }
+html.ed-focus .ed-paper { border: 0; background: transparent; padding-top: 24px; }
+html.ed-focus .ed-bar { opacity: .25; transition: opacity .2s; }
+html.ed-focus .ed-bar:hover { opacity: 1; }
+html.ed-focus .ed-stats { bottom: 0; }
+/* свёрнутое меню: иконки — посередине по высоте, кнопка разворота — внизу */
+@media (min-width: 1180px) {
+  html.nav-mini nav.tabs { justify-content: center; }
+  html.nav-mini .nav-toggle { position: absolute; bottom: 24px; left: 50%; margin: 0; transform: translateX(-50%) rotate(180deg); }
+}
+/* гармоничные отступы: шапка ↔ плитки, внутри плиток */
+main { padding-top: 20px; }
+.stat { padding: 14px 16px 15px; }
+.stat .v { margin-top: 6px; }
+.stat .s { margin-top: 6px; line-height: 1.4; }
+.grid4 { gap: 12px; margin-bottom: 16px; }
+.home-h { margin-bottom: 14px; }

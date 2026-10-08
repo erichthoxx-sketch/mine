@@ -175,30 +175,26 @@ export function sideToday(c) {
     <button class="link side-more" data-act="go" data-to="/plan">Открыть Планер →</button>`;
 }
 
-// Баннер «Сегодня важно» (компьютер): только то, что требует действия сегодня — без таймеров и далёких дат
-export function todayBanner(c) {
+// Компактный блок дел на сегодня — в левом меню на компьютере: только то, что требует действия
+export function navToday(c) {
   const t = c.today;
   const imp = planItems(c, t, addDays(t, 2)).filter((x) => {
-    if (x.kind === 'wait' || x.kind === 'done' || x.kind === 'queue') return x.kind === 'queue' && x.date === t;
-    if (x.kind === 'pub' || x.kind === 'waitans' || x.kind === 'mk') return x.date === t;
+    if (x.kind === 'wait' || x.kind === 'done') return false;
+    if (x.kind === 'pub' || x.kind === 'waitans' || x.kind === 'mk' || x.kind === 'queue') return x.date === t;
     return true; // сроки, конкурсы, налог, заявки — сегодня и в ближайшие 2 дня
   });
   const goals = activeGoals(c).map((g) => ({ g, s: goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t) })).filter((x) => x.s.active && x.s.todayDay && !x.s.doneToday);
-  const n = imp.length + goals.length;
-  const when = (d) => (d === t ? 'сегодня' : d === addDays(t, 1) ? 'завтра' : 'послезавтра');
-  const done = activeGoals(c).filter((g) => goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t).doneToday).length;
-  const head = `<div class="tb-head"><div class="tb-k">Сегодня важно</div><div class="tb-date">${dayName(t, t).replace('Сегодня · ', '')}</div>
-    <div class="tb-stats"><span>написано <b>+${alNum(c.writtenToday)} а.л.</b></span><span>за 7 дней <b>${alNum(c.writtenWeek)} а.л.</b></span>${done ? `<span>целей выполнено <b>${done}</b></span>` : ''}</div></div>`;
-  if (!n) return `<div class="today-banner calm">${head}<div class="tb-empty">Всё важное на сегодня сделано ✓</div></div>`;
-  const tile = (title, sub, extra, act) => `<div class="tb-item"${act ? ` ${act}` : ''}><div class="tb-t">${title}</div>${sub ? `<div class="tb-s">${sub}</div>` : ''}${extra || ''}</div>`;
+  const when = (d) => (d === t ? '' : d === addDays(t, 1) ? 'завтра' : 'послезавтра');
+  const row = (kind, title, sub, attrs, btn = '') => `<div class="nt-item" ${attrs}><i class="k-${kind}"></i><div class="nt-body"><div class="nt-t">${title}</div>${sub ? `<div class="nt-s">${sub}</div>` : ''}${btn}</div></div>`;
   const items = [
-    ...goals.map(({ g, s }) => tile(esc(goalTitle(c, g)), goalToday(c, g, s), g.type === 'custom' ? `<button class="small-btn primary" data-act="goal.check" data-id="${g.id}">Сделала</button>` : '', `data-act="goal.edit" data-id="${g.id}" role="button" tabindex="0"`)),
+    ...goals.map(({ g, s }) => row('goal', esc(goalTitle(c, g)), goalToday(c, g, s), `data-act="goal.edit" data-id="${g.id}" role="button" tabindex="0"`, g.type === 'custom' ? `<button class="nt-btn" data-act="goal.check" data-id="${g.id}">Сделала</button>` : '')),
     ...imp.map((x) => x.kind === 'pub'
-      ? tile(`Выложить ${x.ch ? `«${esc(x.ch)}»` : 'главу'}`, x.sub, `<div class="tb-btns"><button class="small-btn primary" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="done">Выложила</button><button class="small-btn" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="plan" title="На таймер">⏱</button></div>`)
-      : tile(x.title, [x.date !== t ? when(x.date) : '', x.sub].filter(Boolean).join(' · '), '', x.href ? `onclick="location.href='${x.href}'" role="link" tabindex="0"` : x.to ? `data-act="go" data-to="${x.to}" role="button" tabindex="0"` : `data-act="${x.act}" data-id="${x.id}" role="button" tabindex="0"`)),
+      ? row('pub', `Выложить ${x.ch ? `«${esc(x.ch)}»` : 'главу'}`, '', '', `<span class="nt-btns"><button class="nt-btn" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="done">Выложила</button><button class="nt-btn" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="plan" title="На таймер">⏱</button></span>`)
+      : row(x.kind, x.title, when(x.date), x.href ? `onclick="location.href='${x.href}'" role="link" tabindex="0"` : x.to ? `data-act="go" data-to="${x.to}" role="button" tabindex="0"` : `data-act="${x.act}" data-id="${x.id}" role="button" tabindex="0"`)),
   ];
-  const shown = items.slice(0, 4), more = items.length - shown.length;
-  return `<div class="today-banner">${head}<div class="tb-items">${shown.join('')}</div>${more ? `<button class="link tb-more" data-act="go" data-to="/plan">ещё ${more} — в Планере →</button>` : ''}</div>`;
+  const shown = items.slice(0, 5), more = items.length - shown.length;
+  return `<div class="nav-today"><div class="nt-date">${dayName(t, t).replace('Сегодня · ', '')}</div>
+    ${items.length ? shown.join('') + (more ? `<button class="link nt-more" data-act="go" data-to="/plan">ещё ${more} →</button>` : '') : '<div class="nt-empty">На сегодня всё сделано ✓</div>'}</div>`;
 }
 
 export function planView(a) {

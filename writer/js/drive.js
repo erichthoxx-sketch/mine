@@ -270,6 +270,7 @@ const mock = (() => {
       const tabs = mockTabs(id);
       for (const r of requests) {
         const k = r.deleteContentRange || r.insertText || r.updateTextStyle;
+        if (!k) continue; // стили абзацев пробный документ не хранит
         const tab = tabs.find((t) => t.id === (k.range || k.location).tabId) || tabs[0];
         if (r.deleteContentRange) tab.chars.splice(k.range.startIndex - 1, k.range.endIndex - k.range.startIndex);
         if (r.insertText) tab.chars.splice(k.location.index - 1, 0, ...[...k.text].map((ch) => ({ ch, b: false, i: false })));
