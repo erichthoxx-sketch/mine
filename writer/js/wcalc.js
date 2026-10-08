@@ -277,7 +277,7 @@ export function dailyWrittenAll(books, from, to, today) {
 
 // ---- цели ----
 // g = { type: 'finish' | 'daily' | 'custom', bookId, title, deadline, days:[1..7], perDay (знаков, для daily), checks:{date:true}, done }
-export const GOAL_TYPES = { finish: 'Главы к сроку (по главе в день)', daily: 'Писать N знаков в день', custom: 'Своя цель' };
+export const GOAL_TYPES = { finish: 'Главы к сроку (по главе в день)', daily: 'Писать N а.л. в день', custom: 'Своя цель' };
 const isGoalDay = (g, d) => { const days = (g.days || []).map(Number); return !days.length || days.includes(dowOf(d)); };
 // сколько дней цели осталось с today по deadline включительно
 export function goalDaysLeft(g, today) {
@@ -337,3 +337,16 @@ export function goalStatus(g, book, today) {
   }
   return r;
 }
+
+// ---- авторские листы: 1 а.л. = 40 000 знаков с пробелами. Везде показываем объём в а.л., не в знаках ----
+export const AL = 40000;
+// 7,5 · 0,97 · 12 — без лишних нулей; совсем мало — «< 0,01»
+export function alNum(chars) {
+  const v = (Number(chars) || 0) / AL;
+  if (v > 0 && v < 0.005) return '< 0,01';
+  const d = v >= 10 ? 1 : v >= 1 ? 1 : 2;
+  return v.toFixed(d).replace(/\.?0+$/, '').replace('.', ',');
+}
+export const al = (chars) => `${alNum(chars)} а.л.`;
+// ввод: «7,5» а.л. → знаки
+export const fromAl = (v) => { const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.')); return String(v ?? '').trim() === '' || Number.isNaN(n) ? null : Math.round(n * AL); };

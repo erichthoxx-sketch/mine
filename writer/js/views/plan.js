@@ -4,13 +4,13 @@ import { num, fmtDate, pct } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
 import { reminders } from './home.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
-import { goalStatus } from '../wcalc.js';
+import { goalStatus, al, alNum, fromAl } from '../wcalc.js';
 import { addDays } from '../../../js/calc.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
 import { startEvent, finishEvent, chapterEvent, removeEvent } from '../sync.js';
 
 const app = () => window.__app;
-const zn = (n) => num(n || 0) + ' зн.';
+const zn = (n) => al(n);
 const CSTATUS = { plan: 'Собираюсь', in: 'Участвую', sent: 'Подала', done: 'Итоги' };
 
 // ---------- Планер: неделя → дела на выбранный день → ближайшие две недели → разделы ----------
@@ -202,11 +202,11 @@ function contestForm(c, x = {}) {
   <div><label for="cs">Статус</label><select id="cs" name="status">${Object.entries(CSTATUS).map(([k, v]) => opt(k, v, x.status || 'plan')).join('')}</select></div></div>
   <div class="f2"><div><label for="c1">Начало</label><input id="c1" type="date" name="start" value="${x.start || ''}"></div><div><label for="c2">Окончание</label><input id="c2" type="date" name="end" value="${x.end || ''}" required></div></div>
   <label for="cb">Книга на конкурс</label><select id="cb" name="bookId"><option value="">—</option>${c.wbooks.map((b) => opt(b.id, b.title, x.bookId)).join('')}</select>
-  <div class="f2"><div><label for="cmin">Объём от, знаков</label><input id="cmin" name="minChars" inputmode="numeric" value="${x.minChars ?? ''}"></div><div><label for="cmax">до, знаков</label><input id="cmax" name="maxChars" inputmode="numeric" value="${x.maxChars ?? ''}"></div></div>
+  <div class="f2"><div><label for="cmin">Объём от, а.л.</label><input id="cmin" name="minChars" inputmode="decimal" value="${x.minChars ? alNum(x.minChars) : ''}"></div><div><label for="cmax">до, а.л.</label><input id="cmax" name="maxChars" inputmode="decimal" value="${x.maxChars ? alNum(x.maxChars) : ''}"></div></div>
   <label for="cc">Условия</label><textarea id="cc" name="conditions" style="min-height:120px">${esc(x.conditions || '')}</textarea>
   <label for="cu">Ссылка на страницу конкурса</label><input id="cu" name="url" value="${esc(x.url || '')}">`;
 }
-const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookId: fd.get('bookId') || '', minChars: N(fd.get('minChars')), maxChars: N(fd.get('maxChars')), conditions: fd.get('conditions') || '', url: (fd.get('url') || '').trim() });
+const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookId: fd.get('bookId') || '', minChars: fromAl(fd.get('minChars')), maxChars: fromAl(fd.get('maxChars')), conditions: fd.get('conditions') || '', url: (fd.get('url') || '').trim() });
 acts['plan.tab'] = (d) => { app().ui.planTab = d.v; };
 acts['contest.new'] = () => openSheet('Новый конкурс', contestForm(app().ctx()), async (fd) => { await app().store.put('w_contests', { id: 'c' + uid(), ...contestFrom(fd) }); toast('Конкурс добавлен'); });
 acts['contest.edit'] = (d) => {

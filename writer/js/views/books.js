@@ -1,7 +1,7 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten } from '../wcalc.js';
+import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl } from '../wcalc.js';
 import { goalTitle, goalToday } from './goals.js';
 import { writtenChart, growthChart } from '../wcharts.js';
 export { chapterList };
@@ -14,7 +14,7 @@ import { finishEvent, removeEvent, chapterEvent, chapterUnset } from '../sync.js
 const app = () => window.__app;
 export const STATUS = { idea: 'Идея', progress: 'В процессе', done: 'Завершена' };
 export const PLATFORMS = ['Литнет', 'Литмаркет', 'Литгород', 'Литрес'];
-const zn = (n) => num(n || 0) + ' зн.';
+const zn = (n) => al(n);
 
 // Google Диск: подключён — точка-маркер; не подключён или нет папки — нужная кнопка
 export const driveReady = (c) => drive.driveConfigured && drive.isConnected() && !!c.settings.wBooksFolder;
@@ -29,7 +29,7 @@ export const driveDot = (c) => `<span class="ddot ${driveReady(c) ? 'on' : 'off'
 // для Главной: точка + «обновить» одной аккуратной кнопкой
 export function driveChip(c) {
   if (!driveReady(c)) return `<button class="drive-chip" data-act="${drive.isConnected() ? 'go' : 'drive.connect'}" data-to="/settings">${driveDot(c)}Диск</button>`;
-  return `<button class="drive-chip" data-act="wbook.refresh" title="Обновить знаки с Google Диска">${driveDot(c)}${ic('refresh')}Обновить</button>`;
+  return `<button class="drive-chip" data-act="wbook.refresh" title="Обновить книги с Google Диска">${driveDot(c)}${ic('refresh')}Обновить</button>`;
 }
 
 // активные конкурсы книги: метка «Конкурс · N дн.»
@@ -46,7 +46,7 @@ function tile(c, b) {
     <div class="ct-title">${esc(b.title)}</div>
     <div class="tags"><span class="tag ${b.status === 'progress' || !b.status ? 'on' : ''}">${STATUS[b.status] || STATUS.progress}</span>${(b.platforms || []).map((p) => `<span class="tag">${esc(p)}</span>`).join('')}</div>
     ${contestTags(c, b)}
-    <div class="ct-num">${zn(b.chars)}${today ? ` <span class="up">+${num(today)}</span>` : ''}</div></a>`;
+    <div class="ct-num">${b.status === 'done' ? `${chapterList(b).length} ${plural(chapterList(b).length, ['глава', 'главы', 'глав'])}` : `${zn(b.chars)}${today ? ` <span class="up">+${alNum(today)}</span>` : ''}`}</div></a>`;
 }
 
 export function booksView(a) {
@@ -55,8 +55,8 @@ export function booksView(a) {
   const html = `
   <div class="card">
     <div class="grid3">
-      <div><div class="k small muted">Сегодня написано</div><div class="big">${num(c.writtenToday)}</div><div class="small muted">${plural(c.writtenToday, ['знак', 'знака', 'знаков'])}</div></div>
-      <div><div class="k small muted">За 7 дней</div><div class="big">${num(c.writtenWeek)}</div><div class="small muted">${plural(c.writtenWeek, ['знак', 'знака', 'знаков'])}</div></div>
+      <div><div class="k small muted">Сегодня написано</div><div class="big">${alNum(c.writtenToday)}</div><div class="small muted">а.л.</div></div>
+      <div><div class="k small muted">За 7 дней</div><div class="big">${alNum(c.writtenWeek)}</div><div class="small muted">а.л.</div></div>
       <div><div class="k small muted">В работе</div><div class="big">${active}</div><div class="small muted">${plural(active, ['книга', 'книги', 'книг'])}</div></div>
     </div>
     ${driveBar(c)}
@@ -87,7 +87,7 @@ export function progressBlock(c, b) {
   if (s.next) parts.push(`<div class="small">Следующая: <b>${s.next.ch ? esc(s.next.ch) : 'новая глава'}</b> — ${esc(s.next.pf)}, ${fmtDate(s.next.date)} (${whenTxt(diffD(s.next.date, t))})</div>`);
   for (const x of liveContests(c, b)) {
     const st = contestStatus(x, b, t);
-    parts.push(`<div class="small">Конкурс «${esc(x.name)}»${st.daysLeft != null ? ` · осталось ${st.daysLeft} дн.` : ''}${x.minChars ? ` — объём ${num(st.chars)} из ${num(x.minChars)} зн.: ${st.need === 0 ? '<span class="up">✓ проходит</span>' : `не хватает ${num(st.need)} зн.${st.perDay ? ` (~${num(st.perDay)} в день)` : ''}${st.onTrack ? ' — по темпу успеваю' : ''}`}` : ''}</div>`);
+    parts.push(`<div class="small">Конкурс «${esc(x.name)}»${st.daysLeft != null ? ` · осталось ${st.daysLeft} дн.` : ''}${x.minChars ? ` — объём ${alNum(st.chars)} из ${zn(x.minChars)}: ${st.need === 0 ? '<span class="up">✓ проходит</span>' : `не хватает ${zn(st.need)}${st.perDay ? ` (~${zn(st.perDay)} в день)` : ''}${st.onTrack ? ' — по темпу успеваю' : ''}`}` : ''}</div>`);
   }
   return parts.join('');
 }
@@ -139,12 +139,12 @@ export function bookPage(a, id) {
       ${contestTags(c, b)}
       ${b.webViewLink ? `<a class="btn primary" href="${esc(b.webViewLink)}" target="_blank" rel="noopener" style="margin:12px 0">✎ Открыть в Google Документах</a>` : ''}
       <dl class="dl">
-        <dt>Всего знаков (с пробелами)</dt><dd>${zn(b.chars)}</dd>
-        <dt>Сегодня / за 7 дней</dt><dd><span class="up">+${num(writtenToday(b, c.today))}</span> / <span class="up">+${num(writtenWeek(b, c.today))}</span></dd>
-        <dt>Темп за 2 недели</dt><dd>${p ? num(Math.round(p)) + ' зн. в день' : '—'}</dd>
-        <dt>Последняя правка файла</dt><dd>${b.modifiedTime ? fmtDate(b.modifiedTime.slice(0, 10)) : '—'}${b.countedAt ? ` <span class="muted small">· знаки обновлены ${fmtDate(b.countedAt.slice(0, 10))} ${b.countedAt.slice(11, 16)}</span>` : ''}</dd>
+        ${b.status === 'done' ? `<dt>Глав</dt><dd>${chapterList(b).length}</dd>` : `<dt>Объём</dt><dd>${zn(b.chars)} · ${writtenChapters(b)} ${plural(writtenChapters(b), ['глава', 'главы', 'глав'])}</dd>
+        <dt>Сегодня / за 7 дней</dt><dd><span class="up">+${alNum(writtenToday(b, c.today))}</span> / <span class="up">+${zn(writtenWeek(b, c.today))}</span></dd>
+        <dt>Темп за 2 недели</dt><dd>${p ? zn(p) + ' в день' : '—'}</dd>`}
+        <dt>Последняя правка файла</dt><dd>${b.modifiedTime ? fmtDate(b.modifiedTime.slice(0, 10)) : '—'}${b.countedAt ? ` <span class="muted small">· обновлено ${fmtDate(b.countedAt.slice(0, 10))} ${b.countedAt.slice(11, 16)}</span>` : ''}</dd>
       </dl>
-      ${b.fileId ? `<div class="row" style="margin-top:8px"><button data-act="wbook.refreshOne" data-id="${b.id}">Обновить знаки</button></div>` : ''}
+      ${b.fileId ? `<div class="row" style="margin-top:8px"><button data-act="wbook.refreshOne" data-id="${b.id}">Обновить с Диска</button></div>` : ''}
     </div>
   </div>
   <div class="card"><div class="row between"><h2 style="margin:0">Прогресс и сроки</h2><button data-act="wb.dates" data-id="${b.id}">Сроки</button></div>
@@ -153,14 +153,13 @@ export function bookPage(a, id) {
   </div>
   <div class="card"><div class="row between"><h2 style="margin:0">Цели и динамика</h2><button class="small-btn" data-act="goal.new" data-book="${b.id}">+ Цель</button></div>
     ${bookGoals.length ? `<div class="plist" style="margin-top:4px">${bookGoals.map(({ g, st }) => `<a class="pitem tap" href="#" data-act="goal.edit" data-id="${g.id}"><span class="dot k-goal"${st.doneToday ? ' style="opacity:.4"' : ''}></span><span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}${g.deadline ? ` · до ${fmtDate(g.deadline)}` : ''}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:6px 0 0">Целей по книге нет. Например: «дописать к 15 октября» — посчитаю, сколько писать в день, и буду напоминать.</p>'}
-    <h3 style="margin:14px 0 4px">Знаки по дням</h3><div class="chart" id="bchart1"></div>
-    <h3 style="margin:14px 0 4px">Рост книги</h3><div class="chart" id="bchart2"></div>
-    ${growthGoal ? `<div class="small muted chart-cap">пунктир — путь к цели: ${num(growthGoal.value)} зн. к ${fmtDate(growthGoal.date)}</div>` : ''}</div>
+    <h3 style="margin:14px 0 4px">Написано по дням, а.л.</h3><div class="chart" id="bchart1"></div>
+    <h3 style="margin:14px 0 4px">Рост книги, а.л.</h3><div class="chart" id="bchart2"></div>
+</div>
   <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div>
-    ${planned.length ? `<div class="alert alert-thin">Отложено: ${planned.map((x) => `${esc(x.ch)} — ${esc(x.pf)}, ${dm(x.date)}`).join('; ')}. В этот день глава сама станет выложенной.</div>` : ''}
-    ${chs.length ? `<div class="scroll" style="margin-top:8px"><table class="pub-t${pfs.length > 2 ? " many" : ""}"><tr><th>Глава</th><th class="r">Знаков</th>${pfs.map((x) => `<th>${esc(x)}</th>`).join('')}</tr>
-      ${chs.map((t) => `<tr><td>${esc(t.title)}</td><td class="r">${t.chars == null ? '' : num(t.chars)}</td>${pfs.map((x) => cell(t.title, x)).join('')}</tr>`).join('')}
-      <tr class="total"><td>Всего</td><td class="r">${num(b.chars)}</td>${pfs.map((x) => `<td>${chs.filter((t) => pubState((pm[t.title] || {})[x], c.today) === 'done').length}</td>`).join('')}</tr></table></div>` : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
+    ${chs.length ? `<div class="scroll" style="margin-top:8px"><table class="pub-t${pfs.length > 2 ? " many" : ""}"><tr><th>Глава</th><th class="r">а.л.</th>${pfs.map((x) => `<th>${esc(x)}</th>`).join('')}</tr>
+      ${chs.map((t) => `<tr><td>${esc(t.title)}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => cell(t.title, x)).join('')}</tr>`).join('')}
+      <tr class="total"><td>Всего</td><td class="r">${alNum(b.chars)}</td>${pfs.map((x) => `<td>${chs.filter((t) => pubState((pm[t.title] || {})[x], c.today) === 'done').length}</td>`).join('')}</tr></table></div>` : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
     <div class="hint">Нажмите на ячейку, чтобы отметить главу на площадке: «выложила» или «запланировала» (отложенная публикация — ⏱). Выкладка сразу попадает событием в «Доходы».${other.length ? ` Не считаются как текст книги: ${other.map((t) => esc(t.title)).join(', ')}.` : ''}</div></div>
   ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${zn(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
@@ -187,7 +186,7 @@ export function bookPage(a, id) {
     <label for="bx">Другие площадки (через запятую)</label><input id="bx" name="pfx" value="${esc(extra)}">
     <div class="f2"><div><label for="bp">Глав в книге, примерно</label><input id="bp" name="planChapters" inputmode="numeric" value="${b.planChapters ?? ''}"></div>
     <div><label for="bi">Книга в приложении доходов</label><select id="bi" name="incomeBookId"><option value="">—</option>${c.incomeBooks.map((x) => opt(x.id, x.title, c.incomeIdOf(b))).join('')}</select></div></div>
-    ${b.fileId ? '' : `<label for="bm">Знаков сейчас (книга без файла)</label><input id="bm" name="manualChars" inputmode="numeric" value="${b.chars ?? ''}">`}
+    ${b.fileId ? '' : `<label for="bm">Объём сейчас, а.л. (книга без файла)</label><input id="bm" name="manualChars" inputmode="decimal" value="${b.chars != null ? alNum(b.chars) : ''}">`}
     <label for="bl">Ссылка на файл (если без Google Диска)</label><input id="bl" name="link" value="${esc(b.fileId ? '' : b.webViewLink || '')}" ${b.fileId ? 'disabled placeholder="файл с Google Диска подключён"' : ''}>
     <label for="bn">Заметки</label><textarea id="bn" name="note">${esc(b.note || '')}</textarea>
     <div class="row between" style="margin-top:14px"><button class="primary" type="submit">Сохранить</button><button type="button" class="danger" data-act="wbook.del" data-id="${b.id}">Убрать из приложения</button></div>
@@ -243,10 +242,10 @@ export async function refreshAll(a, { quiet = false } = {}) {
     }
   }
   if (fails.length) toast(`Не обновилось — ${fails.join('; ')}`);
-  else if (!quiet) toast(n ? `Знаки обновлены: ${n} кн.` : 'Изменений в файлах нет');
+  else if (!quiet) toast(n ? `Обновлено книг: ${n}` : 'Изменений в файлах нет');
 }
 acts['wbook.refresh'] = async () => { try { await drive.ensureToken(); } catch (e) { toast(e.message); return; } await refreshAll(app()); app().rerender(); };
-acts['wbook.refreshOne'] = async (d) => { try { await drive.ensureToken(); toast('Считаю знаки…'); await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast('Знаки обновлены'); } catch (e) { toast('Не получилось: ' + e.message); } };
+acts['wbook.refreshOne'] = async (d) => { try { await drive.ensureToken(); toast('Обновляю…'); await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast('Обновлено'); } catch (e) { toast('Не получилось: ' + e.message); } };
 acts['drive.connect'] = async () => {
   try { await drive.connect(); toast('Google Диск подключён'); refreshAll(app(), { quiet: true }); } catch (e) { toast(e.message); }
 };
@@ -304,8 +303,8 @@ acts['wbook.addFile'] = async (d) => {
   const b = { id, title: f.name.replace(/\.docx$/i, ''), fileId: f.id, mimeType: f.mimeType, webViewLink: f.webViewLink, modifiedTime: '', status: 'progress', platforms: ['Литнет'], chars: 0, history: {}, createdAt: new Date().toISOString() };
   await app().store.put('w_books', b);
   picked.splice(Number(d.i), 1); pickSheet();
-  toast('Считаю знаки…');
-  try { await refreshOne(app(), b, true); toast(`«${b.title}» добавлена`); } catch (e) { toast(`«${b.title}» добавлена, но знаки не посчитались: ${e.message}. Нажмите «Обновить знаки» на странице книги.`); }
+  toast('Загружаю книгу…');
+  try { await refreshOne(app(), b, true); toast(`«${b.title}» добавлена`); } catch (e) { toast(`«${b.title}» добавлена, но не загрузилась: ${e.message}. Нажмите «Обновить с Диска» на странице книги.`); }
 };
 
 // ---------- карточка книги ----------
@@ -315,7 +314,7 @@ forms['wbook.save'] = async (fd, f) => {
   const patch = { title: fd.get('title').trim(), status: fd.get('status'), platforms, planChapters: N(fd.get('planChapters')) || null, incomeBookId: fd.get('incomeBookId') || '', note: fd.get('note') || '' };
   if (!b.fileId) {
     patch.webViewLink = (fd.get('link') || '').trim();
-    const m = N(fd.get('manualChars'));
+    const m = fromAl(fd.get('manualChars'));
     if (m != null && !Number.isNaN(m)) { patch.chars = m; patch.history = recordProgress(b.history, c.today, m); }
   }
   if (patch.status === 'done' && b.status !== 'done') { patch.finishedAt = b.finishedAt || c.today; await finishEvent(c, { ...b, ...patch }, patch.finishedAt); }

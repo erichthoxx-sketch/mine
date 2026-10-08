@@ -3,12 +3,12 @@ import { esc } from '../../../js/ui.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll } from '../wcalc.js';
+import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll, al, alNum } from '../wcalc.js';
 import { STATUS, progressBlock, daysTxt, driveChip } from './books.js';
 import { goalTitle, goalToday, activeGoals } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 
-const zn = (n) => num(n || 0) + ' зн.';
+const zn = (n) => al(n);
 const dleft = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
 const when = (n) => (n < 0 ? `просрочено на ${-n} дн.` : n === 0 ? 'сегодня' : n === 1 ? 'завтра' : `через ${n} дн.`);
 const SOON = 14; // за сколько дней показывать напоминание
@@ -64,7 +64,7 @@ function workCard(c, r) {
     <span class="mk-cover big">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
     <span class="wcard-body"><span class="row between"><b>${esc(b.title)}</b></span>
       ${progressBlock(c, b)}
-      <span class="small">В ${fmtMonthIn(monthKey(t)).split(' ')[0]}: +${num(r.wrote)} зн.${r.today ? ` (сегодня +${num(r.today)})` : ''} · глав ${r.chapters}${r.income != null ? ` · доход ${rub(r.income, 0)}` : ''}</span></span></a>`;
+      <span class="small">В ${fmtMonthIn(monthKey(t)).split(' ')[0]}: +${zn(r.wrote)}${r.today ? ` (сегодня +${alNum(r.today)})` : ''} · глав ${r.chapters}${r.income != null ? ` · доход ${rub(r.income, 0)}` : ''}</span></span></a>`;
 }
 
 export function homeView(a) {
@@ -86,12 +86,12 @@ export function homeView(a) {
   const target = activeGoals(c).reduce((s2, g) => { const st = goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t); return s2 + (g.type === 'daily' && st.active && st.perDay ? st.perDay : 0); }, 0) || null;
   const known = series.filter((x) => x.known), avg7 = series.slice(-7).filter((x) => x.known);
   const best = known.reduce((m, x) => (x.value > (m?.value || 0) ? x : m), null);
-  const chartCard = known.length ? `<div class="card"><h2>Знаки по дням</h2><div class="chart" id="wchart"></div>
-    <div class="small muted chart-cap">${[avg7.length ? `в среднем ${num(Math.round(avg7.reduce((a2, x) => a2 + x.value, 0) / avg7.length))} зн. в день за неделю` : '', best && best.value ? `лучший день — ${fmtDate(best.date).slice(0, 5)}: ${num(best.value)}` : '', target ? `пунктир — норма по целям (${num(target)})` : ''].filter(Boolean).join(' · ')}</div></div>` : '';
+  const chartCard = known.length ? `<div class="card"><h2>Написано по дням, а.л.</h2><div class="chart" id="wchart"></div>
+    <div class="small muted chart-cap">${[avg7.length ? `в среднем ${zn(Math.round(avg7.reduce((a2, x) => a2 + x.value, 0) / avg7.length))} в день за неделю` : '', best && best.value ? `лучший день — ${fmtDate(best.date).slice(0, 5)}: ${zn(best.value)}` : '', target ? `пунктир — норма по целям (${zn(target)})` : ''].filter(Boolean).join(' · ')}</div></div>` : '';
   const html = `
   <div class="row between home-h"><h2 style="margin:0">${fmtMonthCap(mk)}</h2>${driveChip(c)}</div>
   <div class="grid4">
-    <div class="stat"><div class="k">Написано за месяц</div><div class="v">${num(sum('wrote'))}</div><div class="s">${plural(sum('wrote'), ['знак', 'знака', 'знаков'])} · сегодня +${num(sum('today'))}</div></div>
+    <div class="stat"><div class="k">Написано за месяц</div><div class="v">${alNum(sum('wrote'))}</div><div class="s">а.л. · сегодня +${alNum(sum('today'))}</div></div>
     <div class="stat"><div class="k">Глав выложено</div><div class="v">${sum('chapters')}</div><div class="s">в ${fmtMonthIn(mk)}</div></div>
     <div class="stat"><div class="k">Доход за ${fmtMonth(mk).split(' ')[0]}</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div></div>
     <div class="stat"><div class="k">В работе</div><div class="v">${inWork.length}</div><div class="s">${plural(inWork.length, ['книга', 'книги', 'книг'])}</div></div>
@@ -99,7 +99,7 @@ export function homeView(a) {
   ${rem.length ? `<div class="card"><h2>Напоминания</h2><div class="list">${rem.map((r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}</span></a>`).join('')}</div></div>` : ''}
   ${chartCard}
   ${inWork.length ? `<h2 style="margin-top:18px">В работе</h2>${inWork.map((r) => workCard(c, r)).join('')}` : ''}
-  ${others.length ? `<div class="card"><h2>Другие книги в ${fmtMonthIn(mk)}</h2><div class="list">${others.map((r) => `<a class="item row between" href="#" data-act="go" data-to="/book/${r.b.id}"><span>${esc(r.b.title)}<span class="sub">${[r.wrote ? `+${num(r.wrote)} зн.` : '', r.chapters ? `глав ${r.chapters}` : '', STATUS[r.b.status] || ''].filter(Boolean).join(' · ')}</span></span><b>${r.income != null ? rub(r.income, 0) : ''}</b></a>`).join('')}</div></div>` : ''}`;
+  ${others.length ? `<div class="card"><h2>Другие книги в ${fmtMonthIn(mk)}</h2><div class="list">${others.map((r) => `<a class="item row between" href="#" data-act="go" data-to="/book/${r.b.id}"><span>${esc(r.b.title)}<span class="sub">${[r.wrote ? `+${zn(r.wrote)}` : '', r.chapters ? `глав ${r.chapters}` : '', STATUS[r.b.status] || ''].filter(Boolean).join(' · ')}</span></span><b>${r.income != null ? rub(r.income, 0) : ''}</b></a>`).join('')}</div></div>` : ''}`;
   return { html, after: () => writtenChart(document.getElementById('wchart'), { days: series, target }) };
 }
 export { ic };

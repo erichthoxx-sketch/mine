@@ -160,3 +160,10 @@ test('цели: главы к сроку считаются по отметка�
   assert.equal(goalStatus({ type: 'custom', checks: { [t]: true } }, null, t).doneToday, true);
   assert.deepEqual(dailyWritten(book, '2026-10-06', t, t).map((x) => [x.value, x.known]), [[0, false], [14000, true]]);
 });
+
+test('авторские листы: формат и ввод', async () => {
+  const { alNum, fromAl } = await import('../writer/js/wcalc.js');
+  assert.equal(alNum(299743), '7,5'); assert.equal(alNum(38764), '0,97'); assert.equal(alNum(400000), '10');
+  assert.equal(alNum(0), '0'); assert.equal(alNum(100), '< 0,01'); assert.equal(alNum(16000), '0,4');
+  assert.equal(fromAl('7,5'), 300000); assert.equal(fromAl(''), null);
+});

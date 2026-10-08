@@ -1,11 +1,11 @@
-// Цели: «дописать книгу к сроку», «N знаков в день», «своя цель» — с напоминанием в дни цели
+// Цели: «главы к сроку», «N а.л. в день», «своя цель» — с напоминанием в дни цели
 import { esc, acts, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { GOAL_TYPES, goalStatus, DOW, pubMap, pubPlatforms } from '../wcalc.js';
+import { GOAL_TYPES, goalStatus, DOW, pubMap, pubPlatforms, al, alNum, fromAl } from '../wcalc.js';
 const markedCount = (b) => { const pf = pubPlatforms(b)[0]; return Object.values(pubMap(b)).filter((x) => x[pf]?.date).length; };
 
 const app = () => window.__app;
-const zn = (n) => num(Math.round(n || 0)) + ' зн.';
+const zn = (n) => al(n);
 // норма глав словами: «по главе в день», «1 глава в 2 дня», «≈ 1,5 главы в день»
 const chTxt = (x) => (x >= 0.95 && x <= 1.05 ? 'по главе в день' : x < 1 ? `1 глава в ${Math.max(2, Math.round(1 / x))} ${plural(Math.max(2, Math.round(1 / x)), ['день', 'дня', 'дней'])}` : `≈ ${num(Math.ceil(x * 10) / 10)} главы в день`);
 
@@ -21,8 +21,8 @@ export function goalToday(c, g, s) {
   if (g.type === 'custom') return s.doneToday ? '✓ сегодня сделано' : s.todayDay ? 'сегодня — отметьте, когда сделаете' : 'сегодня не день цели';
   if (s.finished) return '✓ все главы отмечены';
   if (g.type === 'finish') {
-    const gl = (n) => `${num(n)} ${plural(n, ['глава', 'главы', 'глав'])}`;
-    const today = s.doneToday ? `✓ сегодня отмечено: ${gl(s.todayCh)}` : s.todayDay ? `сегодня отметить ещё ${gl(s.needToday)}` : 'сегодня не день цели';
+    const glAcc = (n) => (n === 1 ? 'главу' : `${num(n)} ${plural(n, ['главу', 'главы', 'глав'])}`);
+    const today = s.doneToday ? `✓ сегодня ${s.todayCh === 1 ? 'отмечена глава' : `отмечено ${s.todayCh} ${plural(s.todayCh, ['глава', 'главы', 'глав'])}`}` : s.todayDay ? `сегодня нужно отметить ${s.needToday === 1 ? 'ещё одну главу' : `ещё ${glAcc(s.needToday)}`}` : 'сегодня не день цели';
     const warn = s.needPerDay && s.needPerDay > s.perDayCh * 1.05 ? ` · чтобы успеть к сроку, нужно ≈ ${num(Math.ceil(s.needPerDay * 10) / 10)} в день` : '';
     return today + warn;
   }
@@ -61,14 +61,14 @@ function goalForm(c, g = {}) {
     <div data-g="finish"><label for="gc">Глав в книге, примерно</label><input id="gc" name="chapters" inputmode="numeric" value="${g.chapters || b?.planChapters || ''}" placeholder="например, 25">
       <div class="small muted">Изменится и в книге. Уже отмечено (выложено или на таймере): <span data-wch>${b ? markedCount(b) : '—'}</span></div></div>
     <div data-g="finish"><label for="gpc">Глав в день</label><input id="gpc" name="perDayCh" inputmode="numeric" value="${g.type === 'finish' ? g.perDay || 1 : 1}"></div>
-    <div data-g="daily"><label for="gp">Знаков в день</label><input id="gp" name="perDay" inputmode="numeric" value="${g.type === 'daily' ? g.perDay || '' : ''}" placeholder="например, 15000"></div>
+    <div data-g="daily"><label for="gp">Авторских листов в день</label><input id="gp" name="perDay" inputmode="decimal" value="${g.type === 'daily' && g.perDay ? alNum(g.perDay) : ''}" placeholder="например, 0,4"></div>
     <label for="gd">Срок</label><input id="gd" type="date" name="deadline" value="${g.deadline || ''}">
     <label>Дни цели</label><div class="checks dow">${DOW.map((x, i) => `<label class="check"><input type="checkbox" name="dow" value="${i + 1}"${days.has(i + 1) ? ' checked' : ''}>${x}</label>`).join('')}</div>
     <div class="hint" data-ghint></div>`;
 }
 const HINT = {
   finish: 'Глава засчитывается, когда вы отмечаете её выложенной или ставите на таймер. В каждый день цели, пока глава не отмечена, на Главной будет напоминание. Если по главе в день к сроку не успеть — подскажу, сколько нужно.',
-  daily: 'В дни цели на Главной будет напоминание, пока норма не набрана. Знаки берутся из Google Документа (кнопка «Обновить» на Главной).',
+  daily: 'В дни цели на Главной будет напоминание, пока норма не набрана. Объём берётся из Google Документа (кнопка «Обновить» на Главной).',
   custom: 'В дни цели на Главной будет напоминание, пока не отметите «Сделала».',
 };
 function wire() {
@@ -88,11 +88,11 @@ function wire() {
 }
 async function saveGoal(c, fd, g = {}) {
   const type = fd.get('type');
-  const v = { type, bookId: type === 'custom' ? '' : fd.get('bookId') || '', title: type === 'custom' ? (fd.get('title') || '').trim() : '', deadline: fd.get('deadline') || '', days: fd.getAll('dow').map(Number), perDay: type === 'daily' ? N(fd.get('perDay')) : type === 'finish' ? N(fd.get('perDayCh')) || 1 : null, chapters: type === 'finish' ? N(fd.get('chapters')) : null };
+  const v = { type, bookId: type === 'custom' ? '' : fd.get('bookId') || '', title: type === 'custom' ? (fd.get('title') || '').trim() : '', deadline: fd.get('deadline') || '', days: fd.getAll('dow').map(Number), perDay: type === 'daily' ? fromAl(fd.get('perDay')) : type === 'finish' ? N(fd.get('perDayCh')) || 1 : null, chapters: type === 'finish' ? N(fd.get('chapters')) : null };
   if (type === 'custom' && !v.title) { toast('Напишите, что сделать'); return false; }
   if (type === 'finish' && !v.bookId) { toast('Выберите книгу'); return false; }
   if (type === 'finish' && !v.deadline) { toast('Укажите срок'); return false; }
-  if (type === 'daily' && !(v.perDay > 0)) { toast('Сколько знаков в день?'); return false; }
+  if (type === 'daily' && !(v.perDay > 0)) { toast('Сколько а.л. в день?'); return false; }
   if (!v.days.length) { toast('Выберите хотя бы один день'); return false; }
   if (v.days.length === 7) v.days = [];
   await app().store.put('w_goals', { checks: {}, done: false, createdAt: new Date().toISOString(), ...g, ...v, id: g.id || 'g' + uid() });
