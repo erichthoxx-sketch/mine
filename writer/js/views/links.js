@@ -3,6 +3,7 @@ import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { fmtDate, plural } from '../../../js/format.js';
 import { waitingStatus } from '../wcalc.js';
+import { addDays } from '../../../js/calc.js';
 
 const app = () => window.__app;
 export const LKINDS = { publisher: 'Издательства', social: 'Соцсети', platform: 'Площадки', people: 'Люди', other: 'Другое' };
@@ -54,6 +55,7 @@ export function linkPage(a, id) {
   const reqs = c.data.w_waiting.filter((r) => r.contactId === x.id);
   const open = reqs.filter((r) => !r.done), log = [...(x.log || [])].sort((p, q) => q.date.localeCompare(p.date));
   const url = safeUrl(x.url);
+  const todos = (x.todos || []).filter((td) => !td.done).sort((p2, q2) => p2.date.localeCompare(q2.date));
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/links">← Связи</a></p>
   <div class="card"><div class="row between"><h2 style="margin:0">${esc(x.name)}</h2><button class="small-btn" data-act="link.edit" data-id="${x.id}">Изменить</button></div>
     <div class="tags" style="margin-top:6px"><span class="tag on">${KIND1[x.kind || 'other']}</span>${x.net ? `<span class="tag">${esc(x.net)}</span>` : ''}</div>
@@ -62,6 +64,8 @@ export function linkPage(a, id) {
     ${x.note ? `<p class="idea-text" style="margin-bottom:0">${esc(x.note)}</p>` : ''}</div>
   <div class="psec-h"><h2>Запросы <span class="muted">${open.length || ''}</span></h2><button class="small-btn" data-act="wait.new" data-contact="${x.id}">+ Запрос</button></div>
   ${open.length ? `<div class="card plist-card"><div class="plist">${open.map((r) => reqRow(c, r)).join('')}</div></div>` : '<div class="card"><p class="small muted" style="margin:0">Открытых запросов нет.</p></div>'}
+  <div class="psec-h"><h2>Напоминания <span class="muted">${todos.length || ''}</span></h2><button class="small-btn" data-act="link.todo" data-id="${x.id}">+ Напомнить</button></div>
+  ${todos.length ? `<div class="card plist-card"><div class="plist">${todos.map((td) => `<div class="pitem"><span class="dot k-waitans"${td.date > c.today ? ' style="opacity:.45"' : ''}></span><span class="pi-body"><span class="pi-t">${esc(td.text)}</span><span class="pi-s">${fmtDate(td.date)}${td.date < c.today ? ' · просрочено' : td.date === c.today ? ' · сегодня' : ''}</span></span><span class="pi-btns"><button data-act="link.todoDone" data-id="${x.id}" data-k="${esc(td.k)}">Сделано</button><button class="icon-btn" data-act="link.todoDel" data-id="${x.id}" data-k="${esc(td.k)}" aria-label="Удалить напоминание">${ic('trash')}</button></span></div>`).join('')}</div></div>` : '<div class="card"><p class="small muted" style="margin:0">Написать, позвонить, отправить — поставьте дату, и это появится в Планере в нужный день.</p></div>'}
   <div class="psec-h"><h2>История общения</h2></div>
   <div class="card">
     <form data-form="link.log" data-id="${x.id}" class="row" style="align-items:stretch"><input type="date" name="date" value="${c.today}" style="width:auto" aria-label="Дата"><input name="text" placeholder="Что было: письмо, звонок, пост, договорённость…" style="flex:1;min-width:160px" aria-label="Запись"><button class="primary" type="submit">Записать</button></form>
@@ -157,3 +161,26 @@ acts['wait.answer'] = (d) => {
     if (x.contactId) await addLog(x.contactId, c.today, `Ответили${x.what ? ' (' + x.what + ')' : ''}${answer ? ': ' + answer : ''}`);
   }, { submitText: 'Сохранить' });
 };
+
+// напоминания по связи: дата + что сделать → в Планере и на Главной
+acts['link.todo'] = (d) => {
+  const c = app().ctx(), x = c.data.w_links.find((l) => l.id === d.id);
+  openSheet(`Напомнить — ${x.name}`, `<label for="tdt" style="margin-top:0">Что сделать</label><input id="tdt" name="text" required placeholder="написать редактору, отправить синопсис, выложить пост…">
+    <label for="tdd">Когда</label><input id="tdd" type="date" name="date" value="${addDays(c.today, 1)}" required>`, async (fd) => {
+    const text = (fd.get('text') || '').trim();
+    if (!text) { toast('Напишите, что сделать'); return false; }
+    await app().store.put('w_links', { ...x, todos: [...(x.todos || []), { k: uid(), date: fd.get('date'), text, done: false }] });
+    toast('Напомню в Планере');
+  }, { submitText: 'Добавить' });
+};
+acts['link.todoDone'] = async (d) => {
+  const c = app().ctx(), x = c.data.w_links.find((l) => l.id === d.id), td = (x.todos || []).find((t) => t.k === d.k);
+  await app().store.put('w_links', { ...x, todos: (x.todos || []).map((t) => (t.k === d.k ? { ...t, done: true, doneAt: c.today } : t)), log: [...(x.log || []), { k: uid(), date: c.today, text: td ? td.text : 'Сделано' }] });
+  toast('Готово — записала в историю общения');
+};
+acts['link.todoDel'] = async (d) => {
+  const x = app().ctx().data.w_links.find((l) => l.id === d.id);
+  await app().store.put('w_links', { ...x, todos: (x.todos || []).filter((t) => t.k !== d.k) });
+};
+// все открытые напоминания по связям — для Планера и Главной
+export const linkTodos = (c) => (c.data.w_links || []).flatMap((x) => (x.todos || []).filter((t) => !t.done).map((t) => ({ ...t, linkId: x.id, name: x.name })));

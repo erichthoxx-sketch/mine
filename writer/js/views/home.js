@@ -7,6 +7,8 @@ import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chap
 import { STATUS, progressBlock, daysTxt, driveChip } from './books.js';
 import { goalTitle, goalToday, activeGoals } from './goals.js';
 import { widgetReminder } from './widgets.js';
+import { linkTodos } from './links.js';
+import { marketingNeeds } from './plan.js';
 import { writtenChart } from '../wcharts.js';
 
 const zn = (n) => al(n);
@@ -41,6 +43,9 @@ export function reminders(c) {
   }
   // приоритетные показы: подать заявку до 25-го
   const wr = widgetReminder(c); if (wr) add(wr.date, wr.title, wr.sub, wr.to, 15);
+  // напоминания по связям и подготовка маркетинга
+  for (const x of linkTodos(c)) add(x.date, x.text, x.name, '/link/' + x.linkId, 1);
+  for (const m of marketingNeeds(c)) add(m.date, m.title, esc(m.sub), m.to, 0);
   for (const x of d.w_queue) if (!x.done && x.due) add(x.due, x.title, x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди «Что пишу дальше»', '/plan');
   for (const x of d.w_waiting) {
     if (x.done) continue;

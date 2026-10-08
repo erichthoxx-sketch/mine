@@ -4,6 +4,8 @@ import { num, fmtDate, pct } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
 import { reminders } from './home.js';
 import { widgetReminder } from './widgets.js';
+import { linkTodos } from './links.js';
+import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
@@ -64,7 +66,11 @@ export function planItems(c, from, to) {
   const wr = widgetReminder(c);
   if (wr) { add(t, 'money', esc(wr.title), esc(wr.sub), { to: wr.to }); if (wr.date !== t) add(wr.date, 'money', `Срок заявки на показы`, '19:00 МСК', { to: wr.to }); }
   for (const x of incomeItems(c, from, to)) add(x.date, 'money', x.title, x.sub, { href: '../' });
-  const ord = { goal: -1, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
+  // Связи: напоминания по контактам (просроченные — на сегодня)
+  for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', `${esc(x.text)}`, `${esc(x.name)}${x.date < t ? ' · просрочено' : ''}`, { to: '/link/' + x.linkId });
+  // Маркетинг: подготовить материалы к старту выкладки и к рекламе
+  for (const m of marketingNeeds(c)) add(m.date, 'mk', esc(m.title), esc(m.sub), { to: m.to });
+  const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
   return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
 }
 // Важное из «Доходов» по датам: налог (до 28-го), цифры Rocket (с 20-го), старт и конец рекламы, события дней
@@ -104,6 +110,27 @@ function incomeItems(c, from, to) {
       if (e.src && String(e.src).startsWith('w:')) continue;
       const ty = EVENT_TYPES[e.type] || EVENT_TYPES.note;
       add(day.date, `${ty.label}${e.text ? ': ' + e.text : ''}`, e.bookId ? (d.books || []).find((b) => b.id === e.bookId)?.title || '' : '');
+    }
+  }
+  return out;
+}
+
+// Маркетинг: за 2 недели до старта выкладки и за неделю до рекламы — чего не хватает из материалов (на сегодня)
+export function marketingNeeds(c) {
+  const t = c.today, out = [], soon = (d, n) => d && d >= t && d <= addDays(t, n);
+  const left = (d) => { const n = Math.round((new Date(d + 'T00:00:00Z') - new Date(t + 'T00:00:00Z')) / 86400000); return n === 0 ? 'сегодня' : n === 1 ? 'завтра' : `через ${n} дн.`; };
+  for (const b of c.wbooks) {
+    if (b.status === 'done') continue;
+    const m = mkSummary(c, b);
+    if (soon(b.publishStart, 14)) {
+      const miss = [!m.annotation ? 'аннотация' : '', m.texts < m.textsAll ? 'тексты для постов' : '', !m.banners ? 'баннеры' : ''].filter(Boolean);
+      if (miss.length) out.push({ date: t, title: `Маркетинг к старту «${b.title}» (${left(b.publishStart)})`, sub: `не хватает: ${miss.join(', ')}`, to: '/mk/' + b.id });
+    }
+    const incomeId = c.incomeIdOf(b);
+    for (const k of c.data.campaigns || []) {
+      if (k.oneOff || !incomeId || k.bookId !== incomeId || !soon(k.start, 7)) continue;
+      const miss = [!m.creatives ? 'креативы' : '', !m.ads ? 'тексты объявлений' : ''].filter(Boolean);
+      if (miss.length) out.push({ date: t, title: `Таргет «${k.name}» стартует ${left(k.start)}`, sub: `для таргетолога нет: ${miss.join(', ')}`, to: '/mk/' + b.id });
     }
   }
   return out;
