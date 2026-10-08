@@ -476,3 +476,12 @@ details.trash-item > summary .sub { color: var(--muted); }
 .ed-draft .link { padding: 0 4px; }
 a.ch-link { color: var(--text); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .editor p { text-indent: 1.2em; }
+/* приоритетные показы */
+.wg .tiles { margin: 6px 0 4px; }
+.wg-bar { margin-top: 12px; }
+.wg-status { margin-top: 12px; font-size: 14px; color: var(--muted); }
+.wg-status.ok { color: var(--good); }
+.wg-apply { margin-top: 12px; }
+.wg-how { margin-top: 10px; }
+.wg-how summary { font-size: 14px; }
+.wg-how p { margin: 6px 0 0; color: var(--text-2); }

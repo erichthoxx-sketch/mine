@@ -4,6 +4,7 @@ import { widgetShows, widgetProgram, addMonths, campaignMetrics, litnetPace, ctr
 import { rocketCard } from './money.js';
 import { targetAlert, campaignProgress, adGroupSummary, budgetPlan } from '../calc.js';
 import { buildTargetPrompt } from '../report.js';
+import { widgetCardHtml } from '../widgetcard.js';
 import { resizeImage } from '../img.js';
 import { parseTargetReport, reportId } from '../parse.js';
 import { dailyChart, lineChart } from '../charts.js';
@@ -70,22 +71,8 @@ function discountTable(c) {
 
 // Приоритетные показы в виджетах (программа Литнета): показы на месяц — по рекламе, открученной с 26-го по 25-е;
 // заявка через форму до 25-го, 19:00 МСК
-export function widgetCard(c, { compact = false } = {}) {
-  const p = widgetProgram({ campaigns: c.campaigns, reports: c.data.reports, today: c.today, settings: c.settings, months: c.data.months || [] });
-  const n = p.next, cur = p.current, N = (v) => num(v);
-  const share = Math.min(1, ((n.spent - n.blocks * n.step) / n.step) || 0);
-  const form = c.settings.widgetFormUrl ? `<a class="btn" href="${esc(c.settings.widgetFormUrl)}" target="_blank" rel="noopener">Открыть форму</a>` : '';
-  const applyRow = n.open && !n.applied
-    ? `<div class="alert alert-thin" style="margin-top:8px">Пора подать заявку на ${fmtMonth(n.month)} — до ${fmtDate(n.deadline)}, 19:00 МСК. В форме укажите расход с ${fmtDate(n.from)}: <b>${rub(n.spent, 0)}</b>${n.forecast > n.spent ? ` (к ${fmtDate(n.to).slice(0, 5)} по плану ≈ ${rub(n.forecast, 0)})` : ''}.
-        <div class="row" style="margin-top:6px">${form}<button class="primary" data-act="widget.applied" data-m="${n.month}">Заявку подала</button></div></div>`
-    : n.applied ? `<div class="small up" style="margin-top:6px">✓ Заявка на ${fmtMonth(n.month)} подана</div>` : '';
-  return `<h3>Приоритетные показы в виджетах</h3>
-    <div class="wbar"><div class="row between small"><span>На ${fmtMonth(n.month)} · реклама с ${fmtDate(n.from).slice(0, 5)} по ${fmtDate(n.to).slice(0, 5)}</span><span>${rub(n.spent, 0)}</span></div>
-      <div class="progress"><i style="width:${(share * 100).toFixed(1)}%"></i></div>
-      <div class="small muted">${n.shows ? `уже ${N(n.shows)} показов · ` : ''}до ${n.shows ? 'следующих' : 'первых'} +${N(n.step * n.perRub)} показов — ещё ${rub(n.toNext, 0)}${n.forecastShows !== n.shows ? ` · по плану кампаний ≈ ${N(n.forecastShows)}` : ''}</div></div>
-    ${applyRow}
-    ${compact ? '' : `<div class="small" style="margin-top:8px">В ${fmtMonthIn(cur.month)}: ${cur.shows ? `<b>${N(cur.shows)}</b> показов` : 'показов нет'} <span class="muted">(реклама ${fmtDate(cur.from).slice(0, 5)}–${fmtDate(cur.to).slice(0, 5)}: ${rub(cur.spent, 0)}${cur.applied ? ' · заявка подана' : ''})</span></div>
-    <div class="hint">Программа Литнета: за каждые ${rub(n.step, 0)} реально открученной рекламы — по ${n.perRub} показа за рубль (${rub(n.step, 0)} → ${N(n.step * n.perRub)} показов). Считается расход с 26-го по 25-е, заявку подают через форму до 25-го, 19:00 МСК, показы идут в следующем месяце.</div>`}`;
+export function widgetCard(c) {
+  return widgetCardHtml(widgetProgram({ campaigns: c.campaigns, reports: c.data.reports, today: c.today, settings: c.settings, months: c.data.months || [] }), c.settings);
 }
 const widgetTable = (c) => widgetCard(c);
 acts['widget.applied'] = async (d) => {
@@ -155,8 +142,8 @@ export function ads(a) {
   <div class="card"><div class="row between"><h2 style="margin:0">Таргет «Литнет платит»</h2><button class="primary" data-act="ad.new" data-ch="litnet">+ Кампания</button></div>
     ${litnet.length ? summaryBody(c, sL, { past }) + campaignList(c, litnet, alerts) : '<p class="muted">Кампаний пока нет. Добавьте оплату таргетологам как кампанию: книга, даты, сумма.</p>'}
     ${discountTable(c)}
-    ${widgetTable(c)}
   </div>
+  ${litnet.length ? widgetTable(c) : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Мой таргет</h2><button data-act="ad.new" data-ch="own">+ Кампания</button></div>
     ${own.length ? summaryBody(c, sO, { past }) + campaignList(c, own, alerts) : '<p class="muted">Здесь будут кампании, которые вы ведёте сами. Добавьте кампанию с бюджетом и датами — окупаемость посчитается так же.</p>'}
   </div>
