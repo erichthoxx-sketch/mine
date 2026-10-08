@@ -3,6 +3,7 @@ import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../../../j
 import { num, fmtDate, pct } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
 import { reminders } from './home.js';
+import { widgetReminder } from './widgets.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut } from '../wcalc.js';
 import { addDays } from '../../../js/calc.js';
@@ -57,6 +58,9 @@ export function planItems(c, from, to) {
     add(remind < t ? t : remind, 'waitans', `Напомнить о себе: ${esc(x.who)}`, `${s.days} дн. без ответа${x.what ? ' · ' + esc(x.what.slice(0, 50)) : ''}`, { to: x.contactId ? '/link/' + x.contactId : '/links' });
   }
   for (const g of activeGoals(c)) if (g.deadline) add(g.deadline, 'goal', `Срок цели: ${esc(g.bookId && c.wbooksById[g.bookId] ? '«' + c.wbooksById[g.bookId].title + '»' : goalTitle(c, g))}`, '', { act: 'goal.edit', id: g.id });
+  // заявка на приоритетные показы — на сегодня, пока актуально, и в день срока
+  const wr = widgetReminder(c);
+  if (wr) { add(t, 'money', esc(wr.title), esc(wr.sub), { to: wr.to }); if (wr.date !== t) add(wr.date, 'money', `Срок заявки на показы`, '19:00 МСК', { to: wr.to }); }
   for (const r of reminders(c)) if (r.to === '../') add(r.date < t ? t : r.date, 'money', r.title, `${r.sub} · в «Доходах»`, { href: '../' });
   const ord = { goal: -1, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
   return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);

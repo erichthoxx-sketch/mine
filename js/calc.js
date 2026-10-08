@@ -341,6 +341,36 @@ export function widgetShows(spend, step = 20000, perRub = 2) {
   const blocks = Math.floor(v / st);
   return { blocks, shows: blocks * st * pr, toNext: r2(st - (v - blocks * st)), nextShows: (blocks + 1) * st * pr };
 }
+// Программа приоритетных показов Литнета: показы на месяц T считаются по рекламе «Литнет платит»,
+// реально открученной с 26-го числа (T−2) по 25-е (T−1). Заявку подают через форму до 25-го (T−1), 19:00 МСК.
+export function widgetProgram({ campaigns = [], reports = [], today, settings = {}, months = [] }) {
+  const st = Number(settings.widgetStep) || 20000, pr = Number(settings.widgetPerRub) || 2;
+  const mk = monthKey(today), day = Number(today.slice(8, 10));
+  const lit = campaigns.filter((c) => chOf(c) === 'litnet');
+  const applied = (m) => !!(months.find((x) => x.id === m) || {}).widgetApplied;
+  const one = (T) => {
+    const from = addMonths(T, -2) + '-26', to = addMonths(T, -1) + '-25', cap = to < today ? to : today;
+    let spent = 0, plan = 0;
+    for (const c of lit) {
+      const d = campaignDailySpend(c, reports, today);
+      for (const [k, v] of Object.entries(d)) if (k >= from && k <= cap) spent += v;
+      // оставшиеся дни периода — по плану кампании
+      const per = budgetPerDay(c);
+      if (per && to > today && c.end > today) {
+        const f = addDays(today, 1) > c.start ? addDays(today, 1) : c.start, t = c.end < to ? c.end : to;
+        if (t >= f) plan += per * countDays(f, t);
+      }
+    }
+    spent = r2(spent); plan = r2(plan);
+    const w = widgetShows(spent, st, pr), wf = widgetShows(spent + plan, st, pr);
+    const deadline = to, openFrom = addMonths(T, -1) + '-15';
+    return { month: T, from, to, spent, forecast: r2(spent + plan), shows: w.shows, blocks: w.blocks, toNext: w.toNext, nextShows: w.nextShows, forecastShows: wf.shows,
+      deadline, open: today >= openFrom && today <= deadline, closed: today > deadline, applied: applied(T), step: st, perRub: pr };
+  };
+  // следующий месяц, на который ещё идёт приём заявок (до 25-го включительно), и текущий — показы уже начислены
+  const next = day <= 25 ? addMonths(mk, 1) : addMonths(mk, 2);
+  return { next: one(next), current: one(mk) };
+}
 export const DISCOUNT_NOTE = 'Скидка «Литнет платит» не уменьшает оплату рекламы — она уменьшает комиссию Литнета с продаж этого месяца и приходит в следующей выплате.';
 // used: {месяц: использованный бюджет} — сколько рекламы открутилось за месяц (текущий месяц — прогноз).
 // Скидка(м) = (использовано(м) − скидка(м−1)) × pct, только если использовано(м) ≥ порога;

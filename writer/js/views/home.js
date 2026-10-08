@@ -6,6 +6,7 @@ import { ic } from '../../../js/icons.js';
 import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll, al, alNum, contestVol } from '../wcalc.js';
 import { STATUS, progressBlock, daysTxt, driveChip } from './books.js';
 import { goalTitle, goalToday, activeGoals } from './goals.js';
+import { widgetReminder } from './widgets.js';
 import { writtenChart } from '../wcharts.js';
 
 const zn = (n) => al(n);
@@ -38,6 +39,8 @@ export function reminders(c) {
     const st = goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t);
     if (st.active && st.todayDay && !st.doneToday) add(t, `Цель: ${goalTitle(c, g)}`, goalToday(c, g, st), '/plan', 0);
   }
+  // приоритетные показы: подать заявку до 25-го
+  const wr = widgetReminder(c); if (wr) add(wr.date, wr.title, wr.sub, wr.to, 15);
   for (const x of d.w_queue) if (!x.done && x.due) add(x.due, x.title, x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди «Что пишу дальше»', '/plan');
   for (const x of d.w_waiting) {
     if (x.done) continue;

@@ -584,3 +584,19 @@ test('приоритетные показы в виджетах: за кажды
   assert.equal(widgetShows(48000).shows, 80000);
   assert.equal(widgetShows(48000).toNext, 12000);
 });
+
+test('программа приоритетных показов: период 26-е — 25-е, заявка до 25-го', async () => {
+  const { widgetProgram } = await import('../js/calc.js');
+  const campaigns = [{ id: 'k1', channel: 'litnet', start: '2026-09-14', end: '2026-10-31', budget: 48000 }];
+  const p = widgetProgram({ campaigns, reports: [], today: '2026-10-08', settings: {}, months: [{ id: '2026-11', widgetApplied: false }] });
+  assert.equal(p.next.month, '2026-11'); assert.equal(p.next.from, '2026-09-26'); assert.equal(p.next.to, '2026-10-25');
+  assert.equal(p.next.open, false); // заявки — с 15-го
+  assert.equal(p.current.month, '2026-10'); assert.equal(p.current.from, '2026-08-26'); assert.equal(p.current.to, '2026-09-25');
+  // 48 000 ₽ на 48 дней = 1 000 ₽ в день: 14–25.09 = 12 000 ₽ → в октябре показов нет
+  assert.equal(p.current.spent, 12000); assert.equal(p.current.shows, 0);
+  // 26.09–08.10 = 13 дней → 13 000; до 25.10 по плану ещё 17 000 → 30 000 → 40 000 показов в ноябре
+  assert.equal(p.next.spent, 13000); assert.equal(p.next.forecast, 30000); assert.equal(p.next.forecastShows, 40000);
+  const q = widgetProgram({ campaigns, reports: [], today: '2026-10-20', settings: {}, months: [] });
+  assert.equal(q.next.open, true); assert.equal(q.next.spent, 25000); assert.equal(q.next.shows, 40000);
+  assert.equal(widgetProgram({ campaigns, reports: [], today: '2026-10-26', settings: {}, months: [] }).next.month, '2026-12');
+});
