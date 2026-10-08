@@ -698,3 +698,11 @@ main { padding-top: 20px; }
   html.nav-mini nav.tabs a { width: 48px; height: 48px; padding: 0; justify-content: center; border-radius: 14px; }
   html.nav-mini nav.tabs a b { width: 22px; }
 }
+@media (min-width: 1180px) {
+  .nt-done { font-size: 13px; color: var(--good); padding: 6px 0 0; cursor: pointer; line-height: 1.35; }
+  .nt-stat { font-size: 12px; color: var(--muted); padding-top: 10px; margin-top: 10px; border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); }
+  .nt-stat b { color: var(--text); }
+  .nt-k { font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+  .nt-soon { display: flex; gap: 10px; font-size: 13px; line-height: 1.35; padding: 4px 0; color: var(--text-2); }
+  .nt-d { flex: none; width: 48px; white-space: nowrap; color: var(--muted); font-weight: 700; }
+}
