@@ -346,7 +346,7 @@ acts['pub.mark'] = (d) => {
     <label for="pcx">${chs.length ? 'Или другая глава' : 'Глава'}</label><input id="pcx" name="chx" placeholder="например, Глава 25">
     <label>Площадки</label><div class="checks">${pfs.map((x) => `<label class="check"><input type="checkbox" name="pf" value="${esc(x)}"${(d.pf ? d.pf === x : x === pfs[0]) ? ' checked' : ''}>${esc(x)}</label>`).join('')}</div>
     <div class="f2"><div><label for="pmd">Что сделала</label><select id="pmd" name="mode">${opt('done', 'Выложила', defMode)}${opt('plan', 'Запланировала (отложенная)', defMode)}${opt('past', 'Уже выложено раньше — без событий', '')}${opt('clear', 'Снять отметку', '')}</select></div>
-    <div><label for="pdt">Дата</label><input id="pdt" type="date" name="date" value="${cur?.date || d.date || (defMode === 'plan' ? nextSlot() : c.today)}"></div></div>
+    <div><label for="pdt">Дата</label><input id="pdt" type="date" name="date" value="${cur?.date || d.date || (defMode === 'plan' ? nextSlot() : c.today)}"><div class="small muted" data-autodate hidden>по графику — можно поменять</div></div></div>
     ${hasSch ? `<div data-sch hidden><label class="check"><input type="checkbox" name="bySch" checked>По графику (${daysTxt(b.pubDays)}): каждой главе — свой день, начиная с даты</label><div class="small muted" data-preview></div></div>` : ''}
     <div class="hint">Отложенная публикация: до указанной даты глава отмечена ⏱, а в этот день сама станет выложенной. Событие «Выкладка главы» сразу ставится на эту дату в «Доходах». «Уже выложено раньше» — для глав, что вышли до начала учёта: они отметятся выложенными, но событий в «Доходах» не будет, дата не нужна.</div>`, async (fd) => {
     const list = pickList(fd);
@@ -382,9 +382,23 @@ acts['pub.mark'] = (d) => {
   // живая подсказка: какая глава в какой день выйдет; при выборе «Запланировала» — дата = ближайший день графика
   const form = document.querySelector('dialog[open] form');
   if (!form) return;
+  // дата для отложенной: сама подбирается по графику — ближайший свободный день для выбранных глав;
+  // если вписать дату руками, больше не трогаем
+  let dateTouched = !!(cur?.date || d.date);
+  const autoDate = (fd) => {
+    if (!hasSch) return nextSlot();
+    const list = pickList(fd), pf = fd.getAll('pf')[0] || pfs[0];
+    const plan = list.length ? planBySchedule(b, list, addDays(c.today, 1), pf) : null;
+    return plan && plan.length ? plan[0].date : nextSlot();
+  };
   const upd = (e) => {
     const fd = new FormData(form), mode = fd.get('mode'), box = form.querySelector('[data-sch]');
-    if (e?.target?.name === 'mode' && mode === 'plan' && (form.elements.date.value || '') <= c.today) form.elements.date.value = nextSlot();
+    if (e?.target?.name === 'date') dateTouched = true;
+    if (e?.target?.name === 'mode' && mode !== 'plan' && !dateTouched) form.elements.date.value = c.today;
+    if (mode === 'plan' && (!dateTouched || (form.elements.date.value || '') <= c.today)) {
+      form.elements.date.value = autoDate(fd);
+      const h = form.querySelector('[data-autodate]'); if (h) h.hidden = !hasSch;
+    } else { const h = form.querySelector('[data-autodate]'); if (h) h.hidden = true; }
     if (!box) return;
     const list = pickList(fd), on = mode === 'plan' && list.length > 1;
     box.hidden = !on;
