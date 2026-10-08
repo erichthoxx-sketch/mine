@@ -576,3 +576,11 @@ test('окончания по числу', async () => {
   const f = ['книга', 'книги', 'книг'];
   assert.deepEqual([0, 1, 2, 4, 5, 11, 12, 21, 22, 25, 101, 111].map((n) => plural(n, f)), ['книг', 'книга', 'книги', 'книги', 'книг', 'книг', 'книг', 'книга', 'книги', 'книг', 'книга', 'книг']);
 });
+
+test('приоритетные показы в виджетах: за каждые 20 000 ₽ — по 2 показа за рубль', async () => {
+  const { widgetShows } = await import('../js/calc.js');
+  assert.deepEqual(widgetShows(19999), { blocks: 0, shows: 0, toNext: 1, nextShows: 40000 });
+  assert.equal(widgetShows(20000).shows, 40000);
+  assert.equal(widgetShows(48000).shows, 80000);
+  assert.equal(widgetShows(48000).toNext, 12000);
+});

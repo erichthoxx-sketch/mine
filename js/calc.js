@@ -334,6 +334,13 @@ export function monthSpendForecast(campaigns, reports, today) {
 }
 
 // ---------- скидка «Литнет платит» (по оферте) ----------
+// Приоритетные показы в виджетах Литнета: за каждые полные step ₽ рекламы, потраченных за месяц,
+// дают perRub показов за каждый рубль этого блока. Начисляются в следующем месяце.
+export function widgetShows(spend, step = 20000, perRub = 2) {
+  const v = Math.max(0, Number(spend) || 0), st = Number(step) || 20000, pr = Number(perRub) || 2;
+  const blocks = Math.floor(v / st);
+  return { blocks, shows: blocks * st * pr, toNext: r2(st - (v - blocks * st)), nextShows: (blocks + 1) * st * pr };
+}
 export const DISCOUNT_NOTE = 'Скидка «Литнет платит» не уменьшает оплату рекламы — она уменьшает комиссию Литнета с продаж этого месяца и приходит в следующей выплате.';
 // used: {месяц: использованный бюджет} — сколько рекламы открутилось за месяц (текущий месяц — прогноз).
 // Скидка(м) = (использовано(м) − скидка(м−1)) × pct, только если использовано(м) ≥ порога;

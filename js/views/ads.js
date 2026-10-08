@@ -1,6 +1,6 @@
 import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthCap, fmtMonthIn } from '../format.js';
-import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween, DISCOUNT_NOTE } from '../calc.js';
+import { widgetShows, addMonths, campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween, DISCOUNT_NOTE } from '../calc.js';
 import { rocketCard } from './money.js';
 import { targetAlert, campaignProgress, adGroupSummary, budgetPlan } from '../calc.js';
 import { buildTargetPrompt } from '../report.js';
@@ -68,6 +68,25 @@ function discountTable(c) {
     <div class="hint">Считается само. ${DISCOUNT_NOTE}</div>`;
 }
 
+// Приоритетные показы в виджетах: по использованному бюджету месяца, начисляются в следующем месяце
+function widgetTable(c) {
+  const st = Number(c.settings.widgetStep) || 20000, pr = Number(c.settings.widgetPerRub) || 2, cur = monthKey(c.today);
+  const ms = Object.keys(c.discounts).filter((k) => (c.discounts[k].spend || 0) > 0).sort().reverse().slice(0, 6);
+  if (!ms.length) return '';
+  const N = (n) => num(n);
+  const row = (k) => {
+    const d = c.discounts[k], next = fmtMonthIn(addMonths(k, 1));
+    if (k === cur) {
+      const used = d.usedToDate ?? d.spend, w = widgetShows(used, st, pr), f = d.forecast && d.spend > used ? widgetShows(d.spend, st, pr) : null;
+      return `<div class="item row between"><span><b>${fmtMonthCap(k)}</b><span class="sub">потрачено на сегодня ${rub(used, 0)}${w.toNext > 0 ? ` · до следующих +${N(st * pr)} показов — ещё ${rub(w.toNext, 0)}` : ''}${f && f.shows !== w.shows ? ` · к концу месяца по плану ≈ ${N(f.shows)}` : ''} · начислят в ${next}</span></span><b class="${w.shows ? 'up' : 'muted'}">${w.shows ? N(w.shows) : 'пока 0'}</b></div>`;
+    }
+    const w = widgetShows(d.spend, st, pr);
+    return `<div class="item row between"><span><b>${fmtMonthCap(k)}</b><span class="sub">потрачено ${rub(d.spend, 0)}${w.blocks ? ` · ${w.blocks} × ${rub(st, 0)}` : ` · меньше ${rub(st, 0)}`} · ${w.shows ? 'начислены' : 'не начисляются'} в ${next}</span></span><b class="${w.shows ? 'up' : 'muted'}">${w.shows ? N(w.shows) : '—'}</b></div>`;
+  };
+  return `<h3>Приоритетные показы в виджетах</h3><div class="list">${ms.map(row).join('')}</div>
+    <div class="hint">За каждые ${rub(st, 0)} рекламы, потраченных за месяц, Литнет даёт по ${pr} приоритетных показа в виджетах за каждый рубль (${rub(st, 0)} → ${N(st * pr)} показов). Показы начисляются в следующем месяце.</div>`;
+}
+
 // «Бюджет на следующий месяц»: сколько вложить в рекламу, чтобы выйти на цель месяца
 export function budgetCard(c) {
   const b = budgetPlan({ sales: c.sales, legacyDays: c.legacyDays, campaigns: c.campaigns, reports: c.data.reports, settings: c.settings, today: c.today, dataEnd: c.dataEnd });
@@ -129,6 +148,7 @@ export function ads(a) {
   <div class="card"><div class="row between"><h2 style="margin:0">Таргет «Литнет платит»</h2><button class="primary" data-act="ad.new" data-ch="litnet">+ Кампания</button></div>
     ${litnet.length ? summaryBody(c, sL, { past }) + campaignList(c, litnet, alerts) : '<p class="muted">Кампаний пока нет. Добавьте оплату таргетологам как кампанию: книга, даты, сумма.</p>'}
     ${discountTable(c)}
+    ${widgetTable(c)}
   </div>
   <div class="card"><div class="row between"><h2 style="margin:0">Мой таргет</h2><button data-act="ad.new" data-ch="own">+ Кампания</button></div>
     ${own.length ? summaryBody(c, sO, { past }) + campaignList(c, own, alerts) : '<p class="muted">Здесь будут кампании, которые вы ведёте сами. Добавьте кампанию с бюджетом и датами — окупаемость посчитается так же.</p>'}

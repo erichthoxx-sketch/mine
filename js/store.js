@@ -12,6 +12,8 @@ export const DEFAULT_SETTINGS = {
   litnetPct: 20,
   baseDays: 14,
   rocketCap: 50,
+  widgetStep: 20000,     // приоритетные показы в виджетах: за каждые 20 000 ₽ рекламы в месяц…
+  widgetPerRub: 2,       // …по 2 показа за каждый рубль — начисляются в следующем месяце
   goalStart: '2026-10',
   goalAmount: 50000,
   goalGrowth: 12,        // % в месяц
