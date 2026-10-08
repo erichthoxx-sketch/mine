@@ -673,3 +673,28 @@ main { padding-top: 20px; }
 .stat .s { margin-top: 6px; line-height: 1.4; }
 .grid4 { gap: 12px; margin-bottom: 16px; }
 .home-h { margin-bottom: 14px; }
+
+/* шторка правой колонки «Сегодня» (Доходы) */
+.side-grip { display: none; }
+@media (min-width: 1180px) {
+  aside.side { transition: transform .3s ease; }
+  #app { transition: padding .3s ease; }
+  .side-grip { display: flex; position: fixed; top: 50%; right: 356px; z-index: 7; width: 18px; height: 64px; min-height: 0; padding: 0; margin: -32px -9px 0 0;
+    align-items: center; justify-content: center; border-radius: 10px; background: var(--surface); border: 1px solid var(--line) !important; cursor: grab; touch-action: none; transition: right .3s ease, background .15s; }
+  .side-grip span { width: 3px; height: 26px; border-radius: 2px; background: var(--line); box-shadow: 5px 0 0 -0px transparent; }
+  .side-grip:hover { background: var(--surface-2); }
+  .side-grip:hover span { background: var(--muted); }
+  html.side-drag, html.side-drag * { cursor: grabbing !important; user-select: none; }
+  html.side-drag aside.side, html.side-drag .side-grip { transition: none; }
+  html.side-off aside.side { transform: translateX(100%); }
+  html.side-off .side-grip { right: 0; margin-right: 0; border-radius: 10px 0 0 10px; border-right: 0 !important; width: 22px; }
+  html.side-off:not(.app-writer) #app { padding-right: 56px; }
+  html.side-off:not(.app-writer) .demo { margin-right: -56px; }
+  html.side-off:not(.app-writer) main, html.side-off:not(.app-writer) .top { max-width: 1120px; }
+}
+/* свёрнутое меню — гармонично: иконки сверху, как в развёрнутом, ровно по центру полоски, одинаковые квадраты */
+@media (min-width: 1180px) {
+  html.nav-mini nav.tabs { justify-content: flex-start; align-items: center; width: 77px !important; padding: 28px 0; }
+  html.nav-mini nav.tabs a { width: 48px; height: 48px; padding: 0; justify-content: center; border-radius: 14px; }
+  html.nav-mini nav.tabs a b { width: 22px; }
+}

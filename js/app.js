@@ -120,7 +120,7 @@ function render() {
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
   <div class="row"><a class="btn" href="pisatel/">${ic('sparkle')} Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
   <main>${r.html}</main>
-  ${wide() ? `<aside class="side">${(() => { try { return sideIncome(c); } catch (e) { console.error(e); return ''; } })()}</aside>` : ''}
+  ${wide() ? `<aside class="side">${(() => { try { return sideIncome(c); } catch (e) { console.error(e); return ''; } })()}</aside><button class="side-grip" aria-label="Скрыть или показать панель «Сегодня»" title="Потяните вправо, чтобы скрыть"><span></span></button>` : ''}
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h.slice(1)}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
   afterFn = r.after || null;
   afterFn?.();
@@ -152,6 +152,31 @@ installHandlers(() => render());
 watchForUpdates();
 try { sessionStorage.removeItem('staleReload'); } catch { /* нет доступа к памяти браузера */ }
 applyTheme();
+// правая колонка «Сегодня»: шторка — потянуть вправо (или нажать), чтобы скрыть; потянуть обратно — показать
+try { document.documentElement.classList.toggle('side-off', localStorage.getItem('sideOff') === '1'); } catch { /* ок */ }
+const setSide = (off) => { document.documentElement.classList.toggle('side-off', off); try { localStorage.setItem('sideOff', off ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 320); };
+document.addEventListener('pointerdown', (e) => {
+  const grip = e.target.closest('.side-grip');
+  if (!grip) return;
+  e.preventDefault();
+  const aside = document.querySelector('aside.side'), x0 = e.clientX, off0 = document.documentElement.classList.contains('side-off');
+  let dx = 0;
+  document.documentElement.classList.add('side-drag');
+  const move = (ev) => {
+    dx = ev.clientX - x0;
+    const w = aside?.offsetWidth || 356, shift = Math.max(0, Math.min(w, (off0 ? w : 0) + dx));
+    if (aside) aside.style.transform = `translateX(${shift}px)`;
+    grip.style.transform = `translateX(${shift - (off0 ? w : 0)}px)`;
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up);
+    document.documentElement.classList.remove('side-drag');
+    if (aside) aside.style.transform = ''; grip.style.transform = '';
+    // короткое нажатие — переключить; протянули — по направлению
+    if (Math.abs(dx) < 6) setSide(!off0); else setSide(off0 ? dx > -60 : dx > 60);
+  };
+  document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+});
 // меню слева на компьютере: свёрнутое (только иконки) или полное — запоминаем
 try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem('navMini') === '1'); } catch { /* ок */ }
 acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
