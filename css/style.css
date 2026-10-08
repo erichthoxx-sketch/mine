@@ -349,7 +349,7 @@ details.idea-group[open] > summary span:first-child::before { content: '▾'; }
 /* Мастерская, главная: карточки книг в работе */
 main a.card.wcard { display: flex; gap: 14px; align-items: flex-start; color: inherit; font-weight: inherit; text-decoration: none; }
 .wcard-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
-.wbar .progress { margin: 4px 0 2px; }
+.wbar .progress { margin: 10px 0 8px; }
 .alert.alert-thin { margin-top: 8px; padding: 6px 12px; font-size: 14px; line-height: 1.35; }
 /* кнопки и ссылки-кнопки всегда основным шрифтом и в одну строку — как в «Доходах» */
 button, .btn { font-family: var(--font-body); white-space: nowrap; }
@@ -370,7 +370,7 @@ button.pill.wait { border-color: var(--warn); color: var(--text); background: co
 label.inline-num { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 6px; color: var(--text); font-size: 14px; }
 label.inline-num input { width: 84px; text-align: center; margin: 0; }
 .checks.dow { gap: 4px 10px; }
-.wbar + .wbar { margin-top: 8px; }
+.wbar + .wbar { margin-top: 16px; }
 /* маленькая иконка-кнопка (урна у идеи) */
 button.icon-btn { min-height: 0; width: 30px; height: 30px; padding: 0; margin-left: 6px; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; background: transparent; border: 0; border-radius: 50%; color: var(--muted); box-shadow: none; }
 button.icon-btn .ic { width: 17px; height: 17px; }
@@ -486,3 +486,4 @@ a.ch-link { color: var(--text); text-decoration: underline; text-decoration-colo
 .wg-how summary { font-size: 14px; }
 .wg-how p { margin: 6px 0 0; color: var(--text-2); }
 .wg .wg-bonus { padding: 0 !important; min-height: 0; font-size: 13px; margin-top: 4px; }
+.wbar > .small.muted { line-height: 1.45; }
