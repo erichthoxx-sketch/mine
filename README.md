@@ -5,7 +5,6 @@
 
 - **Доходы:** https://erichthoxx-sketch.github.io/mine/ — настройка: [docs/SETUP.md](docs/SETUP.md)
 - **Мастерская** (книги на Google Диске, идеи, планер, маркетинг): https://erichthoxx-sketch.github.io/mine/pisatel/ — подключение Диска: [docs/SETUP-WRITER.md](docs/SETUP-WRITER.md)
-- **Таро-кабинет** (колоды, наработки, расклады, клиенты, чат с ChatGPT по каждой колоде): https://erichthoxx-sketch.github.io/mine/taro/ — вход тот же; ChatGPT подключается ключом OpenAI API в настройках приложения
-- **Расчёты:** `js/calc.js` (доходы), `js/parse.js` (разбор файлов), `writer/js/wcalc.js` (знаки, конкурсы, прогнозы), `taro/js/tcalc.js` (таро: карты рождения, база знаний для ИИ). Тесты: `npm test`
+- **Расчёты:** `js/calc.js` (доходы), `js/parse.js` (разбор файлов), `writer/js/wcalc.js` (знаки, конкурсы, прогнозы). Тесты: `npm test`
 - Пока Firebase не настроен, приложение запускается в пробном режиме (данные только в этом браузере).
 - Личные выгрузки (`Statistic*.csv`, `dohody*.csv`) в репозиторий не кладите — они в `.gitignore`.
