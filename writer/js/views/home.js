@@ -3,7 +3,7 @@ import { esc } from '../../../js/ui.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll, al, alNum } from '../wcalc.js';
+import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll, al, alNum, contestVol } from '../wcalc.js';
 import { STATUS, progressBlock, daysTxt, driveChip } from './books.js';
 import { goalTitle, goalToday, activeGoals } from './goals.js';
 import { writtenChart } from '../wcharts.js';
@@ -20,7 +20,7 @@ export function reminders(c) {
   for (const x of d.w_contests) {
     if (x.status === 'done' || !x.end || x.end < addDays(t, -3)) continue;
     const b = x.bookId ? c.wbooksById[x.bookId] : null, s = contestStatus(x, b, t);
-    add(x.end, `Конкурс «${x.name}» заканчивается`, `${b ? esc(b.title) : ''}${s.need ? ` · нужно ещё ${zn(s.need)}${s.perDay ? ` (~${zn(s.perDay)} в день)` : ''}` : ''}`, '/plan');
+    add(x.end, `Конкурс «${x.name}» заканчивается`, `${b ? esc(b.title) : ''}${s.need ? ` · нужно ещё ${contestVol(x)(s.need)}${s.perDay ? ` (~${contestVol(x)(s.perDay)} в день)` : ''}` : ''}`, '/plan');
     if (x.start && x.start >= t) add(x.start, `Конкурс «${x.name}» начинается`, b ? esc(b.title) : '', '/plan', 7);
   }
   for (const b of c.wbooks) {

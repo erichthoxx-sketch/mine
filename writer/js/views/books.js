@@ -1,7 +1,7 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl } from '../wcalc.js';
+import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol } from '../wcalc.js';
 import { goalTitle, goalToday } from './goals.js';
 import { writtenChart, growthChart } from '../wcharts.js';
 export { chapterList };
@@ -87,7 +87,7 @@ export function progressBlock(c, b) {
   if (s.next) parts.push(`<div class="small">Следующая: <b>${s.next.ch ? esc(s.next.ch) : 'новая глава'}</b> — ${esc(s.next.pf)}, ${fmtDate(s.next.date)} (${whenTxt(diffD(s.next.date, t))})</div>`);
   for (const x of liveContests(c, b)) {
     const st = contestStatus(x, b, t);
-    parts.push(`<div class="small">Конкурс «${esc(x.name)}»${st.daysLeft != null ? ` · осталось ${st.daysLeft} дн.` : ''}${x.minChars ? ` — объём ${alNum(st.chars)} из ${zn(x.minChars)}: ${st.need === 0 ? '<span class="up">✓ проходит</span>' : `не хватает ${zn(st.need)}${st.perDay ? ` (~${zn(st.perDay)} в день)` : ''}${st.onTrack ? ' — по темпу успеваю' : ''}`}` : ''}</div>`);
+    parts.push(`<div class="small">Конкурс «${esc(x.name)}»${st.daysLeft != null ? ` · осталось ${st.daysLeft} дн.` : ''}${x.minChars ? ` — объём ${contestVol(x)(st.chars)} из ${contestVol(x)(x.minChars)}: ${st.need === 0 ? '<span class="up">✓ проходит</span>' : `не хватает ${contestVol(x)(st.need)}${st.perDay ? ` (~${contestVol(x)(st.perDay)} в день)` : ''}${st.onTrack ? ' — по темпу успеваю' : ''}`}` : ''}</div>`);
   }
   return parts.join('');
 }
@@ -161,7 +161,7 @@ export function bookPage(a, id) {
       ${chs.map((t) => `<tr><td>${esc(t.title)}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => cell(t.title, x)).join('')}</tr>`).join('')}
       <tr class="total"><td>Всего</td><td class="r">${alNum(b.chars)}</td>${pfs.map((x) => `<td>${chs.filter((t) => pubState((pm[t.title] || {})[x], c.today) === 'done').length}</td>`).join('')}</tr></table></div>` : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
     <div class="hint">Нажмите на ячейку, чтобы отметить главу на площадке: «выложила» или «запланировала» (отложенная публикация — ⏱). Выкладка сразу попадает событием в «Доходы».${other.length ? ` Не считаются как текст книги: ${other.map((t) => esc(t.title)).join(', ')}.` : ''}</div></div>
-  ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${zn(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
+  ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${contestVol(x)(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
       ${ideas.length > IDEAS_MAX ? `<div style="margin-top:10px"><button data-act="idea.open" data-book="${b.id}">Все идеи к книге (${ideas.length})</button></div>` : ''}` : '<p class="small muted" style="margin:8px 0 0">Идей к этой книге пока нет.</p>'}</div>

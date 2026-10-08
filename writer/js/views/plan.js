@@ -4,7 +4,7 @@ import { num, fmtDate, pct } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
 import { reminders } from './home.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
-import { goalStatus, al, alNum, fromAl } from '../wcalc.js';
+import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut } from '../wcalc.js';
 import { addDays } from '../../../js/calc.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
 import { startEvent, finishEvent, chapterEvent, removeEvent } from '../sync.js';
@@ -47,7 +47,7 @@ export function planItems(c, from, to) {
   for (const x of d.w_contests) {
     if (x.status === 'done') continue;
     const b = x.bookId ? c.wbooksById[x.bookId] : null, st = contestStatus(x, b, t);
-    add(x.end, 'contest', `Конкурс «${esc(x.name)}» — окончание`, [b ? esc(b.title) : '', st.need ? `не хватает ${zn(st.need)}` : st.need === 0 ? 'объём ✓' : ''].filter(Boolean).join(' · '), { act: 'contest.edit', id: x.id });
+    add(x.end, 'contest', `Конкурс «${esc(x.name)}» — окончание`, [b ? esc(b.title) : '', st.need ? `не хватает ${contestVol(x)(st.need)}` : st.need === 0 ? 'объём ✓' : ''].filter(Boolean).join(' · '), { act: 'contest.edit', id: x.id });
     if (x.start && x.start >= t) add(x.start, 'contest', `Конкурс «${esc(x.name)}» — старт`, b ? esc(b.title) : '', { act: 'contest.edit', id: x.id });
   }
   for (const x of d.w_queue) if (!x.done && x.due) add(x.due < t ? t : x.due, 'queue', esc(x.title), `${x.due < t ? 'просрочено · ' : ''}${x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди'}`, { act: 'queue.edit', id: x.id });
@@ -181,15 +181,15 @@ function contests(c) {
   });
   return `${list.length ? list.map((x) => {
     const b = x.bookId ? c.wbooksById[x.bookId] : null;
-    const s = contestStatus(x, b, c.today);
+    const s = contestStatus(x, b, c.today), cv = contestVol(x);
     const over = s.ended || x.status === 'done';
     const badge = s.daysLeft == null ? '' : over ? '<span class="badge">завершён</span>' : `<span class="badge ${s.daysLeft <= 7 ? 'bad' : s.daysLeft <= 14 ? 'warn' : 'good'}">осталось ${s.daysLeft} дн.</span>`;
     return `<div class="card${over ? ' faded' : ''}">
       <div class="row between"><b>${esc(x.name)}</b>${badge}</div>
       <div class="small muted">${x.platform ? esc(x.platform) + ' · ' : ''}${CSTATUS[x.status] || CSTATUS.plan}${x.start ? ' · с ' + fmtDate(x.start) : ''}${x.end ? ' по ' + fmtDate(x.end) : ''}</div>
-      ${b ? `<div style="margin-top:8px"><div class="small">${ic('books')} ${esc(b.title)} — ${zn(s.chars)}${x.minChars ? ` из ${zn(x.minChars)}` : ''}${x.maxChars ? ` (не больше ${zn(x.maxChars)})` : ''}</div>
+      ${b ? `<div style="margin-top:8px"><div class="small">${ic('books')} ${esc(b.title)} — ${cv(s.chars)}${x.minChars ? ` из ${cv(x.minChars)}` : ''}${x.maxChars ? ` (не больше ${cv(x.maxChars)})` : ''}</div>
         ${s.progress != null ? `<div class="progress"><i style="width:${(s.progress * 100).toFixed(1)}%"></i></div>
-        <div class="small">${s.need ? `нужно ещё ${zn(s.need)} · это ~${zn(s.perDay)} в день` : 'объём набран ✔︎'}${s.need ? (s.onTrack ? ` · <span class="up">успеваю ✔︎ (прогноз ${fmtDate(s.forecast)})</span>` : ` · <span class="down">${s.forecast ? 'при нынешнем темпе — к ' + fmtDate(s.forecast) : 'темпа пока нет'} ⚠︎</span>`) : ''}</div>` : ''}
+        <div class="small">${s.need ? `нужно ещё ${cv(s.need)} · это ~${cv(s.perDay)} в день` : 'объём набран ✔︎'}${s.need ? (s.onTrack ? ` · <span class="up">успеваю ✔︎ (прогноз ${fmtDate(s.forecast)})</span>` : ` · <span class="down">${s.forecast ? 'при нынешнем темпе — к ' + fmtDate(s.forecast) : 'темпа пока нет'} ⚠︎</span>`) : ''}</div>` : ''}
         ${x.maxChars && s.chars > x.maxChars ? '<div class="small down">⚠︎ объём больше максимума конкурса</div>' : ''}</div>` : ''}
       ${x.conditions ? `<details style="margin-top:8px"><summary>Условия</summary><p class="idea-text">${esc(x.conditions)}</p></details>` : ''}
       <div class="row" style="margin-top:8px">${x.url ? `<a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">Страница конкурса</a>` : ''}<button class="link" data-act="contest.edit" data-id="${x.id}">Изменить</button></div>
@@ -202,11 +202,13 @@ function contestForm(c, x = {}) {
   <div><label for="cs">Статус</label><select id="cs" name="status">${Object.entries(CSTATUS).map(([k, v]) => opt(k, v, x.status || 'plan')).join('')}</select></div></div>
   <div class="f2"><div><label for="c1">Начало</label><input id="c1" type="date" name="start" value="${x.start || ''}"></div><div><label for="c2">Окончание</label><input id="c2" type="date" name="end" value="${x.end || ''}" required></div></div>
   <label for="cb">Книга на конкурс</label><select id="cb" name="bookId"><option value="">—</option>${c.wbooks.map((b) => opt(b.id, b.title, x.bookId)).join('')}</select>
-  <div class="f2"><div><label for="cmin">Объём от, а.л.</label><input id="cmin" name="minChars" inputmode="decimal" value="${x.minChars ? alNum(x.minChars) : ''}"></div><div><label for="cmax">до, а.л.</label><input id="cmax" name="maxChars" inputmode="decimal" value="${x.maxChars ? alNum(x.maxChars) : ''}"></div></div>
+  <div class="f3"><div><label for="cmin">Объём от</label><input id="cmin" name="minChars" inputmode="decimal" value="${contestOut(x.unit, x.minChars)}"></div><div><label for="cmax">до</label><input id="cmax" name="maxChars" inputmode="decimal" value="${contestOut(x.unit, x.maxChars)}"></div>
+    <div><label for="cun">в чём</label><select id="cun" name="unit">${opt('al', 'а.л.', x.unit || 'al')}${opt('chars', 'знаках', x.unit || 'al')}</select></div></div>
+  <div class="small muted">Как в условиях конкурса: если там знаки — выберите «знаках», и прогресс книги по этому конкурсу тоже будет в знаках.</div>
   <label for="cc">Условия</label><textarea id="cc" name="conditions" style="min-height:120px">${esc(x.conditions || '')}</textarea>
   <label for="cu">Ссылка на страницу конкурса</label><input id="cu" name="url" value="${esc(x.url || '')}">`;
 }
-const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookId: fd.get('bookId') || '', minChars: fromAl(fd.get('minChars')), maxChars: fromAl(fd.get('maxChars')), conditions: fd.get('conditions') || '', url: (fd.get('url') || '').trim() });
+const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookId: fd.get('bookId') || '', unit: fd.get('unit') || 'al', minChars: contestIn(fd.get('unit'), fd.get('minChars')), maxChars: contestIn(fd.get('unit'), fd.get('maxChars')), conditions: fd.get('conditions') || '', url: (fd.get('url') || '').trim() });
 acts['plan.tab'] = (d) => { app().ui.planTab = d.v; };
 acts['contest.new'] = () => openSheet('Новый конкурс', contestForm(app().ctx()), async (fd) => { await app().store.put('w_contests', { id: 'c' + uid(), ...contestFrom(fd) }); toast('Конкурс добавлен'); });
 acts['contest.edit'] = (d) => {

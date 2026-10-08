@@ -350,3 +350,14 @@ export function alNum(chars) {
 export const al = (chars) => `${alNum(chars)} а.л.`;
 // ввод: «7,5» а.л. → знаки
 export const fromAl = (v) => { const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.')); return String(v ?? '').trim() === '' || Number.isNaN(n) ? null : Math.round(n * AL); };
+
+// ---- конкурс: объём в тех единицах, в которых он задан в условиях (x.unit: 'al' — а.л., 'chars' — знаки) ----
+const grp = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+export const contestVol = (x) => (n) => (x?.unit === 'chars' ? `${grp(n)} зн.` : al(n));
+// ввод объёма конкурса: в знаках или в а.л.
+export const contestIn = (unit, v) => {
+  if (unit !== 'chars') return fromAl(v);
+  const n = Number(String(v ?? '').replace(/[\s ]/g, '').replace(',', '.'));
+  return String(v ?? '').trim() === '' || Number.isNaN(n) ? null : Math.round(n);
+};
+export const contestOut = (unit, chars) => (chars == null ? '' : unit === 'chars' ? String(chars) : alNum(chars));

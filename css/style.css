@@ -463,3 +463,4 @@ details.trash-item > summary .sub { color: var(--muted); }
 .ai-day .link { font-size: 13px; font-weight: 600; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
 .ai-day .link .ic { width: 14px; height: 14px; }
 .ai-day .link:hover { color: var(--link); }
+.f3 { display: grid; grid-template-columns: 1fr 1fr 0.9fr; gap: 0 10px; } .f3 > div { min-width: 0; }
