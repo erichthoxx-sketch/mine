@@ -6,7 +6,9 @@ import { reminders } from './home.js';
 import { widgetReminder } from './widgets.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut } from '../wcalc.js';
-import { addDays } from '../../../js/calc.js';
+import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
+import { rub, fmtMonth } from '../../../js/format.js';
+import { EVENT_TYPES } from '../../../js/charts.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
 import { startEvent, finishEvent, chapterEvent, removeEvent } from '../sync.js';
 
@@ -61,10 +63,52 @@ export function planItems(c, from, to) {
   // заявка на приоритетные показы — на сегодня, пока актуально, и в день срока
   const wr = widgetReminder(c);
   if (wr) { add(t, 'money', esc(wr.title), esc(wr.sub), { to: wr.to }); if (wr.date !== t) add(wr.date, 'money', `Срок заявки на показы`, '19:00 МСК', { to: wr.to }); }
-  for (const r of reminders(c)) if (r.to === '../') add(r.date < t ? t : r.date, 'money', r.title, `${r.sub} · в «Доходах»`, { href: '../' });
+  for (const x of incomeItems(c, from, to)) add(x.date, 'money', x.title, x.sub, { href: '../' });
   const ord = { goal: -1, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
   return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
 }
+// Важное из «Доходов» по датам: налог (до 28-го), цифры Rocket (с 20-го), старт и конец рекламы, события дней
+function incomeItems(c, from, to) {
+  const d = c.data, t = c.today, out = [];
+  const add = (date, title, sub = '') => { if (date >= from && date <= to) out.push({ date, title: esc(title), sub: esc(sub) }); };
+  const mOf = (k) => (d.months || []).find((m) => m.id === k) || {};
+  const rate = (Number(c.settings.taxRate) || 4) / 100;
+  // налог: за каждый месяц с продажами — до 28-го следующего; неоплаченный просроченный — на сегодня
+  for (let k = addMonths(monthKey(from), -3); k <= monthKey(to); k = addMonths(k, 1)) {
+    if (mOf(k).taxPaid) continue;
+    const end = addDays(addMonths(k, 1) + '-01', -1);
+    const gross = sumSeries(incomeSeries(d.sales || [], [], k + '-01', end < t ? end : t), 'gross');
+    if (!(gross > 0)) continue;
+    const due = npdDeadline(k);
+    if (k >= monthKey(t)) continue; // налог за текущий месяц — когда месяц закончится
+    if (due < t) add(t, `Налог за ${fmtMonth(k)} — просрочен (был до ${fmtDate(due).slice(0, 5)})`, `≈ ${rub(gross * rate, 0)} · отметить «Оплачен» в «Доходах»`);
+    else add(due, `Заплатить налог за ${fmtMonth(k)}`, `≈ ${rub(gross * rate, 0)} · до 28-го`);
+  }
+  // Rocket: с 20-го записать цифры за прошлый месяц
+  for (let k = monthKey(from); k <= monthKey(to); k = addMonths(k, 1)) {
+    const prev = addMonths(k, -1);
+    if (mOf(prev).rocketFee != null) continue;
+    const had = (d.sales || []).some((x) => x.date.startsWith(prev));
+    if (had) add(k + '-20' < t ? (k === monthKey(t) ? t : k + '-20') : k + '-20', `Записать цифры Rocket за ${fmtMonth(prev)}`, 'из кабинета Rocket');
+  }
+  // реклама: старт и конец кампаний
+  for (const k of d.campaigns || []) {
+    if (k.oneOff) continue;
+    if (k.start) add(k.start, `Старт рекламы «${k.name}»`);
+    if (k.end) add(k.end, `Конец рекламы «${k.name}»`, 'решить, продлевать ли');
+  }
+  // события дней из «Доходов» (что вносила там сама, без выкладки глав из Мастерской)
+  for (const day of d.days || []) {
+    if (day.date < from || day.date > to) continue;
+    for (const e of day.events || []) {
+      if (e.src && String(e.src).startsWith('w:')) continue;
+      const ty = EVENT_TYPES[e.type] || EVENT_TYPES.note;
+      add(day.date, `${ty.label}${e.text ? ': ' + e.text : ''}`, e.bookId ? (d.books || []).find((b) => b.id === e.bookId)?.title || '' : '');
+    }
+  }
+  return out;
+}
+
 // компактная строка для «Дальше»: только суть, книга — если книг в работе несколько
 const strip = (h) => String(h).replace(/<[^>]+>/g, '');
 function shortItem(c, x, multi) {
@@ -89,7 +133,7 @@ export function planView(a) {
   const sel = ui.planDay && ui.planDay >= addDays(t, -60) ? ui.planDay : t;
   // полоска из 7 дней: сегодня — посередине (три дня до и три после); стрелки листают на неделю
   const wk = addDays(t, 7 * (ui.planWeek || 0) - 3);
-  const items = planItems(c, wk < t ? wk : t, addDays(sel > t ? sel : t, 21));
+  const items = planItems(c, wk < t ? wk : t, addDays(sel > t ? sel : t, 35));
   const by = {};
   for (const x of items) (by[x.date] ||= []).push(x);
   // неделя
@@ -103,7 +147,10 @@ export function planView(a) {
   const goalRows = sel === t ? activeGoals(c).map((g) => ({ g, s: goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t) })).filter((x) => x.s.active && x.s.todayDay) : [];
   const goalHtml = goalRows.map(({ g, s }) => `<div class="pitem"><span class="dot k-goal"${s.doneToday ? ' style="opacity:.4"' : ''}></span><a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${s.doneToday ? '✓ ' : ''}${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, s)}</span></a>${g.type === 'custom' ? `<span class="pi-btns"><button class="${s.doneToday ? '' : 'primary'}" data-act="goal.check" data-id="${g.id}">${s.doneToday ? '✓' : 'Сделала'}</button></span>` : ''}</div>`).join('');
   // дальше: следующие 14 дней после выбранного
-  const nextDays = Object.keys(by).filter((k) => k > sel && k <= addDays(sel, 10)).sort();
+  // «Дальше»: всё на 10 дней, а важное из «Доходов» (налог, Rocket, реклама) — на месяц вперёд
+  const far = addDays(sel, 10);
+  for (const k of Object.keys(by)) if (k > far) { by[k] = by[k].filter((x) => x.kind === 'money'); if (!by[k].length) delete by[k]; }
+  const nextDays = Object.keys(by).filter((k) => k > sel && k <= addDays(sel, 35)).sort();
   const multi = c.wbooks.filter((b) => (b.status || 'progress') === 'progress').length > 1;
   const inWork = c.wbooks.filter((b) => (b.status || 'progress') === 'progress');
   const live = d.w_contests.filter((x) => !(x.end && x.end < t) && x.status !== 'done');
