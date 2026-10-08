@@ -44,6 +44,7 @@ export function day(a) {
     <div class="chips" style="margin:6px 0">${chg(st.vsAvg, `среднему за 7 дн. (${rub(st.avg7, 0)})`)}${chg(st.vsWeek, `${WD_ACC[wd]} (${rub(st.weekAgo, 0)})`)}</div>
     <div class="small">${st.qty} шт.: продажи ${st.saleQty} (${rub(st.saleRoyalty, 0)}) · подписки ${st.subQty} (${rub(st.subRoyalty, 0)})</div>`}
   </a>
+  ${noData && !st.royalty ? '' : `<div class="ai-day"><button class="link" data-act="day.ai" data-date="${date}">${ic('sparkle')} Спросить ИИ про этот день</button></div>`}
   ${plan ? `<a class="card tap" href="#" data-act="goal.all" data-m="${mk}"><h2>Цель ${fmtMonth(mk)}</h2>
     <div class="row between small"><span>К ${fmtShort(date)}: <b>${rub(mtd, 0)}</b> из ${rub(plan.plan, 0)}</span><span class="muted">${pct(mtd / plan.plan, 0)}</span></div>
     <div class="progress"><i style="width:${Math.min(100, (mtd / plan.plan) * 100).toFixed(1)}%"></i></div>
@@ -137,4 +138,34 @@ acts['event.quick'] = (d) => {
     await save({ ...doc, id: date, date, events: [...(doc.events || []), ev] });
     toast('Событие добавлено');
   }, { submitText: 'Добавить' });
+};
+
+// «Спросить ИИ про этот день»: короткая сводка — день против недели, книги, реклама, события вокруг
+function dayPrompt(c, date) {
+  const st = dayStats(c.sales, c.legacyDays, date), wd = new Date(date + 'T00:00:00Z').getUTCDay();
+  const r0 = (v) => (v == null ? '—' : rub(v, 0));
+  const week = incomeSeries(c.sales, c.legacyDays, addDays(date, -7), addDays(date, -1)).filter((x) => x.known);
+  const bb = booksBreakdown(c.sales, date, date);
+  const ads = c.campaigns.filter((k) => k.start && k.start <= date && (k.end || k.start) >= date);
+  const evs = c.data.days.filter((d) => d.date >= addDays(date, -3) && d.date <= date && (d.events || []).length)
+    .sort((x, y) => x.date.localeCompare(y.date))
+    .flatMap((d) => d.events.map((e) => `${fmtDate(d.date)} — ${(EVENT_TYPES[e.type] || EVENT_TYPES.note).label}${e.bookId ? ' · ' + c.titleOf(e.bookId, '') : ''}${e.text ? ': ' + e.text : ''}`));
+  const note = (dayDoc(c, date).note || '').trim();
+  const L = [];
+  L.push(`Я автор на Литнете. Помоги понять, почему день ${fmtDate(date)} (${WD[wd]}) получился таким по доходу.`, '');
+  L.push(`Доход за день: ${r0(st.royalty)} · ${st.qty} шт. (продажи ${st.saleQty} на ${r0(st.saleRoyalty)}, подписки ${st.subQty} на ${r0(st.subRoyalty)}).`);
+  L.push(`Среднее за 7 дней до этого: ${r0(st.avg7)} в день${st.vsAvg != null ? ` (этот день ${st.vsAvg >= 0 ? 'выше' : 'ниже'} на ${Math.round(Math.abs(st.vsAvg) * 100)} %)` : ''}. Неделю назад (тоже ${WD[wd]}): ${r0(st.weekAgo)}.`);
+  if (week.length) L.push(`Предыдущие дни: ${week.map((x) => `${fmtShort(x.date)} ${r0(x.royalty)}`).join(', ')}.`);
+  if (bb.length) L.push('', 'По книгам:', ...bb.map((b) => `— ${c.titleOf(b.bookId, b.title)}: ${r0(b.royalty)}, продажи ${b.saleQty}, подписки ${b.subQty}`));
+  if (ads.length) L.push('', 'Реклама в этот день:', ...ads.map((k) => { const sp = campaignDailySpend(k, c.data.reports, null)[date]; return `— ${k.name}${k.bookId ? ' (' + c.titleOf(k.bookId, '') + ')' : ''}: ${k.oneOff ? 'разовая' : `день ${countDays(k.start, date)}`}${sp ? `, расход ≈ ${r0(sp)}` : ''}`; }));
+  else L.push('', 'Рекламы в этот день не было.');
+  if (evs.length) L.push('', 'События за этот день и 3 дня до него:', ...evs.map((x) => '— ' + x));
+  if (note) L.push('', `Моя заметка: ${note}`);
+  L.push('', 'Что вероятнее всего повлияло на результат? Это случайное колебание или есть причина? Что стоит сделать в ближайшие дни? Ответь коротко, по пунктам.');
+  return L.join('\n');
+}
+acts['day.ai'] = async (d) => {
+  const text = dayPrompt(app().ctx(), d.date);
+  try { await navigator.clipboard.writeText(text); toast('Сводка скопирована — вставьте её в чат с ИИ'); }
+  catch { openSheet('Сводка дня для ИИ', `<p class="small muted">Выделите текст и скопируйте:</p><textarea style="min-height:300px" readonly>${esc(text)}</textarea>`, null); }
 };

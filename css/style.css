@@ -458,3 +458,8 @@ details.trash-item > summary .sub { color: var(--muted); }
 .agenda .aitem { display: flex; align-items: center; gap: 8px; color: var(--text); text-decoration: none; font-size: 14px; }
 .agenda .aitem i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .agenda .aitem .muted { font-size: 13px; }
+/* «Спросить ИИ про этот день» — тихая ссылка под суммой дня */
+.ai-day { margin: -4px 0 12px; text-align: right; }
+.ai-day .link { font-size: 13px; font-weight: 600; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+.ai-day .link .ic { width: 14px; height: 14px; }
+.ai-day .link:hover { color: var(--link); }
