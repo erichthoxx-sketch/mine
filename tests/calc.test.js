@@ -600,3 +600,9 @@ test('программа приоритетных показов: период 2
   assert.equal(q.next.open, true); assert.equal(q.next.spent, 25000); assert.equal(q.next.shows, 40000);
   assert.equal(widgetProgram({ campaigns, reports: [], today: '2026-10-26', settings: {}, months: [] }).next.month, '2026-12');
 });
+
+test('приоритетные показы: бонус месяца прибавляется', async () => {
+  const { widgetProgram } = await import('../js/calc.js');
+  const p = widgetProgram({ campaigns: [], reports: [], today: '2026-10-08', months: [{ id: '2026-10', widgetBonus: 20000, widgetBonusNote: 'приветственный' }] });
+  assert.equal(p.current.total, 20000); assert.equal(p.current.bonus, 20000); assert.equal(p.next.total, 0);
+});

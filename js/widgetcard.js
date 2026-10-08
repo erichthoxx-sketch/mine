@@ -15,7 +15,8 @@ export function widgetCardHtml(p, settings = {}) {
       : `<div class="wg-status">Заявка на ${fmtMonth(n.month)}: с ${dm(n.to.slice(0, 8) + '15')} по ${dm(n.deadline)}, 19:00 МСК — напомню</div>`;
   return `<div class="card wg"><h2>Приоритетные показы в виджетах</h2>
     <div class="tiles">
-      <div><div class="k">Сейчас, в ${fmtMonthIn(cur.month).split(' ')[0]}</div><div class="v">${cur.shows ? num(cur.shows) : '0'}</div><div class="s">показов · реклама ${dm(cur.from)}–${dm(cur.to)}: ${rub(cur.spent, 0)}</div></div>
+      <div><div class="k">Сейчас, в ${fmtMonthIn(cur.month).split(' ')[0]}</div><div class="v">${num(cur.total)}</div><div class="s">${[cur.shows ? `${num(cur.shows)} за рекламу` : '', cur.bonus ? (cur.shows ? `${num(cur.bonus)} — ${esc(cur.bonusNote || 'бонус')}` : esc(cur.bonusNote || 'бонус')) : ''].filter(Boolean).join(' + ') || 'показов'}
+        <br><button class="link wg-bonus" data-act="widget.bonus" data-m="${cur.month}">${cur.bonus ? 'изменить бонус' : '+ бонусные показы'}</button></div></div>
       <div><div class="k">На ${fmtMonth(n.month).split(' ')[0]}</div><div class="v">${num(n.shows)}</div><div class="s">${n.forecastShows !== n.shows ? `по плану кампаний ≈ ${num(n.forecastShows)}` : 'показов сейчас'}</div></div>
     </div>
     <div class="wbar wg-bar"><div class="row between small"><span>Реклама ${dm(n.from)} – ${dm(n.to)}</span><span><b>${rub(n.spent, 0)}</b> из ${rub(target, 0)}</span></div>

@@ -353,3 +353,13 @@ forms['base.try'] = (fd, f) => {
   app().rerender(); window.scrollTo(0, 0);
 };
 acts['base.reset'] = () => { app().ui.baseTry = null; };
+
+acts['widget.bonus'] = (d) => {
+  const st = app().store, m = (st.data.months || []).find((x) => x.id === d.m) || { id: d.m };
+  openSheet('Бонусные показы', `<p class="small muted" style="margin-top:0">Например, приветственные разовые показы от Литнета. Они прибавятся к показам за рекламу в этом месяце.</p>
+    <div class="f2"><div><label for="wb">Показов</label><input id="wb" name="bonus" inputmode="numeric" value="${m.widgetBonus || ''}" placeholder="20000"></div>
+    <div><label for="wn">Что это</label><input id="wn" name="note" value="${esc(m.widgetBonusNote || 'приветственный бонус, разово')}"></div></div>`, async (fd) => {
+    const v = Number(String(fd.get('bonus') || '').replace(/\s/g, '')) || 0;
+    await st.put('months', { ...m, id: d.m, widgetBonus: v, widgetBonusNote: (fd.get('note') || '').trim() });
+  });
+};

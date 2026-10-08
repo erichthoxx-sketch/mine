@@ -348,6 +348,8 @@ export function widgetProgram({ campaigns = [], reports = [], today, settings = 
   const mk = monthKey(today), day = Number(today.slice(8, 10));
   const lit = campaigns.filter((c) => chOf(c) === 'litnet');
   const applied = (m) => !!(months.find((x) => x.id === m) || {}).widgetApplied;
+  // бонусные показы месяца (например, приветственные разовые) — вносятся вручную
+  const bonusOf = (m) => { const x = months.find((y) => y.id === m) || {}; return { bonus: Number(x.widgetBonus) || 0, bonusNote: x.widgetBonusNote || '' }; };
   const one = (T) => {
     const from = addMonths(T, -2) + '-26', to = addMonths(T, -1) + '-25', cap = to < today ? to : today;
     let spent = 0, plan = 0;
@@ -365,7 +367,7 @@ export function widgetProgram({ campaigns = [], reports = [], today, settings = 
     const w = widgetShows(spent, st, pr), wf = widgetShows(spent + plan, st, pr);
     const deadline = to, openFrom = addMonths(T, -1) + '-15';
     return { month: T, from, to, spent, forecast: r2(spent + plan), shows: w.shows, blocks: w.blocks, toNext: w.toNext, nextShows: w.nextShows, forecastShows: wf.shows,
-      deadline, open: today >= openFrom && today <= deadline, closed: today > deadline, applied: applied(T), step: st, perRub: pr };
+      deadline, open: today >= openFrom && today <= deadline, closed: today > deadline, applied: applied(T), step: st, perRub: pr, ...bonusOf(T), total: w.shows + bonusOf(T).bonus };
   };
   // следующий месяц, на который ещё идёт приём заявок (до 25-го включительно), и текущий — показы уже начислены
   const next = day <= 25 ? addMonths(mk, 1) : addMonths(mk, 2);
