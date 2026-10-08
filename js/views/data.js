@@ -28,6 +28,8 @@ export function data(a) {
     <div class="hint">Самозанятая с агентским договором Литнета: 4 % со всей цены, которую заплатили читатели (физлица), а не с суммы, пришедшей на карту.</div>
     <div class="f2"><div><label>«Литнет платит»: порог, ₽ в месяц</label><input name="litnetThreshold" inputmode="decimal" value="${s.litnetThreshold}"></div><div><label>Скидка, %</label><input name="litnetPct" inputmode="decimal" value="${s.litnetPct}"></div></div>
     <div class="f2"><div><label>База кампании по умолчанию, дней до старта</label><input name="baseDays" inputmode="numeric" value="${s.baseDays}"></div><div><label>Потолок индекса Rocket, ₽</label><input name="rocketCap" inputmode="decimal" value="${s.rocketCap}"></div></div>
+    <div class="f2"><div><label>Показы в виджетах: за каждые, ₽ в месяц</label><input name="widgetStep" inputmode="decimal" value="${s.widgetStep ?? 20000}"></div><div><label>Показов за 1 ₽</label><input name="widgetPerRub" inputmode="decimal" value="${s.widgetPerRub ?? 2}"></div></div>
+    <label>Ссылка на форму заявки на приоритетные показы</label><input name="widgetFormUrl" value="${esc(s.widgetFormUrl || '')}" placeholder="из уведомления Литнета">
     <h3>Цели</h3>
     <div class="f2"><div><label>Первый месяц плана</label><input type="month" name="goalStart" value="${s.goalStart}"></div><div><label>План на него, ₽</label><input name="goalAmount" inputmode="decimal" value="${s.goalAmount}"></div></div>
     <label>Рост в месяц, %</label><input name="goalGrowth" inputmode="decimal" value="${s.goalGrowth}">
@@ -43,7 +45,7 @@ export function data(a) {
 
 forms.settings = async (fd) => {
   const n = (k) => { const v = N(fd.get(k)); return Number.isNaN(v) || v == null ? undefined : v; };
-  const patch = { taxRate: n('taxRate'), taxBase: fd.get('taxBase'), litnetThreshold: n('litnetThreshold'), litnetPct: n('litnetPct'), baseDays: n('baseDays'), rocketCap: n('rocketCap'), goalStart: fd.get('goalStart'), goalAmount: n('goalAmount'), goalGrowth: n('goalGrowth'), pseudonym: (fd.get('pseudonym') || '').trim() };
+  const patch = { taxRate: n('taxRate'), taxBase: fd.get('taxBase'), litnetThreshold: n('litnetThreshold'), litnetPct: n('litnetPct'), baseDays: n('baseDays'), rocketCap: n('rocketCap'), widgetStep: n('widgetStep'), widgetPerRub: n('widgetPerRub'), widgetFormUrl: (fd.get('widgetFormUrl') || '').trim(), goalStart: fd.get('goalStart'), goalAmount: n('goalAmount'), goalGrowth: n('goalGrowth'), pseudonym: (fd.get('pseudonym') || '').trim() };
   Object.keys(patch).forEach((k) => patch[k] === undefined && delete patch[k]);
   await app().store.saveSettings(patch);
   toast('Настройки сохранены');

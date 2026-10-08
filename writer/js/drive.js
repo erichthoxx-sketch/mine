@@ -227,6 +227,16 @@ export async function fileBlob(file) {
   return (await gfetch(`${DRIVE}/${file.id}?alt=media&supportsAllDrives=true`)).blob();
 }
 
+// ---------- редактор главы: прочитать документ со вкладками и записать вкладку ----------
+export async function getDoc(id) {
+  if (isLocalDev) return mock.doc(id);
+  return (await gfetch(`https://docs.googleapis.com/v1/documents/${id}?includeTabsContent=true`)).json();
+}
+export async function docUpdate(id, requests) {
+  if (isLocalDev) return mock.update(id, requests);
+  return (await gfetch(`https://docs.googleapis.com/v1/documents/${id}:batchUpdate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requests }) })).json();
+}
+
 // ---------- пробный «диск» для проверки на localhost ----------
 const mock = (() => {
   const t = '2026-10-05T10:00:00Z';
@@ -251,5 +261,47 @@ const mock = (() => {
     meta: (id) => link(files.find((f) => f.id === id) || { id, name: '?', mimeType: MIME.doc, parents: [] }),
     count: (f) => counts[f.id] || { total: 1000, tabs: [] },
     create(meta) { const f = { id: 'm' + Math.random().toString(36).slice(2, 8), modifiedTime: new Date().toISOString(), mimeType: meta.mimeType || 'image/jpeg', ...meta }; files.push(f); return link(f); },
+    // пробный документ: вкладки — массивы знаков с оформлением
+    doc(id) {
+      const tabs = mockTabs(id);
+      return { documentId: id, revisionId: 'r' + mockRev, tabs: tabs.map((t) => ({ tabProperties: { tabId: t.id, title: t.title }, documentTab: { body: { content: mockContent(t.chars) } } })) };
+    },
+    update(id, requests) {
+      const tabs = mockTabs(id);
+      for (const r of requests) {
+        const k = r.deleteContentRange || r.insertText || r.updateTextStyle;
+        const tab = tabs.find((t) => t.id === (k.range || k.location).tabId) || tabs[0];
+        if (r.deleteContentRange) tab.chars.splice(k.range.startIndex - 1, k.range.endIndex - k.range.startIndex);
+        if (r.insertText) tab.chars.splice(k.location.index - 1, 0, ...[...k.text].map((ch) => ({ ch, b: false, i: false })));
+        if (r.updateTextStyle) for (let n = k.range.startIndex; n < k.range.endIndex; n++) { const c = tab.chars[n - 1]; if (!c) continue; if ('bold' in k.textStyle) c.b = k.textStyle.bold; if ('italic' in k.textStyle) c.i = k.textStyle.italic; }
+      }
+      mockRev++;
+      return { documentId: id };
+    },
   };
 })();
+let mockRev = 1;
+const mockDocs = {};
+function mockTabs(id) {
+  if (!mockDocs[id]) {
+    const mk = (s) => [...s].map((ch) => ({ ch, b: false, i: false }));
+    mockDocs[id] = [{ id: 't.syn', title: 'Синопсис', chars: mk('Короткий синопсис.') }, { id: 't.1', title: 'Глава 1', chars: mk('Снег шёл третий день.\nОн вернулся за ней через год.') }, { id: 't.2', title: 'Глава 2', chars: mk('Утро было тихим.') }];
+  }
+  return mockDocs[id];
+}
+// знаки вкладки → content как в Docs API (абзацы по \n, куски по оформлению)
+function mockContent(chars) {
+  const content = [{ endIndex: 1, sectionBreak: {} }];
+  let idx = 1, cur = [];
+  const flush = () => {
+    const els = [];
+    for (const c of cur) { const l = els[els.length - 1]; if (l && l.b === c.b && l.i === c.i) l.t += c.ch; else els.push({ t: c.ch, b: c.b, i: c.i }); }
+    if (!els.length) els.push({ t: '\n', b: false, i: false }); else els[els.length - 1].t += '\n';
+    const len = els.reduce((a, e) => a + e.t.length, 0);
+    content.push({ startIndex: idx, endIndex: idx + len, paragraph: { elements: els.map((e) => ({ textRun: { content: e.t, textStyle: { ...(e.b ? { bold: true } : {}), ...(e.i ? { italic: true } : {}) } } })) } });
+    idx += len; cur = [];
+  };
+  for (const c of chars) { if (c.ch === '\n') flush(); else cur.push(c); }
+  flush();
+  return content;
+}

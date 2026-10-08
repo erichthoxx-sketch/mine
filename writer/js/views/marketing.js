@@ -4,6 +4,7 @@ import { resizeImage } from '../../../js/img.js';
 import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
 import { STATUS } from './books.js';
+import { widgetCard } from './widgets.js';
 
 const app = () => window.__app;
 export const MTYPES = { banner: 'Баннер для постов', cover: 'Обложка', target: 'Креатив для таргета', manuscript: 'Рукопись', synopsis: 'Синопсис', other: 'Другое' };
@@ -28,7 +29,8 @@ export function marketingView(a) {
   <div class="chips">${chip('progress', 'В процессе', by('progress').length)}${chip('done', 'Завершённые', by('done').length)}${chip('idea', 'Идеи', by('idea').length)}${chip('all', 'Все', c.wbooks.length)}</div>
   ${c.wbooks.length > 6 ? `<input type="search" value="${esc(a.ui.mQ || '')}" placeholder="Найти книгу" data-chg="mk.q" aria-label="Найти книгу" style="margin-bottom:10px">` : ''}
   ${list.length ? `<div class="card list">${list.map((b) => bookRow(c, b)).join('')}</div>` : `<div class="card"><p class="muted" style="margin:0">${c.wbooks.length ? 'В этой группе книг нет.' : 'Книг пока нет — добавьте их на вкладке «Книги».'}</p></div>`}
-  <div class="hint">У каждой книги три блока: тексты для постов, материалы для таргета (Яндекс Директ) и пакет для издательства.</div>`;
+  <div class="hint">У каждой книги три блока: тексты для постов, материалы для таргета (Яндекс Директ) и пакет для издательства.</div>
+  <div style="margin-top:16px">${widgetCard(c)}</div>`;
   return { html };
 }
 function bookRow(c, b) {

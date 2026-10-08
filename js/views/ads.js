@@ -1,9 +1,10 @@
 import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthCap, fmtMonthIn } from '../format.js';
-import { campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween, DISCOUNT_NOTE } from '../calc.js';
+import { widgetShows, widgetProgram, addMonths, campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween, DISCOUNT_NOTE } from '../calc.js';
 import { rocketCard } from './money.js';
 import { targetAlert, campaignProgress, adGroupSummary, budgetPlan } from '../calc.js';
 import { buildTargetPrompt } from '../report.js';
+import { widgetCardHtml } from '../widgetcard.js';
 import { resizeImage } from '../img.js';
 import { parseTargetReport, reportId } from '../parse.js';
 import { dailyChart, lineChart } from '../charts.js';
@@ -68,6 +69,18 @@ function discountTable(c) {
     <div class="hint">Считается само. ${DISCOUNT_NOTE}</div>`;
 }
 
+// Приоритетные показы в виджетах (программа Литнета): показы на месяц — по рекламе, открученной с 26-го по 25-е;
+// заявка через форму до 25-го, 19:00 МСК
+export function widgetCard(c) {
+  return widgetCardHtml(widgetProgram({ campaigns: c.campaigns, reports: c.data.reports, today: c.today, settings: c.settings, months: c.data.months || [] }), c.settings);
+}
+const widgetTable = (c) => widgetCard(c);
+acts['widget.applied'] = async (d) => {
+  const st = app().store, m = (st.data.months || []).find((x) => x.id === d.m) || { id: d.m };
+  await st.put('months', { ...m, id: d.m, widgetApplied: true, widgetAppliedAt: app().ctx().today });
+  toast('Отмечено: заявка подана');
+};
+
 // «Бюджет на следующий месяц»: сколько вложить в рекламу, чтобы выйти на цель месяца
 export function budgetCard(c) {
   const b = budgetPlan({ sales: c.sales, legacyDays: c.legacyDays, campaigns: c.campaigns, reports: c.data.reports, settings: c.settings, today: c.today, dataEnd: c.dataEnd });
@@ -130,6 +143,7 @@ export function ads(a) {
     ${litnet.length ? summaryBody(c, sL, { past }) + campaignList(c, litnet, alerts) : '<p class="muted">Кампаний пока нет. Добавьте оплату таргетологам как кампанию: книга, даты, сумма.</p>'}
     ${discountTable(c)}
   </div>
+  ${litnet.length ? widgetTable(c) : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Мой таргет</h2><button data-act="ad.new" data-ch="own">+ Кампания</button></div>
     ${own.length ? summaryBody(c, sO, { past }) + campaignList(c, own, alerts) : '<p class="muted">Здесь будут кампании, которые вы ведёте сами. Добавьте кампанию с бюджетом и датами — окупаемость посчитается так же.</p>'}
   </div>
@@ -339,3 +353,13 @@ forms['base.try'] = (fd, f) => {
   app().rerender(); window.scrollTo(0, 0);
 };
 acts['base.reset'] = () => { app().ui.baseTry = null; };
+
+acts['widget.bonus'] = (d) => {
+  const st = app().store, m = (st.data.months || []).find((x) => x.id === d.m) || { id: d.m };
+  openSheet('Бонусные показы', `<p class="small muted" style="margin-top:0">Например, приветственные разовые показы от Литнета. Они прибавятся к показам за рекламу в этом месяце.</p>
+    <div class="f2"><div><label for="wb">Показов</label><input id="wb" name="bonus" inputmode="numeric" value="${m.widgetBonus || ''}" placeholder="20000"></div>
+    <div><label for="wn">Что это</label><input id="wn" name="note" value="${esc(m.widgetBonusNote || 'приветственный бонус, разово')}"></div></div>`, async (fd) => {
+    const v = Number(String(fd.get('bonus') || '').replace(/\s/g, '')) || 0;
+    await st.put('months', { ...m, id: d.m, widgetBonus: v, widgetBonusNote: (fd.get('note') || '').trim() });
+  });
+};

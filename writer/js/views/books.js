@@ -15,6 +15,8 @@ const app = () => window.__app;
 export const STATUS = { idea: 'Идея', progress: 'В процессе', done: 'Завершена' };
 export const PLATFORMS = ['Литнет', 'Литмаркет', 'Литгород', 'Литрес'];
 const zn = (n) => al(n);
+// объём книги одинаково везде: «19 глав · 7,5 а.л.»
+export const volTxt = (b) => { const n = writtenChapters(b); return n ? `${n} ${plural(n, ['глава', 'главы', 'глав'])} · ${al(b.chars)}` : al(b.chars); };
 
 // Google Диск: подключён — точка-маркер; не подключён или нет папки — нужная кнопка
 export const driveReady = (c) => drive.driveConfigured && drive.isConnected() && !!c.settings.wBooksFolder;
@@ -46,7 +48,7 @@ function tile(c, b) {
     <div class="ct-title">${esc(b.title)}</div>
     <div class="tags"><span class="tag ${b.status === 'progress' || !b.status ? 'on' : ''}">${STATUS[b.status] || STATUS.progress}</span>${(b.platforms || []).map((p) => `<span class="tag">${esc(p)}</span>`).join('')}</div>
     ${contestTags(c, b)}
-    <div class="ct-num">${b.status === 'done' ? `${chapterList(b).length} ${plural(chapterList(b).length, ['глава', 'главы', 'глав'])}` : `${zn(b.chars)}${today ? ` <span class="up">+${alNum(today)}</span>` : ''}`}</div></a>`;
+    <div class="ct-num">${volTxt(b)}${b.status !== 'done' && today ? ` <span class="up">+${alNum(today)}</span>` : ''}</div></a>`;
 }
 
 export function booksView(a) {
@@ -118,6 +120,8 @@ export function bookPage(a, id) {
     return `<td class="pc"><button class="${cls}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? (v.past ? '✓' : dm(v.date)) : st === 'wait' ? '⏱ ' + dm(v.date) : '—'}</button></td>`;
   };
   const sch = bookSchedule(b, c.today);
+  // главы можно открыть в редакторе — для Google Документов
+  const canEdit = !!b.fileId && b.mimeType === drive.MIME.doc;
   // цели по книге и данные для графиков
   const bookGoals = c.data.w_goals.filter((g) => !g.done && g.bookId === b.id).map((g) => ({ g, st: goalStatus(g, b, c.today) }));
   const fin = bookGoals.find((x) => x.g.type === 'finish' && x.st.active);
@@ -139,7 +143,8 @@ export function bookPage(a, id) {
       ${contestTags(c, b)}
       ${b.webViewLink ? `<a class="btn primary" href="${esc(b.webViewLink)}" target="_blank" rel="noopener" style="margin:12px 0">✎ Открыть в Google Документах</a>` : ''}
       <dl class="dl">
-        ${b.status === 'done' ? `<dt>Глав</dt><dd>${chapterList(b).length}</dd>` : `<dt>Объём</dt><dd>${zn(b.chars)} · ${writtenChapters(b)} ${plural(writtenChapters(b), ['глава', 'главы', 'глав'])}</dd>
+        <dt>Объём</dt><dd>${volTxt(b)}</dd>
+        ${b.status === 'done' ? '' : `
         <dt>Сегодня / за 7 дней</dt><dd><span class="up">+${alNum(writtenToday(b, c.today))}</span> / <span class="up">+${zn(writtenWeek(b, c.today))}</span></dd>
         <dt>Темп за 2 недели</dt><dd>${p ? zn(p) + ' в день' : '—'}</dd>`}
         <dt>Последняя правка файла</dt><dd>${b.modifiedTime ? fmtDate(b.modifiedTime.slice(0, 10)) : '—'}${b.countedAt ? ` <span class="muted small">· обновлено ${fmtDate(b.countedAt.slice(0, 10))} ${b.countedAt.slice(11, 16)}</span>` : ''}</dd>
@@ -158,9 +163,9 @@ export function bookPage(a, id) {
 </div>
   <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div>
     ${chs.length ? `<div class="scroll" style="margin-top:8px"><table class="pub-t${pfs.length > 2 ? " many" : ""}"><tr><th>Глава</th><th class="r">а.л.</th>${pfs.map((x) => `<th>${esc(x)}</th>`).join('')}</tr>
-      ${chs.map((t) => `<tr><td>${esc(t.title)}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => cell(t.title, x)).join('')}</tr>`).join('')}
+      ${chs.map((t) => `<tr><td>${canEdit ? `<a href="#" class="tap ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}">${esc(t.title)}</a>` : esc(t.title)}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => cell(t.title, x)).join('')}</tr>`).join('')}
       <tr class="total"><td>Всего</td><td class="r">${alNum(b.chars)}</td>${pfs.map((x) => `<td>${chs.filter((t) => pubState((pm[t.title] || {})[x], c.today) === 'done').length}</td>`).join('')}</tr></table></div>` : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
-    <div class="hint">Нажмите на ячейку, чтобы отметить главу на площадке: «выложила» или «запланировала» (отложенная публикация — ⏱). Выкладка сразу попадает событием в «Доходы».${other.length ? ` Не считаются как текст книги: ${other.map((t) => esc(t.title)).join(', ')}.` : ''}</div></div>
+    <div class="hint">${canEdit ? 'Нажмите на название главы — она откроется в редакторе. ' : ''}Нажмите на ячейку, чтобы отметить главу на площадке: «выложила» или «запланировала» (отложенная публикация — ⏱). Выкладка сразу попадает событием в «Доходы».${other.length ? ` Не считаются как текст книги: ${other.map((t) => esc(t.title)).join(', ')}.` : ''}</div></div>
   ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${contestVol(x)(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
@@ -341,7 +346,7 @@ acts['pub.mark'] = (d) => {
     <label for="pcx">${chs.length ? 'Или другая глава' : 'Глава'}</label><input id="pcx" name="chx" placeholder="например, Глава 25">
     <label>Площадки</label><div class="checks">${pfs.map((x) => `<label class="check"><input type="checkbox" name="pf" value="${esc(x)}"${(d.pf ? d.pf === x : x === pfs[0]) ? ' checked' : ''}>${esc(x)}</label>`).join('')}</div>
     <div class="f2"><div><label for="pmd">Что сделала</label><select id="pmd" name="mode">${opt('done', 'Выложила', defMode)}${opt('plan', 'Запланировала (отложенная)', defMode)}${opt('past', 'Уже выложено раньше — без событий', '')}${opt('clear', 'Снять отметку', '')}</select></div>
-    <div><label for="pdt">Дата</label><input id="pdt" type="date" name="date" value="${cur?.date || d.date || (defMode === 'plan' ? nextSlot() : c.today)}"></div></div>
+    <div><label for="pdt">Дата</label><input id="pdt" type="date" name="date" value="${cur?.date || d.date || (defMode === 'plan' ? nextSlot() : c.today)}"><div class="small muted" data-autodate hidden>по графику — можно поменять</div></div></div>
     ${hasSch ? `<div data-sch hidden><label class="check"><input type="checkbox" name="bySch" checked>По графику (${daysTxt(b.pubDays)}): каждой главе — свой день, начиная с даты</label><div class="small muted" data-preview></div></div>` : ''}
     <div class="hint">Отложенная публикация: до указанной даты глава отмечена ⏱, а в этот день сама станет выложенной. Событие «Выкладка главы» сразу ставится на эту дату в «Доходах». «Уже выложено раньше» — для глав, что вышли до начала учёта: они отметятся выложенными, но событий в «Доходах» не будет, дата не нужна.</div>`, async (fd) => {
     const list = pickList(fd);
@@ -377,9 +382,23 @@ acts['pub.mark'] = (d) => {
   // живая подсказка: какая глава в какой день выйдет; при выборе «Запланировала» — дата = ближайший день графика
   const form = document.querySelector('dialog[open] form');
   if (!form) return;
+  // дата для отложенной: сама подбирается по графику — ближайший свободный день для выбранных глав;
+  // если вписать дату руками, больше не трогаем
+  let dateTouched = !!(cur?.date || d.date);
+  const autoDate = (fd) => {
+    if (!hasSch) return nextSlot();
+    const list = pickList(fd), pf = fd.getAll('pf')[0] || pfs[0];
+    const plan = list.length ? planBySchedule(b, list, addDays(c.today, 1), pf) : null;
+    return plan && plan.length ? plan[0].date : nextSlot();
+  };
   const upd = (e) => {
     const fd = new FormData(form), mode = fd.get('mode'), box = form.querySelector('[data-sch]');
-    if (e?.target?.name === 'mode' && mode === 'plan' && (form.elements.date.value || '') <= c.today) form.elements.date.value = nextSlot();
+    if (e?.target?.name === 'date') dateTouched = true;
+    if (e?.target?.name === 'mode' && mode !== 'plan' && !dateTouched) form.elements.date.value = c.today;
+    if (mode === 'plan' && (!dateTouched || (form.elements.date.value || '') <= c.today)) {
+      form.elements.date.value = autoDate(fd);
+      const h = form.querySelector('[data-autodate]'); if (h) h.hidden = !hasSch;
+    } else { const h = form.querySelector('[data-autodate]'); if (h) h.hidden = true; }
     if (!box) return;
     const list = pickList(fd), on = mode === 'plan' && list.length > 1;
     box.hidden = !on;
