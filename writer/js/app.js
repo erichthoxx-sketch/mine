@@ -95,7 +95,7 @@ function render() {
   <div class="row"><a class="btn" href="../">${ic('ruble')} Доходы</a><button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">${ic('settings')}</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
   <main>${r.html}</main>
   ${wide() ? `<aside class="side">${(() => { try { return sideToday(c); } catch (e) { console.error(e); return ''; } })()}</aside>` : ''}
-  <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}"><b>${ic(i)}</b>${t}</a>`).join('')}</nav>`;
+  <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
   afterFn = r.after || null;
   afterFn?.();
 }
@@ -118,6 +118,9 @@ installHandlers(() => render());
 watchForUpdates();
 try { sessionStorage.removeItem('staleReload'); } catch { /* нет доступа к памяти браузера */ }
 applyTheme();
+// меню слева на компьютере: свёрнутое (только иконки) или полное — запоминаем
+try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem('navMini') === '1'); } catch { /* ок */ }
+acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
 store.subscribe(() => safeRender());
 drive.preload().catch(() => {});
 let autoRefreshed = false;

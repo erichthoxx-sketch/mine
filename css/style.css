@@ -550,3 +550,22 @@ a.side-card:hover { border-color: var(--accent-2); }
 .prog > * + * { margin-top: 18px !important; }
 .prog > .small { line-height: 1.45; }
 .wcard-body > .prog, .pbook > .prog { margin-top: 0; }
+
+/* меню слева: сворачивается до иконок */
+.nav-toggle { display: none; }
+@media (min-width: 1180px) {
+  #app { transition: padding-left .25s ease; }
+  nav.tabs { transition: width .25s ease, padding .25s ease; overflow-x: hidden; }
+  nav.tabs a .nl { white-space: nowrap; transition: opacity .18s ease; }
+  nav.tabs a b { flex: none; width: 22px; justify-content: center; }
+  .nav-toggle { display: inline-flex; margin-top: auto; align-self: flex-end; width: 36px; height: 36px; min-height: 0; padding: 0; border-radius: 50%; background: transparent; border: 1px solid var(--line) !important; color: var(--muted) !important; transition: transform .25s ease, align-self .25s; }
+  .nav-toggle:hover { color: var(--text) !important; background: var(--surface-2); }
+  .nav-toggle .ic { width: 18px; height: 18px; }
+  html.nav-mini #app { padding-left: 96px; }
+  html.nav-mini .demo { margin-left: -96px; }
+  html.nav-mini nav.tabs { width: 76px; padding-left: 12px; padding-right: 12px; }
+  html.nav-mini nav.tabs a { justify-content: center; padding: 11px 0; gap: 0; }
+  html.nav-mini nav.tabs a .nl { opacity: 0; width: 0; overflow: hidden; }
+  html.nav-mini .nav-toggle { align-self: center; transform: rotate(180deg); }
+  html.nav-mini #toast { left: 50%; }
+}
