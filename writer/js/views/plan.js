@@ -155,6 +155,26 @@ function itemHtml(c, x) {
   return `<a class="pitem tap" href="#" data-act="${x.act}" data-id="${x.id}">${body}</a>`;
 }
 
+// цели на сегодня — строки как в Планере
+function goalRowsHtml(c) {
+  const t = c.today;
+  return activeGoals(c).map((g) => ({ g, s: goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t) })).filter((x) => x.s.active && x.s.todayDay)
+    .map(({ g, s }) => `<div class="pitem"><span class="dot k-goal"${s.doneToday ? ' style="opacity:.4"' : ''}></span><a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${s.doneToday ? '✓ ' : ''}${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, s)}</span></a>${g.type === 'custom' ? `<span class="pi-btns"><button class="${s.doneToday ? '' : 'primary'}" data-act="goal.check" data-id="${g.id}">${s.doneToday ? '✓' : 'Сделала'}</button></span>` : ''}</div>`).join('');
+}
+// Колонка «Сегодня» на широком экране: что требует внимания сегодня + ближайшая неделя
+export function sideToday(c) {
+  const t = c.today, items = planItems(c, t, addDays(t, 7)), by = {};
+  for (const x of items) (by[x.date] ||= []).push(x);
+  const today = (by[t] || []), goals = goalRowsHtml(c);
+  const next = Object.keys(by).filter((k) => k > t).sort();
+  const multi = c.wbooks.filter((b) => (b.status || 'progress') === 'progress').length > 1;
+  return `<div class="side-h"><div class="side-k">Сегодня</div><div class="side-date">${dayName(t, t).replace('Сегодня · ', '')}</div></div>
+    <div class="side-stats"><div><span>Написано</span><b>+${alNum(c.writtenToday)} а.л.</b></div><div><span>За 7 дней</span><b>${alNum(c.writtenWeek)} а.л.</b></div></div>
+    <div class="side-card">${today.length || goals ? `<div class="plist">${goals}${today.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">На сегодня всё сделано ✓</p>'}</div>
+    ${next.length ? `<div class="side-k" style="margin-top:20px">Неделя</div><div class="agenda side-agenda">${next.map((k) => `<div class="arow"><span class="ad">${DOW[dowI(k)]} ${Number(k.slice(8, 10))}</span><span class="ai">${by[k].map((x) => shortItem(c, x, multi)).join('')}</span></div>`).join('')}</div>` : ''}
+    <button class="link side-more" data-act="go" data-to="/plan">Открыть Планер →</button>`;
+}
+
 export function planView(a) {
   const c = a.ctx(), t = c.today, d = c.data, ui = a.ui;
   const sel = ui.planDay && ui.planDay >= addDays(t, -60) ? ui.planDay : t;
@@ -171,8 +191,7 @@ export function planView(a) {
   }).join('');
   const dayList = by[sel] || [];
   // цели — только на сегодня: что осталось по норме, своя цель — с кнопкой «Сделала»
-  const goalRows = sel === t ? activeGoals(c).map((g) => ({ g, s: goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t) })).filter((x) => x.s.active && x.s.todayDay) : [];
-  const goalHtml = goalRows.map(({ g, s }) => `<div class="pitem"><span class="dot k-goal"${s.doneToday ? ' style="opacity:.4"' : ''}></span><a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${s.doneToday ? '✓ ' : ''}${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, s)}</span></a>${g.type === 'custom' ? `<span class="pi-btns"><button class="${s.doneToday ? '' : 'primary'}" data-act="goal.check" data-id="${g.id}">${s.doneToday ? '✓' : 'Сделала'}</button></span>` : ''}</div>`).join('');
+  const goalHtml = sel === t ? goalRowsHtml(c) : '';
   // дальше: следующие 14 дней после выбранного
   // «Дальше»: всё на 10 дней, а важное из «Доходов» (налог, Rocket, реклама) — на месяц вперёд
   const far = addDays(sel, 10);
@@ -214,7 +233,7 @@ function booksPlan(c, list) {
   return `<div class="card plist-card">${list.map((b) => `<div class="pbook">
       <a href="#" class="pbook-t" data-act="go" data-to="/book/${b.id}"><span class="mk-cover">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span><b>${esc(b.title)}</b></a>
       ${progressBlock(c, b)}
-      <div class="row"><button class="primary" data-act="ch.publish" data-id="${b.id}">Выложила главу</button><button data-act="wb.dates" data-id="${b.id}">Сроки</button><button data-act="wb.finish" data-id="${b.id}">Книга завершена</button></div>
+      <div class="row pbook-actions"><button class="primary" data-act="ch.publish" data-id="${b.id}">Выложила главу</button><button data-act="wb.dates" data-id="${b.id}">Сроки</button><button data-act="wb.finish" data-id="${b.id}">Книга завершена</button></div>
     </div>`).join('')}</div>`;
 }
 // Сроки: график выкладки (начало + дни недели) и примерное число глав — даты «выкладка до» и «допишу к» считаются сами;

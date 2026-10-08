@@ -8,7 +8,7 @@ import { ic } from '../../js/icons.js';
 import { booksView, bookPage, refreshAll } from './views/books.js';
 import { ideasView } from './views/ideas.js';
 import { homeView } from './views/home.js';
-import { planView } from './views/plan.js';
+import { planView, sideToday } from './views/plan.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
@@ -94,12 +94,15 @@ function render() {
   <div class="top"><div><h1>Мастерская</h1><small>${esc(c.settings.pseudonym)}${sync ? ' · ' + sync : ''}</small></div>
   <div class="row"><a class="btn" href="../">${ic('ruble')} Доходы</a><button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">${ic('settings')}</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
   <main>${r.html}</main>
+  ${wide() ? `<aside class="side">${(() => { try { return sideToday(c); } catch (e) { console.error(e); return ''; } })()}</aside>` : ''}
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}"><b>${ic(i)}</b>${t}</a>`).join('')}</nav>`;
   afterFn = r.after || null;
   afterFn?.();
 }
 acts.go = (d) => { ui.route = d.to; window.scrollTo(0, 0); };
-let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => afterFn?.(), 150); });
+// широкий экран: меню слева, колонка «Сегодня» справа
+const wide = () => window.matchMedia('(min-width: 1180px)').matches;
+let rt, wasWide = wide(); window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (wide() !== wasWide) { wasWide = wide(); render(); } else afterFn?.(); }, 150); });
 acts['theme.toggle'] = () => app.setTheme({ auto: 'light', light: 'dark', dark: 'auto' }[theme]);
 
 let pending = false;

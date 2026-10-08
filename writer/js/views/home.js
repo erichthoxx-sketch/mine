@@ -70,9 +70,12 @@ function workCard(c, r) {
   const b = r.b, t = c.today;
   return `<a class="card wcard tap" href="#" data-act="go" data-to="/book/${b.id}">
     <span class="mk-cover big">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
-    <span class="wcard-body"><span class="row between"><b>${esc(b.title)}</b></span>
+    <span class="wcard-body"><span class="wcard-title">${esc(b.title)}</span>
       ${progressBlock(c, b)}
-      <span class="small">В ${fmtMonthIn(monthKey(t)).split(' ')[0]}: +${zn(r.wrote)}${r.today ? ` (сегодня +${alNum(r.today)})` : ''} · глав ${r.chapters}${r.timers ? ` (+${r.timers} на таймере)` : ''}${r.income != null ? ` · доход ${rub(r.income, 0)}` : ''}</span></span></a>`;
+      <span class="wcard-foot"><span class="wf-k">В ${fmtMonthIn(monthKey(t)).split(' ')[0]}</span>
+        <span><b>+${zn(r.wrote)}</b>${r.today ? ` <span class="muted">(сегодня +${alNum(r.today)})</span>` : ''}</span>
+        <span><b>${r.chapters}</b> ${plural(r.chapters, ['глава вышла', 'главы вышли', 'глав вышло'])}${r.timers ? ` <span class="muted">+${r.timers} на таймере</span>` : ''}</span>
+        ${r.income != null ? `<span>доход <b>${rub(r.income, 0)}</b></span>` : ''}</span></span></a>`;
 }
 
 export function homeView(a) {

@@ -12,6 +12,7 @@ import { books, bookPage } from './views/books.js';
 import { ads, adPage } from './views/ads.js';
 import { money } from './views/money.js';
 import { data } from './views/data.js';
+import { sideIncome } from './views/side.js';
 
 const store = createStore();
 const ui = { route: '/', range: 90, table: 'weeks', day: null, month: null };
@@ -119,6 +120,7 @@ function render() {
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
   <div class="row"><a class="btn" href="pisatel/">${ic('sparkle')} Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
   <main>${r.html}</main>
+  ${wide() ? `<aside class="side">${(() => { try { return sideIncome(c); } catch (e) { console.error(e); return ''; } })()}</aside>` : ''}
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h.slice(1)}" class="${tab === h ? 'on' : ''}"><b>${ic(i)}</b>${t}</a>`).join('')}</nav>`;
   afterFn = r.after || null;
   afterFn?.();
@@ -140,8 +142,10 @@ function setRoute(path) {
   if (path !== '/books' && !path.startsWith('/book/')) ui.booksMonth = null;
 }
 acts.go = (d) => { setRoute(d.to); window.scrollTo(0, 0); };
-let rt;
-window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => afterFn?.(), 150); });
+// широкий экран: меню слева, колонка «Сегодня» справа
+const wide = () => window.matchMedia('(min-width: 1180px)').matches;
+let rt, wasWide = wide();
+window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (wide() !== wasWide) { wasWide = wide(); render(); } else afterFn?.(); }, 150); });
 window.addEventListener('online', render); window.addEventListener('offline', render);
 
 installHandlers(() => render());

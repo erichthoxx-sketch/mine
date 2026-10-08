@@ -77,12 +77,14 @@ export function written(history, today, days = 1) {
   return now - before;
 }
 // Написано сегодня: знаков сейчас − знаков на начало сегодняшнего дня (dayStart считается по истории версий файла)
-export function writtenToday(book, today) {
+export function writtenToday(book, today) { return Math.max(0, writtenTodayRaw(book, today)); }
+function writtenTodayRaw(book, today) {
   if (book.dayStart && book.dayStart.date === today && book.chars != null) return Math.max(0, book.chars - book.dayStart.chars);
   return written(book.history, today, 1);
 }
 // Написано за 7 дней (сегодня и 6 дней до него): от начала недели по истории версий файла
-export function writtenWeek(book, today) {
+export function writtenWeek(book, today) { return Math.max(0, writtenWeekRaw(book, today)); }
+function writtenWeekRaw(book, today) {
   if (book.weekStart && book.weekStart.date === today && book.weekStart.chars != null && book.chars != null) return Math.max(0, book.chars - book.weekStart.chars);
   return written(book.history, today, 7);
 }

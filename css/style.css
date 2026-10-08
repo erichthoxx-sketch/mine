@@ -488,3 +488,65 @@ a.ch-link { color: var(--text); text-decoration: underline; text-decoration-colo
 .wg .wg-bonus { padding: 0 !important; min-height: 0; font-size: 13px; margin-top: 4px; }
 .wbar > .small.muted { line-height: 1.45; }
 .k-mk { background: #e59ac0; }
+/* следующая выкладка и кнопки в карточке книги — с воздухом */
+.next-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding: 10px 14px; border-radius: 12px; background: var(--surface-2); font-size: 14px; }
+.pbook-actions { margin-top: 16px; }
+.wbar > .small.muted { margin-top: 2px; }
+
+/* ---------- широкий экран (компьютер): меню слева, страница по центру, колонка «Сегодня» справа ---------- */
+aside.side { display: none; }
+.side-h { margin-bottom: 14px; }
+.side-k { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.side-date { font-family: var(--font-display, inherit); font-size: 20px; font-weight: 700; margin-top: 2px; }
+.side-card { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; margin-top: 12px; color: var(--text); text-decoration: none; }
+a.side-card:hover { border-color: var(--accent-2); }
+.side-big { font-size: 24px; font-weight: 800; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+.side-big .small { font-weight: 600; }
+.side-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.side-stats > div { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.side-stats span { font-size: 12px; color: var(--muted); }
+.side-stats b { font-size: 17px; }
+.side-agenda { margin-top: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 6px 16px; }
+.side .pitem { padding: 8px 0; }
+.side .pi-t { font-size: 14px; }
+.side .pi-btns button { min-height: 32px; padding: 3px 10px; font-size: 13px; }
+.side-more { display: block; margin: 14px 0 0; font-size: 14px; }
+.side-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.side-actions button { min-height: 36px; padding: 6px 14px; font-size: 14px; }
+
+@media (min-width: 1180px) {
+  body { padding-bottom: 0; }
+  #app { padding: 0 372px 0 236px; }
+  .demo { margin: 0 -372px 0 -236px; }
+  main, .top { max-width: 920px; }
+  main { padding-bottom: 48px; }
+  nav.tabs { top: 0; bottom: 0; left: 0; right: auto; width: 220px; flex-direction: column; gap: 4px; padding: 28px 14px; border-top: 0; border-right: 1px solid var(--line); transform: none; overflow-y: auto; }
+  nav.tabs::after { display: none; }
+  nav.tabs a { flex: none; display: flex; flex-direction: row; align-items: center; gap: 12px; text-align: left; min-height: 0; padding: 11px 14px; border-radius: 14px; font-size: 15px; font-weight: 600; color: var(--text-2); }
+  nav.tabs a b { height: auto; display: flex; }
+  nav.tabs a:hover { background: var(--surface-2); }
+  nav.tabs a.on { background: var(--accent-soft); color: var(--text); font-weight: 800; }
+  aside.side { display: block; position: fixed; top: 0; right: 0; bottom: 0; width: 356px; overflow-y: auto; padding: 28px 22px 32px; border-left: 1px solid var(--line); background: var(--bg); }
+  #toast { left: calc(50% - 68px); bottom: 24px; }
+  .ed-foot { bottom: 0; }
+}
+
+/* ---------- ритм карточек книг: заголовок → шкалы → следующая выкладка → итог месяца ---------- */
+.wcard-body { gap: 0; }
+.wcard-title { font-weight: 800; font-size: 16px; line-height: 1.3; margin-bottom: 14px; }
+.wbar { display: block; }
+.wbar + .wbar, .wbar + .small, .small + .wbar { margin-top: 18px; }
+.wbar > .row.small { font-size: 14px; align-items: baseline; }
+.wbar .progress { height: 8px; margin: 9px 0 7px; }
+.wbar > .small.muted { font-size: 13px; line-height: 1.45; margin-top: 0; }
+.next-line { margin-top: 18px; }
+.wcard-body > .small, .pbook > .small { display: block; margin-top: 14px; line-height: 1.45; }
+.wcard-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; }
+.wcard-foot .wf-k { width: 100%; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.pbook-t { margin-bottom: 16px; }
+.pbook-actions { margin-top: 18px; }
+@media (max-width: 520px) { main a.card.wcard { flex-direction: column; } main a.card.wcard .mk-cover.big { width: 64px; height: 92px; } }
+.prog { display: block; }
+.prog > * + * { margin-top: 18px !important; }
+.prog > .small { line-height: 1.45; }
+.wcard-body > .prog, .pbook > .prog { margin-top: 0; }
