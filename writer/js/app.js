@@ -8,7 +8,7 @@ import { ic } from '../../js/icons.js';
 import { booksView, bookPage, refreshAll } from './views/books.js';
 import { ideasView } from './views/ideas.js';
 import { homeView } from './views/home.js';
-import { planView, sideToday } from './views/plan.js';
+import { planView, todayBanner } from './views/plan.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
@@ -93,8 +93,7 @@ function render() {
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере.</div>' : ''}
   <div class="top"><div><h1>Мастерская</h1><small>${esc(c.settings.pseudonym)}${sync ? ' · ' + sync : ''}</small></div>
   <div class="row"><a class="btn" href="../">${ic('ruble')} Доходы</a><button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">${ic('settings')}</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
-  <main>${r.html}</main>
-  ${wide() ? `<aside class="side">${(() => { try { return sideToday(c); } catch (e) { console.error(e); return ''; } })()}</aside>` : ''}
+  <main>${wide() && tab !== '/plan' && !ui.route.startsWith('/ed/') ? (() => { try { return todayBanner(c); } catch (e) { console.error(e); return ''; } })() : ''}${r.html}</main>
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
   afterFn = r.after || null;
   afterFn?.();

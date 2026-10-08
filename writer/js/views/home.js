@@ -80,7 +80,9 @@ function workCard(c, r) {
 
 export function homeView(a) {
   const c = a.ctx(), t = c.today, mk = monthKey(t), from = mk + '-01';
-  const rem = reminders(c);
+  // на компьютере сегодняшнее — в баннере «Сегодня важно», здесь только то, что скоро
+  const wideScreen = typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1180px)').matches;
+  const rem = reminders(c).filter((r) => !wideScreen || r.n > 0);
   // по книгам за месяц: написано (по истории знаков), глав выложено, доход по связанной книге «Доходов»
   const rows = c.wbooks.map((b) => {
     const wrote = writtenMonth(b, t);
@@ -110,7 +112,7 @@ export function homeView(a) {
     <div class="stat"><div class="k">Доход за ${fmtMonth(mk).split(' ')[0]}</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div></div>
     <div class="stat"><div class="k">В работе</div><div class="v">${inWork.length}</div><div class="s">${plural(inWork.length, ['книга', 'книги', 'книг'])}</div></div>
   </div>
-  ${rem.length ? `<div class="card"><h2>Напоминания</h2><div class="list">${rem.map((r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}</span></a>`).join('')}</div></div>` : ''}
+  ${rem.length ? `<div class="card"><h2>${wideScreen ? 'Скоро' : 'Напоминания'}</h2><div class="list">${rem.map((r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}</span></a>`).join('')}</div></div>` : ''}
   ${chartCard}
   ${inWork.length ? `<h2 style="margin-top:18px">В работе</h2>${inWork.map((r) => workCard(c, r)).join('')}` : ''}
   ${others.length ? `<div class="card"><h2>Другие книги в ${fmtMonthIn(mk)}</h2><div class="list">${others.map((r) => `<a class="item row between" href="#" data-act="go" data-to="/book/${r.b.id}"><span>${esc(r.b.title)}<span class="sub">${[r.wrote ? `+${zn(r.wrote)}` : '', r.chapters ? `глав ${r.chapters}` : '', STATUS[r.b.status] || ''].filter(Boolean).join(' · ')}</span></span><b>${r.income != null ? rub(r.income, 0) : ''}</b></a>`).join('')}</div></div>` : ''}`;
