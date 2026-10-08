@@ -119,9 +119,9 @@ export function planView(a) {
     ${dayList.length || goalHtml ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">Дел на этот день нет.</p>'}</div>
   <div class="psec-h"><h2>Цели <span class="muted">${activeGoals(c).length || ''}</span></h2><button class="small-btn" data-act="goal.new">+ Цель</button></div>
   ${goalsSection(c)}
-  ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 4px">Дальше</h2><div class="agenda">${nextDays.map((k) => `<div class="arow"><span class="ad">${DOW[dowI(k)]} ${Number(k.slice(8, 10))}</span><span class="ai">${by[k].map((x) => shortItem(c, x, multi)).join('')}</span></div>`).join('')}</div></div>` : ''}
   <div class="psec-h"><h2>Книги в работе <span class="muted">${inWork.length || ''}</span></h2></div>
   ${booksPlan(c, inWork)}
+  ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 4px">Дальше</h2><div class="agenda">${nextDays.map((k) => `<div class="arow"><span class="ad">${DOW[dowI(k)]} ${Number(k.slice(8, 10))}</span><span class="ai">${by[k].map((x) => shortItem(c, x, multi)).join('')}</span></div>`).join('')}</div></div>` : ''}
   <div class="psec-h"><h2>Конкурсы <span class="muted">${live.length || ''}</span></h2><button class="small-btn" data-act="contest.new">+ Конкурс</button></div>
   ${contests(c)}
   <div class="psec-h"><h2>Что пишу дальше <span class="muted">${qTodo.length || ''}</span></h2><button class="small-btn" data-act="queue.new">+ В очередь</button></div>
