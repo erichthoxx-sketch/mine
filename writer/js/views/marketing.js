@@ -26,11 +26,11 @@ export function marketingView(a) {
   const list = (st === 'all' ? c.wbooks : by(st)).filter((b) => !q || b.title.toLowerCase().includes(q));
   const chip = (k, label, n) => `<button class="chip${st === k ? ' on' : ''}" data-act="mk.st" data-v="${k}">${label}${n != null ? ` · ${n}` : ''}</button>`;
   const html = `<h2>Маркетинг</h2>
-  ${widgetCard(c)}
   <div class="chips">${chip('progress', 'В процессе', by('progress').length)}${chip('done', 'Завершённые', by('done').length)}${chip('idea', 'Идеи', by('idea').length)}${chip('all', 'Все', c.wbooks.length)}</div>
   ${c.wbooks.length > 6 ? `<input type="search" value="${esc(a.ui.mQ || '')}" placeholder="Найти книгу" data-chg="mk.q" aria-label="Найти книгу" style="margin-bottom:10px">` : ''}
   ${list.length ? `<div class="card list">${list.map((b) => bookRow(c, b)).join('')}</div>` : `<div class="card"><p class="muted" style="margin:0">${c.wbooks.length ? 'В этой группе книг нет.' : 'Книг пока нет — добавьте их на вкладке «Книги».'}</p></div>`}
-  <div class="hint">У каждой книги три блока: тексты для постов, материалы для таргета (Яндекс Директ) и пакет для издательства.</div>`;
+  <div class="hint">У каждой книги три блока: тексты для постов, материалы для таргета (Яндекс Директ) и пакет для издательства.</div>
+  <div style="margin-top:16px">${widgetCard(c)}</div>`;
   return { html };
 }
 function bookRow(c, b) {
