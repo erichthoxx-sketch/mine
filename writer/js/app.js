@@ -12,6 +12,7 @@ import { planView } from './views/plan.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
+import { editorView, editorDirty } from './views/editor.js';
 
 export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
@@ -56,6 +57,7 @@ const TABS = [['/', 'house', 'Главная'], ['/books', 'books', 'Книги'
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'book' && b) return { tab: '/books', view: (x) => bookPage(x, decodeURIComponent(b)) };
+  if (a === 'ed' && b) { const [, , bid, ...rest] = ('#' + ui.route).split('/'); return { tab: '/books', view: (x) => editorView(x, decodeURIComponent(bid), decodeURIComponent(rest.join('/'))) }; }
   if (a === 'link' && b) return { tab: '/links', view: (x) => linkPage(x, decodeURIComponent(b)) };
   if (a === 'mk' && b) return { tab: '/marketing', view: (x) => bookMarketing(x, decodeURIComponent(b)) };
   const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, marketing: marketingView, links: linksView, settings: settingsView };
@@ -103,10 +105,10 @@ acts['theme.toggle'] = () => app.setTheme({ auto: 'light', light: 'dark', dark: 
 let pending = false;
 function safeRender() {
   const ae = document.activeElement;
-  if (ae && ae.closest?.('main') && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) { pending = true; return; }
+  if (ae && ae.closest?.('main') && (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) || ae.isContentEditable)) { pending = true; return; }
   render();
 }
-document.addEventListener('focusout', () => { if (pending) setTimeout(() => { const a = document.activeElement; if (!a?.closest?.('main') || !/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) { pending = false; render(); } }, 150); });
+document.addEventListener('focusout', () => { if (pending) setTimeout(() => { const a = document.activeElement; if (!a?.closest?.('main') || !(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) { pending = false; render(); } }, 150); });
 window.addEventListener('online', render); window.addEventListener('offline', render);
 
 installHandlers(() => render());

@@ -64,7 +64,7 @@ function workCard(c, r) {
     <span class="mk-cover big">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
     <span class="wcard-body"><span class="row between"><b>${esc(b.title)}</b></span>
       ${progressBlock(c, b)}
-      <span class="small">В ${fmtMonthIn(monthKey(t)).split(' ')[0]}: +${zn(r.wrote)}${r.today ? ` (сегодня +${alNum(r.today)})` : ''} · глав ${r.chapters}${r.income != null ? ` · доход ${rub(r.income, 0)}` : ''}</span></span></a>`;
+      <span class="small">В ${fmtMonthIn(monthKey(t)).split(' ')[0]}: +${zn(r.wrote)}${r.today ? ` (сегодня +${alNum(r.today)})` : ''} · глав ${r.chapters}${r.timers ? ` (+${r.timers} на таймере)` : ''}${r.income != null ? ` · доход ${rub(r.income, 0)}` : ''}</span></span></a>`;
 }
 
 export function homeView(a) {
@@ -73,11 +73,14 @@ export function homeView(a) {
   // по книгам за месяц: написано (по истории знаков), глав выложено, доход по связанной книге «Доходов»
   const rows = c.wbooks.map((b) => {
     const wrote = writtenMonth(b, t);
-    const chapters = Object.values(chapterOutDates(b, t)).filter((dt) => dt >= from && dt <= t).length;
+    const out = chapterOutDates(b, t);
+    const chapters = Object.values(out).filter((dt) => dt >= from && dt <= t).length;
+    // на таймере с датой в этом месяце (главы, которые ещё не вышли нигде)
+    const timers = new Set(plannedPubs(b, t).filter((x) => x.date.slice(0, 7) === mk && !out[x.ch]).map((x) => x.ch)).size;
     const incomeId = c.incomeIdOf(b);
     const income = incomeId ? sumSeries(incomeSeries(c.data.sales, [], from, t, incomeId)) : null;
     const contests = c.data.w_contests.filter((x) => x.bookId === b.id && x.status !== 'done' && !(x.end && x.end < t));
-    return { b, wrote, today: writtenToday(b, t), chapters, income, contests };
+    return { b, wrote, today: writtenToday(b, t), chapters, timers, income, contests };
   }).filter((r) => (r.b.status || 'progress') === 'progress' || r.wrote || r.chapters || r.income);
   const sum = (k) => rows.reduce((s, r) => s + (r[k] || 0), 0);
   const inWork = rows.filter((r) => (r.b.status || 'progress') === 'progress'), others = rows.filter((r) => (r.b.status || 'progress') !== 'progress');
@@ -92,7 +95,7 @@ export function homeView(a) {
   <div class="row between home-h"><h2 style="margin:0">${fmtMonthCap(mk)}</h2>${driveChip(c)}</div>
   <div class="grid4">
     <div class="stat"><div class="k">Написано за месяц</div><div class="v">${alNum(sum('wrote'))}</div><div class="s">а.л. · сегодня +${alNum(sum('today'))}</div></div>
-    <div class="stat"><div class="k">Глав выложено</div><div class="v">${sum('chapters')}</div><div class="s">в ${fmtMonthIn(mk)}</div></div>
+    <div class="stat"><div class="k">Глав в ${fmtMonthIn(mk).split(' ')[0]}</div><div class="v">${sum('chapters') + sum('timers')}</div><div class="s">${sum('timers') ? `${sum('chapters')} ${plural(sum('chapters'), ['вышла', 'вышли', 'вышло'])} · ${sum('timers')} на таймере` : plural(sum('chapters'), ['вышла', 'вышли', 'вышло'])}</div></div>
     <div class="stat"><div class="k">Доход за ${fmtMonth(mk).split(' ')[0]}</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div></div>
     <div class="stat"><div class="k">В работе</div><div class="v">${inWork.length}</div><div class="s">${plural(inWork.length, ['книга', 'книги', 'книг'])}</div></div>
   </div>
