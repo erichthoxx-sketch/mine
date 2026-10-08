@@ -1,0 +1,943 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Тихий Аркан</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Forum&family=Golos+Text:wght@400;500;600&display=swap">
+<style>
+/* Layout: одна колонка-приложение до 760px, нижняя панель вкладок; карты — главные предметы, вокруг тихо */
+:root {
+  --bg: #e9ebf1;
+  --surface: #f7f7fa;
+  --ink: #1c2040;
+  --muted: #5a5f7d;
+  --line: #cdd1de;
+  --brass: #8d611a;
+  --brass-soft: #ecdfc4;
+  --on-brass: #fffaf0;
+  --card: #f8f3e6;
+  --card-ink: #2b2542;
+  --card-line: #b9a37a;
+  --back: #252a5c;
+  --back-line: #c9a35a;
+  --danger: #a13a30;
+  --scrim: rgba(18, 20, 40, .55);
+  --display: "Forum", "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --body: "Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1221; --surface: #171b2f; --ink: #e8e4d8; --muted: #9da0b8; --line: #2b3050;
+    --brass: #d6a85a; --brass-soft: #362e20; --on-brass: #1a1508;
+    --card: #ebe2cd; --card-ink: #2b2542; --card-line: #a98f5f;
+    --back: #2a3070; --back-line: #d6a85a; --danger: #ff9184; --scrim: rgba(0, 0, 0, .65);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1221; --surface: #171b2f; --ink: #e8e4d8; --muted: #9da0b8; --line: #2b3050;
+  --brass: #d6a85a; --brass-soft: #362e20; --on-brass: #1a1508;
+  --card: #ebe2cd; --card-ink: #2b2542; --card-line: #a98f5f;
+  --back: #2a3070; --back-line: #d6a85a; --danger: #ff9184; --scrim: rgba(0, 0, 0, .65);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--body); -webkit-font-smoothing: antialiased; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+.app { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 0 calc(84px + env(safe-area-inset-bottom, 0px)); }
+header.top { display: flex; align-items: center; gap: 12px; padding-block: 18px 10px; }
+.brand { font: 28px/1 var(--display); letter-spacing: .02em; margin: 0; flex: 1; }
+.brand small { display: block; font: 12px/1.3 var(--body); color: var(--muted); letter-spacing: .04em; margin-top: 6px; }
+.ai-pill { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 6px 12px; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.ai-pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.ai-pill[data-state="on"] i { background: var(--brass); box-shadow: 0 0 0 3px var(--brass-soft); }
+
+h2 { font: 24px/1.15 var(--display); margin: 0; text-wrap: balance; }
+h3 { font: 19px/1.2 var(--display); margin: 0; }
+.eyebrow { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.muted { color: var(--muted); }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+section.view { display: flex; flex-direction: column; gap: 22px; padding-block: 6px 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; }
+
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 9px 14px; line-height: 1.2; }
+.btn:hover { border-color: var(--brass); }
+.btn.primary { background: var(--brass); border-color: var(--brass); color: var(--on-brass); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.ghost { background: transparent; }
+.btn.small { padding: 6px 10px; font-size: 13.5px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.danger { color: var(--danger); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: transparent; border-radius: 99px; padding: 6px 12px; font-size: 13.5px; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+textarea, input[type="text"], input[type="password"], input[type="search"] {
+  width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 10px 12px; font-size: 15px; color: var(--ink);
+}
+textarea { resize: vertical; min-height: 64px; }
+.check { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+.check input { accent-color: var(--brass); width: 16px; height: 16px; }
+
+/* ---------- карта ---------- */
+.tcard { container-type: inline-size; aspect-ratio: 7 / 12; width: 100%; max-width: 100%; border-radius: 7px; background: var(--card); color: var(--card-ink); box-shadow: 0 1px 2px rgba(20, 16, 40, .18), 0 6px 18px -8px rgba(20, 16, 40, .35); padding: 5%; position: relative; }
+.tc-in { height: 100%; border: 1px solid var(--card-line); border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 7cqw 5cqw; text-align: center; transition: transform .3s; }
+.tcard.is-rev .tc-in { transform: rotate(180deg); }
+.tc-num { font: max(9px, 11cqw)/1 var(--display); letter-spacing: .06em; }
+.tc-glyph { width: 62%; height: auto; color: var(--card-ink); }
+.tc-glyph * { vector-effect: non-scaling-stroke; }
+.tc-name { font: max(9.5px, 10.5cqw)/1.1 var(--display); text-wrap: balance; min-height: 2.2em; display: flex; align-items: flex-end; justify-content: center; }
+.tcard.major .tc-in { border-color: var(--card-ink); box-shadow: inset 0 0 0 3cqw var(--card), inset 0 0 0 calc(3cqw + 1px) var(--card-line); }
+.cback { aspect-ratio: 7 / 12; width: 100%; border-radius: 7px; background:
+  radial-gradient(circle at 50% 50%, transparent 0 14%, var(--back-line) 14.5% 15.5%, transparent 16%),
+  repeating-linear-gradient(45deg, transparent 0 9px, color-mix(in srgb, var(--back-line) 40%, transparent) 9px 10px),
+  repeating-linear-gradient(-45deg, transparent 0 9px, color-mix(in srgb, var(--back-line) 40%, transparent) 9px 10px),
+  var(--back);
+  box-shadow: inset 0 0 0 4px var(--back), inset 0 0 0 5px var(--back-line), 0 6px 18px -8px rgba(20, 16, 40, .45); }
+
+.flip { position: relative; perspective: 900px; }
+.flip-in { position: relative; transform-style: preserve-3d; transition: transform .7s cubic-bezier(.2, .7, .2, 1); }
+.flip.shown .flip-in { transform: rotateY(180deg); }
+.flip .face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.flip .face.front { position: absolute; inset: 0; transform: rotateY(180deg); }
+@media (prefers-reduced-motion: reduce) { .flip-in, .tc-in { transition: none; } }
+
+/* ---------- карта дня ---------- */
+.daily { display: grid; grid-template-columns: 112px 1fr; gap: 18px; align-items: start; }
+.daily > div { min-width: 0; }
+.daily .kw { margin: 8px 0 0; }
+.kw { font-size: 14px; }
+.kw b { font-weight: 600; }
+
+/* ---------- расклад ---------- */
+.spread { display: grid; gap: 14px 12px; grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); }
+.spread[data-n="1"] { grid-template-columns: minmax(0, 170px); justify-content: center; }
+.spread[data-n="3"] { grid-template-columns: repeat(3, minmax(0, 150px)); justify-content: center; }
+.slot { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.slot button.open { all: unset; cursor: pointer; display: block; border-radius: 7px; }
+.slot button.open:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.slot .pos { font-size: 12px; line-height: 1.3; color: var(--muted); display: flex; gap: 6px; }
+.slot .pos b { font: 15px/1 var(--display); color: var(--brass); }
+.slot .cap { font-size: 12.5px; line-height: 1.3; min-height: 1.3em; }
+.slot .cap em { color: var(--muted); font-style: normal; display: block; }
+.summary { font-size: 13.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.summary b { color: var(--ink); font-weight: 600; }
+.poslist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.poslist li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; font-size: 14px; }
+.poslist li > span:first-child { font: 17px/1.3 var(--display); color: var(--brass); }
+.poslist .nm { font-weight: 600; }
+
+/* ---------- ИИ-текст ---------- */
+.ai-out { font-size: 15px; line-height: 1.65; max-width: 65ch; }
+.ai-out p { margin: 0 0 .8em; }
+.ai-out h4 { font: 19px/1.25 var(--display); margin: 1em 0 .4em; }
+.ai-out ul { margin: 0 0 .8em; padding-left: 1.2em; }
+.ai-out strong { font-weight: 600; }
+.ai-out > :last-child { margin-bottom: 0; }
+.thinking { color: var(--muted); display: inline-flex; gap: 8px; align-items: center; }
+.thinking::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--brass); animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .thinking::before { animation: none; } }
+.note { font-size: 13.5px; color: var(--muted); }
+.note.err { color: var(--danger); }
+
+/* ---------- справочник ---------- */
+.deck { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+.deck button { all: unset; cursor: pointer; display: block; border-radius: 7px; }
+.deck button:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+
+/* ---------- чат ---------- */
+.chat { display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 88%; padding: 10px 14px; border-radius: 12px; min-width: 0; overflow-wrap: anywhere; }
+.msg.user { align-self: flex-end; background: var(--ink); color: var(--bg); border-bottom-right-radius: 4px; white-space: pre-wrap; }
+.msg.ai { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; }
+.composer textarea { min-height: 46px; max-height: 160px; }
+.ctx { display: flex; gap: 8px; align-items: center; font-size: 13px; background: var(--brass-soft); border-radius: 8px; padding: 8px 10px; }
+.ctx span { flex: 1; min-width: 0; }
+.suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- журнал ---------- */
+.journal { display: flex; flex-direction: column; gap: 10px; }
+.entry { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.entry summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+.entry summary::-webkit-details-marker { display: none; }
+.entry .when { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.entry .q { font-weight: 600; }
+.entry .cards { font-size: 13.5px; color: var(--muted); }
+.entry .body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; margin-inline: 0; }
+.empty { text-align: center; padding: 28px 16px; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--r); }
+
+/* ---------- вкладки ---------- */
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
+nav.tabs .in { max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+nav.tabs button { border: 0; background: transparent; border-radius: 8px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; color: var(--muted); }
+nav.tabs button svg { width: 22px; height: 22px; }
+nav.tabs button[aria-selected="true"] { color: var(--ink); background: var(--brass-soft); }
+
+/* ---------- окно ---------- */
+.modal { position: fixed; inset: 0; z-index: 10; background: var(--scrim); display: flex; align-items: flex-end; justify-content: center; padding: 16px; padding-top: calc(16px + env(safe-area-inset-top, 0px)); }
+.sheet { background: var(--bg); border-radius: 14px; width: 100%; max-width: 560px; max-height: 100%; overflow: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+@media (min-width: 600px) { .modal { align-items: center; } }
+.sheet-head { display: flex; align-items: flex-start; gap: 10px; }
+.sheet-head > div { flex: 1; min-width: 0; }
+.x { border: 0; background: transparent; font-size: 24px; line-height: 1; padding: 2px 6px; color: var(--muted); }
+.cardinfo { display: grid; grid-template-columns: 130px 1fr; gap: 16px; align-items: start; }
+.cardinfo > div { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.cardinfo p { margin: 0; }
+
+@media (max-width: 420px) {
+  .daily { grid-template-columns: 96px 1fr; gap: 14px; }
+  .cardinfo { grid-template-columns: 100px 1fr; }
+  .spread[data-n="3"] { gap: 10px 8px; }
+}
+</style>
+
+<div class="app">
+  <header class="top">
+    <h1 class="brand">Тихий Аркан<small>78 карт Райдера–Уэйта и ИИ-толкователь</small></h1>
+    <button class="ai-pill" id="aiPill" type="button" data-state="pending"><i></i><span id="aiPillText">ИИ…</span></button>
+  </header>
+
+  <!-- ================= РАСКЛАД ================= -->
+  <section class="view" id="view-read">
+    <div class="panel daily" id="daily"></div>
+
+    <div class="stack">
+      <div>
+        <p class="eyebrow">Новый расклад</p>
+        <h2>О чём спросить карты</h2>
+      </div>
+      <label class="field" for="question">Ваш вопрос (можно оставить пустым)
+        <textarea id="question" rows="2" placeholder="Например: стоит ли мне менять работу этой осенью?"></textarea>
+      </label>
+      <div class="chips" id="spreadChips" role="group" aria-label="Расклад"></div>
+      <p class="note" id="spreadNote"></p>
+      <div class="row">
+        <button class="btn primary" id="drawBtn" type="button">Перемешать и разложить</button>
+        <label class="check" for="useRev"><input type="checkbox" id="useRev" checked>Учитывать перевёрнутые карты</label>
+      </div>
+    </div>
+
+    <div class="spread" id="spread"></div>
+    <div class="summary" id="summary" hidden></div>
+
+    <div class="panel stack" id="readingPanel" hidden>
+      <ol class="poslist" id="poslist"></ol>
+    </div>
+
+    <div class="panel stack" id="aiPanel" hidden>
+      <div class="row" style="justify-content: space-between;">
+        <h3>Толкование</h3>
+        <div class="row">
+          <button class="btn small" id="stopRead" type="button" hidden>Стоп</button>
+          <button class="btn small primary" id="askRead" type="button">Истолковать с ИИ</button>
+        </div>
+      </div>
+      <div class="ai-out" id="readOut"><p class="muted">ИИ посмотрит на карты вместе: как они связаны с вашим вопросом, друг с другом и с позициями расклада, и даст совет.</p></div>
+      <p class="note" id="readNote" hidden></p>
+      <div class="row" id="readActions" hidden>
+        <button class="btn small" id="saveRead" type="button">Сохранить в журнал</button>
+        <button class="btn small" id="chatRead" type="button">Обсудить в чате</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= КАРТЫ ================= -->
+  <section class="view" id="view-deck" hidden>
+    <div class="stack">
+      <div>
+        <p class="eyebrow">Справочник</p>
+        <h2>Значения карт</h2>
+      </div>
+      <input type="search" id="deckSearch" placeholder="Найти карту или значение: «Луна», «деньги», «выбор»…" aria-label="Поиск по картам">
+      <div class="chips" id="deckFilter" role="group" aria-label="Масть"></div>
+      <p class="note" id="deckCount"></p>
+    </div>
+    <div class="deck" id="deck"></div>
+  </section>
+
+  <!-- ================= ЧАТ ================= -->
+  <section class="view" id="view-chat" hidden>
+    <div class="row" style="justify-content: space-between;">
+      <div>
+        <p class="eyebrow">Разговор</p>
+        <h2>Спросить таролога-ИИ</h2>
+      </div>
+      <button class="btn small ghost" id="chatNew" type="button">Новый чат</button>
+    </div>
+    <div class="ctx" id="chatCtx" hidden><span id="chatCtxText"></span><button class="x" id="chatCtxX" type="button" aria-label="Убрать расклад из разговора">×</button></div>
+    <div class="chat" id="chat"></div>
+    <div class="suggest" id="suggest"></div>
+    <p class="note" id="chatNote" hidden></p>
+    <div class="composer">
+      <textarea id="chatInput" rows="1" placeholder="Напишите вопрос…" aria-label="Сообщение"></textarea>
+      <button class="btn" id="chatStop" type="button" hidden>Стоп</button>
+      <button class="btn primary" id="chatSend" type="button">Отправить</button>
+    </div>
+  </section>
+
+  <!-- ================= ЖУРНАЛ ================= -->
+  <section class="view" id="view-journal" hidden>
+    <div>
+      <p class="eyebrow">Журнал</p>
+      <h2>Сохранённые расклады</h2>
+    </div>
+    <div class="journal" id="journal"></div>
+    <p class="note">Журнал хранится только в этом браузере.</p>
+  </section>
+</div>
+
+<nav class="tabs" aria-label="Разделы">
+  <div class="in" role="tablist">
+    <button type="button" role="tab" data-tab="read" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="6" width="7" height="12" rx="1.2"/><rect x="14" y="6" width="7" height="12" rx="1.2"/><path d="M6.5 10.5v3M17.5 10.5v3"/></svg>Расклад</button>
+    <button type="button" role="tab" data-tab="deck" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="3" width="11" height="16" rx="1.2"/><path d="M8 21h10.5a1 1 0 0 0 1-1V7"/><path d="M8.5 8h4M8.5 11h4M8.5 14h2.5"/></svg>Карты</button>
+    <button type="button" role="tab" data-tab="chat" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Чат с ИИ</button>
+    <button type="button" role="tab" data-tab="journal" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3h11a1 1 0 0 1 1 1v17l-6.5-4L5 21V4a1 1 0 0 1 1-1z"/></svg>Журнал</button>
+  </div>
+</nav>
+
+<div class="modal" id="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="modalTitle" id="sheet"></div>
+</div>
+
+<script>
+'use strict';
+/* ====================================================================
+   КОЛОДА
+   ==================================================================== */
+const MAJOR = [
+  ['Шут', 'начало пути, спонтанность, свобода, доверие жизни', 'безрассудство, неоправданный риск, наивность', 'Шаг в неизвестность с открытым сердцем. Карта нового цикла, когда опыт ещё не мешает, а мир кажется полным возможностей.'],
+  ['Маг', 'воля, мастерство, ресурсы под рукой, проявление', 'манипуляции, нереализованный потенциал, обман', 'Всё нужное уже есть: инструменты, навыки, энергия. Вопрос в том, направите ли вы волю на цель.'],
+  ['Верховная Жрица', 'интуиция, тайное знание, подсознание, тишина', 'скрытые мотивы, глухота к интуиции, секреты', 'Ответ не снаружи, а внутри. Время слушать, наблюдать и не торопиться с действиями.'],
+  ['Императрица', 'изобилие, забота, плодородие, чувственность', 'зависимость, застой, гиперопека', 'Рост, красота и щедрость жизни. Карта творчества, материнства, плодов, которые созревают при заботе.'],
+  ['Император', 'структура, власть, порядок, ответственность', 'жёсткий контроль, деспотизм, ригидность', 'Опора, правила и границы. Время строить систему и брать ответственность за результат.'],
+  ['Иерофант', 'традиция, наставник, ценности, институты', 'бунт против правил, догматизм, свой путь', 'Знание, переданное от учителя к ученику. Ритуалы, обучение, общие ценности и принятые нормы.'],
+  ['Влюблённые', 'любовь, союз, выбор сердцем, общие ценности', 'разлад, неверный выбор, внутреннее противоречие', 'Не только о романтике: это выбор, в котором отражаются ваши истинные ценности.'],
+  ['Колесница', 'победа, воля, движение вперёд, самоконтроль', 'потеря направления, агрессия, распыление сил', 'Две противоположные силы удерживаются в одной упряжке. Успех через собранность и решимость.'],
+  ['Сила', 'мужество, мягкая сила, терпение, самообладание', 'неуверенность в себе, слабость, срывы', 'Укрощение не кнутом, а лаской. Внутренняя сила, которая побеждает страх и гнев спокойствием.'],
+  ['Отшельник', 'поиск себя, уединение, мудрость, внутренний свет', 'изоляция, одиночество, бегство от мира', 'Пора отойти от шума и посветить фонарём внутрь. Ответы приходят в тишине.'],
+  ['Колесо Фортуны', 'перемены, судьба, циклы, удачный поворот', 'неудача, сопротивление переменам, застой', 'Колесо вращается: то, что было внизу, поднимается. Карта поворотных моментов и случайностей.'],
+  ['Справедливость', 'справедливость, истина, причина и следствие, закон', 'несправедливость, нечестность, уход от ответственности', 'Каждое действие имеет последствия. Честный взгляд на ситуацию и взвешенное решение.'],
+  ['Повешенный', 'пауза, новый взгляд, отпускание, добровольная жертва', 'застой, бесполезная жертва, нерешительность', 'Мир, увиденный вверх ногами, открывает новое. Иногда лучший ход — остановиться и сдаться течению.'],
+  ['Смерть', 'окончание, трансформация, переход, обновление', 'страх перемен, цепляние за прошлое, застой', 'Почти никогда не о буквальной смерти. Что-то завершается, чтобы освободить место новому.'],
+  ['Умеренность', 'баланс, мера, терпение, исцеление', 'крайности, дисбаланс, нетерпение', 'Смешать огонь и воду в верной пропорции. Постепенность, гармония и средний путь.'],
+  ['Дьявол', 'зависимость, искушение, привязанность, материализм', 'освобождение, разрыв оков, осознание', 'Цепи на картине надеты свободно — их можно снять. Карта того, что держит нас против нашей воли.'],
+  ['Башня', 'внезапные перемены, крах иллюзий, откровение', 'отсроченный кризис, страх перемен, избежавший удара', 'Молния рушит то, что было построено на ложном основании. Болезненно, но освобождает.'],
+  ['Звезда', 'надежда, вдохновение, исцеление, вера', 'отчаяние, потеря веры, разочарование', 'После бури приходит тишина и свет. Карта восстановления, мечты и спокойной уверенности.'],
+  ['Луна', 'иллюзии, страхи, интуиция, неясность', 'прояснение, выход из тумана, раскрытие обмана', 'Путь освещён лишь лунным светом: всё кажется не тем, что есть. Доверяйте интуиции, но проверяйте факты.'],
+  ['Солнце', 'радость, успех, ясность, жизненная сила', 'временная грусть, излишний оптимизм, отсрочка успеха', 'Одна из самых светлых карт колоды. Тепло, открытость, ясность и заслуженная радость.'],
+  ['Суд', 'пробуждение, переоценка, призвание, второй шанс', 'самокритика, сомнения, глухота к зову', 'Звучит труба: время подвести итоги, простить себя и откликнуться на своё призвание.'],
+  ['Мир', 'завершение, целостность, достижение, путешествие', 'незавершённость, задержки, нехватка закрытия', 'Цикл пройден полностью. Гармония, цельность и готовность к следующему витку.']
+];
+const SUITS = {
+  wands:     { name: 'Жезлы',    gen: 'Жезлов',    el: 'Огонь', sphere: 'энергия, действие, творчество, амбиции, работа' },
+  cups:      { name: 'Кубки',    gen: 'Кубков',    el: 'Вода',  sphere: 'чувства, отношения, интуиция, любовь' },
+  swords:    { name: 'Мечи',     gen: 'Мечей',     el: 'Воздух', sphere: 'мысли, решения, конфликты, правда' },
+  pentacles: { name: 'Пентакли', gen: 'Пентаклей', el: 'Земля', sphere: 'деньги, работа, тело, быт, материальный мир' }
+};
+const RANKS = ['Туз', 'Двойка', 'Тройка', 'Четвёрка', 'Пятёрка', 'Шестёрка', 'Семёрка', 'Восьмёрка', 'Девятка', 'Десятка', 'Паж', 'Рыцарь', 'Королева', 'Король'];
+const RANK_NUM = ['Туз', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'Паж', 'Рыцарь', 'Королева', 'Король'];
+const RANK_NOTE = ['Зерно, чистый потенциал', 'Выбор и равновесие', 'Первый рост и результат', 'Устойчивость и пауза', 'Испытание и потеря', 'Восстановление гармонии', 'Проверка и оценка', 'Движение и мастерство', 'Почти итог', 'Завершение цикла', 'Ученик и весть', 'Порыв и поступок', 'Зрелость и внутренняя сила', 'Власть и ответственность'];
+const MINOR = {
+  wands: [
+    ['вдохновение, новый проект, искра, творческий импульс', 'задержки, угасший энтузиазм, ложный старт'],
+    ['планирование, выбор пути, взгляд в будущее', 'страх перемен, нерешительность, плохое планирование'],
+    ['расширение, первые результаты, дальние перспективы', 'препятствия, задержки, узкий кругозор'],
+    ['праздник, дом, стабильность, гармония', 'неустроенность, непрочность, отложенное торжество'],
+    ['соперничество, споры, столкновение амбиций', 'избегание конфликта, внутренняя борьба, примирение'],
+    ['победа, признание, публичный успех', 'гордыня, недостаток признания, удар по репутации'],
+    ['отстаивание позиций, вызов, упорство', 'усталость от борьбы, сдача позиций, перегруз'],
+    ['стремительность, новости, быстрое развитие', 'задержки, суета, неверное направление'],
+    ['стойкость, последний рывок, бдительность', 'истощение, подозрительность, желание всё бросить'],
+    ['перегруз, ответственность, тяжёлая ноша', 'неумение делегировать, выгорание, сброс груза'],
+    ['любопытство, вдохновляющая новость, энтузиазм', 'незрелость, разбросанность, плохие вести'],
+    ['действие, смелость, приключение, страсть', 'импульсивность, безрассудство, нетерпение'],
+    ['уверенность, обаяние, решительность, тепло', 'ревность, эгоцентризм, неуверенность'],
+    ['лидерство, видение, предприимчивость', 'деспотизм, вспыльчивость, завышенные ожидания']
+  ],
+  cups: [
+    ['новая любовь, эмоциональное начало, сострадание', 'подавленные чувства, эмоциональная пустота'],
+    ['союз, взаимность, партнёрство', 'разлад, дисбаланс в отношениях, разрыв'],
+    ['дружба, праздник, сообщество', 'сплетни, излишества, отчуждение от друзей'],
+    ['апатия, созерцание, неудовлетворённость', 'пробуждение интереса, выход из застоя'],
+    ['утрата, сожаление, разочарование', 'принятие, исцеление, движение дальше'],
+    ['ностальгия, детство, светлые воспоминания', 'жизнь прошлым, идеализация, взросление'],
+    ['иллюзии, множество вариантов, мечты', 'ясность, трезвый выбор, конец иллюзий'],
+    ['уход, поиск глубинного смысла, отказ от неважного', 'страх перемен, бегство, возвращение'],
+    ['исполнение желаний, удовлетворение, радость', 'самодовольство, неудовлетворённость, излишества'],
+    ['семейное счастье, гармония, эмоциональная полнота', 'разлад в семье, несбывшиеся ожидания'],
+    ['чувствительность, интуитивные послания, мечтательность', 'эмоциональная незрелость, капризы'],
+    ['романтика, предложение, следование сердцу', 'непостоянство, пустые обещания, перепады настроения'],
+    ['сочувствие, интуиция, эмоциональная поддержка', 'созависимость, выгорание, мнительность'],
+    ['эмоциональная зрелость, спокойствие, дипломатия', 'манипуляции, подавление чувств, холодность']
+  ],
+  swords: [
+    ['ясность, истина, прорыв, сильная идея', 'путаница, ложь, злоупотребление силой'],
+    ['тупик, трудный выбор, избегание', 'информационная перегрузка, раскрытие правды, решение принято'],
+    ['боль, разбитое сердце, горькая правда', 'восстановление, прощение, отпускание боли'],
+    ['отдых, восстановление, пауза', 'беспокойство, истощение, возвращение к делам'],
+    ['конфликт, поражение, победа любой ценой', 'примирение, сожаление о сказанном, конец спора'],
+    ['переход, уход от трудностей, путь к спокойствию', 'незавершённые дела, сопротивление переменам'],
+    ['хитрость, скрытность, стратегия', 'разоблачение, признание, угрызения совести'],
+    ['ограничения, ощущение ловушки, самоограничение', 'освобождение, новый взгляд, принятие себя'],
+    ['тревога, бессонница, страхи', 'надежда, отпускание тревоги, обращение за помощью'],
+    ['крах, конец, болезненное дно', 'восстановление, худшее позади, возрождение'],
+    ['любознательность, бдительность, новые идеи', 'сплетни, поспешные выводы, колкость'],
+    ['напор, амбиции, быстрые действия', 'бестактность, агрессия, хаотичность'],
+    ['независимость, ясный ум, прямота', 'холодность, жёсткость, горечь'],
+    ['интеллект, авторитет, справедливость, логика', 'тирания, манипуляции, злоупотребление властью']
+  ],
+  pentacles: [
+    ['новая финансовая возможность, процветание, крепкий старт', 'упущенный шанс, плохое планирование'],
+    ['баланс, гибкость, жонглирование делами', 'перегруз, финансовый хаос, потеря равновесия'],
+    ['командная работа, мастерство, обучение', 'разлад в команде, низкое качество, нет плана'],
+    ['накопление, контроль, бережливость', 'жадность, страх потерь, умение отпустить'],
+    ['нужда, трудности, ощущение изоляции', 'восстановление, помощь извне, конец трудной полосы'],
+    ['щедрость, обмен, помощь', 'долги, неравный обмен, помощь с условиями'],
+    ['терпение, долгосрочные вложения, оценка результатов', 'нетерпение, напрасные усилия, слабая отдача'],
+    ['усердие, мастерство, развитие навыков', 'перфекционизм, рутина без смысла, халтура'],
+    ['самостоятельность, достаток, комфорт', 'зависимость, показная роскошь, неуверенность'],
+    ['богатство, наследие, семейная стабильность', 'семейные споры о деньгах, потеря стабильности'],
+    ['учёба, новые цели, практичный подход', 'лень, отсутствие прогресса, упущенные возможности'],
+    ['надёжность, усердие, методичность', 'застой, скука, чрезмерная осторожность'],
+    ['забота, практичность, достаток в доме', 'трудоголизм, самопренебрежение, собственничество'],
+    ['изобилие, деловая хватка, стабильность', 'материализм, упрямство, финансовая негибкость']
+  ]
+};
+const ROMAN = ['0', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX', 'XXI'];
+
+const DECK = [];
+MAJOR.forEach((m, i) => DECK.push({ id: 'm' + i, arcana: 'major', num: i, name: m[0], numeral: ROMAN[i], up: m[1], rev: m[2], desc: m[3] }));
+Object.keys(SUITS).forEach(s => MINOR[s].forEach((m, i) => DECK.push({
+  id: s + i, arcana: 'minor', suit: s, num: i, name: RANKS[i] + ' ' + SUITS[s].gen, numeral: RANK_NUM[i], up: m[0], rev: m[1],
+  desc: RANK_NOTE[i] + ' в сфере масти ' + SUITS[s].name + ' (' + SUITS[s].el.toLowerCase() + '): ' + SUITS[s].sphere + '.'
+})));
+const BY_ID = Object.fromEntries(DECK.map(c => [c.id, c]));
+
+const SPREADS = [
+  { id: 'one', name: 'Одна карта', positions: ['Ответ и совет'], note: 'Быстрый ответ на конкретный вопрос.' },
+  { id: 'three', name: 'Прошлое · настоящее · будущее', positions: ['Прошлое', 'Настоящее', 'Будущее'], note: 'Классика: откуда ситуация пришла и куда идёт.' },
+  { id: 'sit', name: 'Ситуация · препятствие · совет', positions: ['Ситуация', 'Препятствие', 'Совет'], note: 'Когда нужно понять, что мешает и что делать.' },
+  { id: 'love', name: 'Отношения', positions: ['Вы', 'Партнёр', 'Что вас связывает', 'Что мешает', 'Перспектива'], note: 'Пять карт о паре: каждый из вас, связь, трудность и перспектива.' },
+  { id: 'celtic', name: 'Кельтский крест', positions: ['Суть ситуации', 'Что перекрывает', 'Глубинная основа', 'Недавнее прошлое', 'Сознательная цель', 'Ближайшее будущее', 'Вы сами', 'Окружение', 'Надежды и страхи', 'Итог'], note: 'Десять карт: подробный разбор сложного вопроса.' }
+];
+
+/* ====================================================================
+   ОТРИСОВКА КАРТ
+   ==================================================================== */
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+function starPath(points, rot) {
+  const pts = [];
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 ? 6 : 15, a = (Math.PI / points) * i + rot;
+    pts.push((20 + r * Math.sin(a)).toFixed(2) + ' ' + (20 - r * Math.cos(a)).toFixed(2));
+  }
+  return 'M' + pts.join('L') + 'Z';
+}
+const GLYPH = {
+  cups: '<path d="M10 7h20c0 9.5-4.5 14-10 14S10 16.5 10 7z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M20 21v9M13.5 33h13" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M12 11h16" fill="none" stroke="currentColor" stroke-width=".8"/>',
+  swords: '<path d="M18.2 7 20 2.5 21.8 7v19h-3.6z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M12.5 26h15M20 26v7" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="20" cy="35" r="1.8" fill="none" stroke="currentColor" stroke-width="1.2"/>',
+  wands: '<path d="M13 36 27 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M23.5 12c3-1.6 5.6-.6 6.5 1.6-3 1.2-5.3.6-6.5-1.6zM17.5 24c-3-1.5-5.6-.4-6.4 1.8 3 1.1 5.3.4 6.4-1.8z" fill="none" stroke="currentColor" stroke-width="1.1"/>',
+  pentacles: '<circle cx="20" cy="20" r="14.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M20 8.5 26.76 29.3 9.06 16.45h21.88L13.24 29.3z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>'
+};
+function glyphFor(c) {
+  if (c.arcana === 'minor') return GLYPH[c.suit];
+  if (c.num === 0) return '<circle cx="20" cy="20" r="13" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="20" cy="20" r="3" fill="currentColor"/>';
+  return '<path d="' + starPath(4 + (c.num % 5), (c.num % 3) * 0.3) + '" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><circle cx="20" cy="20" r="2.4" fill="currentColor"/>';
+}
+function shortName(c) {
+  return c.arcana === 'minor' ? SUITS[c.suit].gen : c.name;
+}
+function faceHTML(c, rev) {
+  return '<div class="tcard ' + (c.arcana === 'major' ? 'major' : '') + (rev ? ' is-rev' : '') + '"><div class="tc-in">' +
+    '<span class="tc-num">' + esc(c.numeral) + '</span>' +
+    '<svg class="tc-glyph" viewBox="0 0 40 40" aria-hidden="true">' + glyphFor(c) + '</svg>' +
+    '<span class="tc-name">' + esc(shortName(c)) + '</span></div></div>';
+}
+function cardMeta(c) {
+  return c.arcana === 'major' ? 'Старший аркан · ' + c.numeral : 'Младший аркан · ' + SUITS[c.suit].name + ' · ' + SUITS[c.suit].el;
+}
+
+/* ====================================================================
+   ХРАНЕНИЕ (только этот браузер)
+   ==================================================================== */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+};
+
+/* ====================================================================
+   ИИ: Claude внутри claude.ai, иначе — ваш ключ Anthropic API
+   ==================================================================== */
+const MODEL = 'claude-sonnet-5-5';
+const RULES = 'Ты — внимательный и тёплый таролог-консультант в приложении «Тихий Аркан». Отвечай по-русски. ' +
+  'Колода — классическая Райдер–Уэйт, 78 карт. Трактуй карты в связке: с вопросом, с позициями расклада и друг с другом, учитывай перевёрнутое положение, ведущую масть и стихию, число старших арканов. ' +
+  'Пиши живо и конкретно, без воды и без запугивания: таро — инструмент для размышления, а не приговор, у человека всегда есть выбор. ' +
+  'Не предсказывай смерть, болезни и катастрофы и не давай медицинских, юридических и финансовых предписаний; если вопрос касается таких тем, мягко посоветуй обратиться к специалисту. ' +
+  'Оформление: короткие абзацы, **жирным** — названия карт, списки строками с «- », подзаголовки строкой с «### ». Без эмодзи.';
+
+const getKey = () => store.get('tarot.apikey', '');
+const AI = { mode: 'pending', sample: null, ready: null };
+AI.ready = (async () => {
+  if (window.claude && typeof window.claude.use === 'function') {
+    try {
+      const s = await window.claude.use('sample');
+      if (s) { AI.sample = s; AI.mode = 'claude'; renderAIPill(); return; }
+    } catch (e) {}
+  }
+  AI.mode = 'key'; renderAIPill();
+})();
+
+function renderAIPill() {
+  const pill = document.getElementById('aiPill'), t = document.getElementById('aiPillText');
+  if (AI.mode === 'claude') { pill.dataset.state = 'on'; t.textContent = 'ИИ: Claude'; }
+  else if (AI.mode === 'key') { pill.dataset.state = getKey() ? 'on' : 'off'; t.textContent = getKey() ? 'ИИ: по ключу' : 'ИИ: подключить'; }
+  else if (AI.mode === 'off') { pill.dataset.state = 'off'; t.textContent = 'ИИ выключен'; }
+  else { pill.dataset.state = 'pending'; t.textContent = 'ИИ…'; }
+}
+
+function mergeTurns(turns) {
+  const out = [];
+  for (const t of turns) {
+    if (out.length && out[out.length - 1].role === t.role) out[out.length - 1].content += '\n\n' + t.content;
+    else out.push({ role: t.role, content: t.content });
+  }
+  while (out.length && out[0].role !== 'user') out.shift();
+  return out;
+}
+
+async function askKey(turns, onText, signal) {
+  const key = getKey();
+  if (!key) throw { code: 'no_key' };
+  const body = { model: MODEL, max_tokens: 2500, stream: true, system: turns[0].content, messages: mergeTurns(turns.slice(1)) };
+  let text = '';
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal,
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      let m = ''; try { m = (await r.json()).error.message; } catch (e) {}
+      throw { code: r.status === 401 || r.status === 403 ? 'bad_key' : r.status === 429 ? 'rate_limited' : 'upstream_error', message: m };
+    }
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (!line.startsWith('data:')) continue;
+        let ev; try { ev = JSON.parse(line.slice(5)); } catch (e) { continue; }
+        if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { text += ev.delta.text; onText({ text }); }
+        else if (ev.type === 'error') throw { code: 'upstream_error', message: ev.error && ev.error.message };
+      }
+    }
+    if (!text) throw { code: 'empty_completion' };
+    return { text };
+  } catch (e) {
+    if (e && e.code) { if (text && !e.text) e.text = text; throw e; }
+    if (e && e.name === 'AbortError') throw { code: 'cancelled', text };
+    throw { code: 'upstream_error', text };
+  }
+}
+
+async function ask(turns, onText, signal) {
+  await AI.ready;
+  if (AI.mode === 'claude') return AI.sample(turns, { onText, signal, cache: false });
+  if (AI.mode === 'key') return askKey(turns, onText, signal);
+  throw { code: 'not_granted' };
+}
+
+function errText(e) {
+  const code = e && e.code;
+  if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'].includes(code)) {
+    AI.mode = 'off'; renderAIPill();
+    return 'Доступ приложения к Claude не разрешён. Его можно включить в меню «Разрешения» этой страницы и открыть её заново.';
+  }
+  return ({
+    no_key: 'Чтобы ИИ заработал здесь, добавьте ключ Anthropic API: кнопка «ИИ» вверху справа.',
+    bad_key: 'Ключ не подошёл. Проверьте его в настройках ИИ (кнопка вверху справа).',
+    rate_limited: 'Слишком много запросов или закончился лимит. Попробуйте через несколько минут.',
+    session_expired: 'Сессия Claude истекла. Войдите заново и повторите.',
+    refused: 'Claude не стал отвечать на этот запрос. Попробуйте сформулировать вопрос иначе.',
+    prompt_too_large: 'Разговор получился слишком длинным. Начните новый чат.',
+    empty_completion: 'ИИ вернул пустой ответ. Попробуйте ещё раз.'
+  })[code] || 'Не получилось связаться с ИИ. Проверьте интернет и попробуйте ещё раз.';
+}
+
+/* мини-разметка ответа: абзацы, списки, ### заголовки, **жирный** */
+function md(src) {
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,!?:;]|$)/g, '$1<em>$2</em>');
+  const out = []; let list = null, para = [];
+  const flushP = () => { if (para.length) { out.push('<p>' + para.map(inline).join('<br>') + '</p>'); para = []; } };
+  const flushL = () => { if (list) { out.push('<ul>' + list.map(li => '<li>' + inline(li) + '</li>').join('') + '</ul>'); list = null; } };
+  for (const raw of String(src).split('\n')) {
+    const line = raw.trim();
+    if (!line) { flushP(); flushL(); continue; }
+    let m;
+    if ((m = line.match(/^#{1,4}\s+(.*)$/))) { flushP(); flushL(); out.push('<h4>' + inline(m[1].replace(/\*\*/g, '')) + '</h4>'); }
+    else if ((m = line.match(/^(?:[-•*]|\d+[.)])\s+(.*)$/))) { flushP(); (list = list || []).push(m[1]); }
+    else { flushL(); para.push(line); }
+  }
+  flushP(); flushL();
+  return out.join('');
+}
+
+/* ====================================================================
+   СЛУЧАЙНОСТЬ
+   ==================================================================== */
+function rand(n) {
+  try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); }
+}
+function drawCards(n, reversals) {
+  const ids = DECK.map(c => c.id);
+  for (let i = ids.length - 1; i > 0; i--) { const j = rand(i + 1); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+  return ids.slice(0, n).map(id => ({ id, rev: reversals ? rand(2) === 1 : false }));
+}
+function todayKey(d = new Date()) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+function hash(s) { let h = 2166136261; for (const ch of s) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const fmtDate = d => d.getDate() + ' ' + MONTHS[d.getMonth()];
+
+/* ====================================================================
+   КАРТА ДНЯ
+   ==================================================================== */
+const $ = id => document.getElementById(id);
+function renderDaily() {
+  const now = new Date(), h = hash('tarot' + todayKey(now));
+  const c = DECK[h % DECK.length], rev = (h >>> 8) % 4 === 0;
+  $('daily').innerHTML =
+    '<button class="open" type="button" style="all:unset;cursor:pointer;display:block" data-card="' + c.id + '" data-rev="' + (rev ? 1 : 0) + '" aria-label="' + esc(c.name) + ': подробнее">' + faceHTML(c, rev) + '</button>' +
+    '<div><p class="eyebrow">Карта дня · ' + fmtDate(now) + '</p><h2 style="margin-top:4px">' + esc(c.name) + (rev ? ' <span class="muted" style="font-size:16px">(перевёрнутая)</span>' : '') + '</h2>' +
+    '<p class="kw"><b>Ключевые слова:</b> ' + esc(rev ? c.rev : c.up) + '</p>' +
+    '<p class="muted" style="margin:8px 0 12px;font-size:14px">' + esc(c.desc) + '</p>' +
+    '<button class="btn small" type="button" id="dailyAsk">Что она значит для меня сегодня?</button></div>';
+  $('dailyAsk').onclick = () => {
+    goTab('chat');
+    sendChat('Мне выпала карта дня: ' + c.name + (rev ? ' (перевёрнутая)' : '') + '. Что она советует на сегодня? Дай пару конкретных идей, как прожить этот день.');
+  };
+}
+
+/* ====================================================================
+   РАСКЛАД
+   ==================================================================== */
+const state = { spread: 'three', cards: null, question: '', interp: '', savedId: null };
+let readCtl = null;
+
+function renderSpreadChips() {
+  $('spreadChips').innerHTML = SPREADS.map(s => '<button type="button" class="chip" data-spread="' + s.id + '" aria-pressed="' + (s.id === state.spread) + '">' + esc(s.name) + ' <span class="muted">· ' + s.positions.length + '</span></button>').join('');
+  $('spreadNote').textContent = SPREADS.find(s => s.id === state.spread).note;
+}
+$('spreadChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-spread]'); if (!b) return;
+  if (readCtl) readCtl.abort();
+  state.spread = b.dataset.spread; state.cards = null;
+  store.set('tarot.spread', state.spread);
+  renderSpreadChips(); renderSpread();
+});
+
+function renderSpread(animate) {
+  const sp = SPREADS.find(s => s.id === state.spread);
+  const el = $('spread');
+  el.dataset.n = sp.positions.length;
+  el.innerHTML = sp.positions.map((p, i) => {
+    const d = state.cards && state.cards[i], c = d && BY_ID[d.id];
+    return '<div class="slot"><div class="pos"><b>' + (i + 1) + '</b><span>' + esc(p) + '</span></div>' +
+      '<button class="open" type="button" ' + (c ? 'data-card="' + c.id + '" data-rev="' + (d.rev ? 1 : 0) + '" aria-label="' + esc(c.name) + ': подробнее"' : 'disabled aria-label="Карта ещё не открыта"') + '>' +
+      '<div class="flip' + (c && !animate ? ' shown' : '') + '"><div class="flip-in"><div class="face back cback"></div>' + (c ? '<div class="face front">' + faceHTML(c, d.rev) + '</div>' : '') + '</div></div></button>' +
+      '<div class="cap">' + (c ? esc(c.name) + (d.rev ? '<em>перевёрнутая</em>' : '') : '') + '</div></div>';
+  }).join('');
+  if (animate) {
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.querySelectorAll('.flip').forEach((f, i) => setTimeout(() => f.classList.add('shown'), reduce ? 0 : 120 + i * 160));
+  }
+  const has = !!state.cards;
+  $('summary').hidden = $('readingPanel').hidden = $('aiPanel').hidden = !has;
+  if (!has) return;
+
+  const cards = state.cards.map(d => BY_ID[d.id]);
+  const majors = cards.filter(c => c.arcana === 'major').length;
+  const suitCount = {}; cards.forEach(c => { if (c.suit) suitCount[c.suit] = (suitCount[c.suit] || 0) + 1; });
+  const top = Object.entries(suitCount).sort((a, b) => b[1] - a[1]);
+  const lead = top.length && (top.length === 1 || top[0][1] > top[1][1]) ? SUITS[top[0][0]] : null;
+  const revs = state.cards.filter(d => d.rev).length;
+  $('summary').innerHTML = '<span>Старших арканов: <b>' + majors + ' из ' + cards.length + '</b></span>' +
+    (lead && cards.length > 1 ? '<span>Ведущая масть: <b>' + lead.name + '</b> (' + lead.el.toLowerCase() + ')</span>' : '') +
+    (revs ? '<span>Перевёрнутых: <b>' + revs + '</b></span>' : '');
+  $('poslist').innerHTML = sp.positions.map((p, i) => {
+    const d = state.cards[i], c = BY_ID[d.id];
+    return '<li><span>' + (i + 1) + '</span><div><div><span class="muted">' + esc(p) + ':</span> <span class="nm">' + esc(c.name) + '</span>' + (d.rev ? ' <span class="muted">(перевёрнутая)</span>' : '') + '</div><div class="muted">' + esc(d.rev ? c.rev : c.up) + '</div></div></li>';
+  }).join('');
+}
+
+$('drawBtn').onclick = () => {
+  if (readCtl) readCtl.abort();
+  const sp = SPREADS.find(s => s.id === state.spread);
+  state.cards = drawCards(sp.positions.length, $('useRev').checked);
+  state.question = $('question').value.trim();
+  state.interp = ''; state.savedId = null;
+  $('readOut').innerHTML = '<p class="muted">Карты лежат. Нажмите «Истолковать с ИИ», чтобы получить разбор расклада целиком.</p>';
+  $('readNote').hidden = true; $('readActions').hidden = true; $('askRead').textContent = 'Истолковать с ИИ';
+  renderSpread(true);
+  $('spread').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+};
+$('useRev').onchange = () => store.set('tarot.rev', $('useRev').checked);
+
+function readingText(cards, spreadId, question) {
+  const sp = SPREADS.find(s => s.id === spreadId);
+  return 'Расклад: «' + sp.name + '» (' + sp.positions.length + ' карт).\n' +
+    'Вопрос: ' + (question ? '«' + question + '»' : 'не задан — общий взгляд на текущую ситуацию') + '\n' +
+    cards.map((d, i) => { const c = BY_ID[d.id]; return (i + 1) + '. ' + sp.positions[i] + ' — ' + c.name + (d.rev ? ' (перевёрнутая)' : '') + '. ' + cardMeta(c) + '. Значения: ' + (d.rev ? c.rev : c.up) + '.'; }).join('\n');
+}
+
+$('askRead').onclick = async () => {
+  if (!state.cards) return;
+  const sp = SPREADS.find(s => s.id === state.spread);
+  const len = sp.positions.length >= 10 ? 'до 600 слов' : sp.positions.length >= 5 ? 'до 450 слов' : 'до 300 слов';
+  const prompt = 'Сделай толкование расклада.\n\n' + readingText(state.cards, state.spread, state.question) + '\n\n' +
+    'Структура ответа: для каждой позиции 1–3 предложения (подзаголовок — номер, позиция и карта); затем «### Общая картина» — как карты связаны между собой и с вопросом; затем «### Совет» — 2–3 практичных шага. Объём ' + len + '.';
+  readCtl = new AbortController();
+  const ctl = readCtl;
+  $('askRead').disabled = true; $('stopRead').hidden = false; $('readNote').hidden = true; $('readActions').hidden = true;
+  $('readOut').innerHTML = '<p class="thinking">Смотрю на карты…</p>';
+  try {
+    const r = await ask([{ role: 'user', content: RULES }, { role: 'user', content: prompt }], ({ text }) => { $('readOut').innerHTML = md(text); }, ctl.signal);
+    state.interp = r.text; $('readOut').innerHTML = md(r.text);
+    if (r.truncated) { $('readNote').textContent = 'Ответ оборвался из-за длины.'; $('readNote').className = 'note'; $('readNote').hidden = false; }
+    $('readActions').hidden = false; $('askRead').textContent = 'Истолковать заново';
+  } catch (e) {
+    if (e && e.text) { state.interp = e.text; $('readOut').innerHTML = md(e.text); $('readActions').hidden = false; }
+    else $('readOut').innerHTML = '';
+    if (!e || e.code !== 'cancelled') { $('readNote').textContent = errText(e); $('readNote').className = 'note err'; $('readNote').hidden = false; }
+  } finally {
+    if (readCtl === ctl) readCtl = null;
+    $('askRead').disabled = false; $('stopRead').hidden = true;
+  }
+};
+$('stopRead').onclick = () => readCtl && readCtl.abort();
+
+$('saveRead').onclick = () => {
+  if (!state.cards) return;
+  const list = store.get('tarot.journal', []);
+  const entry = { id: state.savedId || Date.now().toString(36), at: Date.now(), spread: state.spread, question: state.question, cards: state.cards, interp: state.interp };
+  const i = list.findIndex(x => x.id === entry.id);
+  if (i >= 0) list[i] = entry; else list.unshift(entry);
+  if (store.set('tarot.journal', list)) { state.savedId = entry.id; $('saveRead').textContent = 'Сохранено'; setTimeout(() => { $('saveRead').textContent = 'Сохранить в журнал'; }, 1600); renderJournal(); }
+  else { $('readNote').textContent = 'Браузер не дал сохранить журнал (например, в приватном окне).'; $('readNote').className = 'note err'; $('readNote').hidden = false; }
+};
+$('chatRead').onclick = () => {
+  attachReading({ spread: state.spread, question: state.question, cards: state.cards, interp: state.interp });
+  goTab('chat'); $('chatInput').focus();
+};
+
+/* ====================================================================
+   СПРАВОЧНИК
+   ==================================================================== */
+let deckFilter = 'all';
+const FILTERS = [['all', 'Все'], ['major', 'Старшие'], ['wands', 'Жезлы'], ['cups', 'Кубки'], ['swords', 'Мечи'], ['pentacles', 'Пентакли']];
+function renderDeckFilter() {
+  $('deckFilter').innerHTML = FILTERS.map(f => '<button type="button" class="chip" data-f="' + f[0] + '" aria-pressed="' + (f[0] === deckFilter) + '">' + f[1] + '</button>').join('');
+}
+function renderDeck() {
+  const q = $('deckSearch').value.trim().toLowerCase();
+  const list = DECK.filter(c => (deckFilter === 'all' || (deckFilter === 'major' ? c.arcana === 'major' : c.suit === deckFilter)) &&
+    (!q || (c.name + ' ' + c.up + ' ' + c.rev + ' ' + c.desc).toLowerCase().includes(q)));
+  $('deck').innerHTML = list.map(c => '<button type="button" data-card="' + c.id + '" data-rev="0" aria-label="' + esc(c.name) + '">' + faceHTML(c, false) + '</button>').join('');
+  $('deckCount').textContent = list.length ? 'Карт: ' + list.length + '. Нажмите на карту, чтобы прочитать значение.' : 'Ничего не нашлось. Попробуйте другое слово.';
+}
+$('deckFilter').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; deckFilter = b.dataset.f; renderDeckFilter(); renderDeck(); });
+$('deckSearch').addEventListener('input', renderDeck);
+
+/* ====================================================================
+   ОКНО: КАРТА / НАСТРОЙКИ ИИ
+   ==================================================================== */
+let lastFocus = null;
+function openModal(html) {
+  lastFocus = document.activeElement;
+  $('sheet').innerHTML = html; $('modal').hidden = false;
+  const f = $('sheet').querySelector('button, input'); if (f) f.focus();
+}
+function closeModal() { $('modal').hidden = true; $('sheet').innerHTML = ''; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+$('modal').addEventListener('click', e => { if (e.target === $('modal') || e.target.closest('[data-close]')) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('modal').hidden) closeModal(); });
+
+function showCard(id, rev) {
+  const c = BY_ID[id];
+  openModal('<div class="sheet-head"><div><p class="eyebrow">' + esc(cardMeta(c)) + '</p><h2 id="modalTitle" style="margin-top:4px">' + esc(c.name) + '</h2></div><button class="x" type="button" data-close aria-label="Закрыть">×</button></div>' +
+    '<div class="cardinfo">' + faceHTML(c, rev) + '<div>' +
+    (rev ? '<p class="muted" style="font-size:13px">Выпала перевёрнутой</p>' : '') +
+    '<p class="kw"><b>Прямое положение:</b> ' + esc(c.up) + '</p>' +
+    '<p class="kw"><b>Перевёрнутое:</b> ' + esc(c.rev) + '</p></div></div>' +
+    '<p>' + esc(c.desc) + '</p>' +
+    '<div class="row"><button class="btn primary small" type="button" id="cardAsk">Спросить ИИ об этой карте</button></div>');
+  $('cardAsk').onclick = () => {
+    closeModal(); goTab('chat');
+    sendChat('Расскажи подробнее о карте «' + c.name + '»' + (rev ? ' в перевёрнутом положении' : '') + ': символизм, значение в любви, работе и как совет.');
+  };
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-card]');
+  if (b && !b.disabled) showCard(b.dataset.card, b.dataset.rev === '1');
+});
+
+$('aiPill').onclick = async () => {
+  await Promise.race([AI.ready, new Promise(r => setTimeout(r, 300))]);
+  if (AI.mode === 'claude') {
+    openModal('<div class="sheet-head"><div><p class="eyebrow">Нейросеть</p><h2 id="modalTitle">ИИ подключён</h2></div><button class="x" type="button" data-close aria-label="Закрыть">×</button></div>' +
+      '<p>Толкования и чат работают через Claude в вашем аккаунте claude.ai. Ключ не нужен. При первом запросе Claude спросит разрешение.</p>');
+    return;
+  }
+  if (AI.mode === 'off') {
+    openModal('<div class="sheet-head"><div><p class="eyebrow">Нейросеть</p><h2 id="modalTitle">ИИ выключен</h2></div><button class="x" type="button" data-close aria-label="Закрыть">×</button></div>' +
+      '<p>Вы не разрешили этой странице обращаться к Claude. Разрешение включается в меню «Разрешения» артефакта. Расклады и справочник работают и без ИИ.</p>');
+    return;
+  }
+  if (AI.mode === 'pending') {
+    openModal('<div class="sheet-head"><div><p class="eyebrow">Нейросеть</p><h2 id="modalTitle">Подключаю ИИ…</h2></div><button class="x" type="button" data-close aria-label="Закрыть">×</button></div><p class="muted">Ещё несколько секунд.</p>');
+    return;
+  }
+  openModal('<div class="sheet-head"><div><p class="eyebrow">Нейросеть</p><h2 id="modalTitle">Ключ Anthropic API</h2></div><button class="x" type="button" data-close aria-label="Закрыть">×</button></div>' +
+    '<p>Здесь толкования делает Claude через ваш ключ. Получить ключ: console.anthropic.com → API Keys. Ключ хранится только в этом браузере и отправляется только в Anthropic.</p>' +
+    '<label class="field" for="keyInput">Ключ<input type="password" id="keyInput" autocomplete="off" placeholder="sk-ant-…" value="' + esc(getKey()) + '"></label>' +
+    '<div class="row"><button class="btn primary" type="button" id="keySave">Сохранить</button>' + (getKey() ? '<button class="btn danger" type="button" id="keyDel">Удалить ключ</button>' : '') + '</div>' +
+    '<p class="note" id="keyNote" hidden></p>');
+  $('keySave').onclick = () => {
+    const v = $('keyInput').value.trim();
+    if (!v) { $('keyNote').textContent = 'Вставьте ключ в поле.'; $('keyNote').hidden = false; return; }
+    if (store.set('tarot.apikey', v)) { renderAIPill(); closeModal(); }
+    else { $('keyNote').textContent = 'Браузер не дал сохранить ключ (например, в приватном окне).'; $('keyNote').hidden = false; }
+  };
+  if ($('keyDel')) $('keyDel').onclick = () => { store.set('tarot.apikey', ''); renderAIPill(); closeModal(); };
+};
+
+/* ====================================================================
+   ЧАТ
+   ==================================================================== */
+const chat = { turns: [], ctx: null };
+let chatCtl = null;
+const SUGGEST = ['Как лучше задавать вопросы картам?', 'Чем старшие арканы отличаются от младших?', 'Что значит, если карта выпала перевёрнутой?', 'Какой расклад выбрать для вопроса о работе?'];
+
+function attachReading(r) {
+  chat.ctx = r;
+  const sp = SPREADS.find(s => s.id === r.spread);
+  $('chatCtxText').textContent = 'В разговоре расклад «' + sp.name + '»' + (r.question ? ': ' + r.question : '');
+  $('chatCtx').hidden = false;
+}
+$('chatCtxX').onclick = () => { chat.ctx = null; $('chatCtx').hidden = true; };
+
+function renderChat() {
+  const box = $('chat');
+  if (!chat.turns.length) {
+    box.innerHTML = '<div class="msg ai"><p style="margin:0">Здравствуйте. Спросите о любой карте, раскладе или ситуации. Можно обсудить свой расклад: на вкладке «Расклад» нажмите «Обсудить в чате».</p></div>';
+  } else {
+    box.innerHTML = chat.turns.map(t => t.role === 'user' ? '<div class="msg user">' + esc(t.content) + '</div>' : '<div class="msg ai ai-out">' + md(t.content) + '</div>').join('');
+  }
+  $('suggest').innerHTML = chat.turns.length ? '' : SUGGEST.map(s => '<button type="button" class="chip" data-s="' + esc(s) + '">' + esc(s) + '</button>').join('');
+}
+$('suggest').addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (b) sendChat(b.dataset.s); });
+
+async function sendChat(text) {
+  text = String(text || '').trim();
+  if (!text || chatCtl) return;
+  chat.turns.push({ role: 'user', content: text });
+  renderChat();
+  const box = $('chat');
+  const bubble = document.createElement('div');
+  bubble.className = 'msg ai ai-out'; bubble.innerHTML = '<p class="thinking" style="margin:0">Думаю…</p>';
+  box.appendChild(bubble);
+  bubble.scrollIntoView({ block: 'nearest' });
+  $('chatNote').hidden = true; $('chatSend').disabled = true; $('chatStop').hidden = false;
+
+  let rules = RULES + ' Это чат: отвечай по делу, обычно 80–200 слов, если не просят подробнее.';
+  if (chat.ctx) rules += '\n\nКонтекст — расклад, который сделал человек:\n' + readingText(chat.ctx.cards, chat.ctx.spread, chat.ctx.question) + (chat.ctx.interp ? '\n\nТолкование, которое уже было дано:\n' + chat.ctx.interp.slice(0, 6000) : '');
+  const history = chat.turns.slice(-20);
+  while (history.length && history[0].role !== 'user') history.shift();
+
+  chatCtl = new AbortController();
+  try {
+    const r = await ask([{ role: 'user', content: rules }].concat(history), ({ text }) => { bubble.innerHTML = md(text); }, chatCtl.signal);
+    chat.turns.push({ role: 'assistant', content: r.text });
+  } catch (e) {
+    if (e && e.text) chat.turns.push({ role: 'assistant', content: e.text });
+    if (!e || e.code !== 'cancelled') { $('chatNote').textContent = errText(e); $('chatNote').className = 'note err'; $('chatNote').hidden = false; }
+  } finally {
+    chatCtl = null; $('chatSend').disabled = false; $('chatStop').hidden = true;
+    renderChat();
+    const last = $('chat').lastElementChild; if (last) last.scrollIntoView({ block: 'nearest' });
+  }
+}
+$('chatSend').onclick = () => { const v = $('chatInput').value; if (v.trim() && !chatCtl) { $('chatInput').value = ''; sendChat(v); } };
+$('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('chatSend').click(); } });
+$('chatStop').onclick = () => chatCtl && chatCtl.abort();
+$('chatNew').onclick = () => { if (chatCtl) chatCtl.abort(); chat.turns = []; chat.ctx = null; $('chatCtx').hidden = true; $('chatNote').hidden = true; renderChat(); };
+
+/* ====================================================================
+   ЖУРНАЛ
+   ==================================================================== */
+function renderJournal() {
+  const list = store.get('tarot.journal', []);
+  if (!list.length) {
+    $('journal').innerHTML = '<div class="empty">Здесь появятся расклады, которые вы сохраните.<br>Сделайте расклад и нажмите «Сохранить в журнал» под толкованием.</div>';
+    return;
+  }
+  $('journal').innerHTML = list.map(r => {
+    const sp = SPREADS.find(s => s.id === r.spread) || SPREADS[0], d = new Date(r.at);
+    const names = r.cards.map(x => BY_ID[x.id].name + (x.rev ? ' (пер.)' : '')).join(' · ');
+    return '<details class="entry"><summary><span class="when">' + fmtDate(d) + ' ' + d.getFullYear() + ', ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ' · ' + esc(sp.name) + '</span>' +
+      '<span class="q">' + esc(r.question || 'Без вопроса') + '</span><span class="cards">' + esc(names) + '</span></summary>' +
+      '<div class="body"><div class="spread" data-n="' + r.cards.length + '">' + r.cards.map((x, i) => '<div class="slot"><div class="pos"><b>' + (i + 1) + '</b><span>' + esc(sp.positions[i] || '') + '</span></div><button class="open" type="button" data-card="' + x.id + '" data-rev="' + (x.rev ? 1 : 0) + '" aria-label="' + esc(BY_ID[x.id].name) + '">' + faceHTML(BY_ID[x.id], x.rev) + '</button></div>').join('') + '</div>' +
+      (r.interp ? '<div class="ai-out">' + md(r.interp) + '</div>' : '<p class="muted">Толкования нет.</p>') +
+      '<div class="row"><button class="btn small" type="button" data-jchat="' + r.id + '">Обсудить в чате</button><button class="btn small danger" type="button" data-jdel="' + r.id + '">Удалить</button></div></div></details>';
+  }).join('');
+}
+$('journal').addEventListener('click', e => {
+  const del = e.target.closest('[data-jdel]'), ch = e.target.closest('[data-jchat]');
+  if (del) {
+    if (del.dataset.confirm !== '1') { del.dataset.confirm = '1'; del.textContent = 'Точно удалить?'; return; }
+    store.set('tarot.journal', store.get('tarot.journal', []).filter(x => x.id !== del.dataset.jdel));
+    if (state.savedId === del.dataset.jdel) state.savedId = null;
+    renderJournal();
+  } else if (ch) {
+    const r = store.get('tarot.journal', []).find(x => x.id === ch.dataset.jchat);
+    if (r) { attachReading(r); goTab('chat'); $('chatInput').focus(); }
+  }
+});
+
+/* ====================================================================
+   ВКЛАДКИ И СТАРТ
+   ==================================================================== */
+function goTab(t) {
+  document.querySelectorAll('nav.tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  ['read', 'deck', 'chat', 'journal'].forEach(v => { $('view-' + v).hidden = v !== t; });
+  window.scrollTo(0, 0);
+}
+document.querySelector('nav.tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) goTab(b.dataset.tab); });
+
+state.spread = SPREADS.some(s => s.id === store.get('tarot.spread', '')) ? store.get('tarot.spread', '') : 'three';
+$('useRev').checked = store.get('tarot.rev', true) !== false;
+renderAIPill(); renderDaily(); renderSpreadChips(); renderSpread(); renderDeckFilter(); renderDeck(); renderChat(); renderJournal();
+const hashTab = (location.hash || '').slice(1);
+if (['deck', 'chat', 'journal'].includes(hashTab)) goTab(hashTab);
+</script>
+</body>
+</html>
