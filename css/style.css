@@ -780,3 +780,13 @@ main table.pub-t button.pill.done:hover, main table.pub-t button.pill.wait:hover
 main table.pub-t button.pill { width: 92px; min-width: 92px; color: var(--muted) !important; font-weight: 600; }
 main table.pub-t button.pill.done { color: var(--link) !important; }
 main table.pub-t button.pill.wait { color: var(--text) !important; }
+/* отметки выкладки: без плашек — линейная галочка, часы и дата текстом; значки ровно в одну вертикаль */
+table.pub-t th.pc, table.pub-t td.pc { width: 96px; text-align: left; padding-left: 14px; }
+main table.pub-t button.pill, main table.pub-t button.pill.done, main table.pub-t button.pill.wait { width: auto; min-width: 0; height: 28px; min-height: 28px; padding: 0 6px; margin-left: -6px;
+  justify-content: flex-start; gap: 7px; background: transparent !important; color: var(--text) !important; font-weight: 500; font-size: 14px; filter: none; }
+main table.pub-t button.pill:hover { background: var(--surface-2) !important; }
+main table.pub-t button.pill .icx .ic { width: 18px; height: 18px; stroke-width: 1.8; }
+main table.pub-t button.pill .icx { vertical-align: 0; }
+main table.pub-t .pl-none { color: var(--muted); display: inline-block; width: 18px; text-align: center; }
+table.pub-t tr.total td.pc { padding-left: 14px; }
+table.pub-t td.r, table.pub-t th.r { padding-right: 22px; }

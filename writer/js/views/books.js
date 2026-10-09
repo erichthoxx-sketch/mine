@@ -117,7 +117,7 @@ export function bookPage(a, id) {
   const cell = (ch, pf) => {
     const v = (pm[ch] || {})[pf], st = pubState(v, c.today);
     const cls = st === 'done' ? 'pill done' : st === 'wait' ? 'pill wait' : 'pill';
-    return `<td class="pc"><button class="${cls}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? (v.past ? '✓' : dm(v.date)) : st === 'wait' ? icx('timer') + ' ' + dm(v.date) : '—'}</button></td>`;
+    return `<td class="pc"><button class="${cls}" title="${st === 'done' ? (v.past ? 'выложена' : 'выложена ' + dm(v.date)) : st === 'wait' ? 'выйдет ' + dm(v.date) : 'отметить'}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? icx('check') : st === 'wait' ? icx('timer') + `<span>${dm(v.date)}</span>` : '<span class="pl-none">—</span>'}</button></td>`;
   };
   const sch = bookSchedule(b, c.today);
   // главы можно открыть в редакторе — для Google Документов

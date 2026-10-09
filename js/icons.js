@@ -6,6 +6,7 @@ export const ICONS = {
   day: svg('<path d="M15.5 4.5l4 4L9 19H5v-4z"/><path d="M13.5 6.5l4 4"/>'),
   // книги на полке: две стоят, третья наклонилась
   books: svg('<rect x="3" y="4" width="4.5" height="16" rx="1"/><rect x="9" y="4" width="4.5" height="16" rx="1"/><rect x="16" y="4.5" width="4.5" height="15.5" rx="1" transform="rotate(-17 18.25 20)"/>'),
+  check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
   // часы: «запланировано», «на таймер»
   timer: svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/>'),
   ads: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>'),
