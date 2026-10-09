@@ -1,4 +1,4 @@
-import { ic } from '../../../js/icons.js';
+import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, openSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, pct } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
@@ -38,7 +38,7 @@ export function planItems(c, from, to) {
     // отложенные главы (на всех площадках)
     for (const [ch, pfs] of Object.entries(pm)) for (const [pf, v] of Object.entries(pfs)) {
       if (!v?.date || v.past) continue;
-      if (v.date > t) add(v.date, 'wait', `⏱ ${esc(ch)} — выйдет сама`, `${bt} · ${esc(pf)}`, { to: '/book/' + b.id });
+      if (v.date > t) add(v.date, 'wait', `${icx('timer')} ${esc(ch)} — выйдет сама`, `${bt} · ${esc(pf)}`, { to: '/book/' + b.id });
       else if (v.date >= from) add(v.date, 'done', `✓ ${esc(ch)} — выложена`, `${bt} · ${esc(pf)}`, { to: '/book/' + b.id });
     }
     // свободные дни графика: какую главу выкладывать
@@ -148,7 +148,7 @@ function itemHtml(c, x) {
   const body = `<span class="dot k-${x.kind}"></span><span class="pi-body"><span class="pi-t">${x.title}</span>${x.sub ? `<span class="pi-s">${x.sub}</span>` : ''}</span>`;
   if (x.kind === 'pub') {
     const today = x.date <= c.today;
-    return `<div class="pitem">${body}<span class="pi-btns">${today ? `<button class="primary" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="done">Выложила</button>` : ''}<button data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="plan" data-date="${x.date}" title="Поставить на таймер">⏱</button></span></div>`;
+    return `<div class="pitem">${body}<span class="pi-btns">${today ? `<button class="primary" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="done">Выложила</button>` : ''}<button data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="plan" data-date="${x.date}" title="Поставить на таймер" aria-label="Поставить на таймер">${icx('timer')}</button></span></div>`;
   }
   if (x.href) return `<a class="pitem tap" href="${x.href}">${body}</a>`;
   if (x.to) return `<a class="pitem tap" href="#" data-act="go" data-to="${x.to}">${body}</a>`;
@@ -189,7 +189,7 @@ export function navToday(c) {
   const items = [
     ...goals.map(({ g, s }) => row('goal', esc(goalTitle(c, g)), goalToday(c, g, s), `data-act="goal.edit" data-id="${g.id}" role="button" tabindex="0"`, g.type === 'custom' ? `<button class="nt-btn" data-act="goal.check" data-id="${g.id}">Сделала</button>` : '')),
     ...imp.map((x) => x.kind === 'pub'
-      ? row('pub', `Выложить ${x.ch ? `«${esc(x.ch)}»` : 'главу'}`, '', '', `<span class="nt-btns"><button class="nt-btn" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="done">Выложила</button><button class="nt-btn" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="plan" title="На таймер">⏱</button></span>`)
+      ? row('pub', `Выложить ${x.ch ? `«${esc(x.ch)}»` : 'главу'}`, '', '', `<span class="nt-btns"><button class="nt-btn" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="done">Выложила</button><button class="nt-btn" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="plan" title="На таймер" aria-label="На таймер">${icx('timer')}</button></span>`)
       : row(x.kind, x.title, when(x.date), x.href ? `onclick="location.href='${x.href}'" role="link" tabindex="0"` : x.to ? `data-act="go" data-to="${x.to}" role="button" tabindex="0"` : `data-act="${x.act}" data-id="${x.id}" role="button" tabindex="0"`)),
   ];
   const shown = items.slice(0, 5), more = items.length - shown.length;

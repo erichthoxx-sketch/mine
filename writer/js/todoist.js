@@ -21,7 +21,7 @@ export function todoistTasks(items, booksById) {
   const out = [], seen = new Set();
   for (const x of items) {
     if (SKIP.has(x.kind)) continue;
-    const title = unesc(x.title).replace(/^[⏱✓]\s*/, ''), bid = bookOf(x), b = bid ? booksById[bid] : null;
+    const title = unesc(String(x.title).replace(/<[^>]+>/g, '')).replace(/^[⏱✓]?\s*/, ''), bid = bookOf(x), b = bid ? booksById[bid] : null;
     const key = `${x.kind}_` + hash(x.kind === 'pub' ? `${x.book}:${x.date}` : x.todoK ? `${x.linkId}:${x.todoK}` : `${x.id || ''}:${title}`);
     if (seen.has(key)) continue;
     seen.add(key);

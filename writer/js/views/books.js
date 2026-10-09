@@ -1,4 +1,4 @@
-import { ic } from '../../../js/icons.js';
+import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
 import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol } from '../wcalc.js';
@@ -117,7 +117,7 @@ export function bookPage(a, id) {
   const cell = (ch, pf) => {
     const v = (pm[ch] || {})[pf], st = pubState(v, c.today);
     const cls = st === 'done' ? 'pill done' : st === 'wait' ? 'pill wait' : 'pill';
-    return `<td class="pc"><button class="${cls}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? (v.past ? '✓' : dm(v.date)) : st === 'wait' ? '⏱ ' + dm(v.date) : '—'}</button></td>`;
+    return `<td class="pc"><button class="${cls}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? (v.past ? '✓' : dm(v.date)) : st === 'wait' ? icx('timer') + ' ' + dm(v.date) : '—'}</button></td>`;
   };
   const sch = bookSchedule(b, c.today);
   // главы можно открыть в редакторе — для Google Документов
@@ -161,7 +161,7 @@ export function bookPage(a, id) {
     ${chs.length ? `<div class="scroll" style="margin-top:8px"><table class="pub-t${pfs.length > 2 ? " many" : ""}"><tr><th>Глава</th><th class="r">а.л.</th>${pfs.map((x) => `<th>${esc(x)}</th>`).join('')}</tr>
       ${chs.map((t) => `<tr><td>${canEdit ? `<a href="#" class="tap ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}">${esc(t.title)}</a>` : esc(t.title)}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => cell(t.title, x)).join('')}</tr>`).join('')}
       <tr class="total"><td>Всего</td><td class="r">${alNum(b.chars)}</td>${pfs.map((x) => `<td>${chs.filter((t) => pubState((pm[t.title] || {})[x], c.today) === 'done').length}</td>`).join('')}</tr></table></div>` : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
-    <div class="hint">${canEdit ? 'Нажмите на название главы — она откроется в редакторе. ' : ''}Нажмите на ячейку, чтобы отметить главу на площадке: «выложила» или «запланировала» (отложенная публикация — ⏱). Выкладка сразу попадает событием в «Доходы».</div></div>
+    <div class="hint">${canEdit ? 'Нажмите на название главы — она откроется в редакторе. ' : ''}Нажмите на ячейку, чтобы отметить главу на площадке: «выложила» или «запланировала» (отложенная публикация — ${icx('timer')}). Выкладка сразу попадает событием в «Доходы».</div></div>
   ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${contestVol(x)(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
@@ -330,7 +330,7 @@ acts['pub.mark'] = (d) => {
   // первый день графика после сегодняшнего — дата по умолчанию для отложенной
   const nextSlot = () => (hasSch ? scheduleDates(b.publishStart, b.pubDays, addDays(c.today, 1), 1)[0] : null) || addDays(c.today, 1);
   const pickList = (fd) => { const firstN = N(fd.get('firstN')); return [...(firstN > 0 ? chs.slice(0, firstN).map((t) => t.title) : fd.getAll('ch')), ...String(fd.get('chx') || '').split(',').map((x) => x.trim()).filter(Boolean)]; };
-  const stOf = (t) => pfs.map((x) => { const st = pubState((pm[t] || {})[x], c.today); return st ? `${x} ${st === 'done' ? '✓' : '⏱ ' + dm(pm[t][x].date)}` : ''; }).filter(Boolean).join(' · ');
+  const stOf = (t) => pfs.map((x) => { const st = pubState((pm[t] || {})[x], c.today); return st ? `${x} ${st === 'done' ? '✓' : icx('timer') + ' ' + dm(pm[t][x].date)}` : ''; }).filter(Boolean).join(' · ');
   openSheet(`Выкладка — ${b.title}`, `
     ${chs.length ? `<label style="margin-top:0">Главы</label><div class="pick-list">${chs.map((t) => `<label class="check"><input type="checkbox" name="ch" value="${esc(t.title)}"${pre.has(t.title) ? ' checked' : ''}><span>${esc(t.title)}${stOf(t.title) ? ` <span class="small muted">· ${stOf(t.title)}</span>` : ''}</span></label>`).join('')}</div>` : ''}
     ${chs.length > 3 ? `<label for="pfn">Или первые N глав по порядку</label><input id="pfn" name="firstN" inputmode="numeric" placeholder="например, 12 — пролог и 11 глав">` : ''}
@@ -339,7 +339,7 @@ acts['pub.mark'] = (d) => {
     <div class="f2"><div><label for="pmd">Что сделала</label><select id="pmd" name="mode">${opt('done', 'Выложила', defMode)}${opt('plan', 'Запланировала (отложенная)', defMode)}${opt('past', 'Уже выложено раньше — без событий', '')}${opt('clear', 'Снять отметку', '')}</select></div>
     <div><label for="pdt">Дата</label><input id="pdt" type="date" name="date" value="${cur?.date || d.date || (defMode === 'plan' ? nextSlot() : c.today)}"><div class="small muted" data-autodate hidden>по графику — можно поменять</div></div></div>
     ${hasSch ? `<div data-sch hidden><label class="check"><input type="checkbox" name="bySch" checked>По графику (${daysTxt(b.pubDays)}): каждой главе — свой день, начиная с даты</label><div class="small muted" data-preview></div></div>` : ''}
-    <div class="hint">Отложенная публикация: до указанной даты глава отмечена ⏱, а в этот день сама станет выложенной. Событие «Выкладка главы» сразу ставится на эту дату в «Доходах». «Уже выложено раньше» — для глав, что вышли до начала учёта: они отметятся выложенными, но событий в «Доходах» не будет, дата не нужна.</div>`, async (fd) => {
+    <div class="hint">Отложенная публикация: до указанной даты глава отмечена ${icx('timer')}, а в этот день сама станет выложенной. Событие «Выкладка главы» сразу ставится на эту дату в «Доходах». «Уже выложено раньше» — для глав, что вышли до начала учёта: они отметятся выложенными, но событий в «Доходах» не будет, дата не нужна.</div>`, async (fd) => {
     const list = pickList(fd);
     const plats = fd.getAll('pf'), mode = fd.get('mode'), date = fd.get('date') || c.today;
     if (!list.length) { toast('Выберите главу'); return false; }

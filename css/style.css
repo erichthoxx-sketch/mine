@@ -749,3 +749,6 @@ main { padding-top: 20px; }
 .svc-text p { margin: 0 0 .35em; text-indent: 1.5em; }
 .svc-text p.center { text-indent: 0; text-align: center; } .svc-text p.right { text-indent: 0; text-align: right; }
 .svc-card > p.small { font-size: 13px; line-height: 1.45; }
+/* маленькая линейная иконка в строке текста (часы «запланировано») */
+.icx { display: inline-flex; vertical-align: -0.16em; }
+.icx .ic { width: 1.05em; height: 1.05em; stroke-width: 1.8; }
