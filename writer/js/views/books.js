@@ -6,7 +6,7 @@ import { goalTitle, goalToday } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
-import { textsCard, publisherCard } from './pubfiles.js';
+import { publisherCard, svcInfo } from './pubfiles.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 import { addDays } from '../../../js/calc.js';
@@ -119,21 +119,20 @@ export function bookPage(a, id) {
     const cls = st === 'done' ? 'pill done' : st === 'wait' ? 'pill wait' : 'pill';
     return `<td class="pc"><button class="${cls}" title="${st === 'done' ? (v.past ? 'выложена' : 'выложена ' + dm(v.date)) : st === 'wait' ? 'выйдет ' + dm(v.date) : 'отметить'}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? icx('check') : st === 'wait' ? icx('timer') + `<span>${dm(v.date)}</span>` : '<span class="pl-none">—</span>'}</button></td>`;
   };
-  // главы: сверху — что ещё впереди (запланированные и невыложенные), выложенные — свёрнуты; на широком экране — в две колонки
+  // главы — всё содержание книги по порядку, одной таблицей; сверху — короткая сводка
   const chaptersBlock = () => {
     const stOf = (t) => pfs.map((x) => pubState((pm[t.title] || {})[x], c.today));
-    const allDone = (t) => pfs.length > 0 && stOf(t).every((x) => x === 'done');
-    const done = chs.filter(allDone), rest = chs.filter((t) => !allDone(t)), nPlan = rest.filter((t) => stOf(t).includes('wait')).length;
+    const nDone = chs.filter((t) => pfs.length > 0 && stOf(t).every((x) => x === 'done')).length, nPlan = chs.filter((t) => stOf(t).includes('wait')).length;
     const mark = (ch, pf) => {
       const v = (pm[ch] || {})[pf], st = pubState(v, c.today);
-      const tip = `${pfs.length > 1 ? pf + ': ' : ''}${st === 'done' ? (v.past ? 'выложена' : 'выложена ' + dm(v.date)) : st === 'wait' ? 'выйдет ' + dm(v.date) : 'отметить выкладку'}`;
-      return `<button class="pm ${st || 'none'}" title="${esc(tip)}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? icx('check') : st === 'wait' ? icx('timer') + `<span>${dm(v.date)}</span>` : '<span class="pl-none">—</span>'}</button>`;
+      const tip = `${st === 'done' ? (v.past ? 'выложена' : 'выложена ' + dm(v.date)) : st === 'wait' ? 'выйдет ' + dm(v.date) : 'отметить выкладку'}`;
+      return `<td class="pc"><button class="pm" title="${esc(tip)}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? icx('check') : st === 'wait' ? icx('timer') + `<span>${dm(v.date)}</span>` : '<span class="pl-none">—</span>'}</button></td>`;
     };
-    const row = (t) => `<div class="chr"><span class="chr-n">${canEdit ? `<a href="#" class="ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе">${esc(t.title)}</a>` : esc(t.title)}</span><span class="chr-v">${t.chars == null ? '' : alNum(t.chars)}</span><span class="chr-m">${pfs.map((x) => mark(t.title, x)).join('')}</span></div>`;
-    const range = (l) => (l.length > 1 ? `${esc(l[0].title)} — ${esc(l[l.length - 1].title)}` : l.length ? esc(l[0].title) : '');
-    return `<div class="ch-sum">выложено <b>${done.length}</b>${nPlan ? ` · запланировано <b>${nPlan}</b>` : ''}${rest.length - nPlan ? ` · ждут выкладки <b>${rest.length - nPlan}</b>` : ''} · ${alNum(b.chars)} а.л.${pfs.length > 1 ? ` · отметки: ${pfs.map(esc).join(' / ')}` : ''}</div>
-      ${rest.length ? `<div class="ch-cols">${rest.map(row).join('')}</div>` : '<p class="small muted" style="margin:4px 0 8px">Все главы выложены ✓</p>'}
-      ${done.length ? `<details class="ch-done"${rest.length ? '' : ' open'}><summary>Выложенные главы <span class="muted">· ${done.length} · ${range(done)}</span></summary><div class="ch-cols">${done.map(row).join('')}</div></details>` : ''}`;
+    const rest = chs.length - nDone - nPlan;
+    return `<div class="ch-sum">выложено <b>${nDone}</b>${nPlan ? ` · запланировано <b>${nPlan}</b>` : ''}${rest > 0 ? ` · ждут выкладки <b>${rest}</b>` : ''} · ${alNum(b.chars)} а.л.</div>
+      <div class="scroll"><table class="pub-t"><tr><th>Глава</th><th class="r">а.л.</th>${pfs.map((x) => `<th class="pc">${esc(x)}</th>`).join('')}</tr>
+      ${chs.map((t) => `<tr><td>${canEdit ? `<a href="#" class="ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе">${esc(t.title)}</a>` : esc(t.title)}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => mark(t.title, x)).join('')}</tr>`).join('')}
+      </table></div>`;
   };
   const sch = bookSchedule(b, c.today);
   // главы можно открыть в редакторе — для Google Документов
@@ -147,24 +146,7 @@ export function bookPage(a, id) {
   const wch = writtenChapters(b), planCh = Number(fin?.g.chapters || b.planChapters) || null;
 
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a></p>
-  <div class="card book-head">
-    <div class="cover big">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}
-      <label class="btn small-btn">${b.cover ? 'Сменить обложку' : 'Загрузить обложку'}<input type="file" accept="image/*" data-chg="wbook.cover" data-id="${b.id}" hidden></label></div>
-    <div class="book-info">
-      <h2>${esc(b.title)}</h2>
-      <div class="tags"><span class="tag on">${STATUS[b.status] || STATUS.progress}</span>${(b.platforms || []).map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>
-      ${contestTags(c, b)}
-      ${b.webViewLink ? `<a class="btn primary" href="${esc(b.webViewLink)}" target="_blank" rel="noopener" style="margin:12px 0">✎ Открыть в Google Документах</a>` : ''}
-      <dl class="dl">
-        <dt>Объём</dt><dd>${volTxt(b)}</dd>
-        ${b.status === 'done' ? '' : `
-        <dt>Сегодня / за 7 дней</dt><dd><span class="up">+${alNum(writtenToday(b, c.today))}</span> / <span class="up">+${zn(writtenWeek(b, c.today))}</span></dd>
-        <dt>Темп за 2 недели</dt><dd>${p ? zn(p) + ' в день' : '—'}</dd>`}
-        <dt>Последняя правка файла</dt><dd>${b.modifiedTime ? fmtDate(b.modifiedTime.slice(0, 10)) : '—'}${b.countedAt ? ` <span class="muted small">· обновлено ${fmtDate(b.countedAt.slice(0, 10))} ${b.countedAt.slice(11, 16)}</span>` : ''}</dd>
-      </dl>
-      ${b.fileId ? `<div class="row" style="margin-top:8px"><button data-act="wbook.refreshOne" data-id="${b.id}">Обновить с Диска</button></div>` : ''}
-    </div>
-  </div>
+  ${headCard(c, b, p)}
   <div class="card"><div class="row between"><h2 style="margin:0">Прогресс и сроки</h2><button data-act="wb.dates" data-id="${b.id}">Сроки</button></div>
     <label class="inline-num">Глав в книге, примерно <input type="number" min="1" inputmode="numeric" value="${b.planChapters || ''}" placeholder="—" data-chg="wb.planCh" data-id="${b.id}"></label>
     ${progressBlock(c, b)}
@@ -186,7 +168,6 @@ export function bookPage(a, id) {
       <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="target"><span>Для таргета<span class="sub">креативов ${mk.creatives} · объявлений ${mk.ads}</span></span><span>${mark(mk.creatives && mk.ads)}</span></a>
     </div>
     ${mk.creatives || mk.ads ? `<div class="row" style="margin-top:10px"><button data-act="mk.targetZip" data-id="${b.id}">Скачать пакет для таргетолога</button></div>` : ''}</div>
-  ${textsCard(b)}
   ${publisherCard(b)}
   <div class="card"><h2>О книге</h2>
   <form data-form="wbook.save" data-id="${b.id}">
@@ -210,12 +191,12 @@ export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
-  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled) return false;
+  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled && (meta.mimeType !== drive.MIME.doc || b.svc)) return false;
   const r = await drive.countFile(meta);
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
   const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
   // шаг 1: знаки и главы сохраняем сразу — они видны, даже если история версий долгая или недоступна
-  const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE };
+  const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE, ...(r.svc ? { svc: r.svc } : {}) };
   await a.store.put('w_books', base);
   // шаг 2: начало дня / недели / месяца и (один раз) история за 2 недели — по версиям документа
   let dayStart = b.dayStart && b.dayStart.date === c.today && b.dayStart.v === 2 ? b.dayStart : null;
@@ -433,3 +414,34 @@ acts['wbook.del'] = async (d) => {
   app().go('/books');
 };
 export { daysLeft };
+
+// ---------- шапка книги: обложка, главное в цифрах, аннотация и синопсис под рукой ----------
+function headCard(c, b, p) {
+  const n = writtenChapters(b), done = b.status === 'done';
+  const tile = (k, v, sub, cls = '') => `<div class="bh-tile"><span class="bh-k">${k}</span><b class="${cls}">${v}</b><span class="bh-sub">${sub}</span></div>`;
+  const tiles = [tile('Объём', alNum(b.chars), n ? `а.л. · ${n} ${plural(n, ['глава', 'главы', 'глав'])}` : 'а.л.')];
+  if (!done) tiles.push(tile('Сегодня', '+' + alNum(writtenToday(b, c.today)), 'а.л.', 'up'), tile('За 7 дней', '+' + alNum(writtenWeek(b, c.today)), 'а.л.', 'up'), tile('Темп', p ? alNum(p) : '—', 'а.л. в день за 2 недели'));
+  const icb = (act, k, icon, title) => `<button class="ed-ic" data-act="${act}" data-id="${b.id}" data-k="${k}" title="${title}" aria-label="${title}">${ic(icon)}</button>`;
+  const ann = (b.svc?.annotation ?? '') || (b.promo || {}).annotation || '', syn = (b.svc?.synopsis ?? '') || b.synopsis || '';
+  const ai = svcInfo(b, 'annotation'), si = svcInfo(b, 'synopsis');
+  const paras = (t) => esc(t).split('\n').map((x) => `<p>${x}</p>`).join('');
+  const annBlock = ann
+    ? `<div class="bh-text"><div class="bh-h"><b>Аннотация</b><span class="bh-ics">${icb('svc.copy', 'annotation', 'copy', 'Скопировать')}${icb('svc.docx', 'annotation', 'download', 'Скачать Word')}</span></div>
+      <div class="bh-ann" data-act="bh.more" title="Нажмите, чтобы развернуть">${paras(ann)}</div></div>`
+    : `<div class="bh-text"><div class="bh-h"><b>Аннотация</b></div><p class="small muted" style="margin:2px 0 0">${ai.ok ? 'Нажмите «Обновить», чтобы подтянуть текст из Документа.' : b.fileId ? 'Добавьте в Google Документ вкладку «Аннотация» — текст появится здесь.' : 'Пока нет.'}</p></div>`;
+  const synBlock = `<div class="bh-text"><div class="bh-h"><b>Синопсис</b><span class="muted small">${syn ? `${grp(syn.length)} зн.` : si.ok ? '' : 'нет вкладки «Синопсис»'}</span>
+      <span class="bh-ics">${syn || si.ok ? `${icb('svc.view', 'synopsis', 'eye', 'Прочитать')}${icb('svc.copy', 'synopsis', 'copy', 'Скопировать')}${icb('svc.docx', 'synopsis', 'download', 'Скачать Word')}` : ''}</span></div>
+      ${syn ? `<p class="bh-syn">${esc(syn.split('\n')[0])}</p>` : ''}</div>`;
+  return `<div class="card book-head2">
+    <label class="bh-cover" title="${b.cover ? 'Сменить обложку' : 'Загрузить обложку'}">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}<span class="bh-cover-edit">${b.cover ? 'Сменить' : 'Загрузить обложку'}</span><input type="file" accept="image/*" data-chg="wbook.cover" data-id="${b.id}" hidden></label>
+    <div class="bh-main">
+      <div class="bh-top"><div class="bh-title"><h2>${esc(b.title)}</h2><div class="tags"><span class="tag on">${STATUS[b.status] || STATUS.progress}</span>${(b.platforms || []).map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>${contestTags(c, b)}</div>
+        <div class="bh-acts">${b.webViewLink ? `<a class="btn small-btn" href="${esc(b.webViewLink)}" target="_blank" rel="noopener" title="Открыть в Google Документах">${ic('doc')} Документ</a>` : ''}${b.fileId ? `<button class="ed-ic" data-act="wbook.refreshOne" data-id="${b.id}" title="Обновить с Диска" aria-label="Обновить с Диска">${ic('refresh')}</button>` : ''}</div></div>
+      <div class="bh-tiles">${tiles.join('')}</div>
+      <div class="bh-texts">${annBlock}${synBlock}</div>
+      <div class="bh-foot">${b.modifiedTime ? `правка файла ${fmtDate(b.modifiedTime.slice(0, 10))}` : ''}${b.countedAt ? ` · обновлено ${fmtDate(b.countedAt.slice(0, 10)) === fmtDate(c.today) ? 'сегодня' : fmtDate(b.countedAt.slice(0, 10))} в ${b.countedAt.slice(11, 16)}` : ''}</div>
+    </div>
+  </div>`;
+}
+const grp = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+acts['bh.more'] = (d, el) => { el.classList.toggle('open'); return false; };

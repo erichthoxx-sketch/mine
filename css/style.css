@@ -813,3 +813,55 @@ details.ch-done > summary::-webkit-details-marker { display: none; }
 details.ch-done > summary::before { content: '›'; display: inline-block; width: 14px; transition: transform .15s; color: var(--muted); }
 details.ch-done[open] > summary::before { transform: rotate(90deg); }
 details.ch-done > summary .muted { font-weight: 400; }
+/* шапка книги: обложка слева, справа — название, цифры плитками, аннотация и синопсис */
+.book-head2 { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 24px; align-items: start; }
+.bh-cover { position: relative; display: block; cursor: pointer; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); aspect-ratio: 2 / 3; background: var(--surface-2); }
+.bh-cover img, .bh-cover .cover-ph { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bh-cover-edit { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 8px 9px; text-align: center; font-size: 12.5px; font-weight: 700; color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,.6)); opacity: 0; transition: opacity .15s; }
+.bh-cover:hover .bh-cover-edit, .bh-cover:focus-within .bh-cover-edit { opacity: 1; }
+.bh-main { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.bh-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.bh-title h2 { margin: 0 0 8px; }
+.bh-title .tags { margin: 0; }
+.bh-acts { display: flex; align-items: center; gap: 6px; flex: none; }
+.bh-acts .btn.small-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 4px 14px; font-size: 13.5px; }
+.bh-acts .btn .ic, .bh-acts .ed-ic .ic { width: 17px; height: 17px; }
+.bh-acts .ed-ic { width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.bh-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
+.bh-tile { display: flex; flex-direction: column; gap: 2px; padding: 11px 14px; border-radius: 14px; background: var(--surface-2); }
+.bh-tile .bh-k { font-size: 12px; color: var(--muted); }
+.bh-tile b { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.bh-tile .bh-sub { font-size: 12px; color: var(--muted); }
+.bh-texts { display: grid; gap: 14px; }
+.bh-text { border-top: 1px solid var(--line); padding-top: 12px; }
+.bh-h { display: flex; align-items: center; gap: 8px; }
+.bh-h b { font-size: 14px; }
+.bh-ics { margin-left: auto; display: flex; gap: 2px; }
+.bh-ics .ed-ic { width: 32px; height: 32px; min-height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.bh-ics .ed-ic .ic { width: 17px; height: 17px; }
+.bh-ann { margin-top: 6px; font-size: 14.5px; line-height: 1.55; color: var(--text-2); cursor: pointer; max-height: calc(1.55em * 4); overflow: hidden; position: relative; }
+.bh-ann::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1.6em; background: linear-gradient(transparent, var(--surface)); }
+.bh-ann.open { max-height: none; } .bh-ann.open::after { display: none; }
+.bh-ann p { margin: 0 0 .5em; }
+.bh-syn { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bh-foot { font-size: 12px; color: var(--muted); }
+@media (max-width: 640px) {
+  .book-head2 { grid-template-columns: 92px minmax(0, 1fr); gap: 14px; }
+  .bh-main { display: contents; }
+  .bh-top { flex-direction: column; gap: 10px; }
+  .bh-tiles, .bh-texts, .bh-foot { grid-column: 1 / -1; }
+  .bh-tiles { grid-template-columns: 1fr 1fr; }
+  .bh-tile b { font-size: 18px; }
+  .bh-cover-edit { opacity: 1; padding: 10px 4px 6px; font-size: 11px; }
+}
+/* таблица глав: всё содержание по порядку, строки компактные, отметки — простые значки */
+table.pub-t td { padding-top: 7px; padding-bottom: 7px; }
+table.pub-t .ch-link { color: var(--text) !important; font-weight: 400; text-decoration: none; }
+table.pub-t .ch-link:hover { color: var(--link) !important; }
+main table.pub-t button.pm { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; width: auto; min-width: 0; height: 28px; min-height: 28px; padding: 0 6px; margin-left: -6px;
+  border: 0 !important; border-radius: 8px; background: transparent !important; box-shadow: none; color: var(--text) !important; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+main table.pub-t button.pm:hover { background: var(--surface-2) !important; }
+main table.pub-t button.pm .icx .ic { width: 17px; height: 17px; stroke-width: 1.8; }
+main table.pub-t button.pm .icx { vertical-align: 0; }
+main table.pub-t .pl-none { color: var(--muted); display: inline-block; width: 17px; text-align: center; }

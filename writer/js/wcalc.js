@@ -21,10 +21,15 @@ export function charsFromDocsJson(doc) {
     }
     return t;
   };
-  const tabs = [];
+  const tabs = [], svc = {};
+  // текст аннотации и синопсиса — чтобы показывать их в карточке книги без загрузки документа
+  const svcText = (t) => t.replace(/\u000b/g, '\n').split('\n').map((x) => x.trim()).filter(Boolean).filter((x, i) => !(i === 0 && /^(синопсис|аннотация)\.?$/i.test(x))).join('\n').slice(0, 30000);
   const walk = (list) => {
     for (const tab of list || []) {
-      tabs.push({ title: tab.tabProperties?.title || 'Без названия', chars: countChars(textOf(tab.documentTab?.body?.content)) });
+      const title = tab.tabProperties?.title || 'Без названия', text = textOf(tab.documentTab?.body?.content);
+      tabs.push({ title, chars: countChars(text) });
+      if (/^\s*синопсис/i.test(title) && svc.synopsis == null) svc.synopsis = svcText(text);
+      if (/^\s*аннотац/i.test(title) && svc.annotation == null) svc.annotation = svcText(text);
       walk(tab.childTabs);
     }
   };
@@ -32,7 +37,7 @@ export function charsFromDocsJson(doc) {
   else return { total: countChars(textOf(doc.body?.content)), tabs: [{ title: doc.title || 'Документ', chars: countChars(textOf(doc.body?.content)), counted: true }] };
   const any = tabs.some((t) => isBookTab(t.title));
   for (const t of tabs) t.counted = any ? isBookTab(t.title) : true;
-  return { total: tabs.filter((t) => t.counted).reduce((a, t) => a + t.chars, 0), tabs };
+  return { total: tabs.filter((t) => t.counted).reduce((a, t) => a + t.chars, 0), tabs, svc };
 }
 
 // Word (.docx): word/document.xml → число знаков (текст в <w:t>, табуляция = 1 знак)
