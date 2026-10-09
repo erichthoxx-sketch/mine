@@ -1,6 +1,6 @@
 // Редактор главы: вкладка Google Документа ⇄ абзацы со стилями. Чистые функции — без DOM и сети.
 // Абзац: { st: { n: namedStyleType, a: alignment, fi: отступ первой строки (pt), il: отступ слева (pt), sa/sb: интервал до/после (pt), ls: межстрочный (%) },
-//          runs: [{ t, b, i, u, s, f: шрифт, z: размер (pt) }] }
+//          runs: [{ t, b, i, u, s, f: шрифт, z: размер (pt), c: цвет текста «#rrggbb» }] }
 
 // найти вкладку по названию (или id) — вкладки бывают вложенными
 export function findTab(doc, key) {
@@ -22,13 +22,18 @@ function paraSt(ps = {}) {
   if (typeof ps.lineSpacing === 'number') st.ls = ps.lineSpacing;
   return st;
 }
+// цвет текста Docs API {red, green, blue: 0…1} ⇄ «#0b6b4f»; чёрный — как «без цвета»
+const hex2 = (v) => Math.round((Number(v) || 0) * 255).toString(16).padStart(2, '0');
+export const colorOf = (fc) => { const c = fc?.color?.rgbColor; if (!c) return ''; const h = '#' + hex2(c.red) + hex2(c.green) + hex2(c.blue); return h === '#000000' ? '' : h; };
+export const rgbOf = (h) => { const n = parseInt(String(h).slice(1), 16); return { red: ((n >> 16) & 255) / 255, green: ((n >> 8) & 255) / 255, blue: (n & 255) / 255 }; };
 function runOf(t, ts = {}) {
   const r = { t, b: !!ts.bold, i: !!ts.italic, u: !!ts.underline, s: !!ts.strikethrough };
+  const c = colorOf(ts.foregroundColor); if (c) r.c = c;
   if (ts.weightedFontFamily?.fontFamily) r.f = ts.weightedFontFamily.fontFamily;
   if (pt(ts.fontSize) != null) r.z = pt(ts.fontSize);
   return r;
 }
-const sameRun = (a, b) => a.b === b.b && a.i === b.i && a.u === b.u && a.s === b.s && a.f === b.f && a.z === b.z;
+const sameRun = (a, b) => a.b === b.b && a.i === b.i && a.u === b.u && a.s === b.s && a.f === b.f && a.z === b.z && a.c === b.c;
 const mergeRuns = (runs) => runs.reduce((acc, r) => { const l = acc[acc.length - 1]; if (l && sameRun(l, r)) l.t += r.t; else acc.push({ ...r }); return acc; }, []);
 
 // содержимое вкладки → абзацы; таблицы — по ячейкам абзацами
@@ -79,7 +84,7 @@ export function saveRequests(blocks, tabId, endIndex) {
   req.push({ insertText: { location: { index: 1, ...T }, text } });
   const end = 1 + text.length;
   // текст: сначала всё «как в стиле абзаца», потом — свои отличия кусков
-  req.push({ updateTextStyle: { range: rng(1, end), textStyle: {}, fields: 'bold,italic,underline,strikethrough,fontSize,weightedFontFamily' } });
+  req.push({ updateTextStyle: { range: rng(1, end), textStyle: {}, fields: 'bold,italic,underline,strikethrough,fontSize,weightedFontFamily,foregroundColor' } });
   // абзацы: стиль, выравнивание, отступы, интервалы — подряд идущие одинаковые одним запросом
   const PF = 'namedStyleType,alignment,indentFirstLine,indentStart,spaceAbove,spaceBelow,lineSpacing';
   const psOf = (st = {}) => {
@@ -107,6 +112,7 @@ export function saveRequests(blocks, tabId, endIndex) {
       if (r.s) { ts.strikethrough = true; f.push('strikethrough'); }
       if (r.f) { ts.weightedFontFamily = { fontFamily: r.f }; f.push('weightedFontFamily'); }
       if (r.z) { ts.fontSize = { magnitude: r.z, unit: 'PT' }; f.push('fontSize'); }
+      if (r.c) { ts.foregroundColor = { color: { rgbColor: rgbOf(r.c) } }; f.push('foregroundColor'); }
       if (f.length && e > s) runReq.push({ updateTextStyle: { range: rng(s, e), textStyle: ts, fields: f.join(',') } });
       pos = e;
     }

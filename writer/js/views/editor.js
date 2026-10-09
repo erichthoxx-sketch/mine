@@ -44,6 +44,7 @@ function runHtml(r, base) {
   if (r.u) h = `<u>${h}</u>`;
   if (r.i) h = `<i>${h}</i>`;
   if (r.b) h = `<b>${h}</b>`;
+  if (r.c) h = `<span data-c="${esc(r.c)}" style="color:${esc(r.c)}">${h}</span>`;
   if (r.f || r.z) h = `<span${r.f ? ` data-f="${esc(r.f)}"` : ''}${r.z ? ` data-z="${r.z}"` : ''} style="${r.f ? `font-family:'${esc(r.f)}',inherit;` : ''}${r.z ? `font-size:${em(r.z, base)}` : ''}">${h}</span>`;
   return h;
 }
@@ -54,6 +55,8 @@ export function blocksToHtml(blocks, named = {}, base = 12) {
     return `<${tag} data-st='${esc(JSON.stringify(rest))}' style="${blockStyle(p.st || {}, named, base)}">${p.runs.map((r) => runHtml(r, base)).join('') || '<br>'}</${tag}>`;
   }).join('');
 }
+// «rgb(11, 107, 79)» → «#0b6b4f» (пусто — если цвета нет)
+const cssHex = (v) => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(v || ''); return m ? '#' + [m[1], m[2], m[3]].map((x) => (+x).toString(16).padStart(2, '0')).join('') : /^#[0-9a-f]{6}$/i.test(v || '') ? v.toLowerCase() : ''; };
 function htmlToBlocks(root) {
   const blocks = [];
   let cur = [], curSt = {};
@@ -69,7 +72,7 @@ function htmlToBlocks(root) {
   };
   const walk = (node, f) => {
     for (const n of node.childNodes) {
-      if (n.nodeType === 3) { if (n.nodeValue) cur.push({ t: n.nodeValue, b: f.b, i: f.i, u: f.u, s: f.s, ...(f.f ? { f: f.f } : {}), ...(f.z ? { z: f.z } : {}) }); continue; }
+      if (n.nodeType === 3) { if (n.nodeValue) cur.push({ t: n.nodeValue, b: f.b, i: f.i, u: f.u, s: f.s, ...(f.f ? { f: f.f } : {}), ...(f.z ? { z: f.z } : {}), ...(f.c ? { c: f.c } : {}) }); continue; }
       if (n.nodeType !== 1) continue;
       const tag = n.tagName, sty = n.style || {};
       if (tag === 'BR') { if (n !== n.parentNode.lastChild || n.parentNode === root) cur.push({ t: '\n', ...f }); continue; }
@@ -81,6 +84,7 @@ function htmlToBlocks(root) {
         u: f.u || tag === 'U' || /underline/.test(sty.textDecoration || sty.textDecorationLine || ''),
         s: f.s || tag === 'S' || tag === 'STRIKE' || tag === 'DEL' || /line-through/.test(sty.textDecoration || sty.textDecorationLine || ''),
         f: n.getAttribute?.('data-f') || f.f, z: Number(n.getAttribute?.('data-z')) || f.z,
+        c: n.getAttribute?.('data-c') || cssHex(sty.color) || n.getAttribute?.('color') || f.c,
       };
       walk(n, nf);
       if (block) push();
@@ -91,7 +95,7 @@ function htmlToBlocks(root) {
   // перевод строки внутри абзаца (Shift+Enter) — оставляем; пустой хвост — убираем
   for (const p of blocks) { if (p.runs.length && p.runs[p.runs.length - 1].t === '\n') p.runs.pop(); }
   while (blocks.length > 1 && !blocks[blocks.length - 1].runs.length) blocks.pop();
-  const same = (a, b) => a.b === b.b && a.i === b.i && a.u === b.u && a.s === b.s && a.f === b.f && a.z === b.z;
+  const same = (a, b) => a.b === b.b && a.i === b.i && a.u === b.u && a.s === b.s && a.f === b.f && a.z === b.z && a.c === b.c;
   return blocks.map((p) => ({ st: p.st, runs: p.runs.reduce((a, r) => { const l = a[a.length - 1]; if (l && same(l, r)) l.t += r.t; else a.push({ ...r }); return a; }, []) }));
 }
 
@@ -144,6 +148,7 @@ export function editorView(a, bookId, title) {
       <button class="ed-ic" data-act="ed.fmt" data-v="italic" title="Курсив (Ctrl+I)"><i>К</i></button>
       <button class="ed-ic" data-act="ed.fmt" data-v="underline" title="Подчёркнутый (Ctrl+U)"><u>Ч</u></button>
       <button class="ed-ic" data-act="ed.fmt" data-v="strikeThrough" title="Зачёркнутый"><s>З</s></button>
+      <button class="ed-ic ed-color" data-act="ed.color" title="Выделить цветом — тёмно-изумрудный (Ctrl+Shift+E). Ещё раз — убрать" aria-label="Выделить цветом"><span>А</span></button>
       <span class="ed-sep"></span>
       <button class="ed-ic" data-act="ed.align" data-v="left" title="По левому краю">${alignIc('left')}</button>
       <button class="ed-ic" data-act="ed.align" data-v="center" title="По центру">${alignIc('center')}</button>
@@ -400,6 +405,25 @@ acts['ed.copy'] = async () => {
 };
 
 acts['ed.save'] = () => { save(); return false; };
+// выделение цветом: тёмно-изумрудный, как в Google Документе; на уже выделенном — снимает цвет
+const MARK = '#0b6b4f', CLEAR = '#010203';
+function colorSel() {
+  const el = document.getElementById('ed'), sel = window.getSelection();
+  if (!el || !sel.rangeCount || sel.isCollapsed || !el.contains(sel.anchorNode)) { toast('Выделите текст, который пометить цветом'); return false; }
+  const at = (n) => (n.nodeType === 3 ? n.parentElement : n)?.closest?.('[data-c]');
+  const on = [sel.anchorNode, sel.focusNode].every((n) => at(n)?.getAttribute('data-c') === MARK);
+  snap(el, true);
+  document.execCommand('styleWithCSS', false, true);
+  document.execCommand('foreColor', false, on ? CLEAR : MARK);
+  for (const sp of el.querySelectorAll('[style*="color"], font[color]')) {
+    const c = cssHex(sp.style.color) || (sp.getAttribute('color') || '').toLowerCase();
+    if (c === CLEAR) { sp.style.color = ''; sp.removeAttribute('data-c'); sp.removeAttribute('color'); if (!sp.getAttribute('style')) sp.removeAttribute('style'); if (sp.tagName === 'SPAN' && !sp.attributes.length) sp.replaceWith(...sp.childNodes); }
+    else if (c === MARK) sp.setAttribute('data-c', MARK);
+  }
+  el.dispatchEvent(new Event('input')); snap(el, true);
+  return false;
+}
+acts['ed.color'] = () => colorSel();
 acts['ed.fmt'] = (d) => { const el = document.getElementById('ed'); el?.focus(); snap(el, true); document.execCommand(d.v); el?.dispatchEvent(new Event('input')); snap(el, true); return false; };
 acts['ed.align'] = (d) => { const el = document.getElementById('ed'); snap(el, true); for (const b of selectedBlocks()) b.style.textAlign = d.v === 'left' ? 'left' : d.v; el?.dispatchEvent(new Event('input')); snap(el, true); return false; };
 acts['ed.dash'] = () => { document.getElementById('ed')?.focus(); document.execCommand('insertText', false, '— '); return false; };
@@ -463,6 +487,7 @@ document.addEventListener('keydown', (e) => {
   else if (mod && k === 'f') { e.preventDefault(); const f = document.getElementById('edfind'); if (f?.hidden) acts['ed.find'](); else document.getElementById('edq')?.focus(); }
   else if (mod && (k === 'z' || k === 'я') && e.target.id === 'ed') { e.preventDefault(); histGo(e.shiftKey ? 1 : -1); }
   else if (mod && (k === 'y' || k === 'н') && e.target.id === 'ed') { e.preventDefault(); histGo(1); }
+  else if (mod && e.shiftKey && (k === 'e' || k === 'у') && e.target.id === 'ed') { e.preventDefault(); colorSel(); }
   else if (e.key === 'Escape') document.documentElement.classList.remove('ed-focus');
 });
 export const editorDirty = () => !!ed?.dirty;

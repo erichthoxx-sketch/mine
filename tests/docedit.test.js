@@ -34,7 +34,19 @@ test('редактор: сохранение — текст, оформлени�
   const para = r.filter((x) => x.updateParagraphStyle).map((x) => [x.updateParagraphStyle.range.startIndex, x.updateParagraphStyle.range.endIndex, x.updateParagraphStyle.paragraphStyle.namedStyleType, x.updateParagraphStyle.paragraphStyle.alignment]);
   // заголовок 1..9, два одинаковых абзаца — одним запросом 9..27
   assert.deepEqual(para, [[1, 9, 'HEADING_1', 'CENTER'], [9, 27, 'NORMAL_TEXT', 'JUSTIFIED']]);
-  const runs = r.filter((x) => x.updateTextStyle && x.updateTextStyle.fields !== 'bold,italic,underline,strikethrough,fontSize,weightedFontFamily');
+  const runs = r.filter((x) => x.updateTextStyle && x.updateTextStyle.fields !== 'bold,italic,underline,strikethrough,fontSize,weightedFontFamily,foregroundColor');
   assert.deepEqual(runs.map((x) => [x.updateTextStyle.range.startIndex, x.updateTextStyle.range.endIndex, x.updateTextStyle.fields]), [[1, 8, 'bold'], [12, 20, 'italic,underline'], [22, 27, 'strikethrough,fontSize']]);
   assert.equal(saveRequests([{ st: {}, runs: [{ t: 'Текст', b: false, i: false, u: false, s: false }] }], 't1', 2)[0].insertText.text, 'Текст');
+});
+
+test('цвет текста: из Документа и обратно', async () => {
+  const { contentToBlocks, saveRequests, colorOf } = await import('../writer/js/docedit.js');
+  const fc = { color: { rgbColor: { red: 11 / 255, green: 107 / 255, blue: 79 / 255 } } };
+  assert.equal(colorOf(fc), '#0b6b4f');
+  assert.equal(colorOf({ color: { rgbColor: {} } }), ''); // чёрный — без цвета
+  const bl = contentToBlocks([{ paragraph: { elements: [{ textRun: { content: 'пометка', textStyle: { foregroundColor: fc } } }, { textRun: { content: ' дальше\n', textStyle: {} } }] } }]);
+  assert.deepEqual(bl[0].runs.map((r) => r.c || ''), ['#0b6b4f', '']);
+  const rq = saveRequests(bl, 't', 2).find((r) => r.updateTextStyle?.fields === 'foregroundColor');
+  assert.deepEqual([rq.updateTextStyle.range.startIndex, rq.updateTextStyle.range.endIndex], [1, 8]);
+  assert.equal(Math.round(rq.updateTextStyle.textStyle.foregroundColor.color.rgbColor.green * 255), 107);
 });
