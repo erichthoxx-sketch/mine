@@ -146,8 +146,6 @@ export function editorView(a, bookId, title) {
       <span class="ed-sep"></span>
       <button class="ed-ic" data-act="ed.fmt" data-v="bold" title="Жирный (Ctrl+B)"><b>Ж</b></button>
       <button class="ed-ic" data-act="ed.fmt" data-v="italic" title="Курсив (Ctrl+I)"><i>К</i></button>
-      <button class="ed-ic" data-act="ed.fmt" data-v="underline" title="Подчёркнутый (Ctrl+U)"><u>Ч</u></button>
-      <button class="ed-ic" data-act="ed.fmt" data-v="strikeThrough" title="Зачёркнутый"><s>З</s></button>
       <button class="ed-ic ed-color" data-act="ed.color" title="Выделить цветом — тёмно-изумрудный (Ctrl+Shift+E). Ещё раз — убрать" aria-label="Выделить цветом"><span>А</span></button>
       <span class="ed-sep"></span>
       <button class="ed-ic" data-act="ed.align" data-v="left" title="По левому краю">${alignIc('left')}</button>
