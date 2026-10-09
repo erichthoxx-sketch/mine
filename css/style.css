@@ -790,3 +790,26 @@ main table.pub-t button.pill .icx { vertical-align: 0; }
 main table.pub-t .pl-none { color: var(--muted); display: inline-block; width: 18px; text-align: center; }
 table.pub-t tr.total td.pc { padding-left: 14px; }
 table.pub-t td.r, table.pub-t th.r { padding-right: 22px; }
+/* главы: компактные строки, на широком экране — две колонки; выложенные свёрнуты */
+.ch-sum { font-size: 13px; color: var(--muted); margin: 6px 0 10px; }
+.ch-sum b { color: var(--text); font-weight: 700; }
+.ch-cols { columns: 2 300px; column-gap: 32px; }
+.chr { display: flex; align-items: center; gap: 12px; min-height: 38px; padding: 0 8px; margin: 0 -8px; border-radius: 10px; break-inside: avoid; }
+.chr:hover { background: var(--surface-2); }
+.chr-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.chr-n .ch-link { color: var(--text); text-decoration: none; }
+.chr-n .ch-link:hover { color: var(--link); }
+.chr-v { flex: none; width: 40px; text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chr-m { flex: none; display: flex; gap: 2px; }
+main .chr button.pm { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; width: 74px; min-width: 0; height: 30px; min-height: 30px; padding: 0 8px;
+  border: 0 !important; border-radius: 8px; background: transparent !important; box-shadow: none; color: var(--text) !important; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+main .chr button.pm:hover { background: var(--surface) !important; }
+main .chr button.pm .icx .ic { width: 17px; height: 17px; stroke-width: 1.8; }
+main .chr button.pm .icx { vertical-align: 0; }
+main .chr .pl-none { color: var(--muted); display: inline-block; width: 17px; text-align: center; }
+details.ch-done { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 4px; }
+details.ch-done > summary { list-style: none; cursor: pointer; padding: 10px 0; font-size: 14px; font-weight: 600; color: var(--text-2); }
+details.ch-done > summary::-webkit-details-marker { display: none; }
+details.ch-done > summary::before { content: '›'; display: inline-block; width: 14px; transition: transform .15s; color: var(--muted); }
+details.ch-done[open] > summary::before { transform: rotate(90deg); }
+details.ch-done > summary .muted { font-weight: 400; }

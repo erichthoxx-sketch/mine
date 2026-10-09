@@ -119,6 +119,22 @@ export function bookPage(a, id) {
     const cls = st === 'done' ? 'pill done' : st === 'wait' ? 'pill wait' : 'pill';
     return `<td class="pc"><button class="${cls}" title="${st === 'done' ? (v.past ? 'выложена' : 'выложена ' + dm(v.date)) : st === 'wait' ? 'выйдет ' + dm(v.date) : 'отметить'}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? icx('check') : st === 'wait' ? icx('timer') + `<span>${dm(v.date)}</span>` : '<span class="pl-none">—</span>'}</button></td>`;
   };
+  // главы: сверху — что ещё впереди (запланированные и невыложенные), выложенные — свёрнуты; на широком экране — в две колонки
+  const chaptersBlock = () => {
+    const stOf = (t) => pfs.map((x) => pubState((pm[t.title] || {})[x], c.today));
+    const allDone = (t) => pfs.length > 0 && stOf(t).every((x) => x === 'done');
+    const done = chs.filter(allDone), rest = chs.filter((t) => !allDone(t)), nPlan = rest.filter((t) => stOf(t).includes('wait')).length;
+    const mark = (ch, pf) => {
+      const v = (pm[ch] || {})[pf], st = pubState(v, c.today);
+      const tip = `${pfs.length > 1 ? pf + ': ' : ''}${st === 'done' ? (v.past ? 'выложена' : 'выложена ' + dm(v.date)) : st === 'wait' ? 'выйдет ' + dm(v.date) : 'отметить выкладку'}`;
+      return `<button class="pm ${st || 'none'}" title="${esc(tip)}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? icx('check') : st === 'wait' ? icx('timer') + `<span>${dm(v.date)}</span>` : '<span class="pl-none">—</span>'}</button>`;
+    };
+    const row = (t) => `<div class="chr"><span class="chr-n">${canEdit ? `<a href="#" class="ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе">${esc(t.title)}</a>` : esc(t.title)}</span><span class="chr-v">${t.chars == null ? '' : alNum(t.chars)}</span><span class="chr-m">${pfs.map((x) => mark(t.title, x)).join('')}</span></div>`;
+    const range = (l) => (l.length > 1 ? `${esc(l[0].title)} — ${esc(l[l.length - 1].title)}` : l.length ? esc(l[0].title) : '');
+    return `<div class="ch-sum">выложено <b>${done.length}</b>${nPlan ? ` · запланировано <b>${nPlan}</b>` : ''}${rest.length - nPlan ? ` · ждут выкладки <b>${rest.length - nPlan}</b>` : ''} · ${alNum(b.chars)} а.л.${pfs.length > 1 ? ` · отметки: ${pfs.map(esc).join(' / ')}` : ''}</div>
+      ${rest.length ? `<div class="ch-cols">${rest.map(row).join('')}</div>` : '<p class="small muted" style="margin:4px 0 8px">Все главы выложены ✓</p>'}
+      ${done.length ? `<details class="ch-done"${rest.length ? '' : ' open'}><summary>Выложенные главы <span class="muted">· ${done.length} · ${range(done)}</span></summary><div class="ch-cols">${done.map(row).join('')}</div></details>` : ''}`;
+  };
   const sch = bookSchedule(b, c.today);
   // главы можно открыть в редакторе — для Google Документов
   const canEdit = !!b.fileId && b.mimeType === drive.MIME.doc;
@@ -158,10 +174,8 @@ export function bookPage(a, id) {
     ${b.status === 'done' ? '' : `<div class="mini-chart"><div class="row between small muted"><span>Написано за 2 недели</span><b>+${al(series.reduce((a, d) => a + (d.known ? d.value : 0), 0))}</b></div><div class="chart" id="bchart1"></div></div>`}
 </div>
   <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><div class="row">${canEdit ? `<button data-act="ch.add" data-id="${b.id}" title="Отдельная вкладка в Google Документе">+ Глава</button>` : ''}<button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div></div>
-    ${chs.length ? `<div class="scroll" style="margin-top:8px"><table class="pub-t${pfs.length > 2 ? " many" : ""}"><tr><th>Глава</th><th class="r">а.л.</th>${pfs.map((x) => `<th class="pc">${esc(x)}</th>`).join('')}</tr>
-      ${chs.map((t) => `<tr><td>${canEdit ? `<a href="#" class="tap ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}">${esc(t.title)}</a>` : esc(t.title)}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => cell(t.title, x)).join('')}</tr>`).join('')}
-      <tr class="total"><td>Всего</td><td class="r">${alNum(b.chars)}</td>${pfs.map((x) => `<td class="pc">${chs.filter((t) => pubState((pm[t.title] || {})[x], c.today) === 'done').length}</td>`).join('')}</tr></table></div>` : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
-    <div class="hint">${canEdit ? 'Нажмите на название главы — она откроется в редакторе. ' : ''}Нажмите на ячейку, чтобы отметить главу на площадке: «выложила» или «запланировала» (отложенная публикация — ${icx('timer')}). Выкладка сразу попадает событием в «Доходы».</div></div>
+    ${chs.length ? chaptersBlock() : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
+    <div class="hint">${canEdit ? 'Название — открыть главу в редакторе. ' : ''}Отметка справа — «выложила» или «на таймер». Выкладка сразу попадает событием в «Доходы».</div></div>
   ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${contestVol(x)(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
