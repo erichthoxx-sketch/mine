@@ -722,3 +722,14 @@ main { padding-top: 20px; }
 .goals-card .plist { margin-top: 6px; }
 .goals-card .mini-chart { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 .goals-card .mini-chart .row { margin-bottom: 4px; }
+/* шторка закрыта: колонка ровно по центру между меню и краем окна — одинаковые поля слева и справа, спокойная ширина */
+@media (min-width: 1180px) {
+  html.side-off:not(.app-writer) #app { padding-left: calc(220px + 48px); padding-right: 48px; }
+  html.side-off.nav-mini:not(.app-writer) #app { padding-left: calc(77px + 48px); }
+  html.side-off:not(.app-writer) .demo { margin-left: calc(-220px - 48px); margin-right: -48px; }
+  html.side-off.nav-mini:not(.app-writer) .demo { margin-left: calc(-77px - 48px); }
+  html.side-off:not(.app-writer) main, html.side-off:not(.app-writer) .top { max-width: 1040px; }
+  /* меню слева — без полосы прокрутки (прокручивается колёсиком и пальцем) */
+  nav.tabs { scrollbar-width: none; -ms-overflow-style: none; }
+  nav.tabs::-webkit-scrollbar { display: none; width: 0; height: 0; }
+}
