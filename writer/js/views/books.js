@@ -336,10 +336,11 @@ acts['pub.mark'] = (d) => {
     ${chs.length > 3 ? `<label for="pfn">Или первые N глав по порядку</label><input id="pfn" name="firstN" inputmode="numeric" placeholder="например, 12 — пролог и 11 глав">` : ''}
     <label for="pcx">${chs.length ? 'Или другая глава' : 'Глава'}</label><input id="pcx" name="chx" placeholder="например, Глава 25">
     <label>Площадки</label><div class="checks">${pfs.map((x) => `<label class="check"><input type="checkbox" name="pf" value="${esc(x)}"${(d.pf ? d.pf === x : x === pfs[0]) ? ' checked' : ''}>${esc(x)}</label>`).join('')}</div>
-    <div class="f2"><div><label for="pmd">Что сделала</label><select id="pmd" name="mode">${opt('done', 'Выложила', defMode)}${opt('plan', 'Запланировала (отложенная)', defMode)}${opt('past', 'Уже выложено раньше — без событий', '')}${opt('clear', 'Снять отметку', '')}</select></div>
-    <div><label for="pdt">Дата</label><input id="pdt" type="date" name="date" value="${cur?.date || d.date || (defMode === 'plan' ? nextSlot() : c.today)}"><div class="small muted" data-autodate hidden>по графику — можно поменять</div></div></div>
+    <div class="f2 f2-top"><div><label for="pmd">Что сделала</label><select id="pmd" name="mode">${opt('done', 'Выложила', defMode)}${opt('plan', 'Запланировала', defMode)}${opt('past', 'Выложено раньше', '')}${opt('clear', 'Снять отметку', '')}</select></div>
+    <div><label for="pdt">Дата</label><input id="pdt" type="date" name="date" value="${cur?.date || d.date || (defMode === 'plan' ? nextSlot() : c.today)}"></div></div>
+    <div class="small muted f2-note" data-autodate hidden>Дата — по графику выкладки, можно поменять.</div>
     ${hasSch ? `<div data-sch hidden><label class="check"><input type="checkbox" name="bySch" checked>По графику (${daysTxt(b.pubDays)}): каждой главе — свой день, начиная с даты</label><div class="small muted" data-preview></div></div>` : ''}
-    <div class="hint">Отложенная публикация: до указанной даты глава отмечена ${icx('timer')}, а в этот день сама станет выложенной. Событие «Выкладка главы» сразу ставится на эту дату в «Доходах». «Уже выложено раньше» — для глав, что вышли до начала учёта: они отметятся выложенными, но событий в «Доходах» не будет, дата не нужна.</div>`, async (fd) => {
+    <div class="hint">Отложенная публикация: до указанной даты глава отмечена ${icx('timer')}, а в этот день сама станет выложенной. Событие «Выкладка главы» сразу ставится на эту дату в «Доходах». «Выложено раньше» — для глав, что вышли до начала учёта: они отметятся выложенными, но событий в «Доходах» не будет, дата не нужна.</div>`, async (fd) => {
     const list = pickList(fd);
     const plats = fd.getAll('pf'), mode = fd.get('mode'), date = fd.get('date') || c.today;
     if (!list.length) { toast('Выберите главу'); return false; }
