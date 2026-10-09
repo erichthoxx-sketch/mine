@@ -1,6 +1,6 @@
 // Запуск приложения: вход, маршруты, общий контекст расчётов.
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
-import { installHandlers, esc, toast, acts, forms, watchForUpdates } from './ui.js';
+import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace } from './ui.js';
 import {
   todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth, litnetMoneyByMonth, litnetDiscountBase, monthKey,
 } from './calc.js';
@@ -16,6 +16,7 @@ import { sideIncome } from './views/side.js';
 
 const store = createStore();
 const ui = { route: '/', range: 90, table: 'weeks', day: null, month: null };
+keepPlace(ui, ['range', 'table', 'day', 'month', 'adMonth', 'booksMonth']);
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* нет доступа к памяти браузера */ }
 

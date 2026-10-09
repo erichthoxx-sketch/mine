@@ -755,3 +755,5 @@ main { padding-top: 20px; }
 /* выделение цветом в редакторе: тёмно-изумрудный (в тёмной теме — светлее, чтобы читалось) */
 .editor [data-c="#0b6b4f"] { color: var(--link) !important; }
 button.ed-ic.ed-color span { font-weight: 800; color: var(--link); border-bottom: 3px solid var(--link); line-height: 1; padding: 0 1px 1px; }
+/* цвета из Документа (кроме своей изумрудной пометки) в редакторе не показываем — обычный цвет текста темы; в Документе они сохраняются */
+.editor [data-c]:not([data-c="#0b6b4f"]) { color: inherit !important; }

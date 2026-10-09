@@ -121,3 +121,18 @@ export function watchForUpdates() {
   check();
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
 }
+
+// После обновления страницы остаёмся там же: адрес раздела — в адресной строке (#/book/…),
+// выбранные день, месяц, вкладки — в памяти этой вкладки браузера.
+export function keepPlace(ui, keys = []) {
+  const k = 'place:' + location.pathname;
+  try { const saved = JSON.parse(sessionStorage.getItem(k) || 'null'); if (saved) for (const x of keys) if (x in saved) ui[x] = saved[x]; } catch { /* нет памяти — не страшно */ }
+  const h = location.hash.slice(1);
+  if (h.startsWith('/')) ui.route = h;
+  let r = ui.route;
+  Object.defineProperty(ui, 'route', { get: () => r, set: (v) => { r = v; try { history.replaceState(null, '', '#' + v); } catch { /* ок */ } }, enumerable: true, configurable: true });
+  try { history.replaceState(null, '', '#' + r); } catch { /* ок */ }
+  const save = () => { try { sessionStorage.setItem(k, JSON.stringify(Object.fromEntries(keys.map((x) => [x, ui[x]])))); } catch { /* ок */ } };
+  addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', save);
+}

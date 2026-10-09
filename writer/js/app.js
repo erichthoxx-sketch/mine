@@ -1,6 +1,6 @@
 // Писательское приложение: книги (Google Диск), идеи, планер, маркетинг. Вход и база — общие с приложением доходов.
 import { createStore, authErrorText } from '../../js/store.js';
-import { installHandlers, esc, toast, acts, forms, watchForUpdates } from '../../js/ui.js';
+import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace } from '../../js/ui.js';
 import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
 import { writtenToday, writtenWeek } from './wcalc.js';
 import * as drive from './drive.js';
@@ -18,6 +18,7 @@ import { editorView, editorDirty } from './views/editor.js';
 export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'active', openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
+keepPlace(ui, ['planTab', 'ideaBook', 'ideaSt', 'mSt', 'mTab']);
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* ок */ }
 
