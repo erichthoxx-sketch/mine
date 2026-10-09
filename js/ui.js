@@ -104,6 +104,7 @@ export const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toS
 // Автообновление: если на сайте вышла новая версия, а браузер показывает старую из памяти — перезагружаем.
 // Версия зашита в адрес скриптов (папка vXXXXXXXX), её сравниваем со свежей страницей.
 export function watchForUpdates() {
+  try { sessionStorage.removeItem('staleReload'); } catch { /* ок */ } // приложение загрузилось — счётчик перезагрузок с нуля
   const mine = /\/v([0-9a-f]{8})\//.exec(import.meta.url)?.[1];
   if (!mine) return; // локальная проверка — без версий
   const check = async () => {

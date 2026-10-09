@@ -11,14 +11,15 @@
 <title>Мастерская</title>
 <script>
 // Если телефон держит старую страницу, а файлы этой версии уже заменены новыми — один раз перезагружаем свежую страницу
-window.__stale = function () {
-  try { var n = +(sessionStorage.getItem('staleReload') || 0); if (n >= 2) return; sessionStorage.setItem('staleReload', n + 1); } catch (e) {}
-  location.replace(location.pathname + '?t=' + Date.now());
+// (счётчик сбрасывается, как только приложение загрузилось; кнопка «Обновить» срабатывает всегда)
+window.__stale = function (force) {
+  try { var n = +(sessionStorage.getItem('staleReload') || 0); if (n >= 3 && !force) return; sessionStorage.setItem('staleReload', n + 1); } catch (e) {}
+  location.replace(location.pathname + '?t=' + Date.now() + location.hash);
 };
 // Не загрузилось за 12 секунд — показываем кнопку «Обновить» вместо вечной «Загрузки…»
 setTimeout(function () {
   var b = document.querySelector('#app .boot');
-  if (b) b.innerHTML = 'Не получилось загрузить приложение. <button onclick="window.__stale()">Обновить</button>';
+  if (b) b.innerHTML = 'Не получилось загрузить приложение. <button onclick="window.__stale(true)">Обновить</button>';
 }, 12000);
 // Вышла новая версия — сами переходим на неё: при открытии и когда приложение возвращается из фона
 window.__V = '__APPV__';
@@ -30,7 +31,7 @@ window.__V = '__APPV__';
       v = (v || '').trim();
       if (!v || v === window.__V) return;
       try { if (sessionStorage.getItem('appV') === v) return; sessionStorage.setItem('appV', v); } catch (e) {}
-      location.replace(location.pathname + '?v=' + v);
+      location.replace(location.pathname + '?v=' + v + location.hash);
     }).catch(function () {});
   }
   window.addEventListener('load', check);
