@@ -82,7 +82,7 @@ function todoistCard(c) {
   </div>`;
 }
 acts['td.key'] = () => openSheet('Ключ Todoist', `<p class="small muted" style="margin-top:0">Todoist → Настройки → Интеграции → Для разработчиков → «Токен API». Скопируйте и вставьте сюда.</p>
-  <input name="k" autocomplete="off" spellcheck="false" placeholder="например, c16b7ee4…" required>`, async (fd) => {
+  <input name="k" autocomplete="off" spellcheck="false" placeholder="длинная строка из букв и цифр" required>`, async (fd) => {
   const k = String(fd.get('k') || '').trim();
   if (!/^[0-9a-f]{30,}$/i.test(k)) { toast('Похоже, это не ключ: нужна строка из букв и цифр'); return false; }
   await app().store.saveSettings({ todoistToken: k, todoistOff: false, todoist: { ...(app().ctx().settings.todoist || {}), err: '' } });
