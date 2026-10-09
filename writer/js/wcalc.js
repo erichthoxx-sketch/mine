@@ -192,7 +192,8 @@ export function plannedPubs(b, today) {
 export function chapterList(b) {
   const tabs = (b.tabs || []).filter((t) => t.counted !== false).map((t) => ({ title: t.title, chars: t.chars }));
   const have = new Set(tabs.map((t) => t.title));
-  return [...tabs, ...Object.keys(pubMap(b)).filter((t) => !have.has(t)).map((title) => ({ title, chars: null }))];
+  // синопсис, аннотация и прочие служебные вкладки главами не показываем
+  return [...tabs, ...Object.keys(pubMap(b)).filter((t) => !have.has(t) && !/^\s*(синопсис|аннотац)/i.test(t)).map((title) => ({ title, chars: null }))];
 }
 // написанные главы — вкладки «Пролог», «Глава …», «Эпилог» («От автора» главой не считаем)
 export const writtenChapters = (b) => (b.tabs || []).filter((t) => t.counted !== false && /^\s*(пролог|глава|эпилог)/i.test(t.title)).length;

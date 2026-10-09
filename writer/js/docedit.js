@@ -130,3 +130,6 @@ export function nextChapterTab(doc) {
   walk(doc.tabs);
   return { title: `Глава ${n + 1}`, index: at ? at.index : (doc.tabs || []).length, ...(at?.parentTabId ? { parentTabId: at.parentTabId } : {}) };
 }
+
+// строка — название главы («Глава 3.», «Пролог», «Глава пятая. Утро»)
+export const isChapterTitle = (t) => { const v = String(t || '').trim(); return v.length > 0 && v.length <= 80 && /^(пролог|эпилог|глава|часть)(?=[\s.,:;!?\d]|$)/i.test(v); };

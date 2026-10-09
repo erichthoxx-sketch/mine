@@ -6,7 +6,7 @@ import { esc, acts, toast, ask, openSheet } from '../../../js/ui.js';
 import { fmtDate, num, plural } from '../../../js/format.js';
 import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
-import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats, nextChapterTab } from '../docedit.js';
+import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats, nextChapterTab, isChapterTitle } from '../docedit.js';
 import { alNum, chapterList } from '../wcalc.js';
 
 const app = () => window.__app;
@@ -155,7 +155,7 @@ export function editorView(a, bookId, title) {
       <button class="ed-ic" data-act="ed.redo" title="Повторить (Ctrl+Shift+Z)">↷</button>
       <span class="ed-sep"></span>
       <button class="ed-ic" data-act="ed.find" title="Найти и заменить (Ctrl+F)">${ic('search')}</button>
-      <button class="ed-ic" data-act="ed.copy" title="Скопировать всю главу">${ic('copy')}</button>
+      <button class="ed-ic" data-act="ed.copy" title="Скопировать главу (без названия)">${ic('copy')}</button>
       <button class="ed-ic" data-act="ed.zoom" data-v="-1" title="Мельче">A−</button>
       <button class="ed-ic" data-act="ed.zoom" data-v="1" title="Крупнее">A+</button>
       <button class="ed-ic" data-act="ed.focus" title="Режим фокуса (Esc — выйти)">⛶</button>
@@ -379,15 +379,22 @@ acts['ed.replaceAll'] = () => {
 acts['ed.copy'] = async () => {
   const el = document.getElementById('ed');
   if (!el) return false;
-  const text = blocksText(htmlToBlocks(el));
-  const html = `<div>${[...el.children].map((b) => `<${b.tagName.toLowerCase()}${b.getAttribute('style') ? ` style="${b.getAttribute('style')}"` : ''}>${b.innerHTML}</${b.tagName.toLowerCase()}>`).join('')}</div>`;
+  // без названия главы: «Глава 3.», «Пролог» и пустые строки после него в копию не идут
+  const kids = [...el.children], empty = (n) => !n.textContent.trim();
+  let k = 0;
+  while (k < kids.length && empty(kids[k])) k++;
+  if (kids[k] && (/^H[1-6]$/.test(kids[k].tagName) || isChapterTitle(kids[k].textContent))) { k++; while (k < kids.length && empty(kids[k])) k++; }
+  const body = kids.slice(k), box = document.createElement('div');
+  body.forEach((n) => box.append(n.cloneNode(true)));
+  const text = blocksText(htmlToBlocks(box));
+  const html = `<div>${body.map((b) => `<${b.tagName.toLowerCase()}${b.getAttribute('style') ? ` style="${b.getAttribute('style')}"` : ''}>${b.innerHTML}</${b.tagName.toLowerCase()}>`).join('')}</div>`;
   try {
     if (window.ClipboardItem && navigator.clipboard?.write) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
     else await navigator.clipboard.writeText(text);
-    toast('Глава скопирована целиком');
+    toast('Глава скопирована — без названия');
   } catch {
     const r = document.createRange(); r.selectNodeContents(el); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
-    document.execCommand('copy'); toast('Глава скопирована целиком');
+    document.execCommand('copy'); toast('Скопировано всё, вместе с названием');
   }
   return false;
 };

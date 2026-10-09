@@ -5,6 +5,7 @@ import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
 import { STATUS } from './books.js';
 import { widgetCard } from './widgets.js';
+import { svcInfo } from './pubfiles.js';
 
 const app = () => window.__app;
 export const MTYPES = { banner: 'Баннер для постов', cover: 'Обложка', target: 'Креатив для таргета', manuscript: 'Рукопись', synopsis: 'Синопсис', other: 'Другое' };
@@ -49,8 +50,8 @@ export function mkSummary(c, b) {
     banners: mediaOf(c, b, ['banner', 'cover']).length,
     creatives: mediaOf(c, b, ['target']).length, ads: directOf(b).ads.length,
     manuscript: !!b.fileId || mediaOf(c, b, ['manuscript']).length > 0,
-    synopsis: !!(b.synopsis || '').trim() || mediaOf(c, b, ['synopsis']).length > 0,
-    annotation: !!(promoOf(b).annotation || '').trim(),
+    synopsis: svcInfo(b, 'synopsis').ok || mediaOf(c, b, ['synopsis']).length > 0,
+    annotation: svcInfo(b, 'annotation').ok,
   };
 }
 acts['mk.go'] = (d) => { app().ui.mTab = d.tab || 'texts'; app().go('/mk/' + d.id); };
@@ -122,7 +123,7 @@ function pubBlock(c, b) {
     <div class="list">${syn.map(fileRow).join('')}</div>
     <div class="row" style="margin-top:8px">${ok ? upBtn(b, 'synopsis', '+ Загрузить файл синопсиса', '.doc,.docx,.pdf,.rtf,.odt,.txt') : ''}</div></div>
   <div class="card"><h2>Отправить в издательство</h2>
-    <p class="small muted" style="margin-top:0">Архив: рукопись (Word), синопсис, аннотация и обложка — в одной папке.</p>
+    <p class="small muted" style="margin-top:0">Архив: рукопись одним файлом Word в оформлении для издательства и синопсис из вкладки «Синопсис».</p>
     <div class="row"><button class="primary" data-act="mk.pubZip" data-id="${b.id}">Скачать пакет для издательства</button>${b.mkFolders?.pub ? `<a class="btn" href="${esc(b.mkFolders.pub.link)}" target="_blank" rel="noopener">${ic('folder')} Папка на Диске</a>` : ''}</div></div>
   ${driveNote(c)}`;
 }
@@ -251,19 +252,6 @@ acts['mk.targetZip'] = async (d) => {
   const files = [[`Тексты — ${safe(b.title)}.txt`, targetText(c, b)]];
   for (const m of mediaOf(c, b, ['target'])) files.push([`Креативы/${safe(m.name) || m.id + '.jpg'}`, await blobOf(m)]);
   await zipDownload(`target-${latin(b.title)}.zip`, files);
-};
-acts['mk.pubZip'] = async (d) => {
-  const c = app().ctx(), b = c.wbooksById[d.id];
-  try { await drive.ensureToken(); } catch (e) { toast(e.message); return; }
-  toast('Собираю архив…');
-  const p = promoOf(b), files = [];
-  try { if (b.fileId) files.push([`${safe(b.title)} — рукопись.docx`, await drive.fileBlob({ id: b.fileId, mimeType: b.mimeType || drive.MIME.doc })]); } catch (e) { toast('Рукопись не выгрузилась: ' + e.message); }
-  for (const m of mediaOf(c, b, ['manuscript'])) files.push([`Рукопись/${safe(m.name)}`, await blobOf(m)]);
-  if ((b.synopsis || '').trim()) files.push(['Синопсис.txt', b.synopsis]);
-  for (const m of mediaOf(c, b, ['synopsis'])) files.push([`Синопсис/${safe(m.name)}`, await blobOf(m)]);
-  if (p.annotation) files.push(['Аннотация.txt', p.annotation]);
-  if (b.cover) files.push(['Обложка.jpg', await (await fetch(b.cover)).blob()]);
-  await zipDownload(`izdatelstvo-${latin(b.title)}.zip`, files);
 };
 
 acts.copy ||= async (d) => {

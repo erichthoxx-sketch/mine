@@ -6,6 +6,7 @@ import { goalTitle, goalToday } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
+import { textsCard, publisherCard } from './pubfiles.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 import { addDays } from '../../../js/calc.js';
@@ -112,7 +113,6 @@ export function bookPage(a, id) {
   const extra = (b.platforms || []).filter((x) => !PLATFORMS.includes(x)).join(', ');
   const chs = chapterList(b), pm = pubMap(b), pfs = pubPlatforms(b), outN = Object.keys(chapterOutDates(b, c.today)).length;
   const planned = plannedPubs(b, c.today);
-  const other = (b.tabs || []).filter((t) => t.counted === false);
   const mk = mkSummary(c, b);
   const cell = (ch, pf) => {
     const v = (pm[ch] || {})[pf], st = pubState(v, c.today);
@@ -161,7 +161,7 @@ export function bookPage(a, id) {
     ${chs.length ? `<div class="scroll" style="margin-top:8px"><table class="pub-t${pfs.length > 2 ? " many" : ""}"><tr><th>Глава</th><th class="r">а.л.</th>${pfs.map((x) => `<th>${esc(x)}</th>`).join('')}</tr>
       ${chs.map((t) => `<tr><td>${canEdit ? `<a href="#" class="tap ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}">${esc(t.title)}</a>` : esc(t.title)}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => cell(t.title, x)).join('')}</tr>`).join('')}
       <tr class="total"><td>Всего</td><td class="r">${alNum(b.chars)}</td>${pfs.map((x) => `<td>${chs.filter((t) => pubState((pm[t.title] || {})[x], c.today) === 'done').length}</td>`).join('')}</tr></table></div>` : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
-    <div class="hint">${canEdit ? 'Нажмите на название главы — она откроется в редакторе. ' : ''}Нажмите на ячейку, чтобы отметить главу на площадке: «выложила» или «запланировала» (отложенная публикация — ⏱). Выкладка сразу попадает событием в «Доходы».${other.length ? ` Не считаются как текст книги: ${other.map((t) => esc(t.title)).join(', ')}.` : ''}</div></div>
+    <div class="hint">${canEdit ? 'Нажмите на название главы — она откроется в редакторе. ' : ''}Нажмите на ячейку, чтобы отметить главу на площадке: «выложила» или «запланировала» (отложенная публикация — ⏱). Выкладка сразу попадает событием в «Доходы».</div></div>
   ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${contestVol(x)(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
@@ -172,13 +172,8 @@ export function bookPage(a, id) {
       <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="target"><span>Для таргета<span class="sub">креативов ${mk.creatives} · объявлений ${mk.ads}</span></span><span>${mark(mk.creatives && mk.ads)}</span></a>
     </div>
     ${mk.creatives || mk.ads ? `<div class="row" style="margin-top:10px"><button data-act="mk.targetZip" data-id="${b.id}">Скачать пакет для таргетолога</button></div>` : ''}</div>
-  <div class="card"><h2>Для издательства</h2>
-    <div class="list">
-      <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="pub"><span>Рукопись</span><span>${mark(mk.manuscript)}</span></a>
-      <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="pub"><span>Синопсис</span><span>${mark(mk.synopsis)}</span></a>
-      <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="texts"><span>Аннотация</span><span>${mark(mk.annotation)}</span></a>
-    </div>
-    <div class="row" style="margin-top:10px"><button class="primary" data-act="mk.pubZip" data-id="${b.id}">Скачать пакет для издательства</button></div></div>
+  ${textsCard(b)}
+  ${publisherCard(b)}
   <div class="card"><h2>О книге</h2>
   <form data-form="wbook.save" data-id="${b.id}">
     <label for="bt" style="margin-top:0">Название</label><input id="bt" name="title" value="${esc(b.title)}" required>
