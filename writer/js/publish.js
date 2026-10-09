@@ -138,13 +138,19 @@ export function parasHtml(paras) {
   const css = (p) => { if (!p.ps) return ''; const { a, fi, il, sa, sb, ls } = p.ps; return ` style="margin:${sa}pt 0 ${sb}pt ${il}pt;text-indent:${fi - il}pt;line-height:${+(ls / 100 * 1.15).toFixed(3)};text-align:${AL[a] || 'left'}"`; };
   return paras.map((p) => `<p class="${p.kind}${p.pageBreak ? ' pb' : ''}"${css(p)}>${(p.runs || []).map(run).join('') || '&nbsp;'}</p>`).join('');
 }
+// Поля страницы — внутри вёрстки (у самой страницы полей нет): тогда браузер не печатает свои колонтитулы
+// (дату, название, about:blank). Верх и низ повторяются на каждой странице — шапкой и подвалом таблицы.
 export function printHtml(paras, docTitle) {
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>${hesc(docTitle)}</title><style>
-@page { size: A4; margin: 2cm 1.5cm 2cm 3cm; }
-body { font: 12pt/1.15 'Times New Roman', Times, serif; color: #000; margin: 0; }
+@page { size: A4; margin: 0; }
+html, body { margin: 0; }
+body { font: 12pt/1.15 'Times New Roman', Times, serif; color: #000; padding: 0 1.5cm 0 3cm; }
+table.pg { width: 100%; border-collapse: collapse; }
+table.pg td { padding: 0; }
+.pg-top { height: 2cm; } .pg-bot { height: 2cm; }
 p { margin: 0; }
 p.h { text-align: center; font-weight: bold; font-size: 14pt; margin-bottom: 1.5em; }
 p.author { text-align: center; font-size: 14pt; margin: 6cm 0 2cm; } p.title { text-align: center; font-weight: bold; font-size: 18pt; margin-bottom: 8cm; } p.meta { text-align: center; }
 p.pb { break-before: page; }
-</style></head><body>${parasHtml(paras)}</body></html>`;
+</style></head><body><table class="pg"><thead><tr><td class="pg-top"></td></tr></thead><tfoot><tr><td class="pg-bot"></td></tr></tfoot><tbody><tr><td>${parasHtml(paras)}</td></tr></tbody></table></body></html>`;
 }
