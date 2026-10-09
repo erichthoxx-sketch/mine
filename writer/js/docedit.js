@@ -117,3 +117,16 @@ export function saveRequests(blocks, tabId, endIndex) {
   });
   return [...req, ...runReq];
 }
+
+// новая глава: следующий номер после последней «Глава N» и место — сразу за ней (в той же группе вкладок)
+export function nextChapterTab(doc) {
+  let n = 0, at = null;
+  const walk = (list, parentTabId) => (list || []).forEach((t, k) => {
+    const ti = t.tabProperties?.title || '', m = /^\s*глава\s+(\d+)/i.exec(ti);
+    if (m && +m[1] >= n) { n = +m[1]; at = { index: k + 1, parentTabId }; }
+    else if (!at && /^\s*пролог/i.test(ti)) at = { index: k + 1, parentTabId };
+    walk(t.childTabs, t.tabProperties?.tabId);
+  });
+  walk(doc.tabs);
+  return { title: `Глава ${n + 1}`, index: at ? at.index : (doc.tabs || []).length, ...(at?.parentTabId ? { parentTabId: at.parentTabId } : {}) };
+}

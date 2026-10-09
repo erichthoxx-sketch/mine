@@ -169,12 +169,16 @@ export async function gainsSince(file, dates) {
   const revs = (j.revisions || []).sort((a, b) => a.modifiedTime.localeCompare(b.modifiedTime));
   if (!revs.length) return out;
   const last = revs[revs.length - 1];
+  // «сейчас» — сам файл, а не последняя версия: Диск собирает версии с опозданием, и утренние правки
+  // иначе теряются (было: последняя версия вчерашняя → «сегодня не писала» → +0)
+  const nowRev = file.mimeType === MIME.doc ? { id: '__now', now: true } : last;
+  const lastTime = file.modifiedTime && file.modifiedTime > last.modifiedTime ? file.modifiedTime : last.modifiedTime;
   const memo = new Map();
   const textOf = async (rev) => {
     if (memo.has(rev.id)) return memo.get(rev.id);
     let n;
     if (file.mimeType === MIME.doc) {
-      const url = rev.exportLinks?.['text/plain'];
+      const url = rev.now ? `${DRIVE}/${file.id}/export?mimeType=text/plain` : rev.exportLinks?.['text/plain'];
       if (!url) throw new Error('нет выгрузки версии');
       n = countPlain(await (await gfetch(url)).text());
     } else {
@@ -187,10 +191,10 @@ export async function gainsSince(file, dates) {
   };
   for (const d of dates) {
     const midnight = new Date(d + 'T00:00:00').toISOString();
-    if (last.modifiedTime < midnight) { out[d] = 0; continue; } // после этой даты файл не меняли
+    if (lastTime < midnight) { out[d] = 0; continue; } // после этой даты файл не меняли
     const before = [...revs].reverse().find((r) => r.modifiedTime < midnight);
     if (!before) continue; // файл появился позже — честно не посчитать
-    out[d] = (await textOf(last)) - (await textOf(before));
+    out[d] = (await textOf(nowRev)) - (await textOf(before));
   }
   return out;
 }
@@ -237,6 +241,12 @@ export async function docUpdate(id, requests) {
   return (await gfetch(`https://docs.googleapis.com/v1/documents/${id}:batchUpdate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requests }) })).json();
 }
 
+// новая вкладка документа (глава): возвращает её tabId
+export async function docAddTab(id, props) {
+  const r = await docUpdate(id, [{ addDocumentTab: { tabProperties: props } }]);
+  return r?.replies?.[0]?.addDocumentTab?.tabProperties?.tabId || '';
+}
+
 // ---------- пробный «диск» для проверки на localhost ----------
 const mock = (() => {
   const t = '2026-10-05T10:00:00Z';
@@ -268,6 +278,11 @@ const mock = (() => {
     },
     update(id, requests) {
       const tabs = mockTabs(id);
+      if (requests[0]?.addDocumentTab) {
+        const p = requests[0].addDocumentTab.tabProperties, t = { id: 't.' + Math.random().toString(36).slice(2, 7), title: p.title, chars: [] };
+        tabs.splice(p.index ?? tabs.length, 0, t); mockRev++;
+        return { documentId: id, replies: [{ addDocumentTab: { tabProperties: { tabId: t.id, title: t.title } } }] };
+      }
       for (const r of requests) {
         const k = r.deleteContentRange || r.insertText || r.updateTextStyle;
         if (!k) continue; // стили абзацев пробный документ не хранит

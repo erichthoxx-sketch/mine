@@ -4,26 +4,27 @@ import { num, fmtDate, fmtShort } from '../../js/format.js';
 import { alNum, al } from './wcalc.js';
 
 // Знаки по дням: столбики, пунктир — норма цели, линия — среднее за 7 дней
-export function writtenChart(el, { days, target = null, height = 210 }) {
+export function writtenChart(el, { days, target = null, height = 210, mini = false }) {
   if (!el) return;
   const W = Math.max(300, el.clientWidth || 340), H = height;
-  const L = 46, R = 8, T = 14, B = 24, pw = W - L - R, ph = H - T - B;
+  const L = mini ? 4 : 46, R = mini ? 4 : 8, T = mini ? 6 : 14, B = mini ? 18 : 24, pw = W - L - R, ph = H - T - B;
   const n = days.length;
   if (!n || !days.some((d) => d.known)) { el.innerHTML = '<p class="small muted" style="margin:0">Пока мало данных — график появится, когда объём обновится несколько дней.</p>'; return; }
   const ma = days.map((_, i) => { const w = days.slice(Math.max(0, i - 6), i + 1).filter((d) => d.known); return w.length ? w.reduce((s, d) => s + d.value, 0) / w.length : 0; });
   const max = niceMax(Math.max(...days.map((d) => d.value), target || 0, 1));
   const y = (v) => T + ph - (v / max) * ph;
   const xc = (i) => L + ((i + 0.5) / n) * pw;
-  const bw = Math.max(2, Math.min(16, pw / n - 3));
+  const bw = Math.max(2, Math.min(mini ? 22 : 16, pw / n - (mini ? 5 : 3)));
   let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Знаки по дням">`;
-  s += ticks(max, 3).map((t) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text class="axis" x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${alNum(t)}</text>`).join('');
+  if (!mini) s += ticks(max, 3).map((t) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text class="axis" x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${alNum(t)}</text>`).join('');
   s += days.map((d, i) => `<rect class="bar${d.known ? '' : ' unk'}${target && d.value >= target * 0.95 ? ' hit' : ''}" x="${xc(i) - bw / 2}" y="${y(d.value)}" width="${bw}" height="${Math.max(0, T + ph - y(d.value))}" rx="2"/>`).join('');
   // среднее — только с первого дня, где есть данные
   const first = days.findIndex((d) => d.known);
   s += `<polyline class="ma" fill="none" points="${ma.map((v, i) => (i < first ? null : `${xc(i).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean).join(' ')}"/>`;
   if (target) s += `<line class="target" x1="${L}" x2="${W - R}" y1="${y(target)}" y2="${y(target)}"/>`;
-  const step = Math.max(1, Math.ceil(n / 6));
-  for (let i = 0; i < n; i += step) s += `<text class="axis" x="${xc(i)}" y="${H - 6}" text-anchor="middle">${fmtShort(days[i].date)}</text>`;
+  if (mini) s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${T + ph}" y2="${T + ph}"/>`;
+  const step = mini ? Math.max(1, n - 1) : Math.max(1, Math.ceil(n / 6));
+  for (let i = 0; i < n; i += step) s += `<text class="axis" x="${xc(i)}" y="${H - 6}" text-anchor="${mini ? (i ? 'end' : 'start') : 'middle'}">${fmtShort(days[i].date)}</text>`.replace(mini ? `x="${xc(i)}"` : '\u0000', `x="${i ? W - R : L}"`);
   s += `<line class="cursor" y1="${T}" y2="${T + ph}" hidden/></svg>`;
   el.innerHTML = s;
   bindTip(el, el.querySelector('svg'), W, L, W - R, n, (i) => `<b>${fmtDate(days[i].date)}</b><div>${days[i].known ? al(days[i].value) : 'нет данных'}</div><div class="muted">среднее 7 дн.: ${al(ma[i])}</div>${target ? `<div class="muted">норма: ${al(target)}</div>` : ''}`);

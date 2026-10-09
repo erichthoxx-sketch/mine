@@ -3,7 +3,7 @@ import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, a
 import { num, fmtDate, plural } from '../../../js/format.js';
 import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol } from '../wcalc.js';
 import { goalTitle, goalToday } from './goals.js';
-import { writtenChart, growthChart } from '../wcharts.js';
+import { writtenChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
 import { resizeImage } from '../../../js/img.js';
@@ -127,11 +127,8 @@ export function bookPage(a, id) {
   const fin = bookGoals.find((x) => x.g.type === 'finish' && x.st.active);
   const daily = bookGoals.find((x) => x.g.type === 'daily' && x.st.active);
   const target = (daily && daily.st.perDay) || null;
-  const series = dailyWritten(b, addDays(c.today, -29), c.today, c.today);
-  const pts = Object.keys(h).filter((k) => k >= addDays(c.today, -90) && k <= c.today).sort().map((k) => ({ date: k, value: h[k] }));
-  if (b.chars != null && (!pts.length || pts[pts.length - 1].date < c.today)) pts.push({ date: c.today, value: b.chars });
+  const series = dailyWritten(b, addDays(c.today, -13), c.today, c.today);
   const wch = writtenChapters(b), planCh = Number(fin?.g.chapters || b.planChapters) || null;
-  const growthGoal = null;
 
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a></p>
   <div class="card book-head">
@@ -156,12 +153,11 @@ export function bookPage(a, id) {
     <label class="inline-num">Глав в книге, примерно <input type="number" min="1" inputmode="numeric" value="${b.planChapters || ''}" placeholder="—" data-chg="wb.planCh" data-id="${b.id}"></label>
     ${progressBlock(c, b)}
   </div>
-  <div class="card"><div class="row between"><h2 style="margin:0">Цели и динамика</h2><button class="small-btn" data-act="goal.new" data-book="${b.id}">+ Цель</button></div>
-    ${bookGoals.length ? `<div class="plist" style="margin-top:4px">${bookGoals.map(({ g, st }) => `<a class="pitem tap" href="#" data-act="goal.edit" data-id="${g.id}"><span class="dot k-goal"${st.doneToday ? ' style="opacity:.4"' : ''}></span><span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}${g.deadline ? ` · до ${fmtDate(g.deadline)}` : ''}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:6px 0 0">Целей по книге нет. Например: «дописать к 15 октября» — посчитаю, сколько писать в день, и буду напоминать.</p>'}
-    <h3 style="margin:14px 0 4px">Написано по дням, а.л.</h3><div class="chart" id="bchart1"></div>
-    <h3 style="margin:14px 0 4px">Рост книги, а.л.</h3><div class="chart" id="bchart2"></div>
+  <div class="card goals-card"><div class="row between"><h2 style="margin:0">Цели</h2><button class="small-btn" data-act="goal.new" data-book="${b.id}">+ цель</button></div>
+    ${bookGoals.length ? `<div class="plist">${bookGoals.map(({ g, st }) => `<a class="pitem tap" href="#" data-act="goal.edit" data-id="${g.id}"><span class="dot k-goal"${st.doneToday ? ' style="opacity:.4"' : ''}></span><span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:4px 0 0">Например, «по главе в день до 15 октября» — буду напоминать.</p>'}
+    ${b.status === 'done' ? '' : `<div class="mini-chart"><div class="row between small muted"><span>Написано за 2 недели</span><b>+${al(series.reduce((a, d) => a + (d.known ? d.value : 0), 0))}</b></div><div class="chart" id="bchart1"></div></div>`}
 </div>
-  <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div>
+  <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><div class="row">${canEdit ? `<button data-act="ch.add" data-id="${b.id}" title="Отдельная вкладка в Google Документе">+ Глава</button>` : ''}<button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div></div>
     ${chs.length ? `<div class="scroll" style="margin-top:8px"><table class="pub-t${pfs.length > 2 ? " many" : ""}"><tr><th>Глава</th><th class="r">а.л.</th>${pfs.map((x) => `<th>${esc(x)}</th>`).join('')}</tr>
       ${chs.map((t) => `<tr><td>${canEdit ? `<a href="#" class="tap ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}">${esc(t.title)}</a>` : esc(t.title)}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => cell(t.title, x)).join('')}</tr>`).join('')}
       <tr class="total"><td>Всего</td><td class="r">${alNum(b.chars)}</td>${pfs.map((x) => `<td>${chs.filter((t) => pubState((pm[t.title] || {})[x], c.today) === 'done').length}</td>`).join('')}</tr></table></div>` : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
@@ -196,7 +192,7 @@ export function bookPage(a, id) {
     <label for="bn">Заметки</label><textarea id="bn" name="note">${esc(b.note || '')}</textarea>
     <div class="row between" style="margin-top:14px"><button class="primary" type="submit">Сохранить</button><button type="button" class="danger" data-act="wbook.del" data-id="${b.id}">Убрать из приложения</button></div>
   </form></div>`;
-  return { html, after: () => { writtenChart(document.getElementById('bchart1'), { days: series, target }); growthChart(document.getElementById('bchart2'), { points: pts, goal: growthGoal }); } };
+  return { html, after: () => { writtenChart(document.getElementById('bchart1'), { days: series, target, height: 86, mini: true }); } };
 }
 
 // ---------- обновление знаков ----------
@@ -205,7 +201,7 @@ export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
-  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled) return false;
+  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled) return false;
   const r = await drive.countFile(meta);
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
   const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
@@ -213,7 +209,7 @@ export async function refreshOne(a, b, force = false) {
   const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE };
   await a.store.put('w_books', base);
   // шаг 2: начало дня / недели / месяца и (один раз) история за 2 недели — по версиям документа
-  let dayStart = b.dayStart && b.dayStart.date === c.today ? b.dayStart : null;
+  let dayStart = b.dayStart && b.dayStart.date === c.today && b.dayStart.v === 2 ? b.dayStart : null;
   let weekStart = b.weekStart && b.weekStart.date === c.today ? b.weekStart : null;
   let monthStart = b.monthStart && b.monthStart.date === c.today ? b.monthStart : null;
   let filled = !!b.histFilled || meta.mimeType !== drive.MIME.doc; // Word-файлы не восстанавливаем — это тяжело
@@ -227,7 +223,7 @@ export async function refreshOne(a, b, force = false) {
     for (const d of fill) { const k = addDays(d, -1); if (g[d] != null && h2[k] == null) h2[k] = Math.max(0, r.total - Math.max(0, g[d])); }
     if (fill.some((d) => g[d] != null)) filled = true;
     const prev = Object.keys(b.history || {}).filter((k) => k < c.today).sort().pop();
-    if (!dayStart) dayStart = { date: c.today, chars: g[c.today] != null ? r.total - Math.max(0, g[c.today]) : (!ruleChanged && prev && prev >= addDays(c.today, -1) ? b.history[prev] : r.total) };
+    if (!dayStart) dayStart = { date: c.today, v: 2, chars: g[c.today] != null ? r.total - Math.max(0, g[c.today]) : (!ruleChanged && prev && prev >= addDays(c.today, -1) ? b.history[prev] : r.total) };
     if (!weekStart) weekStart = { date: c.today, from: wFrom, chars: g[wFrom] != null ? r.total - Math.max(0, g[wFrom]) : null };
     if (!monthStart) monthStart = { date: c.today, from: mFrom, chars: g[mFrom] != null ? r.total - Math.max(0, g[mFrom]) : null };
     const cur = a.ctx().wbooksById[b.id] || base;

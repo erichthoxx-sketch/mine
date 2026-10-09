@@ -512,7 +512,7 @@ a.side-card:hover { border-color: var(--accent-2); }
 .side .pi-btns button { min-height: 32px; padding: 3px 10px; font-size: 13px; }
 .side-more { display: block; margin: 14px 0 0; font-size: 14px; }
 .side-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-.side-actions button { min-height: 36px; padding: 6px 14px; font-size: 14px; }
+.side-actions button, .side-actions .btn { min-height: 36px; padding: 6px 14px; font-size: 14px; }
 
 @media (min-width: 1180px) {
   body { padding-bottom: 0; }
@@ -706,3 +706,19 @@ main { padding-top: 20px; }
   .nt-soon { display: flex; gap: 10px; font-size: 13px; line-height: 1.35; padding: 4px 0; color: var(--text-2); }
   .nt-d { flex: none; width: 48px; white-space: nowrap; color: var(--muted); font-weight: 700; }
 }
+/* поиск в редакторе: все совпадения и текущее */
+::highlight(ed-find) { background-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+::highlight(ed-find-cur) { background-color: var(--accent-2); color: var(--accent-ink); }
+.ed-find { padding: 8px 10px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.ed-find input { width: 190px; min-height: 32px; padding: 4px 10px; }
+.ed-found { min-width: 70px; }
+/* переключатель глав: аккуратные стрелки и «+» */
+.ed-chapter .ed-ic { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.ed-chapter .ed-ic .ic { width: 18px; height: 18px; stroke-width: 2; }
+.ed-chapter .flip { display: inline-flex; transform: scaleX(-1); }
+.ed-ic-gap { width: 34px; height: 34px; flex: none; }
+.ed-chapter .ed-add { font-size: 20px; font-weight: 400; line-height: 1; }
+/* цели книги: узкий блок, мини-график без осей */
+.goals-card .plist { margin-top: 6px; }
+.goals-card .mini-chart { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.goals-card .mini-chart .row { margin-bottom: 4px; }

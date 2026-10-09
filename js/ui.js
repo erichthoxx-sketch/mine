@@ -55,8 +55,9 @@ export function installHandlers(afterChange) {
     const fn = acts[el.dataset.act];
     if (!fn) return;
     e.preventDefault();
-    try { await fn(el.dataset, el, e); } catch (err) { console.error(err); toast('Ошибка: ' + (err.message || err)); }
-    afterChange?.();
+    let res;
+    try { res = await fn(el.dataset, el, e); } catch (err) { console.error(err); toast('Ошибка: ' + (err.message || err)); }
+    if (res !== false) afterChange?.();
   });
   document.addEventListener('submit', async (e) => {
     const f = e.target.closest('form[data-form]');

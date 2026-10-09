@@ -45,6 +45,6 @@ export function sideIncome(c) {
       <div class="small muted">${need > 0 ? `≈ ${rub(need, 0)} в день до конца месяца` : 'цель месяца выполнена ✓'}</div></a>` : ''}
     <div class="side-k" style="margin-top:20px">Ближайшее</div>
     ${dates.length ? `<div class="side-card"><div class="plist">${dates.map((x) => `<a class="pitem tap" href="#" data-act="go" data-to="${x.to}"><span class="dot k-money"></span><span class="pi-body"><span class="pi-t">${esc(x.title)}</span><span class="pi-s">${fmtDate(x.date).slice(0, 5)} · ${when(dleft(x.date, t))}${x.sub ? ' · ' + esc(x.sub) : ''}</span></span></a>`).join('')}</div></div>` : '<p class="small muted">Ничего срочного на три недели ✓</p>'}
-    <div class="side-actions"><button data-act="event.quick" data-date="${t}">+ Событие</button><button data-act="sale.manual" data-date="${t}">+ Продажи</button><button data-act="go" data-to="/data">Загрузить выгрузку</button></div>`;
+    <div class="side-actions"><button data-act="event.quick" data-date="${t}">+ Событие</button><button data-act="sale.manual" data-date="${t}">+ Продажи</button><label class="btn" style="cursor:pointer" title="Отчёт о продажах Литнета (CSV) — загрузится сразу">Загрузить выгрузку<input type="file" accept=".csv,.txt" data-chg="imp.any" hidden></label></div>`;
 }
 export { fmtMonthIn };

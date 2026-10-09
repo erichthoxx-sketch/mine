@@ -2,11 +2,11 @@
 // шрифт, жирный/курсив/подчёркнутый/зачёркнутый). Пишем здесь — черновик на устройстве, сохраняем в Документ по кнопке
 // (Ctrl+S) или автоматически. Инструменты писателя: типографика («ёлочки», тире), поиск и замена, режим фокуса,
 // статистика (слова, знаки, а.л., за сессию), переход между главами.
-import { esc, acts, toast, ask } from '../../../js/ui.js';
+import { esc, acts, toast, ask, openSheet } from '../../../js/ui.js';
 import { fmtDate, num, plural } from '../../../js/format.js';
 import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
-import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats } from '../docedit.js';
+import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats, nextChapterTab } from '../docedit.js';
 import { alNum, chapterList } from '../wcalc.js';
 
 const app = () => window.__app;
@@ -125,13 +125,14 @@ export function editorView(a, bookId, title) {
   if (ed.status === 'error') return { html: `<p>${back}</p><div class="card"><p style="margin-top:0">Не получилось открыть главу: ${esc(ed.err)}</p><button data-act="ed.reload">Попробовать ещё раз</button></div>` };
   const chs = chapterList(b).map((t) => t.title), i = chs.indexOf(title);
   const prev = i > 0 ? chs[i - 1] : null, next = i >= 0 && i < chs.length - 1 ? chs[i + 1] : null;
-  const zoom = pref('zoom', 1), auto = pref('auto', false);
+  const zoom = pref('zoom', 1), auto = pref('auto', true);
   const html = `
   <div class="ed-bar">
     <div class="ed-nav">${back}
-      <div class="ed-chapter">${prev ? `<button class="ed-ic" data-act="ed.goto" data-t="${esc(prev)}" title="${esc(prev)}" aria-label="Предыдущая глава">‹</button>` : ''}
+      <div class="ed-chapter">${prev ? `<button class="ed-ic" data-act="ed.goto" data-t="${esc(prev)}" title="${esc(prev)}" aria-label="Предыдущая глава">${ic('chevron')}</button>` : '<span class="ed-ic-gap"></span>'}
         <select data-chg="ed.pick" aria-label="Глава">${chs.map((t) => `<option${t === title ? ' selected' : ''}>${esc(t)}</option>`).join('')}${i < 0 ? `<option selected>${esc(title)}</option>` : ''}</select>
-        ${next ? `<button class="ed-ic" data-act="ed.goto" data-t="${esc(next)}" title="${esc(next)}" aria-label="Следующая глава">›</button>` : ''}</div>
+        ${next ? `<button class="ed-ic" data-act="ed.goto" data-t="${esc(next)}" title="${esc(next)}" aria-label="Следующая глава"><span class="flip">${ic('chevron')}</span></button>` : '<span class="ed-ic-gap"></span>'}
+        <button class="ed-ic ed-add" data-act="ch.add" data-id="${b.id}" title="Новая глава — отдельная вкладка в Google Документе" aria-label="Новая глава">+</button></div>
       <span class="ed-status" id="edstat">${statusText()}</span>
       <label class="ed-auto" title="Сохранять в Google Документ само, через полминуты после правки"><input type="checkbox" data-chg="ed.auto"${auto ? ' checked' : ''}> автосохранение</label>
       <button class="primary" data-act="ed.save" title="Ctrl+S">Сохранить в Документ</button>
@@ -150,16 +151,19 @@ export function editorView(a, bookId, title) {
       <button class="ed-ic" data-act="ed.align" data-v="justify" title="По ширине">${alignIc('justify')}</button>
       <span class="ed-sep"></span>
       <button class="ed-ic" data-act="ed.dash" title="Тире для диалога">—</button>
-      <button class="ed-ic" data-act="ed.fmt" data-v="undo" title="Отменить (Ctrl+Z)">↶</button>
-      <button class="ed-ic" data-act="ed.fmt" data-v="redo" title="Повторить (Ctrl+Shift+Z)">↷</button>
+      <button class="ed-ic" data-act="ed.undo" title="Отменить (Ctrl+Z)">↶</button>
+      <button class="ed-ic" data-act="ed.redo" title="Повторить (Ctrl+Shift+Z)">↷</button>
       <span class="ed-sep"></span>
-      <button class="ed-ic" data-act="ed.find" title="Найти и заменить (Ctrl+F)">⌕</button>
+      <button class="ed-ic" data-act="ed.find" title="Найти и заменить (Ctrl+F)">${ic('search')}</button>
+      <button class="ed-ic" data-act="ed.copy" title="Скопировать всю главу">${ic('copy')}</button>
       <button class="ed-ic" data-act="ed.zoom" data-v="-1" title="Мельче">A−</button>
       <button class="ed-ic" data-act="ed.zoom" data-v="1" title="Крупнее">A+</button>
       <button class="ed-ic" data-act="ed.focus" title="Режим фокуса (Esc — выйти)">⛶</button>
     </div>
-    <div class="ed-find" id="edfind" hidden><input id="edq" placeholder="Найти" aria-label="Найти"><input id="edr" placeholder="Заменить на" aria-label="Заменить на">
-      <button class="small-btn" data-act="ed.findNext">Найти</button><button class="small-btn" data-act="ed.replaceAll">Заменить все</button><span class="small muted" id="edfound"></span></div>
+    <div class="ed-find" id="edfind" hidden><input id="edq" placeholder="Найти в главе" aria-label="Найти" autocomplete="off">
+      <button class="ed-ic" data-act="ed.findPrev" title="Предыдущее (Shift+Enter)">↑</button><button class="ed-ic" data-act="ed.findNext" title="Следующее (Enter)">↓</button><span class="small muted ed-found" id="edfound"></span>
+      <input id="edr" placeholder="Заменить на" aria-label="Заменить на" autocomplete="off"><button class="small-btn" data-act="ed.replaceOne">Заменить</button><button class="small-btn" data-act="ed.replaceAll">Заменить все</button>
+      <button class="ed-ic" data-act="ed.find" title="Закрыть (Esc)">✕</button></div>
   </div>
   ${ed.draft ? `<div class="alert alert-thin ed-draft">На этом устройстве есть несохранённый черновик от ${fmtDate(ed.draft.at.slice(0, 10))} ${ed.draft.at.slice(11, 16)}. <button class="link" data-act="ed.useDraft">Открыть черновик</button> <button class="link" data-act="ed.dropDraft">Отбросить</button></div>` : ''}
   <div class="ed-paper"><div class="editor" id="ed" contenteditable="true" spellcheck="true" lang="ru" style="--ed-zoom:${zoom};${ed.font ? `font-family:'${esc(ed.font)}',Georgia,'Times New Roman',serif` : ''}">${ed.html}</div></div>
@@ -195,9 +199,13 @@ function wire() {
     clearTimeout(draftTimer);
     draftTimer = setTimeout(() => { ls.set(draftKey(ed.key), { html: ed.html, text: blocksText(htmlToBlocks(el)), at: new Date().toISOString() }); stats(el); }, 500);
     clearTimeout(autoTimer);
-    if (pref('auto', false)) autoTimer = setTimeout(() => save({ auto: true }), 30000);
+    if (pref('auto', true)) autoTimer = setTimeout(() => save({ auto: true }), 30000);
   };
-  el.addEventListener('input', changed);
+  el.addEventListener('input', () => { changed(); snap(el); });
+  hist.stack = [{ html: el.innerHTML, caret: null }]; hist.i = 0;
+  const q = document.getElementById('edq');
+  q?.addEventListener('input', () => { fnd.i = -1; findStep(1); });
+  q?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); findStep(e.shiftKey ? -1 : 1); } else if (e.key === 'Escape') acts['ed.find'](); });
   // типографика: «ёлочки», длинное тире из «--», в начале абзаца «- » → «— »
   el.addEventListener('beforeinput', (e) => {
     if (e.inputType !== 'insertText' || !e.data) return;
@@ -259,29 +267,164 @@ async function save({ auto = false } = {}) {
   ed.saving = false; setStatus();
 }
 
-acts['ed.save'] = () => save();
-acts['ed.fmt'] = (d) => { document.getElementById('ed')?.focus(); document.execCommand(d.v); document.getElementById('ed')?.dispatchEvent(new Event('input')); return false; };
-acts['ed.align'] = (d) => { for (const b of selectedBlocks()) b.style.textAlign = d.v === 'left' ? 'left' : d.v; document.getElementById('ed')?.dispatchEvent(new Event('input')); };
-acts['ed.dash'] = () => { document.getElementById('ed')?.focus(); document.execCommand('insertText', false, '— '); };
-acts['ed.zoom'] = (d) => { const z = Math.min(1.6, Math.max(0.8, +(pref('zoom', 1) + Number(d.v) * 0.1).toFixed(1))); setPref('zoom', z); document.getElementById('ed')?.style.setProperty('--ed-zoom', z); };
-acts['ed.focus'] = () => { document.documentElement.classList.toggle('ed-focus'); document.getElementById('ed')?.focus(); };
-acts['ed.find'] = () => { const f = document.getElementById('edfind'); if (f) { f.hidden = !f.hidden; if (!f.hidden) document.getElementById('edq')?.focus(); } };
-acts['ed.findNext'] = () => {
-  const q = document.getElementById('edq')?.value;
-  if (!q) return;
-  const ok = window.find ? window.find(q, false, false, true) : false;
-  const out = document.getElementById('edfound'); if (out) out.textContent = ok ? '' : 'не найдено';
+// ---------- история правок: снимки текста с положением курсора; много шагов назад и вперёд ----------
+const hist = { stack: [], i: -1, timer: null, lock: false };
+function caretOffset(el) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !el.contains(sel.anchorNode)) return null;
+  const r = sel.getRangeAt(0).cloneRange(); r.selectNodeContents(el); r.setEnd(sel.anchorNode, sel.anchorOffset);
+  return r.toString().length;
+}
+function setCaret(el, off) {
+  if (off == null) return;
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let n, left = off;
+  while ((n = w.nextNode())) { if (left <= n.nodeValue.length) { const r = document.createRange(); r.setStart(n, left); r.collapse(true); const s2 = window.getSelection(); s2.removeAllRanges(); s2.addRange(r); return; } left -= n.nodeValue.length; }
+}
+function snap(el, now = false) {
+  if (hist.lock) return;
+  const take = () => {
+    const html = el.innerHTML;
+    if (hist.stack[hist.i]?.html === html) return;
+    hist.stack = hist.stack.slice(0, hist.i + 1);
+    hist.stack.push({ html, caret: caretOffset(el) });
+    if (hist.stack.length > 300) hist.stack.shift();
+    hist.i = hist.stack.length - 1;
+  };
+  clearTimeout(hist.timer);
+  if (now) take(); else hist.timer = setTimeout(take, 400); // печать слова — один шаг
+}
+function histGo(dir) {
+  const el = document.getElementById('ed');
+  if (!el) return false;
+  clearTimeout(hist.timer); snap(el, true);
+  const j = hist.i + dir;
+  if (j < 0 || j >= hist.stack.length) return false;
+  hist.i = j; hist.lock = true;
+  el.innerHTML = hist.stack[j].html; setCaret(el, hist.stack[j].caret); el.focus();
+  el.dispatchEvent(new Event('input'));
+  hist.lock = false;
+  return false;
+}
+acts['ed.undo'] = () => histGo(-1);
+acts['ed.redo'] = () => histGo(1);
+
+// ---------- поиск и замена: все совпадения подсвечены, текущее — выделено, «3 из 12» ----------
+const fnd = { list: [], i: -1 };
+function findAll(q) {
+  const el = document.getElementById('ed'), out = [];
+  if (!el || !q) return out;
+  const ql = q.toLowerCase(), w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    const v = n.nodeValue.toLowerCase();
+    for (let k = v.indexOf(ql); k >= 0; k = v.indexOf(ql, k + ql.length)) { const r = document.createRange(); r.setStart(n, k); r.setEnd(n, k + q.length); out.push(r); }
+  }
+  return out;
+}
+function showFind(focusEditor = false) {
+  const q = document.getElementById('edq')?.value || '', out = document.getElementById('edfound');
+  fnd.list = findAll(q);
+  if (fnd.i >= fnd.list.length) fnd.i = fnd.list.length - 1;
+  if (window.CSS?.highlights) {
+    CSS.highlights.set('ed-find', new Highlight(...fnd.list));
+    if (fnd.list[fnd.i]) CSS.highlights.set('ed-find-cur', new Highlight(fnd.list[fnd.i])); else CSS.highlights.delete('ed-find-cur');
+  }
+  if (out) out.textContent = !q ? '' : fnd.list.length ? `${fnd.i >= 0 ? fnd.i + 1 : 0} из ${fnd.list.length}` : 'не найдено';
+  const r = fnd.list[fnd.i];
+  if (r) {
+    const rect = r.getBoundingClientRect();
+    if (rect.top < 140 || rect.bottom > window.innerHeight - 80) window.scrollBy({ top: rect.top - window.innerHeight / 3, behavior: 'smooth' });
+    if (focusEditor || !window.CSS?.highlights) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+  }
+}
+const findStep = (dir) => { const q = document.getElementById('edq')?.value; if (!q) return false; fnd.list = findAll(q); if (!fnd.list.length) { fnd.i = -1; showFind(); return false; } fnd.i = (fnd.i + dir + fnd.list.length) % fnd.list.length; showFind(); return false; };
+const clearFind = () => { if (window.CSS?.highlights) { CSS.highlights.delete('ed-find'); CSS.highlights.delete('ed-find-cur'); } fnd.list = []; fnd.i = -1; };
+acts['ed.find'] = () => {
+  const f = document.getElementById('edfind');
+  if (!f) return false;
+  f.hidden = !f.hidden;
+  if (f.hidden) clearFind();
+  else {
+    const sel = String(window.getSelection() || '').trim(), q = document.getElementById('edq');
+    if (sel && sel.length < 80 && q) q.value = sel;
+    q?.focus(); q?.select(); fnd.i = -1; findStep(1);
+  }
+  return false;
+};
+acts['ed.findNext'] = () => findStep(1);
+acts['ed.findPrev'] = () => findStep(-1);
+acts['ed.replaceOne'] = () => {
+  const el = document.getElementById('ed'), r = fnd.list[fnd.i], rep = document.getElementById('edr')?.value ?? '';
+  if (!el || !r) return findStep(1);
+  snap(el, true);
+  r.deleteContents(); r.insertNode(document.createTextNode(rep)); el.normalize();
+  el.dispatchEvent(new Event('input')); snap(el, true);
+  fnd.i -= 1; findStep(1);
+  return false;
 };
 acts['ed.replaceAll'] = () => {
-  const q = document.getElementById('edq')?.value, r = document.getElementById('edr')?.value ?? '', el = document.getElementById('ed');
-  if (!q || !el) return;
-  let n = 0;
-  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-  for (let t = walker.nextNode(); t; t = walker.nextNode()) { const parts = t.nodeValue.split(q); if (parts.length > 1) { n += parts.length - 1; t.nodeValue = parts.join(r); } }
-  const out = document.getElementById('edfound'); if (out) out.textContent = n ? `заменено: ${n}` : 'не найдено';
-  if (n) el.dispatchEvent(new Event('input'));
+  const q = document.getElementById('edq')?.value, rep = document.getElementById('edr')?.value ?? '', el = document.getElementById('ed');
+  if (!q || !el) return false;
+  snap(el, true);
+  const list = findAll(q).reverse(); // с конца — диапазоны не сдвигаются
+  for (const r of list) { r.deleteContents(); r.insertNode(document.createTextNode(rep)); }
+  el.normalize();
+  const out = document.getElementById('edfound'); if (out) out.textContent = list.length ? `заменено: ${list.length}` : 'не найдено';
+  if (list.length) { el.dispatchEvent(new Event('input')); snap(el, true); }
+  clearFind();
+  return false;
 };
-acts['ed.goto'] = (d) => app().go(`/ed/${ed.bookId}/${encodeURIComponent(d.t)}`);
+
+// ---------- скопировать всю главу: с оформлением (для редакторов площадок) и простым текстом ----------
+acts['ed.copy'] = async () => {
+  const el = document.getElementById('ed');
+  if (!el) return false;
+  const text = blocksText(htmlToBlocks(el));
+  const html = `<div>${[...el.children].map((b) => `<${b.tagName.toLowerCase()}${b.getAttribute('style') ? ` style="${b.getAttribute('style')}"` : ''}>${b.innerHTML}</${b.tagName.toLowerCase()}>`).join('')}</div>`;
+  try {
+    if (window.ClipboardItem && navigator.clipboard?.write) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+    else await navigator.clipboard.writeText(text);
+    toast('Глава скопирована целиком');
+  } catch {
+    const r = document.createRange(); r.selectNodeContents(el); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    document.execCommand('copy'); toast('Глава скопирована целиком');
+  }
+  return false;
+};
+
+acts['ed.save'] = () => { save(); return false; };
+acts['ed.fmt'] = (d) => { const el = document.getElementById('ed'); el?.focus(); snap(el, true); document.execCommand(d.v); el?.dispatchEvent(new Event('input')); snap(el, true); return false; };
+acts['ed.align'] = (d) => { const el = document.getElementById('ed'); snap(el, true); for (const b of selectedBlocks()) b.style.textAlign = d.v === 'left' ? 'left' : d.v; el?.dispatchEvent(new Event('input')); snap(el, true); return false; };
+acts['ed.dash'] = () => { document.getElementById('ed')?.focus(); document.execCommand('insertText', false, '— '); return false; };
+acts['ed.zoom'] = (d) => { const z = Math.min(1.6, Math.max(0.8, +(pref('zoom', 1) + Number(d.v) * 0.1).toFixed(1))); setPref('zoom', z); document.getElementById('ed')?.style.setProperty('--ed-zoom', z); return false; };
+acts['ed.focus'] = () => { document.documentElement.classList.toggle('ed-focus'); document.getElementById('ed')?.focus(); return false; };
+// ---------- новая глава: вкладка в Google Документе сразу за последней главой ----------
+acts['ch.add'] = async (d) => {
+  const b = app().ctx().wbooksById[d.id];
+  if (!b?.fileId) return false;
+  let plan;
+  try { await drive.ensureToken(); plan = nextChapterTab(await drive.getDoc(b.fileId)); } catch (e) { toast('Не получилось открыть документ: ' + e.message); return false; }
+  openSheet('Новая глава', `<label>Название вкладки<input name="t" value="${esc(plan.title)}" required autocomplete="off"></label>
+    <p class="small muted" style="margin:6px 0 0">Появится отдельной вкладкой в Google Документе — сразу после последней главы — и откроется здесь, в редакторе.</p>`, async (fd) => {
+    const title = String(fd.get('t') || '').trim();
+    if (!title) return false;
+    const have = (b.tabs || []).some((t) => t.title === title);
+    if (have) { toast('Вкладка с таким названием уже есть'); return false; }
+    try {
+      const { title: _, ...where } = plan;
+      await drive.docAddTab(b.fileId, { title, ...where });
+    } catch (e) { toast('Google Документ не дал создать вкладку: ' + e.message); return false; }
+    // в списке глав книги — сразу после последней главы, чтобы не ждать обновления с Диска
+    const tabs = [...(b.tabs || [])];
+    let k = -1; tabs.forEach((t, j) => { if (/^\s*(пролог|глава)/i.test(t.title)) k = j; });
+    tabs.splice(k + 1 || tabs.length, 0, { title, chars: 0, counted: true });
+    await app().store.put('w_books', { ...b, tabs });
+    toast(`«${title}» создана`);
+    app().go(`/ed/${b.id}/${encodeURIComponent(title)}`);
+  }, { submitText: 'Создать' });
+  return false;
+};
+acts['ed.goto'] = (d) => { clearFind(); app().go(`/ed/${ed.bookId}/${encodeURIComponent(d.t)}`); };
 acts['ed.back'] = (d) => { document.documentElement.classList.remove('ed-focus'); app().go('/book/' + d.id); };
 acts['ed.reload'] = () => { const k = ed?.key; ed = null; if (k) app().rerender(); };
 acts['ed.useDraft'] = () => { ed.html = ed.draft.html; ed.draft = null; ed.dirty = true; app().rerender(); };
@@ -291,7 +434,7 @@ changes['ed.pick'] = (v) => app().go(`/ed/${ed.bookId}/${encodeURIComponent(v)}`
 changes['ed.auto'] = (v, el) => { setPref('auto', el.checked); toast(el.checked ? 'Автосохранение включено: через полминуты после правки' : 'Автосохранение выключено'); };
 changes['ed.style'] = (v) => {
   const el = document.getElementById('ed');
-  el?.focus();
+  el?.focus(); snap(el, true);
   const tag = TAG[v] || 'p';
   for (const b of selectedBlocks()) {
     if (b.tagName.toLowerCase() === tag) continue;
@@ -308,8 +451,11 @@ changes['ed.style'] = (v) => {
 document.addEventListener('keydown', (e) => {
   if (!document.getElementById('ed')) return;
   const mod = e.ctrlKey || e.metaKey;
-  if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
-  else if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); acts['ed.find'](); }
+  const k = e.key.toLowerCase();
+  if (mod && k === 's') { e.preventDefault(); save(); }
+  else if (mod && k === 'f') { e.preventDefault(); const f = document.getElementById('edfind'); if (f?.hidden) acts['ed.find'](); else document.getElementById('edq')?.focus(); }
+  else if (mod && (k === 'z' || k === 'я') && e.target.id === 'ed') { e.preventDefault(); histGo(e.shiftKey ? 1 : -1); }
+  else if (mod && (k === 'y' || k === 'н') && e.target.id === 'ed') { e.preventDefault(); histGo(1); }
   else if (e.key === 'Escape') document.documentElement.classList.remove('ed-focus');
 });
 export const editorDirty = () => !!ed?.dirty;
