@@ -430,7 +430,7 @@ function headCard(c, b, p) {
   const long = ann.length > 320 || ann.split('\n').length > 3;
   const annBlock = ann
     ? `<div class="bh-text"><div class="bh-h"><b>Аннотация</b><span class="bh-ics">${icb('svc.view', 'annotation', 'eye', 'Посмотреть')}${icb('svc.copy', 'annotation', 'copy', 'Скопировать')}${icb('svc.docx', 'annotation', 'download', 'Скачать Word')}</span></div>
-      ${long ? `<div class="bh-ann" id="bhann">${paras(ann)}</div><button class="link bh-more" data-act="bh.more">Развернуть</button>` : `<div class="bh-ann open">${paras(ann)}</div>`}</div>`
+      ${long ? `<div class="bh-ann bh-tog" data-act="bh.more" title="Нажмите, чтобы развернуть или свернуть">${paras(ann)}</div>` : `<div class="bh-ann open">${paras(ann)}</div>`}</div>`
     : `<div class="bh-text"><div class="bh-h"><b>Аннотация</b></div><p class="small muted" style="margin:2px 0 0">${ai.ok ? 'Нажмите «Обновить», чтобы подтянуть текст из Документа.' : b.fileId ? 'Добавьте в Google Документ вкладку «Аннотация» — текст появится здесь.' : 'Пока нет.'}</p></div>`;
   const synBlock = `<div class="bh-text"><div class="bh-h"><b>Синопсис</b><span class="muted small">${syn ? `${grp(syn.length)} зн.` : si.ok ? '' : 'нет вкладки «Синопсис»'}</span>
       <span class="bh-ics">${syn || si.ok ? `${icb('svc.view', 'synopsis', 'eye', 'Прочитать')}${icb('svc.copy', 'synopsis', 'copy', 'Скопировать')}${icb('svc.docx', 'synopsis', 'download', 'Скачать Word')}` : ''}</span></div>
@@ -447,4 +447,4 @@ function headCard(c, b, p) {
   </div>`;
 }
 const grp = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-acts['bh.more'] = (d, el) => { const t = document.getElementById('bhann'); if (!t) return false; const on = t.classList.toggle('open'); el.textContent = on ? 'Свернуть' : 'Развернуть'; return false; };
+acts['bh.more'] = (d, el) => { if (!String(window.getSelection() || '')) el.classList.toggle('open'); return false; }; // выделяла текст — не сворачиваем
