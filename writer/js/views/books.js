@@ -128,10 +128,12 @@ export function bookPage(a, id) {
       const tip = `${st === 'done' ? (v.past ? 'выложена' : 'выложена ' + dm(v.date)) : st === 'wait' ? 'выйдет ' + dm(v.date) : 'отметить выкладку'}`;
       return `<td class="pc"><button class="pm" title="${esc(tip)}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? icx('check') : st === 'wait' ? icx('timer') + `<span>${dm(v.date)}</span>` : '<span class="pl-none">—</span>'}</button></td>`;
     };
-    const rest = chs.length - nDone - nPlan;
+    const rest = chs.length - nDone - nPlan, maxCh = Math.max(1, ...chs.map((t) => t.chars || 0));
     return `<div class="ch-sum">выложено <b>${nDone}</b>${nPlan ? ` · запланировано <b>${nPlan}</b>` : ''}${rest > 0 ? ` · ждут выкладки <b>${rest}</b>` : ''} · ${alNum(b.chars)} а.л.</div>
-      <div class="scroll"><table class="pub-t"><tr><th>Глава</th><th class="r">а.л.</th>${pfs.map((x) => `<th class="pc">${esc(x)}</th>`).join('')}</tr>
-      ${chs.map((t) => `<tr><td>${canEdit ? `<a href="#" class="ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе">${esc(t.title)}</a>` : esc(t.title)}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => mark(t.title, x)).join('')}</tr>`).join('')}
+      <div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-v"><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup>
+      <tr><th>Глава</th><th class="bar-h" title="длина главы относительно самой длинной">длина</th><th class="r">а.л.</th>${pfs.map((x) => `<th class="pc">${esc(x)}</th>`).join('')}</tr>
+      ${chs.map((t) => `<tr><td><div class="ch-cell">${canEdit ? `<a href="#" class="ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе">${esc(t.title)}</a>` : `<span class="ch-t">${esc(t.title)}</span>`}${t.lead ? `<span class="ch-lead">${esc(t.lead)}</span>` : ''}</div></td>
+        <td class="bar-c">${t.chars ? `<span class="ch-bar" title="${alNum(t.chars)} а.л."><i style="width:${Math.max(4, Math.round((t.chars / maxCh) * 100))}%"></i></span>` : ''}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => mark(t.title, x)).join('')}</tr>`).join('')}
       </table></div>`;
   };
   const sch = bookSchedule(b, c.today);
@@ -191,7 +193,7 @@ export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
-  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled && (meta.mimeType !== drive.MIME.doc || b.svc)) return false;
+  if (!force && !ruleChanged && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled && (meta.mimeType !== drive.MIME.doc || (b.svc && (b.tabs || []).some((t) => 'lead' in t)))) return false;
   const r = await drive.countFile(meta);
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
   const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);

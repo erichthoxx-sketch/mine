@@ -27,7 +27,10 @@ export function charsFromDocsJson(doc) {
   const walk = (list) => {
     for (const tab of list || []) {
       const title = tab.tabProperties?.title || 'Без названия', text = textOf(tab.documentTab?.body?.content);
-      tabs.push({ title, chars: countChars(text) });
+      // первая строка главы (без названия) — чтобы таблица глав читалась как содержание книги
+      const lines = text.replace(/\u000b/g, '\n').split('\n').map((x) => x.trim()).filter(Boolean);
+      if (lines[0] && lines[0].length <= 80 && (/^(пролог|эпилог|глава|часть)(?=[\s.,:;!?\d]|$)/i.test(lines[0]) || lines[0].replace(/[.\s]+$/, '') === title.trim())) lines.shift();
+      tabs.push({ title, chars: countChars(text), lead: (lines[0] || '').slice(0, 160) });
       if (/^\s*синопсис/i.test(title) && svc.synopsis == null) svc.synopsis = svcText(text);
       if (/^\s*аннотац/i.test(title) && svc.annotation == null) svc.annotation = svcText(text);
       walk(tab.childTabs);
@@ -195,7 +198,7 @@ export function plannedPubs(b, today) {
 
 // главы книги: вкладки документа, которые считаются, плюс главы, отмеченные вручную (книга без файла)
 export function chapterList(b) {
-  const tabs = (b.tabs || []).filter((t) => t.counted !== false).map((t) => ({ title: t.title, chars: t.chars }));
+  const tabs = (b.tabs || []).filter((t) => t.counted !== false).map((t) => ({ title: t.title, chars: t.chars, lead: t.lead || '' }));
   const have = new Set(tabs.map((t) => t.title));
   // синопсис, аннотация и прочие служебные вкладки главами не показываем
   return [...tabs, ...Object.keys(pubMap(b)).filter((t) => !have.has(t) && !/^\s*(синопсис|аннотац)/i.test(t)).map((title) => ({ title, chars: null }))];

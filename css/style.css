@@ -865,3 +865,21 @@ main table.pub-t button.pm:hover { background: var(--surface-2) !important; }
 main table.pub-t button.pm .icx .ic { width: 17px; height: 17px; stroke-width: 1.8; }
 main table.pub-t button.pm .icx { vertical-align: 0; }
 main table.pub-t .pl-none { color: var(--muted); display: inline-block; width: 17px; text-align: center; }
+/* содержание книги: название главы + её первая строка, полоска длины, объём, отметки */
+table.pub-t2 { table-layout: fixed; }
+table.pub-t2 col.c-v { width: 120px; } table.pub-t2 col.c-al { width: 64px; } table.pub-t2 col.c-pf { width: 104px; }
+table.pub-t2 td:first-child { white-space: nowrap; }
+.ch-cell { display: flex; align-items: baseline; gap: 14px; min-width: 0; overflow: hidden; }
+.ch-cell .ch-link, .ch-cell .ch-t { flex: none; }
+.ch-lead { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13.5px; font-style: italic; }
+table.pub-t2 th.bar-h { font-weight: 600; color: var(--muted); text-align: left; padding-left: 16px; }
+table.pub-t2 td.bar-c { padding-left: 16px; padding-right: 0; }
+.ch-bar { display: block; height: 4px; border-radius: 4px; background: color-mix(in srgb, var(--line) 70%, transparent); overflow: hidden; }
+.ch-bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent-2); }
+table.pub-t2 td.r { padding-right: 14px; }
+@media (max-width: 640px) {
+  table.pub-t2 col.c-v, table.pub-t2 th.bar-h, table.pub-t2 td.bar-c { display: none; }
+  table.pub-t2 col.c-v { width: 0; }
+  .ch-lead { display: none; }
+}
+.ch-cell .ch-link, .ch-cell .ch-t { min-width: 5.4em; }
