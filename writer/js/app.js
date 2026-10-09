@@ -9,6 +9,7 @@ import { booksView, bookPage, refreshAll } from './views/books.js';
 import { ideasView } from './views/ideas.js';
 import { homeView } from './views/home.js';
 import { planView, navToday } from './views/plan.js';
+import { scheduleTodoist } from './tdsync.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
@@ -127,11 +128,12 @@ applyTheme();
 // меню слева на компьютере: свёрнутое (только иконки) или полное — запоминаем
 try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem('navMini') === '1'); } catch { /* ок */ }
 acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
-store.subscribe(() => safeRender());
+store.subscribe(() => { safeRender(); scheduleTodoist(app); });
 drive.preload().catch(() => {});
 let autoRefreshed = false;
 store.init().then(() => {
   render();
+  scheduleTodoist(app, 3000);
   // при открытии один раз обновляем знаки книг, если Диск подключён
   const tryRefresh = () => {
     if (autoRefreshed || !store.user || !drive.hasFreshToken() || !store.data.w_books.length) return;

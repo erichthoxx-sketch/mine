@@ -2,6 +2,8 @@ import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, opt, toast, download, ask } from '../../../js/ui.js';
 import * as drive from '../drive.js';
 import { WCOLLS } from '../app.js';
+import { runTodoist } from '../tdsync.js';
+import { TD_DAYS, TD_LABEL } from '../todoist.js';
 
 const app = () => window.__app;
 
@@ -18,6 +20,7 @@ export function settingsView(a) {
       <button class="danger" data-act="set.disconnect" style="margin-top:10px">Отключить Диск на этом устройстве</button>`
     : '<p>На этом устройстве Диск не подключён.</p><button class="primary" data-act="drive.connect">Подключить Google Диск</button>'}
     <p class="hint">Подключать нужно на каждом устройстве один раз. Google даёт браузерным приложениям доступ на час — после этого кнопка «Обновить» на Главной продлевает его одним нажатием, без повторного разрешения.</p></div>
+  ${todoistCard(c)}
   <div class="card"><h2>Резервная копия мастерской</h2><p class="small muted">Книги, идеи, планер и галерея (без самих файлов Диска — они и так на Диске).</p>
     <div class="row"><button class="primary" data-act="set.backup">Скачать копию</button><label class="btn">Восстановить<input type="file" accept=".json" data-chg="set.restore" hidden></label></div></div>
   <div class="card"><h2>Оформление и аккаунт</h2>
@@ -64,3 +67,28 @@ changes['set.restore'] = async (v, el) => {
   toast('Данные восстановлены');
 };
 export { forms };
+
+// ---------- Todoist ----------
+function todoistCard(c) {
+  const s = c.settings, td = s.todoist || {}, on = !!s.todoistToken;
+  const when = td.at ? new Date(td.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Todoist</h2>${on ? `<span class="badge ${td.err ? 'warn' : 'good'}">● ${td.err ? 'ошибка' : 'подключён'}</span>` : ''}</div>
+    ${on ? `<p class="small muted" style="margin:8px 0 0">Планер на ${TD_DAYS} дней вперёд сам уходит в Todoist с датами. Книжное — в «Книги», в раздел своей книги; деньги, связи, маркетинг, конкурсы — в проект «Мастерская». Метка у всех — «${TD_LABEL}».
+      Сделала здесь — в Todoist закроется; закрыла в Todoist — больше не появится.</p>
+      ${td.err ? `<p class="small" style="color:var(--bad)">${esc(td.err)}</p>` : when ? `<p class="small muted">Последняя синхронизация: ${when}</p>` : ''}
+      <label class="check"><input type="checkbox" data-chg="td.auto"${s.todoistOff ? '' : ' checked'}> отправлять автоматически</label>
+      <div class="row" style="margin-top:10px"><button class="primary" data-act="td.sync">Синхронизировать сейчас</button><button data-act="td.key">Сменить ключ</button><button class="danger" data-act="td.off">Отключить</button></div>`
+    : `<p class="small muted" style="margin:8px 0 10px">Планер сам разложит дела по полочкам Todoist — с датами, чтобы напоминания приходили на телефон.</p><button class="primary" data-act="td.key">Подключить Todoist</button>`}
+  </div>`;
+}
+acts['td.key'] = () => openSheet('Ключ Todoist', `<p class="small muted" style="margin-top:0">Todoist → Настройки → Интеграции → Для разработчиков → «Токен API». Скопируйте и вставьте сюда.</p>
+  <input name="k" autocomplete="off" spellcheck="false" placeholder="например, c16b7ee4…" required>`, async (fd) => {
+  const k = String(fd.get('k') || '').trim();
+  if (!/^[0-9a-f]{30,}$/i.test(k)) { toast('Похоже, это не ключ: нужна строка из букв и цифр'); return false; }
+  await app().store.saveSettings({ todoistToken: k, todoistOff: false, todoist: { ...(app().ctx().settings.todoist || {}), err: '' } });
+  toast('Ключ сохранён — отправляю планер в Todoist…');
+  runTodoist(app(), { force: true });
+}, { submitText: 'Подключить' });
+acts['td.sync'] = async () => { toast('Отправляю в Todoist…'); await runTodoist(app(), { force: true }); };
+acts['td.off'] = async () => { if (!(await ask('Отключить Todoist? Задачи, которые уже там, останутся.', 'Отключить'))) return; await app().store.saveSettings({ todoistToken: '', todoist: {} }); toast('Todoist отключён'); };
+changes['td.auto'] = async (v, el, checked) => { await app().store.saveSettings({ todoistOff: !checked }); if (checked) runTodoist(app(), { force: true }); };

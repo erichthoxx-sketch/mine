@@ -52,22 +52,22 @@ export function planItems(c, from, to) {
   for (const x of d.w_contests) {
     if (x.status === 'done') continue;
     const b = x.bookId ? c.wbooksById[x.bookId] : null, st = contestStatus(x, b, t);
-    add(x.end, 'contest', `Конкурс «${esc(x.name)}» — окончание`, [b ? esc(b.title) : '', st.need ? `не хватает ${contestVol(x)(st.need)}` : st.need === 0 ? 'объём ✓' : ''].filter(Boolean).join(' · '), { act: 'contest.edit', id: x.id });
-    if (x.start && x.start >= t) add(x.start, 'contest', `Конкурс «${esc(x.name)}» — старт`, b ? esc(b.title) : '', { act: 'contest.edit', id: x.id });
+    add(x.end, 'contest', `Конкурс «${esc(x.name)}» — окончание`, [b ? esc(b.title) : '', st.need ? `не хватает ${contestVol(x)(st.need)}` : st.need === 0 ? 'объём ✓' : ''].filter(Boolean).join(' · '), { act: 'contest.edit', id: x.id, bookId: x.bookId });
+    if (x.start && x.start >= t) add(x.start, 'contest', `Конкурс «${esc(x.name)}» — старт`, b ? esc(b.title) : '', { act: 'contest.edit', id: x.id, bookId: x.bookId });
   }
-  for (const x of d.w_queue) if (!x.done && x.due) add(x.due < t ? t : x.due, 'queue', esc(x.title), `${x.due < t ? 'просрочено · ' : ''}${x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди'}`, { act: 'queue.edit', id: x.id });
+  for (const x of d.w_queue) if (!x.done && x.due) add(x.due < t ? t : x.due, 'queue', esc(x.title), `${x.due < t ? 'просрочено · ' : ''}${x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди'}`, { act: 'queue.edit', id: x.id, bookId: x.bookId });
   for (const x of d.w_waiting) {
     if (x.done) continue;
     const remind = addDays(x.since, Number(x.remindDays) || 14), s = waitingStatus(x, t);
     add(remind < t ? t : remind, 'waitans', `Напомнить о себе: ${esc(x.who)}`, `${s.days} дн. без ответа${x.what ? ' · ' + esc(x.what.slice(0, 50)) : ''}`, { to: x.contactId ? '/link/' + x.contactId : '/links' });
   }
-  for (const g of activeGoals(c)) if (g.deadline) add(g.deadline, 'goal', `Срок цели: ${esc(g.bookId && c.wbooksById[g.bookId] ? '«' + c.wbooksById[g.bookId].title + '»' : goalTitle(c, g))}`, '', { act: 'goal.edit', id: g.id });
+  for (const g of activeGoals(c)) if (g.deadline) add(g.deadline, 'goal', `Срок цели: ${esc(g.bookId && c.wbooksById[g.bookId] ? '«' + c.wbooksById[g.bookId].title + '»' : goalTitle(c, g))}`, '', { act: 'goal.edit', id: g.id, bookId: g.bookId });
   // заявка на приоритетные показы — на сегодня, пока актуально, и в день срока
   const wr = widgetReminder(c);
   if (wr) { add(t, 'money', esc(wr.title), esc(wr.sub), { to: wr.to }); if (wr.date !== t) add(wr.date, 'money', `Срок заявки на показы`, '19:00 МСК', { to: wr.to }); }
   for (const x of incomeItems(c, from, to)) add(x.date, 'money', x.title, x.sub, { href: '../' });
   // Связи: напоминания по контактам (просроченные — на сегодня)
-  for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', `${esc(x.text)}`, `${esc(x.name)}${x.date < t ? ' · просрочено' : ''}`, { to: '/link/' + x.linkId });
+  for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', `${esc(x.text)}`, `${esc(x.name)}${x.date < t ? ' · просрочено' : ''}`, { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k });
   // Маркетинг: подготовить материалы к старту выкладки и к рекламе
   for (const m of marketingNeeds(c)) add(m.date, 'mk', esc(m.title), esc(m.sub), { to: m.to });
   const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
