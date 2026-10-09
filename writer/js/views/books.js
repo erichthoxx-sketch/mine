@@ -128,12 +128,12 @@ export function bookPage(a, id) {
       const tip = `${st === 'done' ? (v.past ? 'выложена' : 'выложена ' + dm(v.date)) : st === 'wait' ? 'выйдет ' + dm(v.date) : 'отметить выкладку'}`;
       return `<td class="pc"><button class="pm" title="${esc(tip)}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? icx('check') : st === 'wait' ? icx('timer') + `<span>${dm(v.date)}</span>` : '<span class="pl-none">—</span>'}</button></td>`;
     };
-    const rest = chs.length - nDone - nPlan, maxCh = Math.max(1, ...chs.map((t) => t.chars || 0));
+    const rest = chs.length - nDone - nPlan;
     return `<div class="ch-sum">выложено <b>${nDone}</b>${nPlan ? ` · запланировано <b>${nPlan}</b>` : ''}${rest > 0 ? ` · ждут выкладки <b>${rest}</b>` : ''} · ${alNum(b.chars)} а.л.</div>
-      <div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-v"><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup>
-      <tr><th>Глава</th><th class="bar-h" title="длина главы относительно самой длинной">длина</th><th class="r">а.л.</th>${pfs.map((x) => `<th class="pc">${esc(x)}</th>`).join('')}</tr>
+      <div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup>
+      <tr><th>Глава</th><th class="r" title="знаки с пробелами, как считает Литнет">знаков</th>${pfs.map((x) => `<th class="pc">${esc(x)}</th>`).join('')}</tr>
       ${chs.map((t) => `<tr><td><div class="ch-cell">${canEdit ? `<a href="#" class="ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе">${esc(t.title)}</a>` : `<span class="ch-t">${esc(t.title)}</span>`}${t.lead ? `<span class="ch-lead">${esc(t.lead)}</span>` : ''}</div></td>
-        <td class="bar-c">${t.chars ? `<span class="ch-bar" title="${alNum(t.chars)} а.л."><i style="width:${Math.max(4, Math.round((t.chars / maxCh) * 100))}%"></i></span>` : ''}</td><td class="r">${t.chars == null ? '' : alNum(t.chars)}</td>${pfs.map((x) => mark(t.title, x)).join('')}</tr>`).join('')}
+        <td class="r" title="${t.chars == null ? '' : alNum(t.chars) + ' а.л.'}">${t.chars == null ? '' : grp(t.chars)}</td>${pfs.map((x) => mark(t.title, x)).join('')}</tr>`).join('')}
       </table></div>`;
   };
   const sch = bookSchedule(b, c.today);
@@ -427,13 +427,14 @@ function headCard(c, b, p) {
   const ann = (b.svc?.annotation ?? '') || (b.promo || {}).annotation || '', syn = (b.svc?.synopsis ?? '') || b.synopsis || '';
   const ai = svcInfo(b, 'annotation'), si = svcInfo(b, 'synopsis');
   const paras = (t) => esc(t).split('\n').map((x) => `<p>${x}</p>`).join('');
+  const long = ann.length > 320 || ann.split('\n').length > 3;
   const annBlock = ann
-    ? `<div class="bh-text"><div class="bh-h"><b>Аннотация</b><span class="bh-ics">${icb('svc.copy', 'annotation', 'copy', 'Скопировать')}${icb('svc.docx', 'annotation', 'download', 'Скачать Word')}</span></div>
-      <div class="bh-ann" data-act="bh.more" title="Нажмите, чтобы развернуть">${paras(ann)}</div></div>`
+    ? `<div class="bh-text"><div class="bh-h"><b>Аннотация</b><span class="bh-ics">${icb('svc.view', 'annotation', 'eye', 'Посмотреть')}${icb('svc.copy', 'annotation', 'copy', 'Скопировать')}${icb('svc.docx', 'annotation', 'download', 'Скачать Word')}</span></div>
+      ${long ? `<div class="bh-ann" id="bhann">${paras(ann)}</div><button class="link bh-more" data-act="bh.more">Развернуть</button>` : `<div class="bh-ann open">${paras(ann)}</div>`}</div>`
     : `<div class="bh-text"><div class="bh-h"><b>Аннотация</b></div><p class="small muted" style="margin:2px 0 0">${ai.ok ? 'Нажмите «Обновить», чтобы подтянуть текст из Документа.' : b.fileId ? 'Добавьте в Google Документ вкладку «Аннотация» — текст появится здесь.' : 'Пока нет.'}</p></div>`;
   const synBlock = `<div class="bh-text"><div class="bh-h"><b>Синопсис</b><span class="muted small">${syn ? `${grp(syn.length)} зн.` : si.ok ? '' : 'нет вкладки «Синопсис»'}</span>
       <span class="bh-ics">${syn || si.ok ? `${icb('svc.view', 'synopsis', 'eye', 'Прочитать')}${icb('svc.copy', 'synopsis', 'copy', 'Скопировать')}${icb('svc.docx', 'synopsis', 'download', 'Скачать Word')}` : ''}</span></div>
-      ${syn ? `<p class="bh-syn">${esc(syn.split('\n')[0])}</p>` : ''}</div>`;
+</div>`;
   return `<div class="card book-head2">
     <label class="bh-cover" title="${b.cover ? 'Сменить обложку' : 'Загрузить обложку'}">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}<span class="bh-cover-edit">${b.cover ? 'Сменить' : 'Загрузить обложку'}</span><input type="file" accept="image/*" data-chg="wbook.cover" data-id="${b.id}" hidden></label>
     <div class="bh-main">
@@ -446,4 +447,4 @@ function headCard(c, b, p) {
   </div>`;
 }
 const grp = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-acts['bh.more'] = (d, el) => { el.classList.toggle('open'); return false; };
+acts['bh.more'] = (d, el) => { const t = document.getElementById('bhann'); if (!t) return false; const on = t.classList.toggle('open'); el.textContent = on ? 'Свернуть' : 'Развернуть'; return false; };

@@ -883,3 +883,6 @@ table.pub-t2 td.r { padding-right: 14px; }
   .ch-lead { display: none; }
 }
 .ch-cell .ch-link, .ch-cell .ch-t { min-width: 5.4em; }
+.bh-ann { cursor: default; }
+.bh-more { margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--link); padding: 0; min-height: 0; }
+table.pub-t2 col.c-al { width: 92px; }

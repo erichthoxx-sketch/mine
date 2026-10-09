@@ -21,12 +21,16 @@ test('название главы', () => {
   assert.ok(isServiceTab('СИНОПСИС') && isServiceTab('Аннотация') && !isServiceTab('Глава 1'));
 });
 
-test('рукопись: только главы, название из первой строки, каждая с новой страницы', () => {
+test('рукопись: только главы, название из первой строки, каждая с новой страницы, абзацы как в Документе', () => {
   const chs = chaptersOf(doc);
   assert.deepEqual(chs.map((c) => c.title), ['Пролог', 'Глава 1', 'Глава 2']);
-  assert.equal(chs[1].paras.length, 3); // пустая строка убрана, «***» → «* * *»
-  assert.deepEqual(chs[1].paras[1], { kind: 'center', runs: [{ t: '* * *' }] });
-  assert.equal(chs[1].paras[2].runs[0].i, true);
+  // «Глава 1.» — своим абзацем с новой страницы; пустая строка и «***» — как в Документе
+  const g1 = chs[1].paras;
+  assert.equal(g1[0].pageBreak, true);
+  assert.deepEqual(g1.map((p) => p.runs.map((r) => r.t).join('')), ['Глава 1.', '', 'Утро было ', '***', 'Тихо.']);
+  assert.equal(g1[4].runs[0].i, true);
+  // у главы без названия внутри — название вкладки заголовком
+  assert.deepEqual([chs[2].paras[0].kind, chs[2].paras[0].runs[0].t], ['h', 'Глава 2']);
   const m = manuscriptParas(doc, { title: 'Альпийский развод', author: 'Лана Фрейтаг' });
   assert.equal(m.chapters, 3);
   assert.deepEqual(m.paras.slice(0, 2).map((p) => p.kind), ['author', 'title']);
@@ -34,14 +38,24 @@ test('рукопись: только главы, название из перв�
   assert.ok(!JSON.stringify(m.paras).includes('Спасибо') && !JSON.stringify(m.paras).includes('Героиня'));
 });
 
-test('синопсис и аннотация — из своих вкладок, без повтора слова «СИНОПСИС»', () => {
-  const s = serviceParas(doc, 'synopsis', { title: 'Книга', author: 'Лана' });
-  assert.equal(s.text, 'Героиня бежит в горы.\nФинал счастливый.');
-  assert.equal(s.body.length, 2);
-  assert.equal(serviceParas(doc, 'annotation', { title: 'Книга' }).text, 'Он оставил меня умирать.');
-  const f = serviceParas(null, 'synopsis', { title: 'Книга', fallback: 'Свой текст' });
+test('отступы и интервалы абзаца — из Документа (свои и стиля «обычный текст»)', () => {
+  const t = { tabProperties: { title: 'Глава 5' }, documentTab: {
+    namedStyles: { styles: [{ namedStyleType: 'NORMAL_TEXT', paragraphStyle: { lineSpacing: 150, indentFirstLine: { magnitude: 36, unit: 'PT' } }, textStyle: {} }] },
+    body: { content: [{ paragraph: { paragraphStyle: { alignment: 'JUSTIFIED', spaceBelow: { magnitude: 6, unit: 'PT' } }, elements: [{ textRun: { content: 'Текст.\n', textStyle: {} } }] } }] } } };
+  const [ch] = chaptersOf({ tabs: [t] });
+  const p = ch.paras[1];
+  assert.deepEqual(p.ps, { a: 'JUSTIFIED', fi: 36, il: 0, sa: 0, sb: 6, ls: 150 });
+  const x = documentXml([p]);
+  assert.ok(x.includes('<w:spacing w:before="0" w:after="120" w:line="360" w:lineRule="auto"/><w:ind w:left="0" w:firstLine="720"/><w:jc w:val="both"/>'));
+});
+
+test('синопсис и аннотация — ровно текст своих вкладок', () => {
+  const s = serviceParas(doc, 'synopsis');
+  assert.equal(s.text, 'СИНОПСИС\nГероиня бежит в горы.\n\nФинал счастливый.');
+  assert.equal(serviceParas(doc, 'annotation').text, 'Он оставил меня умирать.');
+  const f = serviceParas(null, 'synopsis', { fallback: 'Свой текст' });
   assert.ok(f.found && f.text === 'Свой текст');
-  assert.equal(serviceParas({ tabs: [] }, 'synopsis', { title: 'К' }).found, false);
+  assert.equal(serviceParas({ tabs: [] }, 'synopsis').found, false);
 });
 
 test('XML документа: стили, разрыв страницы, экранирование', () => {

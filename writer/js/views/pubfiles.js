@@ -3,7 +3,7 @@
 import { esc, acts, toast, openSheet, download } from '../../../js/ui.js';
 import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
-import { manuscriptParas, serviceParas, docxBlob, printHtml, isServiceTab, SERVICE } from '../publish.js';
+import { manuscriptParas, serviceParas, docxBlob, printHtml, parasHtml, isServiceTab, SERVICE } from '../publish.js';
 import { isBookTab, alNum } from '../wcalc.js';
 
 const app = () => window.__app;
@@ -66,10 +66,7 @@ export function publisherCard(b) {
 
 // ---------- действия ----------
 const bookOf = (d) => app().ctx().wbooksById[d.id];
-function htmlOf(paras) {
-  const run = (r) => { let h = esc(r.t).replace(/\n/g, '<br>'); if (r.s) h = `<s>${h}</s>`; if (r.u) h = `<u>${h}</u>`; if (r.i) h = `<i>${h}</i>`; if (r.b) h = `<b>${h}</b>`; return h; };
-  return paras.map((p) => `<p class="${p.kind}">${(p.runs || []).map(run).join('')}</p>`).join('');
-}
+const htmlOf = (paras) => parasHtml(paras);
 async function copyText(text, html) {
   try {
     if (html && window.ClipboardItem && navigator.clipboard?.write) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
