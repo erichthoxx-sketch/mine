@@ -939,3 +939,11 @@ table.pub-t tr.ch-row:hover td { background: transparent; }
   .ed-paper .ed-stats .es-sess { padding-top: 14px; border-top: 1px solid var(--line); }
 }
 html.ed-focus .ed-paper .ed-stats { bottom: auto; }
+/* колонка цифр сбоку: чуть мельче и чуть заметнее */
+@media (min-width: 1380px) {
+  .ed-paper .ed-stats { opacity: .8; gap: 13px; }
+  .ed-paper .ed-stats b { font-size: 14px; }
+  .ed-paper .ed-stats i { font-size: 10.5px; color: var(--text-2); }
+  .ed-paper .ed-stats .es-sess { padding-top: 12px; }
+}
+@media (min-width: 1180px) and (max-width: 1379px) { .ed-paper .ed-stats { opacity: .85; font-size: 11.5px; } }
