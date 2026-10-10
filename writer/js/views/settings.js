@@ -76,7 +76,7 @@ function todoistCard(c) {
     ${on ? `<div class="td-how small"><p><b>Свои дела</b> — в Todoist как удобно: Входящие, Дела, Спорт… Приложение их не трогает.</p>
       <p><b>По книге</b> — в проект «Книги», раздел с названием книги. Задача появится на странице книги и в Планере в свой день.</p>
       <p><b>Авторские дела</b> — в проект «Мастерская», в раздел: Деньги и реклама (видно и в «Доходах»), Маркетинг, Связи, Конкурсы, Дела.</p>
-      <p><b>Из приложения</b> всё нужное на ${TD_DAYS} дней вперёд само уходит туда же с датами (метка «${TD_LABEL}» — служебная). Закрыла в одном месте — закроется и в другом.</p></div>`
+      <p><b>Из приложения</b> всё нужное на ${TD_DAYS} дней вперёд само уходит туда же с датами (метка «${TD_LABEL}» — служебная). Закрыла в одном месте — закроется и в другом.</p></div>
       ${td.err ? `<p class="small" style="color:var(--bad)">${esc(td.err)}</p>` : when ? `<p class="small muted">Последняя синхронизация: ${when}</p>` : ''}
       <label class="check"><input type="checkbox" data-chg="td.auto"${s.todoistOff ? '' : ' checked'}> отправлять автоматически</label>
       <div class="row" style="margin-top:10px"><button class="primary" data-act="td.sync">Синхронизировать сейчас</button><button data-act="td.key">Сменить ключ</button><button class="danger" data-act="td.off">Отключить</button></div>`
