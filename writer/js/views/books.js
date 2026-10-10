@@ -132,7 +132,7 @@ export function bookPage(a, id) {
     return `<div class="ch-sum">выложено <b>${nDone}</b>${nPlan ? ` · запланировано <b>${nPlan}</b>` : ''}${rest > 0 ? ` · ждут выкладки <b>${rest}</b>` : ''} · ${alNum(b.chars)} а.л.</div>
       <div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup>
       <tr><th>Глава</th><th class="r" title="знаки с пробелами, как считает Литнет">знаков</th>${pfs.map((x) => `<th class="pc">${esc(x)}</th>`).join('')}</tr>
-      ${chs.map((t) => `<tr><td><div class="ch-cell">${canEdit ? `<a href="#" class="ch-link" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе">${esc(t.title)}</a>` : `<span class="ch-t">${esc(t.title)}</span>`}${t.lead ? `<span class="ch-lead">${esc(t.lead)}</span>` : ''}</div></td>
+      ${chs.map((t) => `<tr${canEdit ? ` class="ch-row" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе"` : ''}><td><div class="ch-cell"><span class="ch-t">${esc(t.title)}</span>${t.lead ? `<span class="ch-lead">${esc(t.lead)}</span>` : ''}</div></td>
         <td class="r" title="${t.chars == null ? '' : alNum(t.chars) + ' а.л.'}">${t.chars == null ? '' : grp(t.chars)}</td>${pfs.map((x) => mark(t.title, x)).join('')}</tr>`).join('')}
       </table></div>`;
   };

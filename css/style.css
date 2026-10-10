@@ -911,3 +911,7 @@ table td, table th { overflow-wrap: normal; word-break: normal; }
   html.on-ed body { padding-bottom: env(safe-area-inset-bottom); }
   html.on-ed .ed-stats { bottom: env(safe-area-inset-bottom); }
 }
+/* строка главы целиком открывает редактор; цветом не выделяется */
+table.pub-t tr.ch-row { cursor: pointer; }
+table.pub-t tr.ch-row:hover td { background: transparent; }
+.ch-cell .ch-t { color: var(--text); font-weight: 600; }
