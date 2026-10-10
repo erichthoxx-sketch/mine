@@ -47,3 +47,23 @@ test('план синхронизации: создать, обновить, з�
   const moved = todoistPlan([{ ...pub, date: '2026-10-13' }], { [pub.key]: { id: '1' } }, {}, active);
   assert.equal(moved.update.length, 1);
 });
+
+test('идеи ⇄ Todoist: новые, правки с обеих сторон, удалённые, закрытые', async () => {
+  const { ideasPlan } = await import('../writer/js/todoist.js');
+  const ideas = [
+    { id: 'a', title: 'Сцена в горах', text: '', tdId: '1', tdT: 'Сцена в горах', tdD: '' }, // без изменений
+    { id: 'b', title: 'Старое', text: '', tdId: '2', tdT: 'Старое', tdD: '' }, // поменяли в Todoist
+    { id: 'c', title: 'Новое здесь', text: 'текст', tdId: '3', tdT: 'Было', tdD: '' }, // поменяли в приложении
+    { id: 'd', title: 'Удалила', tdId: '4', tdT: 'Удалила', tdD: '', deletedAt: '2026-10-10' },
+    { id: 'e', title: 'Только в приложении' }, // отправить в Todoist
+    { id: 'f', title: 'Закрыла в Todoist', tdId: '9', tdT: 'Закрыла в Todoist', tdD: '' },
+  ];
+  const tasks = [{ id: '1', t: 'Сцена в горах', d: '' }, { id: '2', t: 'Новое из Todoist', d: '' }, { id: '3', t: 'Было', d: '' }, { id: '4', t: 'Удалила', d: '' }, { id: '7', t: 'Сцена с санитарами', d: '' }];
+  const ops = ideasPlan(ideas, tasks);
+  assert.deepEqual(ops.create.map((t) => t.id), ['7']);
+  assert.deepEqual(ops.pull.map((p) => p.x.id), ['b']);
+  assert.deepEqual(ops.update.map((x) => x.id), ['c']);
+  assert.deepEqual(ops.close.map((x) => x.id), ['d']);
+  assert.deepEqual(ops.push.map((x) => x.id), ['e']);
+  assert.deepEqual(ops.gone.map((x) => x.id), ['f']);
+});

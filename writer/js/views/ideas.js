@@ -30,6 +30,7 @@ export function ideasView(a) {
   const booksWithIdeas = c.wbooks.filter((b) => all.some((x) => x.bookId === b.id));
   const openAll = keys.length <= 4 || !!fb || !!q; // групп немного — раскрыты все; много — свёрнуты, видно счётчики
   const html = `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Идеи</h2><button class="primary" data-act="idea.new" data-book="${fb && fb !== '-' ? fb : ''}">+ Идея</button></div>
+  ${c.settings.todoistToken ? '<p class="small muted idea-hint">С телефона: в Todoist — задача с меткой <b>@идея</b>, и она появится здесь. Сразу к книге — положите её в раздел книги в проекте «Книги» или выберите книгу здесь.</p>' : ''}
   <div class="card idea-filter">
     <input type="search" value="${esc(q)}" placeholder="Поиск по идеям: слово из названия, текста, метки…" data-chg="idea.q" aria-label="Поиск по идеям">
     <div class="f2"><div><select data-chg="idea.book" aria-label="Книга"><option value="">Все книги</option>${booksWithIdeas.map((b) => opt(b.id, b.title, fb)).join('')}<option value="-"${fb === '-' ? ' selected' : ''}>Без книги</option></select></div>
@@ -51,7 +52,8 @@ function ideaRow(c, x, open) {
   const comments = x.comments || [];
   const st = x.status || 'new';
   const head = `<div class="row between idea-head" role="button" tabindex="0" data-act="idea.toggle" data-id="${x.id}"><span><b>${esc(x.title || (x.text || '').slice(0, 60) || 'Без названия')}</b>${st !== 'new' ? ` <span class="badge">${IST[st]}</span>` : ''}</span><span class="small muted">${x.createdAt ? fmtDate(x.createdAt.slice(0, 10)) : ''}${comments.length ? ` · ${comments.length} комм.` : ''}<button class="icon-btn" data-act="idea.quickDel" data-id="${x.id}" aria-label="Удалить идею" title="Удалить">${ic('trash')}</button></span></div>`;
-  if (!open) return `<div class="item idea" id="idea-${x.id}">${head}${x.text ? `<div class="small muted idea-snip">${esc(x.text.slice(0, 120))}${x.text.length > 120 ? '…' : ''}</div>` : ''}</div>`;
+  const pick = !x.bookId && c.wbooks.length ? `<div class="idea-pick"><select data-chg="idea.setBook" data-id="${x.id}" aria-label="К какой книге"><option value="">К какой книге?</option>${c.wbooks.map((b) => opt(b.id, b.title, '')).join('')}</select></div>` : '';
+  if (!open) return `<div class="item idea" id="idea-${x.id}">${head}${x.text ? `<div class="small muted idea-snip">${esc(x.text.slice(0, 120))}${x.text.length > 120 ? '…' : ''}</div>` : ''}${pick}</div>`;
   return `<div class="item idea open" id="idea-${x.id}">${head}
     ${x.text ? `<p class="idea-text">${esc(x.text)}</p>` : ''}
     <div class="tags">${(x.tags || []).map((t) => `<span class="tag">#${esc(t)}</span>`).join('')}${x.fileLink ? `<a class="tag on" href="${esc(x.fileLink)}" target="_blank" rel="noopener">${ic('doc')} ${esc(x.fileName || 'документ')}</a>` : ''}</div>
@@ -76,6 +78,7 @@ changes['idea.q'] = (v) => { app().ui.ideaQ = v.trim(); app().rerender(); };
 changes['idea.book'] = (v) => { app().ui.ideaBook = v; app().rerender(); };
 changes['idea.st'] = (v) => { app().ui.ideaSt = v; app().rerender(); };
 acts['idea.reset'] = () => { const u = app().ui; u.ideaQ = ''; u.ideaBook = ''; u.ideaSt = 'active'; };
+changes['idea.setBook'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_ideas.find((i) => i.id === el.dataset.id); await app().store.put('w_ideas', { ...x, bookId: v, ...(x.tdId ? { tdMove: true } : {}) }); toast('Идея привязана к книге'); };
 changes['idea.setSt'] = async (v, el) => { const x = app().ctx().data.w_ideas.find((i) => i.id === el.dataset.id); await app().store.put('w_ideas', { ...x, status: v }); toast(`Идея: ${IST[v].toLowerCase()}`); };
 acts['idea.newFor'] = (d) => acts['idea.new'](d); // «+ Идея» на странице книги — книга уже выбрана
 // со страницы книги: идеи этой книги, нужная — раскрыта
