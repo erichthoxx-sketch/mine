@@ -1128,3 +1128,4 @@ html.is-dragging, html.is-dragging * { cursor: grabbing !important; }
 
 .ct-bb { flex-wrap: wrap; }
 @media (max-width: 560px) { .ct-book { align-items: stretch; } .ct-bb { width: 100%; } .ct-bb .small-btn { padding: 3px 10px; font-size: 12.5px; } .ct-bb .ct-x { margin-left: auto; } }
+.bg-pace { margin-top: 6px; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--text); }

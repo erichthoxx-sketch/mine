@@ -16,6 +16,14 @@ const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 // которая остаётся после комиссий и рекламы, минус налог. Налог — по годам: пока доход за год укладывается в лимит НПД
 // (2,4 млн с базы налога) — ставка из настроек (4%); год, где лимит превышается, — как ИП на УСН «доходы» 6%.
 export const USN_RATE = 0.06;
+// после НПД: УСН «доходы» 6% (взносы ИП уменьшают налог) или АУСН «доходы» 8% (без взносов и отчётов)
+export const AFTER = { usn: { rate: 0.06, name: 'УСН 6%' }, ausn: { rate: 0.08, name: 'АУСН 8%' } };
+// темп выше 8% в месяц — подсказка, когда цель реальна при спокойных +6%
+function paceHint(plan, base, target, startM) {
+  if (!(plan.growth > 0.08) || !(base > 0)) return null;
+  const n = Math.ceil(Math.log(target / base) / Math.log(1.06));
+  return { by: addMonths(startM, n) };
+}
 export function bigGoalStatus(c, finOf) {
   const g = c.settings.bigGoal;
   if (!g || !g.amount || !g.by) return null;
@@ -56,13 +64,14 @@ export function bigGoalStatus(c, finOf) {
     const ahead = future.filter((p) => p.month.startsWith(y)).reduce((m, p) => m + (gross ? p.value : royOf(p.value, npdRate)) * ratio, 0);
     if (done + ahead + (y === c.today.slice(0, 4) ? other : 0) > limit) { regime[y] = 'usn'; usnFrom = y; } else regime[y] = 'npd';
   }
-  const rateOf = (m) => (regime[m.slice(0, 4)] === 'usn' ? USN_RATE : npdRate);
+  const after = AFTER[g.after] ? g.after : 'usn', alt = after === 'usn' ? 'ausn' : 'usn';
+  const rateOf = (m) => (regime[m.slice(0, 4)] === 'usn' ? AFTER[after].rate : npdRate);
   const roy = Object.fromEntries(future.map((p) => [p.month, Math.round(gross ? p.value : royOf(p.value, rateOf(p.month)))]));
   const curPlan = future[0]?.value ?? base, left = Math.max(0, monthsBetween(cur, g.by).length - 1);
   // как росли на самом деле: роялти, средние трёх месяцев — последние к предыдущим, в пересчёте на месяц
   const a = last3.map(R), b = prev3.map(R);
   const actual = a.length === 3 && b.length === 3 && avg(b) > 0 && avg(a) > 0 ? (avg(a) / avg(b)) ** (1 / 3) - 1 : null;
-  return { g, base, now, own, startM, baseFrom: pick.from, plan, curPlan, curRoy: roy[cur] ?? baseRoy, targetRoy: roy[g.by], roy, left, actual, keep, ratio, npdRate, usnFrom, limit, onTrack: actual == null ? null : actual >= plan.growth, months: last3.length };
+  return { g, base, now, own, startM, baseFrom: pick.from, plan, curPlan, curRoy: roy[cur] ?? baseRoy, targetRoy: roy[g.by], altRoy: gross || !usnFrom ? null : Math.round(royOf(Number(g.amount), AFTER[alt].rate)), after, alt, paceHint: paceHint(plan, base, Number(g.amount), startM), roy, left, actual, keep, ratio, npdRate, usnFrom, limit, onTrack: actual == null ? null : actual >= plan.growth, months: last3.length };
 }
 const cur0 = (st) => Object.keys(st.roy)[0] || st.g.by;
 const fmtMln = (v) => `${num(v / 1e6, 1)} млн`;
@@ -71,7 +80,7 @@ function taxLine(st) {
   const { g, usnFrom, npdRate, limit } = st, y0 = cur0(st).slice(0, 4);
   const goalRoy = g.kind === 'gross' ? '' : ` Цель ≈ <b>${rub(st.targetRoy, 0)}</b> роялти в месяц.`;
   if (!usnFrom) return `Налог: НПД ${num(npdRate * 100, 0)}% — весь путь в лимите ${fmtMln(limit)} в год.${goalRoy}`;
-  return `Налог: ${usnFrom === y0 ? '' : `НПД ${num(npdRate * 100, 0)}% до ${Number(usnFrom) - 1}, `}с ${usnFrom} — ИП на УСН 6%: доход выше лимита НПД ${fmtMln(limit)} в год.${goalRoy}`;
+  return `Налог: ${usnFrom === y0 ? '' : `НПД ${num(npdRate * 100, 0)}% до ${Number(usnFrom) - 1}, `}с ${usnFrom} — ИП на ${AFTER[st.after].name}: доход выше лимита НПД ${fmtMln(limit)} в год.${goalRoy}${st.altRoy ? ` <span class="muted">На ${AFTER[st.alt].name} — ≈ ${rub(st.altRoy, 0)}.</span>` : ''}`;
 }
 const word = (g) => (g.kind === 'gross' ? 'до вычетов' : 'чистыми');
 // большая карточка в «Финансах»
@@ -84,6 +93,7 @@ export function bigGoalCard(st) {
     <div class="progress"><i style="width:${(share * 100).toFixed(1)}%"></i></div>
     <div class="small bg-now-plan">${st.own && st.startM <= cur0(st) ? `Старт пути: ${nom(st.startM)} — <b>${rub(Number(g.startRoy), 0)}</b> роялти` : `План на ${nom(cur0(st))}: <b>${rub(st.curRoy, 0)}</b> роялти`}${g.kind === 'gross' ? '' : ` <span class="muted">≈ ${rub(st.curPlan, 0)} чистыми</span>`}</div>
     <div class="small bg-tax">${taxLine(st)}</div>
+    ${st.paceHint ? `<div class="small bg-pace">Темп очень высокий — доход должен расти в ${num(1 + plan.yearly, 1)} раза за год. При спокойных +6% в месяц ${rub(g.amount, 0)} будет примерно ${byMonthText(st.paceHint.by)}.</div>` : ''}
     <div class="bg-facts">
       <div><span>Нужный рост</span><b>+${num(plan.growth * 100, 1)}%</b><i>в месяц · ×${num(1 + plan.yearly, 1)} за год</i></div>
       <div><span>Сейчас растёт</span><b class="${onTrack == null ? '' : onTrack ? 'up' : 'down'}">${actual == null ? '—' : (actual >= 0 ? '+' : '−') + num(Math.abs(actual) * 100, 1) + '%'}</b><i>${actual == null ? 'нужно полгода данных' : onTrack ? 'в месяц · в темпе' : 'в месяц · медленнее плана'}</i></div>
@@ -114,6 +124,8 @@ acts['bigGoal.edit'] = () => {
     <div class="f2"><div><label for="bgSM">Начало пути</label><input id="bgSM" type="month" name="startMonth" value="${g.startMonth || monthKey(c.today)}"></div>
     <div><label for="bgSR">Цель этого месяца, ₽ роялти</label><input id="bgSR" name="startRoy" inputmode="decimal" value="${g.startRoy || ''}" placeholder="авто — по моим данным"></div></div>
     <div class="hint">С какой месячной цели начать путь — как в «Целях по месяцам» (до вычетов). Пусто — от того, сколько получается сейчас.</div>
+    <label for="bgAf">Когда доход превысит лимит НПД</label><select id="bgAf" name="after">${opt('usn', 'ИП на УСН «доходы» 6% — взносы уменьшают налог', g.after || 'usn')}${opt('ausn', 'ИП на АУСН «доходы» 8% — без взносов и деклараций', g.after || 'usn')}</select>
+    <div class="hint">Ещё не решили — оставьте УСН: в карточке видно, сколько понадобилось бы на АУСН.</div>
     <label for="bgK">Считать</label><select id="bgK" name="kind">${opt('net', 'чистыми — после комиссии, рекламы и налога', g.kind || 'net')}${opt('gross', 'до вычетов (роялти)', g.kind || 'net')}</select>
     ${g.amount ? '<label class="check"><input type="checkbox" name="off">Убрать большую цель</label>' : ''}`, async (fd) => {
     if (fd.get('off')) { await app().store.saveSettings({ bigGoal: null }); toast('Большая цель убрана'); return; }
@@ -121,7 +133,7 @@ acts['bigGoal.edit'] = () => {
     if (!amount || amount <= 0 || !/^\d{4}-\d{2}$/.test(by)) { toast('Укажите сумму и месяц'); return false; }
     if (by <= monthKey(c.today)) { toast('Месяц цели должен быть впереди'); return false; }
     const startRoy = N(fd.get('startRoy')), startMonth = String(fd.get('startMonth') || '');
-    await app().store.saveSettings({ bigGoal: { amount, by, kind: fd.get('kind') === 'gross' ? 'gross' : 'net', startMonth: startRoy > 0 ? startMonth : '', startRoy: startRoy > 0 ? startRoy : null } });
+    await app().store.saveSettings({ bigGoal: { amount, by, kind: fd.get('kind') === 'gross' ? 'gross' : 'net', after: fd.get('after') === 'ausn' ? 'ausn' : 'usn', startMonth: startRoy > 0 ? startMonth : '', startRoy: startRoy > 0 ? startRoy : null } });
     const st = bigGoalOf(app().ctx());
     if (st) await applyPath(app().ctx(), st);
     toast('Цель сохранена — путь и цели по месяцам пересчитаны');
@@ -144,7 +156,7 @@ acts['bigGoal.apply'] = () => {
   if (!st) return;
   const cur = monthKey(c.today), first = st.curRoy;
   openSheet('Разложить по месяцам', `<p>Цели по месяцам с ${gen(cur)} пойдут по пути к большой цели: ${rub(first, 0)} в этом месяце и дальше примерно +${num(st.plan.growth * 100, 1)}% каждый месяц.</p>
-    ${st.g.kind === 'gross' ? '' : `<p class="small muted">Помесячные цели — в роялти (до вычетов): это то, что видно в отчётах Литнета. Перевод из «чистыми» — с учётом рекламы, комиссий и налога${st.usnFrom ? `, а с ${st.usnFrom} года — налога ИП на УСН 6%` : ''}.</p>`}
+    ${st.g.kind === 'gross' ? '' : `<p class="small muted">Помесячные цели — в роялти (до вычетов): это то, что видно в отчётах Литнета. Перевод из «чистыми» — с учётом рекламы, комиссий и налога${st.usnFrom ? `, а с ${st.usnFrom} года — налога ИП на ${AFTER[st.after].name}` : ''}.</p>`}
     <p class="small muted">Цели прошлых месяцев не меняются. Свои цели на будущие месяцы заменятся расчётом.</p>`, async () => {
     await applyPath(c, st);
     toast('Цели по месяцам пересчитаны');
