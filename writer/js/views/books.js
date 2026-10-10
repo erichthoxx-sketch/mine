@@ -78,6 +78,8 @@ function bar(label, share, right, hint = '') {
   const v = Math.max(0, Math.min(1, share || 0));
   return `<div class="wbar"><div class="row between small"><span>${label}</span><span>${right}</span></div><div class="progress"><i style="width:${(v * 100).toFixed(1)}%"></i></div>${hint ? `<div class="small muted">${hint}</div>` : ''}</div>`;
 }
+const MON_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const MON_SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 const whenTxt = (n) => (n < 0 ? `просрочено на ${-n} дн.` : n === 0 ? 'сегодня' : n === 1 ? 'завтра' : `через ${n} дн.`);
 export const daysTxt = (days) => (days || []).map(Number).sort().map((x) => DOW[x - 1]).join(', ');
 // Прогресс книги: главы (написано / выложено) по примерному плану глав, график выкладки, конкурсы с условием по объёму
@@ -87,7 +89,16 @@ export function progressBlock(c, b) {
   if (s.planCh) parts.push(bar('Написано глав', s.written / s.planCh, `${s.written} из ≈${s.planCh}`, s.doneWriting ? 'все главы написаны' : s.finish ? `допишу к ${fmtDate(s.finish)}${b.finishBy ? '' : ' — по темпу'}` : ''));
   else parts.push(`<div class="small">Написано глав: <b>${s.written}</b> <span class="muted">· укажите, сколько примерно глав в книге, — сроки посчитаются сами</span></div>`);
   if (total) parts.push(bar('Выложено', s.out / total, `${s.out} из ${s.planCh ? '≈' + s.planCh : total}`, [b.publishStart ? `с ${fmtDate(b.publishStart)}` : '', b.pubDays?.length ? `по графику: ${daysTxt(b.pubDays)}` : '', s.until ? `до ${fmtDate(s.until)}${b.publishUntil ? '' : ' — посчитано'}` : ''].filter(Boolean).join(' · ')));
-  if (s.next) parts.push(`<div class="next-line"><span><b>${s.next.ch ? esc(s.next.ch) : 'новая глава'}</b> · ${esc(s.next.pf)} · ${fmtDate(s.next.date).slice(0, 5)} <span class="muted">(${whenTxt(diffD(s.next.date, t))})</span></span><span class="muted nl-k">Следующая выкладка</span></div>`);
+  if (s.next) {
+    // следующий свободный день выкладки по графику: какую главу и к какому числу
+    const d = s.next.date, n = diffD(d, t), when = `${Number(d.slice(8, 10))} ${MON_GEN[Number(d.slice(5, 7)) - 1]}`;
+    const nums = chapterList(b).map((x) => Number((/^\s*глава\s+(\d+)/i.exec(x.title) || [])[1])).filter(Boolean);
+    const newCh = nums.length ? `Глава ${Math.max(...nums) + 1}` : 'Новая глава';
+    const title = s.next.ch ? `Выложить «${esc(s.next.ch)}»` : `${newCh} — написать к ${when}`;
+    const sub = s.next.ch ? `глава написана — осталось поставить на таймер · ${esc(s.next.pf)}` : `все написанные главы уже выложены или стоят на таймере · ${esc(s.next.pf)}`;
+    parts.push(`<div class="next-line"><span class="nl-date"><b>${Number(d.slice(8, 10))}</b><i>${MON_SHORT[Number(d.slice(5, 7)) - 1]}</i></span>
+      <span class="nl-body"><span class="nl-t">${title}</span><span class="nl-s"><span class="nl-when-m">${whenTxt(n)} · </span>${sub}</span></span><span class="nl-when${n < 0 ? ' late' : n <= 2 ? ' soon' : ''}">${whenTxt(n)}</span></div>`);
+  }
   for (const x of liveContests(c, b)) {
     const st = contestStatus(x, b, t);
     parts.push(`<div class="small">Конкурс «${esc(x.name)}»${st.daysLeft != null ? ` · осталось ${st.daysLeft} дн.` : ''}${x.minChars ? ` — объём ${contestVol(x)(st.chars)} из ${contestVol(x)(x.minChars)}: ${st.need === 0 ? '<span class="up">✓ проходит</span>' : `не хватает ${contestVol(x)(st.need)}${st.perDay ? ` (~${contestVol(x)(st.perDay)} в день)` : ''}${st.onTrack ? ' — по темпу успеваю' : ''}`}` : ''}</div>`);

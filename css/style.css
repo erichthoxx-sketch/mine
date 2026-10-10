@@ -954,3 +954,15 @@ html.ed-focus .ed-paper .ed-stats { bottom: auto; }
 a.card.npd-alert { display: block; color: var(--text); text-decoration: none; border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); background: color-mix(in srgb, var(--warn) 8%, var(--surface)); }
 a.card.npd-alert.over { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); background: color-mix(in srgb, var(--bad) 8%, var(--surface)); }
 a.card.npd-alert .small { margin-top: 4px; color: var(--text-2); }
+/* следующая выкладка: листок календаря + что сделать + когда */
+.next-line { display: flex; align-items: center; justify-content: flex-start; flex-wrap: nowrap; gap: 14px; padding: 10px 14px; }
+.nl-date { flex: none; width: 46px; height: 50px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+.nl-date b { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.nl-date i { font-style: normal; font-size: 11px; color: var(--muted); margin-top: 3px; text-transform: lowercase; }
+.nl-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nl-t { font-weight: 700; font-size: 14.5px; }
+.nl-s { font-size: 12.5px; color: var(--muted); }
+.nl-when { flex: none; font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.nl-when.soon { color: var(--warn); font-weight: 600; } .nl-when.late { color: var(--bad); font-weight: 600; }
+.nl-when-m { display: none; }
+@media (max-width: 520px) { .nl-when { display: none; } .nl-when-m { display: inline; color: var(--text-2); font-weight: 600; } .next-line { gap: 12px; } }
