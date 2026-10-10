@@ -169,8 +169,7 @@ export function editorView(a, bookId, title) {
       <button class="ed-ic" data-act="ed.find" title="Закрыть (Esc)">✕</button></div>
   </div>
   ${ed.draft ? `<div class="alert alert-thin ed-draft">На этом устройстве есть несохранённый черновик от ${fmtDate(ed.draft.at.slice(0, 10))} ${ed.draft.at.slice(11, 16)}. <button class="link" data-act="ed.useDraft">Открыть черновик</button> <button class="link" data-act="ed.dropDraft">Отбросить</button></div>` : ''}
-  <div class="ed-paper"><div class="editor" id="ed" contenteditable="true" spellcheck="true" lang="ru" style="--ed-zoom:${zoom};${ed.font ? `font-family:'${esc(ed.font)}',Georgia,'Times New Roman',serif` : ''}">${ed.html}</div></div>
-  <div class="ed-stats" id="edstats"></div>`;
+  <div class="ed-paper"><div class="ed-stats" id="edstats"></div><div class="editor" id="ed" contenteditable="true" spellcheck="true" lang="ru" style="--ed-zoom:${zoom};${ed.font ? `font-family:'${esc(ed.font)}',Georgia,'Times New Roman',serif` : ''}">${ed.html}</div></div>`;
   return { html, after: wire };
 }
 const alignIc = (v) => {
@@ -190,7 +189,7 @@ function stats(el) {
   const s = textStats(htmlToBlocks(el)), box = document.getElementById('edstats');
   if (!box) return;
   const diff = s.chars - (ed.startChars || 0);
-  box.innerHTML = `<span><b>${num(s.words)}</b> ${plural(s.words, ['слово', 'слова', 'слов'])}</span><span><b>${num(s.chars)}</b> зн.</span><span><b>${alNum(s.chars)}</b> а.л.</span><span>за сессию <b class="${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '+' : '−'}${num(Math.abs(diff))}</b> зн.</span>`;
+  box.innerHTML = `<span><b>${num(s.words)}</b> <i>${plural(s.words, ['слово', 'слова', 'слов'])}</i></span><span><b>${num(s.chars)}</b> <i>зн.</i></span><span><b>${alNum(s.chars)}</b> <i>а.л.</i></span><span class="es-sess"><b class="${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '+' : '−'}${num(Math.abs(diff))}</b> <i>зн. за сессию</i></span>`;
 }
 function wire() {
   const el = document.getElementById('ed');

@@ -922,3 +922,20 @@ table.pub-t tr.ch-row:hover td { background: transparent; }
   html.on-ed main { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
   html.on-ed #toast { bottom: calc(56px + env(safe-area-inset-bottom)); }
 }
+/* цифры главы на компьютере — не под текстом, а тихой колонкой сбоку */
+.ed-stats i { font-style: normal; }
+.ed-paper { position: relative; }
+@media (min-width: 1180px) {
+  .ed-paper .ed-stats { position: absolute; top: 18px; right: 22px; bottom: auto; left: auto; padding: 0; background: none; gap: 14px; font-size: 12px; opacity: .7; transition: opacity .2s; }
+  .ed-paper .ed-stats:hover { opacity: 1; }
+  .ed-paper .ed-stats b { font-weight: 600; }
+}
+@media (min-width: 1380px) {
+  .ed-paper .ed-stats { position: fixed; top: 50%; right: 28px; transform: translateY(-50%); flex-direction: column; flex-wrap: nowrap; align-items: flex-end; gap: 16px; text-align: right; opacity: .55; }
+  .ed-paper .ed-stats span { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; line-height: 1.2; }
+  .ed-paper .ed-stats b { font-size: 16px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .ed-paper .ed-stats b.up { color: var(--good); } .ed-paper .ed-stats b.down { color: var(--bad); }
+  .ed-paper .ed-stats i { font-size: 11px; color: var(--muted); letter-spacing: .02em; }
+  .ed-paper .ed-stats .es-sess { padding-top: 14px; border-top: 1px solid var(--line); }
+}
+html.ed-focus .ed-paper .ed-stats { bottom: auto; }
