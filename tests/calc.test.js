@@ -4,6 +4,7 @@ import {
   r2, addDays, countDays, weekStart, monthKey, addMonths, incomeSeries, sumSeries, movingAverage, byWeek, byMonth,
   dashboardStats, campaignMetrics, campaignSpendByMonth, spendByMonthChannel, litnetDiscounts, litnetPace,
   monthFinance, buildPlan, goalRows, rollingAverage, inferPriceChanges, priceAt, ctr, cpc, bookIdFor, saleId,
+  bigGoalPlan,
 } from '../js/calc.js';
 
 const mk = (date, price, qty, roy, book = 'А', kind = 'sale') => ({ date, book, bookId: bookIdFor(book), kind, price, qty, royalty: roy, id: '' });
@@ -625,4 +626,14 @@ test('лимит НПД: набралось с 1 января, прогноз и
   assert.equal(npdLimitStatus(() => 0, '2026-03-05', { other: 2500000 }).level, 'over');
   // далеко до превышения — «позже»
   assert.equal(npdLimitStatus((k) => (k === '2026-03' ? 0 : 400000), '2026-03-01').level, 'later');
+});
+
+test('bigGoalPlan: путь к 500 000 ₽ к январю 2030', () => {
+  const p = bigGoalPlan({ target: 500000, byMonth: '2030-01', startMonth: '2026-10', base: 45000 });
+  assert.equal(p.n, 39);
+  assert.ok(Math.abs(p.growth - 0.0637) < 0.001);
+  assert.equal(p.path.at(-1).value, 500000);
+  assert.deepEqual(p.miles.map((m) => m.month), ['2026-12', '2027-12', '2028-12', '2029-12', '2030-01']);
+  // нулевая база не ломает расчёт
+  assert.ok(Number.isFinite(bigGoalPlan({ target: 500000, byMonth: '2030-01', startMonth: '2026-10', base: 0 }).growth));
 });

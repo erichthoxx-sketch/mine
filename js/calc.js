@@ -911,3 +911,14 @@ export function npdLimitStatus(baseOf, today, { limit = NPD_LIMIT, other = 0 } =
   const level = ytd > lim ? 'over' : breach && breach <= addMonths(cur, 1) ? 'next' : breach ? 'later' : ytd >= lim * 0.8 ? 'near' : 'ok';
   return { year: y, ytd: r2(ytd), limit: lim, left: r2(Math.max(0, lim - ytd)), share: ytd / lim, pace: r2(pace), yearEnd: r2(proj[proj.length - 1].cum), breach, level };
 }
+
+// ---------- большая цель: «500 000 ₽ чистыми в месяц к январю 2030» ----------
+// база — средний месяц за последние 3 закончившихся; путь — ровный рост в % каждый месяц до цели
+export function bigGoalPlan({ target, byMonth, startMonth, base }) {
+  const n = Math.max(1, monthsBetween(startMonth, byMonth).length - 1);
+  const b = Math.max(1000, Number(base) || 0); // ноль/минус — считаем от символической 1000, чтобы путь был
+  const growth = (Number(target) / b) ** (1 / n) - 1;
+  const path = Array.from({ length: n + 1 }, (_, i) => ({ month: addMonths(startMonth, i), value: Math.round(b * (1 + growth) ** i) }));
+  const miles = path.filter((p) => p.month.endsWith('-12') || p.month === byMonth);
+  return { n, base: b, growth, yearly: (1 + growth) ** 12 - 1, path, miles };
+}

@@ -108,7 +108,7 @@ export async function fetchOwnTasks(token) {
     const secs = await all(token, `/sections?project_id=${p.id}`), sn = Object.fromEntries(secs.map((x) => [String(x.id), x.name]));
     for (const t of await all(token, `/tasks?project_id=${p.id}`)) {
       if ((t.labels || []).includes(TD_LABEL) || (t.labels || []).includes(IDEA_LABEL) || t.parent_id) continue;
-      out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: String(p.name).trim(), s: sn[String(t.section_id)] || '', pr: t.priority || 1 });
+      out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: String(p.name).trim(), s: sn[String(t.section_id)] || '', pr: t.priority || 1, ds: t.description || '' });
     }
   }
   return out.slice(0, 300);

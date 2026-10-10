@@ -1040,3 +1040,36 @@ details.idea-group > summary > span:first-child::before { content: none; }
 details.idea-group[open] > summary > span:first-child::before { content: none; }
 .ig-chev { transform: rotate(180deg); } .idea-group[open] .ig-chev { transform: rotate(-90deg); }
 .ig-h .ig-cover { margin-right: 4px; }
+/* задача из Todoist — вся строка открывает её */
+.pi-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+.pi-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+/* большая цель */
+.bg-target { margin-top: 6px; font-size: 15px; }
+.bg-target b { font-size: 22px; letter-spacing: -.01em; }
+.bg-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.bg-facts > div { background: var(--bg); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bg-facts span { font-size: 12px; color: var(--text-2); }
+.bg-facts b { font-size: 18px; white-space: nowrap; }
+.bg-facts i { font-style: normal; font-size: 12px; color: var(--text-2); }
+.bg-miles { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; scrollbar-width: none; }
+.bg-miles::-webkit-scrollbar { display: none; }
+.bg-miles > div { flex: 1 0 auto; border-top: 2px solid var(--line); padding-top: 6px; display: flex; flex-direction: column; font-size: 12px; color: var(--text-2); }
+.bg-miles > div:last-child { border-color: var(--accent); }
+.bg-miles b { color: var(--text); font-size: 14px; white-space: nowrap; }
+.bg-line { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 14px; }
+.card > .bg-line:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.bg-line .muted { font-size: 12.5px; }
+@media (max-width: 560px) { .bg-facts { grid-template-columns: 1fr; } .bg-facts > div { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 6px; } .bg-facts span { flex: 1 0 100%; } }
+.bg-now { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 10px; }
+.bg-now > span:last-child { flex: none; }
+@media (max-width: 560px) {
+  .bg-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .bg-facts > div { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 1px; padding: 8px 9px; }
+  .bg-facts span { flex: none; font-size: 11px; }
+  .bg-facts b { font-size: 16px; }
+  .bg-facts i { font-size: 11px; }
+  .bg-miles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; overflow: visible; }
+  .bg-target b { font-size: 20px; }
+}
+a.td-ext { text-decoration: none; font-weight: 700; font-size: 14px; }
+a.td-ext { color: var(--link); }

@@ -5,6 +5,7 @@ import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, goalRows, da
 import { fmtDate } from '../format.js';
 import { goalChart } from '../charts.js';
 import { budgetCard } from './ads.js';
+import { bigGoalOf, bigGoalCard } from '../biggoal.js';
 
 const app = () => window.__app;
 const fin = (c, k) => monthFinance(k, { sales: c.sales, legacyDays: c.legacyDays, spend: c.spend, discounts: c.discounts, months: c.monthsMap, settings: c.settings, litnet: c.litnetMoney });
@@ -60,6 +61,7 @@ export function money(a) {
       <td>${h.cash == null ? '—' : `≈ ${rub(h.cash, 0)}`}</td></tr>`; }).join('')}</table></div>
     <div class="hint">Всё считается само. Реклама — сколько открутилось за месяц. Скидка — от Литнета по программе «Литнет платит». Выплата — сколько Литнет перечислит за продажи месяца. На руках — пришедшая выплата за прошлый месяц минус оплаты рекламы и налог.</div></div>
   ${budgetCard(c)}
+  ${bigGoalCard(bigGoalOf(c))}
   <div class="card"><div class="row between"><h2>Цели</h2><button class="primary" data-act="goal.all">Изменить цели</button></div>
     <p class="small muted">Старт: ${fmtMonth(s.goalStart)} — ${rub(s.goalAmount, 0)}, дальше +${s.goalGrowth}% в месяц; свои цели по месяцам — кнопка «Изменить цели». Факт — доход до вычетов (роялти).</p>
     <div class="chart" id="goalChart"></div>
@@ -112,7 +114,7 @@ acts['goal.all'] = (d) => {
     const n = (k) => { const v = N(fd.get(k)); return v == null || Number.isNaN(v) ? undefined : v; };
     const o = fd.get('reset') ? {} : { ...ov };
     if (!fd.get('reset')) for (const p of plan) { const v = n('p_' + p.month); if (v === undefined) delete o[p.month]; else o[p.month] = v; }
-    const patch = { goalStart: fd.get('goalStart') || s.goalStart, goalAmount: n('goalAmount') ?? s.goalAmount, goalGrowth: n('goalGrowth') ?? s.goalGrowth, goalMonths: Math.min(36, Math.max(1, Math.round(n('goalMonths') ?? 13))), planOverrides: o };
+    const patch = { goalStart: fd.get('goalStart') || s.goalStart, goalAmount: n('goalAmount') ?? s.goalAmount, goalGrowth: n('goalGrowth') ?? s.goalGrowth, goalMonths: Math.min(60, Math.max(1, Math.round(n('goalMonths') ?? 13))), planOverrides: o };
     await app().store.saveSettings(patch);
     toast('Цели сохранены');
   });
