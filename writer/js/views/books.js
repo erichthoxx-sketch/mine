@@ -1,13 +1,14 @@
 import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol } from '../wcalc.js';
+import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol } from '../wcalc.js';
 import { goalTitle, goalToday } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
 import { publisherCard, svcInfo } from './pubfiles.js';
 import { ownTasks, bookOfTask, addOwnTask } from '../../../js/tdtasks.js';
+import { contestCard } from './plan.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 import { addDays } from '../../../js/calc.js';
@@ -37,7 +38,7 @@ export function driveChip(c) {
 }
 
 // активные конкурсы книги: метка «Конкурс · N дн.»
-const liveContests = (c, b) => c.data.w_contests.filter((x) => x.bookId === b.id && x.status !== 'done' && !(x.end && x.end < c.today));
+const liveContests = (c, b) => c.data.w_contests.filter((x) => contestBookIds(x).includes(b.id) && x.status !== 'done' && !(x.end && x.end < c.today));
 const daysTo = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
 function contestTags(c, b) {
   const l = liveContests(c, b);
@@ -118,7 +119,7 @@ export function bookPage(a, id) {
   if (!b) return { html: '<div class="card"><p>Книга не найдена.</p><a href="#" data-act="go" data-to="/books">← Все книги</a></div>' };
   const h = b.history || {};
   const p = pace(h, c.today);
-  const contests = c.data.w_contests.filter((x) => x.bookId === b.id);
+  const contests = c.data.w_contests.filter((x) => contestBookIds(x).includes(b.id)).sort((x, y) => (x.status === 'done') - (y.status === 'done') || (y.end || '').localeCompare(x.end || '') * -1);
   // идеи к книге — самые свежие сверху; на странице книги не больше 8
   const ideas = c.data.w_ideas.filter((x) => x.bookId === b.id && !x.deletedAt).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
   const IDEAS_MAX = 8;
@@ -173,7 +174,7 @@ export function bookPage(a, id) {
   <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><div class="row">${canEdit ? `<button data-act="ch.add" data-id="${b.id}" title="Отдельная вкладка в Google Документе">+ Глава</button>` : ''}<button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div></div>
     ${chs.length ? chaptersBlock() : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
     <div class="hint">${canEdit ? 'Название — открыть главу в редакторе. ' : ''}Отметка справа — «выложила» или «на таймер». Выкладка сразу попадает событием в «Доходы».</div></div>
-  ${contests.length ? `<div class="card"><h2>Конкурсы</h2>${contests.map((x) => { const s = contestStatus(x, b, c.today); return `<div class="item small"><b>${esc(x.name)}</b> · ${s.daysLeft == null ? '' : s.daysLeft < 0 ? 'завершён' : 'осталось ' + s.daysLeft + ' дн.'}${s.need != null ? ` · нужно ещё ${contestVol(x)(s.need)}` : ''}</div>`; }).join('')}</div>` : ''}
+  ${bookContests(c, b, contests)}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
       ${ideas.length > IDEAS_MAX ? `<div style="margin-top:10px"><button data-act="idea.open" data-book="${b.id}">Все идеи к книге (${ideas.length})</button></div>` : ''}` : '<p class="small muted" style="margin:8px 0 0">Идей к этой книге пока нет.</p>'}</div>
@@ -486,3 +487,12 @@ acts['td.addBook'] = (d) => {
     } catch (e) { toast('Не получилось: ' + e.message); return false; }
   }, { submitText: 'Добавить' });
 };
+
+// конкурсы книги: карточки с условиями, проверкой книги, кнопками «Текст», «Синопсис», почтой; плюс «на конкурс»
+function bookContests(c, b, contests) {
+  const free = c.data.w_contests.filter((x) => !contestBookIds(x).includes(b.id) && x.status !== 'done' && !(x.end && x.end < c.today));
+  if (!contests.length && !free.length) return '';
+  return `<div class="ct-wrap"><div class="row between" style="margin:4px 2px 10px"><h2 style="margin:0">Конкурсы</h2>${free.length ? `<select class="ct-join" data-chg="contest.addBookTo" data-b="${b.id}" aria-label="Отправить на конкурс"><option value="">+ на конкурс</option>${free.map((x) => opt(x.id, x.name, '')).join('')}</select>` : ''}</div>
+    ${contests.map((x) => contestCard(c, x, { forBook: b.id })).join('')}</div>`;
+}
+changes['contest.addBookTo'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_contests.find((i) => i.id === v), ids = [...new Set([...contestBookIds(x), el.dataset.b])]; await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0] }); toast(`Книга на конкурсе «${x.name}»`); };

@@ -5,6 +5,7 @@ import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
 import { STATUS } from './books.js';
 import { widgetCard } from './widgets.js';
+import { contests } from './plan.js';
 import { svcInfo } from './pubfiles.js';
 
 const app = () => window.__app;
@@ -31,6 +32,8 @@ export function marketingView(a) {
   ${c.wbooks.length > 6 ? `<input type="search" value="${esc(a.ui.mQ || '')}" placeholder="Найти книгу" data-chg="mk.q" aria-label="Найти книгу" style="margin-bottom:10px">` : ''}
   ${list.length ? `<div class="card list">${list.map((b) => bookRow(c, b)).join('')}</div>` : `<div class="card"><p class="muted" style="margin:0">${c.wbooks.length ? 'В этой группе книг нет.' : 'Книг пока нет — добавьте их на вкладке «Книги».'}</p></div>`}
   <div class="hint">У каждой книги три блока: тексты для постов, материалы для таргета (Яндекс Директ) и пакет для издательства.</div>
+  <div class="psec-h" style="margin-top:22px"><h2>Конкурсы</h2><button class="small-btn" data-act="contest.new">+ Конкурс</button></div>
+  ${contests(c)}
   <div style="margin-top:16px">${widgetCard(c)}</div>`;
   return { html };
 }

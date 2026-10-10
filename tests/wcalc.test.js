@@ -174,11 +174,34 @@ test('конкурс из текста условий: название, дат�
 Приём работ с 15 октября по 30 ноября 2026 года. Итоги — 20 декабря.
 Объём произведения — от 6 до 12 а.л. Произведение должно быть новым.`;
   const r = parseContest(t, 'https://litnet.com/ru/contest/123', '2026-10-10');
-  assert.deepEqual(r, { platform: 'Литнет', name: 'Второе дыхание', start: '2026-10-15', end: '2026-11-30', unit: 'al', minChars: 240000, maxChars: 480000 });
+  assert.deepEqual(r, { platform: 'Литнет', name: 'Второе дыхание', results: '2026-12-20', start: '2026-10-15', end: '2026-11-30', unit: 'al', minChars: 240000, maxChars: 480000 });
   const r2 = parseContest('Конкурс "Тёмная сторона". Последний день подачи: 01.12.2026. Объём не менее 200 000 знаков с пробелами.', '', '2026-10-10');
   assert.equal(r2.name, 'Тёмная сторона');
   assert.equal(r2.end, '2026-12-01');
   assert.deepEqual([r2.unit, r2.minChars, r2.maxChars], ['chars', 200000, undefined]);
   const r3 = parseContest('Конкурс «Зимняя сказка» на Author.Today, до 15 января. Объём до 120 тыс. знаков', '', '2026-11-20');
   assert.deepEqual([r3.platform, r3.end, r3.maxChars, r3.unit], ['Author.Today', '2027-01-15', 120000, 'chars']);
+});
+
+test('конкурс: условия как на странице Литнета (диапазон чисел, итоги, жанры, почта)', async () => {
+  const { parseContest } = await import('../writer/js/wcalc.js');
+  const t = `Правила конкурса
+Срок приема работ
+31.07.2026 - 31.10.2026
+Оглашение результатов
+До 30.11.2026
+Размер книги
+От 30 000 знаков
+Жанры
+Все жанры
+Вы когда-нибудь воображали...
+«Литнет», издательство Cherry Books, а также городское медиа Time Out запускает конкурс романов «Второе дыхание» — истории о тех, кому судьба дала еще один шанс.
+Вопросы — на contest@litnet.com.`;
+  const r = parseContest(t, '', '2026-10-10');
+  assert.equal(r.name, 'Второе дыхание');
+  assert.deepEqual([r.start, r.end, r.results], ['2026-07-31', '2026-10-31', '2026-11-30']);
+  assert.deepEqual([r.unit, r.minChars], ['chars', 30000]);
+  assert.equal(r.genres, 'Все жанры');
+  assert.deepEqual(r.emails, ['contest@litnet.com']);
+  assert.equal(r.platform, 'Литнет');
 });

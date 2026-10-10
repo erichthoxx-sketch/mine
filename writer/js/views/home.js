@@ -5,7 +5,7 @@ import { ownTasks } from '../../../js/tdtasks.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll, al, alNum, contestVol } from '../wcalc.js';
+import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll, al, alNum, contestVol, contestBookIds } from '../wcalc.js';
 import { STATUS, progressBlock, daysTxt, driveChip } from './books.js';
 import { goalTitle, goalToday, activeGoals } from './goals.js';
 import { widgetReminder } from './widgets.js';
@@ -24,8 +24,9 @@ export function reminders(c) {
   const add = (date, title, sub, to, horizon = SOON) => { if (date && dleft(date, t) <= horizon) out.push({ date, n: dleft(date, t), title, sub, to }); };
   for (const x of d.w_contests) {
     if (x.status === 'done' || !x.end || x.end < addDays(t, -3)) continue;
-    const b = x.bookId ? c.wbooksById[x.bookId] : null, s = contestStatus(x, b, t);
-    add(x.end, `Конкурс «${x.name}» заканчивается`, `${b ? esc(b.title) : ''}${s.need ? ` · нужно ещё ${contestVol(x)(s.need)}${s.perDay ? ` (~${contestVol(x)(s.perDay)} в день)` : ''}` : ''}`, '/plan');
+    const bs = contestBookIds(x).map((id) => c.wbooksById[id]).filter(Boolean), b = bs[0] || null, s = contestStatus(x, b, t);
+    if (bs.length && x.status !== 'sent' && x.end >= t) add(x.end, `Отправить на конкурс «${x.name}»`, `${bs.map((y) => esc(y.title)).join(', ')}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, '/plan', 7);
+    add(x.end, `Конкурс «${x.name}» — последний день приёма`, `${b ? esc(b.title) : ''}${s.need ? ` · нужно ещё ${contestVol(x)(s.need)}${s.perDay ? ` (~${contestVol(x)(s.perDay)} в день)` : ''}` : ''}`, '/plan');
     if (x.start && x.start >= t) add(x.start, `Конкурс «${x.name}» начинается`, b ? esc(b.title) : '', '/plan', 7);
   }
   for (const b of c.wbooks) {
@@ -96,7 +97,7 @@ export function homeView(a) {
     const timers = new Set(plannedPubs(b, t).filter((x) => x.date.slice(0, 7) === mk && !out[x.ch]).map((x) => x.ch)).size;
     const incomeId = c.incomeIdOf(b);
     const income = incomeId ? sumSeries(incomeSeries(c.data.sales, [], from, t, incomeId)) : null;
-    const contests = c.data.w_contests.filter((x) => x.bookId === b.id && x.status !== 'done' && !(x.end && x.end < t));
+    const contests = c.data.w_contests.filter((x) => contestBookIds(x).includes(b.id) && x.status !== 'done' && !(x.end && x.end < t));
     return { b, wrote, today: writtenToday(b, t), chapters, timers, income, contests };
   }).filter((r) => (r.b.status || 'progress') === 'progress' || r.wrote || r.chapters || r.income);
   const sum = (k) => rows.reduce((s, r) => s + (r[k] || 0), 0);

@@ -40,7 +40,7 @@ export function ideasView(a) {
   ${list.length ? keys.map((k) => {
     const items = groups.get(k), b = k === '-' ? null : c.wbooksById[k];
     const open = openAll || items.some((x) => x.id === ui.openIdea);
-    return `<details class="card idea-group" ${open ? 'open' : ''}><summary><span>${b ? ic('books') + ' ' + esc(b.title) : 'Без книги'}</span><span class="muted small">${items.length}</span></summary>
+    return `<details class="card idea-group" ${open ? 'open' : ''}><summary><span class="ig-h">${b ? (b.cover ? `<img class="ig-cover" src="${b.cover}" alt="">` : `<span class="ig-cover ig-ph">${esc(b.title.slice(0, 1))}</span>`) : '<span class="ig-cover ig-none">?</span>'}<span>${b ? esc(b.title) : 'Без книги'}</span></span><span class="muted small">${items.length}</span></summary>
       <div class="list">${items.map((x) => ideaRow(c, x, ui.openIdea === x.id)).join('')}</div></details>`;
   }).join('') : `<div class="card"><p class="muted" style="margin:0">${all.length ? 'Ничего не нашлось — попробуйте другое слово или сбросьте фильтры.' : 'Идей пока нет. Запишите первую — она не потеряется и будет доступна с телефона.'}</p></div>`}
   ${trash.length ? `<div class="trash-link"><button class="link" data-act="idea.trash">${ic('trash')} Удалённые (${trash.length})</button></div>` : ''}`;
