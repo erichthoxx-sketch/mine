@@ -26,6 +26,8 @@ export function data(a) {
     <div class="f2"><div><label class="first">Налог, % (самозанятая: 4 %)</label><input name="taxRate" inputmode="decimal" value="${s.taxRate}"></div>
     <div><label class="first">Налог считать от</label><select name="taxBase">${opt('gross', 'полной цены книг', s.taxBase)}${opt('royalty', 'роялти', s.taxBase)}</select></div></div>
     <div class="hint">Самозанятая с агентским договором Литнета: 4 % со всей цены, которую заплатили читатели (физлица), а не с суммы, пришедшей на карту.</div>
+    <div class="f2"><div><label>Лимит НПД в год, ₽</label><input name="npdLimit" inputmode="decimal" value="${s.npdLimit || 2400000}"></div><div><label>Доход на НПД вне Литнета в этом году, ₽</label><input name="npdOther" inputmode="decimal" value="${s.npdOther || ''}" placeholder="0"></div></div>
+    <div class="hint">Самозанятым можно не больше 2,4 млн ₽ дохода за год — суммарно со всех источников на НПД. Если есть доход на НПД не через Литнет, впишите его сюда — он прибавится к лимиту. Приложение заранее предупредит, если по темпу превышение ожидается в этом или следующем месяце.</div>
     <div class="f2"><div><label>«Литнет платит»: порог, ₽ в месяц</label><input name="litnetThreshold" inputmode="decimal" value="${s.litnetThreshold}"></div><div><label>Скидка, %</label><input name="litnetPct" inputmode="decimal" value="${s.litnetPct}"></div></div>
     <div class="f2"><div><label>База кампании по умолчанию, дней до старта</label><input name="baseDays" inputmode="numeric" value="${s.baseDays}"></div><div><label>Потолок индекса Rocket, ₽</label><input name="rocketCap" inputmode="decimal" value="${s.rocketCap}"></div></div>
     <div class="f2"><div><label>Показы в виджетах: за каждые, ₽ в месяц</label><input name="widgetStep" inputmode="decimal" value="${s.widgetStep ?? 20000}"></div><div><label>Показов за 1 ₽</label><input name="widgetPerRub" inputmode="decimal" value="${s.widgetPerRub ?? 2}"></div></div>
@@ -45,7 +47,7 @@ export function data(a) {
 
 forms.settings = async (fd) => {
   const n = (k) => { const v = N(fd.get(k)); return Number.isNaN(v) || v == null ? undefined : v; };
-  const patch = { taxRate: n('taxRate'), taxBase: fd.get('taxBase'), litnetThreshold: n('litnetThreshold'), litnetPct: n('litnetPct'), baseDays: n('baseDays'), rocketCap: n('rocketCap'), widgetStep: n('widgetStep'), widgetPerRub: n('widgetPerRub'), widgetFormUrl: (fd.get('widgetFormUrl') || '').trim(), goalStart: fd.get('goalStart'), goalAmount: n('goalAmount'), goalGrowth: n('goalGrowth'), pseudonym: (fd.get('pseudonym') || '').trim() };
+  const patch = { npdLimit: n('npdLimit'), npdOther: n('npdOther'), taxRate: n('taxRate'), taxBase: fd.get('taxBase'), litnetThreshold: n('litnetThreshold'), litnetPct: n('litnetPct'), baseDays: n('baseDays'), rocketCap: n('rocketCap'), widgetStep: n('widgetStep'), widgetPerRub: n('widgetPerRub'), widgetFormUrl: (fd.get('widgetFormUrl') || '').trim(), goalStart: fd.get('goalStart'), goalAmount: n('goalAmount'), goalGrowth: n('goalGrowth'), pseudonym: (fd.get('pseudonym') || '').trim() };
   Object.keys(patch).forEach((k) => patch[k] === undefined && delete patch[k]);
   await app().store.saveSettings(patch);
   toast('Настройки сохранены');

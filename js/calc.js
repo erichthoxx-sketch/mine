@@ -886,3 +886,28 @@ export function budgetPlan(ctx) {
   out.status = 'ok';
   return out;
 }
+
+// ---------- лимит НПД: не больше 2,4 млн ₽ дохода за календарный год (со всех источников на НПД) ----------
+// Превысила — право на НПД теряется с этого момента. Считаем заранее: сколько уже набралось с 1 января,
+// прогноз по темпу последних трёх месяцев и месяц, в котором по прогнозу будет превышение.
+export const NPD_LIMIT = 2400000;
+// доход месяца для лимита — та же база, что и для налога (полная цена книг или роялти — как в настройках)
+export const npdBaseFn = (sales, legacyDays, settings = {}) => (k) => sumSeries(incomeSeries(sales || [], legacyDays || [], k + '-01', monthEnd(k)), settings.taxBase === 'royalty' ? 'royalty' : 'gross');
+export function npdLimitStatus(baseOf, today, { limit = NPD_LIMIT, other = 0 } = {}) {
+  const y = today.slice(0, 4), cur = monthKey(today), lim = Number(limit) || NPD_LIMIT;
+  const val = (k) => Math.max(0, Number(baseOf(k)) || 0);
+  let ytd = Number(other) || 0;
+  for (let k = `${y}-01`; k <= cur; k = addMonths(k, 1)) ytd += val(k);
+  const dom = Number(today.slice(8, 10)), dim = daysInMonth(cur), curV = val(cur);
+  const prev = [1, 2, 3].map((i) => val(addMonths(cur, -i))).filter((v) => v > 0);
+  const curProj = dom ? (curV / dom) * dim : curV;
+  const pace = prev.length ? prev.reduce((a, v) => a + v, 0) / prev.length : curProj; // в месяц
+  // прогноз: этот месяц — по его темпу, дальше — по среднему трёх прошлых
+  let cum = ytd - curV + Math.max(curV, curProj);
+  const proj = [{ month: cur, cum }];
+  for (let k = addMonths(cur, 1); k.slice(0, 4) === y; k = addMonths(k, 1)) { cum += pace; proj.push({ month: k, cum }); }
+  // «не более 2,4 млн»: ровно лимит — можно, больше — уже превышение
+  const breach = ytd > lim ? cur : (proj.find((p) => p.cum > lim + 0.5) || {}).month || null;
+  const level = ytd > lim ? 'over' : breach && breach <= addMonths(cur, 1) ? 'next' : breach ? 'later' : ytd >= lim * 0.8 ? 'near' : 'ok';
+  return { year: y, ytd: r2(ytd), limit: lim, left: r2(Math.max(0, lim - ytd)), share: ytd / lim, pace: r2(pace), yearEnd: r2(proj[proj.length - 1].cum), breach, level };
+}

@@ -9,6 +9,7 @@ import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
+import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { rub, fmtMonth } from '../../../js/format.js';
 import { EVENT_TYPES } from '../../../js/charts.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
@@ -90,6 +91,9 @@ function incomeItems(c, from, to) {
     if (due < t) add(t, `Налог за ${fmtMonth(k)} — просрочен (был до ${fmtDate(due).slice(0, 5)})`, `≈ ${rub(gross * rate, 0)} · отметить «Оплачен» в «Доходах»`);
     else add(due, `Заплатить налог за ${fmtMonth(k)}`, `≈ ${rub(gross * rate, 0)} · до 28-го`);
   }
+  // лимит НПД: превышен или будет превышен в этом / следующем месяце — на сегодня
+  const na = npdAlert(npdStatusOf(d.sales || [], [], c.settings, t), t);
+  if (na) add(t, na.title, na.sub);
   // Rocket: с 20-го записать цифры за прошлый месяц
   for (let k = monthKey(from); k <= monthKey(to); k = addMonths(k, 1)) {
     const prev = addMonths(k, -1);

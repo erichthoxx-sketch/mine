@@ -609,3 +609,20 @@ test('приоритетные показы: бонус месяца приба�
   const p = widgetProgram({ campaigns: [], reports: [], today: '2026-10-08', months: [{ id: '2026-10', widgetBonus: 20000, widgetBonusNote: 'приветственный' }] });
   assert.equal(p.current.total, 20000); assert.equal(p.current.bonus, 20000); assert.equal(p.next.total, 0);
 });
+
+test('лимит НПД: набралось с 1 января, прогноз и месяц превышения', async () => {
+  const { npdLimitStatus } = await import('../js/calc.js');
+  // по 200 000 ₽ в месяц: к 10 октября — 9 полных месяцев + 10 дней октября
+  const base = (k) => (k.startsWith('2026') ? (k === '2026-10' ? 64516.13 : 200000) : 200000);
+  const s = npdLimitStatus(base, '2026-10-10');
+  assert.equal(s.ytd, 1864516.13);
+  assert.equal(s.level, 'ok'); // к концу года ≈ 2 400 000 — ровно на грани, но не больше
+  // по 230 000 ₽: к концу ноября перевалит за 2,4 млн — предупреждаем заранее
+  const s2 = npdLimitStatus((k) => (k === '2026-10' ? 74193.55 : 230000), '2026-10-10');
+  assert.equal(s2.breach, '2026-11');
+  assert.equal(s2.level, 'next');
+  // доход из других источников добавляется к лимиту
+  assert.equal(npdLimitStatus(() => 0, '2026-03-05', { other: 2500000 }).level, 'over');
+  // далеко до превышения — «позже»
+  assert.equal(npdLimitStatus((k) => (k === '2026-03' ? 0 : 400000), '2026-03-01').level, 'later');
+});

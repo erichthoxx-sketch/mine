@@ -1,5 +1,6 @@
 // Главная Мастерской: всё актуальное за текущий месяц по книгам и напоминания обо всём, у чего есть дата
 import { esc } from '../../../js/ui.js';
+import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
@@ -41,6 +42,8 @@ export function reminders(c) {
     const st = goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t);
     if (st.active && st.todayDay && !st.doneToday) add(t, `Цель: ${goalTitle(c, g)}`, goalToday(c, g, st), '/plan', 0);
   }
+  // лимит НПД (2,4 млн ₽ в год): превышен или вот-вот будет
+  const na = npdAlert(npdStatusOf(d.sales || [], [], c.settings, t), t); if (na) add(t, na.title, na.sub, '/plan', 0);
   // приоритетные показы: подать заявку до 25-го
   const wr = widgetReminder(c); if (wr) add(wr.date, wr.title, wr.sub, wr.to, 15);
   // напоминания по связям и подготовка маркетинга
