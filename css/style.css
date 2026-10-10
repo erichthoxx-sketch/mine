@@ -887,3 +887,11 @@ table.pub-t2 td.r { padding-right: 14px; }
 .bh-more { margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--link); padding: 0; min-height: 0; }
 table.pub-t2 col.c-al { width: 92px; }
 .bh-ann.bh-tog { cursor: pointer; }
+/* редактор — бережно к глазам: тёплая «бумага» вместо чисто-белого и мягкий графитовый текст вместо чёрного;
+   в тёмной теме — не чисто-белые буквы, а приглушённые */
+:root { --paper: #fbf8f3; --ink: #3a3532; --paper-line: #ece5dc; }
+@media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) { --paper: #1e1c1b; --ink: #d8d0c9; --paper-line: #302c2a; } }
+:root[data-theme="dark"] { --paper: #1e1c1b; --ink: #d8d0c9; --paper-line: #302c2a; }
+.ed-paper { background: var(--paper); border-color: var(--paper-line); }
+.editor { color: var(--ink); caret-color: var(--link); }
+.editor ::selection { background: color-mix(in srgb, var(--link) 22%, transparent); }
