@@ -947,3 +947,5 @@ html.ed-focus .ed-paper .ed-stats { bottom: auto; }
   .ed-paper .ed-stats .es-sess { padding-top: 12px; }
 }
 @media (min-width: 1180px) and (max-width: 1379px) { .ed-paper .ed-stats { opacity: .85; font-size: 11.5px; } }
+/* колонка цифр сбоку — внизу справа */
+@media (min-width: 1380px) { .ed-paper .ed-stats { top: auto; bottom: 36px; transform: none; } }
