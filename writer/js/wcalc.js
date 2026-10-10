@@ -484,7 +484,7 @@ export function parseContest(text, url = '', today = new Date().toISOString().sl
     out.volNote = [...new Set([minF, maxF, minS].filter(Boolean).map((f) => f.sent.replace(/\s+/g, ' ').slice(0, 160)))].join(' … ');
   }
   // только новые книги (в процессе): «принимаются новые произведения», «первая глава — не ранее 31 июля», «в процессе написания»
-  const NEW = /(принима\S*\s+(только\s+)?нов\S*|нов(ые|ое|ых|ая)\s+(произведени|книг|роман|истори|текст)|в\s+процессе\s+(написания|выкладки)|начат\S*\s+(не\s+ранее|после)|перв\S*\s+глав\S*[^.\n]{0,60}(не\s+ранее|после|с\s+\d)|не\s+ранее[^.\n]{0,30}(публикац|выкладк|начал))/i.exec(t);
+  const NEW = /((законченн|завершённ|завершенн)\S*\s+(произведени|книг|роман|текст)|принима\S*\s+(только\s+)?нов\S*|нов(ые|ое|ых|ая)\s+(произведени|книг|роман|истори|текст)|в\s+процессе\s+(написания|выкладки)|начат\S*\s+(не\s+ранее|после)|перв\S*\s+глав\S*[^.\n]{0,60}(не\s+ранее|после|с\s+\d)|не\s+ранее[^.\n]{0,30}(публикац|выкладк|начал))/i.exec(t);
   if (NEW) {
     out.newOnly = true;
     const since = dates.find((d) => d.i >= NEW.index - 10 && d.i <= NEW.index + NEW[0].length + 60);
@@ -537,12 +537,13 @@ export function contestFileName(x, b, kind, author = '') {
 export function contestFit(x, b, today) {
   const s = contestStatus(x, b, today), v = contestVol(x), chars = contestChars(b) ?? s.chars ?? b?.chars ?? 0;
   const min = Number(x.minChars) || 0, max = Number(x.maxChars) || 0;
-  // конкурс для новых книг в процессе: завершённая или начатая раньше — не подходит; минимум — чтобы подать
+  // книга пишется на конкурс: пока пишу — «участвую», подаётся только законченная (статус «Завершена»);
+  // объём «от» — минимум; начатая раньше даты из условий — не подходит
   if (x.newOnly) {
-    if (b?.status === 'done') return { ok: false, out: true, chars, text: 'книга завершена — конкурс для новых книг в процессе' };
-    if (x.newSince && b?.publishStart && b.publishStart < x.newSince) return { ok: false, out: true, chars, text: `выкладка начата раньше ${x.newSince.slice(8, 10)}.${x.newSince.slice(5, 7)} — конкурс для новых книг` };
-    if (min && chars < min) return { ok: false, chars, need: min - chars, text: `до подачи ещё ${v(min - chars)} (${v(chars)} из ${v(min)})${s.perDay ? ` · ~${v(s.perDay)} в день` : ''}` };
-    return { ok: true, ready: true, chars, text: min ? `можно подавать — ${v(chars)} из ${v(min)}` : 'можно подавать' };
+    if (x.newSince && b?.publishStart && b.publishStart < x.newSince) return { ok: false, out: true, chars, text: `выкладка начата раньше ${x.newSince.slice(8, 10)}.${x.newSince.slice(5, 7)} — по условиям не подходит` };
+    if (min && chars < min) return { ok: false, chars, need: min - chars, writing: true, text: `участвую · до минимума ещё ${v(min - chars)} (${v(chars)} из ${v(min)})${s.perDay ? ` · ~${v(s.perDay)} в день` : ''}` };
+    if (b?.status !== 'done') return { ok: null, chars, writing: true, text: `участвую · ${min ? `${v(chars)} — минимум есть, ` : ''}подать можно, когда книга будет завершена` };
+    return { ok: true, ready: true, chars, text: `книга завершена — можно подавать${min ? ` · ${v(chars)}` : ''}` };
   }
   if (!min && !max) return { ok: null, chars, text: `${v(chars)} · условий по объёму нет` };
   if (max && chars > max) return { ok: false, chars, text: `${v(chars)} — больше максимума (${v(max)})` };

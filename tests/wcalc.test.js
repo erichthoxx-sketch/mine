@@ -254,9 +254,13 @@ test('конкурс для новых книг: завершённая не п�
   assert.equal(r.newOnly, true);
   assert.equal(r.newSince, '2026-07-31');
   const x = { ...r };
-  assert.equal(contestFit(x, { status: 'done', chars: 327253 }, '2026-10-11').out, true);
+  // начата раньше даты из условий — не подходит
   assert.equal(contestFit(x, { status: 'progress', chars: 50000, publishStart: '2026-05-01' }, '2026-10-11').out, true);
+  // пишу: до минимума / минимум есть, но книга не закончена — подавать нельзя
   const f = contestFit(x, { status: 'progress', chars: 12000, publishStart: '2026-09-01' }, '2026-10-11');
-  assert.deepEqual([f.ok, f.need], [false, 18000]);
-  assert.equal(contestFit(x, { status: 'progress', chars: 31000 }, '2026-10-11').ready, true);
+  assert.deepEqual([f.ok, f.need, f.writing], [false, 18000, true]);
+  const w = contestFit(x, { status: 'progress', chars: 327253 }, '2026-10-11');
+  assert.deepEqual([w.ok, w.ready, w.writing], [null, undefined, true]);
+  // завершена — можно подавать
+  assert.equal(contestFit(x, { status: 'done', chars: 327253 }, '2026-10-11').ready, true);
 });

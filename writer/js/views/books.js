@@ -496,4 +496,4 @@ function bookContests(c, b, contests) {
   return `<div class="ct-wrap"><div class="row between" style="margin:4px 2px 10px"><h2 style="margin:0">Конкурсы</h2>${free.length ? `<select class="ct-join" data-chg="contest.addBookTo" data-b="${b.id}" aria-label="Отправить на конкурс"><option value="">+ на конкурс</option>${free.map((x) => opt(x.id, x.name, '')).join('')}</select>` : ''}</div>
     ${contests.map((x) => contestCard(c, x, { forBook: b.id })).join('')}</div>`;
 }
-changes['contest.addBookTo'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_contests.find((i) => i.id === v), ids = [...new Set([...contestBookIds(x), el.dataset.b])]; await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0] }); toast(`Книга на конкурсе «${x.name}»`); };
+changes['contest.addBookTo'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_contests.find((i) => i.id === v), ids = [...new Set([...contestBookIds(x), el.dataset.b])]; await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0], joinedBooks: { [el.dataset.b]: app().ctx().today, ...(x.joinedBooks || {}) } }); toast(`Книга на конкурсе «${x.name}»`); };

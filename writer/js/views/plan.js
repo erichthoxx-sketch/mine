@@ -59,12 +59,19 @@ export function planItems(c, from, to) {
     // напомнить отправить книгу — за 3 дня до конца приёма (или сегодня, если уже поздно)
     const unsent = contestUnsent(x).map((id) => c.wbooksById[id]).filter((y) => y && !contestFit(x, y, t).out);
     // книга в процессе на конкурс для новых книг: сегодня — одна строчка: сколько осталось до минимума для подачи, или «можно подавать»
-    if (x.newOnly && x.end && x.end >= t && x.status !== 'sent') for (const y of unsent) {
-      const f = contestFit(x, y, t);
-      if (f.ready) add(t, 'contest', `«${esc(y.title)}» можно подавать на «${esc(x.name)}»`, `${f.text.replace('можно подавать — ', 'набрано ')} · приём до ${fmtDate(x.end)}`, { to: '/marketing', bookId: y.id });
-      else if (f.need) add(t, 'contest', `«${esc(y.title)}» → «${esc(x.name)}»: ${f.text.split(' (')[0]}`, `${f.text.includes('·') ? f.text.split('· ')[1] + ' · ' : ''}приём до ${fmtDate(x.end)}`, { to: '/book/' + y.id, bookId: y.id });
+    // книга пишется на конкурс: день, когда начала участвовать; сегодня — сколько до минимума / завершить к сроку / можно подавать
+    if (x.newOnly) {
+      for (const [id, d0] of Object.entries(x.joinedBooks || {})) { const y = c.wbooksById[id]; if (y && d0) add(d0, 'contest', `Участвую: «${esc(y.title)}» на «${esc(x.name)}»`, 'книга пишется на конкурс', { to: '/book/' + id, bookId: id }); }
+      if (x.end && x.end >= t && x.status !== 'sent') for (const y of unsent) {
+        const f = contestFit(x, y, t), left = Math.round((Date.parse(x.end) - Date.parse(t)) / 864e5);
+        if (f.ready) add(t, 'contest', `Подать «${esc(y.title)}» на «${esc(x.name)}»`, `книга завершена · приём до ${fmtDate(x.end)}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, { to: '/marketing', bookId: y.id });
+        else if (f.need) add(t, 'contest', `«${esc(y.title)}» на «${esc(x.name)}»: до минимума ещё ${contestVol(x)(f.need)}`, `${f.text.includes('в день') ? f.text.split('· ').pop() + ' · ' : ''}приём до ${fmtDate(x.end)}`, { to: '/book/' + y.id, bookId: y.id });
+        else if (f.writing && left <= 14) add(t, 'contest', `Завершить «${esc(y.title)}» к ${fmtDate(x.end).slice(0, 5)} — для «${esc(x.name)}»`, 'подать можно только законченную книгу', { to: '/book/' + y.id, bookId: y.id });
+      }
     }
-    if (unsent.length && x.status !== 'sent' && x.end && x.end >= t) { const due = addDays(x.end, -3) < t ? t : addDays(x.end, -3); add(due, 'contest', `Отправить ${unsent.length > 1 ? 'книги' : `«${esc(unsent[0].title)}»`} на конкурс «${esc(x.name)}»`, `до ${fmtDate(x.end)}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, { act: 'contest.edit', id: x.id, bookId: b?.id }); }
+    // напомнить отправить — только то, что уже можно подавать
+    const toSend = x.newOnly ? unsent.filter((y) => contestFit(x, y, t).ready) : unsent;
+    if (toSend.length && !x.newOnly && x.status !== 'sent' && x.end && x.end >= t) { const due = addDays(x.end, -3) < t ? t : addDays(x.end, -3); add(due, 'contest', `Отправить ${toSend.length > 1 ? 'книги' : `«${esc(toSend[0].title)}»`} на конкурс «${esc(x.name)}»`, `до ${fmtDate(x.end)}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, { act: 'contest.edit', id: x.id, bookId: b?.id }); }
     if (x.start && x.start >= t) add(x.start, 'contest', `Конкурс «${esc(x.name)}» — старт`, bt, { act: 'contest.edit', id: x.id, bookId: b?.id });
     if (x.results && x.results >= t) add(x.results, 'contest', `Итоги конкурса «${esc(x.name)}»`, bt, { act: 'contest.edit', id: x.id, bookId: b?.id });
   }
@@ -437,17 +444,17 @@ export function contestCard(c, x, { forBook = null } = {}) {
     const b = c.wbooksById[id], f = contestFit(x, b, c.today), sd = sent[id];
     const nm = contestFileName(x, b, 'text', author);
     const sentBtn = over ? '' : sd != null ? `<button class="link ct-sent" data-act="contest.unsend" data-id="${x.id}" data-b="${id}" title="Отменить отметку">${icx('check')} отправлена${sd ? ' ' + dm(sd) : ''}</button>` : `<button class="small-btn primary" data-act="contest.sent" data-id="${x.id}" data-b="${id}">Отправила</button>`;
-    return `<div class="ct-book${sd != null ? ' is-sent' : ''}"><div class="ct-bt"><span class="ct-ok ${f.ok === true ? 'yes' : f.ok === false && (f.out || !x.newOnly) ? 'no' : ''}">${f.ok === true ? icx('check') : f.out || (f.ok === false && !x.newOnly) ? '!' : f.need ? icx('timer') : '·'}</span><span><b>${esc(b.title)}</b><span class="sub">${f.text}</span>${nm ? `<span class="ct-fn"><span class="ct-fnh">Имена файлов по условиям</span>${fnChip(nm + '.docx', 'текст')}${fnChip(contestFileName(x, b, 'synopsis', author) + '.docx', 'синопсис')}</span>` : ''}</span></div>
-      <div class="ct-bb">${f.out ? '' : `<button class="small-btn" data-act="ct.dl" data-c="${x.id}" data-id="${b.id}" data-k="text" title="${x.chapters ? `Скачать первые главы (${x.chapters}) в Word` : 'Скачать текст книги в Word'}">${x.chapters ? `Главы 1–${x.chapters}` : 'Текст'}</button><button class="small-btn" data-act="ct.dl" data-c="${x.id}" data-id="${b.id}" data-k="synopsis" title="Скачать синопсис в Word">Синопсис</button>${f.need && x.newOnly ? '' : sentBtn}`}${forBook ? '' : `<button class="link ct-x" data-act="contest.rmBook" data-id="${x.id}" data-b="${b.id}" title="Убрать книгу с конкурса">${ic('trash')}</button>`}</div></div>`;
+    return `<div class="ct-book${sd != null ? ' is-sent' : ''}"><div class="ct-bt"><span class="ct-ok ${f.ok === true ? 'yes' : f.ok === false && (f.out || !x.newOnly) ? 'no' : ''}">${f.ok === true ? icx('check') : f.out || (f.ok === false && !x.newOnly) ? '!' : f.need || f.writing ? icx('timer') : '·'}</span><span><b>${esc(b.title)}</b><span class="sub">${x.newOnly && (x.joinedBooks || {})[id] ? f.text.replace(/^участвую/, `участвую с ${dm(x.joinedBooks[id])}`) : f.text}</span>${nm ? `<span class="ct-fn"><span class="ct-fnh">Имена файлов по условиям</span>${fnChip(nm + '.docx', 'текст')}${fnChip(contestFileName(x, b, 'synopsis', author) + '.docx', 'синопсис')}</span>` : ''}</span></div>
+      <div class="ct-bb">${f.out ? '' : `<button class="small-btn" data-act="ct.dl" data-c="${x.id}" data-id="${b.id}" data-k="text" title="${x.chapters ? `Скачать первые главы (${x.chapters}) в Word` : 'Скачать текст книги в Word'}">${x.chapters ? `Главы 1–${x.chapters}` : 'Текст'}</button><button class="small-btn" data-act="ct.dl" data-c="${x.id}" data-id="${b.id}" data-k="synopsis" title="Скачать синопсис в Word">Синопсис</button>${x.newOnly && !f.ready ? '' : sentBtn}`}${forBook ? '' : `<button class="link ct-x" data-act="contest.rmBook" data-id="${x.id}" data-b="${b.id}" title="Убрать книгу с конкурса">${ic('trash')}</button>`}</div></div>`;
   };
   const free = c.wbooks.filter((b) => !ids.includes(b.id));
   const v = contestVol(x);
   return `<div class="card ct${over ? ' faded' : ''}">
     <div class="ct-head"><h3>${esc(x.name || 'Конкурс')}</h3>${badge}</div>
     <div class="ct-sub">${x.platform ? esc(x.platform) + ' · ' : ''}<select class="ct-st" data-chg="contest.st" data-id="${x.id}" aria-label="Статус">${Object.entries(CSTATUS).map(([k, w]) => opt(k, w, x.status || 'plan')).join('')}</select>${x.url ? `<a class="ct-url" href="${esc(x.url)}" target="_blank" rel="noopener">страница конкурса ↗</a>` : ''}</div>
-    <div class="ct-facts">${fact('Приём работ', x.start && x.end ? `${dm(x.start)} — ${fmtDate(x.end)}` : x.end ? `до ${fmtDate(x.end)}` : '')}${fact('Итоги', x.results ? `до ${fmtDate(x.results)}` : '')}${fact(x.newOnly ? 'Для подачи' : 'Объём', vol(x) + (x.startChars ? `<i>на старте от ${v(x.startChars)}</i>` : ''), x.volNote ? 'Из условий: ' + x.volNote : '')}${fact('Жанры', esc(x.genres || ''))}${fact('Отправить', esc(files))}</div>
+    <div class="ct-facts">${fact('Приём работ', x.start && x.end ? `${dm(x.start)} — ${fmtDate(x.end)}` : x.end ? `до ${fmtDate(x.end)}` : '')}${fact('Итоги', x.results ? `до ${fmtDate(x.results)}` : '')}${fact(x.newOnly ? 'Минимум' : 'Объём', vol(x) + (x.startChars ? `<i>на старте от ${v(x.startChars)}</i>` : ''), x.volNote ? 'Из условий: ' + x.volNote : '')}${fact('Жанры', esc(x.genres || ''))}${fact('Отправить', esc(files))}</div>
     ${x.volNote && !forBook ? `<div class="ct-src">Объём взят из условий: «${esc(x.volNote)}»</div>` : ''}
-    ${x.newOnly && !forBook && !over && !ids.some((id) => !contestFit(x, c.wbooksById[id], c.today).out) ? `<div class="ct-src">Конкурс для новых книг в процессе${x.minChars ? ` — для подачи нужно от ${contestVol(x)(x.minChars)}` : ''}. Начните книгу и привяжите её — приложение напомнит, сколько осталось до подачи.</div>` : ''}
+    ${x.newOnly && !forBook && !over && !ids.some((id) => !contestFit(x, c.wbooksById[id], c.today).out) ? `<div class="ct-src">Книга пишется на конкурс${x.minChars ? ` (минимум ${contestVol(x)(x.minChars)})` : ''}, подаётся законченная. Начнёте книгу — привяжите её: «участвую» появится в Планере, а когда отметите книгу завершённой — напоминание подать.</div>` : ''}
     ${mails ? `<div class="ct-f ct-mails"><span>Куда отправлять</span><div>${mails}</div></div>` : ''}
     ${shown.length ? `<div class="ct-books">${shown.map(bookRow).join('')}</div>` : ''}
     <div class="ct-acts">${forBook || !free.length ? '' : `<select class="ct-addb" data-chg="contest.addBook" data-id="${x.id}" aria-label="Привязать книгу"><option value="">+ книга на конкурс</option>${free.map((b) => opt(b.id, b.title, '')).join('')}</select>`}<button class="link" data-act="contest.edit" data-id="${x.id}">Изменить</button>${x.conditions ? `<button class="link" data-act="contest.reparse" data-id="${x.id}">Разобрать условия заново</button>` : ''}</div>
@@ -467,7 +474,7 @@ function contestForm(c, x = {}) {
   <div class="f3"><div><label for="cmin">Объём от</label><input id="cmin" name="minChars" inputmode="decimal" value="${contestOut(x.unit, x.minChars)}"></div><div><label for="cmax">до</label><input id="cmax" name="maxChars" inputmode="decimal" value="${contestOut(x.unit, x.maxChars)}"></div>
     <div><label for="cun">в чём</label><select id="cun" name="unit">${opt('al', 'а.л.', x.unit || 'al')}${opt('chars', 'знаках', x.unit || 'al')}</select></div></div>
   <div class="small muted">Как в условиях конкурса: если там знаки — выберите «знаках», и прогресс книги по этому конкурсу тоже будет в знаках.</div>
-  <label class="check"><input type="checkbox" name="newOnly"${x.newOnly ? ' checked' : ''}>Только новые книги в процессе — объём «от» нужен для подачи</label>
+  <label class="check"><input type="checkbox" name="newOnly"${x.newOnly ? ' checked' : ''}>Пишу книгу на конкурс: пока пишу — «участвую», подаётся законченная книга</label>
   <div class="f2"><div><label for="cns">Первая глава не раньше</label><input id="cns" type="date" name="newSince" value="${x.newSince || ''}"></div><div></div></div>
 `;
 }
@@ -490,19 +497,21 @@ function wireContestFill(f) {
     if (put('cg', r.genres)) got.push('жанры');
     if (r.emails?.length && put('ce', r.emails.join(', '))) got.push('почта');
     const nb = f.querySelector('[name=newOnly]');
-    if (r.newOnly && nb && !nb.checked) { nb.checked = true; got.push('только новые книги'); if (r.newSince) put('cns', r.newSince); }
+    if (r.newOnly && nb && !nb.checked) { nb.checked = true; got.push('подаётся законченная книга'); if (r.newSince) put('cns', r.newSince); }
     filled.textContent = got.length ? `Заполнено из условий: ${got.join(', ')} — проверьте и поправьте, если нужно.` : '';
   };
   $('cc').addEventListener('input', run); $('cu').addEventListener('input', run);
 }
 const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookIds: fd.getAll('bookIds'), bookId: fd.getAll('bookIds')[0] || '', results: fd.get('results') || '', genres: (fd.get('genres') || '').trim(), emails: String(fd.get('emails') || '').split(/[\s,;]+/).map((e) => e.trim()).filter((e) => e.includes('@')), unit: fd.get('unit') || 'al', minChars: contestIn(fd.get('unit'), fd.get('minChars')), maxChars: contestIn(fd.get('unit'), fd.get('maxChars')), conditions: fd.get('conditions') || '', url: (fd.get('url') || '').trim(), ...extrasOf(fd.get('conditions') || ''), newOnly: !!fd.get('newOnly'), newSince: fd.get('newSince') || '', pv: 3 });
+// когда книга начала участвовать: новые — с сегодняшнего дня, убранные — без отметки
+const joinOf = (jb = {}, ids = []) => Object.fromEntries(ids.map((id) => [id, jb[id] || app().ctx().today]));
 // из условий — то, чего нет в форме: имя файла, первые главы, формат, минимум на старте, откуда взят объём
 const extrasOf = (t) => { const r = parseContest(t, '', app().ctx().today), o = {}; for (const k of ['fileTpl', 'chapters', 'formats', 'startChars', 'volNote']) o[k] = r[k] ?? null; return o; };
 acts['plan.tab'] = (d) => { app().ui.planTab = d.v; };
-acts['contest.new'] = () => wireContestFill(openSheet('Новый конкурс', contestForm(app().ctx()), async (fd) => { await app().store.put('w_contests', { id: 'c' + uid(), pv: 3, ...contestFrom(fd) }); toast('Конкурс добавлен'); }));
+acts['contest.new'] = () => wireContestFill(openSheet('Новый конкурс', contestForm(app().ctx()), async (fd) => { const v = contestFrom(fd); await app().store.put('w_contests', { id: 'c' + uid(), pv: 3, ...v, joinedBooks: joinOf({}, v.bookIds) }); toast('Конкурс добавлен'); }));
 changes['contest.st'] = async (v, el) => { const x = app().ctx().data.w_contests.find((i) => i.id === el.dataset.id); await app().store.put('w_contests', { ...x, status: v }); };
-changes['contest.addBook'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_contests.find((i) => i.id === el.dataset.id), ids = [...new Set([...contestBookIds(x), v])]; await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0] }); toast('Книга на конкурсе'); };
-acts['contest.rmBook'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id), ids = contestBookIds(x).filter((id) => id !== d.b); await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0] || '' }); };
+changes['contest.addBook'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_contests.find((i) => i.id === el.dataset.id), ids = [...new Set([...contestBookIds(x), v])]; await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0], joinedBooks: { [v]: app().ctx().today, ...(x.joinedBooks || {}) } }); toast(x.newOnly ? 'Участвую — отмечено в Планере' : 'Книга на конкурсе'); };
+acts['contest.rmBook'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id), ids = contestBookIds(x).filter((id) => id !== d.b), jb = { ...(x.joinedBooks || {}) }; delete jb[d.b]; await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0] || '', joinedBooks: jb }); };
 // «Отправила» — по каждой книге отдельно; когда отправлены все — конкурс в статусе «Отправила»
 const putSent = async (x, sentBooks) => { const all = contestBookIds(x).every((id) => id in sentBooks); await app().store.put('w_contests', { ...x, sentBooks, status: all ? 'sent' : x.status === 'sent' ? 'in' : x.status, sentAt: all ? app().ctx().today : '' }); };
 acts['contest.sent'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id), ids = d.b ? [d.b] : contestBookIds(x); await putSent(x, { ...contestSent(x), ...Object.fromEntries(ids.map((id) => [id, app().ctx().today])) }); toast('Отмечено: отправлена'); };
@@ -514,7 +523,7 @@ acts['contest.reparse'] = async (d) => {
 };
 acts['contest.edit'] = (d) => {
   const x = app().ctx().data.w_contests.find((i) => i.id === d.id);
-  wireContestFill(openSheet('Конкурс', contestForm(app().ctx(), x) + `<p><button type="button" class="link danger" data-act="contest.del" data-id="${x.id}">Удалить конкурс</button></p>`, async (fd) => { await app().store.put('w_contests', { ...x, ...contestFrom(fd) }); }));
+  wireContestFill(openSheet('Конкурс', contestForm(app().ctx(), x) + `<p><button type="button" class="link danger" data-act="contest.del" data-id="${x.id}">Удалить конкурс</button></p>`, async (fd) => { const v = contestFrom(fd); await app().store.put('w_contests', { ...x, ...v, joinedBooks: joinOf(x.joinedBooks, v.bookIds) }); }));
 };
 acts['contest.del'] = async (d) => { if (await ask('Удалить конкурс?')) await app().store.remove('w_contests', d.id); };
 
