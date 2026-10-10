@@ -7,10 +7,10 @@ import { widgetReminder } from './widgets.js';
 import { linkTodos } from './links.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
-import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestFileName } from '../wcalc.js';
+import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestFileName, goalMult, moveGoalDay } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
-import { ownTasks, bookOfTask } from '../../../js/tdtasks.js';
+import { ownTasks, bookOfTask, moveOwnTask } from '../../../js/tdtasks.js';
 import { rub, fmtMonth } from '../../../js/format.js';
 import { EVENT_TYPES } from '../../../js/charts.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
@@ -166,23 +166,25 @@ function itemHtml(c, x) {
     const today = x.date <= c.today;
     return `<div class="pitem">${body}<span class="pi-btns">${today ? `<button class="primary" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="done">Выложила</button>` : ''}<button data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="plan" data-date="${x.date}" title="Поставить на таймер" aria-label="Поставить на таймер">${icx('timer')}</button></span></div>`;
   }
-  if (x.kind === 'td') return `<div class="pitem"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.tdId}">${body}</a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.tdId}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${icx('check')}</button></span></div>`;
+  if (x.kind === 'td') return `<div class="pitem" data-drag="td" data-id="${x.tdId}"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.tdId}">${body}</a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.tdId}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${icx('check')}</button></span></div>`;
   if (x.href) return `<a class="pitem tap" href="${x.href}">${body}</a>`;
   if (x.to) return `<a class="pitem tap" href="#" data-act="go" data-to="${x.to}">${body}</a>`;
-  return `<a class="pitem tap" href="#" data-act="${x.act}" data-id="${x.id}">${body}</a>`;
+  return `<a class="pitem tap" href="#" data-act="${x.act}" data-id="${x.id}"${x.kind === 'queue' ? ` data-drag="queue"` : ''}>${body}</a>`;
 }
+// «×2 — перенесено» у дня цели, куда перенесли норму
+const multNote = (g, day) => { const m = goalMult(g, day); return m > 1 ? ` · <b>×${m}</b> — перенесено` : ''; };
 
 // цели на сегодня — строки как в Планере
 // цели на будущий день: что по плану (без отметок — отметить можно только сегодня)
 function goalRowsFuture(c, day) {
   return activeGoals(c).map((g) => { const b = g.bookId ? c.wbooksById[g.bookId] : null; return { g, s: goalStatus(g, b, day), s0: goalStatus(g, b, c.today) }; })
     .filter((x) => x.s.active && x.s.todayDay)
-    .map(({ g, s0 }) => { const n = Math.max(1, Math.ceil(s0.needPerDay || s0.perDayCh || 1)); const sub = g.type === 'custom' ? 'день цели' : g.type === 'finish' || g.type === 'daily' ? `по плану — отметить ${n === 1 ? 'главу' : n + ' ' + (n < 5 ? 'главы' : 'глав')}` : 'по плану'; return `<div class="pitem"><span class="dot k-goal"></span><a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${sub}</span></a></div>`; }).join('');
+    .map(({ g, s0 }) => { const n = Math.max(1, Math.ceil((s0.needPerDay || Number(g.perDay) || 1) * Math.max(1, goalMult(g, day)))); const sub = g.type === 'custom' ? 'день цели' : g.type === 'finish' || g.type === 'daily' ? `по плану — отметить ${n === 1 ? 'главу' : n + ' ' + (n < 5 ? 'главы' : 'глав')}` : 'по плану'; return `<div class="pitem" data-drag="goal" data-id="${g.id}"><span class="dot k-goal"></span><a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${sub}${multNote(g, day)}</span></a></div>`; }).join('');
 }
 function goalRowsHtml(c) {
   const t = c.today;
   return activeGoals(c).map((g) => ({ g, s: goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t) })).filter((x) => x.s.active && x.s.todayDay)
-    .map(({ g, s }) => `<div class="pitem${s.doneToday ? ' done-today' : ''}">${s.doneToday ? `<span class="pi-ok">${icx('check')}</span>` : '<span class="dot k-goal"></span>'}<a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, s)}</span></a>${g.type === 'custom' ? `<span class="pi-btns"><button class="${s.doneToday ? 'link' : 'primary'}" data-act="goal.check" data-id="${g.id}">${s.doneToday ? 'отменить' : 'Сделала'}</button></span>` : ''}</div>`).join('');
+    .map(({ g, s }) => `<div class="pitem${s.doneToday ? ' done-today' : ''}" data-drag="goal" data-id="${g.id}">${s.doneToday ? `<span class="pi-ok">${icx('check')}</span>` : '<span class="dot k-goal"></span>'}<a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, s)}${multNote(g, t)}</span></a>${g.type === 'custom' ? `<span class="pi-btns"><button class="${s.doneToday ? 'link' : 'primary'}" data-act="goal.check" data-id="${g.id}">${s.doneToday ? 'отменить' : 'Сделала'}</button></span>` : ''}</div>`).join('');
 }
 // Колонка «Сегодня» на широком экране: что требует внимания сегодня + ближайшая неделя
 export function sideToday(c) {
@@ -259,7 +261,7 @@ export function planView(a) {
       <button class="link" data-act="plan.week" data-v="1" aria-label="Следующая неделя">›</button></div>
     <div class="wstrip">${strip}</div>
   </div>
-  <div class="card"><h2 style="margin:0 0 6px">${dayName(sel, t)}</h2>
+  <div class="card" data-day="${sel}"><h2 style="margin:0 0 6px">${dayName(sel, t)}</h2>
     ${dayList.length || goalHtml ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">Дел на этот день нет.</p>'}</div>
   <div class="psec-h"><h2>Цели <span class="muted">${activeGoals(c).length || ''}</span></h2><button class="small-btn" data-act="goal.new">+ Цель</button></div>
   ${goalsSection(c)}
@@ -273,6 +275,86 @@ export function planView(a) {
   return { html };
 }
 acts['plan.day'] = (d) => { app().ui.planDay = d.v; };
+
+// ---------- перетащить дело или цель на другой день недели ----------
+const DOWS = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const dayTxt = (d) => `${DOWS[new Date(d + 'T00:00:00Z').getUTCDay()]} ${Number(d.slice(8, 10))}`;
+async function moveItem(kind, id, from, to) {
+  const c = app().ctx(), st = app().store;
+  if (kind === 'goal') {
+    const g = c.data.w_goals.find((x) => x.id === id);
+    if (!g) return;
+    if (to < c.today) { toast('Цель можно перенести только на сегодня или вперёд'); return; }
+    const prev = g.moved || {};
+    await st.put('w_goals', { ...g, moved: moveGoalDay(g, from, to) });
+    toast(`Цель на ${dayTxt(from)} перенесена на ${dayTxt(to)}`, { undo: () => st.put('w_goals', { ...g, moved: prev }) });
+  } else if (kind === 'queue') {
+    const x = c.data.w_queue.find((q) => q.id === id);
+    if (!x) return;
+    await st.put('w_queue', { ...x, due: to });
+    toast(`Перенесено на ${dayTxt(to)}`, { undo: () => st.put('w_queue', x) });
+  } else if (kind === 'td') {
+    const x = ownTasks(c.settings).find((y) => y.id === id), was = x?.d || '';
+    try { await moveOwnTask(id, to); } catch (e) { toast('Не получилось перенести в Todoist: ' + (e.message || e)); return; }
+    toast(`Перенесено на ${dayTxt(to)} — и в Todoist`, { undo: () => moveOwnTask(id, was) });
+  }
+}
+let drag = null;
+const DRAG_MS = 380; // на телефоне — подержать палец
+function dragStart(e) {
+  const el = e.target.closest('[data-drag]');
+  if (!el || e.button > 0 || !document.querySelector('.wstrip') || e.target.closest('button:not(.pi-body), select, input, textarea')) return;
+  const from = el.closest('[data-day]')?.dataset.day || app().ctx().today;
+  drag = { el, kind: el.dataset.drag, id: el.dataset.id, from, x: e.clientX, y: e.clientY, on: false, touch: e.pointerType !== 'mouse', pid: e.pointerId };
+  if (drag.touch) drag.timer = setTimeout(() => drag && begin(e.clientX, e.clientY), DRAG_MS);
+}
+function begin(x, y) {
+  drag.on = true;
+  const r = drag.el.getBoundingClientRect(), gh = document.createElement('div');
+  gh.className = 'drag-ghost'; gh.textContent = drag.el.querySelector('.pi-t')?.textContent || '';
+  gh.style.width = Math.min(r.width, 340) + 'px';
+  document.body.append(gh); drag.ghost = gh; drag.el.classList.add('dragging'); document.documentElement.classList.add('is-dragging');
+  navigator.vibrate?.(15);
+  moveGhost(x, y);
+}
+function moveGhost(x, y) {
+  drag.ghost.style.transform = `translate(${x + 12}px, ${y - 18}px)`;
+  const w = document.elementFromPoint(x, y)?.closest('.wday');
+  document.querySelectorAll('.wday.drop').forEach((b) => b !== w && b.classList.remove('drop'));
+  if (w && w.dataset.v !== drag.from) w.classList.add('drop');
+  drag.target = w && w.dataset.v !== drag.from ? w.dataset.v : null;
+}
+function dragMove(e) {
+  if (!drag || e.pointerId !== drag.pid) return;
+  const dist = Math.hypot(e.clientX - drag.x, e.clientY - drag.y);
+  if (!drag.on) {
+    if (drag.touch) { if (dist > 8) { clearTimeout(drag.timer); drag = null; } return; } // палец поехал — это прокрутка
+    if (dist < 6) return;
+    begin(e.clientX, e.clientY);
+  }
+  moveGhost(e.clientX, e.clientY);
+}
+async function dragEnd(e) {
+  if (!drag || (e && e.pointerId !== drag.pid)) return;
+  const d = drag; drag = null; clearTimeout(d.timer);
+  if (!d.on) return;
+  d.ghost.remove(); d.el.classList.remove('dragging'); document.documentElement.classList.remove('is-dragging');
+  document.querySelectorAll('.wday.drop').forEach((b) => b.classList.remove('drop'));
+  // клик после перетаскивания не должен открывать задачу
+  const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+  document.addEventListener('click', stop, { capture: true, once: true }); setTimeout(() => document.removeEventListener('click', stop, true), 400);
+  if (d.target && e?.type === 'pointerup') await moveItem(d.kind, d.id, d.from, d.target);
+}
+if (!window.__planDrag) {
+  window.__planDrag = true;
+  document.addEventListener('pointerdown', dragStart);
+  document.addEventListener('pointermove', dragMove);
+  document.addEventListener('pointerup', dragEnd);
+  document.addEventListener('pointercancel', dragEnd);
+  document.addEventListener('touchmove', (e) => { if (drag?.on) e.preventDefault(); }, { passive: false });
+  document.addEventListener('contextmenu', (e) => { if (drag) e.preventDefault(); });
+  document.addEventListener('dragstart', (e) => { if (e.target.closest?.('[data-drag]')) e.preventDefault(); }); // ссылки внутри строки не тащим «по-браузерному»
+}
 acts['day.pick'] = (d) => { app().ui.planDay = d.v; window.scrollTo(0, 0); };
 acts['plan.week'] = (d) => { const u = app().ui; u.planWeek = d.v === '0' ? 0 : (u.planWeek || 0) + Number(d.v); u.planDay = d.v === '0' ? null : addDays(app().ctx().today, 7 * u.planWeek); if (u.planWeek === 0) u.planDay = null; };
 
@@ -332,6 +414,8 @@ export function contests(c) {
 }
 const vol = (x) => { const v = contestVol(x); return x.minChars && x.maxChars ? `от ${v(x.minChars)} до ${v(x.maxChars)}` : x.minChars ? `от ${v(x.minChars)}` : x.maxChars ? `до ${v(x.maxChars)}` : ''; };
 const dm = (d) => fmtDate(d).slice(0, 5);
+// имя файла с кнопкой «скопировать» — если браузер сохранит файл под другим именем, его легко переименовать
+const fnChip = (name, label = '') => `<span class="ct-fnc">${label ? `<i>${label}:</i> ` : ''}<code>${esc(name)}</code><button class="link" data-act="copy" data-text="${esc(name)}" title="Скопировать имя файла" aria-label="Скопировать имя файла">${ic('copy')}</button></span>`;
 // карточка конкурса: главное — фактами, книги — с проверкой условий и кнопками, полный текст — свёрнут
 export function contestCard(c, x, { forBook = null } = {}) {
   const left = x.end ? Math.round((new Date(x.end + 'T00:00:00Z') - new Date(c.today + 'T00:00:00Z')) / 864e5) : null;
@@ -347,7 +431,7 @@ export function contestCard(c, x, { forBook = null } = {}) {
     const b = c.wbooksById[id], f = contestFit(x, b, c.today), sd = sent[id];
     const nm = contestFileName(x, b, 'text', author);
     const sentBtn = over ? '' : sd != null ? `<button class="link ct-sent" data-act="contest.unsend" data-id="${x.id}" data-b="${id}" title="Отменить отметку">${icx('check')} отправлена${sd ? ' ' + dm(sd) : ''}</button>` : `<button class="small-btn primary" data-act="contest.sent" data-id="${x.id}" data-b="${id}">Отправила</button>`;
-    return `<div class="ct-book${sd != null ? ' is-sent' : ''}"><div class="ct-bt"><span class="ct-ok ${f.ok === true ? 'yes' : f.ok === false ? 'no' : ''}">${f.ok === true ? icx('check') : f.ok === false ? '!' : '·'}</span><span><b>${esc(b.title)}</b><span class="sub">${f.text}</span>${nm ? `<span class="sub ct-fn" title="Так файлы будут названы при скачивании">${ic('download')} ${esc(nm)}.docx</span>` : ''}</span></div>
+    return `<div class="ct-book${sd != null ? ' is-sent' : ''}"><div class="ct-bt"><span class="ct-ok ${f.ok === true ? 'yes' : f.ok === false ? 'no' : ''}">${f.ok === true ? icx('check') : f.ok === false ? '!' : '·'}</span><span><b>${esc(b.title)}</b><span class="sub">${f.text}</span>${nm ? `<span class="ct-fn"><span class="ct-fnh">Имена файлов по условиям</span>${fnChip(nm + '.docx', 'текст')}${fnChip(contestFileName(x, b, 'synopsis', author) + '.docx', 'синопсис')}</span>` : ''}</span></div>
       <div class="ct-bb"><button class="small-btn" data-act="ct.dl" data-c="${x.id}" data-id="${b.id}" data-k="text" title="${x.chapters ? `Скачать первые главы (${x.chapters}) в Word` : 'Скачать текст книги в Word'}">${x.chapters ? `Главы 1–${x.chapters}` : 'Текст'}</button><button class="small-btn" data-act="ct.dl" data-c="${x.id}" data-id="${b.id}" data-k="synopsis" title="Скачать синопсис в Word">Синопсис</button>${sentBtn}${forBook ? '' : `<button class="link ct-x" data-act="contest.rmBook" data-id="${x.id}" data-b="${b.id}" title="Убрать книгу с конкурса">${ic('trash')}</button>`}</div></div>`;
   };
   const free = c.wbooks.filter((b) => !ids.includes(b.id));
@@ -356,6 +440,7 @@ export function contestCard(c, x, { forBook = null } = {}) {
     <div class="ct-head"><h3>${esc(x.name || 'Конкурс')}</h3>${badge}</div>
     <div class="ct-sub">${x.platform ? esc(x.platform) + ' · ' : ''}<select class="ct-st" data-chg="contest.st" data-id="${x.id}" aria-label="Статус">${Object.entries(CSTATUS).map(([k, w]) => opt(k, w, x.status || 'plan')).join('')}</select>${x.url ? `<a class="ct-url" href="${esc(x.url)}" target="_blank" rel="noopener">страница конкурса ↗</a>` : ''}</div>
     <div class="ct-facts">${fact('Приём работ', x.start && x.end ? `${dm(x.start)} — ${fmtDate(x.end)}` : x.end ? `до ${fmtDate(x.end)}` : '')}${fact('Итоги', x.results ? `до ${fmtDate(x.results)}` : '')}${fact('Объём', vol(x) + (x.startChars ? `<i>на старте от ${v(x.startChars)}</i>` : ''), x.volNote ? 'Из условий: ' + x.volNote : '')}${fact('Жанры', esc(x.genres || ''))}${fact('Отправить', esc(files))}</div>
+    ${x.volNote && !forBook ? `<div class="ct-src">Объём взят из условий: «${esc(x.volNote)}»</div>` : ''}
     ${mails ? `<div class="ct-f ct-mails"><span>Куда отправлять</span><div>${mails}</div></div>` : ''}
     ${shown.length ? `<div class="ct-books">${shown.map(bookRow).join('')}</div>` : ''}
     <div class="ct-acts">${forBook || !free.length ? '' : `<select class="ct-addb" data-chg="contest.addBook" data-id="${x.id}" aria-label="Привязать книгу"><option value="">+ книга на конкурс</option>${free.map((b) => opt(b.id, b.title, '')).join('')}</select>`}<button class="link" data-act="contest.edit" data-id="${x.id}">Изменить</button>${x.conditions ? `<button class="link" data-act="contest.reparse" data-id="${x.id}">Разобрать условия заново</button>` : ''}</div>
@@ -399,9 +484,11 @@ function wireContestFill(f) {
   };
   $('cc').addEventListener('input', run); $('cu').addEventListener('input', run);
 }
-const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookIds: fd.getAll('bookIds'), bookId: fd.getAll('bookIds')[0] || '', results: fd.get('results') || '', genres: (fd.get('genres') || '').trim(), emails: String(fd.get('emails') || '').split(/[\s,;]+/).map((e) => e.trim()).filter((e) => e.includes('@')), unit: fd.get('unit') || 'al', minChars: contestIn(fd.get('unit'), fd.get('minChars')), maxChars: contestIn(fd.get('unit'), fd.get('maxChars')), conditions: fd.get('conditions') || '', url: (fd.get('url') || '').trim() });
+const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookIds: fd.getAll('bookIds'), bookId: fd.getAll('bookIds')[0] || '', results: fd.get('results') || '', genres: (fd.get('genres') || '').trim(), emails: String(fd.get('emails') || '').split(/[\s,;]+/).map((e) => e.trim()).filter((e) => e.includes('@')), unit: fd.get('unit') || 'al', minChars: contestIn(fd.get('unit'), fd.get('minChars')), maxChars: contestIn(fd.get('unit'), fd.get('maxChars')), conditions: fd.get('conditions') || '', url: (fd.get('url') || '').trim(), ...extrasOf(fd.get('conditions') || ''), pv: 2 });
+// из условий — то, чего нет в форме: имя файла, первые главы, формат, минимум на старте, откуда взят объём
+const extrasOf = (t) => { const r = parseContest(t, '', app().ctx().today), o = {}; for (const k of ['fileTpl', 'chapters', 'formats', 'startChars', 'volNote']) o[k] = r[k] ?? null; return o; };
 acts['plan.tab'] = (d) => { app().ui.planTab = d.v; };
-acts['contest.new'] = () => wireContestFill(openSheet('Новый конкурс', contestForm(app().ctx()), async (fd) => { await app().store.put('w_contests', { id: 'c' + uid(), ...contestFrom(fd) }); toast('Конкурс добавлен'); }));
+acts['contest.new'] = () => wireContestFill(openSheet('Новый конкурс', contestForm(app().ctx()), async (fd) => { await app().store.put('w_contests', { id: 'c' + uid(), pv: 2, ...contestFrom(fd) }); toast('Конкурс добавлен'); }));
 changes['contest.st'] = async (v, el) => { const x = app().ctx().data.w_contests.find((i) => i.id === el.dataset.id); await app().store.put('w_contests', { ...x, status: v }); };
 changes['contest.addBook'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_contests.find((i) => i.id === el.dataset.id), ids = [...new Set([...contestBookIds(x), v])]; await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0] }); toast('Книга на конкурсе'); };
 acts['contest.rmBook'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id), ids = contestBookIds(x).filter((id) => id !== d.b); await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0] || '' }); };
@@ -411,7 +498,7 @@ acts['contest.sent'] = async (d) => { const x = app().ctx().data.w_contests.find
 acts['contest.unsend'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id), sb = { ...contestSent(x) }; delete sb[d.b]; await putSent(x, sb); toast('Отметка снята'); };
 acts['contest.reparse'] = async (d) => {
   const c = app().ctx(), x = c.data.w_contests.find((i) => i.id === d.id), r = parseContest(x.conditions || '', x.url || '', c.today);
-  await app().store.put('w_contests', { ...x, ...r });
+  await app().store.put('w_contests', { ...x, ...r, pv: 2 });
   toast('Условия разобраны заново — проверьте карточку');
 };
 acts['contest.edit'] = (d) => {

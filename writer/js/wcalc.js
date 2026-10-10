@@ -289,12 +289,27 @@ export function dailyWrittenAll(books, from, to, today) {
 // ---- цели ----
 // g = { type: 'finish' | 'daily' | 'custom', bookId, title, deadline, days:[1..7], perDay (знаков, для daily), checks:{date:true}, done }
 export const GOAL_TYPES = { finish: 'Главы к сроку (по главе в день)', daily: 'Писать N а.л. в день', custom: 'Своя цель' };
-const isGoalDay = (g, d) => { const days = (g.days || []).map(Number); return !days.length || days.includes(dowOf(d)); };
+const isRegularDay = (g, d) => { const days = (g.days || []).map(Number); return !days.length || days.includes(dowOf(d)); };
+// перенесённые дни: g.moved = { 'откуда': 'куда' } — в «откуда» цели нет, в «куда» — норма за оба дня
+const isGoalDay = (g, d) => { const mv = g.moved || {}; return d in mv ? false : isRegularDay(g, d) || Object.values(mv).includes(d); };
+export const goalMult = (g, d) => { const mv = g.moved || {}; return d in mv ? 0 : (isRegularDay(g, d) ? 1 : 0) + Object.values(mv).filter((x) => x === d).length; };
+export const goalDayOn = isGoalDay;
+// перенести день цели from → to: что уже было перенесено на from, переезжает вместе с ним; перенос обратно отменяет перенос
+export function moveGoalDay(g, from, to) {
+  const mv = { ...(g.moved || {}) };
+  const incoming = Object.keys(mv).filter((k) => mv[k] === from);
+  const back = Object.keys(mv).filter((k) => k === to && mv[k] === from);
+  for (const k of back) delete mv[k];
+  for (const k of incoming) if (!back.includes(k)) mv[k] = to;
+  if (isRegularDay(g, from) && !(from in mv)) { if (mv[to] === from) delete mv[to]; else mv[from] = to; }
+  for (const k of Object.keys(mv)) if (k === mv[k]) delete mv[k];
+  return mv;
+}
 // сколько дней цели осталось с today по deadline включительно
 export function goalDaysLeft(g, today) {
   if (!g.deadline) return null;
   let n = 0;
-  for (let d = today; d <= g.deadline && n < 1000; d = addDays(d, 1)) if (isGoalDay(g, d)) n++;
+  for (let d = today, i = 0; d <= g.deadline && i < 1000; d = addDays(d, 1), i++) n += isGoalDay(g, d) ? Math.max(1, goalMult(g, d)) : 0; // перенесённый день — двойная порция
   return n;
 }
 export function goalStatus(g, book, today) {
@@ -311,7 +326,7 @@ export function goalStatus(g, book, today) {
     const byDay = {};
     for (const v of marks) { const d = dayOf(v); if (d) byDay[d] = (byDay[d] || 0) + 1; }
     r.unit = 'ch';
-    r.perDayCh = Number(g.perDay) || 1;
+    r.perDayCh = (Number(g.perDay) || 1) * Math.max(1, goalMult(g, today));
     r.todayCh = byDay[today] || 0;
     r.left = planCh ? Math.max(0, planCh - marked) : null;
     r.progress = planCh ? Math.min(1, marked / planCh) : null;
@@ -321,11 +336,11 @@ export function goalStatus(g, book, today) {
     for (let d = r.doneToday ? today : addDays(today, -1), i = 0; i < 365; i++, d = addDays(d, -1)) {
       if (g.createdAt && d < g.createdAt.slice(0, 10)) break;
       if (!isGoalDay(g, d)) continue;
-      if ((byDay[d] || 0) >= r.perDayCh) r.streak++; else break;
+      if ((byDay[d] || 0) >= (Number(g.perDay) || 1) * Math.max(1, goalMult(g, d))) r.streak++; else break;
     }
     if (r.left === 0) { r.doneToday = true; r.active = false; r.finished = true; }
   } else if (g.type === 'daily') {
-    r.perDay = Number(g.perDay) || null;
+    r.perDay = Number(g.perDay) ? Number(g.perDay) * Math.max(1, goalMult(g, today)) : null;
   }
   if (g.type === 'custom') r.doneToday = !!(g.checks || {})[today];
   else if (g.type === 'daily' && r.perDay) {
@@ -338,7 +353,7 @@ export function goalStatus(g, book, today) {
         if (g.createdAt && d < g.createdAt.slice(0, 10)) break;
         if (!isGoalDay(g, d)) continue;
         const v = dailyWritten(book, d, d, today)[0];
-        if (v.known && v.value >= r.perDay * 0.95) r.streak++; else break;
+        if (v.known && v.value >= Number(g.perDay) * Math.max(1, goalMult(g, d)) * 0.95) r.streak++; else break;
       }
     }
   }
@@ -420,6 +435,9 @@ export function parseContest(text, url = '', today = new Date().toISOString().sl
   if (!out.start) { const st = pool.find((d) => /(старт|начал|открыт|с)\s*$/i.test(before(d)) && d.iso !== out.end); if (st) out.start = st.iso; }
   if (!out.end && pool.length) out.end = pool[pool.length - 1].iso;
   if (out.start && out.end && out.start > out.end) [out.start, out.end] = [out.end, out.start];
+  // итоги не раньше конца приёма: «с 10 января по 10 марта, итоги 10 апреля» — всё в одном году
+  const plusYear = (d) => `${Number(d.slice(0, 4)) + 1}${d.slice(4)}`;
+  if (out.results && out.end && out.results < out.end && plusYear(out.results) >= out.end) out.results = plusYear(out.results);
   // жанры: строка после «Жанры» / «Жанр:»
   const gm = /жанр[а-яё]*\s*[:—-]?\s*\n?\s*([^\n]{2,120})/i.exec(t);
   if (gm) out.genres = gm[1].trim().replace(/[.;]$/, '');
@@ -442,7 +460,7 @@ export function parseContest(text, url = '', today = new Date().toISOString().sl
   const found = [];
   for (const m of t.matchAll(new RegExp(`${NUM}\\s*${UNIT}`, 'gi'))) {
     const pre = t.slice(Math.max(0, m.index - 140), m.index), post = t.slice(m.index + m[0].length, m.index + m[0].length + 40);
-    const clause = pre.split(/[.;!?\n]/).pop() + m[0], sent = (pre.split(/[.;!?\n](?=\s|$)/).pop() + m[0] + post.split(/[.;!?\n]/)[0]).trim();
+    const clause = pre.split(/[.;!?\n]/).pop() + m[0], sent = (() => { const ls = pre.split('\n'), cur = ls.pop().split(/[.;!?](?=\s|$)/).pop(), prev = (ls.pop() || '').trim(); return ((cur.trim() === '' || /^\s*(от|до|не)/i.test(cur)) && prev && prev.length < 40 ? prev + ': ' : '') + (cur + m[0] + post.split(/[.;!?\n]/)[0]).trim(); })();
     if (SKIP_BEFORE.test(clause.slice(0, -m[0].length)) && !/объ[её]м\S*\s+(книги|произведени|романа|текста|работы)/i.test(clause)) continue;
     if (SKIP_AFTER.test(post)) continue;
     const v = num(m[1], m[2]), unit = isAl(m[3]) ? 'al' : 'chars', near = pre.slice(-30);
@@ -516,4 +534,39 @@ export function contestFit(x, b, today) {
   if (max && chars > max) return { ok: false, chars, text: `${v(chars)} — больше максимума (${v(max)})` };
   if (min && chars < min) return { ok: false, chars, need: min - chars, text: `${v(chars)} из ${v(min)} — не хватает ${v(min - chars)}${s.perDay ? ` (~${v(s.perDay)} в день)` : ''}` };
   return { ok: true, chars, text: `${v(chars)} — подходит по объёму` };
+}
+
+// ---- календарь конкурсов: из вставленного списка (например, пост «Календарь конкурсов Литнета») — много конкурсов сразу ----
+// Каждый абзац (или строка с «Названием») — отдельный конкурс; если точных дат нет, а есть месяц — ставим весь месяц, примерно.
+const MON_FULL = ['январ', 'феврал', 'март', 'апрел', 'ма[йя]', 'июн', 'июл', 'август', 'сентябр', 'октябр', 'ноябр', 'декабр'];
+export function parseContestList(text, today = new Date().toISOString().slice(0, 10)) {
+  const src = String(text || '').replace(/\r/g, '').trim();
+  if (!src) return [];
+  let chunks = src.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+  if (chunks.length < 2) {
+    // без пустых строк: новый конкурс — строка с «кавычками» или с маркером списка
+    chunks = [];
+    for (const line of src.split('\n')) {
+      if (!chunks.length || /^\s*([-–—•*]|\d+[.)])\s+|[«"]/.test(line)) chunks.push(line); else chunks[chunks.length - 1] += '\n' + line;
+    }
+  }
+  const out = [], seen = new Set();
+  for (const ch of chunks) {
+    const r = parseContest(ch, '', today);
+    if (!r.name || r.name.length > 80) continue;
+    if (!r.end && !r.start) {
+      const m = new RegExp(`(${MON_FULL.join('|')})[а-яё]*(?:\\s+(20\\d\\d))?`, 'i').exec(ch);
+      if (!m) continue;
+      const mi = MON_FULL.findIndex((x) => new RegExp('^' + x, 'i').test(m[1])) + 1;
+      let y = Number(m[2]) || Number(today.slice(0, 4));
+      if (!m[2] && `${y}-${String(mi).padStart(2, '0')}` < today.slice(0, 7)) y++;
+      const mm = String(mi).padStart(2, '0');
+      r.start = `${y}-${mm}-01`; r.end = `${y}-${mm}-${String(new Date(Date.UTC(y, mi, 0)).getUTCDate()).padStart(2, '0')}`; r.approx = true;
+    }
+    const key = r.name.toLowerCase().replace(/[^а-яёa-z0-9]/g, '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...r, conditions: ch });
+  }
+  return out;
 }

@@ -1,3 +1,4 @@
+import { contestCalendar } from './ccal.js';
 import { esc, acts, changes, openSheet, opt, toast, uid, ask, download } from '../../../js/ui.js';
 import { fmtDate } from '../../../js/format.js';
 import { resizeImage } from '../../../js/img.js';
@@ -34,6 +35,7 @@ export function marketingView(a) {
   <div class="hint">У каждой книги три блока: тексты для постов, материалы для таргета (Яндекс Директ) и пакет для издательства.</div>
   <div class="psec-h" style="margin-top:22px"><h2>Конкурсы</h2><button class="small-btn" data-act="contest.new">+ Конкурс</button></div>
   ${contests(c)}
+  ${contestCalendar(c)}
   <div style="margin-top:16px">${widgetCard(c)}</div>`;
   return { html };
 }

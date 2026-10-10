@@ -49,6 +49,15 @@ export async function addOwnTask(settings, { project, section, content, date }) 
   return { id: String(t.id), t: content, d: date || '', p: project, s: section || '', pr: 1 };
 }
 
+// перенести задачу на другой день (перетаскиванием в Планере): срок меняется и в Todoist
+export async function moveOwnTask(id, date) {
+  const a = window.__app, s = a.ctx().settings, token = s.todoistToken;
+  if (!token) throw new Error('Todoist не подключён');
+  await tdReq(token, `/tasks/${id}`, date ? { due_date: date } : { due_string: 'no date' });
+  const td = a.ctx().settings.todoist || {};
+  await a.store.saveSettings({ todoist: { ...td, own: (td.own || []).map((y) => (y.id === id ? { ...y, d: date } : y)) } });
+}
+
 // Открыть задачу: поправить текст, дату и описание прямо здесь — изменения уходят в Todoist
 const taskOf = (id) => ownTasks(window.__app.ctx().settings).find((x) => x.id === id);
 acts['td.open'] = (d) => {

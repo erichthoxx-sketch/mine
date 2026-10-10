@@ -128,6 +128,12 @@ acts['mk.pubZip'] = async (d) => run(async () => {
   if (await download(`izdatelstvo_${latin(b.title)}.zip`, zip, 'application/zip')) toast(errs.length ? `Скачано, но ${errs.join('; ')}` : 'Пакет скачан: рукопись и синопсис');
 });
 
+// после скачивания для конкурса — имя файла в буфер: если браузер назвал файл по-своему, останется вставить при переименовании
+async function saved(nm, msg) {
+  if (!nm) { toast(msg); return; }
+  const ok = await copyText(nm + '.docx');
+  toast(`${msg}. Нужное имя: ${nm}.docx${ok ? ' — скопировано' : ''}`);
+}
 // для конкурса: текст (или первые N глав) и синопсис — с именем файла, как просят в условиях
 acts['ct.dl'] = async (d) => run(async () => {
   const b = bookOf(d), x = app().ctx().data.w_contests.find((i) => i.id === d.c);
@@ -135,13 +141,13 @@ acts['ct.dl'] = async (d) => run(async () => {
   const nm = contestFileName(x, b, d.k, meta(b).author);
   if (d.k === 'synopsis') {
     const r = await service(b, 'synopsis'), blob = await docxBlob(await drive.loadJsZip(), r.paras, meta(b));
-    if (await download(`${nm || latin(b.title) + '_sinopsis'}.docx`, blob, blob.type)) toast('Синопсис скачан');
+    if (await download(`${nm || latin(b.title) + '_sinopsis'}.docx`, blob, blob.type)) saved(nm, 'Синопсис скачан');
     return;
   }
   const n = Number(x.chapters) || 0;
   toast(n ? `Собираю первые главы: ${n}…` : 'Собираю текст…');
   const [, blob] = await manuscriptFile(b, n);
-  if (await download(`${nm || latin(b.title) + (n ? '_glavy_1_' + n : '_tekst')}.docx`, blob, blob.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) toast(n ? `Скачано: первые главы (${n})` : 'Текст скачан');
+  if (await download(`${nm || latin(b.title) + (n ? '_glavy_1_' + n : '_tekst')}.docx`, blob, blob.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) saved(nm, n ? `Скачано: первые главы (${n})` : 'Текст скачан');
 });
 
 export { isServiceTab };

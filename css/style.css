@@ -1081,3 +1081,50 @@ details.idea-group[open] > summary > span:first-child::before { content: none; }
 }
 a.td-ext { text-decoration: none; font-weight: 700; font-size: 14px; }
 a.td-ext { color: var(--link); }
+/* перетаскивание дел и целей на другой день */
+[data-drag] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+[data-drag] a { -webkit-user-drag: none; }
+@media (hover: hover) { .wstrip ~ * [data-drag], body:has(.wstrip) [data-drag] { cursor: grab; } }
+.pitem.dragging { opacity: .35; }
+html.is-dragging, html.is-dragging * { cursor: grabbing !important; }
+.drag-ghost { position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; padding: 9px 14px; border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: 0 10px 30px rgba(0,0,0,.18); font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--accent-2); }
+.wstrip button.wday.drop, .week .wstrip button.wday.drop { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-2); transform: translateY(-2px); transition: transform .12s; }
+.ct-fn { display: flex; flex-direction: column; gap: 3px; margin-top: 5px; font-size: 12px; color: var(--muted); }
+.ct-fnh { font-size: 11.5px; }
+.ct-fnc { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.ct-fnc i { font-style: normal; flex: none; width: 64px; padding-top: 1px; white-space: nowrap; }
+.ct-fnc code { font-family: inherit; font-size: 12px; color: var(--text-2); background: var(--surface-2); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; min-width: 0; }
+.ct-fnc .link { padding: 0 3px !important; min-height: 0; color: var(--muted) !important; }
+.ct-fnc .ic { width: 13px; height: 13px; }
+/* календарь конкурсов */
+.cc-grid { margin-top: 12px; }
+.cc-row { display: grid; grid-template-columns: minmax(150px, 230px) 1fr; gap: 14px; align-items: center; padding: 7px 0; color: inherit; text-decoration: none; border-top: 1px solid var(--line); }
+.cc-row.cc-head { border-top: 0; padding: 0 0 4px; }
+.cc-name { display: flex; flex-direction: column; min-width: 0; }
+.cc-name b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-name span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-track { position: relative; height: 22px; }
+.cc-track > i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.cc-months { height: 28px; }
+.cc-months .cc-yr { position: absolute; top: 0; font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--text-2); padding-left: 4px; }
+.cc-months span { position: absolute; top: 13px; font-size: 11px; color: var(--muted); padding-left: 4px; }
+.cc-now { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--link); border-radius: 2px; opacity: .6; }
+.cc-bar { position: absolute; top: 6px; height: 10px; border-radius: 6px; }
+.cc-plan, .cc-legend i.cc-plan { background: var(--accent-2); }
+.cc-in, .cc-legend i.cc-in { background: var(--accent); }
+.cc-sent, .cc-legend i.cc-sent { background: var(--good); }
+.cc-approx { background: repeating-linear-gradient(90deg, var(--accent-2) 0 6px, transparent 6px 9px); }
+.cc-res { position: absolute; top: 7px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--surface); border: 2px solid var(--text-2); }
+.cc-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.cc-legend i { display: inline-block; width: 14px; height: 7px; border-radius: 4px; margin-right: 6px; vertical-align: middle; }
+.cc-legend i.cc-dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--text-2); background: transparent; }
+.cc-pick { align-items: flex-start; } .cc-pick .sub { display: block; font-size: 12.5px; color: var(--muted); font-weight: 400; }
+@media (max-width: 640px) {
+  .cc-row { grid-template-columns: 1fr; gap: 4px; }
+  .cc-row.cc-head .cc-name { display: none; }
+  .cc-months span { font-size: 9.5px; padding-left: 2px; }
+}
+.ct-src { margin: 6px 2px 0; font-size: 12px; color: var(--muted); }
+
+.ct-bb { flex-wrap: wrap; }
+@media (max-width: 560px) { .ct-book { align-items: stretch; } .ct-bb { width: 100%; } .ct-bb .small-btn { padding: 3px 10px; font-size: 12.5px; } .ct-bb .ct-x { margin-left: auto; } }

@@ -10,6 +10,7 @@ import { ideasView } from './views/ideas.js';
 import { homeView } from './views/home.js';
 import { planView, navToday } from './views/plan.js';
 import { scheduleTodoist } from './tdsync.js';
+import { parseContest } from './wcalc.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
@@ -131,6 +132,25 @@ applyTheme();
 try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem('navMini') === '1'); } catch { /* ок */ }
 acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
 store.subscribe(() => { safeRender(); scheduleTodoist(app); });
+// конкурсы, разобранные старой версией: один раз разбираем условия заново (даты, объём, имя файла); название не трогаем, если оно не «Литнет» и т. п.
+const CONTEST_PV = 2;
+let reparsing = false;
+async function reparseContests() {
+  if (reparsing) return;
+  const old = (store.data.w_contests || []).filter((x) => x.conditions && (x.pv || 0) < CONTEST_PV);
+  if (!old.length) return;
+  reparsing = true;
+  try {
+    for (const x of old) {
+      const r = parseContest(x.conditions, x.url || '', todayISO()), keep = {};
+      if (x.name && !/^(литнет|литрес|author\.today|литмаркет|правила( конкурса)?)$/i.test(x.name.trim())) keep.name = x.name;
+      const clean = { ...x };
+      for (const k of ['minChars', 'maxChars', 'startChars', 'unit', 'volNote', 'fileTpl', 'chapters', 'formats']) delete clean[k];
+      await store.put('w_contests', { ...clean, ...r, ...keep, pv: CONTEST_PV });
+    }
+  } finally { reparsing = false; }
+}
+store.subscribe(() => { reparseContests().catch(() => {}); });
 // вернулась в приложение — подтягиваем свежие задачи из Todoist
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleTodoist(app, 800, { pull: true }); });
 setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(app, 1000, { pull: true }); }, 3 * 60000); // и раз в 3 минуты, пока приложение открыто
