@@ -1,7 +1,7 @@
 import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol } from '../wcalc.js';
+import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol } from '../wcalc.js';
 import { goalTitle, goalToday } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
@@ -103,7 +103,8 @@ export function progressBlock(c, b) {
   }
   for (const x of liveContests(c, b)) {
     const st = contestStatus(x, b, t);
-    parts.push(`<div class="small">Конкурс «${esc(x.name)}»${st.daysLeft != null ? ` · осталось ${st.daysLeft} дн.` : ''}${x.minChars ? ` — объём ${contestVol(x)(st.chars)} из ${contestVol(x)(x.minChars)}: ${st.need === 0 ? '<span class="up">✓ проходит</span>' : `не хватает ${contestVol(x)(st.need)}${st.perDay ? ` (~${contestVol(x)(st.perDay)} в день)` : ''}${st.onTrack ? ' — по темпу успеваю' : ''}`}` : ''}</div>`);
+    const f = contestFit(x, b, t);
+    parts.push(`<div class="small">Конкурс «${esc(x.name)}»${st.daysLeft != null ? ` · осталось ${st.daysLeft} дн.` : ''}${x.minChars || x.maxChars || x.newOnly ? ` · <span class="${f.ok ? 'up' : f.out ? 'down' : ''}">${f.text}</span>` : ''}</div>`);
   }
   return `<div class="prog">${parts.join('')}</div>`;
 }

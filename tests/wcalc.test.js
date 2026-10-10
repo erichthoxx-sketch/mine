@@ -247,3 +247,16 @@ test('календарь конкурсов: список из поста — п
     ['Летний роман', '2027-06-01', '2027-06-30', '', true],
   ]);
 });
+
+test('конкурс для новых книг: завершённая не подходит, в процессе — сколько до подачи', async () => {
+  const { parseContest, contestFit } = await import('../writer/js/wcalc.js');
+  const r = parseContest('«Второе дыхание»\nСрок приема работ\n31 июл. 2026 - 31 окт. 2026\nПринимаются только новые произведения: первая глава опубликована не ранее 31.07.2026.\nРазмер книги\nОт 30 000 знаков', '', '2026-10-11');
+  assert.equal(r.newOnly, true);
+  assert.equal(r.newSince, '2026-07-31');
+  const x = { ...r };
+  assert.equal(contestFit(x, { status: 'done', chars: 327253 }, '2026-10-11').out, true);
+  assert.equal(contestFit(x, { status: 'progress', chars: 50000, publishStart: '2026-05-01' }, '2026-10-11').out, true);
+  const f = contestFit(x, { status: 'progress', chars: 12000, publishStart: '2026-09-01' }, '2026-10-11');
+  assert.deepEqual([f.ok, f.need], [false, 18000]);
+  assert.equal(contestFit(x, { status: 'progress', chars: 31000 }, '2026-10-11').ready, true);
+});

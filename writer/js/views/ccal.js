@@ -48,7 +48,7 @@ acts['ccal.paste'] = () => {
     <div id="ccFound" class="checks" style="margin-top:10px"></div>`, async (fd) => {
     const picks = fd.getAll('pick').map(Number).map((i) => found[i]).filter(Boolean);
     if (!picks.length) { toast('Отметьте конкурсы, которые добавить'); return false; }
-    for (const x of picks) await app().store.put('w_contests', { id: 'c' + uid(), status: 'plan', bookIds: [], pv: 2, ...x });
+    for (const x of picks) await app().store.put('w_contests', { id: 'c' + uid(), status: 'plan', bookIds: [], pv: 3, ...x });
     toast(`Добавлено в календарь: ${picks.length}`);
   }, { submitText: 'Добавить' });
   const ta = f.querySelector('#ccT'), box = f.querySelector('#ccFound');

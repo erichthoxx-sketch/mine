@@ -133,7 +133,7 @@ try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem
 acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
 store.subscribe(() => { safeRender(); scheduleTodoist(app); });
 // конкурсы, разобранные старой версией: один раз разбираем условия заново (даты, объём, имя файла); название не трогаем, если оно не «Литнет» и т. п.
-const CONTEST_PV = 2;
+const CONTEST_PV = 3;
 let reparsing = false;
 async function reparseContests() {
   if (reparsing) return;
@@ -146,6 +146,7 @@ async function reparseContests() {
       if (x.name && !/^(литнет|литрес|author\.today|литмаркет|правила( конкурса)?)$/i.test(x.name.trim())) keep.name = x.name;
       const clean = { ...x };
       for (const k of ['minChars', 'maxChars', 'startChars', 'unit', 'volNote', 'fileTpl', 'chapters', 'formats']) delete clean[k];
+      if (x.newOnly) delete r.newOnly; // отмечено вручную — оставляем
       await store.put('w_contests', { ...clean, ...r, ...keep, pv: CONTEST_PV });
     }
   } finally { reparsing = false; }
