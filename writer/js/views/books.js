@@ -40,17 +40,19 @@ export function driveChip(c) {
 // активные конкурсы книги: метка «Конкурс · N дн.»
 const liveContests = (c, b) => c.data.w_contests.filter((x) => contestBookIds(x).includes(b.id) && x.status !== 'done' && !(x.end && x.end < c.today));
 const daysTo = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
-function contestTags(c, b) {
-  const l = liveContests(c, b);
-  return l.length ? `<div class="tags">${l.map((x) => `<span class="tag on">Конкурс${x.end ? ` · ${daysTo(x.end, c.today)} дн.` : ''}</span>`).join('')}</div>` : '';
+// строка о книге: статус с цветной точкой, площадки — тихо, тёмно-серым; конкурс — единственный акцент
+function bookMeta(c, b, { full = false } = {}) {
+  const st = b.status || 'progress';
+  const parts = [`<span class="bm-st bm-${st}"><i></i>${STATUS[st] || STATUS.progress}</span>`, ...(b.platforms || []).map((p) => `<span>${esc(p)}</span>`)];
+  const ct = liveContests(c, b).map((x) => { const n = x.end ? daysTo(x.end, c.today) : null; return `<span class="bm-ct"><em>конкурс</em>${full ? ` «${esc(x.name)}»` : ''}${n != null ? ` · ${n === 0 ? 'последний день' : n + ' дн.'}` : ''}</span>`; });
+  return `<div class="bmeta">${parts.join('<b>·</b>')}</div>${ct.length ? `<div class="bmeta bmeta-ct">${ct.join('')}</div>` : ''}`;
 }
 function tile(c, b) {
   const today = writtenToday(b, c.today);
   return `<a href="#" class="cover-tile" data-act="go" data-to="/book/${b.id}">
     <div class="cover">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}</div>
     <div class="ct-title">${esc(b.title)}</div>
-    <div class="tags"><span class="tag ${b.status === 'progress' || !b.status ? 'on' : ''}">${STATUS[b.status] || STATUS.progress}</span>${(b.platforms || []).map((p) => `<span class="tag">${esc(p)}</span>`).join('')}</div>
-    ${contestTags(c, b)}
+    ${bookMeta(c, b)}
     <div class="ct-num">${volTxt(b)}${b.status !== 'done' && today ? ` <span class="up">+${alNum(today)}</span>` : ''}</div></a>`;
 }
 
@@ -453,7 +455,7 @@ function headCard(c, b, p) {
   return `<div class="card book-head2">
     <label class="bh-cover" title="${b.cover ? 'Сменить обложку' : 'Загрузить обложку'}">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}<span class="bh-cover-edit">${b.cover ? 'Сменить' : 'Загрузить обложку'}</span><input type="file" accept="image/*" data-chg="wbook.cover" data-id="${b.id}" hidden></label>
     <div class="bh-main">
-      <div class="bh-top"><div class="bh-title"><h2>${esc(b.title)}</h2><div class="tags"><span class="tag on">${STATUS[b.status] || STATUS.progress}</span>${(b.platforms || []).map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>${contestTags(c, b)}</div>
+      <div class="bh-top"><div class="bh-title"><h2>${esc(b.title)}</h2>${bookMeta(c, b, { full: true })}</div>
         <div class="bh-acts">${b.webViewLink ? `<a class="btn small-btn" href="${esc(b.webViewLink)}" target="_blank" rel="noopener" title="Открыть в Google Документах">${ic('doc')} Документ</a>` : ''}${b.fileId ? `<button class="ed-ic" data-act="wbook.refreshOne" data-id="${b.id}" title="Обновить с Диска" aria-label="Обновить с Диска">${ic('refresh')}</button>` : ''}</div></div>
       <div class="bh-tiles">${tiles.join('')}</div>
       <div class="bh-texts">${annBlock}${synBlock}</div>
