@@ -7,7 +7,7 @@ import { widgetReminder } from './widgets.js';
 import { linkTodos } from './links.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
-import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit } from '../wcalc.js';
+import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestFileName } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask } from '../../../js/tdtasks.js';
@@ -57,7 +57,8 @@ export function planItems(c, from, to) {
     const bt = books.map((y) => esc(y.title)).join(', ');
     add(x.end, 'contest', `Конкурс «${esc(x.name)}» — последний день приёма`, [bt, st.need ? `не хватает ${contestVol(x)(st.need)}` : ''].filter(Boolean).join(' · '), { act: 'contest.edit', id: x.id, bookId: b?.id });
     // напомнить отправить книгу — за 3 дня до конца приёма (или сегодня, если уже поздно)
-    if (books.length && x.status !== 'sent' && x.end && x.end >= t) { const due = addDays(x.end, -3) < t ? t : addDays(x.end, -3); add(due, 'contest', `Отправить ${books.length > 1 ? 'книги' : `«${esc(b.title)}»`} на конкурс «${esc(x.name)}»`, `до ${fmtDate(x.end)}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, { act: 'contest.edit', id: x.id, bookId: b?.id }); }
+    const unsent = contestUnsent(x).map((id) => c.wbooksById[id]).filter(Boolean);
+    if (unsent.length && x.status !== 'sent' && x.end && x.end >= t) { const due = addDays(x.end, -3) < t ? t : addDays(x.end, -3); add(due, 'contest', `Отправить ${unsent.length > 1 ? 'книги' : `«${esc(unsent[0].title)}»`} на конкурс «${esc(x.name)}»`, `до ${fmtDate(x.end)}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, { act: 'contest.edit', id: x.id, bookId: b?.id }); }
     if (x.start && x.start >= t) add(x.start, 'contest', `Конкурс «${esc(x.name)}» — старт`, bt, { act: 'contest.edit', id: x.id, bookId: b?.id });
     if (x.results && x.results >= t) add(x.results, 'contest', `Итоги конкурса «${esc(x.name)}»`, bt, { act: 'contest.edit', id: x.id, bookId: b?.id });
   }
@@ -336,23 +337,28 @@ export function contestCard(c, x, { forBook = null } = {}) {
   const left = x.end ? Math.round((new Date(x.end + 'T00:00:00Z') - new Date(c.today + 'T00:00:00Z')) / 864e5) : null;
   const over = (left != null && left < 0) || x.status === 'done';
   const badge = left == null ? '' : over ? '<span class="badge">приём закрыт</span>' : `<span class="badge ${left <= 7 ? 'bad' : left <= 14 ? 'warn' : 'good'}">${left === 0 ? 'сегодня последний день' : `осталось ${left} дн.`}</span>`;
-  const fact = (k, v) => (v ? `<div class="ct-f"><span>${k}</span><b>${v}</b></div>` : '');
+  const fact = (k, v, title = '') => (v ? `<div class="ct-f"${title ? ` title="${esc(title)}"` : ''}><span>${k}</span><b>${v}</b></div>` : '');
   const mails = (x.emails || []).map((e) => `<span class="ct-mail">${esc(e)}<button class="link" data-act="copy" data-text="${esc(e)}" title="Скопировать адрес">${ic('copy')}</button></span>`).join('');
-  const ids = contestBookIds(x).filter((id) => c.wbooksById[id]);
+  const ids = contestBookIds(x).filter((id) => c.wbooksById[id]), sent = contestSent(x);
   const shown = forBook ? ids.filter((id) => id === forBook) : ids;
+  const author = c.settings.pseudonym || '';
+  const files = [x.chapters ? `первые ${x.chapters} гл.` : '', (x.formats || []).filter((f) => f !== 'pdf' || (x.formats || []).length === 1).slice(0, 2).join(', ')].filter(Boolean).join(' · ');
   const bookRow = (id) => {
-    const b = c.wbooksById[id], f = contestFit(x, b, c.today);
-    return `<div class="ct-book"><div class="ct-bt"><span class="ct-ok ${f.ok === true ? 'yes' : f.ok === false ? 'no' : ''}">${f.ok === true ? icx('check') : f.ok === false ? '!' : '·'}</span><span><b>${esc(b.title)}</b><span class="sub">${f.text}</span></span></div>
-      <div class="ct-bb">${b.fileId ? `<button class="small-btn" data-act="pub.manuscript" data-id="${b.id}" title="Скачать текст книги (Word)">Текст</button>` : ''}<button class="small-btn" data-act="svc.docx" data-id="${b.id}" data-k="synopsis" title="Скачать синопсис (Word)">Синопсис</button>${forBook ? '' : `<button class="link ct-x" data-act="contest.rmBook" data-id="${x.id}" data-b="${b.id}" title="Убрать книгу с конкурса">${ic('trash')}</button>`}</div></div>`;
+    const b = c.wbooksById[id], f = contestFit(x, b, c.today), sd = sent[id];
+    const nm = contestFileName(x, b, 'text', author);
+    const sentBtn = over ? '' : sd != null ? `<button class="link ct-sent" data-act="contest.unsend" data-id="${x.id}" data-b="${id}" title="Отменить отметку">${icx('check')} отправлена${sd ? ' ' + dm(sd) : ''}</button>` : `<button class="small-btn primary" data-act="contest.sent" data-id="${x.id}" data-b="${id}">Отправила</button>`;
+    return `<div class="ct-book${sd != null ? ' is-sent' : ''}"><div class="ct-bt"><span class="ct-ok ${f.ok === true ? 'yes' : f.ok === false ? 'no' : ''}">${f.ok === true ? icx('check') : f.ok === false ? '!' : '·'}</span><span><b>${esc(b.title)}</b><span class="sub">${f.text}</span>${nm ? `<span class="sub ct-fn" title="Так файлы будут названы при скачивании">${ic('download')} ${esc(nm)}.docx</span>` : ''}</span></div>
+      <div class="ct-bb"><button class="small-btn" data-act="ct.dl" data-c="${x.id}" data-id="${b.id}" data-k="text" title="${x.chapters ? `Скачать первые главы (${x.chapters}) в Word` : 'Скачать текст книги в Word'}">${x.chapters ? `Главы 1–${x.chapters}` : 'Текст'}</button><button class="small-btn" data-act="ct.dl" data-c="${x.id}" data-id="${b.id}" data-k="synopsis" title="Скачать синопсис в Word">Синопсис</button>${sentBtn}${forBook ? '' : `<button class="link ct-x" data-act="contest.rmBook" data-id="${x.id}" data-b="${b.id}" title="Убрать книгу с конкурса">${ic('trash')}</button>`}</div></div>`;
   };
   const free = c.wbooks.filter((b) => !ids.includes(b.id));
+  const v = contestVol(x);
   return `<div class="card ct${over ? ' faded' : ''}">
-    <div class="ct-head"><div><h3>${esc(x.name || 'Конкурс')}</h3><div class="ct-sub">${x.platform ? esc(x.platform) + ' · ' : ''}<select class="ct-st" data-chg="contest.st" data-id="${x.id}" aria-label="Статус">${Object.entries(CSTATUS).map(([k, v]) => opt(k, v, x.status || 'plan')).join('')}</select></div></div>${badge}</div>
-    <div class="ct-facts">${fact('Приём работ', x.start && x.end ? `${dm(x.start)} — ${fmtDate(x.end)}` : x.end ? `до ${fmtDate(x.end)}` : '')}${fact('Итоги', x.results ? `до ${fmtDate(x.results)}` : '')}${fact('Объём', vol(x))}${fact('Жанры', esc(x.genres || ''))}</div>
+    <div class="ct-head"><h3>${esc(x.name || 'Конкурс')}</h3>${badge}</div>
+    <div class="ct-sub">${x.platform ? esc(x.platform) + ' · ' : ''}<select class="ct-st" data-chg="contest.st" data-id="${x.id}" aria-label="Статус">${Object.entries(CSTATUS).map(([k, w]) => opt(k, w, x.status || 'plan')).join('')}</select>${x.url ? `<a class="ct-url" href="${esc(x.url)}" target="_blank" rel="noopener">страница конкурса ↗</a>` : ''}</div>
+    <div class="ct-facts">${fact('Приём работ', x.start && x.end ? `${dm(x.start)} — ${fmtDate(x.end)}` : x.end ? `до ${fmtDate(x.end)}` : '')}${fact('Итоги', x.results ? `до ${fmtDate(x.results)}` : '')}${fact('Объём', vol(x) + (x.startChars ? `<i>на старте от ${v(x.startChars)}</i>` : ''), x.volNote ? 'Из условий: ' + x.volNote : '')}${fact('Жанры', esc(x.genres || ''))}${fact('Отправить', esc(files))}</div>
     ${mails ? `<div class="ct-f ct-mails"><span>Куда отправлять</span><div>${mails}</div></div>` : ''}
     ${shown.length ? `<div class="ct-books">${shown.map(bookRow).join('')}</div>` : ''}
-    ${forBook || !free.length ? '' : `<div class="ct-add"><select data-chg="contest.addBook" data-id="${x.id}" aria-label="Привязать книгу"><option value="">+ книга на этот конкурс</option>${free.map((b) => opt(b.id, b.title, '')).join('')}</select></div>`}
-    <div class="ct-acts">${!over && x.status !== 'sent' && ids.length ? `<button class="primary small-btn" data-act="contest.sent" data-id="${x.id}">Отправила</button>` : ''}${x.url ? `<a class="btn small-btn" href="${esc(x.url)}" target="_blank" rel="noopener">Страница конкурса ↗</a>` : ''}<button class="link" data-act="contest.edit" data-id="${x.id}">Изменить</button>${x.conditions ? `<button class="link" data-act="contest.reparse" data-id="${x.id}">Разобрать условия заново</button>` : ''}</div>
+    <div class="ct-acts">${forBook || !free.length ? '' : `<select class="ct-addb" data-chg="contest.addBook" data-id="${x.id}" aria-label="Привязать книгу"><option value="">+ книга на конкурс</option>${free.map((b) => opt(b.id, b.title, '')).join('')}</select>`}<button class="link" data-act="contest.edit" data-id="${x.id}">Изменить</button>${x.conditions ? `<button class="link" data-act="contest.reparse" data-id="${x.id}">Разобрать условия заново</button>` : ''}</div>
     ${x.conditions && !forBook ? `<details class="ct-full"><summary>Полный текст условий</summary><p class="idea-text">${esc(x.conditions)}</p></details>` : ''}
   </div>`;
 }
@@ -399,7 +405,10 @@ acts['contest.new'] = () => wireContestFill(openSheet('Новый конкурс
 changes['contest.st'] = async (v, el) => { const x = app().ctx().data.w_contests.find((i) => i.id === el.dataset.id); await app().store.put('w_contests', { ...x, status: v }); };
 changes['contest.addBook'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_contests.find((i) => i.id === el.dataset.id), ids = [...new Set([...contestBookIds(x), v])]; await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0] }); toast('Книга на конкурсе'); };
 acts['contest.rmBook'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id), ids = contestBookIds(x).filter((id) => id !== d.b); await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0] || '' }); };
-acts['contest.sent'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id); await app().store.put('w_contests', { ...x, status: 'sent', sentAt: app().ctx().today }); toast('Отмечено: книга отправлена'); };
+// «Отправила» — по каждой книге отдельно; когда отправлены все — конкурс в статусе «Отправила»
+const putSent = async (x, sentBooks) => { const all = contestBookIds(x).every((id) => id in sentBooks); await app().store.put('w_contests', { ...x, sentBooks, status: all ? 'sent' : x.status === 'sent' ? 'in' : x.status, sentAt: all ? app().ctx().today : '' }); };
+acts['contest.sent'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id), ids = d.b ? [d.b] : contestBookIds(x); await putSent(x, { ...contestSent(x), ...Object.fromEntries(ids.map((id) => [id, app().ctx().today])) }); toast('Отмечено: отправлена'); };
+acts['contest.unsend'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id), sb = { ...contestSent(x) }; delete sb[d.b]; await putSent(x, sb); toast('Отметка снята'); };
 acts['contest.reparse'] = async (d) => {
   const c = app().ctx(), x = c.data.w_contests.find((i) => i.id === d.id), r = parseContest(x.conditions || '', x.url || '', c.today);
   await app().store.put('w_contests', { ...x, ...r });

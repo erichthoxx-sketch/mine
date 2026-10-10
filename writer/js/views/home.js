@@ -5,7 +5,7 @@ import { ownTasks } from '../../../js/tdtasks.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll, al, alNum, contestVol, contestBookIds } from '../wcalc.js';
+import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll, al, alNum, contestVol, contestBookIds, contestUnsent } from '../wcalc.js';
 import { STATUS, progressBlock, daysTxt, driveChip } from './books.js';
 import { goalTitle, goalToday, activeGoals } from './goals.js';
 import { widgetReminder } from './widgets.js';
@@ -25,7 +25,8 @@ export function reminders(c) {
   for (const x of d.w_contests) {
     if (x.status === 'done' || !x.end || x.end < addDays(t, -3)) continue;
     const bs = contestBookIds(x).map((id) => c.wbooksById[id]).filter(Boolean), b = bs[0] || null, s = contestStatus(x, b, t);
-    if (bs.length && x.status !== 'sent' && x.end >= t) add(x.end, `Отправить на конкурс «${x.name}»`, `${bs.map((y) => esc(y.title)).join(', ')}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, '/plan', 7);
+    const un = contestUnsent(x).map((id) => c.wbooksById[id]).filter(Boolean);
+    if (un.length && x.status !== 'sent' && x.end >= t) add(x.end, `Отправить на конкурс «${x.name}»`, `${un.map((y) => esc(y.title)).join(', ')}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, '/plan', 7);
     add(x.end, `Конкурс «${x.name}» — последний день приёма`, `${b ? esc(b.title) : ''}${s.need ? ` · нужно ещё ${contestVol(x)(s.need)}${s.perDay ? ` (~${contestVol(x)(s.perDay)} в день)` : ''}` : ''}`, '/plan');
     if (x.start && x.start >= t) add(x.start, `Конкурс «${x.name}» начинается`, b ? esc(b.title) : '', '/plan', 7);
   }

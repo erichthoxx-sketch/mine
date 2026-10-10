@@ -374,8 +374,10 @@ export const contestIn = (unit, v) => {
 export const contestOut = (unit, chars) => (chars == null ? '' : unit === 'chars' ? String(chars) : alNum(chars));
 
 // ---- конкурс из текста условий (скопированного со страницы): название, даты, объём, площадка ----
-const MON_RX = 'января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря';
-const MON_I = MON_RX.split('|');
+// месяцы полностью и сокращённо, как на Литнете: «31 июл. 2026», «до 30 нояб. 2026», «1 сент.»
+const MON_RX = '(?:январ[ья]|янв|феврал[ья]|февр?|марта?|мар|апрел[ья]|апр|ма[йя]|июн[ья]|июн|июл[ья]|июл|августа?|авг|сентябр[ья]|сент?|октябр[ья]|окт|ноябр[ья]|нояб?|декабр[ья]|дек)\\.?(?![а-яё])';
+const MON3 = ['янв', 'фев', 'мар', 'апр', 'ма', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const monIdx = (w) => { const x = w.toLowerCase(); return MON3.findIndex((m) => x.startsWith(m)) + 1; };
 const pad2 = (n) => String(n).padStart(2, '0');
 export function parseContest(text, url = '', today = new Date().toISOString().slice(0, 10)) {
   const t = String(text || '').replace(/[  ]/g, ' ').replace(/[ \t]+/g, ' ');
@@ -387,13 +389,20 @@ export function parseContest(text, url = '', today = new Date().toISOString().sl
   // название: «…» рядом со словом «конкурс» («конкурс романов «Второе дыхание»»), иначе первые «…», но не название площадки
   const PLAT = /^(литнет|литрес|author\.today|автор\.тудэй|литмаркет|cherry books|time out)$/i;
   const nm = /конкурс[а-яё]*(?:\s+[а-яёa-z-]+){0,3}\s*[«"]([^»"\n]{3,90})[»"]/i.exec(t) || [...t.matchAll(/[«"]([^»"\n]{3,90})[»"]/g)].find((m) => !PLAT.test(m[1].trim()));
-  if (nm) out.name = nm[1].trim();
-  else { const first = t.split('\n').map((x) => x.trim()).find((x) => x && x.length <= 100 && !/^правила/i.test(x)); if (first) out.name = first.replace(/^конкурс\s*/i, '').trim(); }
+  // страница Литнета: «Название / Конкурс на лучший роман… / Срок приема работ» — название стоит над описанием
+  const lines = t.split('\n').map((x) => x.trim()).filter(Boolean);
+  const NAV = /^(правила(\s+конкурса)?|литнет|литрес|author\.today|литмаркет|книги|конкурсы|блоги|главная|правила|работы|участники|описание|войти|меню|поиск|\d+)$/i;
+  const at = lines.findIndex((x) => /^срок\s+при[её]ма/i.test(x));
+  let head = null;
+  if (at > 0) { let k = at - 1; if (/^конкурс\s+(на|для|о|об|среди)\s/i.test(lines[k]) && k > 0) k--; if (!NAV.test(lines[k]) && lines[k].length <= 90) head = lines[k]; }
+  if (head) out.name = head.replace(/^конкурс\s*/i, '').replace(/^[«"]|[»"]$/g, '').trim();
+  else if (nm) out.name = nm[1].trim();
+  else { const first = lines.find((x) => x.length <= 100 && !/^правила/i.test(x) && !NAV.test(x)); if (first) out.name = first.replace(/^конкурс\s*/i, '').trim(); }
   // даты: «1 октября [2026]» и «01.10.2026»
   const yearHint = Number((/\b(20\d\d)\b/.exec(t) || [])[1]) || Number(today.slice(0, 4));
   const dates = [];
   const fix = (d, m, y) => { let yy = y ? Number(String(y).length === 2 ? '20' + y : y) : yearHint; let iso = `${yy}-${pad2(m)}-${pad2(d)}`; if (!y && iso < today && today.slice(0, 4) == yy && Number(today.slice(5, 7)) - m > 6) iso = `${yy + 1}-${pad2(m)}-${pad2(d)}`; return iso; };
-  for (const m of t.matchAll(new RegExp(`(\\d{1,2})\\s+(${MON_RX})(?:\\s+(\\d{4}))?`, 'gi'))) dates.push({ i: m.index, end: m.index + m[0].length, iso: fix(+m[1], MON_I.indexOf(m[2].toLowerCase()) + 1, m[3]) });
+  for (const m of t.matchAll(new RegExp(`(\\d{1,2})\\s+(${MON_RX})(?:\\s*(\\d{4}))?`, 'gi'))) dates.push({ i: m.index, end: m.index + m[0].length, iso: fix(+m[1], monIdx(m[2]), m[3]) });
   for (const m of t.matchAll(/\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})\b/g)) dates.push({ i: m.index, end: m.index + m[0].length, iso: fix(+m[1], +m[2], m[3]) });
   dates.sort((a, b) => a.i - b.i);
   const before = (d, n = 45) => t.slice(Math.max(0, d.i - n), d.i).toLowerCase();
@@ -417,34 +426,91 @@ export function parseContest(text, url = '', today = new Date().toISOString().sl
   // куда отправлять: email-адреса из условий
   const emails = [...new Set((t.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) || []).map((e) => e.replace(/[.,;]+$/, '').toLowerCase()))];
   if (emails.length) out.emails = emails;
-  // объём: «от 6 до 12 а.л.», «не менее 200 000 знаков», «до 15 авторских листов», «от 120 тыс. знаков»
-  const NUM = '(\\d[\\d ]*(?:[.,]\\d+)?)\\s*(тыс\\.?|тысяч\\w*)?';
-  const UNIT = '(а\\.?\\s?л\\.?|авторск\\w*\\s+лист\\w*|знак\\w*|зн\\.|символ\\w*)';
-  const num = (s, k) => { const v = Number(String(s).replace(/ /g, '').replace(',', '.')); return k ? v * 1000 : v; };
+  // объём: «от 6 до 12 а.л.», «не менее 200 000 знаков», «до 15 авторских листов», «от 120 тыс. знаков».
+  // Правила выкладки («глава — от 10 000 знаков», «не реже… по 30 000 знаков в неделю») — не объём книги, их пропускаем.
+  // Если минимумов два («на момент подачи — от 30 000», «к окончанию приёма — от 100 000»), главный — к окончанию.
+  const NUM = '(\\d[\\d ]*(?:[.,]\\d+)?)\\s*(тыс\\.?|тысяч\\S*)?';
+  const UNIT = '(а\\.?\\s?л\\.?|авторск\\S*\\s+лист\\S*|знак\\S*|зн\\.|символ\\S*)';
+  const num = (v, k) => { const n = Number(String(v).replace(/ /g, '').replace(',', '.')); return k ? n * 1000 : n; };
   const isAl = (u) => /^а|авторск/i.test(u);
-  let unit = null, min = null, max = null;
-  const range = new RegExp(`от\\s+${NUM}\\s*(?:${UNIT}\\s*)?(?:и\\s+)?до\\s+${NUM}\\s*${UNIT}`, 'i').exec(t);
-  if (range) { unit = isAl(range[6]) ? 'al' : 'chars'; min = num(range[1], range[2]); max = num(range[4], range[5]); }
-  else {
-    const mn = new RegExp(`(?:не\\s+менее|минимум|минимальн\\w*\\s+объ[её]м\\w*[:\\s—-]*|от)\\s*${NUM}\\s*${UNIT}`, 'i').exec(t);
-    const mx = new RegExp(`(?:не\\s+более|максимум|максимальн\\w*\\s+объ[её]м\\w*[:\\s—-]*|до)\\s*${NUM}\\s*${UNIT}`, 'i').exec(t);
-    if (mn) { unit = isAl(mn[3]) ? 'al' : 'chars'; min = num(mn[1], mn[2]); }
-    if (mx) { unit = unit || (isAl(mx[3]) ? 'al' : 'chars'); max = num(mx[1], mx[2]); }
+  const SKIP_BEFORE = /(глав[аеыу]?|прод[аыу]?|обновлени\S*|выкладк\S*|выкладыва\S*|отрыв\S*|фрагмент\S*|комментари\S*|рецензи\S*|аннотаци\S*|синопсис\S*|отзыв\S*)[^.;\n]{0,40}$/i;
+  const SKIP_AFTER = /^[^.;\n]{0,25}(в\s+(день|неделю|месяц|сутки)|ежедневн|еженедельн|кажд|за\s+раз|в\s+одной\s+глав)/i;
+  const FINAL = /(к\s+(окончани|концу|завершени|финалу|дате)|на\s+момент\s+(окончани|завершени|подведени)|по\s+окончани|до\s+конца\s+при[её]ма|к\s+подведени)/i;
+  const START = /(на\s+момент\s+(подачи|заявки|старта|регистрац)|при\s+подаче|для\s+подачи|на\s+старте|для\s+(участия|заявки)|в\s+момент\s+подачи)/i;
+  const MAXW = /(не\s+более|не\s+больше|максимум|максимальн\S*(\s+объ[её]м\S*)?|не\s+должен\s+превышать|не\s+превыша\S*)[\s:—-]*$/i;
+  const MINW = /(не\s+менее|не\s+меньше|минимум|минимальн\S*(\s+объ[её]м\S*)?|от)[\s:—-]*$/i;
+  const found = [];
+  for (const m of t.matchAll(new RegExp(`${NUM}\\s*${UNIT}`, 'gi'))) {
+    const pre = t.slice(Math.max(0, m.index - 140), m.index), post = t.slice(m.index + m[0].length, m.index + m[0].length + 40);
+    const clause = pre.split(/[.;!?\n]/).pop() + m[0], sent = (pre.split(/[.;!?\n](?=\s|$)/).pop() + m[0] + post.split(/[.;!?\n]/)[0]).trim();
+    if (SKIP_BEFORE.test(clause.slice(0, -m[0].length)) && !/объ[её]м\S*\s+(книги|произведени|романа|текста|работы)/i.test(clause)) continue;
+    if (SKIP_AFTER.test(post)) continue;
+    const v = num(m[1], m[2]), unit = isAl(m[3]) ? 'al' : 'chars', near = pre.slice(-30);
+    // «от 30 000 до 100 000 знаков» — первое число без единиц
+    const rg = new RegExp(`от\\s+${NUM}\\s*(?:${UNIT}\\s*)?(?:и\\s+)?до\\s*$`, 'i').exec(pre);
+    if (rg) { found.push({ kind: 'min', v: num(rg[1], rg[2]), unit, when: FINAL.test(clause) ? 'final' : START.test(clause) ? 'start' : '', sent }); found.push({ kind: 'max', v, unit, sent }); continue; }
+    if (MAXW.test(near) || /(объ[её]м|размер)\S*[^.\n]{0,30}\sдо\s*$/i.test(near) || /^\s*(и\s+)?не\s+более/i.test(post) || /^\s*максимум/i.test(post)) { found.push({ kind: 'max', v, unit, sent }); continue; }
+    if (MINW.test(near) || /^\s*(и\s+)?(более|больше)/i.test(post) || /^\s*минимум/i.test(post) || /(объ[её]м|размер)\S*[^.\n]{0,40}$/i.test(near)) found.push({ kind: 'min', v, unit, when: FINAL.test(clause) ? 'final' : START.test(clause) ? 'start' : '', sent });
   }
-  if (unit) {
+  const mins = found.filter((f) => f.kind === 'min'), maxs = found.filter((f) => f.kind === 'max');
+  const minF = mins.find((f) => f.when === 'final') || mins.find((f) => !f.when) || mins.find((f) => f.when === 'start');
+  const minS = mins.find((f) => f.when === 'start' && f !== minF);
+  const maxF = maxs[0];
+  const base = minF || maxF;
+  if (base) {
+    const unit = base.unit, toChars = (f) => Math.round(f.unit === 'al' ? f.v * AL : f.v);
     out.unit = unit;
-    const toChars = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(unit === 'al' ? v * AL : v));
-    if (min != null) out.minChars = toChars(min);
-    if (max != null) out.maxChars = toChars(max);
+    if (minF) out.minChars = toChars(minF);
+    if (maxF && (!minF || toChars(maxF) > toChars(minF))) out.maxChars = toChars(maxF);
+    if (minS && minF && toChars(minS) < toChars(minF)) out.startChars = toChars(minS);
+    out.volNote = [...new Set([minF, maxF, minS].filter(Boolean).map((f) => f.sent.replace(/\s+/g, ' ').slice(0, 160)))].join(' … ');
   }
+  // как назвать файл: «Файл назвать: ВторойШанс_Фамилия_Название»
+  const fn = /(?:назов\S*\s+файл\S*|назв\S*\s+файл\S*|имя\s+файла|файл\S*[^.\n]{0,40}?(?:назва\S*|назов\S*|именова\S*|называ\S*)|переименуйте\S*[^.\n]{0,20})[^.\n]{0,60}?[:—–-]?\s*[«"“]?([A-Za-zА-Яа-яЁё0-9]+(?:[_ ]?[-_][_ ]?[A-Za-zА-Яа-яЁё0-9]+){1,6})/i.exec(t);
+  if (fn) out.fileTpl = fn[1].replace(/\s*_\s*/g, '_');
+  // «первые 3 главы», «первые пять глав» — что отправить
+  const W = { одн: 1, перв: 1, дв: 2, тр: 3, четыр: 4, пят: 5, шест: 6, сем: 7, восем: 8, девят: 9, десят: 10 };
+  const fc = /перв\S*\s+(\d{1,2}|[а-яё]+)\s+глав/i.exec(t);
+  if (fc) { const n = /^\d/.test(fc[1]) ? Number(fc[1]) : Object.entries(W).find(([k]) => fc[1].toLowerCase().startsWith(k))?.[1]; if (n) out.chapters = n; }
+  // формат файла
+  const fmts = ['docx', 'doc', 'rtf', 'pdf', 'fb2', 'txt'].filter((f) => new RegExp(`(^|[^a-z])\\.?${f}([^a-z]|$)`, 'i').test(t));
+  if (fmts.length) out.formats = fmts;
   return out;
 }
 
 // книги конкурса: можно несколько (раньше была одна — bookId)
 export const contestBookIds = (x) => (Array.isArray(x?.bookIds) ? x.bookIds : x?.bookId ? [x.bookId] : []);
+// какие книги уже отправлены на конкурс: { bookId: дата }; старое «отправлено» на весь конкурс — все книги
+export const contestSent = (x) => (x?.sentBooks ? x.sentBooks : x?.status === 'sent' ? Object.fromEntries(contestBookIds(x).map((id) => [id, x.sentAt || ''])) : {});
+export const contestUnsent = (x) => contestBookIds(x).filter((id) => !(id in contestSent(x)));
+// знаки книги для конкурса — только текст: без «От автора», аннотации и синопсиса
+export function contestChars(b) {
+  const tabs = (b?.tabs || []).filter((t) => t.counted !== false && isBookTab(t.title) && !/^\s*от автора/i.test(t.title));
+  return tabs.length ? tabs.reduce((a, t) => a + (t.chars || 0), 0) : null;
+}
+// имя файла по правилам конкурса: «ВторойШанс_Фамилия_Название» → «ВторойШанс_Фрейтаг_Звериная_тропа_для_двоих»
+export function contestFileName(x, b, kind, author = '') {
+  const tpl = String(x?.fileTpl || '').trim();
+  if (!tpl) return null;
+  const words = (v) => String(v || '').replace(/[\\/:*?"<>|«»„“”.,!?;]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const aw = words(author), title = words(String(b?.title || '').split(/[.!?]\s/)[0]);
+  const KIND = kind === 'synopsis' ? 'Синопсис' : 'Текст';
+  let hasKind = false;
+  const parts = tpl.split(/[_-]+/).map((tk) => {
+    const k = tk.toLowerCase();
+    if (/^фамили/.test(k)) return aw.at(-1) || tk;
+    if (/^(фио|автор|псевдоним)/.test(k)) return aw.join('_') || tk;
+    if (/^им[яи]$/.test(k)) return aw[0] || tk;
+    if (/^назв|^книг|^произвед|^роман/.test(k)) return title.join('_') || tk;
+    if (/^(синопсис|текст|рукопис|работ)/.test(k)) { hasKind = true; return KIND; }
+    return tk;
+  });
+  if (!hasKind && kind === 'synopsis') parts.push(KIND);
+  return parts.join('_');
+}
 // подходит ли книга под условия конкурса по объёму: { ok, text } — в единицах конкурса
 export function contestFit(x, b, today) {
-  const s = contestStatus(x, b, today), v = contestVol(x), chars = s.chars ?? b?.chars ?? 0;
+  const s = contestStatus(x, b, today), v = contestVol(x), chars = contestChars(b) ?? s.chars ?? b?.chars ?? 0;
   const min = Number(x.minChars) || 0, max = Number(x.maxChars) || 0;
   if (!min && !max) return { ok: null, chars, text: `${v(chars)} · условий по объёму нет` };
   if (max && chars > max) return { ok: false, chars, text: `${v(chars)} — больше максимума (${v(max)})` };

@@ -169,12 +169,15 @@ function reportModel(period = null) {
   return buildReportModel({ sales: c.sales, legacyDays: c.legacyDays, books: c.books, campaigns: c.campaigns, reports: c.data.reports, days: c.data.days, monthsMap: c.monthsMap, spend: c.spend, discounts: c.discounts, litnetPayments: c.litnetPayments, litnetMoney: c.litnetMoney, forecast: c.forecast, settings: c.settings, today: c.today, dataEnd: c.dataEnd }, from, to);
 }
 let sheetjs;
-const loadSheetJs = () => (sheetjs ||= new Promise((res, rej) => {
-  const el = document.createElement('script');
-  el.src = new URL('../vendor/xlsx.full.min.js', import.meta.url).href; // библиотека лежит в самом приложении
-  el.onload = () => res(window.XLSX); el.onerror = () => { sheetjs = null; rej(new Error('Не загрузился модуль Excel — обновите страницу.')); };
-  document.head.appendChild(el);
-}));
+// своя копия; если сайт обновился, пока страница открыта, — постоянная копия в корне сайта, затем cdnjs
+const SHEETJS_SRC = [new URL('../vendor/xlsx.full.min.js', import.meta.url).href, new URL('../../vendor/xlsx.full.min.js', import.meta.url).href, 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'];
+const addScript = (src) => new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = () => { el.remove(); rej(); }; document.head.appendChild(el); });
+const loadSheetJs = () => (sheetjs ||= (async () => {
+  if (window.XLSX) return window.XLSX;
+  for (const src of SHEETJS_SRC) { try { await addScript(src); if (window.XLSX) return window.XLSX; } catch { /* следующий источник */ } }
+  sheetjs = null;
+  throw new Error('Не загрузился модуль Excel — обновите страницу.');
+})());
 acts['report.period'] = (d) => { app().ui.reportDays = Number(d.v); };
 acts['report.fmt'] = (d) => { app().ui.reportFmt = d.v; };
 acts['report.dl'] = async (d) => {

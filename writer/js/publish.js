@@ -59,8 +59,9 @@ const alTxt = (chars) => `${(chars / AL).toFixed(1).replace('.', ',')} а.л.`;
 const grp = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 // рукопись: титульный лист + главы с новой страницы
-export function manuscriptParas(doc, { title, author }) {
-  const chs = chaptersOf(doc), chars = chs.reduce((a, c) => a + c.chars, 0);
+// maxChapters — только первые главы (если конкурс просит «первые 3 главы»)
+export function manuscriptParas(doc, { title, author, maxChapters = 0 }) {
+  const chs = maxChapters > 0 ? chaptersOf(doc).slice(0, maxChapters) : chaptersOf(doc), chars = chs.reduce((a, c) => a + c.chars, 0);
   const paras = [
     { kind: 'author', runs: [{ t: author || '' }] },
     { kind: 'title', runs: [{ t: title }] },

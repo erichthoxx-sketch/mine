@@ -29,6 +29,7 @@ jobs:
           mkdir -p _site/$V
           mkdir -p _site/$V/writer _site/pisatel
           cp -r css js _site/$V/
+          cp -r js/vendor _site/vendor  # постоянная копия библиотек — для страниц, открытых до обновления сайта
           cp -r writer/js _site/$V/writer/
           echo $V > _site/version.txt
           cp manifest.webmanifest heart-line.svg heart-line-180.png heart-line-512.png _site/

@@ -4,7 +4,7 @@ import { esc, acts, toast, openSheet, download } from '../../../js/ui.js';
 import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
 import { manuscriptParas, serviceParas, docxBlob, printHtml, parasHtml, isServiceTab, SERVICE } from '../publish.js';
-import { isBookTab, alNum } from '../wcalc.js';
+import { isBookTab, alNum, contestFileName } from '../wcalc.js';
 
 const app = () => window.__app;
 const NAME = { synopsis: 'Синопсис', annotation: 'Аннотация' };
@@ -12,7 +12,7 @@ const safe = (s) => String(s || '').replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/
 // имя скачиваемого файла — латиницей: с русскими буквами некоторые браузеры сохраняют его как «download» без расширения
 // (внутри архива файлы называются по-русски)
 const TR = ['a', 'b', 'v', 'g', 'd', 'e', 'zh', 'z', 'i', 'y', 'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'f', 'h', 'ts', 'ch', 'sh', 'sch', '', 'y', '', 'e', 'yu', 'ya'];
-const latin = (s) => String(s || '').toLowerCase().replace(/[а-яё]/g, (ch) => (ch === 'ё' ? 'e' : TR[ch.charCodeAt(0) - 1072] ?? '')).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'kniga';
+const latin = (s) => String(s || '').toLowerCase().replace(/[а-яё]/g, (ch) => (ch === 'ё' ? 'e' : TR[ch.charCodeAt(0) - 1072] ?? '')).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'kniga';
 const isGDoc = (b) => !!b.fileId && b.mimeType === drive.MIME.doc;
 
 // документ книги — не чаще раза в 2 минуты
@@ -87,7 +87,7 @@ acts['svc.copy'] = async (d) => run(async () => {
 acts['svc.docx'] = async (d) => run(async () => {
   const b = bookOf(d), r = await service(b, d.k);
   const blob = await docxBlob(await drive.loadJsZip(), r.paras, meta(b));
-  if (await download(`${latin(b.title)}-${d.k === 'synopsis' ? 'sinopsis' : 'annotatsiya'}.docx`, blob, blob.type)) toast('Файл скачан');
+  if (await download(`${latin(b.title)}_${d.k === 'synopsis' ? 'sinopsis' : 'annotatsiya'}.docx`, blob, blob.type)) toast('Файл скачан');
 });
 // PDF — страница для печати: в окне печати выбрать «Сохранить как PDF»
 acts['svc.pdf'] = async (d) => {
@@ -100,9 +100,9 @@ acts['svc.pdf'] = async (d) => {
   w.document.open(); w.document.write(printHtml(r.paras, `${b.title} — ${NAME[d.k].toLowerCase()}`)); w.document.close();
   setTimeout(() => { w.focus(); w.print(); }, 400);
 };
-async function manuscriptFile(b) {
+async function manuscriptFile(b, maxChapters = 0) {
   if (isGDoc(b)) {
-    const r = manuscriptParas(await docOf(b), meta(b));
+    const r = manuscriptParas(await docOf(b), { ...meta(b), maxChapters });
     if (!r.chapters) throw new Error('В Документе не нашлось глав (вкладок «Пролог», «Глава …», «Эпилог»)');
     return [`${safe(b.title)} — рукопись.docx`, await docxBlob(await drive.loadJsZip(), r.paras, meta(b))];
   }
@@ -113,7 +113,7 @@ acts['pub.manuscript'] = async (d) => run(async () => {
   const b = bookOf(d);
   toast('Собираю рукопись…');
   const [, blob] = await manuscriptFile(b);
-  if (await download(`${latin(b.title)}-rukopis.docx`, blob, blob.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) toast('Рукопись скачана');
+  if (await download(`${latin(b.title)}_rukopis.docx`, blob, blob.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) toast('Рукопись скачана');
 });
 // пакет для издательства: рукопись + синопсис (аннотация издательству не нужна)
 acts['mk.pubZip'] = async (d) => run(async () => {
@@ -125,7 +125,23 @@ acts['mk.pubZip'] = async (d) => run(async () => {
   const Zip = await drive.loadJsZip(), z = new Zip();
   for (const [n, blob] of files) z.file(n, blob);
   const zip = await z.generateAsync({ type: 'blob' });
-  if (await download(`izdatelstvo-${latin(b.title)}.zip`, zip, 'application/zip')) toast(errs.length ? `Скачано, но ${errs.join('; ')}` : 'Пакет скачан: рукопись и синопсис');
+  if (await download(`izdatelstvo_${latin(b.title)}.zip`, zip, 'application/zip')) toast(errs.length ? `Скачано, но ${errs.join('; ')}` : 'Пакет скачан: рукопись и синопсис');
+});
+
+// для конкурса: текст (или первые N глав) и синопсис — с именем файла, как просят в условиях
+acts['ct.dl'] = async (d) => run(async () => {
+  const b = bookOf(d), x = app().ctx().data.w_contests.find((i) => i.id === d.c);
+  if (!b || !x) return;
+  const nm = contestFileName(x, b, d.k, meta(b).author);
+  if (d.k === 'synopsis') {
+    const r = await service(b, 'synopsis'), blob = await docxBlob(await drive.loadJsZip(), r.paras, meta(b));
+    if (await download(`${nm || latin(b.title) + '_sinopsis'}.docx`, blob, blob.type)) toast('Синопсис скачан');
+    return;
+  }
+  const n = Number(x.chapters) || 0;
+  toast(n ? `Собираю первые главы: ${n}…` : 'Собираю текст…');
+  const [, blob] = await manuscriptFile(b, n);
+  if (await download(`${nm || latin(b.title) + (n ? '_glavy_1_' + n : '_tekst')}.docx`, blob, blob.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) toast(n ? `Скачано: первые главы (${n})` : 'Текст скачан');
 });
 
 export { isServiceTab };

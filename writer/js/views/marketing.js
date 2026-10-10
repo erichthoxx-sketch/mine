@@ -232,7 +232,7 @@ function targetText(c, b) {
 }
 // имя архива латиницей — так браузеры точно сохранят его с правильным названием
 const TR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
-const latin = (s) => String(s || '').toLowerCase().split('').map((ch) => (TR[ch] ?? ch)).join('').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'kniga';
+const latin = (s) => String(s || '').toLowerCase().split('').map((ch) => (TR[ch] ?? ch)).join('').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'kniga';
 const safe = (s) => String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80);
 async function blobOf(m) {
   if (m.driveId && drive.hasFreshToken()) { try { return await drive.fileBlob({ id: m.driveId, mimeType: m.mime || '', name: m.name }); } catch { /* возьмём копию */ } }

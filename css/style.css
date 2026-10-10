@@ -987,19 +987,26 @@ button.td-ok .ic, button.td-ok .icx .ic { width: 16px; height: 16px; stroke-widt
 .idea-pick { margin-top: 6px; }
 .idea-pick select { width: auto; min-height: 30px; padding: 2px 28px 2px 10px; font-size: 13px; color: var(--text-2); }
 /* конкурс: шапка, факты сеткой, книги с проверкой и кнопками, действия; полный текст — свёрнут */
-.ct .ct-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.ct h3 { margin: 0 0 4px; font-size: 18px; }
-.ct-sub { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ct .ct-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ct h3 { margin: 0; font-size: 18px; }
+.ct-sub { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 4px 6px; flex-wrap: wrap; margin-top: 4px; }
 select.ct-st { width: auto; min-height: 26px; padding: 0 24px 0 8px; font-size: 13px; border-radius: 8px; color: var(--text-2); background-color: transparent; }
-.ct-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
-.ct-f { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
-.ct-f > span { font-size: 12px; color: var(--muted); }
-.ct-f > b { font-size: 14.5px; font-weight: 700; }
-.ct-mails { margin-top: 10px; }
+.ct-facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: var(--surface-2); }
+.ct-f { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ct-f > span { font-size: 11.5px; color: var(--muted); }
+.ct-f > b { font-size: 14px; font-weight: 700; }
+.ct-f > b i { display: block; font-style: normal; font-weight: 500; font-size: 12px; color: var(--muted); }
+.ct-mails { margin-top: 8px; padding: 0 2px; }
 .ct-mail { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; font-weight: 600; font-size: 14px; }
 .ct-mail .link { padding: 0 2px; min-height: 0; } .ct-mail .ic { width: 15px; height: 15px; }
-.ct-books { margin-top: 12px; border-top: 1px solid var(--line); }
-.ct-book { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.ct-books { margin-top: 8px; }
+.ct-book { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; padding: 9px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.ct-book.is-sent .ct-bt b { color: var(--text-2); }
+.ct-fn { display: inline-flex !important; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; word-break: break-all; }
+.ct-fn .ic { width: 13px; height: 13px; flex: none; }
+.ct-sent { color: var(--good) !important; font-size: 13px !important; display: inline-flex; align-items: center; gap: 3px; padding: 0 4px !important; }
+.ct-sent .ic { width: 14px; height: 14px; stroke-width: 2.4; }
+.ct-url { color: var(--link); text-decoration: none; font-weight: 600; margin-left: 4px; }
 .ct-bt { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
 .ct-bt .sub { display: block; font-size: 13px; color: var(--muted); }
 .ct-ok { flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; margin-top: 1px; background: var(--surface-2); color: var(--muted); }
@@ -1009,9 +1016,10 @@ select.ct-st { width: auto; min-height: 26px; padding: 0 24px 0 8px; font-size: 
 .ct-bb .small-btn { min-height: 30px; padding: 3px 12px; font-size: 13px; }
 .ct-x .ic { width: 16px; height: 16px; } .ct-x { color: var(--muted) !important; padding: 0 4px; }
 .ct-add { margin-top: 10px; } .ct-add select, select.ct-join { width: auto; min-height: 32px; padding: 2px 28px 2px 12px; font-size: 13.5px; }
-.ct-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+.ct-acts { display: flex; gap: 6px 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.ct-acts select.ct-addb { width: auto; min-height: 30px; padding: 2px 28px 2px 12px; font-size: 13px; }
 .ct-acts .small-btn { min-height: 32px; padding: 4px 14px; font-size: 13.5px; }
-.ct-full { margin-top: 12px; } .ct-full summary { font-size: 13.5px; color: var(--muted); cursor: pointer; }
+.ct-full { margin-top: 8px; } .ct-full summary { font-size: 13.5px; color: var(--muted); cursor: pointer; }
 .ct-wrap .ct { margin-bottom: 12px; }
 /* идеи: маленькая обложка книги у группы */
 .idea-group summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

@@ -139,12 +139,16 @@ export async function fileMeta(id) {
 }
 
 let jszip;
-export const loadJsZip = () => (jszip ||= new Promise((res, rej) => {
-  const s = document.createElement('script');
-  s.src = new URL('../../js/vendor/jszip.min.js', import.meta.url).href; // библиотека лежит в самом приложении
-  s.onload = () => res(window.JSZip); s.onerror = () => { jszip = null; rej(new Error('Не загрузился модуль для Word')); };
-  document.head.appendChild(s);
-}));
+// Библиотека лежит в самом приложении. Если сайт успел обновиться, пока страница была открыта, папки старой версии
+// уже нет — тогда берём постоянную копию (vendor/ в корне сайта), а в крайнем случае — с cdnjs.
+const JSZIP_SRC = [new URL('../../js/vendor/jszip.min.js', import.meta.url).href, new URL('../../../vendor/jszip.min.js', import.meta.url).href, 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'];
+const addScript = (src) => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => { s.remove(); rej(); }; document.head.appendChild(s); });
+export const loadJsZip = () => (jszip ||= (async () => {
+  if (window.JSZip) return window.JSZip;
+  for (const src of JSZIP_SRC) { try { await addScript(src); if (window.JSZip) return window.JSZip; } catch { /* следующий источник */ } }
+  jszip = null;
+  throw new Error('Не загрузился модуль для Word — обновите страницу');
+})());
 
 // Знаки в файле книги: {total, tabs}
 export async function countFile(file) {

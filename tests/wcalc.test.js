@@ -173,7 +173,8 @@ test('конкурс из текста условий: название, дат�
   const t = `Литературный конкурс «Второе дыхание»
 Приём работ с 15 октября по 30 ноября 2026 года. Итоги — 20 декабря.
 Объём произведения — от 6 до 12 а.л. Произведение должно быть новым.`;
-  const r = parseContest(t, 'https://litnet.com/ru/contest/123', '2026-10-10');
+  const { volNote, ...r } = parseContest(t, 'https://litnet.com/ru/contest/123', '2026-10-10');
+  assert.ok(volNote.includes('от 6 до 12 а.л.'));
   assert.deepEqual(r, { platform: 'Литнет', name: 'Второе дыхание', results: '2026-12-20', start: '2026-10-15', end: '2026-11-30', unit: 'al', minChars: 240000, maxChars: 480000 });
   const r2 = parseContest('Конкурс "Тёмная сторона". Последний день подачи: 01.12.2026. Объём не менее 200 000 знаков с пробелами.', '', '2026-10-10');
   assert.equal(r2.name, 'Тёмная сторона');
@@ -204,4 +205,29 @@ test('конкурс: условия как на странице Литнета
   assert.equal(r.genres, 'Все жанры');
   assert.deepEqual(r.emails, ['contest@litnet.com']);
   assert.equal(r.platform, 'Литнет');
+});
+
+test('конкурс: сокращённые месяцы, правила выкладки — не объём, имя файла, первые главы', async () => {
+  const { parseContest } = await import('../writer/js/wcalc.js');
+  const t = `Литнет
+Книги
+Второе дыхание
+Конкурс на лучший роман о втором шансе
+Срок приема работ
+31 июл. 2026 - 31 окт. 2026
+Оглашение результатов
+До 30 нояб. 2026
+Размер книги
+От 30 000 знаков
+Новые главы выкладывайте регулярно, до 100 000 знаков в неделю.
+Отправьте первые три главы и синопсис в формате docx. Файл назовите так: ВторойШанс_Фамилия_Название.`;
+  const r = parseContest(t, 'https://litnet.com/ru/contests/vtoroe-dyhanie-c150', '2026-10-10');
+  assert.equal(r.name, 'Второе дыхание');
+  assert.deepEqual([r.start, r.end, r.results], ['2026-07-31', '2026-10-31', '2026-11-30']);
+  assert.deepEqual([r.unit, r.minChars, r.maxChars], ['chars', 30000, undefined]);
+  assert.equal(r.fileTpl, 'ВторойШанс_Фамилия_Название');
+  assert.equal(r.chapters, 3);
+  assert.deepEqual(r.formats, ['docx']);
+  const r2 = parseContest('Объём на момент подачи — не менее 30 000 знаков, к окончанию приёма работ — не менее 6 а.л.', '', '2026-10-10');
+  assert.deepEqual([r2.unit, r2.minChars, r2.startChars], ['al', 240000, 30000]);
 });
