@@ -163,7 +163,7 @@ function itemHtml(c, x) {
 function goalRowsHtml(c) {
   const t = c.today;
   return activeGoals(c).map((g) => ({ g, s: goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t) })).filter((x) => x.s.active && x.s.todayDay)
-    .map(({ g, s }) => `<div class="pitem"><span class="dot k-goal"${s.doneToday ? ' style="opacity:.4"' : ''}></span><a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${s.doneToday ? '✓ ' : ''}${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, s)}</span></a>${g.type === 'custom' ? `<span class="pi-btns"><button class="${s.doneToday ? '' : 'primary'}" data-act="goal.check" data-id="${g.id}">${s.doneToday ? '✓' : 'Сделала'}</button></span>` : ''}</div>`).join('');
+    .map(({ g, s }) => `<div class="pitem${s.doneToday ? ' done-today' : ''}">${s.doneToday ? `<span class="pi-ok">${icx('check')}</span>` : '<span class="dot k-goal"></span>'}<a href="#" class="pi-body tap" data-act="goal.edit" data-id="${g.id}" style="color:inherit;text-decoration:none"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, s)}</span></a>${g.type === 'custom' ? `<span class="pi-btns"><button class="${s.doneToday ? 'link' : 'primary'}" data-act="goal.check" data-id="${g.id}">${s.doneToday ? 'отменить' : 'Сделала'}</button></span>` : ''}</div>`).join('');
 }
 // Колонка «Сегодня» на широком экране: что требует внимания сегодня + ближайшая неделя
 export function sideToday(c) {

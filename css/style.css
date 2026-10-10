@@ -966,3 +966,7 @@ a.card.npd-alert .small { margin-top: 4px; color: var(--text-2); }
 .nl-when.soon { color: var(--warn); font-weight: 600; } .nl-when.late { color: var(--bad); font-weight: 600; }
 .nl-when-m { display: none; }
 @media (max-width: 520px) { .nl-when { display: none; } .nl-when-m { display: inline; color: var(--text-2); font-weight: 600; } .next-line { gap: 12px; } }
+/* выполненное сегодня: вместо точки — тонкая галочка, текст спокойнее; без лишних «✓» в тексте */
+.pi-ok { flex: none; width: 10px; display: inline-flex; justify-content: center; margin-top: 3px; color: var(--good); }
+.pi-ok .icx .ic { width: 15px; height: 15px; stroke-width: 2; }
+.pitem.done-today .pi-t { color: var(--text-2); }

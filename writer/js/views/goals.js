@@ -18,17 +18,17 @@ export function goalTitle(c, g) {
 }
 // строка «что сегодня» для цели
 export function goalToday(c, g, s) {
-  if (g.type === 'custom') return s.doneToday ? '✓ сегодня сделано' : s.todayDay ? 'сегодня — отметьте, когда сделаете' : 'сегодня не день цели';
+  if (g.type === 'custom') return s.doneToday ? 'сегодня сделано' : s.todayDay ? 'сегодня — отметьте, когда сделаете' : 'сегодня не день цели';
   if (s.finished) return '✓ все главы отмечены';
   if (g.type === 'finish') {
     const glAcc = (n) => (n === 1 ? 'главу' : `${num(n)} ${plural(n, ['главу', 'главы', 'глав'])}`);
-    const today = s.doneToday ? `✓ сегодня ${s.todayCh === 1 ? 'отмечена глава' : `отмечено ${s.todayCh} ${plural(s.todayCh, ['глава', 'главы', 'глав'])}`}` : s.todayDay ? `сегодня нужно отметить ${s.needToday === 1 ? 'ещё одну главу' : `ещё ${glAcc(s.needToday)}`}` : 'сегодня не день цели';
+    const today = s.doneToday ? `сегодня ${s.todayCh === 1 ? 'отмечена глава' : `отмечено ${s.todayCh} ${plural(s.todayCh, ['глава', 'главы', 'глав'])}`}` : s.todayDay ? `сегодня нужно отметить ${s.needToday === 1 ? 'ещё одну главу' : `ещё ${glAcc(s.needToday)}`}` : 'сегодня не день цели';
     const warn = s.needPerDay && s.needPerDay > s.perDayCh * 1.05 ? ` · чтобы успеть к сроку, нужно ≈ ${num(Math.ceil(s.needPerDay * 10) / 10)} в день` : '';
     return today + warn;
   }
   if (!s.perDay) return g.type === 'finish' ? 'укажите, сколько глав в книге, — посчитаю норму' : '';
   const per = g.type === 'finish' ? `${chTxt(s.perDayCh)} (≈ ${zn(s.perDay)} в день)` : `${zn(s.perDay)} в день`;
-  return s.doneToday ? `✓ норма на сегодня выполнена · ${per}` : s.todayDay ? `сегодня ещё ${zn(s.needToday)} · ${per}` : `сегодня выходной · ${per}`;
+  return s.doneToday ? `норма на сегодня выполнена · ${per}` : s.todayDay ? `сегодня ещё ${zn(s.needToday)} · ${per}` : `сегодня выходной · ${per}`;
 }
 export const activeGoals = (c) => c.data.w_goals.filter((g) => !g.done);
 
