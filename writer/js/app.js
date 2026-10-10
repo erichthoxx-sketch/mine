@@ -90,6 +90,7 @@ function render() {
   const { tab, view } = route();
   const c = getCtx();
   let r;
+  document.documentElement.classList.toggle('on-ed', ui.route.startsWith('/ed/')); // в редакторе нижнее меню прячем
   try { r = view(app) || { html: '' }; } catch (e) { console.error(e); r = { html: `<div class="card"><p>Ошибка экрана: ${esc(e.message)}</p></div>` }; }
   const sync = store.mode === 'local' ? '' : store.sync === 'pending' ? 'сохраняется…' : store.sync === 'error' ? 'ошибка синхронизации' : navigator.onLine ? 'синхронизировано' : 'нет сети';
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере.</div>' : ''}

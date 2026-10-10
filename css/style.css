@@ -905,3 +905,9 @@ table td, table th { overflow-wrap: normal; word-break: normal; }
 /* название на обложке-заглушке: переносы по слогам, а не посреди слова */
 .cover-ph span { overflow-wrap: normal; word-break: normal; hyphens: auto; }
 @media (max-width: 640px) { .bh-cover .cover-ph span { font-size: 12px; } }
+/* редактор главы на телефоне и планшете: нижнего меню нет — весь экран под текст (назад — «← К книге») */
+@media (max-width: 1179px) {
+  html.on-ed nav.tabs { display: none; }
+  html.on-ed body { padding-bottom: env(safe-area-inset-bottom); }
+  html.on-ed .ed-stats { bottom: env(safe-area-inset-bottom); }
+}
