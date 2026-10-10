@@ -1,6 +1,6 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, opt, toast, uid, ask } from '../../../js/ui.js';
-import { fmtDate } from '../../../js/format.js';
+import { fmtDate, plural } from '../../../js/format.js';
 import * as drive from '../drive.js';
 
 const app = () => window.__app;
@@ -40,20 +40,22 @@ export function ideasView(a) {
   ${list.length ? keys.map((k) => {
     const items = groups.get(k), b = k === '-' ? null : c.wbooksById[k];
     const open = openAll || items.some((x) => x.id === ui.openIdea);
-    return `<details class="card idea-group" ${open ? 'open' : ''}><summary><span class="ig-h">${b ? (b.cover ? `<img class="ig-cover" src="${b.cover}" alt="">` : `<span class="ig-cover ig-ph">${esc(b.title.slice(0, 1))}</span>`) : '<span class="ig-cover ig-none">?</span>'}<span>${b ? esc(b.title) : 'Без книги'}</span></span><span class="muted small">${items.length}</span></summary>
+    return `<details class="card idea-group" ${open ? 'open' : ''}><summary><span class="ig-h">${b ? (b.cover ? `<img class="ig-cover" src="${b.cover}" alt="">` : `<span class="ig-cover ig-ph">${esc(b.title.slice(0, 1))}</span>`) : `<span class="ig-cover ig-none">${ic('ideas')}</span>`}<span class="ig-t"><b>${b ? esc(b.title) : 'Без книги'}</b><span class="ig-n">${items.length} ${plural(items.length, ['идея', 'идеи', 'идей'])}${b ? '' : ' — выберите книгу или оставьте в черновиках'}</span></span></span><span class="ig-chev">${ic('chevron')}</span></summary>
       <div class="list">${items.map((x) => ideaRow(c, x, ui.openIdea === x.id)).join('')}</div></details>`;
   }).join('') : `<div class="card"><p class="muted" style="margin:0">${all.length ? 'Ничего не нашлось — попробуйте другое слово или сбросьте фильтры.' : 'Идей пока нет. Запишите первую — она не потеряется и будет доступна с телефона.'}</p></div>`}
   ${trash.length ? `<div class="trash-link"><button class="link" data-act="idea.trash">${ic('trash')} Удалённые (${trash.length})</button></div>` : ''}`;
   return { html };
 }
 
+// превью: без разметки (##, **, списки), в одну-две строки
+const plainSnip = (t) => String(t).replace(/^#+\s*/gm, '').replace(/[*_`>#]+/g, '').replace(/^\s*[-–—•]\s+/gm, '').replace(/\s+/g, ' ').trim().slice(0, 220);
 // строка идеи: коротко; нажали — раскрывается с текстом, комментариями и действиями
 function ideaRow(c, x, open) {
   const comments = x.comments || [];
   const st = x.status || 'new';
   const head = `<div class="row between idea-head" role="button" tabindex="0" data-act="idea.toggle" data-id="${x.id}"><span><b>${esc(x.title || (x.text || '').slice(0, 60) || 'Без названия')}</b>${st !== 'new' ? ` <span class="badge">${IST[st]}</span>` : ''}</span><span class="small muted">${x.createdAt ? fmtDate(x.createdAt.slice(0, 10)) : ''}${comments.length ? ` · ${comments.length} комм.` : ''}<button class="icon-btn" data-act="idea.quickDel" data-id="${x.id}" aria-label="Удалить идею" title="Удалить">${ic('trash')}</button></span></div>`;
-  const pick = !x.bookId && c.wbooks.length ? `<div class="idea-pick"><select data-chg="idea.setBook" data-id="${x.id}" aria-label="К какой книге"><option value="">К какой книге?</option>${c.wbooks.map((b) => opt(b.id, b.title, '')).join('')}</select></div>` : '';
-  if (!open) return `<div class="item idea" id="idea-${x.id}">${head}${x.text ? `<div class="small muted idea-snip">${esc(x.text.slice(0, 120))}${x.text.length > 120 ? '…' : ''}</div>` : ''}${pick}</div>`;
+  const pick = !x.bookId && c.wbooks.length ? `<div class="idea-pick"><select data-chg="idea.setBook" data-id="${x.id}" aria-label="К какой книге"><option value="">+ к книге</option>${c.wbooks.map((b) => opt(b.id, b.title, '')).join('')}</select></div>` : '';
+  if (!open) return `<div class="item idea" id="idea-${x.id}">${head}${x.text ? `<div class="idea-snip">${esc(plainSnip(x.text))}</div>` : ''}${pick}</div>`;
   return `<div class="item idea open" id="idea-${x.id}">${head}
     ${x.text ? `<p class="idea-text">${esc(x.text)}</p>` : ''}
     <div class="tags">${(x.tags || []).map((t) => `<span class="tag">#${esc(t)}</span>`).join('')}${x.fileLink ? `<a class="tag on" href="${esc(x.fileLink)}" target="_blank" rel="noopener">${ic('doc')} ${esc(x.fileName || 'документ')}</a>` : ''}</div>
