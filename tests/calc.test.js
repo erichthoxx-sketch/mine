@@ -314,6 +314,9 @@ test('цель месяца: прогноз и сколько нужно в де
   assert.equal(g.onTrack, false);
   assert.equal(g.daysLeft, 21);
   assert.equal(g.needPerDay, 1904.76);
+  // сегодня 10-е и день ещё идёт: 40 000 ₽ на 22 дня (10–31 октября) — как в колонке «Сегодня»
+  assert.equal(monthGoalStatus(50000, 10000, '2026-10-10', '2026-10-10').needPerDay, 1818.18);
+  assert.equal(monthGoalStatus(50000, 24699, '2026-10-10', '2026-10-10').needPerDay, 1150.05);
   assert.equal(monthGoalStatus(50000, 52000, '2026-10-20').reached, true);
 });
 

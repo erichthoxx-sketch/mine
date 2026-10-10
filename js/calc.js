@@ -690,14 +690,17 @@ export function manualSaleRow({ date, book, bookId, kind, qty, royalty, gross = 
 }
 
 // Цель текущего месяца: сколько сделано, прогноз, сколько нужно в день до конца месяца
-export function monthGoalStatus(planAmount, fact, dataEnd) {
+// today — сегодняшняя дата: сегодняшний день ещё открыт (продажи за него набегают), поэтому «нужно в день»
+// делим и на него — так же, как в колонке «Сегодня». Без today — дни после последнего дня с данными.
+export function monthGoalStatus(planAmount, fact, dataEnd, today) {
   const mk = monthKey(dataEnd), dim = daysInMonth(mk), dom = Number(dataEnd.slice(8, 10));
   const left = dim - dom;
+  const needDays = today && monthKey(today) === mk ? dim - Number(today.slice(8, 10)) + 1 : left;
   const forecast = dom ? r2((fact / dom) * dim) : 0;
   return {
     month: mk, plan: planAmount, fact, share: planAmount ? fact / planAmount : null,
     forecast, daysLeft: left, reached: fact >= planAmount, onTrack: forecast >= planAmount,
-    needPerDay: left > 0 ? r2(Math.max(0, planAmount - fact) / left) : Math.max(0, r2(planAmount - fact)),
+    needPerDay: needDays > 0 ? r2(Math.max(0, planAmount - fact) / needDays) : Math.max(0, r2(planAmount - fact)),
   };
 }
 

@@ -77,7 +77,7 @@ function goalCard(c, st) {
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
   const p = plan.find((x) => x.month === monthKey(c.dataEnd));
   if (!p) return '';
-  const g = monthGoalStatus(p.plan, st.mtd, c.dataEnd);
+  const g = monthGoalStatus(p.plan, st.mtd, c.dataEnd, c.today);
   return `<div class="card"><div class="row between"><h2 style="margin:0">Цель: ${fmtMonth(g.month)}</h2><button class="link" data-act="goal.all" data-m="${g.month}">изменить</button></div>
     <div class="row between small" style="margin-top:8px"><span><b>${rub(g.fact, 0)}</b> из ${rub(g.plan, 0)}</span><span class="muted">${g.share == null ? '' : pct(g.share, 0)}</span></div>
     <div class="progress"><i style="width:${Math.min(100, (g.share || 0) * 100).toFixed(1)}%"></i></div>
