@@ -132,13 +132,13 @@ try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem
 acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
 store.subscribe(() => { safeRender(); scheduleTodoist(app); });
 // вернулась в приложение — подтягиваем свежие задачи из Todoist
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleTodoist(app, 1500); });
-setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(app, 1000); }, 10 * 60000); // и раз в 10 минут, пока приложение открыто
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleTodoist(app, 800, { pull: true }); });
+setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(app, 1000, { pull: true }); }, 3 * 60000); // и раз в 3 минуты, пока приложение открыто
 drive.preload().catch(() => {});
 let autoRefreshed = false;
 store.init().then(() => {
   render();
-  scheduleTodoist(app, 3000);
+  scheduleTodoist(app, 2500, { pull: true });
   // при открытии один раз обновляем знаки книг, если Диск подключён
   const tryRefresh = () => {
     if (autoRefreshed || !store.user || !drive.hasFreshToken() || !store.data.w_books.length) return;

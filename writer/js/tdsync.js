@@ -5,18 +5,21 @@ import { planItems } from './views/plan.js';
 import { addDays } from '../../js/calc.js';
 import { toast } from '../../js/ui.js';
 
-let busy = false, lastHash = '', lastAt = 0, timer = null;
-export function scheduleTodoist(a, ms = 20000) {
+let busy = false, lastHash = '', lastAt = 0, timer = null, pullNext = false;
+// pull — открыла приложение или вернулась в него: подтянуть изменения из самого Todoist сразу (не чаще раза в 30 секунд)
+export function scheduleTodoist(a, ms = 20000, { pull = false } = {}) {
   if (!a.ctx().settings.todoistToken || a.ctx().settings.todoistOff) return;
-  clearTimeout(timer); timer = setTimeout(() => runTodoist(a).catch(() => {}), ms);
+  if (pull) pullNext = true;
+  if (pullNext) ms = Math.min(ms, 2500); // ждём свежее из Todoist — не откладываем надолго
+  clearTimeout(timer); timer = setTimeout(() => { const pl = pullNext; pullNext = false; runTodoist(a, { pull: pl }).catch(() => {}); }, ms);
 }
-export async function runTodoist(a, { force = false } = {}) {
+export async function runTodoist(a, { force = false, pull = false } = {}) {
   const c = a.ctx(), s = c.settings, token = s.todoistToken;
   if (!token || busy || (!force && (s.todoistOff || !navigator.onLine))) return null;
   const want = todoistTasks(planItems(c, c.today, addDays(c.today, TD_DAYS)), c.wbooksById);
   const hash = JSON.stringify([want.map((w) => [w.key, w.content, w.date, w.description]), c.data.w_ideas.map((x) => [x.id, x.title, x.text, x.deletedAt || '', x.tdId || '', x.bookId || ''])]);
-  if (!force && hash === lastHash && Date.now() - lastAt < 10 * 60000) return null;
-  if (!force && Date.now() - lastAt < 60000) { scheduleTodoist(a, 60000); return null; }
+  if (!force && !pull && hash === lastHash && Date.now() - lastAt < 10 * 60000) return null;
+  if (!force && Date.now() - lastAt < (pull ? 30000 : 60000)) { scheduleTodoist(a, pull ? 30000 : 60000, { pull }); return null; }
   busy = true; lastAt = Date.now();
   try {
     const r = await syncTodoist(token, want, s.todoist || {});

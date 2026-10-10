@@ -7,7 +7,7 @@ import { writtenChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
 import { publisherCard, svcInfo } from './pubfiles.js';
-import { ownTasks, bookOfTask } from '../../../js/tdtasks.js';
+import { ownTasks, bookOfTask, addOwnTask } from '../../../js/tdtasks.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 import { addDays } from '../../../js/calc.js';
@@ -467,7 +467,22 @@ function bookTasksCard(c, b) {
   if (!c.settings.todoistToken) return '';
   const list = ownTasks(c.settings).filter((x) => bookOfTask(x, [b])).sort((x, y) => (x.d || '9999').localeCompare(y.d || '9999'));
   const sec = String(b.title).split(/[.!?:]/)[0].trim();
-  return `<div class="card td-card"><div class="row between"><h2 style="margin:0">Задачи</h2><a class="small muted" href="https://app.todoist.com/app" target="_blank" rel="noopener">в Todoist ↗</a></div>
+  return `<div class="card td-card"><div class="row between"><h2 style="margin:0">Задачи</h2><button class="small-btn" data-act="td.addBook" data-id="${b.id}">+ задача</button></div>
     ${list.length ? `<div class="plist">${list.map((x) => `<div class="pitem"><span class="pi-body"><span class="pi-t">${esc(x.t)}</span>${x.d ? `<span class="pi-s${x.d < c.today ? ' down' : ''}">${x.d < c.today ? 'просрочено · ' : ''}${fmtDate(x.d)}</span>` : ''}</span><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${icx('check')}</button></span></div>`).join('')}</div>`
-      : `<p class="small muted" style="margin:6px 0 0">Добавляйте задачи по книге в Todoist: проект «Книги» → раздел «${esc(sec)}». Они появятся здесь и в Планере в свой день.</p>`}</div>`;
+      : `<p class="small muted" style="margin:6px 0 0">Задач по книге нет. Добавляйте здесь или в Todoist (проект «Книги» → раздел «${esc(sec)}») — они видны и там, и тут, и в Планере в свой день.</p>`}</div>`;
 }
+
+acts['td.addBook'] = (d) => {
+  const c = app().ctx(), b = c.wbooksById[d.id], sec = String(b.title).split(/[.!?:]/)[0].trim();
+  openSheet('Задача по книге', `<label for="tdc" style="margin-top:0">Что сделать</label><input id="tdc" name="t" required autocomplete="off" placeholder="например: перечитать главы 10–12">
+    <label for="tdd">Когда (необязательно)</label><input id="tdd" type="date" name="d">
+    <p class="small muted" style="margin:8px 0 0">Появится и в Todoist — проект «Книги», раздел «${esc(sec)}».</p>`, async (fd) => {
+    const content = String(fd.get('t') || '').trim(); if (!content) return false;
+    try {
+      const x = await addOwnTask(c.settings, { project: 'Книги', section: sec, content, date: fd.get('d') || '' });
+      const td = app().ctx().settings.todoist || {};
+      await app().store.saveSettings({ todoist: { ...td, own: [...(td.own || []), x] } });
+      toast('Задача добавлена — и в Todoist');
+    } catch (e) { toast('Не получилось: ' + e.message); return false; }
+  }, { submitText: 'Добавить' });
+};
