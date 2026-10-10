@@ -2,7 +2,7 @@
 // потом выводим её в нужный формат: Markdown, HTML, Excel, JSON. Чистые функции — проверены тестами.
 import {
   addDays, countDays, incomeSeries, sumSeries, byWeek, byMonth, booksBreakdown, priceAt, monthKey,
-  monthsBetween, monthFinance, campaignMetrics, ctr, cpc, buildPlan, r2, monthEnd, chapterEffect,
+  monthsBetween, monthFinance, campaignMetrics, ctr, cpc, buildPlan, planOverridesOf, r2, monthEnd, chapterEffect,
   DISCOUNT_NOTE, budgetPlan,
 } from './calc.js';
 import { fmtDate, fmtMonth, fmtMonthIn } from './format.js';
@@ -43,7 +43,7 @@ export function buildReportModel(d, from, to) {
   const finOf = (k) => monthFinance(k, { sales: d.sales, legacyDays: d.legacyDays, spend: d.spend, discounts: d.discounts, months: d.monthsMap, settings: s, litnet: d.litnetMoney });
   const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays, today: d.today };
   const months = monthsBetween(monthKey(from), monthKey(to));
-  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) });
   const planOf = (k) => plan.find((p) => p.month === k)?.plan ?? null;
   const camps = d.campaigns.filter((k) => !k.oneOff && k.start && k.start <= to && (!k.end || k.end >= from)).sort((a, b) => a.start.localeCompare(b.start));
   const adOn = (date) => camps.filter((k) => date >= k.start && date <= (k.end || '9999')).map((k) => k.name);

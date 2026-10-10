@@ -4,7 +4,7 @@ import { ic } from '../icons.js';
 import { ownTasks, isMoneyTask } from '../tdtasks.js';
 import { bigGoalOf, bigGoalLine } from '../biggoal.js';
 import { rub, pct, fmtDate, fmtShort, fmtMonth, num } from '../format.js';
-import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, monthGoalStatus, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
+import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, planOverridesOf, monthGoalStatus, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
 import { dailyChart, EVENT_TYPES } from '../charts.js';
 import { acts, openSheet, toast } from '../ui.js';
 import { activeAlerts } from './ads.js';
@@ -78,7 +78,7 @@ acts['book.open'] = (d) => { const a = window.__app; a.ui.booksMonth = null; a.g
 
 function goalCard(c, st, big = '') {
   const s = c.settings;
-  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) });
   const p = plan.find((x) => x.month === monthKey(c.dataEnd));
   if (!p) return big ? `<div class="card">${big}</div>` : '';
   const g = monthGoalStatus(p.plan, st.mtd, c.dataEnd, c.today);

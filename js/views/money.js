@@ -1,7 +1,7 @@
 import { esc, acts, forms, openSheet, opt, toast, N, changes } from '../ui.js';
 import { npdStatusOf, npdBlock } from '../npd.js';
 import { rub, fmtMonth, fmtMonthCap, fmtMonthShort, fmtMonthIn, pct, num } from '../format.js';
-import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline, rocketRows, monthCash, addMonths, DISCOUNT_NOTE } from '../calc.js';
+import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, planOverridesOf, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline, rocketRows, monthCash, addMonths, DISCOUNT_NOTE } from '../calc.js';
 import { fmtDate } from '../format.js';
 import { goalChart } from '../charts.js';
 import { budgetCard } from './ads.js';
@@ -19,7 +19,7 @@ export function money(a) {
   const sel = ui.month && keys.includes(ui.month) ? ui.month : cur;
   const f = fin(c, sel), dsc = c.discounts[sel], cash = cashOf(c, sel);
   const s = c.settings;
-  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) });
   const factBy = Object.fromEntries(byMonth(c.series).map((g) => [g.key, g.royalty]));
   const rows = goalRows(plan, factBy, cur).map((r) => ({ ...r, label: fmtMonth(r.month), short: fmtMonthShort(r.month) }));
   const curRow = rows.find((r) => r.partial);
@@ -63,7 +63,7 @@ export function money(a) {
   ${budgetCard(c)}
   ${bigGoalCard(bigGoalOf(c))}
   <div class="card"><div class="row between"><h2>Цели</h2><button class="primary" data-act="goal.all">Изменить цели</button></div>
-    <p class="small muted">Старт: ${fmtMonth(s.goalStart)} — ${rub(s.goalAmount, 0)}, дальше +${s.goalGrowth}% в месяц; свои цели по месяцам — кнопка «Изменить цели». Факт — доход до вычетов (роялти).</p>
+    <p class="small muted">${s.planPath && Object.keys(s.planPath).length ? `По пути к большой цели: ${fmtMonth(Object.keys(s.planPath)[0])} — ${rub(Object.values(s.planPath)[0], 0)}, дальше ≈ +${s.goalGrowth}% в месяц (с учётом налога)` : `Старт: ${fmtMonth(s.goalStart)} — ${rub(s.goalAmount, 0)}, дальше +${s.goalGrowth}% в месяц`}; свои цели по месяцам — кнопка «Изменить цели». План и факт — до вычетов (роялти).</p>
     <div class="chart" id="goalChart"></div>
     <div class="legend"><span><i style="background:var(--bar)"></i>факт (светлый — месяц ещё идёт)</span><span><i class="ln"></i>план</span><span><i class="ln3"></i>среднее за 3 месяца</span></div>
     ${forecast != null ? `<div class="alert ${forecast >= curRow.plan ? 'ok' : ''}">${fmtMonthCap(cur)}: пока ${rub(curRow.fact, 0)}, при таком темпе к концу месяца ≈ ${rub(forecast, 0)} (план ${rub(curRow.plan, 0)}).</div>` : ''}
@@ -100,7 +100,7 @@ acts['goal.edit'] = (d) => {
 // Все цели разом: формула роста + ручные суммы по месяцам
 acts['goal.all'] = (d) => {
   const s = app().ctx().settings;
-  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: {} });
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planPath || {} });
   const ov = s.planOverrides || {};
   openSheet('Цели по месяцам', `
     <p class="small muted">Впишите свою цель в любой месяц. Пустое поле — цель считается по формуле роста (серое число).</p>
@@ -115,6 +115,8 @@ acts['goal.all'] = (d) => {
     const o = fd.get('reset') ? {} : { ...ov };
     if (!fd.get('reset')) for (const p of plan) { const v = n('p_' + p.month); if (v === undefined) delete o[p.month]; else o[p.month] = v; }
     const patch = { goalStart: fd.get('goalStart') || s.goalStart, goalAmount: n('goalAmount') ?? s.goalAmount, goalGrowth: n('goalGrowth') ?? s.goalGrowth, goalMonths: Math.min(60, Math.max(1, Math.round(n('goalMonths') ?? 13))), planOverrides: o };
+    // поменяли формулу руками — путь большой цели больше не подставляем
+    if (patch.goalStart !== s.goalStart || Number(patch.goalAmount) !== Number(s.goalAmount) || Number(patch.goalGrowth) !== Number(s.goalGrowth)) patch.planPath = null;
     await app().store.saveSettings(patch);
     toast('Цели сохранены');
   });

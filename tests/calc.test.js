@@ -637,3 +637,4 @@ test('bigGoalPlan: путь к 500 000 ₽ к январю 2030', () => {
   // нулевая база не ломает расчёт
   assert.ok(Number.isFinite(bigGoalPlan({ target: 500000, byMonth: '2030-01', startMonth: '2026-10', base: 0 }).growth));
 });
+

@@ -626,6 +626,8 @@ export function monthCash(key, finOf, { payments = {}, spend = {}, months = {}, 
 }
 
 // ---------- цели ----------
+// цели по месяцам: путь к большой цели (planPath), поверх — свои правки (planOverrides)
+export const planOverridesOf = (s) => ({ ...(s?.planPath || {}), ...(s?.planOverrides || {}) });
 export function buildPlan({ startMonth = '2026-10', startAmount = 50000, growth = 0.12, count = 13, overrides = {} } = {}) {
   const out = [];
   for (let i = 0; i < count; i++) {
@@ -851,7 +853,7 @@ export function dayStats(sales, legacyDays, date) {
 export function budgetPlan(ctx) {
   const s = ctx.settings || {};
   const next = addMonths(monthKey(ctx.today), 1), days = daysInMonth(next);
-  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} });
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) });
   const goal = plan.find((p) => p.month === next)?.plan ?? null;
   // обычный доход: дни без любой рекламы
   const camps = (ctx.campaigns || []).filter((k) => !k.oneOff && k.start);

@@ -1,7 +1,7 @@
 import { ic } from '../icons.js';
 import { esc, acts, forms, changes, opt, toast, openSheet } from '../ui.js';
 import { rub, fmtDate, fmtShort, fmtMonth, pct } from '../format.js';
-import { incomeSeries, booksBreakdown, manualSaleRow, dayStats, sumSeries, buildPlan, monthKey, daysInMonth, campaignDailySpend, countDays, addDays } from '../calc.js';
+import { incomeSeries, booksBreakdown, manualSaleRow, dayStats, sumSeries, buildPlan, planOverridesOf, monthKey, daysInMonth, campaignDailySpend, countDays, addDays } from '../calc.js';
 import { N } from '../ui.js';
 import { EVENT_TYPES } from '../charts.js';
 
@@ -23,7 +23,7 @@ export function day(a) {
   const wd = new Date(date + 'T00:00:00Z').getUTCDay();
   // цель месяца: сколько к этому дню и вклад дня
   const s = c.settings, mk = monthKey(date);
-  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} }).find((p) => p.month === mk);
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) }).find((p) => p.month === mk);
   const mtd = sumSeries(incomeSeries(c.sales, c.legacyDays, mk + '-01', date));
   const perDayPlan = plan ? plan.plan / daysInMonth(mk) : null;
   // реклама в этот день

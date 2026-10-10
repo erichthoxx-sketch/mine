@@ -3,7 +3,7 @@ import { esc } from '../ui.js';
 import { npdStatusOf, npdAlert } from '../npd.js';
 import { ownTasks, isMoneyTask } from '../tdtasks.js';
 import { rub, fmtDate, fmtMonth, fmtMonthIn, pct } from '../format.js';
-import { dayStats, buildPlan, monthKey, daysInMonth, incomeSeries, sumSeries, addDays, addMonths, npdDeadline, widgetProgram } from '../calc.js';
+import { dayStats, buildPlan, planOverridesOf, monthKey, daysInMonth, incomeSeries, sumSeries, addDays, addMonths, npdDeadline, widgetProgram } from '../calc.js';
 
 const WD = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 const MONG = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
@@ -36,7 +36,7 @@ export function incomeDates(c) {
 export function sideIncome(c) {
   const t = c.today, s = c.settings, mk = monthKey(t);
   const last = c.hasData ? c.dataEnd : null, st = last ? dayStats(c.sales, c.legacyDays, last) : null;
-  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: s.planOverrides || {} }).find((p) => p.month === mk);
+  const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) }).find((p) => p.month === mk);
   const mtd = sumSeries(incomeSeries(c.sales, c.legacyDays, mk + '-01', t));
   const daysLeft = daysInMonth(mk) - Number(t.slice(8, 10)) + 1;
   const need = plan ? Math.max(0, plan.plan - mtd) / Math.max(1, daysLeft) : null;
