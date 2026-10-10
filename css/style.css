@@ -970,3 +970,11 @@ a.card.npd-alert .small { margin-top: 4px; color: var(--text-2); }
 .pi-ok { flex: none; width: 10px; display: inline-flex; justify-content: center; margin-top: 3px; color: var(--good); }
 .pi-ok .icx .ic { width: 15px; height: 15px; stroke-width: 2; }
 .pitem.done-today .pi-t { color: var(--text-2); }
+/* свои задачи из Todoist: кнопка «сделано» — тонкая галочка в кружке */
+button.td-ok { width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid var(--line) !important; color: var(--muted) !important; }
+button.td-ok:hover { border-color: var(--good) !important; color: var(--good) !important; }
+button.td-ok .ic, button.td-ok .icx .ic { width: 16px; height: 16px; stroke-width: 2; }
+.k-td { background: var(--accent-2); }
+.td-card .pitem { padding: 8px 0; }
+.td-how { margin-top: 8px; color: var(--text-2); }
+.td-how p { margin: 0 0 6px; line-height: 1.45; }

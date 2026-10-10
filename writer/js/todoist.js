@@ -7,7 +7,7 @@ const API = 'https://api.todoist.com/api/v1';
 export const TD_LABEL = 'мастерская';
 export const TD_DAYS = 30; // на сколько дней вперёд отправляем
 const KIND_SHELF = { money: 'Деньги и реклама', waitans: 'Связи', mk: 'Маркетинг', contest: 'Конкурсы' };
-const SKIP = new Set(['done', 'wait']); // выложено / выйдет само — делать ничего не нужно
+const SKIP = new Set(['done', 'wait', 'td']); // выложено / выйдет само — делать ничего не нужно; td — задачи из самого Todoist
 
 // ключ — короткий и безопасный для базы (Firestore): вид + хеш
 const hash = (str) => { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return h.toString(36); };
@@ -96,6 +96,21 @@ async function shelves(token, want) {
   return { proj, sec };
 }
 
+// Задачи, которые Лана сама ведёт в Todoist в проектах «Книги» и «Мастерская» (без нашей метки) —
+// показываем в приложении: в планере в свой день, на странице книги (раздел = книга), деньги — и в «Доходах»
+export async function fetchOwnTasks(token) {
+  const projects = await all(token, '/projects'), out = [];
+  for (const p of projects.filter((x) => /^(книги|мастерская)$/i.test(String(x.name).trim()))) {
+    const secs = await all(token, `/sections?project_id=${p.id}`), sn = Object.fromEntries(secs.map((x) => [String(x.id), x.name]));
+    for (const t of await all(token, `/tasks?project_id=${p.id}`)) {
+      if ((t.labels || []).includes(TD_LABEL) || t.parent_id) continue;
+      out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: String(p.name).trim(), s: sn[String(t.section_id)] || '', pr: t.priority || 1 });
+    }
+  }
+  return out.slice(0, 300);
+}
+export const closeTask = (token, id) => post(token, `/tasks/${id}/close`);
+
 // синхронизация: возвращает {state, stats, doneInTodoist}
 export async function syncTodoist(token, want, state = {}) {
   const map = { ...(state.map || {}) }, closed = { ...(state.closed || {}) };
@@ -119,5 +134,6 @@ export async function syncTodoist(token, want, state = {}) {
   // старое не храним: закрытое и прошедшее больше месяца назад
   const old = (d) => today && d && d < today.slice(0, 8) + '01' && d < today;
   for (const [k, d] of Object.entries(closed)) if (old(d) && !want.some((w) => w.key === k)) delete closed[k];
-  return { state: { map, closed, at: new Date().toISOString(), stats }, stats, doneInTodoist: ops.doneInTodoist };
+  const own = await fetchOwnTasks(token).catch(() => state.own || []);
+  return { state: { map, closed, own, at: new Date().toISOString(), stats }, stats, doneInTodoist: ops.doneInTodoist };
 }

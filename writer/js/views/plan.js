@@ -10,6 +10,7 @@ import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
+import { ownTasks, bookOfTask } from '../../../js/tdtasks.js';
 import { rub, fmtMonth } from '../../../js/format.js';
 import { EVENT_TYPES } from '../../../js/charts.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
@@ -69,9 +70,15 @@ export function planItems(c, from, to) {
   for (const x of incomeItems(c, from, to)) add(x.date, 'money', x.title, x.sub, { href: '../' });
   // Связи: напоминания по контактам (просроченные — на сегодня)
   for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', `${esc(x.text)}`, `${esc(x.name)}${x.date < t ? ' · просрочено' : ''}`, { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k });
+  // свои задачи из Todoist (проекты «Книги» и «Мастерская»)
+  for (const x of ownTasks(c.settings)) {
+    if (!x.d) continue;
+    const b = bookOfTask(x, c.wbooks);
+    add(x.d < t ? t : x.d, 'td', esc(x.t), [b ? esc(b.title) : esc(x.s || x.p), x.d < t ? 'просрочено' : ''].filter(Boolean).join(' · '), { tdId: x.id });
+  }
   // Маркетинг: подготовить материалы к старту выкладки и к рекламе
   for (const m of marketingNeeds(c)) add(m.date, 'mk', esc(m.title), esc(m.sub), { to: m.to });
-  const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7 };
+  const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5 };
   return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
 }
 // Важное из «Доходов» по датам: налог (до 28-го), цифры Rocket (с 20-го), старт и конец рекламы, события дней
@@ -154,6 +161,7 @@ function itemHtml(c, x) {
     const today = x.date <= c.today;
     return `<div class="pitem">${body}<span class="pi-btns">${today ? `<button class="primary" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="done">Выложила</button>` : ''}<button data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="plan" data-date="${x.date}" title="Поставить на таймер" aria-label="Поставить на таймер">${icx('timer')}</button></span></div>`;
   }
+  if (x.kind === 'td') return `<div class="pitem">${body}<span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.tdId}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${icx('check')}</button></span></div>`;
   if (x.href) return `<a class="pitem tap" href="${x.href}">${body}</a>`;
   if (x.to) return `<a class="pitem tap" href="#" data-act="go" data-to="${x.to}">${body}</a>`;
   return `<a class="pitem tap" href="#" data-act="${x.act}" data-id="${x.id}">${body}</a>`;

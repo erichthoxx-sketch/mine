@@ -1,5 +1,7 @@
 import { esc } from '../ui.js';
 import { npdStatusOf, npdAlert } from '../npd.js';
+import { ic } from '../icons.js';
+import { ownTasks, isMoneyTask } from '../tdtasks.js';
 import { rub, pct, fmtDate, fmtShort, fmtMonth, num } from '../format.js';
 import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, monthGoalStatus, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
 import { dailyChart, EVENT_TYPES } from '../charts.js';
@@ -50,7 +52,7 @@ export function home(app) {
     <div class="stat"><div class="k">Прошлый месяц</div><div class="v">${rub(st.prevTotal)}</div><div class="s">за тот же срок: ${rub(st.prevSame)}</div></div>
   </div>
   ${activeAlerts(c).map((a) => `<div class="card row between"><span>⚠︎ Таргет «${esc(a.name)}» просел — запросите отчёт у таргетологов</span><button class="link" data-act="go" data-to="/ads">открыть</button></div>`).join('')}
-  ${npdReminder(c)}${taxReminder(c)}
+  ${npdReminder(c)}${moneyTasks(c)}${taxReminder(c)}
   ${goalCard(c, st)}
   <div class="card">
     <div class="chips">${rangeBtn(30, '30 дней')}${rangeBtn(90, '90 дней')}${rangeBtn(180, '180 дней')}${rangeBtn(0, 'Всё время')}</div>
@@ -85,6 +87,11 @@ function goalCard(c, st) {
     <div class="small">${g.reached ? '✔︎ Цель месяца достигнута' : g.daysLeft === 0 ? `Месяц закончился: не хватило ${rub(g.plan - g.fact, 0)}` : `прогноз к концу месяца ≈ ${rub(g.forecast, 0)} ${g.onTrack ? '<span class="up">— успеваете</span>' : '<span class="down">— не хватает ' + rub(g.plan - g.forecast, 0) + '</span>'}${g.daysLeft > 0 ? ` · нужно ~${rub(g.needPerDay, 0)} в день` : ''}`}</div></div>`;
 }
 
+function moneyTasks(c) {
+  const list = ownTasks(c.settings).filter((x) => isMoneyTask(x) && x.d && x.d <= addDays(c.today, 7)).sort((a, b) => a.d.localeCompare(b.d));
+  if (!list.length) return '';
+  return `<div class="card td-card"><h2 style="margin:0 0 4px">Дела по деньгам и рекламе</h2><div class="plist">${list.map((x) => `<div class="pitem"><span class="pi-body"><span class="pi-t">${esc(x.t)}</span><span class="pi-s${x.d < c.today ? ' down' : ''}">${x.d < c.today ? 'просрочено · ' : ''}${fmtDate(x.d)}</span></span><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${ic('check')}</button></span></div>`).join('')}</div></div>`;
+}
 function npdReminder(c) {
   const a = npdAlert(npdStatusOf(c.sales, c.legacyDays, c.settings, c.today), c.today);
   return a ? `<a class="card npd-alert tap ${a.level}" href="#" data-act="go" data-to="/money"><b>${esc(a.title)}</b><div class="small">${esc(a.sub)}</div></a>` : '';

@@ -1,6 +1,7 @@
 // Колонка «Сегодня» для «Доходов» на широком экране: доход последнего дня, цель месяца и ближайшие важные даты
 import { esc } from '../ui.js';
 import { npdStatusOf, npdAlert } from '../npd.js';
+import { ownTasks, isMoneyTask } from '../tdtasks.js';
 import { rub, fmtDate, fmtMonth, fmtMonthIn, pct } from '../format.js';
 import { dayStats, buildPlan, monthKey, daysInMonth, incomeSeries, sumSeries, addDays, addMonths, npdDeadline, widgetProgram } from '../calc.js';
 
@@ -24,6 +25,7 @@ export function incomeDates(c) {
     if (k.start && k.start > t) add(k.start, `Старт рекламы «${k.name}»`, '', '/ads');
     if (k.end && k.end >= t) add(k.end, `Конец рекламы «${k.name}»`, 'продлевать ли?', '/ads');
   }
+  for (const x of ownTasks(c.settings)) if (isMoneyTask(x) && x.d) add(x.d < t ? t : x.d, x.t, x.d < t ? 'просрочено · из Todoist' : 'из Todoist', '/money');
   const na = npdAlert(npdStatusOf(c.sales, c.legacyDays, c.settings, t), t);
   if (na) add(t, na.title, na.sub, '/money');
   const w = widgetProgram({ campaigns: c.campaigns, reports: d.reports, today: t, settings: c.settings, months: d.months || [] }).next;

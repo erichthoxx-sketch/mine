@@ -1,6 +1,7 @@
 // Главная Мастерской: всё актуальное за текущий месяц по книгам и напоминания обо всём, у чего есть дата
 import { esc } from '../../../js/ui.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
+import { ownTasks } from '../../../js/tdtasks.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
@@ -44,6 +45,8 @@ export function reminders(c) {
   }
   // лимит НПД (2,4 млн ₽ в год): превышен или вот-вот будет
   const na = npdAlert(npdStatusOf(d.sales || [], [], c.settings, t), t); if (na) add(t, na.title, na.sub, '/plan', 0);
+  // свои задачи из Todoist (Книги, Мастерская) — на сегодня и просроченные
+  for (const x of ownTasks(c.settings)) if (x.d) add(x.d < t ? t : x.d, esc(x.t), esc(x.s || x.p) + (x.d < t ? ' · просрочено' : ''), '/plan', 0);
   // приоритетные показы: подать заявку до 25-го
   const wr = widgetReminder(c); if (wr) add(wr.date, wr.title, wr.sub, wr.to, 15);
   // напоминания по связям и подготовка маркетинга

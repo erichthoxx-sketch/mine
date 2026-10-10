@@ -7,6 +7,7 @@ import { writtenChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
 import { publisherCard, svcInfo } from './pubfiles.js';
+import { ownTasks, bookOfTask } from '../../../js/tdtasks.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 import { addDays } from '../../../js/calc.js';
@@ -95,9 +96,9 @@ export function progressBlock(c, b) {
     const nums = chapterList(b).map((x) => Number((/^\s*глава\s+(\d+)/i.exec(x.title) || [])[1])).filter(Boolean);
     const newCh = nums.length ? `Глава ${Math.max(...nums) + 1}` : 'Новая глава';
     const title = s.next.ch ? `Выложить «${esc(s.next.ch)}»` : `${newCh} — написать к ${when}`;
-    const sub = s.next.ch ? `глава написана — осталось поставить на таймер · ${esc(s.next.pf)}` : `все написанные главы уже выложены или стоят на таймере · ${esc(s.next.pf)}`;
+    const sub = s.next.ch ? `Глава написана — осталось поставить на таймер · ${esc(s.next.pf)}` : `Все написанные главы уже выложены или стоят на таймере · ${esc(s.next.pf)}`;
     parts.push(`<div class="next-line"><span class="nl-date"><b>${Number(d.slice(8, 10))}</b><i>${MON_SHORT[Number(d.slice(5, 7)) - 1]}</i></span>
-      <span class="nl-body"><span class="nl-t">${title}</span><span class="nl-s"><span class="nl-when-m">${whenTxt(n)} · </span>${sub}</span></span><span class="nl-when${n < 0 ? ' late' : n <= 2 ? ' soon' : ''}">${whenTxt(n)}</span></div>`);
+      <span class="nl-body"><span class="nl-t">${title}</span><span class="nl-s"><span class="nl-when-m">${whenTxt(n).replace(/^./, (ch) => ch.toUpperCase())} · </span>${sub}</span></span><span class="nl-when${n < 0 ? ' late' : n <= 2 ? ' soon' : ''}">${whenTxt(n)}</span></div>`);
   }
   for (const x of liveContests(c, b)) {
     const st = contestStatus(x, b, t);
@@ -168,6 +169,7 @@ export function bookPage(a, id) {
     ${bookGoals.length ? `<div class="plist">${bookGoals.map(({ g, st }) => `<a class="pitem tap${st.doneToday ? ' done-today' : ''}" href="#" data-act="goal.edit" data-id="${g.id}">${st.doneToday ? `<span class="pi-ok">${icx('check')}</span>` : '<span class="dot k-goal"></span>'}<span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:4px 0 0">Например, «по главе в день до 15 октября» — буду напоминать.</p>'}
     ${b.status === 'done' ? '' : `<div class="mini-chart"><div class="row between small muted"><span>Написано за 2 недели</span><b>+${al(series.reduce((a, d) => a + (d.known ? d.value : 0), 0))}</b></div><div class="chart" id="bchart1"></div></div>`}
 </div>
+  ${bookTasksCard(c, b)}
   <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><div class="row">${canEdit ? `<button data-act="ch.add" data-id="${b.id}" title="Отдельная вкладка в Google Документе">+ Глава</button>` : ''}<button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div></div>
     ${chs.length ? chaptersBlock() : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
     <div class="hint">${canEdit ? 'Название — открыть главу в редакторе. ' : ''}Отметка справа — «выложила» или «на таймер». Выкладка сразу попадает событием в «Доходы».</div></div>
@@ -459,3 +461,13 @@ function headCard(c, b, p) {
 }
 const grp = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 acts['bh.more'] = (d, el) => { if (!String(window.getSelection() || '')) el.classList.toggle('open'); return false; }; // выделяла текст — не сворачиваем
+
+// задачи по книге из Todoist: проект «Книги», раздел с названием книги
+function bookTasksCard(c, b) {
+  if (!c.settings.todoistToken) return '';
+  const list = ownTasks(c.settings).filter((x) => bookOfTask(x, [b])).sort((x, y) => (x.d || '9999').localeCompare(y.d || '9999'));
+  const sec = String(b.title).split(/[.!?:]/)[0].trim();
+  return `<div class="card td-card"><div class="row between"><h2 style="margin:0">Задачи</h2><a class="small muted" href="https://app.todoist.com/app" target="_blank" rel="noopener">в Todoist ↗</a></div>
+    ${list.length ? `<div class="plist">${list.map((x) => `<div class="pitem"><span class="pi-body"><span class="pi-t">${esc(x.t)}</span>${x.d ? `<span class="pi-s${x.d < c.today ? ' down' : ''}">${x.d < c.today ? 'просрочено · ' : ''}${fmtDate(x.d)}</span>` : ''}</span><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${icx('check')}</button></span></div>`).join('')}</div>`
+      : `<p class="small muted" style="margin:6px 0 0">Добавляйте задачи по книге в Todoist: проект «Книги» → раздел «${esc(sec)}». Они появятся здесь и в Планере в свой день.</p>`}</div>`;
+}

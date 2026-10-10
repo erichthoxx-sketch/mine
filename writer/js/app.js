@@ -131,6 +131,8 @@ applyTheme();
 try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem('navMini') === '1'); } catch { /* ок */ }
 acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
 store.subscribe(() => { safeRender(); scheduleTodoist(app); });
+// вернулась в приложение — подтягиваем свежие задачи из Todoist
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleTodoist(app, 1500); });
 drive.preload().catch(() => {});
 let autoRefreshed = false;
 store.init().then(() => {
