@@ -136,7 +136,7 @@ function taxCard(c, sel, keys) {
     <details style="margin-top:10px"><summary>По всем месяцам</summary><div class="scroll"><table><tr><th>Месяц</th><th>С суммы</th><th>Налог</th><th>Статус</th><th>Чек</th></tr>
     ${[...t.rows].reverse().map((x) => `<tr><td>${fmtMonthShort(x.month)}</td><td>${rub(x.base, 0)}</td><td><b>${rub(x.tax, 0)}</b></td><td>${x.paid ? `<span class="up">✔︎ ${x.paidAt ? fmtDate(x.paidAt) : 'оплачен'}</span>` : !x.closed ? '<span class="muted">идёт</span>' : x.tax ? `<button class="link" data-act="tax.pay" data-m="${x.month}">оплатила</button>` : '—'}</td><td>${x.closed && x.tax ? `<button class="link" data-act="tax.check" data-m="${x.month}">чек</button>` : ''}</td></tr>`).join('')}</table></div></details>
     ${npdBlock(npdStatusOf(c.sales, c.legacyDays, s, c.today))}
-    <div class="hint">Ставку, с чего считать налог и доход на НПД из других источников можно поменять в «Данные» → «Настройки».</div></div>`;
+    <div class="hint">Ставку, с чего считать налог и другой доход на НПД можно поменять в «Данные» → «Настройки».</div></div>`;
 }
 acts['tax.pay'] = async (d) => {
   const c = app().ctx(), m = c.monthsMap[d.m] || {};
