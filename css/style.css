@@ -895,3 +895,13 @@ table.pub-t2 col.c-al { width: 92px; }
 .ed-paper { background: var(--paper); border-color: var(--paper-line); }
 .editor { color: var(--ink); caret-color: var(--link); }
 .editor ::selection { background: color-mix(in srgb, var(--link) 22%, transparent); }
+/* крупные числа никогда не разрываются: если плитка узкая — число чуть уменьшается, но остаётся одной строкой */
+.stat, .bh-tile, .tiles > *, .side-card { container-type: inline-size; }
+.stat .v, .tiles .v, .bh-tile b, .side-big, .big, .tl-v { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+.stat .v, .tiles .v { font-size: clamp(14px, 12.5cqi, 20px); }
+.bh-tile b { font-size: clamp(14px, 15cqi, 20px); }
+.side-big { font-size: clamp(16px, 11cqi, 26px); }
+table td, table th { overflow-wrap: normal; word-break: normal; }
+/* название на обложке-заглушке: переносы по слогам, а не посреди слова */
+.cover-ph span { overflow-wrap: normal; word-break: normal; hyphens: auto; }
+@media (max-width: 640px) { .bh-cover .cover-ph span { font-size: 12px; } }

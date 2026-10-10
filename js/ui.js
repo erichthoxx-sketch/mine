@@ -29,7 +29,7 @@ export function N(v) {
 export function openSheet(title, bodyHtml, onSubmit, { submitText = 'Сохранить' } = {}) {
   const dlg = document.getElementById('sheet');
   const f = document.getElementById('sheetForm');
-  f.innerHTML = `<h2>${esc(title)}</h2>${bodyHtml}<div class="row between sheet-actions"><button type="button" data-close>${onSubmit ? 'Отмена' : 'Закрыть'}</button>${onSubmit ? `<button class="primary" type="submit">${esc(submitText)}</button>` : ''}</div>`;
+  f.innerHTML = `<h2>${esc(title)}</h2>${tidyNums(bodyHtml)}<div class="row between sheet-actions"><button type="button" data-close>${onSubmit ? 'Отмена' : 'Закрыть'}</button>${onSubmit ? `<button class="primary" type="submit">${esc(submitText)}</button>` : ''}</div>`;
   f.onsubmit = async (e) => {
     e.preventDefault();
     if (!onSubmit) return;
@@ -136,4 +136,25 @@ export function keepPlace(ui, keys = []) {
   const save = () => { try { sessionStorage.setItem(k, JSON.stringify(Object.fromEntries(keys.map((x) => [x, ui[x]])))); } catch { /* ок */ } };
   addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', save);
+}
+
+// Числа не разрываются переносом строки: «21 534,30 ₽», «≈ 1 150 ₽», «7,8 а.л.», «окт 26», «10 октября» —
+// пробел перед/после числа становится неразрывным. Меняем только видимый текст: теги, атрибуты и поля ввода не трогаем.
+const MON = 'янв|фев|мар|апр|мая|май|июн|июл|авг|сен|окт|ноя|дек';
+const DAYS_GEN = 'января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря';
+const UNITS = '₽|%|а\\.л\\.|зн\\.|знак|шт\\.|дн\\.|дней|дня|день|глав|мин|сл\\.|слов|тыс|млн|раз|показ|пр\\.|подп';
+const RX = [
+  [new RegExp(`(^|[\\s(])([≈~±+−–—]) (?=[\\d+−])`, 'g'), '$1$2\u00a0'],
+  [new RegExp(`(\\d) (?=(?:${UNITS}))`, 'g'), '$1\u00a0'],
+  [new RegExp(`(^|[\\s(«])(${MON})\\.? (?=\\d)`, 'gi'), (m, a, b) => m.replace(/ (?=\d)$/, '\u00a0').replace(/ $/, '\u00a0')],
+  [new RegExp(`(\\d) (?=(?:${DAYS_GEN}))`, 'g'), '$1\u00a0'],
+  [/(\d)([–-])(?=\d)/g, '$1$2\u2060'], // «05.10–10.10», «12–14» — не рвём по тире
+];
+export function tidyNums(html) {
+  return String(html).split(/(<textarea[\s\S]*?<\/textarea>|<[^>]+>)/).map((part, i) => {
+    if (i % 2) return part; // тег или поле ввода
+    let t = part;
+    for (const [re, to] of RX) t = t.replace(re, to);
+    return t;
+  }).join('');
 }

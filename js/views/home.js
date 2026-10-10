@@ -39,7 +39,7 @@ export function home(app) {
   const bb = booksBreakdown(c.sales, bkFrom, c.today).map((b) => ({ ...b, title: c.titleOf(b.bookId, b.title) }));
   const rangeBtn = (v, t) => `<button class="chip${ui.range === v ? ' on' : ''}" data-act="home.range" data-v="${v}">${t}</button>`;
   const rows = ui.table === 'months' ? byMonth(c.series).reverse() : byWeek(c.series).reverse().slice(0, 26);
-  const label = (g) => (ui.table === 'months' ? fmtMonth(g.key) : `${fmtShort(g.from)}–${fmtDate(g.to)}`);
+  const label = (g) => (ui.table === 'months' ? fmtMonth(g.key) : `${fmtShort(g.from)}–${g.to.slice(0, 4) === c.today.slice(0, 4) ? fmtShort(g.to) : fmtDate(g.to)}`); // год — только если не текущий
   const vs = st.vsPrev;
   const html = `
   <div class="grid4">

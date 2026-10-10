@@ -1,6 +1,6 @@
 // Запуск приложения: вход, маршруты, общий контекст расчётов.
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
-import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace } from './ui.js';
+import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from './ui.js';
 import {
   todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth, litnetMoneyByMonth, litnetDiscountBase, monthKey,
 } from './calc.js';
@@ -120,8 +120,8 @@ function render() {
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере. Синхронизация появится после настройки Firebase.</div>' : ''}
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
   <div class="row"><a class="btn" href="pisatel/">${ic('sparkle')} Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
-  <main>${r.html}</main>
-  ${wide() ? `<aside class="side">${(() => { try { return sideIncome(c); } catch (e) { console.error(e); return ''; } })()}</aside><button class="side-grip" aria-label="Скрыть или показать панель «Сегодня»" title="Потяните вправо, чтобы скрыть"><span></span></button>` : ''}
+  <main>${tidyNums(r.html)}</main>
+  ${wide() ? `<aside class="side">${(() => { try { return tidyNums(sideIncome(c)); } catch (e) { console.error(e); return ''; } })()}</aside><button class="side-grip" aria-label="Скрыть или показать панель «Сегодня»" title="Потяните вправо, чтобы скрыть"><span></span></button>` : ''}
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h.slice(1)}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
   afterFn = r.after || null;
   afterFn?.();
