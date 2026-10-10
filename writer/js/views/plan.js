@@ -7,7 +7,7 @@ import { widgetReminder } from './widgets.js';
 import { linkTodos } from './links.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
-import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut } from '../wcalc.js';
+import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask } from '../../../js/tdtasks.js';
@@ -338,7 +338,9 @@ function contests(c) {
   }).join('') : '<div class="card"><p class="muted small" style="margin:0">Добавьте конкурс: даты, условия и книгу — приложение посчитает, сколько осталось дней и проходит ли книга по объёму.</p></div>'}`;
 }
 function contestForm(c, x = {}) {
-  return `<label for="cn">Название</label><input id="cn" name="name" value="${esc(x.name || '')}" required>
+  return `<div class="c-fill"><label for="cc" style="margin-top:0">Условия со страницы конкурса</label><textarea id="cc" name="conditions" style="min-height:96px" placeholder="Откройте страницу конкурса, выделите всё (Ctrl+A), скопируйте и вставьте сюда — название, даты, площадка и объём заполнятся сами">${esc(x.conditions || '')}</textarea>
+  <label for="cu">Ссылка на страницу конкурса</label><input id="cu" name="url" value="${esc(x.url || '')}" placeholder="https://litnet.com/…"><div class="small muted c-filled" id="cfilled"></div></div>
+  <label for="cn">Название</label><input id="cn" name="name" value="${esc(x.name || '')}" required>
   <div class="f2"><div><label for="cp">Площадка</label><input id="cp" name="platform" list="pl" value="${esc(x.platform || '')}"><datalist id="pl">${PLATFORMS.map((p) => `<option value="${p}">`).join('')}</datalist></div>
   <div><label for="cs">Статус</label><select id="cs" name="status">${Object.entries(CSTATUS).map(([k, v]) => opt(k, v, x.status || 'plan')).join('')}</select></div></div>
   <div class="f2"><div><label for="c1">Начало</label><input id="c1" type="date" name="start" value="${x.start || ''}"></div><div><label for="c2">Окончание</label><input id="c2" type="date" name="end" value="${x.end || ''}" required></div></div>
@@ -346,15 +348,33 @@ function contestForm(c, x = {}) {
   <div class="f3"><div><label for="cmin">Объём от</label><input id="cmin" name="minChars" inputmode="decimal" value="${contestOut(x.unit, x.minChars)}"></div><div><label for="cmax">до</label><input id="cmax" name="maxChars" inputmode="decimal" value="${contestOut(x.unit, x.maxChars)}"></div>
     <div><label for="cun">в чём</label><select id="cun" name="unit">${opt('al', 'а.л.', x.unit || 'al')}${opt('chars', 'знаках', x.unit || 'al')}</select></div></div>
   <div class="small muted">Как в условиях конкурса: если там знаки — выберите «знаках», и прогресс книги по этому конкурсу тоже будет в знаках.</div>
-  <label for="cc">Условия</label><textarea id="cc" name="conditions" style="min-height:120px">${esc(x.conditions || '')}</textarea>
-  <label for="cu">Ссылка на страницу конкурса</label><input id="cu" name="url" value="${esc(x.url || '')}">`;
+`;
+}
+// вставила условия или ссылку — заполняем пустые поля (и те, что заполнили сами раньше); правку руками не трогаем
+function wireContestFill(f) {
+  if (!f) return;
+  const $ = (id) => f.querySelector('#' + id), filled = $('cfilled');
+  for (const id of ['cn', 'cp', 'c1', 'c2', 'cmin', 'cmax', 'cun']) $(id)?.addEventListener('input', (e) => { if (e.isTrusted) delete e.target.dataset.auto; });
+  const put = (id, v) => { const el = $(id); if (!el || v == null || v === '') return false; if (el.value && !el.dataset.auto) return false; el.value = v; el.dataset.auto = '1'; return true; };
+  const run = () => {
+    const r = parseContest($('cc').value, $('cu').value, app().ctx().today), got = [];
+    if (put('cn', r.name)) got.push('название');
+    if (put('cp', r.platform)) got.push('площадка');
+    const d1 = put('c1', r.start), d2 = put('c2', r.end); if (d1 || d2) got.push('даты');
+    if (r.unit) {
+      const unitFree = !$('cmin').value && !$('cmax').value || $('cmin').dataset.auto || $('cmax').dataset.auto;
+      if (unitFree) { $('cun').value = r.unit; const a = put('cmin', r.minChars != null ? contestOut(r.unit, r.minChars) : ''), b = put('cmax', r.maxChars != null ? contestOut(r.unit, r.maxChars) : ''); if (a || b) got.push('объём'); }
+    }
+    filled.textContent = got.length ? `Заполнено из условий: ${got.join(', ')} — проверьте и поправьте, если нужно.` : '';
+  };
+  $('cc').addEventListener('input', run); $('cu').addEventListener('input', run);
 }
 const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookId: fd.get('bookId') || '', unit: fd.get('unit') || 'al', minChars: contestIn(fd.get('unit'), fd.get('minChars')), maxChars: contestIn(fd.get('unit'), fd.get('maxChars')), conditions: fd.get('conditions') || '', url: (fd.get('url') || '').trim() });
 acts['plan.tab'] = (d) => { app().ui.planTab = d.v; };
-acts['contest.new'] = () => openSheet('Новый конкурс', contestForm(app().ctx()), async (fd) => { await app().store.put('w_contests', { id: 'c' + uid(), ...contestFrom(fd) }); toast('Конкурс добавлен'); });
+acts['contest.new'] = () => wireContestFill(openSheet('Новый конкурс', contestForm(app().ctx()), async (fd) => { await app().store.put('w_contests', { id: 'c' + uid(), ...contestFrom(fd) }); toast('Конкурс добавлен'); }));
 acts['contest.edit'] = (d) => {
   const x = app().ctx().data.w_contests.find((i) => i.id === d.id);
-  openSheet('Конкурс', contestForm(app().ctx(), x) + `<p><button type="button" class="link danger" data-act="contest.del" data-id="${x.id}">Удалить конкурс</button></p>`, async (fd) => { await app().store.put('w_contests', { ...x, ...contestFrom(fd) }); });
+  wireContestFill(openSheet('Конкурс', contestForm(app().ctx(), x) + `<p><button type="button" class="link danger" data-act="contest.del" data-id="${x.id}">Удалить конкурс</button></p>`, async (fd) => { await app().store.put('w_contests', { ...x, ...contestFrom(fd) }); }));
 };
 acts['contest.del'] = async (d) => { if (await ask('Удалить конкурс?')) await app().store.remove('w_contests', d.id); };
 

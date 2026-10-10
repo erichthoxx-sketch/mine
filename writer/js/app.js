@@ -133,6 +133,7 @@ acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle(
 store.subscribe(() => { safeRender(); scheduleTodoist(app); });
 // вернулась в приложение — подтягиваем свежие задачи из Todoist
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleTodoist(app, 1500); });
+setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(app, 1000); }, 10 * 60000); // и раз в 10 минут, пока приложение открыто
 drive.preload().catch(() => {});
 let autoRefreshed = false;
 store.init().then(() => {

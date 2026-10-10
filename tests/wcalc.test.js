@@ -167,3 +167,18 @@ test('авторские листы: формат и ввод', async () => {
   assert.equal(alNum(0), '0'); assert.equal(alNum(100), '< 0,01'); assert.equal(alNum(16000), '0,4');
   assert.equal(fromAl('7,5'), 300000); assert.equal(fromAl(''), null);
 });
+
+test('конкурс из текста условий: название, даты, объём, площадка', async () => {
+  const { parseContest } = await import('../writer/js/wcalc.js');
+  const t = `Литературный конкурс «Второе дыхание»
+Приём работ с 15 октября по 30 ноября 2026 года. Итоги — 20 декабря.
+Объём произведения — от 6 до 12 а.л. Произведение должно быть новым.`;
+  const r = parseContest(t, 'https://litnet.com/ru/contest/123', '2026-10-10');
+  assert.deepEqual(r, { platform: 'Литнет', name: 'Второе дыхание', start: '2026-10-15', end: '2026-11-30', unit: 'al', minChars: 240000, maxChars: 480000 });
+  const r2 = parseContest('Конкурс "Тёмная сторона". Последний день подачи: 01.12.2026. Объём не менее 200 000 знаков с пробелами.', '', '2026-10-10');
+  assert.equal(r2.name, 'Тёмная сторона');
+  assert.equal(r2.end, '2026-12-01');
+  assert.deepEqual([r2.unit, r2.minChars, r2.maxChars], ['chars', 200000, undefined]);
+  const r3 = parseContest('Конкурс «Зимняя сказка» на Author.Today, до 15 января. Объём до 120 тыс. знаков', '', '2026-11-20');
+  assert.deepEqual([r3.platform, r3.end, r3.maxChars, r3.unit], ['Author.Today', '2027-01-15', 120000, 'chars']);
+});

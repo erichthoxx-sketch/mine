@@ -33,10 +33,14 @@ test('план синхронизации: создать, обновить, з�
     { id: '5', content: mk.content, due: { date: mk.date } }, // такая уже есть (другое устройство) → взять
   ];
   const ops = todoistPlan(w, map, {}, active);
-  assert.deepEqual(ops.doneInTodoist.map((x) => x.key), [tax.key]); // id 2 нет среди открытых — закрыла в Todoist
+  assert.deepEqual(ops.verify.map((x) => x.w.key), [tax.key]); // id 2 нет среди открытых — проверим отдельно, закрыта ли
   assert.deepEqual(ops.close, [{ key: 'gone_x', id: '9' }]);
   assert.deepEqual(ops.create.map((x) => x.key), [call.key]);
   assert.deepEqual(ops.update.map((x) => [x.id, !!x.adopt]), [['5', true]]);
+  // связь потерялась (ошибочно считалось «закрыто»), а задача на месте — подхватываем, а не забываем
+  const healed = todoistPlan([mk], {}, { [mk.key]: '2026-10-09' }, [{ id: '5', content: mk.content, due: { date: mk.date } }, { id: '7', content: 'Устаревшее', due: { date: '2026-10-01' } }]);
+  assert.deepEqual(healed.unclose, [mk.key]);
+  assert.deepEqual(healed.close, [{ key: null, id: '7' }]); // наша задача, которой в планере нет, — закрыть
   // закрытое в Todoist заново не создаём
   assert.equal(todoistPlan(w, {}, { [call.key]: '2026-10-12' }, []).create.some((x) => x.key === call.key), false);
   // дата сдвинулась — обновить

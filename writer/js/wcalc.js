@@ -372,3 +372,58 @@ export const contestIn = (unit, v) => {
   return String(v ?? '').trim() === '' || Number.isNaN(n) ? null : Math.round(n);
 };
 export const contestOut = (unit, chars) => (chars == null ? '' : unit === 'chars' ? String(chars) : alNum(chars));
+
+// ---- конкурс из текста условий (скопированного со страницы): название, даты, объём, площадка ----
+const MON_RX = 'января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря';
+const MON_I = MON_RX.split('|');
+const pad2 = (n) => String(n).padStart(2, '0');
+export function parseContest(text, url = '', today = new Date().toISOString().slice(0, 10)) {
+  const t = String(text || '').replace(/[  ]/g, ' ').replace(/[ \t]+/g, ' ');
+  const out = {};
+  // площадка — по ссылке или по тексту
+  const host = (/^https?:\/\/([^/]+)/i.exec(String(url || '').trim()) || [])[1] || '';
+  const pf = /litnet/i.test(host + t) || /литнет/i.test(t) ? 'Литнет' : /author\.today|автор\.тудэй/i.test(host + t) ? 'Author.Today' : /litres|литрес/i.test(host + t) ? 'Литрес' : /litmarket|литмаркет/i.test(host + t) ? 'Литмаркет' : '';
+  if (pf) out.platform = pf;
+  // название: «…» после слова «конкурс», иначе первые «…», иначе первая короткая строка
+  const nm = /конкурс\w*\s*[«"]([^»"\n]{3,90})[»"]/i.exec(t) || /[«"]([^»"\n]{3,90})[»"]/.exec(t);
+  if (nm) out.name = nm[1].trim();
+  else { const first = t.split('\n').map((x) => x.trim()).find((x) => x && x.length <= 100); if (first) out.name = first.replace(/^конкурс\s*/i, '').trim(); }
+  // даты: «1 октября [2026]» и «01.10.2026»
+  const yearHint = Number((/\b(20\d\d)\b/.exec(t) || [])[1]) || Number(today.slice(0, 4));
+  const dates = [];
+  const fix = (d, m, y) => { let yy = y ? Number(String(y).length === 2 ? '20' + y : y) : yearHint; let iso = `${yy}-${pad2(m)}-${pad2(d)}`; if (!y && iso < today && today.slice(0, 4) == yy && Number(today.slice(5, 7)) - m > 6) iso = `${yy + 1}-${pad2(m)}-${pad2(d)}`; return iso; };
+  for (const m of t.matchAll(new RegExp(`(\\d{1,2})\\s+(${MON_RX})(?:\\s+(\\d{4}))?`, 'gi'))) dates.push({ i: m.index, end: m.index + m[0].length, iso: fix(+m[1], MON_I.indexOf(m[2].toLowerCase()) + 1, m[3]) });
+  for (const m of t.matchAll(/\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})\b/g)) dates.push({ i: m.index, end: m.index + m[0].length, iso: fix(+m[1], +m[2], m[3]) });
+  dates.sort((a, b) => a.i - b.i);
+  const before = (d, n = 45) => t.slice(Math.max(0, d.i - n), d.i).toLowerCase();
+  // «с 1 октября по 30 ноября» — самое надёжное
+  for (let k = 0; k + 1 < dates.length; k++) {
+    const gap = t.slice(dates[k].end, dates[k + 1].i);
+    if (/^\s*(?:по|до|—|–|-)\s*$/i.test(gap) && /(^|\s)с\s*$/i.test(before(dates[k], 4))) { out.start = dates[k].iso; out.end = dates[k + 1].iso; break; }
+  }
+  if (!out.end) { const e = dates.find((d) => /(при[её]м[^.]{0,40}(до|по)|окончани|заверш|дедлайн|последн|до|по)\s*$/i.test(before(d))); if (e) out.end = e.iso; }
+  if (!out.start) { const s = dates.find((d) => /(старт|начал|открыт|с)\s*$/i.test(before(d)) && d.iso !== out.end); if (s) out.start = s.iso; }
+  if (!out.end && dates.length) out.end = dates[dates.length - 1].iso;
+  if (out.start && out.end && out.start > out.end) [out.start, out.end] = [out.end, out.start];
+  // объём: «от 6 до 12 а.л.», «не менее 200 000 знаков», «до 15 авторских листов», «от 120 тыс. знаков»
+  const NUM = '(\\d[\\d ]*(?:[.,]\\d+)?)\\s*(тыс\\.?|тысяч\\w*)?';
+  const UNIT = '(а\\.?\\s?л\\.?|авторск\\w*\\s+лист\\w*|знак\\w*|зн\\.|символ\\w*)';
+  const num = (s, k) => { const v = Number(String(s).replace(/ /g, '').replace(',', '.')); return k ? v * 1000 : v; };
+  const isAl = (u) => /^а|авторск/i.test(u);
+  let unit = null, min = null, max = null;
+  const range = new RegExp(`от\\s+${NUM}\\s*(?:${UNIT}\\s*)?(?:и\\s+)?до\\s+${NUM}\\s*${UNIT}`, 'i').exec(t);
+  if (range) { unit = isAl(range[6]) ? 'al' : 'chars'; min = num(range[1], range[2]); max = num(range[4], range[5]); }
+  else {
+    const mn = new RegExp(`(?:не\\s+менее|минимум|минимальн\\w*\\s+объ[её]м\\w*[:\\s—-]*|от)\\s*${NUM}\\s*${UNIT}`, 'i').exec(t);
+    const mx = new RegExp(`(?:не\\s+более|максимум|максимальн\\w*\\s+объ[её]м\\w*[:\\s—-]*|до)\\s*${NUM}\\s*${UNIT}`, 'i').exec(t);
+    if (mn) { unit = isAl(mn[3]) ? 'al' : 'chars'; min = num(mn[1], mn[2]); }
+    if (mx) { unit = unit || (isAl(mx[3]) ? 'al' : 'chars'); max = num(mx[1], mx[2]); }
+  }
+  if (unit) {
+    out.unit = unit;
+    const toChars = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(unit === 'al' ? v * AL : v));
+    if (min != null) out.minChars = toChars(min);
+    if (max != null) out.maxChars = toChars(max);
+  }
+  return out;
+}

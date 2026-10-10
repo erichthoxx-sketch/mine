@@ -978,3 +978,7 @@ button.td-ok .ic, button.td-ok .icx .ic { width: 16px; height: 16px; stroke-widt
 .td-card .pitem { padding: 8px 0; }
 .td-how { margin-top: 8px; color: var(--text-2); }
 .td-how p { margin: 0 0 6px; line-height: 1.45; }
+/* конкурс: блок «вставьте условия» сверху */
+.c-fill { padding: 12px 14px; margin-bottom: 4px; border-radius: 14px; background: var(--surface-2); }
+.c-fill textarea, .c-fill input { background: var(--surface); }
+.c-filled { margin-top: 6px; color: var(--good); }

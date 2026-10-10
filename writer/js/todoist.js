@@ -34,25 +34,28 @@ export function todoistTasks(items, booksById) {
 // active — открытые задачи с нашей меткой [{id, content, due:{date}}]
 export function todoistPlan(want, map = {}, closed = {}, active = []) {
   const byId = new Map(active.map((t) => [String(t.id), t]));
-  const ops = { create: [], update: [], close: [], doneInTodoist: [] };
+  const ops = { create: [], update: [], close: [], verify: [], unclose: [] };
   const wantKeys = new Set(want.map((w) => w.key));
-  const adopted = new Set(Object.values(map).map((m) => String(m.id)));
+  const taken = new Set(Object.values(map).map((m) => String(m.id)));
+  const same = (t, w) => t.content === w.content && (t.due?.date || '').slice(0, 10) === w.date;
   for (const w of want) {
-    if (closed[w.key]) continue;
     const m = map[w.key];
     if (m) {
       const t = byId.get(String(m.id));
-      if (!t) { ops.doneInTodoist.push(w); continue; } // закрыла или удалила в Todoist
+      if (!t) { ops.verify.push({ id: m.id, w }); continue; } // нет в списке — проверим отдельно: закрыта ли на самом деле
       if (t.content !== w.content || (t.due?.date || '').slice(0, 10) !== w.date || (t.description || '') !== w.description) ops.update.push({ id: m.id, w });
       continue;
     }
-    // уже есть такая же (например, создало другое устройство) — берём её, а не дублируем
-    const twin = active.find((t) => !adopted.has(String(t.id)) && t.content === w.content && (t.due?.date || '').slice(0, 10) === w.date);
-    if (twin) { adopted.add(String(twin.id)); ops.update.push({ id: twin.id, w, adopt: true }); continue; }
+    // такая задача уже есть в Todoist (создало другое устройство или потерялась связь) — берём её, а не дублируем
+    const twin = active.find((t) => !taken.has(String(t.id)) && same(t, w));
+    if (twin) { taken.add(String(twin.id)); ops.update.push({ id: twin.id, w, adopt: true }); if (closed[w.key]) ops.unclose.push(w.key); continue; }
+    if (closed[w.key]) continue; // закрыла в Todoist — заново не создаём
     ops.create.push(w);
   }
-  // в планере этого больше нет (сделано в приложении) — закрываем в Todoist
+  // в планере этого больше нет (сделано или выложено в приложении) — закрываем в Todoist
   for (const [key, m] of Object.entries(map)) if (!wantKeys.has(key) && byId.has(String(m.id))) ops.close.push({ key, id: m.id });
+  // наши задачи (с меткой), которые ни к чему в планере не относятся — устарели, закрываем
+  for (const t of active) if (!taken.has(String(t.id))) ops.close.push({ key: null, id: t.id });
   return ops;
 }
 
@@ -118,8 +121,16 @@ export async function syncTodoist(token, want, state = {}) {
   const ops = todoistPlan(want, map, closed, active);
   const today = want.map((w) => w.date).sort()[0] || '';
   const stats = { created: 0, updated: 0, closed: 0 };
-  for (const w of ops.doneInTodoist) { closed[w.key] = w.date; delete map[w.key]; }
-  for (const { key, id } of ops.close) { await post(token, `/tasks/${id}/close`); delete map[key]; stats.closed++; }
+  ops.doneInTodoist = [];
+  for (const k of ops.unclose) delete closed[k];
+  // задачи, которых нет среди открытых: закрыта или удалена в Todoist — тогда больше не трогаем; иначе — обновляем как обычно
+  for (const { id, w } of ops.verify) {
+    let t = null;
+    try { t = await tfetch(token, `/tasks/${id}`); } catch (e) { if (!/404/.test(e.message)) throw e; }
+    if (!t || t.checked || t.is_deleted) { ops.doneInTodoist.push(w); closed[w.key] = w.date; delete map[w.key]; }
+    else ops.update.push({ id, w });
+  }
+  for (const { key, id } of ops.close) { await post(token, `/tasks/${id}/close`).catch(() => {}); if (key) delete map[key]; stats.closed++; }
   for (const { id, w, adopt } of ops.update) {
     if (!adopt) await post(token, `/tasks/${id}`, { content: w.content, description: w.description, due_date: w.date });
     map[w.key] = { id, date: w.date }; if (!adopt) stats.updated++;
