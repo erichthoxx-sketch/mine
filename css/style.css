@@ -915,3 +915,10 @@ table td, table th { overflow-wrap: normal; word-break: normal; }
 table.pub-t tr.ch-row { cursor: pointer; }
 table.pub-t tr.ch-row:hover td { background: transparent; }
 .ch-cell .ch-t { color: var(--text); font-weight: 600; }
+/* редактор на телефоне: строка «слова · знаки · а.л.» прижата к самому низу экрана */
+@media (max-width: 1179px) {
+  html.on-ed .ed-stats { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; margin: 0; gap: 14px;
+    padding: 9px 16px calc(9px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line); }
+  html.on-ed main { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
+  html.on-ed #toast { bottom: calc(56px + env(safe-area-inset-bottom)); }
+}
