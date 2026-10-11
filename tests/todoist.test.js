@@ -67,3 +67,17 @@ test('идеи ⇄ Todoist: новые, правки с обеих сторон,
   assert.deepEqual(ops.push.map((x) => x.id), ['e']);
   assert.deepEqual(ops.gone.map((x) => x.id), ['f']);
 });
+
+test('Todoist: задачу, которую Лана сама пометила «мастерская», приложение не закрывает', async () => {
+  const { todoistPlan } = await import('../writer/js/todoist.js');
+  const mine = { id: '900', content: 'Начать выкладку на Литгород', description: '', due: { date: '2026-10-12' } };
+  const app = { id: '100', content: 'Выложить новую главу', description: 'старое', due: { date: '2026-10-28' } };
+  // 100 — создано приложением (в списке made), но больше не нужно — закрываем; 900 — её собственная — не трогаем
+  const ops = todoistPlan([], {}, {}, [mine, app], { 100: '2026-10-09' });
+  assert.deepEqual(ops.close.map((x) => x.id), ['100']);
+  // и не «усыновляем» её задачу как напоминание с тем же текстом
+  const w = { key: 'k', content: 'Начать выкладку на Литгород', description: 'Звериная тропа для двоих · Литгород', date: '2026-10-12' };
+  const ops2 = todoistPlan([w], {}, {}, [mine], {});
+  assert.equal(ops2.update.length, 0);
+  assert.equal(ops2.create.length, 1);
+});

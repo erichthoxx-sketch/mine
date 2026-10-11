@@ -33,7 +33,9 @@ export function todoistTasks(items, booksById) {
 
 // что сделать: map — {key: {id, date, content}} (что мы уже создали), closed — {key: дата} (закрыто в Todoist),
 // active — открытые задачи с нашей меткой [{id, content, due:{date}}]
-export function todoistPlan(want, map = {}, closed = {}, active = []) {
+// made — id задач, которые создало само приложение: только их можно закрывать как устаревшие.
+// Задачу, которую Лана сама пометила «мастерская», приложение не трогает — она её собственная.
+export function todoistPlan(want, map = {}, closed = {}, active = [], made = null) {
   const byId = new Map(active.map((t) => [String(t.id), t]));
   const ops = { create: [], update: [], close: [], verify: [], unclose: [] };
   const wantKeys = new Set(want.map((w) => w.key));
@@ -48,7 +50,7 @@ export function todoistPlan(want, map = {}, closed = {}, active = []) {
       continue;
     }
     // такая задача уже есть в Todoist (создало другое устройство или потерялась связь) — берём её, а не дублируем
-    const twin = active.find((t) => !taken.has(String(t.id)) && same(t, w));
+    const twin = active.find((t) => !taken.has(String(t.id)) && same(t, w) && (!made || made[String(t.id)] || (t.description || '') === (w.description || '')));
     if (twin) { taken.add(String(twin.id)); ops.update.push({ id: twin.id, w, adopt: true }); if (closed[w.key]) ops.unclose.push(w.key); continue; }
     if (closed[w.key]) continue; // закрыла в Todoist — заново не создаём
     ops.create.push(w);
@@ -56,7 +58,8 @@ export function todoistPlan(want, map = {}, closed = {}, active = []) {
   // в планере этого больше нет (сделано или выложено в приложении) — закрываем в Todoist
   for (const [key, m] of Object.entries(map)) if (!wantKeys.has(key) && byId.has(String(m.id))) ops.close.push({ key, id: m.id });
   // наши задачи (с меткой), которые ни к чему в планере не относятся — устарели, закрываем
-  for (const t of active) if (!taken.has(String(t.id))) ops.close.push({ key: null, id: t.id });
+  const ours = (id) => !made || made[String(id)] || Object.values(map).some((m) => String(m.id) === String(id));
+  for (const t of active) if (!taken.has(String(t.id)) && ours(t.id)) ops.close.push({ key: null, id: t.id });
   return ops;
 }
 
@@ -102,12 +105,13 @@ async function shelves(token, want) {
 
 // Задачи, которые Лана сама ведёт в Todoist в проектах «Книги» и «Мастерская» (без нашей метки) —
 // показываем в приложении: в планере в свой день, на странице книги (раздел = книга), деньги — и в «Доходах»
-export async function fetchOwnTasks(token) {
+export async function fetchOwnTasks(token, made = {}) {
   const projects = await all(token, '/projects'), out = [];
   for (const p of projects.filter((x) => /^(книги|мастерская)$/i.test(String(x.name).trim()))) {
     const secs = await all(token, `/sections?project_id=${p.id}`), sn = Object.fromEntries(secs.map((x) => [String(x.id), x.name]));
     for (const t of await all(token, `/tasks?project_id=${p.id}`)) {
-      if ((t.labels || []).includes(TD_LABEL) || (t.labels || []).includes(IDEA_LABEL) || t.parent_id) continue;
+      // служебные задачи приложения и идеи — не «свои»; но если Лана сама поставила метку «мастерская» — это её задача
+      if (((t.labels || []).includes(TD_LABEL) && made[String(t.id)]) || (t.labels || []).includes(IDEA_LABEL) || t.parent_id) continue;
       out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: String(p.name).trim(), s: sn[String(t.section_id)] || '', pr: t.priority || 1, ds: t.description || '' });
     }
   }
@@ -189,8 +193,11 @@ export async function syncIdeas(token, ideas, booksById) {
 // синхронизация: возвращает {state, stats, doneInTodoist}
 export async function syncTodoist(token, want, state = {}) {
   const map = { ...(state.map || {}) }, closed = { ...(state.closed || {}) };
+  // свои задачи приложения: всё, что оно создало или к чему привязано (раньше списка не было — берём связанные)
+  const made = { ...(state.made || {}) };
+  for (const m of Object.values(map)) made[String(m.id)] ||= m.date || '1';
   const active = await all(token, `/tasks/filter?query=${encodeURIComponent('@' + TD_LABEL)}`).catch(() => all(token, `/tasks?label=${encodeURIComponent(TD_LABEL)}`));
-  const ops = todoistPlan(want, map, closed, active);
+  const ops = todoistPlan(want, map, closed, active, made);
   const today = want.map((w) => w.date).sort()[0] || '';
   const stats = { created: 0, updated: 0, closed: 0 };
   ops.doneInTodoist = [];
@@ -205,18 +212,21 @@ export async function syncTodoist(token, want, state = {}) {
   for (const { key, id } of ops.close) { await post(token, `/tasks/${id}/close`).catch(() => {}); if (key) delete map[key]; stats.closed++; }
   for (const { id, w, adopt } of ops.update) {
     if (!adopt) await post(token, `/tasks/${id}`, { content: w.content, description: w.description, due_date: w.date });
-    map[w.key] = { id, date: w.date }; if (!adopt) stats.updated++;
+    map[w.key] = { id, date: w.date }; made[String(id)] ||= w.date || '1'; if (!adopt) stats.updated++;
   }
   if (ops.create.length) {
     const sh = await shelves(token, ops.create);
     for (const w of ops.create) {
       const t = await post(token, '/tasks', { content: w.content, description: w.description, due_date: w.date, project_id: sh.proj[w.project], section_id: sh.sec[w.project + '\u0000' + w.section], labels: [TD_LABEL] });
-      map[w.key] = { id: t.id, date: w.date }; stats.created++;
+      map[w.key] = { id: t.id, date: w.date }; made[String(t.id)] = w.date || '1'; stats.created++;
     }
   }
   // старое не храним: закрытое и прошедшее больше месяца назад
   const old = (d) => today && d && d < today.slice(0, 8) + '01' && d < today;
   for (const [k, d] of Object.entries(closed)) if (old(d) && !want.some((w) => w.key === k)) delete closed[k];
-  const own = await fetchOwnTasks(token).catch(() => state.own || []);
-  return { state: { map, closed, own, at: new Date().toISOString(), stats }, stats, doneInTodoist: ops.doneInTodoist };
+  // список своих не растёт бесконечно: держим открытые и связанные
+  const openIds = new Set([...active.map((t) => String(t.id)), ...Object.values(map).map((m) => String(m.id))]);
+  for (const id of Object.keys(made)) if (!openIds.has(id)) delete made[id];
+  const own = await fetchOwnTasks(token, made).catch(() => state.own || []);
+  return { state: { map, closed, made, own, at: new Date().toISOString(), stats }, stats, doneInTodoist: ops.doneInTodoist };
 }
