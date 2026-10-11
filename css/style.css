@@ -1002,7 +1002,6 @@ select.ct-st { width: auto; min-height: 26px; padding: 0 24px 0 8px; font-size: 
 .ct-books { margin-top: 8px; }
 .ct-book { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; padding: 9px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .ct-book.is-sent .ct-bt b { color: var(--text-2); }
-.ct-fn { display: inline-flex !important; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; word-break: break-all; }
 .ct-fn .ic { width: 13px; height: 13px; flex: none; }
 .ct-sent { color: var(--good) !important; font-size: 13px !important; display: inline-flex; align-items: center; gap: 3px; padding: 0 4px !important; }
 .ct-sent .ic { width: 14px; height: 14px; stroke-width: 2.4; }
@@ -1148,3 +1147,18 @@ html.is-dragging, html.is-dragging * { cursor: grabbing !important; }
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) :is(.idea-pick select, select.ct-addb, select.ct-join, .ct-add select) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23c9bfc4' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); } }
 :root[data-theme="dark"] :is(.idea-pick select, select.ct-addb, select.ct-join, .ct-add select) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23c9bfc4' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+/* книга на конкурсе: скачать — тихими ссылками, «отправлена» — меткой у названия, корзина — при наведении */
+.ct-bb { gap: 4px; }
+:is(main, dialog) button.ct-dl.ct-dl:not(.chip):not(.link):not(.wide) { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 4px 10px; border: 0; border-radius: 8px; background: transparent; box-shadow: none; color: var(--text-2); font-size: 13px; font-weight: 600; }
+:is(main, dialog) button.ct-dl.ct-dl:not(.chip):not(.link):not(.wide):hover { background: var(--surface-2); color: var(--text); }
+.ct-dl .ic { width: 15px; height: 15px; opacity: .8; }
+.ct-send { margin-left: 4px; }
+:is(main, dialog) button.ct-pill.ct-pill:not(.chip):not(.link):not(.wide) { display: inline-flex; align-items: center; gap: 4px; vertical-align: 2px; margin-left: 8px; min-height: 0; padding: 2px 9px 2px 7px; border: 0; border-radius: 999px; box-shadow: none; background: color-mix(in srgb, var(--good) 12%, transparent); color: var(--good); font-size: 11.5px; font-weight: 700; cursor: pointer; }
+:is(main, dialog) button.ct-pill.ct-pill:not(.chip):not(.link):not(.wide):hover { background: color-mix(in srgb, var(--good) 20%, transparent); }
+.ct-pill .icx .ic, .ct-pill .ic { width: 12px; height: 12px; stroke-width: 2.6; }
+@media (hover: hover) { .ct-book .ct-x { opacity: 0; transition: opacity .15s; } .ct-book:hover .ct-x, .ct-book .ct-x:focus-visible { opacity: 1; } }
+
+/* название книги в «Книгах в работе» — чёрное, как заголовок; цвет — только в акцентах */
+main a.pbook-t, main a.pbook-t b { color: var(--text) !important; }
+/* имена файлов по условиям — тихо, без плашек */
+.ct-fnc code { background: transparent; padding: 0; color: var(--text-2); }
