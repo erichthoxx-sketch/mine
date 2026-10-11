@@ -64,3 +64,10 @@ test('XML документа: стили, разрыв страницы, экр�
   assert.ok(x.includes('Глава &lt;1&gt; &amp; «2»'));
   assert.ok(x.includes('<w:rPr><w:b/></w:rPr><w:br/><w:t xml:space="preserve">b</w:t>'));
 });
+
+test('в скачиваемых файлах нет буквы «ё»', async () => {
+  const { manuscriptParas, documentXml, printHtml, noYo } = await import('../writer/js/publish.js');
+  assert.equal(noYo('Объём, Ёлка, её'), 'Объем, Елка, ее');
+  const html = printHtml([{ kind: 'p', runs: [{ t: 'Она ещё ждёт' }] }], 'Синопсис — объём');
+  assert.ok(!/[ёЁ]/.test(html));
+});

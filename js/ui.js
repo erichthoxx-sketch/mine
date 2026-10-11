@@ -75,7 +75,9 @@ export function installHandlers(afterChange) {
 // Скачивание: в Claude через разрешение «downloads» (обычные ссылки там заблокированы), в обычном браузере — через ссылку
 export async function download(filename, text, mime = 'text/plain') {
   // в именах файлов — нижнее подчёркивание вместо дефисов и пробелов: «zveriniaya_tropa_sinopsis.docx»
-  filename = String(filename).replace(/[\s-]+/g, '_').replace(/_+/g, '_').replace(/_(?=\.[a-z0-9]+$)/i, '');
+  // и без буквы «ё» — ни в имени, ни в тексте файла
+  if (typeof text === 'string') text = text.replace(/ё/g, 'е').replace(/Ё/g, 'Е');
+  filename = String(filename).replace(/ё/g, 'е').replace(/Ё/g, 'Е').replace(/[\s-]+/g, '_').replace(/_+/g, '_').replace(/_(?=\.[a-z0-9]+$)/i, '');
   try {
     const d = await window.claude?.use?.('downloads');
     if (d) { await d.save({ filename, data: text }); return true; }

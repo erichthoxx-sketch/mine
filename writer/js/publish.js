@@ -114,7 +114,11 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </w:styles>`;
 const FOOTER_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:pStyle w:val="Footer"/></w:pPr><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:ftr>`;
+// в скачиваемых файлах — без буквы «ё»: «объём» → «объем» (так просят издательства и конкурсы)
+export const noYo = (t) => String(t ?? '').replace(/ё/g, 'е').replace(/Ё/g, 'Е');
+const paraNoYo = (paras) => paras.map((p) => ({ ...p, runs: (p.runs || []).map((r) => ({ ...r, t: noYo(r.t) })) }));
 export async function docxBlob(Zip, paras, { title = '', author = '' } = {}) {
+  paras = paraNoYo(paras); title = noYo(title); author = noYo(author);
   const z = new Zip();
   z.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`);
@@ -142,6 +146,7 @@ export function parasHtml(paras) {
 // Поля страницы — внутри вёрстки (у самой страницы полей нет): тогда браузер не печатает свои колонтитулы
 // (дату, название, about:blank). Верх и низ повторяются на каждой странице — шапкой и подвалом таблицы.
 export function printHtml(paras, docTitle) {
+  paras = paraNoYo(paras); docTitle = noYo(docTitle);
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>${hesc(docTitle)}</title><style>
 @page { size: A4; margin: 0; }
 html, body { margin: 0; }

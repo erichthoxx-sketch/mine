@@ -531,7 +531,7 @@ export function contestFileName(x, b, kind, author = '') {
     return tk;
   });
   if (!hasKind && kind === 'synopsis') parts.push(KIND);
-  return parts.join('_');
+  return parts.join('_').replace(/ё/g, 'е').replace(/Ё/g, 'Е'); // в именах файлов — без «ё»
 }
 // подходит ли книга под условия конкурса по объёму: { ok, text } — в единицах конкурса
 export function contestFit(x, b, today) {

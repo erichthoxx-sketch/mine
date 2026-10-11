@@ -122,7 +122,7 @@ acts['mk.pubZip'] = async (d) => run(async () => {
   try { const r = await service(b, 'synopsis'); files.push([`${safe(b.title)} — синопсис.docx`, await docxBlob(await drive.loadJsZip(), r.paras, meta(b))]); } catch (e) { errs.push('синопсис: ' + e.message); }
   if (!files.length) throw new Error('Нечего собрать — ' + errs.join('; '));
   const Zip = await drive.loadJsZip(), z = new Zip();
-  for (const [n, blob] of files) z.file(n, blob);
+  for (const [n, blob] of files) z.file(n.replace(/ё/g, 'е').replace(/Ё/g, 'Е'), blob);
   const zip = await z.generateAsync({ type: 'blob' });
   if (await download(`izdatelstvo_${latin(b.title)}.zip`, zip, 'application/zip')) toast(errs.length ? `Скачано, но ${errs.join('; ')}` : 'Пакет скачан: рукопись и синопсис');
 });

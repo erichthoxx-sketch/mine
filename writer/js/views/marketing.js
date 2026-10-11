@@ -242,7 +242,8 @@ async function blobOf(m) {
 }
 async function zipDownload(name, files) {
   const Zip = await drive.loadJsZip(), z = new Zip();
-  for (const [path, data] of files) if (data) z.file(path, data);
+  const yo = (t) => t.replace(/ё/g, 'е').replace(/Ё/g, 'Е'); // в файлах — без «ё»
+  for (const [path, data] of files) if (data) z.file(yo(path), typeof data === 'string' ? yo(data) : data);
   const blob = await z.generateAsync({ type: 'blob' });
   if (await download(name, blob, 'application/zip')) toast('Архив скачан');
 }
