@@ -216,11 +216,8 @@ export function sideToday(c) {
 // Компактный блок дел на сегодня — в левом меню на компьютере: только то, что требует действия
 export function navToday(c) {
   const t = c.today;
-  const imp = planItems(c, t, addDays(t, 2)).filter((x) => {
-    if (x.kind === 'wait' || x.kind === 'done') return false;
-    if (x.kind === 'pub' || x.kind === 'waitans' || x.kind === 'mk' || x.kind === 'queue') return x.date === t;
-    return true; // сроки, конкурсы, налог, заявки — сегодня и в ближайшие 2 дня
-  });
+  // только сегодняшнее: напоминания и важное на текущий день (будущее — в «Скоро» ниже)
+  const imp = planItems(c, t, t).filter((x) => x.date === t && x.kind !== 'wait' && x.kind !== 'done');
   const goals = activeGoals(c).map((g) => ({ g, s: goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t) })).filter((x) => x.s.active && x.s.todayDay && !x.s.doneToday);
   const when = (d) => (d === t ? '' : d === addDays(t, 1) ? 'завтра' : 'послезавтра');
   const row = (kind, title, sub, attrs, btn = '') => `<div class="nt-item" ${attrs}><i class="k-${kind}"></i><div class="nt-body"><div class="nt-t">${title}</div>${sub ? `<div class="nt-s">${sub}</div>` : ''}${btn}</div></div>`;
@@ -232,7 +229,7 @@ export function navToday(c) {
   ];
   const shown = items.slice(0, 5), more = items.length - shown.length;
   // скоро: ближайшие 7 дней — выкладка, сроки, напоминания (без того, что уже выше)
-  const soon = planItems(c, addDays(t, 1), addDays(t, 7)).filter((x) => x.kind !== 'done' && !(x.date <= addDays(t, 2) && x.kind !== 'wait' && x.kind !== 'pub'))
+  const soon = planItems(c, addDays(t, 1), addDays(t, 7)).filter((x) => x.kind !== 'done' && x.date > t)
     .sort((x, y) => x.date.localeCompare(y.date)).slice(0, 4);
   const soonHtml = soon.length ? `<div class="nt-k">Скоро</div>${soon.map((x) => `<div class="nt-soon"><span class="nt-d">${DOW[dowI(x.date)]} ${Number(x.date.slice(8, 10))}</span><span>${x.kind === 'pub' ? `Выложить ${x.ch ? `«${esc(x.ch)}»` : 'главу'}` : x.kind === 'wait' ? x.title.replace(' — выйдет сама', '') : x.title}</span></div>`).join('')}` : '';
   return `<div class="nav-today"><div class="nt-date">${dayName(t, t).replace('Сегодня · ', '')}</div>
