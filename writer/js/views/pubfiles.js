@@ -49,7 +49,7 @@ export function manuscriptInfo(b) {
 }
 
 // ---------- карточки на странице книги ----------
-const btn = (act, id, k, icon, title) => `<button class="ed-ic" data-act="${act}" data-id="${id}" data-k="${k}" title="${title}" aria-label="${title}">${ic(icon)}</button>`;
+const btn = (act, id, k, icon, title) => `<button class="dl dl-i" data-act="${act}" data-id="${id}" data-k="${k}" title="${title}" aria-label="${title}">${ic(icon)}</button>`;
 export function textsCard(b) {
   const row = (k) => { const s = svcInfo(b, k); return `<div class="svc-row"><a href="#" class="svc-name tap" data-act="svc.view" data-id="${b.id}" data-k="${k}"><b>${NAME[k]}</b><span class="sub">${s.sub}</span></a>
     <span class="svc-btns">${s.ok ? `${btn('svc.view', b.id, k, 'eye', 'Посмотреть')}${btn('svc.copy', b.id, k, 'copy', 'Скопировать')}${btn('svc.docx', b.id, k, 'download', 'Скачать Word')}` : ''}</span></div>`; };
@@ -58,8 +58,8 @@ export function textsCard(b) {
 export function publisherCard(b) {
   const m = manuscriptInfo(b), s = svcInfo(b, 'synopsis');
   return `<div class="card svc-card"><h2>Для издательства</h2>
-    <div class="svc-row"><span class="svc-name"><b>Рукопись</b><span class="sub">${m.sub}</span></span><span class="svc-btns">${m.ok ? `<button class="small-btn" data-act="pub.manuscript" data-id="${b.id}">Word</button>` : ''}</span></div>
-    <div class="svc-row"><span class="svc-name"><b>Синопсис</b><span class="sub">${s.sub}</span></span><span class="svc-btns">${s.ok ? `<button class="small-btn" data-act="svc.docx" data-id="${b.id}" data-k="synopsis">Word</button><button class="small-btn" data-act="svc.pdf" data-id="${b.id}" data-k="synopsis">PDF</button>` : ''}</span></div>
+    <div class="svc-row"><span class="svc-name"><b>Рукопись</b><span class="sub">${m.sub}</span></span><span class="svc-btns">${m.ok ? `<button class="dl" data-act="pub.manuscript" data-id="${b.id}" title="Скачать рукопись в Word">${ic('download')}Word</button>` : ''}</span></div>
+    <div class="svc-row"><span class="svc-name"><b>Синопсис</b><span class="sub">${s.sub}</span></span><span class="svc-btns">${s.ok ? `<button class="dl" data-act="svc.docx" data-id="${b.id}" data-k="synopsis" title="Скачать синопсис в Word">${ic('download')}Word</button><button class="dl" data-act="svc.pdf" data-id="${b.id}" data-k="synopsis" title="Синопсис в PDF">${ic('download')}PDF</button>` : ''}</span></div>
     <p class="small muted" style="margin:10px 0 0">Times New Roman 12, интервал 1,5, отступ абзаца 1,25 см, A4, номера страниц, титульный лист; каждая глава — с новой страницы.</p>
     <div class="row" style="margin-top:12px"><button class="primary" data-act="mk.pubZip" data-id="${b.id}"${m.ok || s.ok ? '' : ' disabled'}>Скачать пакет для издательства</button></div></div>`;
 }
@@ -77,8 +77,7 @@ async function copyText(text, html) {
 acts['svc.view'] = async (d) => run(async () => {
   const b = bookOf(d), r = await service(b, d.k);
   openSheet(`${NAME[d.k]} — ${b.title}`, `<div class="svc-text">${htmlOf(r.body)}</div>
-    <div class="row" style="margin-top:12px"><button class="small-btn" data-act="svc.copy" data-id="${b.id}" data-k="${d.k}">Скопировать</button>
-    <button class="small-btn" data-act="svc.docx" data-id="${b.id}" data-k="${d.k}">Скачать Word</button><button class="small-btn" data-act="svc.pdf" data-id="${b.id}" data-k="${d.k}">PDF</button></div>`, null);
+    <div class="dl-row"><button class="dl" data-act="svc.copy" data-id="${b.id}" data-k="${d.k}">${ic('copy')}Скопировать</button><button class="dl" data-act="svc.docx" data-id="${b.id}" data-k="${d.k}">${ic('download')}Word</button><button class="dl" data-act="svc.pdf" data-id="${b.id}" data-k="${d.k}">${ic('download')}PDF</button></div>`, null);
 });
 acts['svc.copy'] = async (d) => run(async () => {
   const b = bookOf(d), r = await service(b, d.k);
