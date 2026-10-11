@@ -161,7 +161,6 @@ export function editorView(a, bookId, title) {
       <button class="ed-ic" data-act="ed.copy" title="Скопировать главу (без названия)">${ic('copy')}</button>
       <button class="ed-ic" data-act="ed.zoom" data-v="-1" title="Мельче">A−</button>
       <button class="ed-ic" data-act="ed.zoom" data-v="1" title="Крупнее">A+</button>
-      <button class="ed-ic" data-act="ed.focus" title="Режим фокуса (Esc — выйти)">⛶</button>
     </div>
     <div class="ed-find" id="edfind" hidden><input id="edq" placeholder="Найти в главе" aria-label="Найти" autocomplete="off">
       <button class="ed-ic" data-act="ed.findPrev" title="Предыдущее (Shift+Enter)">↑</button><button class="ed-ic" data-act="ed.findNext" title="Следующее (Enter)">↓</button><span class="small muted ed-found" id="edfound"></span>
@@ -425,7 +424,6 @@ acts['ed.fmt'] = (d) => { const el = document.getElementById('ed'); el?.focus();
 acts['ed.align'] = (d) => { const el = document.getElementById('ed'); snap(el, true); for (const b of selectedBlocks()) b.style.textAlign = d.v === 'left' ? 'left' : d.v; el?.dispatchEvent(new Event('input')); snap(el, true); return false; };
 acts['ed.dash'] = () => { document.getElementById('ed')?.focus(); document.execCommand('insertText', false, '— '); return false; };
 acts['ed.zoom'] = (d) => { const z = Math.min(1.6, Math.max(0.8, +(pref('zoom', 1) + Number(d.v) * 0.1).toFixed(1))); setPref('zoom', z); document.getElementById('ed')?.style.setProperty('--ed-zoom', z); return false; };
-acts['ed.focus'] = () => { document.documentElement.classList.toggle('ed-focus'); document.getElementById('ed')?.focus(); return false; };
 // ---------- новая глава: вкладка в Google Документе сразу за последней главой ----------
 acts['ch.add'] = async (d) => {
   const b = app().ctx().wbooksById[d.id];
@@ -453,7 +451,7 @@ acts['ch.add'] = async (d) => {
   return false;
 };
 acts['ed.goto'] = (d) => { clearFind(); app().go(`/ed/${ed.bookId}/${encodeURIComponent(d.t)}`); };
-acts['ed.back'] = (d) => { document.documentElement.classList.remove('ed-focus'); app().go('/book/' + d.id); };
+acts['ed.back'] = (d) => { app().go('/book/' + d.id); };
 acts['ed.reload'] = () => { const k = ed?.key; ed = null; if (k) app().rerender(); };
 acts['ed.useDraft'] = () => { ed.html = ed.draft.html; ed.draft = null; ed.dirty = true; app().rerender(); };
 acts['ed.dropDraft'] = () => { ls.del(draftKey(ed.key)); ed.draft = null; app().rerender(); };
@@ -485,7 +483,6 @@ document.addEventListener('keydown', (e) => {
   else if (mod && (k === 'z' || k === 'я') && e.target.id === 'ed') { e.preventDefault(); histGo(e.shiftKey ? 1 : -1); }
   else if (mod && (k === 'y' || k === 'н') && e.target.id === 'ed') { e.preventDefault(); histGo(1); }
   else if (mod && e.shiftKey && (k === 'e' || k === 'у') && e.target.id === 'ed') { e.preventDefault(); colorSel(); }
-  else if (e.key === 'Escape') document.documentElement.classList.remove('ed-focus');
 });
 export const editorDirty = () => !!ed?.dirty;
 export { ic };

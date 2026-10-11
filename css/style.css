@@ -657,13 +657,6 @@ button.ed-ic .ic { width: 18px; height: 18px; }
 @media (max-width: 700px) { .ed-paper { padding: 20px 16px 40px; border-radius: 14px; } .ed-status { width: 100%; order: 9; margin-left: 0; } }
 @media (min-width: 1180px) { .ed-stats { bottom: 0; } }
 /* режим фокуса: только текст */
-html.ed-focus nav.tabs, html.ed-focus .top, html.ed-focus .demo, html.ed-focus .ed-tools, html.ed-focus .ed-draft { display: none !important; }
-html.ed-focus #app { padding-left: 0 !important; padding-right: 0 !important; }
-html.ed-focus body { padding-bottom: 0; }
-html.ed-focus .ed-paper { border: 0; background: transparent; padding-top: 24px; }
-html.ed-focus .ed-bar { opacity: .25; transition: opacity .2s; }
-html.ed-focus .ed-bar:hover { opacity: 1; }
-html.ed-focus .ed-stats { bottom: 0; }
 /* свёрнутое меню: иконки — посередине по высоте, кнопка разворота — внизу */
 @media (min-width: 1180px) {
   html.nav-mini nav.tabs { justify-content: center; }
@@ -941,7 +934,6 @@ table.pub-t tr.ch-row:hover td { background: transparent; }
   .ed-paper .ed-stats i { font-size: 11px; color: var(--muted); letter-spacing: .02em; }
   .ed-paper .ed-stats .es-sess { padding-top: 14px; border-top: 1px solid var(--line); }
 }
-html.ed-focus .ed-paper .ed-stats { bottom: auto; }
 /* колонка цифр сбоку: чуть мельче и чуть заметнее */
 @media (min-width: 1380px) {
   .ed-paper .ed-stats { opacity: .8; gap: 13px; }
