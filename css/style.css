@@ -599,7 +599,7 @@ a.side-card:hover { border-color: var(--accent-2); }
 .today-banner.calm { padding-bottom: 16px; }
 
 /* ---------- Мастерская: дела на сегодня — в левом меню, под разделами ---------- */
-.nav-today { display: none; }
+.nav-today, .nav-soon { display: none; }
 @media (min-width: 1180px) {
   html.app-writer nav.tabs { width: 272px; }
   html.app-writer #app { padding-left: 292px; }
@@ -608,7 +608,10 @@ a.side-card:hover { border-color: var(--accent-2); }
   html.app-writer.nav-mini .demo { margin-left: -96px; }
   html.app-writer.nav-mini nav.tabs { width: 76px; }
   .nav-today { display: block; margin: 22px 2px 12px; padding: 16px 14px 12px; border-radius: 18px; background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent-2) 45%, var(--line)); }
-  html.nav-mini .nav-today { display: none; }
+  html.nav-mini .nav-today, html.nav-mini .nav-soon { display: none; }
+  /* «Скоро» — отдельный блок, нежнее и бледнее, чем «сегодня» */
+  .nav-soon { display: block; margin: 0 2px 12px; padding: 12px 14px 10px; border-radius: 18px; background: color-mix(in srgb, var(--accent-soft) 32%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent-2) 22%, var(--line)); }
+  .nav-soon .nt-k { margin-top: 0; }
   .nt-date { font-size: 13px; font-weight: 700; color: var(--text-2); margin-bottom: 8px; }
   .nt-item { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); cursor: pointer; }
   .nt-date + .nt-item { border-top: 0; }

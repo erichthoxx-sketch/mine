@@ -231,10 +231,11 @@ export function navToday(c) {
   // скоро: ближайшие 7 дней — выкладка, сроки, напоминания (без того, что уже выше)
   const soon = planItems(c, addDays(t, 1), addDays(t, 7)).filter((x) => x.kind !== 'done' && x.date > t)
     .sort((x, y) => x.date.localeCompare(y.date)).slice(0, 4);
-  const soonHtml = soon.length ? `<div class="nt-k">Скоро</div>${soon.map((x) => `<div class="nt-soon"><span class="nt-d">${DOW[dowI(x.date)]} ${Number(x.date.slice(8, 10))}</span><span>${x.kind === 'pub' ? `Выложить ${x.ch ? `«${esc(x.ch)}»` : 'главу'}` : x.kind === 'wait' ? x.title.replace(' — выйдет сама', '') : x.title}</span></div>`).join('')}` : '';
-  return `<div class="nav-today"><div class="nt-date">${dayName(t, t).replace('Сегодня · ', '')}</div>
+  const soonHtml = soon.length ? `<div class="nav-soon"><div class="nt-k">Скоро</div>${soon.map((x) => `<div class="nt-soon"><span class="nt-d">${DOW[dowI(x.date)]} ${Number(x.date.slice(8, 10))}</span><span>${x.kind === 'pub' ? `Выложить ${x.ch ? `«${esc(x.ch)}»` : 'главу'}` : x.kind === 'wait' ? x.title.replace(' — выйдет сама', '') : x.title}</span></div>`).join('')}</div>` : '';
+  // два блока: «сегодня» и отдельно, светлее, — «Скоро»
+  return `<div class="nav-day"><div class="nav-today"><div class="nt-date">${dayName(t, t).replace('Сегодня · ', '')}</div>
     ${items.length ? shown.join('') + (more ? `<button class="link nt-more" data-act="go" data-to="/plan">ещё ${more} →</button>` : '') : '<div class="nt-empty">Срочных дел нет ✓</div>'}
-    <div class="nt-stat">написано сегодня <b>+${alNum(c.writtenToday)} а.л.</b></div>
+    <div class="nt-stat">написано сегодня <b>+${alNum(c.writtenToday)} а.л.</b></div></div>
     ${soonHtml}</div>`;
 }
 
