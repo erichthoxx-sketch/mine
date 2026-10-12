@@ -638,3 +638,20 @@ test('bigGoalPlan: путь к 500 000 ₽ к январю 2030', () => {
   assert.ok(Number.isFinite(bigGoalPlan({ target: 500000, byMonth: '2030-01', startMonth: '2026-10', base: 0 }).growth));
 });
 
+
+test('сбой «не от меня»: потеря, прогноз месяца по обычным дням, база рекламы без дней сбоя', async () => {
+  const { outageSet, outageLoss, monthOutages, paceForecast, dashboardStats } = await import('../js/calc.js');
+  const rows = [];
+  for (let d = 1; d <= 20; d++) { const date = `2026-10-${String(d).padStart(2, '0')}`; const roy = d === 11 || d === 12 ? 200 : 3000; rows.push(mk(date, 199, roy / 100, roy)); }
+  const days = [{ id: '2026-10-11', date: '2026-10-11', events: [{ type: 'outage', text: 'Сбои у Яндекса' }] }, { id: '2026-10-12', date: '2026-10-12', events: [{ type: 'outage' }] }];
+  const out = outageSet(days);
+  assert.deepEqual([...out], ['2026-10-11', '2026-10-12']);
+  const l = outageLoss(rows, [], '2026-10-11', out);
+  assert.deepEqual([l.expected, l.fact, l.loss], [3000, 200, 2800]);
+  const m = monthOutages(rows, [], '2026-10-20', out);
+  assert.deepEqual([m.days, m.fact, m.loss], [2, 400, 5600]);
+  // 18 обычных дней по 3000 + 400 за сбои; дальше — по 3000 в день
+  assert.equal(paceForecast(54400, 20, 31, m), 54400 + 3000 * 11);
+  const st = dashboardStats(rows, [], '2026-10-20', out);
+  assert.equal(st.avg7, 3000);
+});

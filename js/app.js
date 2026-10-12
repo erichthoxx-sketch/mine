@@ -3,6 +3,7 @@ import { createStore, authErrorText, firebaseConfigured } from './store.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from './ui.js';
 import {
   todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth, litnetMoneyByMonth, litnetDiscountBase, monthKey,
+  outageSet,
 } from './calc.js';
 import { fmtDate } from './format.js';
 import { ic } from './icons.js';
@@ -72,6 +73,7 @@ function getCtx() {
     activeBooks: d.books.filter((b) => b.status !== 'removed').sort((a, b) => (a.status === 'done') - (b.status === 'done') || a.title.localeCompare(b.title)),
     firstDate: first, dataEnd, hasData, series, ma: movingAverage(series.map((x) => x.royalty), 7),
     monthsMap, spend, discounts, forecast, litnetPayments, litnetMoney,
+    outages: outageSet(d.days),
     titleOf: (id, fallback) => booksById[id]?.title || fallback,
   };
   cacheKey = key;

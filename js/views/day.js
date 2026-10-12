@@ -1,11 +1,17 @@
 import { ic } from '../icons.js';
 import { esc, acts, forms, changes, opt, toast, openSheet } from '../ui.js';
 import { rub, fmtDate, fmtShort, fmtMonth, pct } from '../format.js';
-import { incomeSeries, booksBreakdown, manualSaleRow, dayStats, sumSeries, buildPlan, planOverridesOf, monthKey, daysInMonth, campaignDailySpend, countDays, addDays } from '../calc.js';
+import { incomeSeries, booksBreakdown, manualSaleRow, dayStats, sumSeries, buildPlan, planOverridesOf, monthKey, daysInMonth, campaignDailySpend, countDays, addDays, outageLoss } from '../calc.js';
 import { N } from '../ui.js';
 import { EVENT_TYPES } from '../charts.js';
 
 const app = () => window.__app;
+// день со сбоем «не от меня»: не идёт в средние, базу рекламы и прогноз; сколько недополучено
+function outageCard(c, date) {
+  if (!c.outages?.has(date)) return '';
+  const l = date <= c.dataEnd ? outageLoss(c.sales, c.legacyDays, date, c.outages) : null;
+  return `<div class="card outage-card"><b>Сбой — не по вашей вине</b><div class="small">Этот день не входит в средние, в базу для рекламы и в прогноз месяца.${l ? ` Обычно ≈ ${rub(l.expected, 0)} в день — недополучено ≈ <b>${rub(l.loss, 0)}</b>.` : ''}</div></div>`;
+}
 const dayDoc = (c, date) => c.data.days.find((d) => d.id === date) || { id: date, date, events: [], note: '' };
 
 const WD = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
@@ -44,6 +50,7 @@ export function day(a) {
     <div class="chips" style="margin:6px 0">${chg(st.vsAvg, `среднему за 7 дн. (${rub(st.avg7, 0)})`)}${chg(st.vsWeek, `${WD_ACC[wd]} (${rub(st.weekAgo, 0)})`)}</div>
     <div class="small">${st.qty} шт.: продажи ${st.saleQty} (${rub(st.saleRoyalty, 0)}) · подписки ${st.subQty} (${rub(st.subRoyalty, 0)})</div>`}
   </a>
+  ${outageCard(c, date)}
   ${noData && !st.royalty ? '' : `<div class="ai-day"><button class="link" data-act="day.ai" data-date="${date}">${ic('sparkle')} Спросить ИИ про этот день</button></div>`}
   ${plan ? `<a class="card tap" href="#" data-act="goal.all" data-m="${mk}"><h2>Цель ${fmtMonth(mk)}</h2>
     <div class="row between small"><span>К ${fmtShort(date)}: <b>${rub(mtd, 0)}</b> из ${rub(plan.plan, 0)}</span><span class="muted">${pct(mtd / plan.plan, 0)}</span></div>
@@ -129,15 +136,25 @@ acts['event.quick'] = (d) => {
   openSheet(`Событие — ${fmtDate(date)}`, `<label for="et">Что произошло</label><select id="et" name="type">${Object.entries(EVENT_TYPES).map(([k, v]) => opt(k, v.label, 'chapter')).join('')}</select>
     <label for="eb">Книга (необязательно)</label><select id="eb" name="bookId"><option value="">—</option>${books.map((b) => opt(b.id, b.title, def?.id)).join('')}</select>
     <label for="ex">Пояснение</label><input id="ex" name="text" placeholder="например, глава 25, скидка 30 % или своё событие">
-    <div class="hint">Для «Другое» напишите, что произошло, в пояснении.</div>`, async (fd) => {
+    <div id="exTo" hidden><label for="et2">Сбой длился до (включительно)</label><input id="et2" type="date" name="to" min="${date}" value="${date}">
+    <div class="hint">Сбой — то, что от вас не зависит: реклама не крутится, площадка лежит. Такие дни не портят средние, базу для рекламы и прогноз месяца, а приложение посчитает, сколько недополучено.</div></div>
+    <div class="hint" id="exHint">Для «Другое» напишите, что произошло, в пояснении.</div>`, async (fd) => {
     const type = fd.get('type'), text = (fd.get('text') || '').trim();
     if (type === 'other' && !text) { toast('Для «Другое» напишите, что произошло'); return false; }
-    const doc = dayDoc(app().ctx(), date);
     const ev = { type, text };
     if (fd.get('bookId')) ev.bookId = fd.get('bookId');
-    await save({ ...doc, id: date, date, events: [...(doc.events || []), ev] });
-    toast('Событие добавлено');
+    // сбой на несколько дней — событие на каждый день
+    const to = type === 'outage' && fd.get('to') > date ? String(fd.get('to')) : date;
+    for (let d = date, i = 0; d <= to && i < 62; d = addDays(d, 1), i++) {
+      const doc = dayDoc(app().ctx(), d);
+      if (type === 'outage' && (doc.events || []).some((e) => e.type === 'outage')) continue;
+      await save({ ...doc, id: d, date: d, events: [...(doc.events || []), ev] });
+    }
+    toast(to > date ? `Сбой отмечен: ${fmtDate(date)} — ${fmtDate(to)}` : 'Событие добавлено');
   }, { submitText: 'Добавить' });
+  const f = document.getElementById('sheetForm'), sel = f?.querySelector('#et');
+  const sync = () => { const o = sel.value === 'outage'; f.querySelector('#exTo').hidden = !o; f.querySelector('#exHint').hidden = o; if (o) f.querySelector('#eb').value = ''; };
+  sel?.addEventListener('change', sync);
 };
 
 // «Спросить ИИ про этот день»: короткая сводка — день против недели, книги, реклама, события вокруг

@@ -8,6 +8,7 @@ export const EVENT_TYPES = {
   finish: { label: 'Завершение книги', color: 'var(--ev-start)' },
   promo: { label: 'Акция Литнета', color: 'var(--ev-promo)' },
   contest: { label: 'Итоги конкурса', color: 'var(--ev-contest)' },
+  outage: { label: 'Сбой (не от меня)', color: 'var(--ev-outage)' },
   note: { label: 'Заметка', color: 'var(--ev-note)' },
   other: { label: 'Другое', color: 'var(--ev-note)' },
 };

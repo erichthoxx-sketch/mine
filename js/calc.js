@@ -215,11 +215,29 @@ export function bookInsights(book, key, ctx) {
 }
 
 // ---------- главный экран ----------
-export function dashboardStats(sales, legacyDays, today) {
+// ---------- сбои «не от меня» (реклама не крутится, площадка лежит…) ----------
+// Дни с событием «Сбой» не портят средние, базу для рекламы и прогноз месяца; потеря — от обычного уровня до сбоя.
+export const outageSet = (days = []) => new Set(days.filter((d) => (d.events || []).some((e) => e.type === 'outage')).map((d) => d.date));
+export function outageLoss(sales, legacyDays, date, outages = new Set(), n = 14) {
+  const prev = incomeSeries(sales, legacyDays, addDays(date, -60), addDays(date, -1)).filter((x) => x.known && !outages.has(x.date)).slice(-n);
+  if (prev.length < 3) return null;
+  const expected = prev.reduce((a, x) => a + x.royalty, 0) / prev.length;
+  const fact = incomeSeries(sales, legacyDays, date, date)[0]?.royalty || 0;
+  return { expected: r2(expected), fact: r2(fact), loss: r2(Math.max(0, expected - fact)) };
+}
+// сбои месяца по dataEnd: сколько дней, сколько на них заработано и недополучено
+export function monthOutages(sales, legacyDays, dataEnd, outages = new Set()) {
+  const mk = monthKey(dataEnd), list = [...outages].filter((d) => d.startsWith(mk) && d <= dataEnd).sort();
+  let fact = 0, loss = 0;
+  for (const d of list) { const l = outageLoss(sales, legacyDays, d, outages); fact += l?.fact ?? 0; loss += l?.loss ?? 0; }
+  return { days: list.length, dates: list, fact: r2(fact), loss: r2(loss) };
+}
+export function dashboardStats(sales, legacyDays, today, outages = new Set()) {
   const last = lastSaleDate(sales);
   const dataEnd = last && last < today ? last : today;
   const dayOf = (d) => incomeSeries(sales, legacyDays, d, d)[0];
-  const avg7 = avgSeries(incomeSeries(sales, legacyDays, addDays(dataEnd, -6), dataEnd), 'royalty', false);
+  // среднее за 7 обычных дней (дни сбоя пропускаем)
+  const avg7 = avgSeries(incomeSeries(sales, legacyDays, addDays(dataEnd, -30), dataEnd).filter((x) => !outages.has(x.date)).slice(-7), 'royalty', false);
   const mk = monthKey(dataEnd);
   const dom = Number(dataEnd.slice(8, 10));
   const mtd = sumSeries(incomeSeries(sales, legacyDays, monthStart(mk), dataEnd));
@@ -231,8 +249,14 @@ export function dashboardStats(sales, legacyDays, today) {
     todayHasData: today <= dataEnd,
     dataEnd, avg7, mtd, prevSame, prevTotal,
     vsPrev: prevSame ? mtd / prevSame - 1 : null,
-    forecast: dom ? r2((mtd / dom) * daysInMonth(mk)) : null,
+    forecast: dom ? paceForecast(mtd, dom, daysInMonth(mk), monthOutages(sales, legacyDays, dataEnd, outages)) : null,
   };
+}
+// прогноз месяца по темпу обычных дней: дни сбоя в темп не входят
+export function paceForecast(fact, dom, dim, out = null) {
+  const n = dom - (out?.days || 0), normal = fact - (out?.fact || 0);
+  if (n <= 0) return r2((fact / dom) * dim);
+  return r2(fact + (normal / n) * (dim - dom));
 }
 
 // ---------- цены книг ----------
@@ -489,7 +513,10 @@ export function campaignMetrics(c, ctx) {
   if (pTo < pFrom) return { status: 'planned', overlaps: campaignOverlaps(c, ctx.campaigns || []) };
   const days = countDays(pFrom, pTo);
   const during = incomeSeries(ctx.sales, ctx.legacyDays, pFrom, pTo, bookId);
-  const avgDuring = avgSeries(during, 'royalty', false);
+  // дни сбоя (реклама не крутилась не по моей вине) не портят ни базу, ни средний доход во время рекламы
+  const out = ctx.outages || outageSet(ctx.days || []);
+  const duringOk = during.filter((x) => !out.has(x.date));
+  const avgDuring = avgSeries(duringOk.length ? duringOk : during, 'royalty', false);
   const qtyDuring = during.reduce((a, x) => a + x.qty, 0);
   const others = (ctx.campaigns || []).filter((o) => o.id !== c.id && o.start && !o.oneOff); // разовые расходы — не кампании
   const adOn = (d) => others.some((o) => d >= o.start && d <= (o.end || '9999-12-31'));
@@ -511,7 +538,7 @@ export function campaignMetrics(c, ctx) {
     // N последних дней до старта, когда не шла никакая реклама; если рядом таких мало — ищем раньше (до 60 дней назад)
     const n = c.baseDays || ctx.baseDays || 14;
     picked = incomeSeries(ctx.sales, ctx.legacyDays, addDays(c.start, -60), addDays(c.start, -1), bookId)
-      .filter((x) => x.known && !adOn(x.date)).slice(-n);
+      .filter((x) => x.known && !adOn(x.date) && !out.has(x.date)).slice(-n);
     if (picked.length < 5) baseNotes.push('few');
   }
   if (picked.length) {
@@ -694,11 +721,11 @@ export function manualSaleRow({ date, book, bookId, kind, qty, royalty, gross = 
 // Цель текущего месяца: сколько сделано, прогноз, сколько нужно в день до конца месяца
 // today — сегодняшняя дата: сегодняшний день ещё открыт (продажи за него набегают), поэтому «нужно в день»
 // делим и на него — так же, как в колонке «Сегодня». Без today — дни после последнего дня с данными.
-export function monthGoalStatus(planAmount, fact, dataEnd, today) {
+export function monthGoalStatus(planAmount, fact, dataEnd, today, out = null) {
   const mk = monthKey(dataEnd), dim = daysInMonth(mk), dom = Number(dataEnd.slice(8, 10));
   const left = dim - dom;
   const needDays = today && monthKey(today) === mk ? dim - Number(today.slice(8, 10)) + 1 : left;
-  const forecast = dom ? r2((fact / dom) * dim) : 0;
+  const forecast = dom ? paceForecast(fact, dom, dim, out) : 0;
   return {
     month: mk, plan: planAmount, fact, share: planAmount ? fact / planAmount : null,
     forecast, daysLeft: left, reached: fact >= planAmount, onTrack: forecast >= planAmount,
@@ -863,7 +890,7 @@ export function budgetPlan(ctx) {
   let organicDays = clean.length;
   if (organicPerDay == null) {
     // дней без рекламы почти нет — берём «обычный доход» (базу) последней кампании, у которой она посчитана
-    const mctx = { sales: ctx.sales, legacyDays: ctx.legacyDays || [], reports: ctx.reports || [], campaigns: ctx.campaigns || [], dataEnd: ctx.dataEnd, baseDays: s.baseDays, today: ctx.today };
+    const mctx = { sales: ctx.sales, legacyDays: ctx.legacyDays || [], reports: ctx.reports || [], campaigns: ctx.campaigns || [], dataEnd: ctx.dataEnd, baseDays: s.baseDays, today: ctx.today, days: ctx.days || [] };
     const withBase = [...camps].sort((a, b) => b.start.localeCompare(a.start)).map((k) => campaignMetrics(k, mctx)).find((m) => m.baseline != null);
     if (withBase) { organicPerDay = withBase.baseline; organicDays = withBase.baseDaysUsed; }
   }

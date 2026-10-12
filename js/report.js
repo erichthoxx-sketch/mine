@@ -25,7 +25,7 @@ export function cellText(c) {
 }
 const T = (s) => cellText(s);
 const CH = { litnet: '«Литнет платит» (таргет таргетологов Литнета)', own: 'свой таргет', other: 'другое' };
-const EV = { chapter: 'выкладка главы', discount: 'скидка', start: 'старт книги', promo: 'акция Литнета', contest: 'итоги конкурса', note: 'заметка' };
+const EV = { chapter: 'выкладка главы', discount: 'скидка', start: 'старт книги', promo: 'акция Литнета', contest: 'итоги конкурса', note: 'заметка', outage: 'сбой (не от меня)', finish: 'завершение книги', other: 'другое' };
 
 // ---------- модель отчёта ----------
 export function buildReportModel(d, from, to) {
@@ -41,7 +41,7 @@ export function buildReportModel(d, from, to) {
   const prevKnown = prevSer.some((x) => x.known);
   const qty = ser.reduce((a, x) => a + x.qty, 0), saleQty = ser.reduce((a, x) => a + x.saleQty, 0), subQty = ser.reduce((a, x) => a + x.subQty, 0);
   const finOf = (k) => monthFinance(k, { sales: d.sales, legacyDays: d.legacyDays, spend: d.spend, discounts: d.discounts, months: d.monthsMap, settings: s, litnet: d.litnetMoney });
-  const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays, today: d.today };
+  const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays, today: d.today, days: d.days };
   const months = monthsBetween(monthKey(from), monthKey(to));
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) });
   const planOf = (k) => plan.find((p) => p.month === k)?.plan ?? null;
@@ -273,7 +273,7 @@ export const buildMarketingReport = (d, from, to) => toMarkdown(buildReportModel
 export function buildTargetPrompt(d, k, alert, notes = []) {
   const s = d.settings;
   const title = (id) => d.books.find((b) => b.id === id)?.title || '';
-  const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays, today: d.today };
+  const mctx = { sales: d.sales, legacyDays: d.legacyDays, reports: d.reports, campaigns: d.campaigns, dataEnd: d.dataEnd, baseDays: s.baseDays, today: d.today, days: d.days };
   const m = campaignMetrics(k, mctx);
   const from = m.baseFrom && m.baseFrom < k.start ? m.baseFrom : addDays(k.start, -14);
   const ser = incomeSeries(d.sales, d.legacyDays, from, m.to || d.dataEnd, m.bookId);

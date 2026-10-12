@@ -14,7 +14,7 @@ const app = () => window.__app;
 export const CHANNELS = { litnet: 'Литнет платит', own: 'Мой таргет', other: 'Другое' };
 
 export function metricsFor(c, k) {
-  return campaignMetrics(k, { sales: c.sales, legacyDays: c.legacyDays, reports: c.data.reports, campaigns: c.campaigns, dataEnd: c.dataEnd, baseDays: c.settings.baseDays, today: c.today });
+  return campaignMetrics(k, { sales: c.sales, legacyDays: c.legacyDays, reports: c.data.reports, campaigns: c.campaigns, outages: c.outages, dataEnd: c.dataEnd, baseDays: c.settings.baseDays, today: c.today });
 }
 
 // Сводка «как идёт таргет»: по каждой идущей кампании — окупаемость, бюджет, сколько реклама вернула, сигналы

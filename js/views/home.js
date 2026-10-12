@@ -4,7 +4,7 @@ import { ic } from '../icons.js';
 import { ownTasks, isMoneyTask } from '../tdtasks.js';
 import { bigGoalOf, bigGoalLine } from '../biggoal.js';
 import { rub, pct, fmtDate, fmtShort, fmtMonth, num } from '../format.js';
-import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, planOverridesOf, monthGoalStatus, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
+import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, planOverridesOf, monthGoalStatus, monthOutages, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
 import { dailyChart, EVENT_TYPES } from '../charts.js';
 import { acts, openSheet, toast } from '../ui.js';
 import { activeAlerts } from './ads.js';
@@ -33,7 +33,7 @@ export function home(app) {
   if (!c.hasData) {
     return { html: `<div class="card"><h2>Пока нет данных</h2><p>Начните с импорта выгрузки продаж из кабинета Литнета.</p><a class="btn primary" href="#" data-act="go" data-to="/data">Загрузить Statistic.csv</a></div>` };
   }
-  const st = dashboardStats(c.sales, c.legacyDays, c.today);
+  const st = dashboardStats(c.sales, c.legacyDays, c.today, c.outages);
   const last = c.series[c.series.length - 1];
   const dayLabel = c.dataEnd === c.today ? 'Сегодня' : `Последний день · ${fmtShort(c.dataEnd)}`;
   const from = ui.range ? (addDays(c.dataEnd, -(ui.range - 1)) < c.firstDate ? c.firstDate : addDays(c.dataEnd, -(ui.range - 1))) : c.firstDate;
@@ -81,11 +81,12 @@ function goalCard(c, st, big = '') {
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) });
   const p = plan.find((x) => x.month === monthKey(c.dataEnd));
   if (!p) return big ? `<div class="card">${big}</div>` : '';
-  const g = monthGoalStatus(p.plan, st.mtd, c.dataEnd, c.today);
+  const out = monthOutages(c.sales, c.legacyDays, c.dataEnd, c.outages);
+  const g = monthGoalStatus(p.plan, st.mtd, c.dataEnd, c.today, out);
   return `<div class="card"><div class="row between"><h2 style="margin:0">Цель: ${fmtMonth(g.month)}</h2><button class="link" data-act="goal.all" data-m="${g.month}">изменить</button></div>
     <div class="row between small" style="margin-top:8px"><span><b>${rub(g.fact, 0)}</b> из ${rub(g.plan, 0)}</span><span class="muted">${g.share == null ? '' : pct(g.share, 0)}</span></div>
     <div class="progress"><i style="width:${Math.min(100, (g.share || 0) * 100).toFixed(1)}%"></i></div>
-    <div class="small">${g.reached ? '✔︎ Цель месяца достигнута' : g.daysLeft === 0 ? `Месяц закончился: не хватило ${rub(g.plan - g.fact, 0)}` : `прогноз к концу месяца ≈ ${rub(g.forecast, 0)} ${g.onTrack ? '<span class="up">— успеваете</span>' : '<span class="down">— не хватает ' + rub(g.plan - g.forecast, 0) + '</span>'}${g.daysLeft > 0 ? ` · нужно ~${rub(g.needPerDay, 0)} в день` : ''}`}</div>${big}</div>`;
+    <div class="small">${g.reached ? '✔︎ Цель месяца достигнута' : g.daysLeft === 0 ? `Месяц закончился: не хватило ${rub(g.plan - g.fact, 0)}` : `прогноз к концу месяца ≈ ${rub(g.forecast, 0)} ${g.onTrack ? '<span class="up">— успеваете</span>' : '<span class="down">— не хватает ' + rub(g.plan - g.forecast, 0) + '</span>'}${g.daysLeft > 0 ? ` · нужно ~${rub(g.needPerDay, 0)} в день` : ''}`}</div>${out.days ? `<div class="small muted" style="margin-top:4px">Сбои в этом месяце: ${out.days} ${out.days === 1 ? 'день' : out.days < 5 ? 'дня' : 'дней'} — недополучено ≈ ${rub(out.loss, 0)}; прогноз считается без них</div>` : ''}${big}</div>`;
 }
 
 function moneyTasks(c) {
