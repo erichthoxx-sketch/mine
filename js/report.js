@@ -25,7 +25,7 @@ export function cellText(c) {
 }
 const T = (s) => cellText(s);
 const CH = { litnet: '«Литнет платит» (таргет таргетологов Литнета)', own: 'свой таргет', other: 'другое' };
-const EV = { chapter: 'выкладка главы', discount: 'скидка', start: 'старт книги', promo: 'акция Литнета', contest: 'итоги конкурса', note: 'заметка', outage: 'сбой (не от меня)', finish: 'завершение книги', other: 'другое' };
+const EV = { chapter: 'выкладка главы', discount: 'скидка', start: 'старт книги', promo: 'акция Литнета', contest: 'итоги конкурса', note: 'заметка', outage: 'сбой', finish: 'завершение книги', other: 'другое' };
 
 // ---------- модель отчёта ----------
 export function buildReportModel(d, from, to) {
