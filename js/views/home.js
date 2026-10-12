@@ -4,7 +4,7 @@ import { ic } from '../icons.js';
 import { ownTasks, isMoneyTask } from '../tdtasks.js';
 import { bigGoalOf, bigGoalLine } from '../biggoal.js';
 import { rub, pct, fmtDate, fmtShort, fmtMonth, num } from '../format.js';
-import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, planOverridesOf, monthGoalStatus, monthOutages, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
+import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, planOverridesOf, monthGoalStatus, monthOutages, outageLoss, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
 import { dailyChart, EVENT_TYPES } from '../charts.js';
 import { acts, openSheet, toast } from '../ui.js';
 import { activeAlerts } from './ads.js';
@@ -53,7 +53,7 @@ export function home(app) {
     <div class="stat"><div class="k">Прошлый месяц</div><div class="v">${rub(st.prevTotal)}</div><div class="s">за тот же срок: ${rub(st.prevSame)}</div></div>
   </div>
   ${activeAlerts(c).map((a) => `<div class="card row between"><span>⚠︎ Таргет «${esc(a.name)}» просел — запросите отчёт у таргетологов</span><button class="link" data-act="go" data-to="/ads">открыть</button></div>`).join('')}
-  ${npdReminder(c)}${moneyTasks(c)}${taxReminder(c)}
+  ${outageNow(c)}${npdReminder(c)}${moneyTasks(c)}${taxReminder(c)}
   ${goalCard(c, st, bigGoalLine(bigGoalOf(c)))}
   <div class="card">
     <div class="chips">${rangeBtn(30, '30 дней')}${rangeBtn(90, '90 дней')}${rangeBtn(180, '180 дней')}${rangeBtn(0, 'Всё время')}</div>
@@ -76,6 +76,11 @@ acts['home.table'] = (d) => { window.__app.ui.table = d.v; };
 // книга с главной — сразу в её аналитику за текущий месяц
 acts['book.open'] = (d) => { const a = window.__app; a.ui.booksMonth = null; a.go('/book/' + d.id); };
 
+// как сбои учтены в прогнозе — одной строкой
+const dn = (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'день' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'дня' : 'дней'}`;
+export function outageNote(out) {
+  return [out.days ? `Сбои: ${dn(out.days)}, недополучено ≈ ${rub(out.loss, 0)} — уже в факте` : '', out.ahead ? `впереди ещё ${dn(out.ahead)} сбоя — посчитаны по темпу сбоя` : '', 'остальные дни — по обычному темпу'].filter(Boolean).join('; ');
+}
 function goalCard(c, st, big = '') {
   const s = c.settings;
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) });
@@ -86,13 +91,21 @@ function goalCard(c, st, big = '') {
   return `<div class="card"><div class="row between"><h2 style="margin:0">Цель: ${fmtMonth(g.month)}</h2><button class="link" data-act="goal.all" data-m="${g.month}">изменить</button></div>
     <div class="row between small" style="margin-top:8px"><span><b>${rub(g.fact, 0)}</b> из ${rub(g.plan, 0)}</span><span class="muted">${g.share == null ? '' : pct(g.share, 0)}</span></div>
     <div class="progress"><i style="width:${Math.min(100, (g.share || 0) * 100).toFixed(1)}%"></i></div>
-    <div class="small">${g.reached ? '✔︎ Цель месяца достигнута' : g.daysLeft === 0 ? `Месяц закончился: не хватило ${rub(g.plan - g.fact, 0)}` : `прогноз к концу месяца ≈ ${rub(g.forecast, 0)} ${g.onTrack ? '<span class="up">— успеваете</span>' : '<span class="down">— не хватает ' + rub(g.plan - g.forecast, 0) + '</span>'}${g.daysLeft > 0 ? ` · нужно ~${rub(g.needPerDay, 0)} в день` : ''}`}</div>${out.days ? `<div class="small muted" style="margin-top:4px">Сбои в этом месяце: ${out.days} ${out.days === 1 ? 'день' : out.days < 5 ? 'дня' : 'дней'} — недополучено ≈ ${rub(out.loss, 0)}; прогноз считается без них</div>` : ''}${big}</div>`;
+    <div class="small">${g.reached ? '✔︎ Цель месяца достигнута' : g.daysLeft === 0 ? `Месяц закончился: не хватило ${rub(g.plan - g.fact, 0)}` : `прогноз к концу месяца ≈ ${rub(g.forecast, 0)} ${g.onTrack ? '<span class="up">— успеваете</span>' : '<span class="down">— не хватает ' + rub(g.plan - g.forecast, 0) + '</span>'}${g.daysLeft > 0 ? ` · нужно ~${rub(g.needPerDay, 0)} в день` : ''}`}</div>${out.days || out.ahead ? `<div class="small muted" style="margin-top:4px">${outageNote(out)}</div>` : ''}${big}</div>`;
 }
 
 function moneyTasks(c) {
   const list = ownTasks(c.settings).filter((x) => isMoneyTask(x) && x.d && x.d <= addDays(c.today, 7)).sort((a, b) => a.d.localeCompare(b.d));
   if (!list.length) return '';
   return `<div class="card td-card"><h2 style="margin:0 0 4px">Дела по деньгам и рекламе</h2><div class="plist">${list.map((x) => `<div class="pitem"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.id}"><span class="pi-body"><span class="pi-t">${esc(x.t)}</span><span class="pi-s${x.d < c.today ? ' down' : ''}">${x.d < c.today ? 'просрочено · ' : ''}${fmtDate(x.d)}</span></span></a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${ic('check')}</button></span></div>`).join('')}</div></div>`;
+}
+// сбой идёт сейчас (сегодня или в последний день с данными) — тихая карточка: что случилось и сколько недополучено
+function outageNow(c) {
+  const day = [c.today, c.dataEnd].find((d) => c.outages?.has(d));
+  if (!day) return '';
+  const ev = (c.data.days.find((x) => x.date === day)?.events || []).find((e) => e.type === 'outage');
+  const l = day <= c.dataEnd ? outageLoss(c.sales, c.legacyDays, day, c.outages) : null;
+  return `<a class="card outage-card tap" href="#" data-act="day.open" data-date="${day}"><b>Сбой${ev?.text ? ': ' + esc(ev.text) : ''}</b><div class="small">${day === c.today ? 'Сегодня' : fmtShort(day)} — не по вашей вине.${l ? ` Обычно ≈ ${rub(l.expected, 0)} в день, недополучено ≈ ${rub(l.loss, 0)}.` : ''} Среднее и расчёт рекламы этот день не портит.</div></a>`;
 }
 function npdReminder(c) {
   const a = npdAlert(npdStatusOf(c.sales, c.legacyDays, c.settings, c.today), c.today);

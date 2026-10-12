@@ -138,7 +138,7 @@ function incomeItems(c, from, to) {
     for (const e of day.events || []) {
       if (e.src && String(e.src).startsWith('w:')) continue;
       const ty = EVENT_TYPES[e.type] || EVENT_TYPES.note;
-      add(day.date, `${ty.label}${e.text ? ': ' + e.text : ''}`, e.bookId ? (d.books || []).find((b) => b.id === e.bookId)?.title || '' : '');
+      add(day.date, `${ty.label}${e.text ? ': ' + e.text : ''}`, e.type === 'outage' ? 'продажи ниже обычного — не по вашей вине' : e.bookId ? (d.books || []).find((b) => b.id === e.bookId)?.title || '' : '');
     }
   }
   return out;

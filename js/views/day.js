@@ -10,7 +10,7 @@ const app = () => window.__app;
 function outageCard(c, date) {
   if (!c.outages?.has(date)) return '';
   const l = date <= c.dataEnd ? outageLoss(c.sales, c.legacyDays, date, c.outages) : null;
-  return `<div class="card outage-card"><b>Сбой — не по вашей вине</b><div class="small">Этот день не входит в средние, в базу для рекламы и в прогноз месяца.${l ? ` Обычно ≈ ${rub(l.expected, 0)} в день — недополучено ≈ <b>${rub(l.loss, 0)}</b>.` : ''}</div></div>`;
+  return `<div class="card outage-card"><b>Сбой — не по вашей вине</b><div class="small">Этот день не портит среднее и расчёт рекламы; в прогнозе месяца его доход учтён как есть, а остаток месяца считается по обычному темпу.${l ? ` Обычно ≈ ${rub(l.expected, 0)} в день — недополучено ≈ <b>${rub(l.loss, 0)}</b>.` : ''}</div></div>`;
 }
 const dayDoc = (c, date) => c.data.days.find((d) => d.id === date) || { id: date, date, events: [], note: '' };
 
@@ -137,7 +137,7 @@ acts['event.quick'] = (d) => {
     <label for="eb">Книга (необязательно)</label><select id="eb" name="bookId"><option value="">—</option>${books.map((b) => opt(b.id, b.title, def?.id)).join('')}</select>
     <label for="ex">Пояснение</label><input id="ex" name="text" placeholder="например, глава 25, скидка 30 % или своё событие">
     <div id="exTo" hidden><label for="et2">Сбой длился до (включительно)</label><input id="et2" type="date" name="to" min="${date}" value="${date}">
-    <div class="hint">Сбой — то, что от вас не зависит: реклама не крутится, площадка лежит. Такие дни не портят средние, базу для рекламы и прогноз месяца, а приложение посчитает, сколько недополучено.</div></div>
+    <div class="hint">Сбой — то, что от вас не зависит: реклама не крутится, площадка лежит. Такие дни не портят средние и расчёт рекламы, прогноз месяца учитывает их как есть, а приложение посчитает, сколько недополучено.</div></div>
     <div class="hint" id="exHint">Для «Другое» напишите, что произошло, в пояснении.</div>`, async (fd) => {
     const type = fd.get('type'), text = (fd.get('text') || '').trim();
     if (type === 'other' && !text) { toast('Для «Другое» напишите, что произошло'); return false; }

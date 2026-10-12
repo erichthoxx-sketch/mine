@@ -1,10 +1,11 @@
 import { esc, acts, forms, openSheet, opt, toast, N, changes } from '../ui.js';
 import { npdStatusOf, npdBlock } from '../npd.js';
 import { rub, fmtMonth, fmtMonthCap, fmtMonthShort, fmtMonthIn, pct, num } from '../format.js';
-import { monthFinance, monthKey, monthsBetween, byMonth, buildPlan, planOverridesOf, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline, rocketRows, monthCash, addMonths, DISCOUNT_NOTE } from '../calc.js';
+import { monthOutages, paceForecast, monthFinance, monthKey, monthsBetween, byMonth, buildPlan, planOverridesOf, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline, rocketRows, monthCash, addMonths, DISCOUNT_NOTE } from '../calc.js';
 import { fmtDate } from '../format.js';
 import { goalChart } from '../charts.js';
 import { budgetCard } from './ads.js';
+import { outageNote } from './home.js';
 import { bigGoalOf, bigGoalCard } from '../biggoal.js';
 
 const app = () => window.__app;
@@ -24,7 +25,8 @@ export function money(a) {
   const rows = goalRows(plan, factBy, cur).map((r) => ({ ...r, label: fmtMonth(r.month), short: fmtMonthShort(r.month) }));
   const curRow = rows.find((r) => r.partial);
   const dom = Number(c.dataEnd.slice(8, 10));
-  const forecast = curRow && monthKey(c.dataEnd) === cur && dom ? (curRow.fact / dom) * daysInMonth(cur) : null;
+  const outM = monthOutages(c.sales, c.legacyDays, c.dataEnd, c.outages);
+  const forecast = curRow && monthKey(c.dataEnd) === cur && dom ? paceForecast(curRow.fact, dom, daysInMonth(cur), outM) : null;
 
   const html = `
   ${taxCard(c, sel, keys)}
@@ -66,7 +68,7 @@ export function money(a) {
     <p class="small muted">${s.planPath && Object.keys(s.planPath).length ? `По пути к большой цели: ${fmtMonth(Object.keys(s.planPath)[0])} — ${rub(Object.values(s.planPath)[0], 0)}, дальше ≈ +${s.goalGrowth}% в месяц (с учётом налога)` : `Старт: ${fmtMonth(s.goalStart)} — ${rub(s.goalAmount, 0)}, дальше +${s.goalGrowth}% в месяц`}; свои цели по месяцам — кнопка «Изменить цели». План и факт — до вычетов (роялти).</p>
     <div class="chart" id="goalChart"></div>
     <div class="legend"><span><i style="background:var(--bar)"></i>факт (светлый — месяц ещё идёт)</span><span><i class="ln"></i>план</span><span><i class="ln3"></i>среднее за 3 месяца</span></div>
-    ${forecast != null ? `<div class="alert ${forecast >= curRow.plan ? 'ok' : ''}">${fmtMonthCap(cur)}: пока ${rub(curRow.fact, 0)}, при таком темпе к концу месяца ≈ ${rub(forecast, 0)} (план ${rub(curRow.plan, 0)}).</div>` : ''}
+    ${forecast != null ? `<div class="alert ${forecast >= curRow.plan ? 'ok' : ''}">${fmtMonthCap(cur)}: пока ${rub(curRow.fact, 0)}, при таком темпе к концу месяца ≈ ${rub(forecast, 0)} (план ${rub(curRow.plan, 0)}).${outM.days || outM.ahead ? `<div class="small muted" style="margin-top:4px">${outageNote(outM)}</div>` : ''}</div>` : ''}
     <div class="scroll"><table><tr><th>Месяц</th><th>План</th><th>Факт</th><th>±</th><th>Среднее 3 мес.</th><th></th></tr>
     ${rows.map((r) => `<tr><td>${fmtMonthShort(r.month)}</td><td>${rub(r.plan, 0)}${s.planOverrides?.[r.month] != null && s.planOverrides[r.month] !== '' ? '*' : ''}</td><td>${r.fact == null ? '—' : rub(r.fact, 0)}</td><td class="${r.diff == null ? '' : r.diff >= 0 ? 'up' : 'down'}">${r.diff == null ? '' : rub(r.diff, 0)}</td><td>${r.ma3 == null ? '—' : rub(r.ma3, 0)}</td><td><button class="link" data-act="goal.edit" data-m="${r.month}">✎</button></td></tr>`).join('')}</table></div>
     <div class="hint">* план изменён вручную. Среднее за 3 месяца считается по полным и текущему месяцам.</div></div>`;

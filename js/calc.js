@@ -225,12 +225,14 @@ export function outageLoss(sales, legacyDays, date, outages = new Set(), n = 14)
   const fact = incomeSeries(sales, legacyDays, date, date)[0]?.royalty || 0;
   return { expected: r2(expected), fact: r2(fact), loss: r2(Math.max(0, expected - fact)) };
 }
-// сбои месяца по dataEnd: сколько дней, сколько на них заработано и недополучено
+// сбои месяца по dataEnd: сколько дней уже было, сколько на них заработано и недополучено,
+// и сколько дней сбоя уже отмечено впереди (до конца месяца)
 export function monthOutages(sales, legacyDays, dataEnd, outages = new Set()) {
   const mk = monthKey(dataEnd), list = [...outages].filter((d) => d.startsWith(mk) && d <= dataEnd).sort();
+  const ahead = [...outages].filter((d) => d.startsWith(mk) && d > dataEnd).length;
   let fact = 0, loss = 0;
   for (const d of list) { const l = outageLoss(sales, legacyDays, d, outages); fact += l?.fact ?? 0; loss += l?.loss ?? 0; }
-  return { days: list.length, dates: list, fact: r2(fact), loss: r2(loss) };
+  return { days: list.length, dates: list, fact: r2(fact), loss: r2(loss), ahead };
 }
 export function dashboardStats(sales, legacyDays, today, outages = new Set()) {
   const last = lastSaleDate(sales);
@@ -252,11 +254,14 @@ export function dashboardStats(sales, legacyDays, today, outages = new Set()) {
     forecast: dom ? paceForecast(mtd, dom, daysInMonth(mk), monthOutages(sales, legacyDays, dataEnd, outages)) : null,
   };
 }
-// прогноз месяца по темпу обычных дней: дни сбоя в темп не входят
+// прогноз месяца: то, что уже заработано (вместе с провалом в дни сбоя), + остаток месяца по обычному темпу;
+// дни сбоя, отмеченные впереди, — по темпу сбоя (если сбоев ещё не было — треть обычного)
 export function paceForecast(fact, dom, dim, out = null) {
   const n = dom - (out?.days || 0), normal = fact - (out?.fact || 0);
   if (n <= 0) return r2((fact / dom) * dim);
-  return r2(fact + (normal / n) * (dim - dom));
+  const pace = normal / n, rem = dim - dom, ahead = Math.min(rem, out?.ahead || 0);
+  const outPace = out?.days ? out.fact / out.days : pace * 0.3;
+  return r2(fact + pace * (rem - ahead) + outPace * ahead);
 }
 
 // ---------- цены книг ----------
