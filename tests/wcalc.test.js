@@ -232,6 +232,23 @@ test('конкурс: сокращённые месяцы, правила вык
   assert.deepEqual([r2.unit, r2.minChars, r2.startChars], ['al', 240000, 30000]);
 });
 
+test('конкурс: отдельная ссылка подачи не путается со страницей конкурса и почтой', async () => {
+  const { parseContest, contestSubmissionUrl } = await import('../writer/js/wcalc.js');
+  const page = 'https://litnet.com/ru/contests/vtoroe-dyhanie-c150';
+  const form = 'https://forms.yandex.ru/u/123456/';
+  const t = `Конкурс «Второе дыхание»
+Правила на ${page}
+Для участия заполните форму заявки: ${form}
+Рукопись направить на contests@litnet.com.`;
+  const r = parseContest(t, page, '2026-10-10');
+  assert.equal(r.submissionUrl, form);
+  assert.equal(contestSubmissionUrl({ ...r, conditions: t, url: page }), form);
+  assert.deepEqual(r.emails, ['contests@litnet.com']);
+  assert.equal(contestSubmissionUrl({ conditions: t, url: page }), form);
+  assert.equal(contestSubmissionUrl({ conditions: `Условия на ${page}`, url: page }), '');
+  assert.equal(contestSubmissionUrl({ submissionUrl: 'javascript:alert(1)' }), '');
+});
+
 test('календарь конкурсов: список из поста — по абзацам, месяц без дат — примерно', async () => {
   const { parseContestList } = await import('../writer/js/wcalc.js');
   const r = parseContestList(`Календарь конкурсов на год
