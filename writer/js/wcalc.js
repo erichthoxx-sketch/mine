@@ -394,6 +394,38 @@ const MON_RX = '(?:январ[ья]|янв|феврал[ья]|февр?|март
 const MON3 = ['янв', 'фев', 'мар', 'апр', 'ма', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 const monIdx = (w) => { const x = w.toLowerCase(); return MON3.findIndex((m) => x.startsWith(m)) + 1; };
 const pad2 = (n) => String(n).padStart(2, '0');
+// Ссылка именно на подачу рукописи/заявки, а не на правила или страницу конкурса.
+const contestLinkUrl = (raw) => {
+  const val = String(raw || '').trim().replace(/[)\]>.,;!?]+$/g, '');
+  if (!/^https?:\/\//i.test(val)) return '';
+  try { const url = new URL(val); return url.hostname ? url.href : ''; } catch { return ''; }
+};
+const submissionLinkFromText = (text, page = '') => {
+  const body = String(text || '');
+  let best = '', bestScore = 0;
+  for (const m of body.matchAll(/https?:\/\/[^\s<>"'«»]+/gi)) {
+    const link = contestLinkUrl(m[0]);
+    if (!link) continue;
+    const u = new URL(link);
+    const before = body.slice(Math.max(0, m.index - 190), m.index);
+    const line = before.split('\n').pop();
+    const after = body.slice(m.index + m[0].length, m.index + m[0].length + 90);
+    const formHost = /^(forms\.yandex\.ru|forms\.gle|forms\.office\.com|forms\.microsoft\.com|tally\.so|form\.typeform\.com|airtable\.com)$/.test(u.hostname)
+      || (u.hostname === 'docs.google.com' && /^\/forms\//.test(u.pathname));
+    let score = formHost ? 5 : 0;
+    if (/(?:заявк\S*|пода(?:ч|т)\S*|отправ\S*|загруз\S*|прикреп\S*|форм\S*|рукопис\S*|для\s+участи\S*)/i.test(line)) score += 5;
+    else if (/(?:заявк\S*|пода(?:ч|т)\S*|отправ\S*|форм\S*)/i.test(before.slice(-100))) score += 3;
+    if (/(?:подать|отправить|заявк\S*|форм\S*)/i.test(after)) score += 2;
+    if (/\/(?:forms?|apply|submit|entry|zayavk|podach)/i.test(u.pathname)) score += 3;
+    if (/(?:страниц\S*\s+конкурс\S*|правил\S*\s+конкурс\S*|политик\S*|согласи\S*|услови\S*\s+конкурс\S*)/i.test(line)) score -= 7;
+    if (page && link.replace(/\/$/, '') === contestLinkUrl(page).replace(/\/$/, '')) score -= 7;
+    if (score >= 5 && score > bestScore) { best = link; bestScore = score; }
+  }
+  return best;
+};
+// Для старых конкурсов извлекаем ссылку прямо из сохранённых условий, без миграции данных.
+export const contestSubmissionUrl = (x) => contestLinkUrl(x?.submissionUrl) || submissionLinkFromText(x?.conditions, x?.url);
+
 export function parseContest(text, url = '', today = new Date().toISOString().slice(0, 10)) {
   const t = String(text || '').replace(/[  ]/g, ' ').replace(/[ \t]+/g, ' ');
   const out = {};
@@ -444,6 +476,8 @@ export function parseContest(text, url = '', today = new Date().toISOString().sl
   // куда отправлять: email-адреса из условий
   const emails = [...new Set((t.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) || []).map((e) => e.replace(/[.,;]+$/, '').toLowerCase()))];
   if (emails.length) out.emails = emails;
+  const submissionUrl = submissionLinkFromText(t, url);
+  if (submissionUrl) out.submissionUrl = submissionUrl;
   // объём: «от 6 до 12 а.л.», «не менее 200 000 знаков», «до 15 авторских листов», «от 120 тыс. знаков».
   // Правила выкладки («глава — от 10 000 знаков», «не реже… по 30 000 знаков в неделю») — не объём книги, их пропускаем.
   // Если минимумов два («на момент подачи — от 30 000», «к окончанию приёма — от 100 000»), главный — к окончанию.
