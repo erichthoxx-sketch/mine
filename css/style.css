@@ -994,6 +994,10 @@ select.ct-st { width: auto; min-height: 26px; padding: 0 24px 0 8px; font-size: 
 .ct-mails { margin-top: 8px; padding: 0 2px; }
 .ct-mail { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; font-weight: 600; font-size: 14px; }
 .ct-mail .link { padding: 0 2px; min-height: 0; } .ct-mail .ic { width: 15px; height: 15px; }
+.ct-delivery { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 18px; min-width: 0; }
+.ct-delivery .ct-mail { margin-right: 0; }
+.ct-submit-link { color: var(--link); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+@media (hover: hover) { .ct-submit-link:hover { text-decoration: underline; } }
 .ct-books { margin-top: 8px; }
 .ct-book { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; padding: 9px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .ct-book.is-sent .ct-bt b { color: var(--text-2); }
