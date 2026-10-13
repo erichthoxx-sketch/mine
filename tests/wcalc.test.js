@@ -249,6 +249,19 @@ test('конкурс: отдельная ссылка подачи не пута
   assert.equal(contestSubmissionUrl({ submissionUrl: 'javascript:alert(1)' }), '');
 });
 
+test('Второе дыхание: у старой карточки есть форма из официальных правил', async () => {
+  const { contestSubmissionUrl } = await import('../writer/js/wcalc.js');
+  const oldCard = {
+    name: 'Второе дыхание',
+    platform: 'Литнет',
+    url: 'https://litnet.com/ru/contests/vtoroe-dyhanie-c151/rules',
+    conditions: 'Срок приема работ 31.07.2026 - 31.10.2026. Минимум 30 000 знаков. Почта contests@litnet.com.'
+  };
+  assert.equal(contestSubmissionUrl(oldCard), 'https://forms.yandex.ru/cloud/6a6c97e2493639819da47b88/');
+  assert.equal(contestSubmissionUrl({ ...oldCard, submissionUrl: 'https://example.com/submit' }), 'https://example.com/submit');
+  assert.equal(contestSubmissionUrl({ ...oldCard, name: 'Другой конкурс', url: 'https://litnet.com/ru/contests/other/rules' }), '');
+});
+
 test('календарь конкурсов: список из поста — по абзацам, месяц без дат — примерно', async () => {
   const { parseContestList } = await import('../writer/js/wcalc.js');
   const r = parseContestList(`Календарь конкурсов на год
