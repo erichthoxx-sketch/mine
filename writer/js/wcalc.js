@@ -424,7 +424,17 @@ const submissionLinkFromText = (text, page = '') => {
   return best;
 };
 // Для старых конкурсов извлекаем ссылку прямо из сохранённых условий, без миграции данных.
-export const contestSubmissionUrl = (x) => contestLinkUrl(x?.submissionUrl) || submissionLinkFromText(x?.conditions, x?.url);
+const knownContestSubmission = (x) => {
+  // У Литнета краткая страница конкурса не содержит ссылку на форму, она вынесена в полные правила.
+  // «Второе дыхание»: ссылка сверена с официальными правилами конкурса.
+  const name = String(x?.name || '').trim().toLowerCase();
+  const page = String(x?.url || '');
+  if (name === 'второе дыхание' && (String(x?.platform || '').toLowerCase() === 'литнет' || /litnet\.com\/ru\/contests\/vtoroe-dyhanie-c151/i.test(page))) {
+    return 'https://forms.yandex.ru/cloud/6a6c97e2493639819da47b88/';
+  }
+  return '';
+};
+export const contestSubmissionUrl = (x) => contestLinkUrl(x?.submissionUrl) || submissionLinkFromText(x?.conditions, x?.url) || knownContestSubmission(x);
 
 export function parseContest(text, url = '', today = new Date().toISOString().slice(0, 10)) {
   const t = String(text || '').replace(/[  ]/g, ' ').replace(/[ \t]+/g, ' ');
