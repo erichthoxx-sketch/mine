@@ -436,6 +436,39 @@ const knownContestSubmission = (x) => {
 };
 export const contestSubmissionUrl = (x) => contestLinkUrl(x?.submissionUrl) || submissionLinkFromText(x?.conditions, x?.url) || knownContestSubmission(x);
 
+// Что именно отправлять НА ПОЧТУ — только из указания рядом с адресом, не из общих требований к заявке.
+export function contestEmailPurpose(x, email) {
+  const source = String(x?.conditions || '');
+  const target = String(email || '').trim().toLowerCase();
+  const instructions = [];
+  for (const m of source.matchAll(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g)) {
+    if (m[0].toLowerCase() !== target) continue;
+    const before = source.slice(Math.max(0, m.index - 260), m.index).split(/\r?\n|[.!?]\s+(?=[А-ЯЁ])/).pop() || '';
+    const after = (source.slice(m.index + m[0].length, m.index + m[0].length + 140).split(/\r?\n|[.!?]\s+(?=[А-ЯЁ])/)[0] || '');
+    const near = (before + ' ' + after).trim();
+    // Почта для вопросов и общий контакт организатора — не инструкция по подаче материалов.
+    if (!/(?:отправ\S*|присл\S*|присыла\S*|направ\S*|высл\S*|прикреп\S*|пода\S*|для\s+отправк\S*|для\s+подач\S*)/i.test(near)) continue;
+    const found = [];
+    if (/синопсис\w*/i.test(near)) found.push('Синопсис');
+    if (/рукопис\w*/i.test(near)) found.push('Рукопись');
+    if (/аннотац\w*/i.test(near)) found.push('Аннотация');
+    if (/(?:полн\w*\s+текст|текст\s+(?:произведени\w*|книг\w*|роман\w*))/i.test(near) && !found.includes('Рукопись')) found.push('Текст книги');
+    if (/перв\w*\s+(?:\d+|одн\w*|дв\w*|тр\w*|четыр\w*|пят\w*)\s+глав\w*/i.test(near)) found.push('Первые главы');
+    if (found.length) instructions.push(found);
+  }
+  if (instructions.length) {
+    // При повторении адреса конкретная инструкция перед почтой важнее общей фразы.
+    const last = instructions[instructions.length - 1];
+    return last.join(' и ');
+  }
+  // Старые карточки «Второго дыхания» сохранили краткие условия без пункта про синопсис.
+  const isSecondChance = String(x?.name || '').trim().toLowerCase() === 'второе дыхание'
+    && (String(x?.platform || '').toLowerCase() === 'литнет' || /litnet\.com\/ru\/contests\/vtoroe-dyhanie-c151/i.test(x?.url || ''));
+  if (isSecondChance && target === 'contests@litnet.com') return 'Синопсис';
+  return '';
+}
+
+
 export function parseContest(text, url = '', today = new Date().toISOString().slice(0, 10)) {
   const t = String(text || '').replace(/[  ]/g, ' ').replace(/[ \t]+/g, ' ');
   const out = {};
