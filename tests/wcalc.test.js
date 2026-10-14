@@ -272,7 +272,7 @@ test('конкурс: материалы для почты определяют�
   };
   assert.equal(contestEmailPurpose(synopsis, email), 'Синопсис');
   assert.equal(contestEmailPurpose({ conditions: 'Рукопись — через форму, а синопсис на почту contests@litnet.com.' }, email), 'Синопсис');
-  assert.equal(contestEmailPurpose({ conditions: 'Отправить на адрес editor@example.ru рукопись и синопсис.' }, 'editor@example.ru'), 'Синопсис и Рукопись');
+  assert.equal(contestEmailPurpose({ conditions: 'Отправить на адрес editor@example.ru рукопись и синопсис.' }, 'editor@example.ru'), 'Рукопись и синопсис');
   assert.equal(contestEmailPurpose({ conditions: 'Полный текст книги прислать на editor@example.ru.' }, 'editor@example.ru'), 'Текст книги');
   assert.equal(contestEmailPurpose({ conditions: 'Синопсис: editor@example.ru' }, 'editor@example.ru'), 'Синопсис');
   assert.equal(contestEmailPurpose({ conditions: 'За уточнениями обращайтесь на questions@example.ru.' }, 'questions@example.ru'), '');
