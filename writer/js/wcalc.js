@@ -450,18 +450,24 @@ export function contestEmailPurpose(x, email) {
     const near = (before + ' ' + after).trim();
     // Контакт для вопросов и общий e-mail организатора — не инструкция по подаче материалов.
     if (!/(?:отправ\S*|присл\S*|присыла\S*|направ\S*|высл\S*|прикреп\S*|пода\S*|на\s+(?:электронн\w*\s+)?почт\w*|для\s+отправк\S*|для\s+подач\S*)/i.test(near) && !/^\s*(?:синопсис|рукопис\w*|аннотац\w*)\s*[:—-]\s*$/i.test(before)) continue;
-    const found = [];
-    if (/синопсис\w*/i.test(near)) found.push('Синопсис');
-    if (/рукопис\w*/i.test(near)) found.push('Рукопись');
-    if (/аннотац\w*/i.test(near)) found.push('Аннотация');
-    if (/(?:полн\w*\s+текст|текст\s+(?:произведени\w*|книг\w*|роман\w*))/i.test(near) && !found.includes('Рукопись')) found.push('Текст книги');
-    if (/перв\w*\s+(?:\d+|одн\w*|дв\w*|тр\w*|четыр\w*|пят\w*)\s+глав\w*/i.test(near)) found.push('Первые главы');
-    if (found.length) instructions.push(found);
+    const kinds = [
+      ['синопсис', /синопсис\w*/i],
+      ['рукопись', /рукопис\w*/i],
+      ['аннотация', /аннотац\w*/i],
+      ['текст книги', /(?:полн\w*\s+текст|текст\s+(?:произведени\w*|книг\w*|роман\w*))/i],
+      ['первые главы', /перв\w*\s+(?:\d+|одн\w*|дв\w*|тр\w*|четыр\w*|пят\w*)\s+глав\w*/i],
+    ];
+    const found = kinds.map(([label, re]) => ({ label, at: near.search(re) })).filter((k) => k.at >= 0);
+    if (found.some((k) => k.label === 'рукопись')) {
+      const i = found.findIndex((k) => k.label === 'текст книги');
+      if (i >= 0) found.splice(i, 1);
+    }
+    if (found.length) instructions.push(found.sort((a, b) => a.at - b.at).map((k) => k.label));
   }
   if (instructions.length) {
     // При повторении адреса конкретная инструкция перед почтой важнее общей фразы.
     const last = instructions[instructions.length - 1];
-    return last.join(' и ');
+    return last.map((label, i) => i ? label : label[0].toUpperCase() + label.slice(1)).join(' и ');
   }
   // Старые карточки «Второго дыхания» сохранили краткие условия без пункта про синопсис.
   const isSecondChance = String(x?.name || '').trim().toLowerCase() === 'второе дыхание'
