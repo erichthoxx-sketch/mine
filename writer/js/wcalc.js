@@ -443,11 +443,13 @@ export function contestEmailPurpose(x, email) {
   const instructions = [];
   for (const m of source.matchAll(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g)) {
     if (m[0].toLowerCase() !== target) continue;
-    const before = source.slice(Math.max(0, m.index - 260), m.index).split(/\r?\n|[.!?]\s+(?=[А-ЯЁ])/).pop() || '';
-    const after = (source.slice(m.index + m[0].length, m.index + m[0].length + 140).split(/\r?\n|[.!?]\s+(?=[А-ЯЁ])/)[0] || '');
+    const sentence = source.slice(Math.max(0, m.index - 260), m.index).split(/\r?\n|[.!?]\s+(?=[А-ЯЁ])/).pop() || '';
+    // «Рукопись через форму, а синопсис на почту»: к адресу относится вторая часть.
+    const before = sentence.split(/[,;]\s*(?:а|но|при этом)\s+|;\s*/i).pop() || '';
+    const after = source.slice(m.index + m[0].length, m.index + m[0].length + 140).split(/\r?\n|[.!?]\s+(?=[А-ЯЁ])/)[0] || '';
     const near = (before + ' ' + after).trim();
-    // Почта для вопросов и общий контакт организатора — не инструкция по подаче материалов.
-    if (!/(?:отправ\S*|присл\S*|присыла\S*|направ\S*|высл\S*|прикреп\S*|пода\S*|для\s+отправк\S*|для\s+подач\S*)/i.test(near)) continue;
+    // Контакт для вопросов и общий e-mail организатора — не инструкция по подаче материалов.
+    if (!/(?:отправ\S*|присл\S*|присыла\S*|направ\S*|высл\S*|прикреп\S*|пода\S*|на\s+(?:электронн\w*\s+)?почт\w*|для\s+отправк\S*|для\s+подач\S*)/i.test(near) && !/^\s*(?:синопсис|рукопис\w*|аннотац\w*)\s*[:—-]\s*$/i.test(before)) continue;
     const found = [];
     if (/синопсис\w*/i.test(near)) found.push('Синопсис');
     if (/рукопис\w*/i.test(near)) found.push('Рукопись');
