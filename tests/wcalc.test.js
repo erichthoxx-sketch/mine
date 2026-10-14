@@ -262,6 +262,26 @@ test('Второе дыхание: у старой карточки есть ф�
   assert.equal(contestSubmissionUrl({ ...oldCard, name: 'Другой конкурс', url: 'https://litnet.com/ru/contests/other/rules' }), '');
 });
 
+test('конкурс: материалы для почты определяются по инструкции рядом с адресом', async () => {
+  const { contestEmailPurpose } = await import('../writer/js/wcalc.js');
+  const email = 'contests@litnet.com';
+  // Официальные правила: в заявке — текст, отдельным письмом — синопсис.
+  const synopsis = {
+    name: 'Другой конкурс', platform: 'Литнет',
+    conditions: 'В заявке предоставьте файл с полным текстом произведения.\nПрикрепить синопсис и отправить его на почту contests@litnet.com.'
+  };
+  assert.equal(contestEmailPurpose(synopsis, email), 'Синопсис');
+  assert.equal(contestEmailPurpose({ conditions: 'Рукопись — через форму, а синопсис на почту contests@litnet.com.' }, email), 'Синопсис');
+  assert.equal(contestEmailPurpose({ conditions: 'Отправить на адрес editor@example.ru рукопись и синопсис.' }, 'editor@example.ru'), 'Синопсис и Рукопись');
+  assert.equal(contestEmailPurpose({ conditions: 'Полный текст книги прислать на editor@example.ru.' }, 'editor@example.ru'), 'Текст книги');
+  assert.equal(contestEmailPurpose({ conditions: 'Синопсис: editor@example.ru' }, 'editor@example.ru'), 'Синопсис');
+  assert.equal(contestEmailPurpose({ conditions: 'За уточнениями обращайтесь на questions@example.ru.' }, 'questions@example.ru'), '');
+  assert.equal(contestEmailPurpose({ conditions: 'По всем вопросам: contests@litnet.com.' }, email), '');
+  // В старой записи сохранена лишь краткая страница, но конкурсные правила известны.
+  const old = { name: 'Второе дыхание', platform: 'Литнет', conditions: 'Сроки конкурса. Вопросы: contests@litnet.com.' };
+  assert.equal(contestEmailPurpose(old, email), 'Синопсис');
+});
+
 test('календарь конкурсов: список из поста — по абзацам, месяц без дат — примерно', async () => {
   const { parseContestList } = await import('../writer/js/wcalc.js');
   const r = parseContestList(`Календарь конкурсов на год
