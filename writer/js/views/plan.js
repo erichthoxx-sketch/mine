@@ -7,7 +7,7 @@ import { widgetReminder } from './widgets.js';
 import { linkTodos } from './links.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
-import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestFileName, contestSubmissionUrl, goalMult, moveGoalDay } from '../wcalc.js';
+import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestFileName, contestSubmissionUrl, contestEmailPurpose, goalMult, moveGoalDay } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask, moveOwnTask } from '../../../js/tdtasks.js';
@@ -434,7 +434,7 @@ export function contestCard(c, x, { forBook = null } = {}) {
   const badge = left == null ? '' : over ? '<span class="badge">приём закрыт</span>' : `<span class="badge ${left <= 7 ? 'bad' : left <= 14 ? 'warn' : 'good'}">${left === 0 ? 'сегодня последний день' : `осталось ${left} дн.`}</span>`;
   const fact = (k, v, title = '') => (v ? `<div class="ct-f"${title ? ` title="${esc(title)}"` : ''}><span>${k}</span><b>${v}</b></div>` : '');
   const submitUrl = contestSubmissionUrl(x);
-  const mails = (x.emails || []).map((e) => `<span class="ct-mail">${esc(e)}<button class="link" data-act="copy" data-text="${esc(e)}" title="Скопировать адрес">${ic('copy')}</button></span>`).join('');
+  const mails = (x.emails || []).map((e) => { const what = contestEmailPurpose(x, e); return `<span class="ct-email-unit">${what ? `<span class="ct-send-what">${esc(what)}:</span>` : ''}<span class="ct-mail">${esc(e)}<button class="link" data-act="copy" data-text="${esc(e)}" title="Скопировать адрес">${ic('copy')}</button></span></span>`; }).join('');
   const ids = contestBookIds(x).filter((id) => c.wbooksById[id]), sent = contestSent(x);
   const shown = forBook ? ids.filter((id) => id === forBook) : ids;
   const author = c.settings.pseudonym || '';
