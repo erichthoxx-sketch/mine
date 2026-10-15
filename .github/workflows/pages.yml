@@ -24,6 +24,8 @@ jobs:
         with: { node-version: 22 }
       - run: npm test
       - run: |
+          find js writer/js -name '*.js' -not -path '*/vendor/*' -print0 | xargs -0 -n1 node --check
+      - run: |
           # каждая версия — в своей папке, чтобы браузер не держал старые файлы
           V=v${GITHUB_SHA::8}
           mkdir -p _site/$V
