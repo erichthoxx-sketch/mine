@@ -605,6 +605,21 @@ export const ctr = (r) => (r.impressions ? r.clicks / r.impressions : null);
 export const cpc = (r) => (r.clicks ? r.spend / r.clicks : null);
 
 // ---------- Rocket, налоги, чистый доход ----------
+// Предварительные цифры Rocket используются только до внесения итоговых.
+// Итоговые показатели заменяют предварительные, а не прибавляются к ним.
+export function rocketFigures(m = {}) {
+  const has = (v) => v != null && v !== '';
+  const final = [m.rocketIndex, m.rocketFee, m.rocketTotal].some(has);
+  const draft = !final && m.rocketPreliminary && typeof m.rocketPreliminary === 'object' ? m.rocketPreliminary : null;
+  const num = (v) => has(v) && Number.isFinite(Number(v)) ? Number(v) : null;
+  return {
+    index: num(final ? m.rocketIndex : draft?.index),
+    fee: num(final ? m.rocketFee : draft?.fee),
+    total: num(final ? m.rocketTotal : draft?.total),
+    preliminary: !!draft && [draft.index, draft.fee, draft.total].some(has),
+    final,
+  };
+}
 // months[месяц] = { rocketIndex, rocketFee, litnetSpend?, extraAdSpend? }
 // Финансы месяца продаж.
 // Чистый = роялти + скидка «Литнет платит» − Rocket − использованный рекламный бюджет − налог. Ожидаемая выплата Литнета за месяц продаж = роялти Литнета − Rocket + скидка
@@ -614,7 +629,8 @@ export function monthFinance(key, { sales, legacyDays, spend, discounts, months 
   const royalty = sumSeries(ser);
   const gross = sumSeries(ser, 'gross');
   const m = months[key] || {};
-  const rocketFee = Number(m.rocketFee) || 0;
+  const rocket = rocketFigures(m);
+  const rocketFee = rocket.fee ?? 0;
   const sp = spend[key] || { litnet: 0, own: 0, other: 0 };
   const dsc = discounts[key];
   const discount = dsc?.applied || 0; // скидка «Литнет платит» — автоматически, по оферте
@@ -631,7 +647,7 @@ export function monthFinance(key, { sales, legacyDays, spend, discounts, months 
   const payoutExpected = r2(lm.royalty - rocketFee + payDisc);
   const payoutActual = m.payoutActual != null && m.payoutActual !== '' ? Number(m.payoutActual) : null;
   return {
-    month: key, royalty, gross, rocketIndex: m.rocketIndex ?? null, rocketFee,
+    month: key, royalty, gross, rocketIndex: rocket.index, rocketFee, rocketPreliminary: rocket.preliminary,
     afterRocket: r2(royalty - rocketFee),
     litnetFee: lm.fee, litnetRoyalty: lm.royalty,
     litnetSpend: sp.litnet, litnetDiscount: discount, expectedDiscount, ownSpend,
@@ -755,19 +771,18 @@ export const npdDeadline = (key) => `${addMonths(key, 1)}-28`;
 export function rocketRows(keys, finOf, monthsMap, today) {
   const rows = keys.map((k) => {
     const f = finOf(k), m = monthsMap[k] || {};
-    const fee = m.rocketFee != null && m.rocketFee !== '' ? Number(m.rocketFee) : null;
-    const index = m.rocketIndex != null && m.rocketIndex !== '' ? Number(m.rocketIndex) : null;
+    const { fee, index, total, preliminary, final } = rocketFigures(m);
     return {
-      month: k, royalty: f.royalty, qty: f.qty ?? null, fee, index,
+      month: k, royalty: f.royalty, qty: f.qty ?? null, fee, index, preliminary, final,
       sales: fee != null && index ? Math.round(fee / index) : null,
       // «Все продажи, шт» из кабинета Rocket — от них честная доля продаж через Rocket
-      total: m.rocketTotal != null && m.rocketTotal !== '' ? Number(m.rocketTotal) : null,
+      total,
       share: fee != null && f.royalty ? fee / f.royalty : null,
       closed: monthEnd(k) < today, chargeBy: `${addMonths(k, 1)}-20`,
     };
   });
   for (const x of rows) x.salesShare = x.sales != null && x.total ? x.sales / x.total : null;
-  return { rows, missing: rows.filter((x) => x.closed && x.fee == null && x.royalty > 0).map((x) => x.month) };
+  return { rows, missing: rows.filter((x) => x.closed && !x.final && x.royalty > 0).map((x) => x.month) };
 }
 
 // Сигнал «таргет ухудшился»: по книге кампании за последние 7 дней доход упал на 25 %+ к предыдущим дням кампании
