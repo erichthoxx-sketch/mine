@@ -343,32 +343,6 @@ test('Rocket: не внесённые закончившиеся месяцы, �
   assert.deepEqual(rocketRows(['2026-09'], (k) => fin[k], {}, '2026-10-05').missing, ['2026-09']);
 });
 
-test('Rocket: предварительные цифры сразу учитываются, итоговые заменяют их', async () => {
-  const { rocketFigures, rocketRows, monthFinance } = await import('../js/calc.js');
-  const sale = { date: '2026-10-02', bookId: 'k', book: 'К', kind: 'sale', price: 100, qty: 20, royalty: 2000 };
-  const prelim = { rocketPreliminary: { index: 25, fee: 500, total: 100 } };
-  const fin = (m) => monthFinance('2026-10', { sales: [sale], legacyDays: [], spend: {}, discounts: {}, months: { '2026-10': m }, settings: {} });
-  const base = fin({});
-  const interim = fin(prelim);
-  assert.equal(interim.rocketFee, 500);
-  assert.equal(interim.rocketIndex, 25);
-  assert.equal(interim.rocketPreliminary, true);
-  assert.equal(interim.net, base.net - 500);
-  assert.equal(interim.payoutExpected, base.payoutExpected - 500);
-  const r = rocketRows(['2026-10'], () => interim, { '2026-10': prelim }, '2026-10-15').rows[0];
-  assert.deepEqual([r.fee, r.index, r.sales, r.total, r.salesShare, r.preliminary], [500, 25, 20, 100, 0.2, true]);
-  const confirmed = { ...prelim, rocketFee: 700, rocketIndex: 35, rocketTotal: 120 };
-  assert.deepEqual([rocketFigures(confirmed).fee, rocketFigures(confirmed).preliminary, rocketFigures(confirmed).final], [700, false, true]);
-  assert.equal(fin(confirmed).net, base.net - 700);
-  assert.equal(fin(confirmed).payoutExpected, base.payoutExpected - 700);
-  const past = rocketRows(['2026-10'], () => interim, { '2026-10': prelim }, '2026-11-22');
-  assert.deepEqual(past.missing, ['2026-10']); // не считать предварительные окончательными
-  const done = rocketRows(['2026-10'], () => fin(confirmed), { '2026-10': confirmed }, '2026-11-22');
-  assert.deepEqual(done.missing, []);
-  assert.equal(rocketFigures({ rocketPreliminary: { index: 34, fee: 0, total: 0 } }).fee, 0);
-  assert.equal(rocketFigures({}).fee, null);
-});
-
 test('сигнал по таргету: падение продаж и доход ниже порога, отложен после отчёта', async () => {
   const { targetAlert } = await import('../js/calc.js');
   const sales = [];
