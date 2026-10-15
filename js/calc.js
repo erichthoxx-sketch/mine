@@ -782,7 +782,7 @@ export function rocketRows(keys, finOf, monthsMap, today) {
     };
   });
   for (const x of rows) x.salesShare = x.sales != null && x.total ? x.sales / x.total : null;
-  return { rows, missing: rows.filter((x) => x.closed && !x.final && x.royalty > 0).map((x) => x.month) };
+  return { rows, missing: rows.filter((x) => x.closed && (!x.final || x.fee == null) && x.royalty > 0).map((x) => x.month) };
 }
 
 // Сигнал «таргет ухудшился»: по книге кампании за последние 7 дней доход упал на 25 %+ к предыдущим дням кампании
