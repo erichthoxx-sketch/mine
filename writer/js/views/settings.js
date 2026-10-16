@@ -1,3 +1,4 @@
+import { PALETTES, applyAccent } from '../../../js/accent.js';
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, opt, toast, download, ask } from '../../../js/ui.js';
 import * as drive from '../drive.js';
@@ -25,6 +26,8 @@ export function settingsView(a) {
     <div class="row"><button class="primary" data-act="set.backup">Скачать копию</button><label class="btn">Восстановить<input type="file" accept=".json" data-chg="set.restore" hidden></label></div></div>
   <div class="card"><h2>Оформление и аккаунт</h2>
     <label for="th" style="margin-top:0">Тема</label><select id="th" data-chg="theme">${opt('auto', 'как в телефоне', a.theme)}${opt('light', 'светлая', a.theme)}${opt('dark', 'тёмная', a.theme)}</select>
+    <label style="margin-top:14px">Цвет акцентов <span class="muted small">— для всех приложений</span></label>
+    <div class="acc-pick">${Object.entries(PALETTES).map(([k, p]) => `<button type="button" class="acc-sw${(c.settings.accent || 'rose') === k ? ' on' : ''}" data-act="accent.set" data-v="${k}" title="${p.name}" aria-label="${p.name}"><i style="background:linear-gradient(135deg, ${p.light.to}, ${p.light.accent})"></i><span>${p.name}</span></button>`).join('')}</div>
     <p class="small muted" style="margin-top:12px">${st.mode === 'firebase' ? `Вы вошли как <b>${esc(st.user.email)}</b> — тот же вход, что в приложении доходов.` : 'Пробный режим.'}</p>
     ${st.mode === 'firebase' ? '<button data-act="auth.out">Выйти</button>' : ''}</div>`;
   return { html };
@@ -94,3 +97,5 @@ acts['td.key'] = () => openSheet('Ключ Todoist', `<p class="small muted" sty
 acts['td.sync'] = async () => { toast('Отправляю в Todoist…'); await runTodoist(app(), { force: true }); };
 acts['td.off'] = async () => { if (!(await ask('Отключить Todoist? Задачи, которые уже там, останутся.', 'Отключить'))) return; await app().store.saveSettings({ todoistToken: '', todoist: {} }); toast('Todoist отключён'); };
 changes['td.auto'] = async (v, el, checked) => { await app().store.saveSettings({ todoistOff: !checked }); if (checked) runTodoist(app(), { force: true }); };
+
+acts['accent.set'] = async (d) => { applyAccent(d.v); await app().store.saveSettings({ accent: d.v }); toast(`Цвет акцентов: ${PALETTES[d.v].name.toLowerCase()} — во всех приложениях`); };

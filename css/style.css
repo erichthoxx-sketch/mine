@@ -1181,6 +1181,13 @@ main a.pbook-t, main a.pbook-t b { color: var(--text) !important; }
 .ct-cond ul { margin: 0 0 12px; padding-left: 18px; }
 .ct-cond li { margin: 3px 0; }
 .ct-cond li::marker { color: var(--accent); }
+/* выбор цвета акцентов — круглые пастельные образцы */
+.acc-pick { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 6px; }
+:is(main, dialog) button.acc-sw.acc-sw:not(.chip):not(.link):not(.wide) { display: inline-flex; flex-direction: column; align-items: center; gap: 5px; min-height: 0; padding: 4px 2px; border: 0; background: transparent; box-shadow: none; font-size: 12px; font-weight: 600; color: var(--text-2); }
+.acc-sw i { width: 34px; height: 34px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); transition: transform .15s; }
+.acc-sw:hover i { transform: scale(1.06); }
+.acc-sw.on i { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.acc-sw.on span { color: var(--text); }
 
 /* ---------- «Директ» ---------- */
 .d-st { font-size: 13px; color: var(--muted); white-space: nowrap; }

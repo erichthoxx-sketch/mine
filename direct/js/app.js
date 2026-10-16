@@ -1,6 +1,7 @@
 // Приложение «Директ»: реклама книг в Яндекс Директе — кампании, расход, запросы, минус-фразы, ставки,
 // учебник и ИИ-помощник. Вход и база — общие с «Доходами» и «Мастерской».
 import { createStore, authErrorText } from '../../js/store.js';
+import { initAccent } from '../../js/accent.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from '../../js/ui.js';
 import { todayISO } from '../../js/calc.js';
 import { ic } from '../../js/icons.js';
@@ -15,6 +16,7 @@ import { logView } from './views/log.js';
 import { settingsView } from './views/settings.js';
 
 const store = createStore({ colls: ['d_snap', 'd_log', 'campaigns', 'reports', 'books'], localKey: 'authorDirect.v1' });
+initAccent(store); // цвет акцентов — общий для всех приложений (выбирается в Мастерской)
 const ui = { route: '/', cTab: 'queries', lTab: '', lesson: '', demo: false, busy: '' };
 keepPlace(ui, ['cTab', 'lTab', 'demo']);
 let theme = 'auto';

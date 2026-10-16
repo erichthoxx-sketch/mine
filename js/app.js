@@ -1,4 +1,5 @@
 // Запуск приложения: вход, маршруты, общий контекст расчётов.
+import { initAccent } from './accent.js';
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from './ui.js';
 import {
@@ -18,6 +19,7 @@ import { sideIncome } from './views/side.js';
 
 // d_snap — сводка из приложения «Директ» (для баннера во вкладке «Реклама»)
 const store = createStore({ colls: [...COLLECTIONS, 'd_snap'] });
+initAccent(store);
 const ui = { route: '/', range: 90, table: 'weeks', day: null, month: null };
 keepPlace(ui, ['range', 'table', 'day', 'month', 'adMonth', 'booksMonth']);
 let theme = 'auto';
