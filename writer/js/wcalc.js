@@ -394,6 +394,89 @@ const MON_RX = '(?:январ[ья]|янв|феврал[ья]|февр?|март
 const MON3 = ['янв', 'фев', 'мар', 'апр', 'ма', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 const monIdx = (w) => { const x = w.toLowerCase(); return MON3.findIndex((m) => x.startsWith(m)) + 1; };
 const pad2 = (n) => String(n).padStart(2, '0');
+// Ссылка именно на подачу рукописи/заявки, а не на правила или страницу конкурса.
+const contestLinkUrl = (raw) => {
+  const val = String(raw || '').trim().replace(/[)\]>.,;!?]+$/g, '');
+  if (!/^https?:\/\//i.test(val)) return '';
+  try { const url = new URL(val); return url.hostname ? url.href : ''; } catch { return ''; }
+};
+const submissionLinkFromText = (text, page = '') => {
+  const body = String(text || '');
+  let best = '', bestScore = 0;
+  for (const m of body.matchAll(/https?:\/\/[^\s<>"'«»]+/gi)) {
+    const link = contestLinkUrl(m[0]);
+    if (!link) continue;
+    const u = new URL(link);
+    const before = body.slice(Math.max(0, m.index - 190), m.index);
+    const line = before.split('\n').pop();
+    const after = body.slice(m.index + m[0].length, m.index + m[0].length + 90);
+    const formHost = /^(forms\.yandex\.ru|forms\.gle|forms\.office\.com|forms\.microsoft\.com|tally\.so|form\.typeform\.com|airtable\.com)$/.test(u.hostname)
+      || (u.hostname === 'docs.google.com' && /^\/forms\//.test(u.pathname));
+    let score = formHost ? 5 : 0;
+    if (/(?:заявк\S*|пода(?:ч|т)\S*|отправ\S*|загруз\S*|прикреп\S*|форм\S*|рукопис\S*|для\s+участи\S*)/i.test(line)) score += 5;
+    else if (/(?:заявк\S*|пода(?:ч|т)\S*|отправ\S*|форм\S*)/i.test(before.slice(-100))) score += 3;
+    if (/(?:подать|отправить|заявк\S*|форм\S*)/i.test(after)) score += 2;
+    if (/\/(?:forms?|apply|submit|entry|zayavk|podach)/i.test(u.pathname)) score += 3;
+    if (/(?:страниц\S*\s+конкурс\S*|правил\S*\s+конкурс\S*|политик\S*|согласи\S*|услови\S*\s+конкурс\S*)/i.test(line)) score -= 7;
+    if (page && link.replace(/\/$/, '') === contestLinkUrl(page).replace(/\/$/, '')) score -= 7;
+    if (score >= 5 && score > bestScore) { best = link; bestScore = score; }
+  }
+  return best;
+};
+// Для старых конкурсов извлекаем ссылку прямо из сохранённых условий, без миграции данных.
+const knownContestSubmission = (x) => {
+  // У Литнета краткая страница конкурса не содержит ссылку на форму, она вынесена в полные правила.
+  // «Второе дыхание»: ссылка сверена с официальными правилами конкурса.
+  const name = String(x?.name || '').trim().toLowerCase();
+  const page = String(x?.url || '');
+  if (name === 'второе дыхание' && (String(x?.platform || '').toLowerCase() === 'литнет' || /litnet\.com\/ru\/contests\/vtoroe-dyhanie-c151/i.test(page))) {
+    return 'https://forms.yandex.ru/cloud/6a6c97e2493639819da47b88/';
+  }
+  return '';
+};
+export const contestSubmissionUrl = (x) => contestLinkUrl(x?.submissionUrl) || submissionLinkFromText(x?.conditions, x?.url) || knownContestSubmission(x);
+
+// Что именно отправлять НА ПОЧТУ — только из указания рядом с адресом, не из общих требований к заявке.
+export function contestEmailPurpose(x, email) {
+  const source = String(x?.conditions || '');
+  const target = String(email || '').trim().toLowerCase();
+  const instructions = [];
+  for (const m of source.matchAll(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g)) {
+    if (m[0].toLowerCase() !== target) continue;
+    const sentence = source.slice(Math.max(0, m.index - 260), m.index).split(/\r?\n|[.!?]\s+(?=[А-ЯЁ])/).pop() || '';
+    // «Рукопись через форму, а синопсис на почту»: к адресу относится вторая часть.
+    const before = sentence.split(/[,;]\s*(?:а|но|при этом)\s+|;\s*/i).pop() || '';
+    const after = source.slice(m.index + m[0].length, m.index + m[0].length + 140).split(/\r?\n|[.!?]\s+(?=[А-ЯЁ])/)[0] || '';
+    const near = (before + ' ' + after).trim();
+    // Контакт для вопросов и общий e-mail организатора — не инструкция по подаче материалов.
+    if (!/(?:отправ\S*|присл\S*|присыла\S*|направ\S*|высл\S*|прикреп\S*|пода\S*|на\s+(?:электронн\w*\s+)?почт\w*|для\s+отправк\S*|для\s+подач\S*)/i.test(near) && !/^\s*(?:синопсис|рукопис\w*|аннотац\w*)\s*[:—-]\s*$/i.test(before)) continue;
+    const kinds = [
+      ['синопсис', /синопсис\w*/i],
+      ['рукопись', /рукопис\w*/i],
+      ['аннотация', /аннотац\w*/i],
+      ['текст книги', /(?:полн\w*\s+текст|текст\s+(?:произведени\w*|книг\w*|роман\w*))/i],
+      ['первые главы', /перв\w*\s+(?:\d+|одн\w*|дв\w*|тр\w*|четыр\w*|пят\w*)\s+глав\w*/i],
+    ];
+    const found = kinds.map(([label, re]) => ({ label, at: near.search(re) })).filter((k) => k.at >= 0);
+    if (found.some((k) => k.label === 'рукопись')) {
+      const i = found.findIndex((k) => k.label === 'текст книги');
+      if (i >= 0) found.splice(i, 1);
+    }
+    if (found.length) instructions.push(found.sort((a, b) => a.at - b.at).map((k) => k.label));
+  }
+  if (instructions.length) {
+    // При повторении адреса конкретная инструкция перед почтой важнее общей фразы.
+    const last = instructions[instructions.length - 1];
+    return last.map((label, i) => i ? label : label[0].toUpperCase() + label.slice(1)).join(' и ');
+  }
+  // Старые карточки «Второго дыхания» сохранили краткие условия без пункта про синопсис.
+  const isSecondChance = String(x?.name || '').trim().toLowerCase() === 'второе дыхание'
+    && (String(x?.platform || '').toLowerCase() === 'литнет' || /litnet\.com\/ru\/contests\/vtoroe-dyhanie-c151/i.test(x?.url || ''));
+  if (isSecondChance && target === 'contests@litnet.com') return 'Синопсис';
+  return '';
+}
+
+
 export function parseContest(text, url = '', today = new Date().toISOString().slice(0, 10)) {
   const t = String(text || '').replace(/[  ]/g, ' ').replace(/[ \t]+/g, ' ');
   const out = {};
@@ -444,6 +527,8 @@ export function parseContest(text, url = '', today = new Date().toISOString().sl
   // куда отправлять: email-адреса из условий
   const emails = [...new Set((t.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) || []).map((e) => e.replace(/[.,;]+$/, '').toLowerCase()))];
   if (emails.length) out.emails = emails;
+  const submissionUrl = submissionLinkFromText(t, url);
+  if (submissionUrl) out.submissionUrl = submissionUrl;
   // объём: «от 6 до 12 а.л.», «не менее 200 000 знаков», «до 15 авторских листов», «от 120 тыс. знаков».
   // Правила выкладки («глава — от 10 000 знаков», «не реже… по 30 000 знаков в неделю») — не объём книги, их пропускаем.
   // Если минимумов два («на момент подачи — от 30 000», «к окончанию приёма — от 100 000»), главный — к окончанию.

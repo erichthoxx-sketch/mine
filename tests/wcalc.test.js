@@ -232,6 +232,56 @@ test('конкурс: сокращённые месяцы, правила вык
   assert.deepEqual([r2.unit, r2.minChars, r2.startChars], ['al', 240000, 30000]);
 });
 
+test('конкурс: отдельная ссылка подачи не путается со страницей конкурса и почтой', async () => {
+  const { parseContest, contestSubmissionUrl } = await import('../writer/js/wcalc.js');
+  const page = 'https://litnet.com/ru/contests/vtoroe-dyhanie-c150';
+  const form = 'https://forms.yandex.ru/u/123456/';
+  const t = `Конкурс «Второе дыхание»
+Правила на ${page}
+Для участия заполните форму заявки: ${form}
+Рукопись направить на contests@litnet.com.`;
+  const r = parseContest(t, page, '2026-10-10');
+  assert.equal(r.submissionUrl, form);
+  assert.equal(contestSubmissionUrl({ ...r, conditions: t, url: page }), form);
+  assert.deepEqual(r.emails, ['contests@litnet.com']);
+  assert.equal(contestSubmissionUrl({ conditions: t, url: page }), form);
+  assert.equal(contestSubmissionUrl({ conditions: `Условия на ${page}`, url: page }), '');
+  assert.equal(contestSubmissionUrl({ submissionUrl: 'javascript:alert(1)' }), '');
+});
+
+test('Второе дыхание: у старой карточки есть форма из официальных правил', async () => {
+  const { contestSubmissionUrl } = await import('../writer/js/wcalc.js');
+  const oldCard = {
+    name: 'Второе дыхание',
+    platform: 'Литнет',
+    url: 'https://litnet.com/ru/contests/vtoroe-dyhanie-c151/rules',
+    conditions: 'Срок приема работ 31.07.2026 - 31.10.2026. Минимум 30 000 знаков. Почта contests@litnet.com.'
+  };
+  assert.equal(contestSubmissionUrl(oldCard), 'https://forms.yandex.ru/cloud/6a6c97e2493639819da47b88/');
+  assert.equal(contestSubmissionUrl({ ...oldCard, submissionUrl: 'https://example.com/submit' }), 'https://example.com/submit');
+  assert.equal(contestSubmissionUrl({ ...oldCard, name: 'Другой конкурс', url: 'https://litnet.com/ru/contests/other/rules' }), '');
+});
+
+test('конкурс: материалы для почты определяются по инструкции рядом с адресом', async () => {
+  const { contestEmailPurpose } = await import('../writer/js/wcalc.js');
+  const email = 'contests@litnet.com';
+  // Официальные правила: в заявке — текст, отдельным письмом — синопсис.
+  const synopsis = {
+    name: 'Другой конкурс', platform: 'Литнет',
+    conditions: 'В заявке предоставьте файл с полным текстом произведения.\nПрикрепить синопсис и отправить его на почту contests@litnet.com.'
+  };
+  assert.equal(contestEmailPurpose(synopsis, email), 'Синопсис');
+  assert.equal(contestEmailPurpose({ conditions: 'Рукопись — через форму, а синопсис на почту contests@litnet.com.' }, email), 'Синопсис');
+  assert.equal(contestEmailPurpose({ conditions: 'Отправить на адрес editor@example.ru рукопись и синопсис.' }, 'editor@example.ru'), 'Рукопись и синопсис');
+  assert.equal(contestEmailPurpose({ conditions: 'Полный текст книги прислать на editor@example.ru.' }, 'editor@example.ru'), 'Текст книги');
+  assert.equal(contestEmailPurpose({ conditions: 'Синопсис: editor@example.ru' }, 'editor@example.ru'), 'Синопсис');
+  assert.equal(contestEmailPurpose({ conditions: 'За уточнениями обращайтесь на questions@example.ru.' }, 'questions@example.ru'), '');
+  assert.equal(contestEmailPurpose({ conditions: 'По всем вопросам: contests@litnet.com.' }, email), '');
+  // В старой записи сохранена лишь краткая страница, но конкурсные правила известны.
+  const old = { name: 'Второе дыхание', platform: 'Литнет', conditions: 'Сроки конкурса. Вопросы: contests@litnet.com.' };
+  assert.equal(contestEmailPurpose(old, email), 'Синопсис');
+});
+
 test('календарь конкурсов: список из поста — по абзацам, месяц без дат — примерно', async () => {
   const { parseContestList } = await import('../writer/js/wcalc.js');
   const r = parseContestList(`Календарь конкурсов на год
