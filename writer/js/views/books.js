@@ -160,7 +160,7 @@ export function bookPage(a, id) {
   const canEdit = !!b.fileId && b.mimeType === drive.MIME.doc;
   // цели по книге и данные для графиков
   const bookGoals = c.data.w_goals.filter((g) => !g.done && g.bookId === b.id).map((g) => ({ g, st: goalStatus(g, b, c.today) }));
-  const fin = bookGoals.find((x) => x.g.type === 'finish' && x.st.active);
+  const fin = bookGoals.find((x) => (x.g.type === 'finish' || x.g.type === 'write') && x.st.active);
   const daily = bookGoals.find((x) => x.g.type === 'daily' && x.st.active);
   const target = (daily && daily.st.perDay) || null;
   const series = dailyWritten(b, addDays(c.today, -13), c.today, c.today);

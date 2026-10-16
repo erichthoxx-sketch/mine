@@ -299,7 +299,9 @@ export function dailyWrittenAll(books, from, to, today) {
 
 // ---- цели ----
 // g = { type: 'finish' | 'daily' | 'custom', bookId, title, deadline, days:[1..7], perDay (знаков, для daily), checks:{date:true}, done }
-export const GOAL_TYPES = { finish: 'Главы к сроку', daily: 'Объём текста (а.л.)', custom: 'Своя цель' };
+export const GOAL_TYPES = { finish: 'Главы к сроку', write: 'Начать писать с даты', daily: 'Объём текста (а.л.)', custom: 'Своя цель' };
+// цели «по главам»: к сроку и «начать писать с даты» (без срока)
+export const isChGoal = (g) => g?.type === 'finish' || g?.type === 'write';
 // график цели: g.every > 1 — раз в N дней начиная с g.from («через день», «раз в 3 дня»); иначе — дни недели g.days (пусто — каждый день)
 export function goalSchedText(g) {
   const ev = Number(g.every) || 1;
@@ -312,6 +314,7 @@ export function goalSchedText(g) {
   return 'в ' + ds.map((x) => DOW[x - 1]).join(', ');
 }
 const isRegularDay = (g, d) => {
+  if (g.start && d < g.start) return false; // «начать писать с даты» — до старта дней цели нет
   const ev = Number(g.every) || 1;
   if (ev > 1) { const from = g.from || String(g.createdAt || d).slice(0, 10); if (d < from) return false; return Math.round((Date.parse(d) - Date.parse(from)) / 864e5) % ev === 0; }
   const days = (g.days || []).map(Number); return !days.length || days.includes(dowOf(d));
@@ -341,7 +344,7 @@ export function goalDaysLeft(g, today) {
 export function goalStatus(g, book, today) {
   const r = { active: !g.done && !(g.deadline && g.deadline < today), todayDay: isGoalDay(g, today), daysLeft: goalDaysLeft(g, today), progress: null, needToday: null, doneToday: false, perDay: null, perDayCh: null, left: null, streak: 0 };
   const wt = book ? writtenToday(book, today) : 0;
-  if (g.type === 'finish' && book) {
+  if (isChGoal(g) && book) {
     // «главы к сроку»: глава засчитывается, когда отмечена выложенной или поставлена на таймер (на основной площадке)
     const pf = pubPlatforms(book)[0], pm = pubMap(book);
     const planCh = Number(g.chapters || book.planChapters) || null;

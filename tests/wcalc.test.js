@@ -333,3 +333,13 @@ test('цели: график «через день», «раз в 3 дня», «
   assert.equal(goalSchedText({ days: [1, 3, 5] }), 'в пн, ср, пт');
   assert.equal(goalStatus({ type: 'custom', title: 'x', days: [1, 2, 3, 4, 5], checks: {} }, null, '2026-10-24').todayDay, false); // суббота
 });
+
+test('цель «начать писать с даты»: до старта дней цели нет, потом — по графику', async () => {
+  const { goalStatus } = await import('../writer/js/wcalc.js');
+  const g = { type: 'write', bookId: 'b', perDay: 1, start: '2026-11-02', days: [1, 2, 3, 4, 5] };
+  const b = { platforms: ['Литнет'], pub: {} };
+  assert.equal(goalStatus(g, b, '2026-10-26').todayDay, false); // пн до старта
+  assert.equal(goalStatus(g, b, '2026-11-02').todayDay, true);
+  assert.equal(goalStatus(g, b, '2026-11-02').needToday, 1);
+  assert.equal(goalStatus(g, b, '2026-11-07').todayDay, false); // суббота
+});
