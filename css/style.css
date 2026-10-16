@@ -1165,3 +1165,13 @@ main a.pbook-t, main a.pbook-t b { color: var(--text) !important; }
 /* день со сбоем «не от меня» */
 .outage-card { border-left: 3px solid var(--ev-outage); }
 .outage-card > b { display: block; margin-bottom: 2px; }
+/* описание и условия конкурса — как аккуратная статья */
+.ct-cond { margin-top: 10px; max-width: 720px; font-size: 14px; line-height: 1.6; color: var(--text-2); }
+.ct-cond dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 18px; margin: 0 0 12px; padding: 0 0 12px; border-bottom: 1px solid var(--line); }
+.ct-cond dt { font-size: 11.5px; color: var(--muted); }
+.ct-cond dd { margin: 0; font-weight: 600; color: var(--text); }
+.ct-cond p { margin: 0 0 10px; }
+.ct-cond h4 { margin: 14px 0 6px; font-size: 13px; font-weight: 700; color: var(--text); }
+.ct-cond ul { margin: 0 0 12px; padding-left: 18px; }
+.ct-cond li { margin: 3px 0; }
+.ct-cond li::marker { color: var(--accent); }

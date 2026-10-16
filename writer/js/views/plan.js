@@ -428,6 +428,27 @@ const dm = (d) => fmtDate(d).slice(0, 5);
 // имя файла с кнопкой «скопировать» — если браузер сохранит файл под другим именем, его легко переименовать
 const fnChip = (name, label = '') => `<span class="ct-fnc">${label ? `<i>${label}:</i> ` : ''}<code>${esc(name)}</code><button class="link" data-act="copy" data-text="${esc(name)}" title="Скопировать имя файла" aria-label="Скопировать имя файла">${ic('copy')}</button></span>`;
 // карточка конкурса: главное — фактами, книги — с проверкой условий и кнопками, полный текст — свёрнут
+// текст условий со страницы — аккуратно: служебные пары («Срок приема работ — 31.07…») уходят в карточку выше,
+// остальное — абзацами, списки «— …» — списком, короткие строки с двоеточием — подзаголовками
+const COND_KEYS = /^(правила конкурса|срок при[её]ма работ|оглашение результатов|размер книги|жанры|призовой фонд|приз[ы]?|участники|работы|описание)$/i;
+function conditionsHtml(text) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n').map((l) => l.trim());
+  const out = [];
+  let list = null;
+  const flush = () => { if (list) { out.push(`<ul>${list.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`); list = null; } };
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (!l) { const nx = lines.slice(i + 1).find(Boolean) || ''; if (!/^[—–\-•*·]\s/.test(nx)) flush(); continue; } // пустая строка между пунктами — список не рвём
+    if (COND_KEYS.test(l)) { if (lines[i + 1] && !COND_KEYS.test(lines[i + 1])) i++; continue; } // даты, объём, жанры уже стоят в карточке выше
+    const li = /^[—–\-•*·]\s*(.+)$/.exec(l);
+    if (li) { (list ||= []).push(li[1].replace(/[;.]$/, '')); continue; }
+    flush();
+    if (l.length <= 60 && /:$/.test(l)) out.push(`<h4>${esc(l.replace(/:$/, ''))}</h4>`);
+    else out.push(`<p>${esc(l)}</p>`);
+  }
+  flush();
+  return `<div class="ct-cond">${out.join('')}</div>`;
+}
 export function contestCard(c, x, { forBook = null } = {}) {
   const left = x.end ? Math.round((new Date(x.end + 'T00:00:00Z') - new Date(c.today + 'T00:00:00Z')) / 864e5) : null;
   const over = (left != null && left < 0) || x.status === 'done';
@@ -458,7 +479,7 @@ export function contestCard(c, x, { forBook = null } = {}) {
     ${mails ? `<div class="ct-f ct-mails"><span>Куда отправлять</span><div>${mails}</div></div>` : ''}
     ${shown.length ? `<div class="ct-books">${shown.map(bookRow).join('')}</div>` : ''}
     <div class="ct-acts">${forBook || !free.length ? '' : `<select class="ct-addb" data-chg="contest.addBook" data-id="${x.id}" aria-label="Привязать книгу"><option value="">+ книга на конкурс</option>${free.map((b) => opt(b.id, b.title, '')).join('')}</select>`}<button class="link" data-act="contest.edit" data-id="${x.id}">Изменить</button>${x.conditions ? `<button class="link" data-act="contest.reparse" data-id="${x.id}">Разобрать условия заново</button>` : ''}</div>
-    ${x.conditions && !forBook ? `<details class="ct-full"><summary>Полный текст условий</summary><p class="idea-text">${esc(x.conditions)}</p></details>` : ''}
+    ${x.conditions && !forBook ? `<details class="ct-full"><summary>Описание и условия</summary>${conditionsHtml(x.conditions)}</details>` : ''}
   </div>`;
 }
 function contestForm(c, x = {}) {
