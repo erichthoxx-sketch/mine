@@ -63,7 +63,9 @@ export async function report(s, { name, type = 'CUSTOM_REPORT', fields, range = 
 // ---------- вход через Яндекс (токен приходит в адрес страницы после «#») ----------
 export const redirectUri = () => location.origin + location.pathname;
 export function authorizeUrl(clientId) {
-  return 'https://oauth.yandex.ru/authorize?' + new URLSearchParams({ response_type: 'token', client_id: clientId, redirect_uri: redirectUri(), force_confirm: 'yes' });
+  // без redirect_uri Яндекс берёт адрес из настроек приложения: для «доступа к API» это его страница
+  // verification_code — там он показывает ключ, и его вставляют в приложение; для веб-сервиса — возврат сюда же
+  return 'https://oauth.yandex.ru/authorize?' + new URLSearchParams({ response_type: 'token', client_id: clientId, force_confirm: 'yes' });
 }
 // Яндекс вернул #access_token=…&expires_in=… → {token, exp} и чистим адрес
 export function takeTokenFromUrl() {

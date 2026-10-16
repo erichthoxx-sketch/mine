@@ -41,7 +41,7 @@ forms['d.token'] = async (fd) => {
   await app().store.saveSettings({ directToken: t, directTokenExp: null });
   app().ui.demo = false; toast('Ключ сохранён'); app().reload?.({ quiet: true });
 };
-acts['d.login'] = () => { location.href = authorizeUrl(app().ctx().settings.direct.clientId); return false; };
+acts['d.login'] = () => { window.open(authorizeUrl(app().ctx().settings.direct.clientId), '_blank', 'noopener'); return false; };
 acts['d.off'] = async () => {
   if (!(await ask('Отключить Директ? Кампании в Директе продолжат работать, просто приложение перестанет их видеть.', 'Отключить'))) return;
   await app().store.saveSettings({ directToken: '', directTokenExp: null });

@@ -1,7 +1,7 @@
 // «Настройка шаг за шагом»: подключение Директа простыми шагами. Галочки ставятся сами, где это можно проверить.
 import { esc, acts, forms, toast } from '../../../js/ui.js';
 import { ic } from '../../../js/icons.js';
-import { authorizeUrl, redirectUri } from '../api.js';
+import { authorizeUrl } from '../api.js';
 import { demo } from '../demo.js';
 
 const app = () => window.__app;
@@ -31,10 +31,11 @@ export function setupSteps(c) {
       why: 'Это «пропуск»: через него Яндекс разрешит приложению «Директ» видеть и менять ваши кампании. Пароль от Яндекса приложение не узнает.',
       how: [
         `Откройте ${ext('https://oauth.yandex.ru/client/new', 'oauth.yandex.ru/client/new')} — в том аккаунте Яндекса, где ваш Директ.`,
-        'Название — <b>Директ Ланы</b> (любое). Платформа — <b>Веб-сервисы</b>.',
-        `В поле <b>Redirect URI</b> вставьте этот адрес: <code class="d-code">${esc(redirectUri())}</code> ${copyBtn(redirectUri())}`,
-        'В доступах найдите <b>Яндекс Директ</b> и отметьте <b>«Использование API Яндекс Директа»</b>.',
-        '<b>Создать приложение</b> → появится <b>ClientID</b> (длинная строка из букв и цифр). Скопируйте его сюда:',
+        'Выберите <b>«Для доступа к API или отладки»</b> → <b>«Перейти к созданию»</b>.',
+        'Название сервиса — <b>Директ Ланы</b> (любое). Почта — любая ваша.',
+        'В поле <b>«Название доступа»</b> напечатайте <b>директ</b> и выберите <b>«Использование API Яндекс Директа»</b>.',
+        'Поле Redirect URI заполнено само — не трогайте. Нажмите <b>«Создать приложение»</b>.',
+        'Появится <b>ClientID</b> (длинная строка из букв и цифр). Скопируйте его сюда:',
       ],
       form: `<form data-form="st.client" class="row st-form"><input name="v" value="${esc(d.clientId || '')}" placeholder="ClientID" autocomplete="off" required><button class="primary" type="submit">Сохранить</button></form>`,
     },
@@ -53,8 +54,9 @@ export function setupSteps(c) {
     {
       id: 'login', title: 'Вход через Яндекс', time: '1 минута', done: !!s.directToken && !(err?.code === 53),
       why: 'Яндекс спросит: «Разрешить приложению доступ к Директу?» — нажмите «Разрешить». После этого приложение само загрузит кампании.',
-      how: ['Нажмите кнопку ниже и подтвердите доступ на странице Яндекса.'],
+      how: ['Нажмите «Войти через Яндекс» — откроется новая вкладка. Нажмите там «Разрешить».', 'Яндекс покажет длинный ключ (токен). Скопируйте его, вернитесь сюда и вставьте в поле ниже → «Сохранить».'],
       form: `<div class="row"><button class="primary" data-act="st.login"${d.clientId && d.proxyOk ? '' : ' disabled'}>Войти через Яндекс</button></div>
+        <form data-form="st.token" class="row st-form"><input name="v" type="password" autocomplete="off" placeholder="Ключ со страницы Яндекса" required><button type="submit">Сохранить</button></form>
         ${!(d.clientId && d.proxyOk) ? '<p class="small muted">Кнопка заработает после шагов 1 и 2.</p>' : ''}
         ${err ? `<p class="small down">${esc(err.code === 58 ? 'Яндекс ещё не одобрил заявку на API. Как придёт письмо — нажмите ↻ «Обновить» вверху.' : err.code === 53 ? 'Ключ устарел — войдите заново.' : err.text)}</p>` : ''}`,
     },
@@ -106,4 +108,10 @@ forms['st.proxy'] = async (fd) => {
 forms['st.client'] = async (fd) => { await saveD({ clientId: fd.get('v').trim() }); toast('ClientID сохранён'); };
 acts['st.applied'] = () => saveD({ appliedAt: new Date().toISOString() });
 acts['st.limit'] = () => saveD({ limitSet: true });
-acts['st.login'] = () => { location.href = authorizeUrl(app().ctx().settings.direct.clientId); return false; };
+acts['st.login'] = () => { window.open(authorizeUrl(app().ctx().settings.direct.clientId), '_blank', 'noopener'); return false; };
+forms['st.token'] = async (fd) => {
+  const t = fd.get('v').trim();
+  if (t.length < 20) { toast('Это не похоже на ключ — скопируйте его целиком'); return; }
+  await app().store.saveSettings({ directToken: t, directTokenExp: Date.now() + 180 * 86400000 });
+  app().ui.demo = false; toast('Ключ сохранён — загружаю кампании'); app().reload?.({ quiet: true });
+};
