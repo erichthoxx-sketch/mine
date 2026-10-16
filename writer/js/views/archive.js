@@ -45,7 +45,7 @@ export function archiveCard(c) {
   }
   const st = archiveStatus(ix), books = Object.values(ix.books || {}).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
   const line = st.days >= 2
-    ? `<p class="arc-st warn">Архив не обновлялся ${st.days} ${plural(st.days, ['день', 'дня', 'дней'])}. Откройте программу «${ARCHIVE_NAME}» на script.google.com и нажмите «Выполнить» — или напишите Claude.</p>`
+    ? `<p class="arc-st warn">Архив не обновлялся ${st.days} ${plural(st.days, ['день', 'дня', 'дней'])}. Откройте программу «${ARCHIVE_NAME}» на script.google.com и нажмите Run — или напишите Claude.</p>`
     : `<p class="arc-st"><span class="dot good"></span>Архив проверен ${when(ix.lastRun)} · ${books.length} ${plural(books.length, ['книга', 'книги', 'книг'])}</p>`;
   const errs = (ix.errors || []).length ? `<p class="small arc-err">Не получилось: ${(ix.errors || []).slice(0, 3).map(esc).join('; ')}</p>` : '';
   const gh = ix.github ? (ix.github.ok ? `<p class="small muted">Копия вне Google (GitHub): ${esc(ix.github.msg || 'сохранено')} ${when(ix.github.at)}</p>` : `<p class="small arc-err">GitHub: ${esc(ix.github.msg || 'ошибка')}</p>`) : '<p class="small muted">Копия вне Google (GitHub) не подключена — по желанию, в «Настроить».</p>';
@@ -107,8 +107,9 @@ acts['arc.setup'] = () => {
   openSheet('Настроить архив книг', `<ol class="arc-steps">
       <li>Нажмите <b>«Скопировать программу»</b> — в ней уже указана ваша папка «${esc(s.wBooksFolderName || 'с книгами')}».<div class="dl-row"><button type="button" class="primary" data-act="arc.copy">${ic('copy')} Скопировать программу</button></div></li>
       <li>Откройте <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → новый проект</a> (тот же аккаунт Google, что и Диск).</li>
-      <li>Сотрите всё в окне, вставьте программу (Ctrl+V или «Вставить»), вверху переименуйте проект в «${ARCHIVE_NAME}» и нажмите значок дискеты «Сохранить».</li>
-      <li>В строке над текстом выберите <b>setup</b> и нажмите <b>«Выполнить»</b>. Google попросит разрешение: выберите свой аккаунт → «Дополнительные настройки» → «Перейти к проекту» → «Разрешить». Он предупреждает, потому что программа ваша личная, а не из магазина.</li>
+      <li>Сотрите всё в окне, вставьте программу (Ctrl+V), вверху переименуйте проект в «${ARCHIVE_NAME}» и нажмите <b>Ctrl+S</b> (или значок дискеты). Пока не сохранено, кнопка Run серая.</li>
+      <li>Рядом с кнопкой <b>Run</b> («Выполнить») должно быть выбрано <b>setup</b> — нажмите <b>Run</b>. Появится окно разрешения: <b>Review permissions</b> → ваш аккаунт → <b>Advanced</b> («Дополнительно») → <b>Go to ${ARCHIVE_NAME} (unsafe)</b> → <b>Allow</b>. Google так предупреждает о любой личной программе — это нормально.</li>
+      <li>Внизу откроется Execution log — подождите строку <b>Execution completed</b> (1–3 минуты).</li>
       <li>Готово. Первая копия появится через пару минут, дальше — каждую ночь около 3:00. Вернитесь сюда и нажмите «Обновить».</li></ol>
     <details class="arc-gh"><summary>Копия вне Google — GitHub, с историей правок (по желанию)</summary><ol class="arc-steps">
       <li>На <a href="https://github.com/new" target="_blank" rel="noopener">github.com/new</a>: имя <b>knigi-arhiv</b>, обязательно <b>Private</b>, галочка «Add a README» → «Create repository».</li>
