@@ -179,6 +179,16 @@ export function pubMap(b) {
 // состояние одной отметки: done — выложена (в т. ч. отложенная, чей день настал), wait — запланирована
 export const pubState = (v, today) => (!v || !v.date ? null : v.date <= today ? 'done' : 'wait');
 // площадки книги для выкладки: сначала Литнет (если есть), затем остальные
+// когда книга завершена для читателя: день выхода последней главы (или «От автора») на основной площадке;
+// если ничего не запланировано позже — дата, когда дописала
+export function releaseDate(b) {
+  const pf = pubPlatforms(b)[0];
+  const ds = Object.values(pubMap(b)).map((x) => x[pf]).filter((v) => v && v.date && !v.past).map((v) => v.date).sort();
+  const last = ds[ds.length - 1] || '';
+  const fin = b?.finishedAt || '';
+  return last > fin ? last : fin || last || null;
+}
+export const isAuthorTab = (title) => /^\s*от автора/i.test(title || '');
 export const pubPlatforms = (b) => { const p = (b?.platforms || []).length ? [...b.platforms] : [MAIN_PF]; return p.includes(MAIN_PF) ? [MAIN_PF, ...p.filter((x) => x !== MAIN_PF)] : p; };
 // дата выкладки главы — первая дата, когда она вышла хоть на одной площадке (к сегодняшнему дню)
 export function chapterOutDates(b, today) {

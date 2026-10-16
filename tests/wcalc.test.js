@@ -314,3 +314,10 @@ test('конкурс для новых книг: завершённая не п�
   // завершена — можно подавать
   assert.equal(contestFit(x, { status: 'done', chars: 327253 }, '2026-10-11').ready, true);
 });
+
+test('завершённая книга: для читателя — в день выхода последней главы или «От автора»', async () => {
+  const { releaseDate } = await import('../writer/js/wcalc.js');
+  const b = { status: 'done', finishedAt: '2026-10-26', platforms: ['Литнет'], pub: { 'Глава 30': { Литнет: { date: '2026-11-07', planned: true } }, 'От автора': { Литнет: { date: '2026-11-09', planned: true } }, 'Глава 1': { Литнет: { date: '2020-01-01', past: true } } } };
+  assert.equal(releaseDate(b), '2026-11-09');
+  assert.equal(releaseDate({ ...b, pub: {} }), '2026-10-26');
+});

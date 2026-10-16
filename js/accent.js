@@ -13,6 +13,7 @@ const vars = (p) => `--accent:${p.accent};--accent-2:${p.a2};--accent-soft:${p.s
 export function applyAccent(key) {
   const k = PALETTES[key] ? key : 'rose';
   try { localStorage.setItem('accent', k); } catch { /* ок */ }
+  recolorFavicon(k);
   let el = document.getElementById('accent-css');
   if (k === 'rose') { el?.remove(); return; } // розовый — родные цвета стилей
   if (!el) { el = document.createElement('style'); el.id = 'accent-css'; document.head.appendChild(el); }
@@ -25,4 +26,18 @@ export function initAccent(store) {
   try { cur = localStorage.getItem('accent'); } catch { /* ок */ }
   applyAccent(cur);
   store.subscribe(() => { const a = store.data.settings?.accent; if (a && a !== cur) { cur = a; applyAccent(a); } });
+}
+
+// значок вкладки — того же цвета: перекрашиваем розовый градиент значка приложения
+async function recolorFavicon(k) {
+  const link = document.querySelector('link[rel="icon"]');
+  if (!link) return;
+  const orig = link.dataset.orig || (link.dataset.orig = link.getAttribute('href'));
+  if (k === 'rose') { link.setAttribute('href', orig); return; }
+  try {
+    const svg = await (await fetch(new URL(orig, location.href))).text();
+    const p = PALETTES[k].light;
+    const out = svg.replace(/#fbdbe6/gi, p.from).replace(/#f3bcd0/gi, p.to);
+    link.setAttribute('href', 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(out));
+  } catch { /* останется прежний значок */ }
 }

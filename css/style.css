@@ -1233,3 +1233,7 @@ main a.pbook-t, main a.pbook-t b { color: var(--text) !important; }
 .st-form { gap: 8px; flex-wrap: nowrap; } .st-form input { flex: 1; min-width: 0; }
 .d-learn summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; } .d-learn summary::-webkit-details-marker { display: none; }
 .st-step summary, .d-learn summary { color: var(--text); } .st-step summary b, .d-learn summary b { color: var(--text); }
+/* «От автора» — отдельным небольшим блоком под главами */
+.ch-author { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.ch-au-h { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.ch-au-h .muted { font-weight: 500; }

@@ -1,7 +1,7 @@
 import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol } from '../wcalc.js';
+import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol } from '../wcalc.js';
 import { goalTitle, goalToday } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
@@ -12,7 +12,7 @@ import { contestCard } from './plan.js';
 import { resizeImage } from '../../../js/img.js';
 import * as drive from '../drive.js';
 import { addDays } from '../../../js/calc.js';
-import { finishEvent, removeEvent, chapterEvent, chapterUnset } from '../sync.js';
+import { finishEvent, removeEvent, chapterEvent, chapterUnset, syncFinish } from '../sync.js';
 
 const app = () => window.__app;
 export const STATUS = { idea: 'Идея', progress: 'В процессе', done: 'Завершена' };
@@ -138,19 +138,24 @@ export function bookPage(a, id) {
   // главы — всё содержание книги по порядку, одной таблицей; сверху — короткая сводка
   const chaptersBlock = () => {
     const stOf = (t) => pfs.map((x) => pubState((pm[t.title] || {})[x], c.today));
-    const nDone = chs.filter((t) => pfs.length > 0 && stOf(t).every((x) => x === 'done')).length, nPlan = chs.filter((t) => stOf(t).includes('wait')).length;
+    const main = chs.filter((t) => !isAuthorTab(t.title)), au = chs.filter((t) => isAuthorTab(t.title));
+    const nDone = main.filter((t) => pfs.length > 0 && stOf(t).every((x) => x === 'done')).length, nPlan = main.filter((t) => stOf(t).includes('wait')).length;
     const mark = (ch, pf) => {
       const v = (pm[ch] || {})[pf], st = pubState(v, c.today);
       const tip = `${st === 'done' ? (v.past ? 'выложена' : 'выложена ' + dm(v.date)) : st === 'wait' ? 'выйдет ' + dm(v.date) : 'отметить выкладку'}`;
       return `<td class="pc"><button class="pm" title="${esc(tip)}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? icx('check') : st === 'wait' ? icx('timer') + `<span>${dm(v.date)}</span>` : '<span class="pl-none">—</span>'}</button></td>`;
     };
-    const rest = chs.length - nDone - nPlan;
+    const rest = main.length - nDone - nPlan;
+    const row = (t) => `<tr${canEdit ? ` class="ch-row" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе"` : ''}><td><div class="ch-cell"><span class="ch-t">${esc(t.title)}</span>${t.lead ? `<span class="ch-lead">${esc(t.lead)}</span>` : ''}</div></td>
+        <td class="r" title="${t.chars == null ? '' : alNum(t.chars) + ' а.л.'}">${t.chars == null ? '' : grp(t.chars)}</td>${pfs.map((x) => mark(t.title, x)).join('')}</tr>`;
     return `<div class="ch-sum">выложено <b>${nDone}</b>${nPlan ? ` · запланировано <b>${nPlan}</b>` : ''}${rest > 0 ? ` · ждут выкладки <b>${rest}</b>` : ''} · ${alNum(b.chars)} а.л.</div>
       <div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup>
       <tr><th>Глава</th><th class="r" title="знаки с пробелами, как считает Литнет">знаков</th>${pfs.map((x) => `<th class="pc">${esc(x)}</th>`).join('')}</tr>
-      ${chs.map((t) => `<tr${canEdit ? ` class="ch-row" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе"` : ''}><td><div class="ch-cell"><span class="ch-t">${esc(t.title)}</span>${t.lead ? `<span class="ch-lead">${esc(t.lead)}</span>` : ''}</div></td>
-        <td class="r" title="${t.chars == null ? '' : alNum(t.chars) + ' а.л.'}">${t.chars == null ? '' : grp(t.chars)}</td>${pfs.map((x) => mark(t.title, x)).join('')}</tr>`).join('')}
-      </table></div>`;
+      ${main.map(row).join('')}
+      </table></div>
+      <div class="ch-author"><div class="ch-au-h">От автора <span class="muted">— обращение к читателям после книги</span></div>
+      ${au.length ? `<div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup>${au.map(row).join('')}</table></div>`
+        : `<p class="small muted" style="margin:4px 0 0">${canEdit ? 'Добавьте в Google Документ вкладку «От автора» — она появится здесь, и её можно будет поставить на выкладку, как главу.' : 'Пока нет.'}</p>`}</div>`;
   };
   const sch = bookSchedule(b, c.today);
   // главы можно открыть в редакторе — для Google Документов
@@ -327,10 +332,10 @@ forms['wbook.save'] = async (fd, f) => {
     const m = fromAl(fd.get('manualChars'));
     if (m != null && !Number.isNaN(m)) { patch.chars = m; patch.history = recordProgress(b.history, c.today, m); }
   }
-  if (patch.status === 'done' && b.status !== 'done') { patch.finishedAt = b.finishedAt || c.today; await finishEvent(c, { ...b, ...patch }, patch.finishedAt); }
+  if (patch.status === 'done' && b.status !== 'done') { patch.finishedAt = b.finishedAt || c.today; await syncFinish(c, { ...b, ...patch }); }
   if (patch.status !== 'done' && b.status === 'done') { patch.finishedAt = ''; await removeEvent(`w:${b.id}:finish`); }
   await app().store.put('w_books', { ...b, ...patch });
-  toast(patch.status === 'done' && b.status !== 'done' ? 'Сохранено — завершение отмечено в «Доходах»' : 'Сохранено');
+  toast(patch.status === 'done' && b.status !== 'done' ? `Сохранено — в «Доходах» книга завершится ${(releaseDate({ ...b, ...patch }) || c.today) > c.today ? 'в день выхода последней главы' : 'сегодня'}` : 'Сохранено');
 };
 // ---------- выкладка глав: «выложила» / «запланировала» (отложенная) / «снять» — по главам и площадкам ----------
 acts['pub.mark'] = (d) => {
@@ -382,6 +387,7 @@ acts['pub.mark'] = (d) => {
       if (!Object.keys(next[ch]).length) delete next[ch];
     }
     await app().store.put('w_books', { ...b, pub: next, published: null });
+    await syncFinish(c, { ...b, pub: next, published: null }); // дописанная книга завершается в «Доходах» с последней главой
     const n = list.length, dts = Object.values(dateOf[plats[0]] || {}).sort();
     toast(mode === 'past' ? `Отмечено выложенными: ${n} — без событий в «Доходах»` : mode === 'clear' ? 'Отметка снята' : mode === 'plan' ? (bySch ? `Запланировано ${n} ${plural(n, ['глава', 'главы', 'глав'])} по графику: ${dm(dts[0])} – ${dm(dts[dts.length - 1])}` : `Запланировано на ${dm(date)} — в «Доходах» тоже`) : `${n > 1 ? 'Главы отмечены' : 'Глава отмечена'} — и в «Доходах» тоже`);
   }, { submitText: 'Сохранить' });

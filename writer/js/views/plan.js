@@ -7,14 +7,14 @@ import { widgetReminder } from './widgets.js';
 import { linkTodos } from './links.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
-import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestFileName, contestSubmissionUrl, contestEmailPurpose, goalMult, moveGoalDay } from '../wcalc.js';
+import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestFileName, contestSubmissionUrl, contestEmailPurpose, goalMult, moveGoalDay, releaseDate } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask, moveOwnTask } from '../../../js/tdtasks.js';
 import { rub, fmtMonth } from '../../../js/format.js';
 import { EVENT_TYPES } from '../../../js/charts.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
-import { startEvent, finishEvent, chapterEvent, removeEvent } from '../sync.js';
+import { startEvent, finishEvent, chapterEvent, removeEvent, syncFinish } from '../sync.js';
 
 const app = () => window.__app;
 const zn = (n) => al(n);
@@ -35,7 +35,9 @@ export function planItems(c, from, to) {
   const out = [], t = c.today, d = c.data;
   const add = (date, kind, title, sub, extra = {}) => { if (date && date >= from && date <= to) out.push({ date, kind, title, sub, ...extra }); };
   for (const b of c.wbooks) {
-    if ((b.status || 'progress') !== 'progress') continue;
+    const st0 = b.status || 'progress';
+    // дописанная книга: глав по графику больше нет, но отложенные выходы глав и «От автора» — в Планере до последней
+    if (st0 !== 'progress' && st0 !== 'done') continue;
     const s = bookSchedule(b, t), pm = pubMap(b), bt = esc(b.title);
     // отложенные главы (на всех площадках)
     for (const [ch, pfs] of Object.entries(pm)) for (const [pf, v] of Object.entries(pfs)) {
@@ -43,6 +45,7 @@ export function planItems(c, from, to) {
       if (v.date > t) add(v.date, 'wait', `${icx('timer')} ${esc(ch)} — выйдет сама`, `${bt} · ${esc(pf)}`, { to: '/book/' + b.id });
       else if (v.date >= from) add(v.date, 'done', `✓ ${esc(ch)} — выложена`, `${bt} · ${esc(pf)}`, { to: '/book/' + b.id });
     }
+    if (st0 === 'done') { const rd = releaseDate(b); if (rd && rd > t) add(rd, 'book', `«${bt}» завершится для читателей`, 'выйдет последняя глава — в «Доходах» книга станет завершённой', { to: '/book/' + b.id }); continue; }
     // свободные дни графика: какую главу выкладывать
     s.free.forEach((date, i) => {
       const ch = s.queue[i];
@@ -404,10 +407,10 @@ acts['wb.dates'] = (d) => {
 acts['wb.finish'] = (d) => {
   const c = app().ctx(), b = c.wbooksById[d.id];
   openSheet(`Книга завершена — ${b.title}`, `<label for="fd">Дата завершения</label><input id="fd" type="date" name="date" value="${c.today}" required>
-    <div class="hint">Книга получит статус «Завершена», а в «Доходах» появится событие «Завершение книги».</div>`, async (fd) => {
+    <div class="hint">Книга получит статус «Завершена» (дописана). В «Доходах» событие «Завершение книги» встанет на день выхода последней главы или «От автора», если выкладка ещё идёт.</div>`, async (fd) => {
     const date = fd.get('date') || c.today;
     await app().store.put('w_books', { ...b, status: 'done', finishedAt: date });
-    await finishEvent(c, b, date);
+    await syncFinish(c, { ...b, status: 'done', finishedAt: date }); // в «Доходах» — в день выхода последней главы
     toast('Поздравляю с завершением!');
   }, { submitText: 'Завершена' });
 };

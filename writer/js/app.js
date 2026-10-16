@@ -11,6 +11,7 @@ import { ideasView } from './views/ideas.js';
 import { homeView } from './views/home.js';
 import { planView, navToday } from './views/plan.js';
 import { scheduleTodoist } from './tdsync.js';
+import { syncFinish } from './sync.js';
 import { parseContest } from './wcalc.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
@@ -154,6 +155,13 @@ async function reparseContests() {
   } finally { reparsing = false; }
 }
 store.subscribe(() => { reparseContests().catch(() => {}); });
+// дописанные книги: событие «Завершение» в «Доходах» — в день выхода последней главы (переносится само, если график сдвинулся)
+let finSync = false;
+store.subscribe(async () => {
+  if (finSync || !store.data.w_books?.length || !store.data.days) return;
+  finSync = true;
+  try { const c = getCtx(); for (const b of store.data.w_books) if (b.status === 'done') await syncFinish(c, b); } catch { /* в следующий раз */ } finally { finSync = false; }
+});
 // вернулась в приложение — подтягиваем свежие задачи из Todoist
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleTodoist(app, 800, { pull: true }); });
 setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(app, 1000, { pull: true }); }, 3 * 60000); // и раз в 3 минуты, пока приложение открыто
