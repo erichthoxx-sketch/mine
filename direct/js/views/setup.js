@@ -18,7 +18,7 @@ export function setupSteps(c) {
       why: 'Яндекс не пускает сайты напрямую в Директ. Переходник — ваш личный бесплатный посредник: передаёт запросы приложения в Директ и обратно, ничего не хранит.',
       how: [
         `Откройте ${ext('https://dash.cloudflare.com/sign-up', 'регистрацию Cloudflare')}: почта и пароль, потом подтвердите почту по письму. Карта не нужна.`,
-        'Слева выберите <b>Workers & Pages</b> (иногда называется <b>Compute → Workers</b>) → <b>Create</b> → <b>Create Worker</b> (или «Start with Hello World»).',
+        'Слева <b>Compute → Workers & Pages</b> → синяя кнопка справа <b>Create application</b> → <b>Start with Hello World!</b>',
         'Имя — <b>direct</b> → <b>Deploy</b>.',
         `Нажмите <b>Edit code</b>, удалите всё в окне. Нажмите здесь <button type="button" class="dl" data-act="st.worker">${ic('copy')} Скопировать код переходника</button> и вставьте туда → <b>Deploy</b>.`,
         'Вверху появится адрес вида <b>https://direct.что-то.workers.dev</b> — скопируйте его и вставьте сюда:',

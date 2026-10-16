@@ -9,7 +9,7 @@
 он только передаёт запросы приложения в Директ и обратно, ничего не хранит. Пользоваться им можно только с вашего сайта.
 
 1. Зарегистрируйтесь на https://dash.cloudflare.com/sign-up (почта и пароль).
-2. Слева **Workers & Pages** (или «Compute» → «Workers») → **Create** → **Create Worker** («Hello World»).
+2. Слева **Compute → Workers & Pages** → синяя кнопка **Create application** → **Start with Hello World!**
 3. Имя — `direct` → **Deploy**.
 4. Нажмите **Edit code**, удалите всё в окне и вставьте текст файла
    [`proxy/direct-worker.js`](../proxy/direct-worker.js) (кнопка «Raw» → выделить всё → скопировать) → **Deploy**.
