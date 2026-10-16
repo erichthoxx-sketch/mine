@@ -178,7 +178,7 @@ export function bookPage(a, id) {
 </div>
   ${bookTasksCard(c, b)}
   <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><div class="row">${canEdit ? `<button data-act="ch.add" data-id="${b.id}" title="Отдельная вкладка в Google Документе">+ Глава</button>` : ''}<button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div></div>
-    ${chs.length ? chaptersBlock() : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
+    ${chs.length ? chaptersBlock() : `<p class="small muted" style="margin:8px 0 0">${canEdit ? 'Глав пока нет. Нажмите «+ Глава» — в Google Документе появится новая вкладка.' : 'Глав пока нет. Когда отмечаете выкладку, просто впишите название главы.'}</p>`}
 </div>
   ${bookContests(c, b, contests)}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
