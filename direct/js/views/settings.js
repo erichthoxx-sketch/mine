@@ -23,11 +23,10 @@ export function settingsView(a) {
         <div class="f2"><div><label>Тестовый бюджет, ₽</label><input name="testBudget" inputmode="decimal" value="${esc(d.testBudget ?? DEFAULT_TEST_BUDGET)}"></div><div><label>Тест с даты</label><input type="date" name="testFrom" value="${esc(d.testFrom || '')}"></div></div>
         <label>Предел ставки за клик, ₽</label><input name="maxBid" inputmode="decimal" value="${esc(d.maxBid ?? DEFAULT_MAX_BID)}">
         <p class="hint">Дороже приложение (и ИИ через него) ставку не поставит. Бюджет и дневной лимит меняются только в кабинете Директа.</p>
-        <label class="row"><input type="checkbox" name="sandbox" ${d.sandbox ? 'checked' : ''}> Песочница Директа (тренировка без денег)</label>
-        <details><summary class="small">Для агентского аккаунта</summary><label>Логин клиента (Client-Login)</label><input name="clientLogin" value="${esc(d.clientLogin || '')}"></details>
-        <div class="row"><button class="primary" type="submit">Сохранить</button></div>
-      </form>
-      <p class="small muted">Сейчас: тест ${rub(Number(d.testBudget) || DEFAULT_TEST_BUDGET, 0)}, ставка не выше ${rub(Number(d.maxBid) || DEFAULT_MAX_BID, 0)}${d.sandbox ? ', песочница' : ''}.</p></div>`,
+        <label class="d-check"><input type="checkbox" name="sandbox" ${d.sandbox ? 'checked' : ''}> Песочница Директа (тренировка без денег)</label>
+        <details class="d-more"><summary class="small">Для агентского аккаунта</summary><label>Логин клиента (Client-Login)</label><input name="clientLogin" value="${esc(d.clientLogin || '')}"></details>
+        <div class="row d-save"><button class="primary" type="submit">Сохранить</button></div>
+      </form></div>`,
   };
 }
 forms['d.opts'] = async (fd) => {

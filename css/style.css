@@ -1237,3 +1237,10 @@ main a.pbook-t, main a.pbook-t b { color: var(--text) !important; }
 .ch-author { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .ch-au-h { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
 .ch-au-h .muted { font-weight: 500; }
+/* Настройки «Директа»: воздух между полями, галочкой, раскрывашкой и кнопкой */
+.app-direct .d-check { display: flex; align-items: center; gap: 10px; margin: 18px 0 0; font-weight: 600; cursor: pointer; }
+.app-direct .d-check input { width: 18px; height: 18px; margin: 0; flex: none; }
+.app-direct .d-more { margin: 16px 0 0; } .app-direct .d-more[open] summary { margin-bottom: 8px; }
+.app-direct .d-save { margin-top: 22px; }
+.app-direct .st-form { margin-top: 12px; }
+.app-direct .card details > form { margin-top: 10px; }
