@@ -1250,4 +1250,3 @@ main a.pbook-t, main a.pbook-t b { color: var(--text) !important; }
 .ch-author p.small, .ch-author > p { font-size: 13px !important; line-height: 1.5; color: var(--muted); margin: 4px 0 0; }
 .ch-author + .hint, .ch-author ~ .small, .ch-author ~ p { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .mk-orig { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; margin: 12px 0 4px; }
-.checks.dow.off { opacity: .4; pointer-events: none; }
