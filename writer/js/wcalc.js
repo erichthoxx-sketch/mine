@@ -299,23 +299,8 @@ export function dailyWrittenAll(books, from, to, today) {
 
 // ---- цели ----
 // g = { type: 'finish' | 'daily' | 'custom', bookId, title, deadline, days:[1..7], perDay (знаков, для daily), checks:{date:true}, done }
-export const GOAL_TYPES = { finish: 'Главы к сроку', daily: 'Объём текста (а.л.)', custom: 'Своя цель' };
-// график цели: g.every > 1 — раз в N дней начиная с g.from («через день», «раз в 3 дня»); иначе — дни недели g.days (пусто — каждый день)
-export function goalSchedText(g) {
-  const ev = Number(g.every) || 1;
-  if (ev === 2) return 'через день';
-  if (ev > 2) return `раз в ${ev} ${ev < 5 ? 'дня' : 'дней'}`;
-  const ds = (g.days || []).map(Number).sort();
-  if (!ds.length || ds.length === 7) return 'каждый день';
-  if (ds.join() === '1,2,3,4,5') return 'по будням';
-  if (ds.join() === '6,7') return 'по выходным';
-  return 'в ' + ds.map((x) => DOW[x - 1]).join(', ');
-}
-const isRegularDay = (g, d) => {
-  const ev = Number(g.every) || 1;
-  if (ev > 1) { const from = g.from || String(g.createdAt || d).slice(0, 10); if (d < from) return false; return Math.round((Date.parse(d) - Date.parse(from)) / 864e5) % ev === 0; }
-  const days = (g.days || []).map(Number); return !days.length || days.includes(dowOf(d));
-};
+export const GOAL_TYPES = { finish: 'Главы к сроку (по главе в день)', daily: 'Писать N а.л. в день', custom: 'Своя цель' };
+const isRegularDay = (g, d) => { const days = (g.days || []).map(Number); return !days.length || days.includes(dowOf(d)); };
 // перенесённые дни: g.moved = { 'откуда': 'куда' } — в «откуда» цели нет, в «куда» — норма за оба дня
 const isGoalDay = (g, d) => { const mv = g.moved || {}; return d in mv ? false : isRegularDay(g, d) || Object.values(mv).includes(d); };
 export const goalMult = (g, d) => { const mv = g.moved || {}; return d in mv ? 0 : (isRegularDay(g, d) ? 1 : 0) + Object.values(mv).filter((x) => x === d).length; };
