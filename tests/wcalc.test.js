@@ -321,3 +321,15 @@ test('завершённая книга: для читателя — в день
   assert.equal(releaseDate(b), '2026-11-09');
   assert.equal(releaseDate({ ...b, pub: {} }), '2026-10-26');
 });
+
+test('цели: график «через день», «раз в 3 дня», «по будням» и название', async () => {
+  const { goalStatus, goalSchedText } = await import('../writer/js/wcalc.js');
+  const g2 = { type: 'custom', title: 'x', every: 2, from: '2026-10-19', checks: {} };
+  assert.deepEqual(['2026-10-19', '2026-10-20', '2026-10-21'].map((d) => goalStatus(g2, null, d).todayDay), [true, false, true]);
+  assert.equal(goalStatus(g2, null, '2026-10-18').todayDay, false);
+  assert.equal(goalSchedText(g2), 'через день');
+  assert.equal(goalSchedText({ every: 3 }), 'раз в 3 дня');
+  assert.equal(goalSchedText({ days: [1, 2, 3, 4, 5] }), 'по будням');
+  assert.equal(goalSchedText({ days: [1, 3, 5] }), 'в пн, ср, пт');
+  assert.equal(goalStatus({ type: 'custom', title: 'x', days: [1, 2, 3, 4, 5], checks: {} }, null, '2026-10-24').todayDay, false); // суббота
+});

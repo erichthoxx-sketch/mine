@@ -175,7 +175,7 @@ export function bookPage(a, id) {
     ${progressBlock(c, b)}
   </div>
   <div class="card goals-card"><div class="row between"><h2 style="margin:0">Цели</h2><button class="small-btn" data-act="goal.new" data-book="${b.id}">+ цель</button></div>
-    ${bookGoals.length ? `<div class="plist">${bookGoals.map(({ g, st }) => `<a class="pitem tap${st.doneToday ? ' done-today' : ''}" href="#" data-act="goal.edit" data-id="${g.id}">${st.doneToday ? `<span class="pi-ok">${icx('check')}</span>` : '<span class="dot k-goal"></span>'}<span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:4px 0 0">Например, «по главе в день до 15 октября» — буду напоминать.</p>'}
+    ${bookGoals.length ? `<div class="plist">${bookGoals.map(({ g, st }) => `<a class="pitem tap${st.doneToday ? ' done-today' : ''}" href="#" data-act="goal.edit" data-id="${g.id}">${st.doneToday ? `<span class="pi-ok">${icx('check')}</span>` : '<span class="dot k-goal"></span>'}<span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:4px 0 0">Например, «1 глава по будням до 15 ноября» или «через день» — буду напоминать в дни цели.</p>'}
     ${b.status === 'done' ? '' : `<div class="mini-chart"><div class="row between small muted"><span>Написано за 2 недели</span><b>+${al(series.reduce((a, d) => a + (d.known ? d.value : 0), 0))}</b></div><div class="chart" id="bchart1"></div></div>`}
 </div>
   ${bookTasksCard(c, b)}
