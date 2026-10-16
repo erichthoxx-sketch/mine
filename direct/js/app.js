@@ -6,7 +6,7 @@ import { todayISO } from '../../js/calc.js';
 import { ic } from '../../js/icons.js';
 import { takeTokenFromUrl } from './api.js';
 import { refresh } from './sync.js';
-import { demo, snap } from './demo.js';
+import { demo, snap, demoLog } from './demo.js';
 import { homeView } from './views/home.js';
 import { campaignView } from './views/campaign.js';
 import { learnView } from './views/learn.js';
@@ -15,8 +15,8 @@ import { logView } from './views/log.js';
 import { settingsView } from './views/settings.js';
 
 const store = createStore({ colls: ['d_snap', 'd_log', 'campaigns', 'reports', 'books'], localKey: 'authorDirect.v1' });
-const ui = { route: '/', cTab: 'queries', demo: false, busy: '' };
-keepPlace(ui, ['cTab', 'demo']);
+const ui = { route: '/', cTab: 'queries', lTab: '', lesson: '', demo: false, busy: '' };
+keepPlace(ui, ['cTab', 'lTab', 'demo']);
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* ок */ }
 
@@ -35,19 +35,28 @@ function applyTheme() { const r = document.documentElement; if (theme === 'auto'
 // Пример включён, пока Директ не подключён (и всегда в пробном режиме на компьютере разработчика)
 async function syncDemo() {
   const on = !store.data.settings.directToken && (store.mode === 'local' || ui.demo);
-  if (on && !demo.on) { demo.on = true; demo.log = []; await refresh(app); } else if (!on && demo.on) { demo.on = false; demo.docs = {}; }
+  if (on && !demo.on) { demo.on = true; demo.log = demoLog(todayISO()); await refresh(app); } else if (!on && demo.on) { demo.on = false; demo.docs = {}; }
 }
 
 // Загрузить свежие данные из Директа (кнопка «Обновить» и раз в 30 минут при открытии)
 export async function reload({ quiet = false } = {}) {
   if (ui.busy) return;
   ui.busy = 'Загружаю…'; render();
-  try { await refresh(app, { onStep: (t) => { ui.busy = t; render(); } }); if (!quiet) toast('Данные обновлены'); } catch (e) { console.error(e); toast(e.message || String(e)); } finally { ui.busy = ''; render(); }
+  // последняя ошибка загрузки хранится в настройках — по ней «Настройка шаг за шагом» подсказывает, что не так
+  const d = () => store.data.settings.direct || {};
+  try {
+    await refresh(app, { onStep: (t) => { ui.busy = t; render(); } });
+    if (d().lastError && !demo.on) await store.saveSettings({ direct: { ...d(), lastError: null } });
+    if (!quiet) toast('Данные обновлены');
+  } catch (e) {
+    console.error(e); toast(e.message || String(e));
+    if (!demo.on) await store.saveSettings({ direct: { ...d(), lastError: { code: e.code || null, text: e.message || String(e), at: new Date().toISOString() } } }).catch(() => {});
+  } finally { ui.busy = ''; render(); }
 }
 app.reload = reload;
 acts['d.reload'] = () => { reload(); return false; };
 
-const TABS = [['/', 'ads', 'Обзор'], ['/learn', 'books', 'Учебник'], ['/ai', 'sparkle', 'ИИ-помощник'], ['/log', 'receipt', 'История']];
+const TABS = [['/', 'ads', 'Обзор'], ['/learn', 'books', 'Учёба'], ['/ai', 'sparkle', 'ИИ-помощник'], ['/log', 'receipt', 'История']];
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'c' && b) return { tab: '/', view: (x) => campaignView(x, Number(decodeURIComponent(b))) };

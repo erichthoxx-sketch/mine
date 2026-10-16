@@ -117,8 +117,18 @@ export async function apply(app, a, { by = 'app' } = {}) {
     out = resultOf(await call(s, q.service, q.method, q.params), q.key);
   }
   if (!out.errors.length) await putSnap(app, [patchSnap(main, a, negatives)]);
-  await putLog(app, { id: 'l' + uid(), at: new Date().toISOString(), by, do: a.do, text, why: a.why || '', ok: !out.errors.length, errors: out.errors, warnings: out.warnings, ...(isDemo() ? { demo: true } : {}) });
+  await putLog(app, { id: 'l' + uid(), at: new Date().toISOString(), by, do: a.do, cid: cidOf(main, a), text, why: a.why || '', ok: !out.errors.length, errors: out.errors, warnings: out.warnings, ...(isDemo() ? { demo: true } : {}) });
   return { ...out, text };
+}
+
+// К какой кампании относится действие (для разбора «что изменилось после правки»)
+export function cidOf(main, a) {
+  if (a.campaign) return a.campaign;
+  if (a.do === 'bid') return main.keywords.find((x) => x.id === a.keyword)?.cid ?? null;
+  if (a.do === 'keywords') return main.groups.find((x) => x.id === a.group)?.cid ?? null;
+  if (a.target === 'campaign') return a.ids[0];
+  const list = a.target === 'keyword' ? main.keywords : main.ads;
+  return list.find((x) => x.id === a.ids?.[0])?.cid ?? null;
 }
 
 // Сразу показать изменение в приложении, не дожидаясь следующей загрузки

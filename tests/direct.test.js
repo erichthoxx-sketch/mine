@@ -174,3 +174,21 @@ test('ошибка Директа — понятным текстом', async ()
   await assert.rejects(call({ directToken: 'T', direct: { proxy: 'https://p.dev' } }, 'campaigns', 'get', {}), /не одобрил заявку/);
   await assert.rejects(call({ direct: { proxy: 'https://p.dev' } }, 'campaigns', 'get', {}), /не подключён/);
 });
+
+test('наставник: этап теста, неделя к неделе, эффект правки', async () => {
+  const { testStage, weekInsights, changeEffects } = await import('../direct/js/dcalc.js');
+  assert.equal(testStage({ from: '2026-10-10', today: '2026-10-11', spent: 100, budget: 10000 }).key, 'start');
+  assert.equal(testStage({ from: '2026-10-10', today: '2026-10-15', spent: 100, budget: 10000 }).key, 'clean');
+  assert.equal(testStage({ from: '2026-10-01', today: '2026-10-12', spent: 100, budget: 10000 }).key, 'optimize');
+  assert.equal(testStage({ from: '2026-10-10', today: '2026-10-12', spent: 10000, budget: 10000 }).key, 'results');
+  assert.equal(testStage({ from: '', today: '2026-10-12', spent: 0, budget: 10000 }).key, 'prep');
+  const day = (date, clicks, cost, impr = 1000) => ({ date, cid: 1, impr, clicks, cost });
+  const daily = [];
+  for (let i = 0; i < 7; i++) daily.push(day(`2026-10-0${i + 2}`, 10, 100)); // клик 10 ₽
+  for (let i = 0; i < 7; i++) daily.push(day(`2026-10-${String(i + 9).padStart(2, '0')}`, 10, 70)); // клик 7 ₽
+  const w = weekInsights(daily, '2026-10-15');
+  assert.equal(w[0].kind, 'good'); assert.match(w[0].text, /подешевел на 30 %/);
+  assert.equal(weekInsights(daily.map((x) => ({ ...x, clicks: 1 })), '2026-10-15')[0].kind, 'few');
+  const eff = changeEffects(daily, [{ at: '2026-10-09T10:00:00Z', ok: true, cid: 1 }, { at: '2026-10-14T10:00:00Z', ok: true, cid: 1 }], '2026-10-15');
+  assert.equal(eff.length, 1); assert.ok(eff[0].enough); assert.ok(eff[0].cpc < -0.2);
+});

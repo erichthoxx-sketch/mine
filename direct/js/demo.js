@@ -18,6 +18,11 @@ export async function putLog(app, item) {
   demo.log.push(item); app.rerender();
 }
 
+// История примера: правка неделю назад — чтобы в «Учёбе» было видно, как разбирается её эффект
+export function demoLog(today) {
+  return [{ id: 'l-demo', at: addDays(today, -6) + 'T10:00:00.000Z', by: 'app', do: 'minus', cid: 701, text: 'Кампания «Книга — поиск»: добавить минус-фразы — скачать, fb2', why: 'ищут файл для скачивания', ok: true, errors: [], warnings: [], demo: true }];
+}
+
 // Псевдослучайные, но одинаковые при каждом открытии числа
 function rnd(seed) { let x = seed; return () => { x = (x * 16807) % 2147483647; return (x - 1) / 2147483646; }; }
 

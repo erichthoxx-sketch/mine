@@ -264,3 +264,53 @@ export function resultOf(result, key) {
   }
   return { ok, errors, warnings };
 }
+
+// ---------- наставник: этап теста и разбор динамики ----------
+const daysBetween = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+export const MIN_CLICKS = 20; // меньше кликов — выводы делать рано
+
+// Этап теста: по дню с начала и потраченному
+export function testStage({ from, today, spent, budget }) {
+  const day = from ? daysBetween(from, today) + 1 : null;
+  if (!day || day < 1) return { key: 'prep', day: 0 };
+  if (budget && spent >= budget) return { key: 'results', day };
+  if (day <= 3) return { key: 'start', day };
+  if (day <= 7) return { key: 'clean', day };
+  if (day <= 14) return { key: 'optimize', day };
+  return { key: 'results', day };
+}
+
+// Сравнить два отрезка: цена клика и CTR, с осторожностью к малым числам
+export function compare(daily, cid, a, b) {
+  const x = totals(daily, a[0], a[1], cid), y = totals(daily, b[0], b[1], cid);
+  const enough = x.clicks >= MIN_CLICKS && y.clicks >= MIN_CLICKS;
+  const ch = (p, q) => (p != null && q != null && p > 0 ? (q - p) / p : null);
+  return { before: x, after: y, enough, cpc: ch(x.cpc, y.cpc), ctr: ch(x.ctr, y.ctr), perDay: ch(x.cost / Math.max(1, daysBetween(a[0], a[1]) + 1), y.cost / Math.max(1, daysBetween(b[0], b[1]) + 1)) };
+}
+
+// Что изменилось после правок из «Истории»: 7 дней до и дни после (не меньше 3)
+export function changeEffects(daily, log, today, cidOf = (x) => x.cid) {
+  const out = [];
+  for (const x of log || []) {
+    if (!x.ok) continue;
+    const d = x.at.slice(0, 10), after = daysBetween(d, today);
+    if (after < 3 || after > 30) continue;
+    const cid = cidOf(x);
+    const r = compare(daily, cid, [addDays(d, -7), addDays(d, -1)], [addDays(d, 1), addDays(d, Math.min(after, 7))]);
+    out.push({ log: x, days: Math.min(after, 7), ...r });
+  }
+  return out;
+}
+
+// Неделя к неделе: короткие выводы простыми словами (что случилось → почему это важно)
+export function weekInsights(daily, today, cid = null) {
+  const r = compare(daily, cid, [addDays(today, -13), addDays(today, -7)], [addDays(today, -6), today]);
+  const out = [];
+  if (!r.after.clicks && !r.before.clicks) return out;
+  if (!r.enough) { out.push({ kind: 'few', text: `За неделю ${r.after.clicks} клик(ов) — пока мало, чтобы судить о цене клика и CTR. Нужно хотя бы ${MIN_CLICKS} кликов за неделю.`, lesson: 'numbers' }); return out; }
+  if (r.cpc != null && Math.abs(r.cpc) >= 0.1) out.push({ kind: r.cpc < 0 ? 'good' : 'bad', text: `Клик ${r.cpc < 0 ? 'подешевел' : 'подорожал'} на ${Math.round(Math.abs(r.cpc) * 100)} %: было ${r2(r.before.cpc)} ₽, стало ${r2(r.after.cpc)} ₽.`, why: r.cpc < 0 ? 'Обычно это значит, что убрали лишние дорогие запросы или объявление стало кликабельнее — Директ за это даёт скидку в аукционе.' : 'Бывает из-за конкурентов (другие авторы подняли ставки), из-за новых широких фраз или потому, что у объявления упал CTR.', lesson: 'bids' });
+  if (r.ctr != null && Math.abs(r.ctr) >= 0.15) out.push({ kind: r.ctr > 0 ? 'good' : 'bad', text: `CTR ${r.ctr > 0 ? 'вырос' : 'упал'} на ${Math.round(Math.abs(r.ctr) * 100)} %: было ${r2(r.before.ctr * 100)} %, стало ${r2(r.after.ctr * 100)} %.`, why: r.ctr > 0 ? 'Объявление чаще попадает в то, что ищут, — минус-фразы и точные фразы работают.' : 'Объявление стали показывать менее подходящим людям или оно «приелось». Проверьте запросы и попробуйте второй вариант текста.', lesson: r.ctr > 0 ? 'minus' : 'ad' });
+  if (r.perDay != null && r.perDay >= 0.3) out.push({ kind: 'warn', text: `Тратится в день на ${Math.round(r.perDay * 100)} % больше, чем неделей раньше.`, why: 'Проверьте, что дневной лимит в кабинете стоит так, как вы задумали.', lesson: 'budget' });
+  if (!out.length) out.push({ kind: 'calm', text: 'Неделя прошла ровно: цена клика и CTR почти не изменились.', why: 'Это хорошо для теста — можно спокойно смотреть, как реклама отражается на продажах в «Доходах».', lesson: 'payback' });
+  return out;
+}

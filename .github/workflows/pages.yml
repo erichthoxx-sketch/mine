@@ -35,7 +35,7 @@ jobs:
           echo $V > _site/version.txt
           cp manifest.webmanifest heart-line.svg heart-line-180.png heart-line-512.png _site/
           cp writer/manifest.webmanifest writer/star.svg writer/star-180.png writer/star-512.png _site/pisatel/
-          cp direct/manifest.webmanifest direct/target.svg direct/target-180.png direct/target-512.png _site/direct/
+          cp direct/manifest.webmanifest direct/target.svg direct/target-180.png direct/target-512.png proxy/direct-worker.js _site/direct/
           sed "s#__APPV__#$V#; s#css/style.css#$V/css/style.css#; s#js/app.js#$V/js/app.js#" index.html > _site/index.html
           sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/writer/js/app.js#" writer/index.html > _site/pisatel/index.html
           sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/direct/js/app.js#" direct/index.html > _site/direct/index.html
