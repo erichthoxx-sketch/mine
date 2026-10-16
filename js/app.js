@@ -1,4 +1,5 @@
 // Запуск приложения: вход, маршруты, общий контекст расчётов.
+import { initAccent } from './accent.js';
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from './ui.js';
 import {
@@ -16,6 +17,7 @@ import { data } from './views/data.js';
 import { sideIncome } from './views/side.js';
 
 const store = createStore();
+initAccent(store);
 const ui = { route: '/', range: 90, table: 'weeks', day: null, month: null };
 keepPlace(ui, ['range', 'table', 'day', 'month', 'adMonth', 'booksMonth']);
 let theme = 'auto';
