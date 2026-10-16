@@ -84,6 +84,8 @@ export function planItems(c, from, to) {
     const remind = addDays(x.since, Number(x.remindDays) || 14), s = waitingStatus(x, t);
     add(remind < t ? t : remind, 'waitans', `Напомнить о себе: ${esc(x.who)}`, `${s.days} дн. без ответа${x.what ? ' · ' + esc(x.what.slice(0, 50)) : ''}`, { to: x.contactId ? '/link/' + x.contactId : '/links' });
   }
+  // «Начать писать с даты»: в день старта — дело в Планере (и в Todoist), с переходом на книгу
+  for (const g of activeGoals(c)) if (g.type === 'write' && g.start && g.start >= t) { const b = c.wbooksById[g.bookId]; add(g.start, 'goal', `Начать писать «${esc(b?.title || 'книгу')}»`, esc(goalTitle(c, { ...g, start: '' })), { to: '/book/' + g.bookId, bookId: g.bookId }); }
   for (const g of activeGoals(c)) if (g.deadline) add(g.deadline, 'goal', `Срок цели: ${esc(g.bookId && c.wbooksById[g.bookId] ? '«' + c.wbooksById[g.bookId].title + '»' : goalTitle(c, g))}`, '', { act: 'goal.edit', id: g.id, bookId: g.bookId });
   // заявка на приоритетные показы — на сегодня, пока актуально, и в день срока
   const wr = widgetReminder(c);
