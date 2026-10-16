@@ -17,12 +17,13 @@ import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
 import { editorView, editorDirty } from './views/editor.js';
+import { legendPage } from './views/legend.js';
 
 export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 initAccent(store);
 const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'active', openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
-keepPlace(ui, ['planTab', 'ideaBook', 'ideaSt', 'mSt', 'mTab']);
+keepPlace(ui, ['planTab', 'ideaBook', 'ideaSt', 'mSt', 'mTab', 'legTab']);
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* ок */ }
 
@@ -63,6 +64,7 @@ const TABS = [['/', 'house', 'Главная'], ['/books', 'books', 'Книги'
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'book' && b) return { tab: '/books', view: (x) => bookPage(x, decodeURIComponent(b)) };
+  if (a === 'legend' && b) return { tab: '/books', view: (x) => legendPage(x, decodeURIComponent(b)) };
   if (a === 'ed' && b) { const [, , bid, ...rest] = ('#' + ui.route).split('/'); return { tab: '/books', view: (x) => editorView(x, decodeURIComponent(bid), decodeURIComponent(rest.join('/'))) }; }
   if (a === 'link' && b) return { tab: '/links', view: (x) => linkPage(x, decodeURIComponent(b)) };
   if (a === 'mk' && b) return { tab: '/marketing', view: (x) => bookMarketing(x, decodeURIComponent(b)) };

@@ -6,6 +6,7 @@ import { esc, acts, toast, ask, openSheet } from '../../../js/ui.js';
 import { fmtDate, num, plural } from '../../../js/format.js';
 import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
+import './legend.js';
 import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats, nextChapterTab, isChapterTitle } from '../docedit.js';
 import { alNum, chapterList } from '../wcalc.js';
 
@@ -136,7 +137,7 @@ export function editorView(a, bookId, title) {
       <div class="ed-chapter">${prev ? `<button class="ed-ic" data-act="ed.goto" data-t="${esc(prev)}" title="${esc(prev)}" aria-label="Предыдущая глава">${ic('chevron')}</button>` : '<span class="ed-ic-gap"></span>'}
         <select data-chg="ed.pick" aria-label="Глава">${chs.map((t) => `<option${t === title ? ' selected' : ''}>${esc(t)}</option>`).join('')}${i < 0 ? `<option selected>${esc(title)}</option>` : ''}</select>
         ${next ? `<button class="ed-ic" data-act="ed.goto" data-t="${esc(next)}" title="${esc(next)}" aria-label="Следующая глава"><span class="flip">${ic('chevron')}</span></button>` : '<span class="ed-ic-gap"></span>'}
-        <button class="ed-ic ed-add" data-act="ch.add" data-id="${b.id}" title="Новая глава — отдельная вкладка в Google Документе" aria-label="Новая глава">+</button></div>
+        <button class="ed-ic ed-add" data-act="ch.add" data-id="${b.id}" title="Новая глава — отдельная вкладка в Google Документе" aria-label="Новая глава">+</button><button class="ed-ic" data-act="leg.peek" data-id="${b.id}" data-t="${esc(title)}" title="Легенда: план этой главы и её персонажи" aria-label="Легенда главы">${ic('books')}<span class="ed-lbl">Легенда</span></button></div>
       <span class="ed-status" id="edstat">${statusText()}</span>
       <label class="ed-auto" title="Сохранять в Google Документ само, через полминуты после правки"><input type="checkbox" data-chg="ed.auto"${auto ? ' checked' : ''}> автосохранение</label>
       <button class="primary" data-act="ed.save" title="Ctrl+S">Сохранить в Документ</button>

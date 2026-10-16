@@ -90,7 +90,9 @@ writer/js/                 — «Мастерская»
   todoist.js    Todoist API v1: задачи-напоминания Мастерской (метка «мастерская»), идеи (метка «идея»), свои задачи
   tdsync.js     когда синхронизировать с Todoist (при изменениях, при открытии, раз в 3 минуты)
   sync.js       события Мастерской → «Доходы» (коллекция days: старт книги, главы, завершение)
-  views/        home, books (книга), editor, plan (Планер, цели, конкурсы), goals, ideas, marketing,
+  legend.js     «Легенда» книги (чистые функции): поля идеи/персонажей, текст «Для нейросети», разбор вкладки «Каркас»,
+                абзацы для вкладок Документа «Идея», «Каркас», «Персонажи», хэш для защиты от перезаписи
+  views/        home, books (книга), legend (Легенда книги: #/legend/ID), editor, plan (Планер, цели, конкурсы), goals, ideas, marketing,
                 ccal (календарь конкурсов), pubfiles (аннотация/синопсис/рукопись), links, settings, widgets
 tests/          node:test — `npm test` (calc, parse, report, wcalc, todoist, publish, docedit, biggoal)
 docs/           SETUP.md (Firebase), SETUP-WRITER.md (Google Диск)
@@ -124,7 +126,7 @@ docs/           SETUP.md (Firebase), SETUP-WRITER.md (Google Диск)
   (`src: 'direct'`), и «Доходы» сами считают окупаемость.
 - «Мастерская»: `w_books` (книга: fileId Документа, tabs [{title, chars, counted, lead}], history {дата: знаки},
   pub {глава: {площадка: {date, planned}}}, publishStart, pubDays, planChapters, status idea|progress|done, platforms,
-  cover, promo, synopsis), `w_ideas` (text, bookId, tags, status, tdId), `w_contests` (см. ниже), `w_goals`
+  cover, promo, synopsis, legend {idea, plan [{id,title,what,why,pov,chars}], chars [{id,name,role,photo,…}], sync, conflicts}), `w_ideas` (text, bookId, tags, status, tdId), `w_contests` (см. ниже), `w_goals`
   (type finish|daily|custom, perDay, days [дни недели], deadline, moved {откуда: куда}, checks), `w_queue` (что пишу дальше),
   `w_waiting` (жду ответа), `w_links` (контакты), `w_media`.
 - Конкурс `w_contests`: name, platform, url, conditions (текст условий), start, end, results, genres, emails,
@@ -202,6 +204,12 @@ docs/           SETUP.md (Firebase), SETUP-WRITER.md (Google Диск)
   Есть календарь конкурсов на 12 месяцев и вставка целого списка конкурсов.
 - **Планер:** дела дня (выкладка глав, цели, конкурсы, Todoist, налог/реклама из «Доходов»); дела и цели
   можно перетащить на другой день недели (у цели день переносится с двойной нормой, есть «Вернуть»).
+- **Легенда книги** (переключатель «Книга | Легенда» вверху страницы книги): Идея (поля с подсказками), Каркас по главам
+  (карточки, ↑↓, вставка; связаны с главами Документа по порядку — «написана · N зн.»), Персонажи (роли, фото, поля).
+  «Для нейросети» — весь контекст одним текстом (можно «до главы N» + «Пишем дальше»). Word/PDF без «ё».
+  Сама пишется во вкладки Документа «Идея», «Каркас», «Персонажи» через 4 с после правки; если вкладку правили
+  в Документе — НЕ перезаписывает, а показывает «Подтянуть в Легенду / Заменить версией из Легенды».
+  Эти вкладки никогда не считаются главами и не идут в рукопись. В редакторе главы кнопка «Легенда» — план этой главы.
 - **Выкладка глав:** по площадкам, с таймером; события уходят в «Доходы» (`sync.js`).
 - **Завершённая книга** («Завершена» = дописана): отложенные главы и «От автора» продолжают идти в Планер и в «Доходы»;
   событие «Завершение книги» в «Доходах» стоит на день выхода последней главы (`releaseDate`, `syncFinish` — переносится само).

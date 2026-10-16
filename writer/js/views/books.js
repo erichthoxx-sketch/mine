@@ -10,6 +10,7 @@ import { publisherCard, svcInfo } from './pubfiles.js';
 import { ownTasks, bookOfTask, addOwnTask } from '../../../js/tdtasks.js';
 import { contestCard } from './plan.js';
 import { resizeImage } from '../../../js/img.js';
+import { bookSeg } from './legend.js';
 import * as drive from '../drive.js';
 import { addDays } from '../../../js/calc.js';
 import { finishEvent, removeEvent, chapterEvent, chapterUnset, syncFinish } from '../sync.js';
@@ -166,7 +167,7 @@ export function bookPage(a, id) {
   const series = dailyWritten(b, addDays(c.today, -13), c.today, c.today);
   const wch = writtenChapters(b), planCh = Number(fin?.g.chapters || b.planChapters) || null;
 
-  const html = `<p><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a></p>
+  const html = `<div class="bk-top"><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a>${bookSeg(b, 'book')}</div>
   ${headCard(c, b, p)}
   <div class="card"><div class="row between"><h2 style="margin:0">Прогресс и сроки</h2><button data-act="wb.dates" data-id="${b.id}">Сроки</button></div>
     <label class="inline-num">Глав в книге, примерно <input type="number" min="1" inputmode="numeric" value="${b.planChapters || ''}" placeholder="—" data-chg="wb.planCh" data-id="${b.id}"></label>

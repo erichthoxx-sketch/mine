@@ -1250,3 +1250,62 @@ main a.pbook-t, main a.pbook-t b { color: var(--text) !important; }
 .ch-author p.small, .ch-author > p { font-size: 13px !important; line-height: 1.5; color: var(--muted); margin: 4px 0 0; }
 .ch-author + .hint, .ch-author ~ .small, .ch-author ~ p { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .mk-orig { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; margin: 12px 0 4px; }
+/* «Легенда» книги: переключатель Книга | Легенда, вкладки Идея / Каркас / Персонажи, карточки */
+.bk-top, .lg-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+.lg-book { margin: 0; font-size: 20px; color: var(--text); }
+.bk-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 14px; font-weight: 700; }
+.bk-seg > * { padding: 5px 14px; border-radius: 999px; color: var(--text-2); text-decoration: none; }
+.bk-seg .on { background: var(--accent-soft); color: var(--text); }
+.bk-seg > a, .bk-seg > a:visited { color: var(--text-2); }
+.bk-seg > a:hover { color: var(--text); }
+.lg-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin: 0 0 10px; }
+.lg-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); flex: 1 1 auto; }
+main .lg-tabs button { background: none; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0; min-height: 36px; padding: 6px 10px; font-weight: 700; color: var(--muted) !important; box-shadow: none; white-space: nowrap; }
+main .lg-tabs button.on { color: var(--text) !important; border-bottom-color: var(--accent-2) !important; }
+.lg-acts { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.lg-acts .primary { min-height: 34px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; }
+.lg-acts .primary .ic { width: 16px; height: 16px; }
+.lg-sync { margin: 0 0 10px; }
+.lg-conf { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 10px 14px; margin: 0 0 10px; border-radius: 12px; background: var(--accent-soft); font-size: 14px; }
+.lg-conf .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.lg-l { display: block; margin: 14px 0 4px; font-weight: 700; font-size: 14px; color: var(--text); }
+.lg-idea .lg-l:first-child { margin-top: 0; }
+textarea.lg-ta { width: 100%; resize: none; overflow: hidden; min-height: 40px; line-height: 1.45; font: inherit; font-size: 15px; }
+.lg-ch { padding: 12px 14px; margin-bottom: 10px; }
+.lg-ch textarea.lg-ta { margin-top: 6px; }
+.lg-ch-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lg-n { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--text); font-weight: 800; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; }
+input.lg-t { flex: 1 1 160px; min-width: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 4px 2px; font-weight: 700; font-size: 16px; color: var(--text); }
+input.lg-t:focus { outline: none; border-bottom: 1px solid var(--accent-2) !important; }
+.lg-st { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.lg-st.ok { color: var(--good); }
+.lg-st.ok::before { content: "● "; font-size: 9px; vertical-align: 1px; }
+.lg-mv { display: inline-flex; gap: 2px; margin-left: auto; }
+main button.lg-ib { min-width: 30px; width: 30px; min-height: 30px; padding: 0; border-radius: 8px; background: transparent; border: 0 !important; box-shadow: none; color: var(--muted) !important; font-size: 15px; font-weight: 700; }
+main button.lg-ib:hover:not(:disabled) { background: var(--surface-2); color: var(--text) !important; }
+main button.lg-ib:disabled { opacity: .3; }
+.lg-ib .ic { width: 16px; height: 16px; }
+.lg-row { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; color: var(--text-2); }
+.lg-pov { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
+.lg-pov select { min-height: 30px; padding: 2px 26px 2px 8px; font-size: 13px; width: auto; }
+.lg-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+main button.lg-chip { min-height: 28px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; background: transparent; border: 1px solid var(--line) !important; color: var(--muted) !important; box-shadow: none; }
+main button.lg-chip.on { background: var(--accent-soft); border-color: var(--accent-2) !important; color: var(--text) !important; }
+.lg-add { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 4px 0 12px; }
+.lg-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.lg-cards .lg-card.lg-card { display: flex; flex-direction: row; gap: 12px; align-items: flex-start; padding: 12px 14px; margin: 0; color: var(--text); text-decoration: none; min-height: 76px; }
+.lg-cb { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lg-role { font-size: 13px; color: var(--muted); }
+.lg-sn { font-size: 13px; color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.lg-in { font-size: 12px; color: var(--muted); }
+main .lg-cards button.lg-new { justify-content: center; align-items: center; border: 1px dashed var(--line) !important; background: transparent; color: var(--muted) !important; font-weight: 700; box-shadow: none; }
+.lg-av { flex: 0 0 auto; border-radius: 50%; object-fit: cover; display: inline-flex; align-items: center; justify-content: center; color: #1c1a1b; font-weight: 800; font-size: 15px; }
+.lg-ch-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+.lg-photo { cursor: pointer; font-weight: 700; }
+textarea.lg-ai { width: 100%; font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; margin-top: 10px; resize: vertical; }
+.lg-peek { display: grid; gap: 10px; margin-top: 12px; }
+.lg-pk { display: flex; gap: 10px; align-items: flex-start; }
+.lg-pk .lg-av { font-size: 12px; }
+@media (max-width: 640px) { input.lg-t { flex-basis: calc(100% - 40px); } .lg-st { flex: 1 1 auto; padding-left: 34px; } .lg-acts { width: 100%; } .lg-cards { grid-template-columns: 1fr; } }
+button.ed-ic .ed-lbl { font-size: 13px; margin-left: 5px; }
+@media (max-width: 640px) { button.ed-ic .ed-lbl { display: none; } }

@@ -39,7 +39,9 @@ export function charsFromDocsJson(doc) {
   if (doc.tabs?.length) walk(doc.tabs);
   else return { total: countChars(textOf(doc.body?.content)), tabs: [{ title: doc.title || 'Документ', chars: countChars(textOf(doc.body?.content)), counted: true }] };
   const any = tabs.some((t) => isBookTab(t.title));
-  for (const t of tabs) t.counted = any ? isBookTab(t.title) : true;
+  // вкладки Легенды («Идея», «Каркас», «Персонажи») и служебные не считаются никогда
+  const svcTab = (t) => /^\s*(идея|каркас|персонажи|синопсис|аннотац)/i.test(t);
+  for (const t of tabs) t.counted = any ? isBookTab(t.title) : !svcTab(t.title);
   return { total: tabs.filter((t) => t.counted).reduce((a, t) => a + t.chars, 0), tabs, svc };
 }
 
