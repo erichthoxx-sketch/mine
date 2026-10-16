@@ -27,18 +27,22 @@ jobs:
           # каждая версия — в своей папке, чтобы браузер не держал старые файлы
           V=v${GITHUB_SHA::8}
           mkdir -p _site/$V
-          mkdir -p _site/$V/writer _site/pisatel
+          mkdir -p _site/$V/writer _site/pisatel _site/$V/direct _site/direct
           cp -r css js _site/$V/
           cp -r js/vendor _site/vendor  # постоянная копия библиотек — для страниц, открытых до обновления сайта
           cp -r writer/js _site/$V/writer/
+          cp -r direct/js _site/$V/direct/
           echo $V > _site/version.txt
           cp manifest.webmanifest heart-line.svg heart-line-180.png heart-line-512.png _site/
           cp writer/manifest.webmanifest writer/star.svg writer/star-180.png writer/star-512.png _site/pisatel/
+          cp direct/manifest.webmanifest direct/target.svg direct/target-180.png direct/target-512.png proxy/direct-worker.js _site/direct/
           sed "s#__APPV__#$V#; s#css/style.css#$V/css/style.css#; s#js/app.js#$V/js/app.js#" index.html > _site/index.html
           sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/writer/js/app.js#" writer/index.html > _site/pisatel/index.html
+          sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/direct/js/app.js#" direct/index.html > _site/direct/index.html
           grep -q "$V/js/app.js" _site/index.html
           grep -q "$V/writer/js/app.js" _site/pisatel/index.html
           grep -q "$V/css/style.css" _site/pisatel/index.html
+          grep -q "$V/direct/js/app.js" _site/direct/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with: { path: _site }

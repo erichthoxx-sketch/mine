@@ -1,0 +1,10 @@
+{
+  "name": "Директ — реклама книг",
+  "short_name": "Директ",
+  "lang": "ru",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f4f2",
+  "theme_color": "#f6f4f2",
+  "icons": [{ "src": "target.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }, { "src": "target-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }, { "src": "target-180.png", "sizes": "180x180", "type": "image/png" }]
+}
