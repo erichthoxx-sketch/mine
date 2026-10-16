@@ -125,7 +125,7 @@ docs/           SETUP.md (Firebase), SETUP-WRITER.md (Google Диск)
 - «Мастерская»: `w_books` (книга: fileId Документа, tabs [{title, chars, counted, lead}], history {дата: знаки},
   pub {глава: {площадка: {date, planned}}}, publishStart, pubDays, planChapters, status idea|progress|done, platforms,
   cover, promo, synopsis), `w_ideas` (text, bookId, tags, status, tdId), `w_contests` (см. ниже), `w_goals`
-  (type finish|write|daily|custom — write: «начать писать с даты» start, без срока; perDay, days [дни недели] или every + from (через день, раз в 3 дня), deadline, moved {откуда: куда}, checks), `w_queue` (что пишу дальше),
+  (type finish|daily|custom, perDay, days [дни недели] или every + from (через день, раз в 3 дня), deadline, moved {откуда: куда}, checks), `w_queue` (что пишу дальше),
   `w_waiting` (жду ответа), `w_links` (контакты), `w_media`.
 - Конкурс `w_contests`: name, platform, url, conditions (текст условий), start, end, results, genres, emails,
   unit (chars|al), minChars, maxChars, startChars, volNote, fileTpl (имя файла по условиям), chapters (первые N глав),
