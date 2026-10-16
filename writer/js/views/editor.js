@@ -425,6 +425,17 @@ acts['ed.align'] = (d) => { const el = document.getElementById('ed'); snap(el, t
 acts['ed.dash'] = () => { document.getElementById('ed')?.focus(); document.execCommand('insertText', false, '— '); return false; };
 acts['ed.zoom'] = (d) => { const z = Math.min(1.6, Math.max(0.8, +(pref('zoom', 1) + Number(d.v) * 0.1).toFixed(1))); setPref('zoom', z); document.getElementById('ed')?.style.setProperty('--ed-zoom', z); return false; };
 // ---------- новая глава: вкладка в Google Документе сразу за последней главой ----------
+// «От автора»: вкладки ещё нет — создаём её в конце Документа и сразу открываем в редакторе
+acts['au.add'] = async (d) => {
+  const b = app().ctx().wbooksById[d.id];
+  if (!b?.fileId) return false;
+  const title = 'От автора';
+  if (!(b.tabs || []).some((t) => t.title === title)) {
+    try { await drive.ensureToken(); await drive.docAddTab(b.fileId, { title }); } catch (e) { toast('Google Документ не дал создать вкладку: ' + e.message); return false; }
+    await app().store.put('w_books', { ...b, tabs: [...(b.tabs || []), { title, chars: 0, counted: true }] });
+  }
+  app().go(`/ed/${b.id}/${encodeURIComponent(title)}`);
+};
 acts['ch.add'] = async (d) => {
   const b = app().ctx().wbooksById[d.id];
   if (!b?.fileId) return false;

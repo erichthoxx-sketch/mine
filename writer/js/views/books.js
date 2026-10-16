@@ -153,9 +153,9 @@ export function bookPage(a, id) {
       <tr><th>Глава</th><th class="r" title="знаки с пробелами, как считает Литнет">знаков</th>${pfs.map((x) => `<th class="pc">${esc(x)}</th>`).join('')}</tr>
       ${main.map(row).join('')}
       </table></div>
-      <div class="ch-author"><div class="ch-au-h">От автора <span class="muted">— обращение к читателям после книги</span></div>
+      <div class="ch-author">
       ${au.length ? `<div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup>${au.map(row).join('')}</table></div>`
-        : `<p class="small muted" style="margin:4px 0 0">${canEdit ? 'Добавьте в Google Документ вкладку «От автора» — она появится здесь, и её можно будет поставить на выкладку, как главу.' : 'Пока нет.'}</p>`}</div>`;
+        : canEdit ? `<div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup><tr class="ch-row" data-act="au.add" data-id="${b.id}" title="Открыть в редакторе"><td><div class="ch-cell"><span class="ch-t">От автора</span><span class="ch-lead">пока пусто</span></div></td><td class="r"></td>${pfs.map(() => '<td class="pc"></td>').join('')}</tr></table></div>` : ''}</div>`;
   };
   const sch = bookSchedule(b, c.today);
   // главы можно открыть в редакторе — для Google Документов
@@ -181,7 +181,7 @@ export function bookPage(a, id) {
   ${bookTasksCard(c, b)}
   <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><div class="row">${canEdit ? `<button data-act="ch.add" data-id="${b.id}" title="Отдельная вкладка в Google Документе">+ Глава</button>` : ''}<button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div></div>
     ${chs.length ? chaptersBlock() : '<p class="small muted" style="margin:8px 0 0">Глав пока нет: они берутся из вкладок Google Документа. Для книги без файла главу можно вписать при отметке выкладки.</p>'}
-    <div class="hint">${canEdit ? 'Название — открыть главу в редакторе. ' : ''}Отметка справа — «выложила» или «на таймер». Выкладка сразу попадает событием в «Доходы».</div></div>
+</div>
   ${bookContests(c, b, contests)}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
