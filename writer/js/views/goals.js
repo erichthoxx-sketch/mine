@@ -57,7 +57,8 @@ export function goalsSection(c) {
 function goalForm(c, g = {}) {
   const type = g.type || 'finish', days = new Set((g.days && g.days.length ? g.days : [1, 2, 3, 4, 5]).map(Number));
   const ev = Number(g.every) || 1, dj = (g.days || []).map(Number).sort().join();
-  const sched = ev === 2 ? 'every2' : ev > 2 ? 'every3' : !g.id ? 'week' : !dj || dj === '1,2,3,4,5,6,7' ? 'daily' : dj === '1,2,3,4,5' ? 'week' : 'dow';
+  const sched = ev === 2 ? 'every2' : ev > 2 ? 'every3' : 'dow';
+  if (g.id && !dj) [1, 2, 3, 4, 5, 6, 7].forEach((x) => days.add(x)); // «каждый день» — все галочки
   const b = g.bookId ? c.wbooksById[g.bookId] : c.wbooks.find((x) => (x.status || 'progress') === 'progress');
   return `<label for="gt" style="margin-top:0">Какая цель</label><select id="gt" name="type">${Object.entries(GOAL_TYPES).map(([k, v]) => opt(k, v, type)).join('')}</select>
     <div data-g="finish write daily"><label for="gb">Книга</label><select id="gb" name="bookId"><option value="">— все книги —</option>${c.wbooks.map((x) => opt(x.id, x.title, b?.id || '')).join('')}</select></div>
@@ -68,9 +69,9 @@ function goalForm(c, g = {}) {
     <div data-g="write"><label for="gst">Начать писать с</label><input id="gst" type="date" name="start" value="${g.start || c.today}"></div>
     <div data-g="daily"><label for="gp">Сколько а.л. за день цели</label><input id="gp" name="perDay" inputmode="decimal" value="${g.type === 'daily' && g.perDay ? alNum(g.perDay) : ''}" placeholder="например, 0,4"></div>
     <div data-g="finish daily custom"><label for="gd">Срок</label><input id="gd" type="date" name="deadline" value="${g.deadline || ''}"></div>
-    <label for="gev">Как часто</label><select id="gev" name="sched">${opt('daily', 'каждый день', sched)}${opt('week', 'по будням', sched)}${opt('every2', 'через день', sched)}${opt('every3', 'раз в 3 дня', sched)}${opt('dow', 'в выбранные дни недели', sched)}</select>
+    <label>Дни цели</label><div class="checks dow" data-sch="dow">${DOW.map((x, i) => `<label class="check"><input type="checkbox" name="dow" value="${i + 1}"${days.has(i + 1) ? ' checked' : ''}>${x}</label>`).join('')}</div>
+    <label for="gev">Повторять</label><select id="gev" name="sched">${opt('dow', 'каждую неделю в отмеченные дни', sched)}${opt('every2', 'через день', sched)}${opt('every3', 'раз в 3 дня', sched)}</select>
     <div data-sch="every"><label for="gfrom">Начиная с</label><input id="gfrom" type="date" name="from" value="${g.from || c.today}"></div>
-    <div data-sch="dow"><div class="checks dow">${DOW.map((x, i) => `<label class="check"><input type="checkbox" name="dow" value="${i + 1}"${days.has(i + 1) ? ' checked' : ''}>${x}</label>`).join('')}</div></div>
     <div class="hint" data-ghint></div>`;
 }
 const HINT = {
@@ -90,7 +91,7 @@ function wire() {
     const b = c.wbooksById[f.elements.bookId.value];
     const w = f.querySelector('[data-wch]'); if (w) w.textContent = b ? markedCount(b) : '—';
   };
-  const sch = () => { const v = f.elements.sched.value; f.querySelector('[data-sch="every"]').hidden = !v.startsWith('every') || f.elements.type.value === 'write'; f.querySelector('[data-sch="dow"]').hidden = v !== 'dow'; };
+  const sch = () => { const v = f.elements.sched.value; f.querySelector('[data-sch="every"]').hidden = !v.startsWith('every') || f.elements.type.value === 'write'; f.querySelector('[data-sch="dow"]').classList.toggle('off', v !== 'dow'); };
   f.elements.sched.addEventListener('change', sch); sch();
   f.elements.type.addEventListener('change', () => { upd(); sch(); });
   f.elements.bookId.addEventListener('change', () => { const b = c.wbooksById[f.elements.bookId.value]; if (b && b.planChapters && !f.elements.chapters.value) f.elements.chapters.value = b.planChapters; upd(); });
@@ -105,9 +106,7 @@ async function saveGoal(c, fd, g = {}) {
   if (type === 'finish' && !v.deadline) { toast('Укажите срок'); return false; }
   if (type === 'daily' && !(v.perDay > 0)) { toast('Сколько а.л. в день?'); return false; }
   const sc = fd.get('sched');
-  if (sc === 'daily') v.days = [];
-  else if (sc === 'week') v.days = [1, 2, 3, 4, 5];
-  else if (sc.startsWith('every')) { v.days = []; v.every = sc === 'every2' ? 2 : 3; v.from = type === 'write' ? v.start : fd.get('from') || c.today; }
+  if (sc.startsWith('every')) { v.days = []; v.every = sc === 'every2' ? 2 : 3; v.from = type === 'write' ? v.start : fd.get('from') || c.today; }
   else if (!v.days.length) { toast('Выберите хотя бы один день'); return false; }
   if (v.days.length === 7) v.days = [];
   await app().store.put('w_goals', { checks: {}, done: false, createdAt: new Date().toISOString(), ...g, ...v, id: g.id || 'g' + uid() });
