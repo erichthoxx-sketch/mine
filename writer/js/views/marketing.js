@@ -1,5 +1,5 @@
 import { contestCalendar } from './ccal.js';
-import { esc, acts, changes, openSheet, opt, toast, uid, ask, download } from '../../../js/ui.js';
+import { esc, acts, changes, openSheet, closeSheet, opt, toast, uid, ask, download } from '../../../js/ui.js';
 import { fmtDate } from '../../../js/format.js';
 import { resizeImage } from '../../../js/img.js';
 import { ic } from '../../../js/icons.js';
@@ -158,6 +158,21 @@ export async function saveMedia(file, { type = 'banner', bookId = '', thumb } = 
   await app().store.put('w_media', item);
   return item;
 }
+// дозагрузить оригинал в полном качестве для картинки, у которой есть только уменьшенная копия
+changes['mk.orig'] = async (v, el) => {
+  const file = el.files?.[0]; if (!file) return;
+  const c = app().ctx(), m = c.data.w_media.find((x) => x.id === el.dataset.id);
+  if (!m) return;
+  try { await drive.ensureToken(); } catch (e) { toast('Подключите Google Диск: ' + e.message); return; }
+  if (!c.settings.wMarketingFolder) { toast('Выберите папку для баннеров в Настройках'); return; }
+  try {
+    const b = m.bookId ? c.wbooksById[m.bookId] : null;
+    const folder = b ? await bookFolder(b, m.type) : c.settings.wMarketingFolder;
+    const f = await drive.uploadFile(file, file.name, folder);
+    await app().store.put('w_media', { ...m, driveId: f.id, webViewLink: f.webViewLink, name: file.name, mime: file.type });
+    closeSheet(); toast('Оригинал сохранён на Google Диске');
+  } catch (e) { toast('На Диск не загрузилось: ' + e.message); }
+};
 changes['mk.upload'] = async (v, el) => {
   const files = [...el.files]; el.value = '';
   if (!files.length) return;
@@ -170,7 +185,8 @@ changes['mk.upload'] = async (v, el) => {
 acts['mk.open'] = (d) => {
   const c = app().ctx(), m = c.data.w_media.find((x) => x.id === d.id);
   openSheet(m.name || 'Картинка', `<img src="${m.thumb}" alt="" style="width:100%;border-radius:16px">
-    ${m.webViewLink ? `<p><a class="btn" href="${esc(m.webViewLink)}" target="_blank" rel="noopener">Открыть оригинал на Google Диске</a></p>` : '<p class="small muted">Оригинал не на Диске — сохранена уменьшенная копия.</p>'}
+    ${m.webViewLink ? `<p><a class="btn" href="${esc(m.webViewLink)}" target="_blank" rel="noopener">Открыть оригинал на Google Диске</a></p>` : `<div class="mk-orig"><p class="small muted" style="margin:0">Здесь только уменьшенная копия: когда картинку добавляли, Google Диск не был подключён, и оригинал в полном качестве никуда не сохранился.</p>
+      <label class="btn">${ic('download')} Загрузить оригинал на Диск<input type="file" accept="image/*" data-chg="mk.orig" data-id="${m.id}" hidden></label></div>`}
     <div class="f2"><div><label for="mt">Где использовать</label><select id="mt" name="type">${Object.entries(MTYPES).filter(([k]) => !['manuscript', 'synopsis'].includes(k)).map(([k, v]) => opt(k, v, m.type)).join('')}</select></div>
     <div><label for="mb">Книга</label><select id="mb" name="bookId"><option value="">—</option>${c.wbooks.map((b) => opt(b.id, b.title, m.bookId)).join('')}</select></div></div>
     <p><button type="button" class="link danger" data-act="mk.del" data-id="${m.id}">Убрать</button></p>`, async (fd) => {
