@@ -1226,3 +1226,10 @@ main a.pbook-t, main a.pbook-t b { color: var(--text) !important; }
 .st-form { gap: 8px; flex-wrap: nowrap; } .st-form input { flex: 1; min-width: 0; }
 .d-learn summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; } .d-learn summary::-webkit-details-marker { display: none; }
 .st-step summary, .d-learn summary { color: var(--text); } .st-step summary b, .d-learn summary b { color: var(--text); }
+/* Настройки «Директа»: воздух между полями, галочкой, раскрывашкой и кнопкой */
+.app-direct .d-check { display: flex; align-items: center; gap: 10px; margin: 18px 0 0; font-weight: 600; cursor: pointer; }
+.app-direct .d-check input { width: 18px; height: 18px; margin: 0; flex: none; }
+.app-direct .d-more { margin: 16px 0 0; } .app-direct .d-more[open] summary { margin-bottom: 8px; }
+.app-direct .d-save { margin-top: 22px; }
+.app-direct .st-form { margin-top: 12px; }
+.app-direct .card details > form { margin-top: 10px; }
