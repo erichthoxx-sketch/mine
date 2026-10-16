@@ -1,0 +1,118 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { thinKeep, scriptCode, archiveStatus, copiesWithDiff, bookChars, INDEX_NAME } from '../writer/js/archive.js';
+
+test('архив: прореживание — 30 дней все, до полугода по неделе, дальше по месяцу', () => {
+  const dates = [];
+  for (let d = new Date('2025-10-01T00:00:00Z'); d <= new Date('2026-10-16T00:00:00Z'); d = new Date(d.getTime() + 864e5)) dates.push(d.toISOString().slice(0, 10));
+  const keep = thinKeep(dates, '2026-10-16');
+  assert.equal(keep.filter((d) => d >= '2026-09-16').length, 31); // последние 30 дней + сегодня
+  const mid = keep.filter((d) => d < '2026-09-16' && d >= '2026-04-16');
+  assert.ok(mid.length >= 21 && mid.length <= 24, String(mid.length)); // по одной в неделю (~22 недели)
+  const old = keep.filter((d) => d < '2026-04-15');
+  assert.deepEqual(old.map((d) => d.slice(0, 7)), [...new Set(old.map((d) => d.slice(0, 7)))]); // по одной в месяц
+  assert.ok(old.includes('2025-10-31'));
+});
+
+test('архив: знаки книги — только главы, служебные вкладки не считаются', () => {
+  assert.equal(bookChars([{ title: 'Глава 1', chars: 100 }, { title: 'Каркас', chars: 50 }, { title: 'Пролог', chars: 10 }]), 110);
+  assert.equal(bookChars([{ title: 'Черновик', chars: 70 }, { title: 'Персонажи', chars: 50 }]), 70);
+});
+
+// заглушка Google Диска для программы
+function fakeGoogle() {
+  let n = 0;
+  const files = {}, folders = {}, triggers = [], props = {}, fetches = [];
+  const iter = (arr) => { let i = 0; return { hasNext: () => i < arr.length, next: () => arr[i++] }; };
+  const mkFolder = (name, parent) => {
+    const id = 'F' + ++n;
+    const f = folders[id] = { id, name, parent,
+      getId: () => id, getName: () => name,
+      getFiles: () => iter(Object.values(files).filter((x) => x.parent === id && !x.trashed)),
+      getFolders: () => iter(Object.values(folders).filter((x) => x.parent === id)),
+      getFoldersByName: (nm) => iter(Object.values(folders).filter((x) => x.parent === id && x.name === nm)),
+      getFilesByName: (nm) => iter(Object.values(files).filter((x) => x.parent === id && x.name === nm && !x.trashed)),
+      createFolder: (nm) => mkFolder(nm, id),
+      createFile: (a, text) => (typeof a === 'string' ? mkFile(a, 'application/json', id, text) : mkFile(a.name, 'docx', id, '')),
+    };
+    return f;
+  };
+  const mkFile = (name, mime, parent, text, tabs) => {
+    const id = 'D' + ++n;
+    const f = files[id] = { id, name, mime, parent, text, tabs, updated: Date.now(), trashed: false,
+      getId: () => id, getName: () => f.name, getMimeType: () => mime, getLastUpdated: () => new Date(f.updated),
+      makeCopy: (nm, dir) => mkFile(nm, mime, dir.getId(), f.text, f.tabs),
+      setTrashed: (v) => { f.trashed = v; },
+      setContent: (t) => { f.text = t; },
+      getBlob: () => ({ getDataAsString: () => f.text }),
+    };
+    return f;
+  };
+  const root = mkFolder('Мой диск', null), books = mkFolder('Литнет', root.id), sub = mkFolder('Звериная тропа', books.id);
+  const tab = (title, text) => ({ getType: () => 'DOC', getTitle: () => title, asDocumentTab: () => ({ getBody: () => ({ getText: () => text }) }), getChildTabs: () => [] });
+  const doc = mkFile('Альпийский развод', 'gdoc', books.id, '', [tab('Глава 1', 'Снег шёл.'), tab('Каркас', 'план')]);
+  mkFile('Звериная тропа для двоих', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', sub.id, '');
+  mkFile('обложка.png', 'image/png', books.id, '');
+  const ctx = {
+    console, Date, JSON, Math, Object, String,
+    DriveApp: { getRootFolder: () => root, getFolderById: (id) => folders[id], getFileById: (id) => files[id] },
+    DocumentApp: { TabType: { DOCUMENT_TAB: 'DOC' }, openById: (id) => ({ getTabs: () => files[id].tabs }) },
+    MimeType: { GOOGLE_DOCS: 'gdoc' },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] ?? null, setProperty: (k, v) => { props[k] = v; } }) },
+    ScriptApp: {
+      getProjectTriggers: () => triggers, deleteTrigger: (t) => triggers.splice(triggers.indexOf(t), 1), getOAuthToken: () => 'tok',
+      newTrigger: (h) => { const b = { timeBased: () => b, everyDays: () => b, atHour: () => b, after: () => b, create: () => triggers.push({ getHandlerFunction: () => h }) }; return b; },
+    },
+    UrlFetchApp: { fetch: (url, o = {}) => {
+      fetches.push({ url, o });
+      if (url.includes('docs.google.com')) return { getBlob: () => ({ setName: (nm) => ({ name: nm }) }) };
+      const path = url.replace(/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+/, '');
+      const body = path === '' ? { default_branch: 'main' } : path.startsWith('/git/ref/') ? { object: { sha: 'c1' } } : path.startsWith('/git/commits/') ? { tree: { sha: 't1' } }
+        : path.startsWith('/git/trees/') ? { tree: [{ type: 'blob', path: 'Альпийский развод/03 Старая глава.md' }, { type: 'blob', path: 'README.md' }] } : path === '/git/trees' ? { sha: 't2' } : path === '/git/commits' ? { sha: 'c2' } : {};
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(body) };
+    } },
+    Utilities: { formatDate: (d) => d.toISOString().slice(0, 10) },
+    Session: { getScriptTimeZone: () => 'Europe/Moscow' },
+    LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
+  };
+  return { ctx, files, folders, triggers, props, fetches, books, doc };
+}
+
+test('архив: программа Google копирует книги, пишет оглавление, копия в GitHub', () => {
+  const g = fakeGoogle();
+  const code = scriptCode(g.books.id);
+  assert.ok(!/ghp_|github_pat_/.test(code)); // ключей в тексте программы нет
+  vm.createContext(g.ctx);
+  vm.runInContext(code, g.ctx);
+  g.props.GITHUB_TOKEN = 'secret'; g.props.GITHUB_REPO = 'me/arhiv';
+  vm.runInContext('setup()', g.ctx);
+  assert.equal(g.triggers.length, 1);
+  const idxFile = Object.values(g.files).find((f) => f.name === INDEX_NAME);
+  const idx = JSON.parse(idxFile.text);
+  const books = Object.values(idx.books);
+  assert.equal(books.length, 2); // документ и Word из подпапки; картинка — нет
+  const alp = idx.books[g.doc.id];
+  assert.equal(alp.copies.length, 1);
+  assert.equal(alp.copies[0].chars, 9); // только «Глава 1», «Каркас» не считается
+  assert.ok(alp.copies[0].docId && alp.copies[0].docxId);
+  assert.equal(idx.books[books.find((b) => b.kind === 'docx').id].copies[0].docxId != null, true);
+  assert.equal(idx.github.ok, true);
+  const tree = JSON.parse(g.fetches.find((f) => f.url.endsWith('/git/trees') && f.o.method === 'post').o.payload).tree;
+  assert.deepEqual(tree.map((t) => t.path), ['Альпийский развод/01 Глава 1.md', 'Альпийский развод/02 Каркас.md', 'Альпийский развод/03 Старая глава.md']);
+  assert.equal(tree[2].sha, null); // удалённая глава убрана из текущей версии
+  // вторая ночь без изменений — новых копий нет, но отметка о запуске свежая
+  const before = Object.keys(g.files).length;
+  vm.runInContext('nightly()', g.ctx);
+  assert.equal(Object.keys(g.files).length, before);
+  assert.ok(JSON.parse(idxFile.text).lastRun);
+});
+
+test('архив: статус и разница в знаках', () => {
+  const now = Date.parse('2026-10-16T12:00:00Z');
+  assert.equal(archiveStatus({ lastRun: '2026-10-16T03:00:00Z', errors: [] }, now).warn, false);
+  assert.equal(archiveStatus({ lastRun: '2026-10-13T03:00:00Z', errors: [] }, now).warn, true);
+  assert.equal(archiveStatus(null, now).none, true);
+  const c = copiesWithDiff({ copies: [{ date: '2026-10-14', chars: 1000 }, { date: '2026-10-16', chars: 1500 }] });
+  assert.deepEqual(c.map((x) => [x.date, x.diff]), [['2026-10-16', 500], ['2026-10-14', null]]);
+});

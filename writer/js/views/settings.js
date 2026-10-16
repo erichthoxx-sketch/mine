@@ -5,6 +5,7 @@ import * as drive from '../drive.js';
 import { WCOLLS } from '../app.js';
 import { runTodoist } from '../tdsync.js';
 import { TD_DAYS, TD_LABEL } from '../todoist.js';
+import { archiveCard, loadArchive } from './archive.js';
 
 const app = () => window.__app;
 
@@ -22,6 +23,7 @@ export function settingsView(a) {
     : '<p>На этом устройстве Диск не подключён.</p><button class="primary" data-act="drive.connect">Подключить Google Диск</button>'}
     <p class="hint">Подключать нужно на каждом устройстве один раз. Google даёт браузерным приложениям доступ на час — после этого кнопка «Обновить» на Главной продлевает его одним нажатием, без повторного разрешения.</p></div>
   ${todoistCard(c)}
+  ${archiveCard(c)}
   <div class="card"><h2>Резервная копия мастерской</h2><p class="small muted">Книги, идеи, планер и галерея (без самих файлов Диска — они и так на Диске).</p>
     <div class="row"><button class="primary" data-act="set.backup">Скачать копию</button><label class="btn">Восстановить<input type="file" accept=".json" data-chg="set.restore" hidden></label></div></div>
   <div class="card"><h2>Оформление и аккаунт</h2>
@@ -30,7 +32,7 @@ export function settingsView(a) {
     <div class="acc-pick">${Object.entries(PALETTES).map(([k, p]) => `<button type="button" class="acc-sw${(c.settings.accent || 'rose') === k ? ' on' : ''}" data-act="accent.set" data-v="${k}" title="${p.name}" aria-label="${p.name}"><i style="background:linear-gradient(135deg, ${p.light.to}, ${p.light.accent})"></i><span>${p.name}</span></button>`).join('')}</div>
     <p class="small muted" style="margin-top:12px">${st.mode === 'firebase' ? `Вы вошли как <b>${esc(st.user.email)}</b> — тот же вход, что в приложении доходов.` : 'Пробный режим.'}</p>
     ${st.mode === 'firebase' ? '<button data-act="auth.out">Выйти</button>' : ''}</div>`;
-  return { html };
+  return { html, after: () => loadArchive() };
 }
 
 async function chooseFolder(key, title) {

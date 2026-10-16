@@ -1307,5 +1307,26 @@ textarea.lg-ai { width: 100%; font: 13px/1.45 ui-monospace, Menlo, Consolas, mon
 .lg-pk { display: flex; gap: 10px; align-items: flex-start; }
 .lg-pk .lg-av { font-size: 12px; }
 @media (max-width: 640px) { input.lg-t { flex-basis: calc(100% - 40px); } .lg-st { flex: 1 1 auto; padding-left: 34px; } .lg-acts { width: 100%; } .lg-cards { grid-template-columns: 1fr; } }
-button.ed-ic .ed-lbl { font-size: 13px; margin-left: 5px; }
-@media (max-width: 640px) { button.ed-ic .ed-lbl { display: none; } }
+/* «Легенда» в панели редактора: значок + слово, ширина по содержимому */
+.ed-chapter button.ed-ic.ed-leg { width: auto; gap: 6px; padding: 0 10px; margin-left: 6px; }
+.ed-chapter .ed-leg .ed-lbl { font-size: 13px; font-weight: 700; }
+@media (max-width: 640px) { .ed-chapter button.ed-ic.ed-leg { width: 34px; padding: 0; margin-left: 2px; } .ed-chapter .ed-leg .ed-lbl { display: none; } }
+/* «Архив книг» */
+.arc .arc-st { margin: 10px 0 6px; display: flex; align-items: center; gap: 8px; }
+.arc .arc-st.warn { padding: 10px 14px; border-radius: 12px; background: var(--accent-soft); }
+.arc .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: 0 0 auto; }
+.arc .arc-name { color: var(--text); }
+.arc-err { color: var(--bad); }
+.arc .dl-row, .arc-copies .dl-row { display: flex; flex-wrap: wrap; gap: 2px 6px; margin-top: 8px; }
+:is(main, dialog) a.dl.dl, :is(main, dialog) a.dl.dl:visited { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 4px 10px; border-radius: 8px; color: var(--text-2); font-size: 13px; font-weight: 600; text-decoration: none; }
+:is(main, dialog) a.dl:hover { background: var(--surface-2); color: var(--text); }
+a.dl .ic { width: 15px; height: 15px; }
+.arc-copies .good { color: var(--good); font-weight: 700; }
+.arc-steps { padding-left: 20px; margin: 0; display: grid; gap: 10px; line-height: 1.45; }
+.arc-steps .dl-row { margin-top: 8px; }
+.arc-gh { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.arc-gh summary { cursor: pointer; font-weight: 700; margin-bottom: 10px; }
+main a.card.arc-warn, main a.card.arc-warn:visited { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--accent-soft); color: var(--text); text-decoration: none; font-weight: 600; font-size: 15px; }
+a.card.arc-warn .ic { width: 18px; height: 18px; flex: 0 0 auto; }
+.arc-steps a, .arc-steps a:visited { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+.arc-gh summary { color: var(--text); }

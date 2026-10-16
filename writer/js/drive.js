@@ -251,6 +251,18 @@ export async function docAddTab(id, props) {
   return r?.replies?.[0]?.addDocumentTab?.tabProperties?.tabId || '';
 }
 
+// ---------- «Архив книг»: оглавление, которое пишет ночная программа Google ----------
+export async function archiveIndex(name) {
+  if (isLocalDev) return ls.get('arch.mock') ? JSON.parse(ls.get('arch.mock')) : null;
+  const f = (await listQuery(`name='${q(name)}' and trashed=false`))[0];
+  return f ? (await gfetch(`${DRIVE}/${f.id}?alt=media&supportsAllDrives=true`)).json() : null;
+}
+// копия файла в папку (восстановление из архива — всегда новый файл, оригинал не трогаем)
+export async function copyFile(id, name, parentId) {
+  if (isLocalDev) return mock.create({ name, mimeType: MIME.doc, parents: parentId ? [parentId] : [] });
+  return (await gfetch(`${DRIVE}/${id}/copy?fields=${FIELDS}&supportsAllDrives=true`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, ...(parentId ? { parents: [parentId] } : {}) }) })).json();
+}
+
 // ---------- пробный «диск» для проверки на localhost ----------
 const mock = (() => {
   const t = '2026-10-05T10:00:00Z';
