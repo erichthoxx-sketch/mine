@@ -9,6 +9,8 @@ import { resizeImage } from '../img.js';
 import { parseTargetReport, reportId } from '../parse.js';
 import { dailyChart, lineChart } from '../charts.js';
 import { chartInputs, chartLegend } from './home.js';
+import { totals as dTotals } from '../../direct/js/dcalc.js';
+import { ic } from '../icons.js';
 
 const app = () => window.__app;
 export const CHANNELS = { litnet: 'Литнет платит', own: 'Мой таргет', other: 'Другое' };
@@ -50,6 +52,15 @@ function campaignList(c, camps, alerts) {
   const past = camps.filter((k) => k.end && k.end < c.today).sort((a, b) => b.start.localeCompare(a.start));
   return `${cur.length ? `<div class="list">${cur.map((k) => miniCampaign(c, k, alerts)).join('')}</div>` : ''}
     ${past.length ? `<details style="margin-top:6px"><summary>Завершённые (${past.length})</summary><div class="list">${past.map((k) => miniCampaign(c, k, alerts)).join('')}</div></details>` : ''}`;
+}
+// Баннер приложения «Директ»: расход за неделю из Яндекс Директа и переход в приложение
+function directBanner(c) {
+  const st = (c.data.d_snap || []).find((x) => x.id === 'stats'), main = (c.data.d_snap || []).find((x) => x.id === 'main');
+  const on = !!c.settings.directToken && main;
+  const t = on ? dTotals(st?.daily || [], addDays(c.today, -6), c.today) : null;
+  const live = on ? (main.campaigns || []).filter((k) => k.state === 'ON').length : 0;
+  const line = on ? `за 7 дней ${rub(t.cost, 0)} · кликов ${num(t.clicks)}${t.cpc != null ? ` · клик ${rub(t.cpc, 1)}` : ''}${live ? ` · идёт кампаний: ${live}` : ''}` : 'Отдельное приложение: кампании, запросы, минус-фразы, учебник и ИИ-помощник';
+  return `<a class="card d-banner" href="direct/"><span class="d-b-ic">${ic('ads')}</span><span class="d-b-t"><b>Яндекс Директ</b><span class="sub">${line}</span></span><span class="small" style="color:var(--link)">${on ? 'Открыть' : 'Подключить'} →</span></a>`;
 }
 // «Литнет платит» по месяцам — считается само, по оферте: 20 % от того, сколько рекламы открутилось за месяц,
 // если не меньше порога; минус скидка прошлого месяца; не больше комиссии Литнета. Подробная таблица — в отчёте.
@@ -144,6 +155,7 @@ export function ads(a) {
     ${discountTable(c)}
   </div>
   ${litnet.length ? widgetTable(c) : ''}
+  ${directBanner(c)}
   <div class="card"><div class="row between"><h2 style="margin:0">Мой таргет</h2><button data-act="ad.new" data-ch="own">+ Кампания</button></div>
     ${own.length ? summaryBody(c, sO, { past }) + campaignList(c, own, alerts) : '<p class="muted">Здесь будут кампании, которые вы ведёте сами. Добавьте кампанию с бюджетом и датами — окупаемость посчитается так же.</p>'}
   </div>

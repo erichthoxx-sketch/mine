@@ -6,6 +6,7 @@ import {
   outageSet,
 } from './calc.js';
 import { fmtDate } from './format.js';
+import { COLLECTIONS } from './parse.js';
 import { ic } from './icons.js';
 import { home } from './views/home.js';
 import { day } from './views/day.js';
@@ -15,7 +16,8 @@ import { money } from './views/money.js';
 import { data } from './views/data.js';
 import { sideIncome } from './views/side.js';
 
-const store = createStore();
+// d_snap — сводка из приложения «Директ» (для баннера во вкладке «Реклама»)
+const store = createStore({ colls: [...COLLECTIONS, 'd_snap'] });
 const ui = { route: '/', range: 90, table: 'weeks', day: null, month: null };
 keepPlace(ui, ['range', 'table', 'day', 'month', 'adMonth', 'booksMonth']);
 let theme = 'auto';

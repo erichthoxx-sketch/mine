@@ -1,4 +1,4 @@
-# Инструкция для нейросетей: приложения «Доходы» и «Мастерская»
+# Инструкция для нейросетей: приложения «Доходы», «Мастерская» и «Директ»
 
 Этот файл — всё, что нужно ИИ-помощнику (Claude, ChatGPT, Cursor, Copilot и т. п.), чтобы сразу продолжить работу.
 Прочитай его целиком перед первой правкой. Если что-то в коде расходится с этим файлом — верь коду и поправь файл.
@@ -14,7 +14,10 @@
     реклама и её окупаемость, программа «Литнет платит», Rocket, налог (НПД), цели по месяцам и «большая цель».
   - **«Мастерская»** — https://erichthoxx-sketch.github.io/mine/pisatel/ — книги из Google Документов
     (знаки, главы, редактор глав), планер, цели письма, идеи, маркетинг, конкурсы, связи, Todoist.
-- Обе работают с **одними данными** одного пользователя (Firebase), настройки общие.
+  - **«Директ»** — https://erichthoxx-sketch.github.io/mine/direct/ — реклама книг в Яндекс Директе: расход, клики,
+    поисковые запросы, минус-фразы, ставки, пауза; учебник; ИИ-помощник (пакет данных для любой нейросети и разбор её плана).
+    Отдельное приложение: кнопки перехода в верхней панели нет, вход в него — только баннером во вкладке «Реклама» «Доходов».
+- Все три работают с **одними данными** одного пользователя (Firebase), настройки общие.
 
 ## 2. Как общаться с владелицей (важно)
 
@@ -65,6 +68,15 @@ js/                        — «Доходы» + общие модули
   tdtasks.js    свои задачи из Todoist (общие для обоих приложений): открыть/править/закрыть/перенести
   report.js, charts.js, format.js, icons.js, img.js, widgetcard.js
   views/        home, day, books, ads, money (Финансы), data (Данные/настройки), side (боковая колонка)
+direct/index.html          — «Директ» (на сайте /direct/; html-класс app-writer — та же раскладка, что у Мастерской)
+direct/js/                 — «Директ»
+  app.js        роутинг (#/ обзор, #/c/ID кампания, #/learn, #/ai, #/log, #/settings), вход Яндекса (токен из адреса)
+  api.js        API Директа v5 через переходник: call(), report() (TSV, очередь 201/202), понятные ошибки 53/58/513
+  sync.js       refresh() → d_snap; apply(действие) с записью в d_log; pushToIncome() — недельные отчёты в «Доходы»
+  dcalc.js      чистые расчёты: итоги, подсказки (JUNK — кандидаты в минус), aiPackage/parsePlan/describe/toRequest
+  demo.js       пример данных (только в памяти страницы, в базу не пишется)
+  views/        home (обзор, «что сделать сейчас»), campaign, learn (учебник), ai, log (история), settings, common
+proxy/direct-worker.js     — переходник (Cloudflare Worker): браузер не может звать API Директа напрямую
 writer/js/                 — «Мастерская»
   app.js        роутинг (#/, #/books, #/book/ID, #/ed/ID/вкладка, #/ideas, #/plan, #/marketing, #/mk/ID,
                 #/links, #/link/ID, #/settings), синхронизация Todoist, разовые миграции данных
@@ -103,6 +115,11 @@ docs/           SETUP.md (Firebase), SETUP-WRITER.md (Google Диск)
   planPath (путь большой цели по месяцам, в роялти), bigGoal {amount, by, kind, after: usn|ausn, startMonth, startRoy},
   todoistToken, todoist {map, closed, own, at}, папки Диска и т. п.
 - «Доходы»: `sales` (продажи по дням), `books`, `days` (события дня), `campaigns` (реклама), `reports`, `months`, `adnotes`.
+- «Директ»: `d_snap` (документы `main` — кампании/группы/фразы/объявления, `stats` — daily по дням и кампаниям,
+  kw — фразы за 30 дней, queries — поисковые запросы), `d_log` (что меняли: by app|ai, why, ok, errors).
+  Настройки: `directToken`, `directTokenExp`, `direct {proxy, clientId, sandbox, maxBid, testBudget, testFrom, clientLogin,
+  links {ID кампании Директа: ID кампании «Доходов»}}`. Связанная кампания получает в `reports` недельные отчёты
+  (`src: 'direct'`), и «Доходы» сами считают окупаемость.
 - «Мастерская»: `w_books` (книга: fileId Документа, tabs [{title, chars, counted, lead}], history {дата: знаки},
   pub {глава: {площадка: {date, planned}}}, publishStart, pubDays, planChapters, status idea|progress|done, platforms,
   cover, promo, synopsis), `w_ideas` (text, bookId, tags, status, tdId), `w_contests` (см. ниже), `w_goals`
@@ -136,6 +153,15 @@ docs/           SETUP.md (Firebase), SETUP-WRITER.md (Google Диск)
     можно **только задачи, которые создало само приложение** (список `settings.todoist.made`). Если Лана сама поставила
     метку «мастерская» на свою задачу — это её задача: не закрывать, показывать как свою.
   - идеи — задачи с меткой `идея` ⇄ раздел «Идеи».
+
+- **Яндекс Директ** (приложение «Директ», настройка — `docs/SETUP-DIRECT.md`): вход OAuth (response_type=token,
+  Redirect URI = адрес /direct/), запросы идут через переходник владелицы на Cloudflare (`proxy/direct-worker.js`,
+  пускает только её сайт). Предохранители — не ослаблять: приложение **не меняет бюджеты и дневные лимиты**;
+  ставка не выше `direct.maxBid` (50 ₽); любое изменение — после «Применить»/галочки и пишется в `d_log`.
+  ИИ получает данные только через «Скопировать для ИИ», а отвечает планом в блоке ```direct-plan (формат — `aiPackage`
+  в `dcalc.js`; действия minus, unminus, pause, resume, bid, keywords). Новое действие — в `parsePlan`, `describe`,
+  `toRequest`, `patchSnap` и тест в `tests/direct.test.js`.
+  Есть и отдельный путь для Claude Desktop — MCP-сервер nozikov/yandex-mcp (только чтение); владелице пока не нужен.
 
 ## 7. Дизайн (то, что владелица ценит больше всего)
 

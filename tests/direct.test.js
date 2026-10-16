@@ -1,0 +1,176 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { parseTsv, dailyRows, mergeDaily, totals, spendSeries, budgetPace, queryHints, keywordHints, withAvgCpc, junkOf, parsePlan, describe, toRequest, resultOf, aiPackage, MICRO } from '../direct/js/dcalc.js';
+import worker from '../proxy/direct-worker.js';
+
+test('parseTsv: заголовок колонок, числа, «--» как ноль', () => {
+  const rows = parseTsv('Date\tCampaignId\tCampaignName\tImpressions\tClicks\tCost\n2026-10-01\t5\tКнига\t100\t4\t36.5\n2026-10-02\t5\tКнига\t--\t0\t0\n');
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows[0], { Date: '2026-10-01', CampaignId: 5, CampaignName: 'Книга', Impressions: 100, Clicks: 4, Cost: 36.5 });
+  assert.equal(rows[1].Impressions, 0);
+});
+
+test('mergeDaily: свежие дни заменяют старые, история обрезается', () => {
+  const old = [{ date: '2025-01-01', cid: 1, impr: 1, clicks: 0, cost: 1 }, { date: '2026-10-01', cid: 1, impr: 10, clicks: 1, cost: 5 }];
+  const fresh = dailyRows([{ Date: '2026-10-01', CampaignId: 1, CampaignName: 'К', Impressions: 20, Clicks: 2, Cost: 9 }]);
+  const m = mergeDaily(old, fresh, 400, '2026-10-16');
+  assert.equal(m.length, 1);
+  assert.equal(m[0].cost, 9);
+});
+
+test('totals, spendSeries, budgetPace', () => {
+  const daily = [
+    { date: '2026-10-10', cid: 1, impr: 100, clicks: 5, cost: 50 },
+    { date: '2026-10-16', cid: 1, impr: 200, clicks: 5, cost: 20 },
+    { date: '2026-10-16', cid: 2, impr: 1000, clicks: 2, cost: 10 },
+  ];
+  const t = totals(daily, '2026-10-10', '2026-10-16');
+  assert.equal(t.cost, 80); assert.equal(t.clicks, 12); assert.equal(t.cpc, 80 / 12);
+  assert.equal(totals(daily, '2026-10-10', '2026-10-16', 2).cost, 10);
+  const s = spendSeries(daily, '2026-10-16', 7);
+  assert.equal(s.length, 7); assert.equal(s[0].date, '2026-10-10'); assert.equal(s[6].value, 30);
+  const p = budgetPace(daily, { budget: 1000, from: '2026-10-01', today: '2026-10-16' });
+  assert.equal(p.spent, 80); assert.equal(p.left, 920); assert.ok(p.daysLeft > 0);
+});
+
+test('queryHints: кандидаты в минус, без уже добавленных, одна подсказка на слово', () => {
+  const qs = [
+    { query: 'читать бесплатно фэнтези', cid: 1, clicks: 3, cost: 30 },
+    { query: 'фэнтези бесплатно полностью', cid: 1, clicks: 2, cost: 20 },
+    { query: 'скачать fb2', cid: 1, clicks: 1, cost: 10 },
+    { query: 'любовное фэнтези', cid: 1, clicks: 9, cost: 90 },
+  ];
+  const h = queryHints(qs, { 1: ['скачать'] });
+  assert.equal(h.length, 2);
+  assert.equal(h[0].word, 'бесплатно'); assert.equal(h[0].cost, 50); assert.equal(h[0].queries.length, 2);
+  assert.equal(h[1].word, 'fb2');
+  assert.equal(junkOf('любовный роман'), null);
+});
+
+test('keywordHints: много показов и почти нет кликов', () => {
+  const kws = withAvgCpc([{ id: 1, cid: 1, phrase: 'книги', state: 'ON' }, { id: 2, cid: 1, phrase: 'роман про дракона', state: 'ON' }], { 1: { impr: 1000, clicks: 2, cost: 20 }, 2: { impr: 300, clicks: 20, cost: 200 } });
+  const h = keywordHints(kws, { 1: { impr: 1000, clicks: 2, cost: 20 }, 2: { impr: 300, clicks: 20, cost: 200 } });
+  assert.equal(h.length, 1); assert.equal(h[0].id, 1); assert.equal(h[0].kind, 'lowctr');
+});
+
+test('parsePlan: блок direct-plan, проверки, предел ставки и запрет бюджета', () => {
+  const text = 'Вот разбор.\n```direct-plan\n{"actions":[{"do":"minus","campaign":"7","phrases":["бесплатно"," бесплатно ","скачать"],"why":"не покупают"},{"do":"pause","target":"keyword","ids":[1,2]},{"do":"bid","keyword":3,"rub":"12,5"},{"do":"bid","keyword":3,"rub":80},{"do":"budget","amount":5000},{"do":"pause","target":"group","ids":[1]}]}\n```';
+  const r = parsePlan(text, { maxBid: 50 });
+  assert.equal(r.actions.length, 3);
+  assert.deepEqual(r.actions[0], { do: 'minus', campaign: 7, phrases: ['бесплатно', 'скачать'], why: 'не покупают' });
+  assert.equal(r.actions[2].rub, 12.5);
+  assert.equal(r.errors.length, 3);
+  assert.match(r.errors[0], /выше предела/);
+  assert.match(r.errors[1], /бюджет/);
+  assert.deepEqual(parsePlan('просто текст').actions, []);
+  assert.equal(parsePlan('```direct-plan\n{не json}\n```').errors.length, 1);
+});
+
+test('describe: понятные слова с названиями', () => {
+  const names = { campaigns: { 7: 'Книга — поиск' }, keywords: { 3: 'роман' } };
+  assert.equal(describe({ do: 'minus', campaign: 7, phrases: ['бесплатно'] }, names), 'Кампания «Книга — поиск»: добавить минус-фразы — бесплатно');
+  assert.equal(describe({ do: 'bid', keyword: 3, rub: 12.5 }, names), 'Фраза «роман»: ставка на поиске 12,5 ₽');
+  assert.equal(describe({ do: 'pause', target: 'keyword', ids: [3, 4] }, names), 'Остановить фразы: «роман», №4');
+});
+
+test('toRequest: минус-фразы дописываются к текущим, ставка в микроединицах', () => {
+  const q = toRequest({ do: 'minus', campaign: 7, phrases: ['Бесплатно', 'скачать'] }, { negatives: ['бесплатно'] });
+  assert.deepEqual(q.params.Campaigns[0].NegativeKeywords.Items, ['бесплатно', 'скачать']);
+  const u = toRequest({ do: 'unminus', campaign: 7, phrases: ['бесплатно'] }, { negatives: ['бесплатно'] });
+  assert.equal(u.params.Campaigns[0].NegativeKeywords, null);
+  const b = toRequest({ do: 'bid', keyword: 3, rub: 12.5 });
+  assert.deepEqual(b, { service: 'keywordbids', method: 'set', key: 'SetResults', params: { KeywordBids: [{ KeywordId: 3, SearchBid: 12.5 * MICRO }] } });
+  assert.equal(toRequest({ do: 'pause', target: 'ad', ids: [1] }).service, 'ads');
+});
+
+test('resultOf: ошибки и предупреждения Директа', () => {
+  const r = resultOf({ UpdateResults: [{ Id: 1 }, { Errors: [{ Message: 'Нет прав', Details: 'кампания чужая' }] }, { Id: 2, Warnings: [{ Message: 'Дубль' }] }] }, 'UpdateResults');
+  assert.equal(r.ok, 2); assert.deepEqual(r.errors, ['Нет прав: кампания чужая']); assert.deepEqual(r.warnings, ['Дубль']);
+});
+
+test('aiPackage: правила, формат плана и данные', () => {
+  const t = aiPackage({ campaigns: [{ id: 7 }] }, { today: '2026-10-16', maxBid: 40, budget: { test: 10000 }, question: 'что убрать?' });
+  assert.match(t, /```direct-plan/); assert.match(t, /не выше 40 ₽/); assert.match(t, /что убрать\?/); assert.match(t, /"id": 7/);
+  // пример плана из пакета сам разбирается приложением
+  assert.equal(parsePlan(t, { maxBid: 40 }).actions.length, 6);
+});
+
+test('переходник: пускает только свой сайт и только в Директ', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => { calls.push({ url, init }); return new Response('{"result":{}}', { status: 200, headers: { 'content-type': 'application/json', Units: '1/2/3', 'set-cookie': 'x' } }); };
+  const site = 'https://erichthoxx-sketch.github.io';
+  const bad = await worker.fetch(new Request('https://p.dev/live/json/v5/campaigns', { method: 'POST', headers: { Origin: 'https://evil.example' }, body: '{}' }));
+  assert.equal(bad.status, 403);
+  const pre = await worker.fetch(new Request('https://p.dev/live/json/v5/campaigns', { method: 'OPTIONS', headers: { Origin: site } }));
+  assert.equal(pre.status, 204); assert.equal(pre.headers.get('Access-Control-Allow-Origin'), site);
+  const nope = await worker.fetch(new Request('https://p.dev/live/../evil', { method: 'POST', headers: { Origin: site }, body: '{}' }));
+  assert.equal(nope.status, 404);
+  const ok = await worker.fetch(new Request('https://p.dev/sandbox/json/v5/campaigns', { method: 'POST', headers: { Origin: site, Authorization: 'Bearer T', Cookie: 'c=1' }, body: '{"method":"get"}' }));
+  assert.equal(ok.status, 200);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://api-sandbox.direct.yandex.com/json/v5/campaigns');
+  assert.equal(calls[0].init.headers.get('authorization'), 'Bearer T');
+  assert.equal(calls[0].init.headers.get('cookie'), null);
+  assert.equal(ok.headers.get('units'), '1/2/3');
+  assert.equal(ok.headers.get('set-cookie'), null);
+});
+
+test('загрузка из Директа: поля, отчёты в очереди, расход по неделям уходит в «Доходы»', async () => {
+  const { refresh, apply } = await import('../direct/js/sync.js');
+  const { report } = await import('../direct/js/api.js');
+  const today = new Date().toISOString().slice(0, 10);
+  const sent = [];
+  let queued = 1;
+  globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body), svc = url.split('/').pop();
+    sent.push({ svc, body, headers: init.headers });
+    const json = (o) => new Response(JSON.stringify(o), { status: 200 });
+    if (svc === 'campaigns' && body.method === 'get') return json({ result: { Campaigns: [{ Id: 7, Name: 'Книга', State: 'ON', Status: 'ACCEPTED', StartDate: today, DailyBudget: { Amount: 500 * MICRO }, NegativeKeywords: { Items: ['скачать'] }, TextCampaign: { BiddingStrategy: { Search: { BiddingStrategyType: 'HIGHEST_POSITION' }, Network: { BiddingStrategyType: 'SERVING_OFF' } } } }] } });
+    if (svc === 'campaigns' && body.method === 'update') return json({ result: { UpdateResults: [{ Id: 7 }] } });
+    if (svc === 'adgroups') return json({ result: { AdGroups: [{ Id: 8, Name: 'Группа', CampaignId: 7 }] } });
+    if (svc === 'keywords') return json({ result: { Keywords: [{ Id: 9, Keyword: 'роман', AdGroupId: 8, CampaignId: 7, Bid: 12 * MICRO, State: 'ON', Status: 'ACCEPTED' }] } });
+    if (svc === 'ads') return json({ result: { Ads: [{ Id: 10, AdGroupId: 8, CampaignId: 7, State: 'ON', Status: 'ACCEPTED', TextAd: { Title: 'Заголовок', Text: 'Текст', Href: 'https://litnet.com/' } }] } });
+    if (svc === 'reports') {
+      if (queued-- > 0) return new Response('', { status: 202, headers: { retryIn: '1' } });
+      const f = body.params.FieldNames.join('\t');
+      if (body.params.ReportType === 'SEARCH_QUERY_PERFORMANCE_REPORT') return new Response(`${f}\nчитать бесплатно\t7\t8\tроман\t50\t2\t20\n`, { status: 200 });
+      if (f.startsWith('Date')) return new Response(`${f}\n${today}\t7\tКнига\t100\t5\t45.5\n`, { status: 200 });
+      return new Response(`${f}\n7\t9\tроман\t100\t5\t45.5\n`, { status: 200 });
+    }
+    return new Response('{}', { status: 404 });
+  };
+  const data = { settings: { directToken: 'T', direct: { proxy: 'https://p.dev/', links: { 7: 'k1' } } }, d_snap: [], d_log: [], campaigns: [{ id: 'k1', name: 'Директ', channel: 'own' }], reports: [] };
+  const store = {
+    async putMany(coll, items) { for (const it of items) { const a = data[coll], i = a.findIndex((x) => x.id === it.id); if (i >= 0) a[i] = it; else a.push(it); } },
+    async put(coll, it) { return this.putMany(coll, [it]); },
+  };
+  const app = { store, ctx: () => ({ data, settings: data.settings, today }), rerender() {} };
+  const realSet = globalThis.setTimeout; globalThis.setTimeout = (f) => realSet(f, 0); // не ждём retryIn по-настоящему
+  try { await refresh(app); } finally { globalThis.setTimeout = realSet; }
+  assert.equal(sent[0].headers.Authorization, 'Bearer T');
+  assert.ok(sent.every((x) => !x.headers['Client-Login']));
+  const main = data.d_snap.find((x) => x.id === 'main'), stats = data.d_snap.find((x) => x.id === 'stats');
+  assert.deepEqual(main.campaigns[0], { id: 7, name: 'Книга', state: 'ON', status: 'ACCEPTED', type: '', start: today, daily: 500, negatives: ['скачать'], strategy: { search: 'HIGHEST_POSITION', network: 'SERVING_OFF' } });
+  assert.equal(main.keywords[0].bid, 12);
+  assert.equal(main.ads[0].title, 'Заголовок');
+  assert.deepEqual(stats.daily, [{ date: today, cid: 7, name: 'Книга', impr: 100, clicks: 5, cost: 45.5 }]);
+  assert.deepEqual(stats.kw[9], { impr: 100, clicks: 5, cost: 45.5 });
+  assert.equal(stats.queries[0].query, 'читать бесплатно');
+  const rep = data.reports[0];
+  assert.equal(rep.campaignId, 'k1'); assert.equal(rep.spend, 45.5); assert.equal(rep.clicks, 5); assert.equal(rep.end, today);
+  // минус-фраза: перечитали текущие и дописали, в историю записали
+  const r = await apply(app, { do: 'minus', campaign: 7, phrases: ['бесплатно'], why: 'тест' });
+  assert.equal(r.errors.length, 0);
+  const upd = sent.find((x) => x.svc === 'campaigns' && x.body.method === 'update');
+  assert.deepEqual(upd.body.params.Campaigns[0].NegativeKeywords.Items, ['скачать', 'бесплатно']);
+  assert.deepEqual(data.d_snap.find((x) => x.id === 'main').campaigns[0].negatives, ['скачать', 'бесплатно']);
+  assert.equal(data.d_log.length, 1); assert.equal(data.d_log[0].ok, true);
+  assert.equal(typeof report, 'function');
+});
+
+test('ошибка Директа — понятным текстом', async () => {
+  const { call } = await import('../direct/js/api.js');
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: { error_code: 58, error_string: 'Незавершенная регистрация' } }), { status: 200 });
+  await assert.rejects(call({ directToken: 'T', direct: { proxy: 'https://p.dev' } }, 'campaigns', 'get', {}), /не одобрил заявку/);
+  await assert.rejects(call({ direct: { proxy: 'https://p.dev' } }, 'campaigns', 'get', {}), /не подключён/);
+});
