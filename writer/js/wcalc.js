@@ -208,7 +208,8 @@ export function plannedPubs(b, today) {
 
 // главы книги: вкладки документа, которые считаются, плюс главы, отмеченные вручную (книга без файла)
 export function chapterList(b) {
-  const tabs = (b.tabs || []).filter((t) => t.counted !== false).map((t) => ({ title: t.title, chars: t.chars, lead: t.lead || '' }));
+  // только вкладки книги: «Пролог», «Глава …», «Эпилог», «От автора»; каркас, заметки, персонажи — не главы
+  const tabs = (b.tabs || []).filter((t) => t.counted !== false && isBookTab(t.title)).map((t) => ({ title: t.title, chars: t.chars, lead: t.lead || '' }));
   const have = new Set(tabs.map((t) => t.title));
   // синопсис, аннотация и прочие служебные вкладки главами не показываем
   return [...tabs, ...Object.keys(pubMap(b)).filter((t) => !have.has(t) && !/^\s*(синопсис|аннотац)/i.test(t)).map((title) => ({ title, chars: null }))];

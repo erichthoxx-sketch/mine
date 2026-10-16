@@ -153,9 +153,7 @@ export function bookPage(a, id) {
       <tr><th>Глава</th><th class="r" title="знаки с пробелами, как считает Литнет">знаков</th>${pfs.map((x) => `<th class="pc">${esc(x)}</th>`).join('')}</tr>
       ${main.map(row).join('')}
       </table></div>
-      <div class="ch-author">
-      ${au.length ? `<div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup>${au.map(row).join('')}</table></div>`
-        : canEdit ? `<div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup><tr class="ch-row" data-act="au.add" data-id="${b.id}" title="Открыть в редакторе"><td><div class="ch-cell"><span class="ch-t">От автора</span><span class="ch-lead">пока пусто</span></div></td><td class="r"></td>${pfs.map(() => '<td class="pc"></td>').join('')}</tr></table></div>` : ''}</div>`;
+      ${au.length ? `<div class="ch-author"><div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup>${au.map(row).join('')}</table></div></div>` : ''}`;
   };
   const sch = bookSchedule(b, c.today);
   // главы можно открыть в редакторе — для Google Документов
