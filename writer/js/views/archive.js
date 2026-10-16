@@ -17,6 +17,7 @@ const when = (iso) => { const d = new Date(iso), days = Math.floor((Date.now() -
 // чтобы предупреждение было видно и без открытия Настроек
 export async function loadArchive(force = false, soft = false) {
   if (arch.loading || !drive.hasFreshToken()) return;
+  if (arch.err && !force) return; // не повторяем по кругу — только по кнопке
   let last = 0;
   try { last = Number(localStorage.getItem('arch.at') || 0); } catch { /* ок */ }
   const fresh = Date.now() - last < 12 * 3600e3;
@@ -27,7 +28,7 @@ export async function loadArchive(force = false, soft = false) {
     try { localStorage.setItem('arch.at', String(Date.now())); } catch { /* ок */ }
     const s = app().ctx().settings.archive || {}, ix = arch.index;
     if (ix && (s.lastRun !== ix.lastRun || s.ok !== !archiveStatus(ix).warn)) await app().store.saveSettings({ archive: { lastRun: ix.lastRun, ok: !(ix.errors || []).length && ix.github?.ok !== false } });
-  } catch (e) { arch.err = e.message || String(e); }
+  } catch (e) { arch.err = 'Не получилось прочитать архив: ' + (e.message || String(e)); }
   arch.loading = false;
   app().rerender();
 }
@@ -37,7 +38,9 @@ export function archiveCard(c) {
   const head = (badge = '') => `<div class="row between"><h2 style="margin:0">Архив книг</h2>${badge}</div>`;
   if (!drive.isConnected()) return `<div class="card arc">${head()}<p class="small muted">Подключите Google Диск — здесь появятся ночные копии книг.</p></div>`;
   const ix = arch.index;
-  if (ix === undefined) return `<div class="card arc">${head()}<p class="small muted">${arch.err ? esc(arch.err) : 'Загружаю…'}</p></div>`;
+  // доступ Google на час истёк или чтение не удалось — не «висим», а даём кнопку
+  if (ix === undefined && (arch.err || !drive.hasFreshToken())) return `<div class="card arc">${head()}<p class="small muted">${arch.err ? esc(arch.err) : 'Чтобы показать архив, Google просит продлить доступ к Диску.'}</p><button class="primary" data-act="arc.open">Показать архив</button></div>`;
+  if (ix === undefined) return `<div class="card arc">${head()}<p class="small muted">Загружаю…</p></div>`;
   if (!ix) {
     return `<div class="card arc">${head()}
       <p>Каждую ночь программа Google сама сохраняет копии всех книг и черновиков из папки с книгами в папку «${ARCHIVE_NAME}» на вашем Диске — компьютер для этого не нужен. Хранятся копии за каждый день месяца, дальше — по неделям и по месяцам.</p>
@@ -69,6 +72,11 @@ export function archiveWarn(c) {
 }
 
 acts['arc.reload'] = () => { arch.index = undefined; loadArchive(true); };
+// по нажатию можно открыть окно Google (без нажатия браузер его заблокирует)
+acts['arc.open'] = async () => {
+  try { await drive.ensureToken(); } catch (e) { arch.err = e.message || String(e); return; }
+  arch.err = ''; arch.index = undefined; await loadArchive(true);
+};
 
 acts['arc.book'] = (d) => {
   const b = arch.index?.books?.[d.id];
