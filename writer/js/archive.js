@@ -9,7 +9,7 @@ export const ARCHIVE_NAME = 'Архив Мастерской';
 export const INDEX_NAME = 'Архив Мастерской — оглавление.json';
 export const STALE_DAYS = 2;
 // версия программы Google: выросла — приложение попросит вставить программу заново
-export const SCRIPT_V = 2;
+export const SCRIPT_V = 3; // 3 — в GitHub главы с разметкой и «Книга целиком»
 
 // какие копии оставить: за 30 дней — все, до полугода — по одной в неделю, дальше — по одной в месяц (навсегда)
 export function thinKeep(dates, today) {
@@ -25,11 +25,29 @@ export function thinKeep(dates, today) {
 }
 export function safeName(s) { return String(s || '').replace(/[\\/:*?"<>|#\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Без названия'; }
 // вкладки книги — как в приложении: Пролог, Главы, Эпилог, От автора; если таких нет — всё, кроме служебных
+export function bookTabs(tabs, withAuthor) {
+  var isBook = function (t) { return /^\s*(пролог|глава|эпилог|от автора)/i.test(t) && (withAuthor || !/^\s*от автора/i.test(t)); };
+  var svc = function (t) { return /^\s*(идея|каркас|персонажи|синопсис|аннотац|от автора)/i.test(t); };
+  var any = tabs.some(function (t) { return /^\s*(пролог|глава|эпилог)/i.test(t.title); });
+  return tabs.filter(function (t) { return any ? isBook(t.title) : !svc(t.title); });
+}
 export function bookChars(tabs) {
-  var isBook = function (t) { return /^\s*(пролог|глава|эпилог|от автора)/i.test(t); };
-  var svc = function (t) { return /^\s*(идея|каркас|персонажи|синопсис|аннотац)/i.test(t); };
-  var any = tabs.some(function (t) { return isBook(t.title); });
-  return tabs.filter(function (t) { return any ? isBook(t.title) : !svc(t.title); }).reduce(function (a, t) { return a + t.chars; }, 0);
+  return bookTabs(tabs, true).reduce(function (a, t) { return a + t.chars; }, 0);
+}
+// абзац Документа → Markdown: заголовки, жирный, курсив; спецсимволы экранируем
+export function paraMd(text, runs, heading) {
+  if (!String(text).trim()) return '';
+  var out = '';
+  runs.forEach(function (r) {
+    var seg = text.slice(r.a, r.b).replace(/([\\*_`])/g, '\\$1');
+    if (!seg) return;
+    var m = /^(\s*)([\s\S]*?)(\s*)$/.exec(seg), w = r.b2 && r.i2 ? '***' : r.b2 ? '**' : r.i2 ? '*' : '';
+    out += w && m[2] ? m[1] + w + m[2] + w + m[3] : seg;
+  });
+  out = out.replace(/[\r\u000b]/g, '  \n');
+  var h = { HEADING1: '# ', TITLE: '# ', HEADING2: '## ', SUBTITLE: '## ', HEADING3: '### ', HEADING4: '#### ', HEADING5: '##### ', HEADING6: '###### ' }[String(heading)] || '';
+  if (!h) out = out.replace(/^(\s*)([#>+-])/, '$1\\$2').replace(/^(\s*\d+)([.)])/, '$1\\$2'); // строка не должна стать заголовком или списком
+  return h + out;
 }
 
 // ---------------- программа Google (Apps Script) ----------------
@@ -57,7 +75,7 @@ function runBackup() {
   var archive = folderIn(DriveApp.getRootFolder(), ARCHIVE_NAME);
   var index = readIndex(archive);
   var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Europe/Moscow', 'yyyy-MM-dd');
-  var ghState = JSON.parse(props.getProperty('ghstate') || '{}');
+  var ghState = props.getProperty('ghv') === String(SCRIPT_V) ? JSON.parse(props.getProperty('ghstate') || '{}') : {}; // новая версия — переотправить всё в новом виде
   var withGh = !!(props.getProperty('GITHUB_TOKEN') && props.getProperty('GITHUB_REPO'));
   var errors = [], files = [], gh = [], left = false;
   walk(DriveApp.getFolderById(BOOKS_FOLDER_ID), '', files, 0, archive.getId());
@@ -104,7 +122,7 @@ function runBackup() {
     try {
       var msg = pushGithub(gh, stamp, props);
       gh.forEach(function (x) { ghState[x.id] = x.upd; });
-      props.setProperty('ghstate', JSON.stringify(ghState));
+      props.setProperty('ghstate', JSON.stringify(ghState)); props.setProperty('ghv', String(SCRIPT_V));
       index.github = { repo: props.getProperty('GITHUB_REPO'), at: new Date().toISOString(), ok: true, msg: msg };
     } catch (e) { index.github = { repo: props.getProperty('GITHUB_REPO'), at: new Date().toISOString(), ok: false, msg: String(e && e.message || e).slice(0, 300) }; }
   }
@@ -138,8 +156,14 @@ function docTabs(id) {
   var add = function (list) {
     list.forEach(function (t) {
       if (t.getType() === DocumentApp.TabType.DOCUMENT_TAB) {
-        var text = t.asDocumentTab().getBody().getText();
-        out.push({ title: t.getTitle(), text: text, chars: text.replace(/[\r\n\u000b\u000c\u2028\u2029]/g, '').length });
+        var body = t.asDocumentTab().getBody(), text = body.getText();
+        // каждый абзац — отдельным абзацем Markdown (через пустую строку), с жирным и курсивом как в Документе
+        var md = body.getParagraphs().map(function (p) {
+          var x = p.editAsText(), s2 = x.getText(), idx = x.getTextAttributeIndices() || [0];
+          var runs = idx.map(function (a, i) { return { a: a, b: i + 1 < idx.length ? idx[i + 1] : s2.length, b2: !!x.isBold(a), i2: !!x.isItalic(a) }; });
+          return paraMd(s2, runs, p.getHeading ? p.getHeading() : '');
+        }).filter(function (l) { return l; }).join('\n\n');
+        out.push({ title: t.getTitle(), text: text, md: md, chars: text.replace(/[\r\n\u000b\u000c\u2028\u2029]/g, '').length });
       }
       add(t.getChildTabs());
     });
@@ -185,7 +209,19 @@ function pushGithub(items, stamp, props) {
   var old = api('/git/trees/' + base + '?recursive=1').tree || [], tree = [], pad = function (n) { return n < 10 ? '0' + n : String(n); };
   items.forEach(function (x) {
     var dir = safeName(x.name) + '/', now = {};
-    x.tabs.forEach(function (t, i) { var p = dir + pad(i + 1) + ' ' + safeName(t.title) + '.md'; now[p] = 1; tree.push({ path: p, mode: '100644', type: 'blob', content: '# ' + t.title + '\n\n' + t.text }); });
+    var plain = function (v) { return String(v).replace(/[#*\\\s.]+/g, ' ').trim().toLowerCase(); };
+    var mdOf = function (t) {
+      var md = t.md != null ? t.md : t.text, first = md.split('\n\n')[0];
+      if (/^#/.test(md)) return md;
+      // первая строка главы и есть её название («Глава 6») — делаем её заголовком, а не повторяем
+      if (plain(first) === plain(t.title)) md = md.slice(first.length).replace(/^\n+/, '');
+      return '# ' + t.title + '\n\n' + md;
+    };
+    x.tabs.forEach(function (t, i) { var p = dir + pad(i + 1) + ' ' + safeName(t.title) + '.md'; now[p] = 1; tree.push({ path: p, mode: '100644', type: 'blob', content: mdOf(t) + '\n' }); });
+    // вся книга одним файлом: главы по порядку (без «От автора» и служебных вкладок) — удобно читать и скачать целиком
+    var whole = dir + '00 Книга целиком.md';
+    now[whole] = 1;
+    tree.push({ path: whole, mode: '100644', type: 'blob', content: '# ' + x.name + '\n\n' + bookTabs(x.tabs, false).map(mdOf).join('\n\n---\n\n') + '\n' });
     // главы, которых больше нет (переименовали, удалили), убираем из текущей версии — в истории они остаются
     old.forEach(function (o) { if (o.type === 'blob' && o.path.indexOf(dir) === 0 && !now[o.path]) tree.push({ path: o.path, mode: '100644', type: 'blob', sha: null }); });
   });
@@ -198,7 +234,7 @@ function pushGithub(items, stamp, props) {
 
 // текст программы для вставки в Google Apps Script (папка с книгами уже подставлена)
 export function scriptCode(folderId) {
-  const fns = [setup, nightly, more, runBackup, walk, docTabs, folderIn, readIndex, writeIndex, trashCopy, pushGithub, thinKeep, safeName, bookChars];
+  const fns = [setup, nightly, more, runBackup, walk, docTabs, folderIn, readIndex, writeIndex, trashCopy, pushGithub, thinKeep, safeName, bookTabs, bookChars, paraMd];
   return [
     '// Архив Мастерской — ночная копия книг. Сделано для приложения «Мастерская».',
     '// Первый запуск: выберите вверху функцию setup и нажмите «Выполнить» (Google попросит разрешение один раз).',

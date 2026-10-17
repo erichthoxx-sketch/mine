@@ -50,8 +50,10 @@ function fakeGoogle() {
     return f;
   };
   const root = mkFolder('Мой диск', null), books = mkFolder('Литнет', root.id), sub = mkFolder('Звериная тропа', books.id);
-  const tab = (title, text) => ({ getType: () => 'DOC', getTitle: () => title, asDocumentTab: () => ({ getBody: () => ({ getText: () => text }) }), getChildTabs: () => [] });
-  const doc = mkFile('Альпийский развод', 'gdoc', books.id, '', [tab('Глава 1', 'Снег шёл.'), tab('Каркас', 'план')]);
+  // абзацы вкладки: [текст, заголовок, жирный с какого знака]
+  const para = ([t, h = 'NORMAL', boldFrom = -1]) => ({ getHeading: () => h, editAsText: () => ({ getText: () => t, getTextAttributeIndices: () => (boldFrom > 0 ? [0, boldFrom] : [0]), isBold: (i) => boldFrom > 0 && i >= boldFrom, isItalic: () => false }) });
+  const tab = (title, text, paras = text.split('\n').map((x) => [x])) => ({ getType: () => 'DOC', getTitle: () => title, asDocumentTab: () => ({ getBody: () => ({ getText: () => text, getParagraphs: () => paras.map(para) }) }), getChildTabs: () => [] });
+  const doc = mkFile('Альпийский развод', 'gdoc', books.id, '', [tab('Глава 1', 'Глава 1\nСнег шёл.', [['Глава 1'], ['Снег шёл.', 'NORMAL', 5]]), tab('Каркас', 'план')]);
   mkFile('Звериная тропа для двоих', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', sub.id, '');
   mkFile('обложка.png', 'image/png', books.id, '');
   const ctx = {
@@ -100,13 +102,15 @@ test('архив: программа Google копирует книги, пиш�
   assert.equal(books.length, 2); // документ и Word из подпапки; картинка — нет
   const alp = idx.books[g.doc.id];
   assert.equal(alp.copies.length, 1);
-  assert.equal(alp.copies[0].chars, 9); // только «Глава 1», «Каркас» не считается
+  assert.equal(alp.copies[0].chars, 16); // только «Глава 1» (вместе с названием), «Каркас» не считается
   assert.ok(alp.copies[0].docId && alp.copies[0].docxId);
   assert.equal(idx.books[books.find((b) => b.kind === 'docx').id].copies[0].docxId != null, true);
   assert.equal(idx.github.ok, true);
   const tree = JSON.parse(g.fetches.find((f) => f.url.endsWith('/git/trees') && f.o.method === 'post').o.payload).tree;
-  assert.deepEqual(tree.map((t) => t.path), ['Альпийский развод/01 Глава 1.md', 'Альпийский развод/02 Каркас.md', 'Альпийский развод/03 Старая глава.md']);
-  assert.equal(tree[2].sha, null); // удалённая глава убрана из текущей версии
+  assert.deepEqual(tree.map((t) => t.path), ['Альпийский развод/01 Глава 1.md', 'Альпийский развод/02 Каркас.md', 'Альпийский развод/00 Книга целиком.md', 'Альпийский развод/03 Старая глава.md']);
+  assert.equal(tree[0].content, '# Глава 1\n\nСнег **шёл.**\n'); // абзацы и жирный как в Документе, название не повторяется
+  assert.equal(tree[2].content, '# Альпийский развод\n\n# Глава 1\n\nСнег **шёл.**\n'); // книга целиком — без служебных вкладок
+  assert.equal(tree[3].sha, null); // удалённая глава убрана из текущей версии
   // следующая ночь без изменений — ни копий, ни отправки в GitHub, но отметка о запуске свежая
   const before = Object.keys(g.files).length, sent = g.fetches.length;
   vm.runInContext('nightly()', g.ctx);
