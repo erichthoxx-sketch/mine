@@ -137,6 +137,15 @@ export async function fileMeta(id) {
   if (isLocalDev) return mock.meta(id);
   return (await gfetch(`${DRIVE}/${id}?fields=${FIELDS}&supportsAllDrives=true`)).json();
 }
+// папка, в которой лежит файл (например, папка книги — там, где её Документ)
+export async function parentOf(id) { return (await fileMeta(id))?.parents?.[0] || null; }
+// перенести файл в папку (если он ещё не там)
+export async function moveFile(id, toId) {
+  const m = await fileMeta(id), from = m?.parents || [];
+  if (!toId || from.includes(toId)) return m;
+  if (isLocalDev) return mock.move(id, toId);
+  return (await gfetch(`${DRIVE}/${id}?addParents=${toId}&removeParents=${from.join(',')}&fields=${FIELDS}&supportsAllDrives=true`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json();
+}
 
 let jszip;
 // Библиотека лежит в самом приложении. Если сайт успел обновиться, пока страница была открыта, папки старой версии
@@ -285,6 +294,7 @@ const mock = (() => {
     ensureFolder(name, parent) { const f = files.find((x) => x.mimeType === MIME.folder && x.name === name && x.parents.includes(parent)); return link(f || this.create({ name, mimeType: MIME.folder, parents: [parent] })); },
     search: (n) => files.filter((f) => isDoc(f.mimeType) && f.name.toLowerCase().includes(n.toLowerCase())).map(link),
     meta: (id) => link(files.find((f) => f.id === id) || { id, name: '?', mimeType: MIME.doc, parents: [] }),
+    move(id, to) { const f = files.find((x) => x.id === id); if (f) f.parents = [to]; return link(f || { id }); },
     count: (f) => counts[f.id] || { total: 1000, tabs: [] },
     create(meta) { const f = { id: 'm' + Math.random().toString(36).slice(2, 8), modifiedTime: new Date().toISOString(), mimeType: meta.mimeType || 'image/jpeg', ...meta }; files.push(f); return link(f); },
     // пробный документ: вкладки — массивы знаков с оформлением

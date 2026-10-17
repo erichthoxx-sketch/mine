@@ -44,7 +44,7 @@ export function ideasView(a) {
       <div class="list">${items.map((x) => ideaRow(c, x, ui.openIdea === x.id)).join('')}</div></details>`;
   }).join('') : `<div class="card"><p class="muted" style="margin:0">${all.length ? 'Ничего не нашлось — попробуйте другое слово или сбросьте фильтры.' : 'Идей пока нет. Запишите первую — она не потеряется и будет доступна с телефона.'}</p></div>`}
   ${trash.length ? `<div class="trash-link"><button class="link" data-act="idea.trash">${ic('trash')} Удалённые (${trash.length})</button></div>` : ''}`;
-  return { html };
+  return { html, after: sweepIdeaDocs };
 }
 
 // превью: без разметки (##, **, списки), в одну-две строки
@@ -80,7 +80,7 @@ changes['idea.q'] = (v) => { app().ui.ideaQ = v.trim(); app().rerender(); };
 changes['idea.book'] = (v) => { app().ui.ideaBook = v; app().rerender(); };
 changes['idea.st'] = (v) => { app().ui.ideaSt = v; app().rerender(); };
 acts['idea.reset'] = () => { const u = app().ui; u.ideaQ = ''; u.ideaBook = ''; u.ideaSt = 'active'; };
-changes['idea.setBook'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_ideas.find((i) => i.id === el.dataset.id); await app().store.put('w_ideas', { ...x, bookId: v, ...(x.tdId ? { tdMove: true } : {}) }); toast('Идея привязана к книге'); };
+changes['idea.setBook'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_ideas.find((i) => i.id === el.dataset.id); await app().store.put('w_ideas', { ...x, bookId: v, ...(x.tdId ? { tdMove: true } : {}) }); toast('Идея привязана к книге'); docToBook({ ...x, bookId: v }); };
 changes['idea.setSt'] = async (v, el) => { const x = app().ctx().data.w_ideas.find((i) => i.id === el.dataset.id); await app().store.put('w_ideas', { ...x, status: v }); toast(`Идея: ${IST[v].toLowerCase()}`); };
 acts['idea.newFor'] = (d) => acts['idea.new'](d); // «+ Идея» на странице книги — книга уже выбрана
 // со страницы книги: идеи этой книги, нужная — раскрыта
@@ -104,6 +104,7 @@ acts['idea.edit'] = (d) => {
   const c = app().ctx(), x = c.data.w_ideas.find((i) => i.id === d.id);
   openSheet('Идея', ideaForm(c, x) + `<p><button type="button" class="link danger" data-act="idea.del" data-id="${x.id}">Удалить идею</button></p>`, async (fd) => {
     await app().store.put('w_ideas', { ...x, ...fromForm(fd), fileName: fromForm(fd).fileLink === x.fileLink ? x.fileName : '' });
+    if (fromForm(fd).bookId && fromForm(fd).bookId !== x.bookId) docToBook({ ...x, bookId: fromForm(fd).bookId });
   });
 };
 acts['idea.del'] = async (d) => {
@@ -169,14 +170,33 @@ acts['idea.delComment'] = async (d) => {
   const x = app().ctx().data.w_ideas.find((i) => i.id === d.id);
   await app().store.put('w_ideas', { ...x, comments: (x.comments || []).filter((_, i) => i !== Number(d.i)) });
 };
+// папка книги на Диске — там, где лежит её Документ
+async function bookFolder(c, bookId) {
+  const b = bookId && c.wbooksById[bookId];
+  if (!b?.fileId) return null;
+  try { return await drive.parentOf(b.fileId); } catch { return null; }
+}
+// документ идеи — в папку её книги (если ещё не там); тихо, без ошибок на экране
+async function docToBook(x) {
+  if (!x?.fileId || !x.bookId || !drive.hasFreshToken()) return;
+  try { const to = await bookFolder(app().ctx(), x.bookId); if (to) await drive.moveFile(x.fileId, to); } catch { /* попробуем в другой раз */ }
+}
+// один раз за открытие: уже созданные документы идей — по папкам книг
+let swept = false;
+export function sweepIdeaDocs() {
+  if (swept || !drive.hasFreshToken()) return;
+  swept = true;
+  (async () => { for (const x of app().ctx().data.w_ideas) if (x.fileId && x.bookId && !x.deletedAt) await docToBook(x); })();
+}
 acts['idea.doc'] = async (d) => {
   const c = app().ctx(), x = c.data.w_ideas.find((i) => i.id === d.id);
   try { await drive.ensureToken(); } catch (e) { toast(e.message); return; }
   try {
     const body = [x.title, x.text, ...(x.comments || []).map((m) => '— ' + m.text)].filter(Boolean).join('\n\n');
-    const f = await drive.createDoc('Идея: ' + (x.title || x.text.slice(0, 40)), c.settings.wIdeasFolder || c.settings.wBooksFolder, body);
+    const inBook = await bookFolder(c, x.bookId);
+    const f = await drive.createDoc('Идея: ' + (x.title || x.text.slice(0, 40)), inBook || c.settings.wIdeasFolder || c.settings.wBooksFolder, body);
     await app().store.put('w_ideas', { ...x, fileLink: f.webViewLink, fileName: f.name, fileId: f.id });
-    toast('Документ создан на Google Диске');
+    toast(inBook ? `Документ создан в папке книги «${c.wbooksById[x.bookId].title}»` : 'Документ создан на Google Диске');
   } catch (e) { toast(e.message); }
 };
 export { changes };

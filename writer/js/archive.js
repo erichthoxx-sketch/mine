@@ -9,7 +9,7 @@ export const ARCHIVE_NAME = 'Архив Мастерской';
 export const INDEX_NAME = 'Архив Мастерской — оглавление.json';
 export const STALE_DAYS = 2;
 // версия программы Google: выросла — приложение попросит вставить программу заново
-export const SCRIPT_V = 3; // 3 — в GitHub главы с разметкой и «Книга целиком»
+export const SCRIPT_V = 4; // 3 — главы с разметкой и «Книга целиком»; 4 — архив повторяет папки Диска
 
 // какие копии оставить: за 30 дней — все, до полугода — по одной в неделю, дальше — по одной в месяц (навсегда)
 export function thinKeep(dates, today) {
@@ -75,10 +75,20 @@ function runBackup() {
   var archive = folderIn(DriveApp.getRootFolder(), ARCHIVE_NAME);
   var index = readIndex(archive);
   var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Europe/Moscow', 'yyyy-MM-dd');
-  var ghState = props.getProperty('ghv') === String(SCRIPT_V) ? JSON.parse(props.getProperty('ghstate') || '{}') : {}; // новая версия — переотправить всё в новом виде
+  var ghFresh = props.getProperty('ghv') !== String(SCRIPT_V);
+  var ghState = ghFresh ? {} : JSON.parse(props.getProperty('ghstate') || '{}'); // новая версия — переотправить всё в новом виде
+  if (ghFresh) props.setProperty('ghclean', '1'); // и убрать из текущей версии старое расположение файлов
   var withGh = !!(props.getProperty('GITHUB_TOKEN') && props.getProperty('GITHUB_REPO'));
   var errors = [], files = [], gh = [], left = false;
   walk(DriveApp.getFolderById(BOOKS_FOLDER_ID), '', files, 0, archive.getId());
+  // папки документов в архиве (чтобы не спутать их с папками Диска с тем же названием)
+  var docFolders = {};
+  Object.keys(index.books).forEach(function (id) { if (index.books[id].folderId) docFolders[index.books[id].folderId] = 1; });
+  // новая версия программы: разложить уже сделанные копии по папкам, как на Диске
+  if (props.getProperty('drivev') !== String(SCRIPT_V)) {
+    files.forEach(function (f) { var b = index.books[f.id]; if (b && b.folderId) { try { archiveDir(archive, f, b, docFolders); b.path = f.path; } catch (e) { errors.push(f.name + ': ' + (e && e.message || e)); } } });
+    props.setProperty('drivev', String(SCRIPT_V));
+  }
   for (var i = 0; i < files.length; i++) {
     var f = files[i];
     if (Date.now() - started > 4.5 * 60 * 1000) { left = true; break; }
@@ -89,11 +99,11 @@ function runBackup() {
       var needGh = withGh && f.mime !== DOCX && !(ghState[f.id] >= upd);
       if (!needCopy && !needGh) continue;
       var tabs = f.mime !== DOCX ? docTabs(f.id) : null;
-      if (needGh) gh.push({ id: f.id, upd: upd, name: f.name, tabs: tabs });
+      if (needGh) gh.push({ id: f.id, upd: upd, name: f.name, path: f.path, tabs: tabs });
       if (!needCopy) continue;
       var book = index.books[f.id] || (index.books[f.id] = { id: f.id, copies: [] });
       book.name = f.name; book.path = f.path; book.kind = f.mime === DOCX ? 'docx' : 'doc';
-      var dir = folderIn(archive, safeName(f.name));
+      var dir = archiveDir(archive, f, book, docFolders);
       book.folderId = dir.getId();
       // повторная копия за тот же день заменяет утреннюю
       book.copies.filter(function (c) { return c.date === stamp; }).forEach(trashCopy);
@@ -120,7 +130,9 @@ function runBackup() {
   });
   if (gh.length) {
     try {
-      var msg = pushGithub(gh, stamp, props);
+      var clean = !left && props.getProperty('ghclean') === '1';
+      var msg = pushGithub(gh, stamp, props, clean ? files.map(ghDir) : null);
+      if (clean) props.deleteProperty('ghclean');
       gh.forEach(function (x) { ghState[x.id] = x.upd; });
       props.setProperty('ghstate', JSON.stringify(ghState)); props.setProperty('ghv', String(SCRIPT_V));
       index.github = { repo: props.getProperty('GITHUB_REPO'), at: new Date().toISOString(), ok: true, msg: msg };
@@ -171,6 +183,27 @@ function docTabs(id) {
   add(DocumentApp.openById(id).getTabs());
   return out;
 }
+// папка документа в архиве — как на Диске: «Подпапка / Документ»; уже существующую папку переносим на место
+function archiveDir(archive, f, book, docFolders) {
+  var parent = archive;
+  (f.path ? f.path.split(' / ') : []).forEach(function (p) {
+    var it = parent.getFoldersByName(safeName(p)), found = null;
+    while (it.hasNext() && !found) { var x = it.next(); if (!docFolders[x.getId()]) found = x; }
+    parent = found || parent.createFolder(safeName(p));
+  });
+  if (book.folderId) {
+    try {
+      var own = DriveApp.getFolderById(book.folderId), ps = own.getParents(), here = ps.hasNext() ? ps.next().getId() : '';
+      if (here !== parent.getId()) own.moveTo(parent);
+      return own;
+    } catch (e) { /* папку удалили — создадим новую */ }
+  }
+  var d = parent.createFolder(safeName(f.name));
+  docFolders[d.getId()] = 1;
+  return d;
+}
+// путь документа в GitHub — тоже как на Диске
+function ghDir(x) { return (x.path ? x.path.split(' / ').map(safeName).join('/') + '/' : '') + safeName(x.name) + '/'; }
 function folderIn(parent, name) {
   var it = parent.getFoldersByName(name);
   return it.hasNext() ? it.next() : parent.createFolder(name);
@@ -188,7 +221,7 @@ function trashCopy(c) {
   [c.docId, c.docxId].forEach(function (id) { if (id) { try { DriveApp.getFileById(id).setTrashed(true); } catch (e) { /* уже нет */ } } });
 }
 // копия вне Google: тексты вкладок → закрытое хранилище GitHub, одной правкой за ночь (история — в самом GitHub)
-function pushGithub(items, stamp, props) {
+function pushGithub(items, stamp, props, keepDirs) {
   var token = String(props.getProperty('GITHUB_TOKEN') || '').trim();
   var repo = String(props.getProperty('GITHUB_REPO') || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, '');
   if (!token || !repo) return '';
@@ -208,7 +241,7 @@ function pushGithub(items, stamp, props) {
   var base = api('/git/commits/' + parent).tree.sha;
   var old = api('/git/trees/' + base + '?recursive=1').tree || [], tree = [], pad = function (n) { return n < 10 ? '0' + n : String(n); };
   items.forEach(function (x) {
-    var dir = safeName(x.name) + '/', now = {};
+    var dir = ghDir(x), now = {};
     var plain = function (v) { return String(v).replace(/[#*\\\s.]+/g, ' ').trim().toLowerCase(); };
     var mdOf = function (t) {
       var md = t.md != null ? t.md : t.text, first = md.split('\n\n')[0];
@@ -225,6 +258,12 @@ function pushGithub(items, stamp, props) {
     // главы, которых больше нет (переименовали, удалили), убираем из текущей версии — в истории они остаются
     old.forEach(function (o) { if (o.type === 'blob' && o.path.indexOf(dir) === 0 && !now[o.path]) tree.push({ path: o.path, mode: '100644', type: 'blob', sha: null }); });
   });
+  // после смены версии: всё, что лежит не на своём месте (старое расположение), убираем из текущей версии
+  if (keepDirs) {
+    var mine = {};
+    tree.forEach(function (t) { mine[t.path] = 1; });
+    old.forEach(function (o) { if (o.type === 'blob' && o.path !== 'README.md' && !mine[o.path] && !keepDirs.some(function (d) { return o.path.indexOf(d) === 0; })) tree.push({ path: o.path, mode: '100644', type: 'blob', sha: null }); });
+  }
   var nt = api('/git/trees', 'post', { base_tree: base, tree: tree });
   if (nt.sha === base) return 'без изменений';
   var cm = api('/git/commits', 'post', { message: 'Копия ' + stamp + ': ' + items.map(function (x) { return x.name; }).join(', ').slice(0, 300), tree: nt.sha, parents: [parent] });
@@ -234,7 +273,7 @@ function pushGithub(items, stamp, props) {
 
 // текст программы для вставки в Google Apps Script (папка с книгами уже подставлена)
 export function scriptCode(folderId) {
-  const fns = [setup, nightly, more, runBackup, walk, docTabs, folderIn, readIndex, writeIndex, trashCopy, pushGithub, thinKeep, safeName, bookTabs, bookChars, paraMd];
+  const fns = [setup, nightly, more, runBackup, walk, docTabs, archiveDir, ghDir, folderIn, readIndex, writeIndex, trashCopy, pushGithub, thinKeep, safeName, bookTabs, bookChars, paraMd];
   return [
     '// Архив Мастерской — ночная копия книг. Сделано для приложения «Мастерская».',
     '// Первый запуск: выберите вверху функцию setup и нажмите «Выполнить» (Google попросит разрешение один раз).',

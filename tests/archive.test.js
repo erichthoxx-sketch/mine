@@ -35,6 +35,8 @@ function fakeGoogle() {
       getFilesByName: (nm) => iter(Object.values(files).filter((x) => x.parent === id && x.name === nm && !x.trashed)),
       createFolder: (nm) => mkFolder(nm, id),
       createFile: (a, text) => (typeof a === 'string' ? mkFile(a, 'application/json', id, text) : mkFile(a.name, 'docx', id, '')),
+      getParents: () => iter(f.parent ? [folders[f.parent]] : []),
+      moveTo: (to) => { f.parent = to.getId(); },
     };
     return f;
   };
@@ -61,7 +63,7 @@ function fakeGoogle() {
     DriveApp: { getRootFolder: () => root, getFolderById: (id) => folders[id], getFileById: (id) => files[id] },
     DocumentApp: { TabType: { DOCUMENT_TAB: 'DOC' }, openById: (id) => ({ getTabs: () => files[id].tabs }) },
     MimeType: { GOOGLE_DOCS: 'gdoc' },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] ?? null, setProperty: (k, v) => { props[k] = v; } }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] ?? null, setProperty: (k, v) => { props[k] = v; }, deleteProperty: (k) => { delete props[k]; } }) },
     ScriptApp: {
       getProjectTriggers: () => triggers, deleteTrigger: (t) => triggers.splice(triggers.indexOf(t), 1), getOAuthToken: () => 'tok',
       newTrigger: (h) => { const b = { timeBased: () => b, everyDays: () => b, atHour: () => b, after: () => b, create: () => triggers.push({ getHandlerFunction: () => h }) }; return b; },
@@ -71,14 +73,14 @@ function fakeGoogle() {
       if (url.includes('docs.google.com')) return { getBlob: () => ({ setName: (nm) => ({ name: nm }) }) };
       const path = url.replace(/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+/, '');
       const body = path === '' ? { default_branch: 'main' } : path.startsWith('/git/ref/') ? { object: { sha: 'c1' } } : path.startsWith('/git/commits/') ? { tree: { sha: 't1' } }
-        : path.startsWith('/git/trees/') ? { tree: [{ type: 'blob', path: 'Альпийский развод/03 Старая глава.md' }, { type: 'blob', path: 'README.md' }] } : path === '/git/trees' ? { sha: 't2' } : path === '/git/commits' ? { sha: 'c2' } : {};
+        : path.startsWith('/git/trees/') ? { tree: [{ type: 'blob', path: 'Альпийский развод/03 Старая глава.md' }, { type: 'blob', path: 'README.md' }, { type: 'blob', path: 'Звериная тропа для двоих/01 Глава.md' }] } : path === '/git/trees' ? { sha: 't2' } : path === '/git/commits' ? { sha: 'c2' } : {};
       return { getResponseCode: () => 200, getContentText: () => JSON.stringify(body) };
     } },
     Utilities: { formatDate: (d) => d.toISOString().slice(0, 10), base64Encode: (t) => Buffer.from(t).toString('base64'), Charset: { UTF_8: 'utf8' } },
     Session: { getScriptTimeZone: () => 'Europe/Moscow' },
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
   };
-  return { ctx, files, folders, triggers, props, fetches, books, doc };
+  return { ctx, files, folders, triggers, props, fetches, books, doc, root };
 }
 
 test('архив: программа Google копирует книги, пишет оглавление, копия в GitHub', () => {
@@ -107,7 +109,13 @@ test('архив: программа Google копирует книги, пиш�
   assert.equal(idx.books[books.find((b) => b.kind === 'docx').id].copies[0].docxId != null, true);
   assert.equal(idx.github.ok, true);
   const tree = JSON.parse(g.fetches.find((f) => f.url.endsWith('/git/trees') && f.o.method === 'post').o.payload).tree;
-  assert.deepEqual(tree.map((t) => t.path), ['Альпийский развод/01 Глава 1.md', 'Альпийский развод/02 Каркас.md', 'Альпийский развод/00 Книга целиком.md', 'Альпийский развод/03 Старая глава.md']);
+  // старое расположение (без папок Диска) убрано из текущей версии, README остаётся
+  assert.deepEqual(tree.map((t) => t.path), ['Альпийский развод/01 Глава 1.md', 'Альпийский развод/02 Каркас.md', 'Альпийский развод/00 Книга целиком.md', 'Альпийский развод/03 Старая глава.md', 'Звериная тропа для двоих/01 Глава.md']);
+  assert.equal(tree[4].sha, null);
+  // в архиве на Диске — те же папки, что на Диске: Word из подпапки лежит в «Звериная тропа»
+  const zv = books.find((b) => b.kind === 'docx'), zvDir = g.folders[zv.folderId];
+  assert.equal(g.folders[zvDir.parent].name, 'Звериная тропа');
+  assert.equal(zv.path, 'Звериная тропа');
   assert.equal(tree[0].content, '# Глава 1\n\nСнег **шёл.**\n'); // абзацы и жирный как в Документе, название не повторяется
   assert.equal(tree[2].content, '# Альпийский развод\n\n# Глава 1\n\nСнег **шёл.**\n'); // книга целиком — без служебных вкладок
   assert.equal(tree[3].sha, null); // удалённая глава убрана из текущей версии
@@ -117,6 +125,23 @@ test('архив: программа Google копирует книги, пиш�
   assert.equal(Object.keys(g.files).length, before);
   assert.equal(g.fetches.length, sent);
   assert.ok(JSON.parse(idxFile.text).lastRun);
+});
+
+test('архив: старые копии сами переезжают в папки, как на Диске', () => {
+  const g = fakeGoogle();
+  vm.createContext(g.ctx);
+  vm.runInContext(scriptCode(g.books.id), g.ctx);
+  vm.runInContext('setup()', g.ctx);
+  const idxFile = Object.values(g.files).find((f) => f.name === INDEX_NAME);
+  const zv = Object.values(JSON.parse(idxFile.text).books).find((b) => b.kind === 'docx');
+  const arch = Object.values(g.folders).find((f) => f.name === 'Архив Мастерской');
+  // как было в старой версии: папка документа прямо в корне архива, рядом — папка «Звериная тропа» с тем же уровнем
+  g.folders[zv.folderId].parent = arch.id;
+  g.props.drivev = '3';
+  vm.runInContext('nightly()', g.ctx);
+  const parent = g.folders[g.folders[zv.folderId].parent];
+  assert.equal(parent.name, 'Звериная тропа'); assert.equal(parent.parent, arch.id);
+  assert.equal(Object.values(g.folders).filter((f) => f.name === 'Звериная тропа' && f.parent === arch.id).length, 1); // без дублей
 });
 
 test('архив: статус и разница в знаках', () => {
