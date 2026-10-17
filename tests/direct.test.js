@@ -261,7 +261,7 @@ test('переходник: Метрика только на чтение и т�
     const other = await worker.fetch(new Request('https://w.dev/metrika/management/v1/counters', { headers: { Origin: 'https://evil.example' } }));
     assert.equal(other.status, 403);
     const ver = await worker.fetch(new Request('https://w.dev/version', { headers: { Origin: 'https://erichthoxx-sketch.github.io' } }));
-    assert.equal(await ver.text(), '2');
+    assert.equal(await ver.text(), '3');
   } finally { globalThis.fetch = origFetch; }
 });
 
@@ -284,4 +284,36 @@ test('разбор кампании: подождать при малых дан
   assert.deepEqual(minus.act.phrases, ['скачать']);
   // фразы не советуем при 3 кликах
   assert.ok(!r.items.some((x) => x.area === 'Фразы'));
+});
+
+test('ИИ-таргетолог: запрос к Claude и ChatGPT, разбор ответа и плана', async () => {
+  const { buildRequest, readResponse, splitPlan, systemPrompt } = await import('../direct/js/agent.js');
+  const c = buildRequest({ provider: 'claude', key: 'K', system: 'S', user: 'U' });
+  assert.equal(c.url, 'https://api.anthropic.com/v1/messages');
+  assert.equal(c.headers['x-api-key'], 'K'); assert.equal(c.headers['anthropic-dangerous-direct-browser-access'], 'true');
+  assert.equal(c.body.model, 'claude-opus-5-5'); assert.equal(c.body.system, 'S');
+  const cp = buildRequest({ provider: 'claude', key: 'K', system: 'S', user: 'U', base: 'https://p.dev/' });
+  assert.equal(cp.url, 'https://p.dev/anthropic/v1/messages'); assert.equal(cp.headers['anthropic-dangerous-direct-browser-access'], undefined);
+  const o = buildRequest({ provider: 'openai', key: 'K', model: 'gpt-x', system: 'S', user: 'U' });
+  assert.equal(o.url, 'https://api.openai.com/v1/chat/completions'); assert.equal(o.headers.authorization, 'Bearer K'); assert.equal(o.body.model, 'gpt-x');
+  assert.equal(readResponse('claude', { content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: 'Привет' }] }), 'Привет');
+  assert.throws(() => readResponse('claude', { stop_reason: 'refusal', content: [] }), /отказался/);
+  assert.equal(readResponse('openai', { choices: [{ message: { content: 'Ок' } }] }), 'Ок');
+  assert.throws(() => readResponse('openai', { error: { message: 'bad key' } }), /bad key/);
+  const r = splitPlan('Разбор: клик дорогой.\n```direct-plan\n{"actions":[{"do":"minus","campaign":1,"phrases":["скачать"],"why":"мусор"}]}\n```', { maxBid: 50 });
+  assert.equal(r.analysis, 'Разбор: клик дорогой.'); assert.equal(r.actions.length, 1);
+  assert.match(systemPrompt({ maxBid: 40 }), /не выше 40 ₽/);
+});
+
+test('переходник: пропускает разбор нейросетью только на нужные адреса', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => { calls.push({ url, init }); return new Response('{}', { status: 200 }); };
+  const site = 'https://erichthoxx-sketch.github.io';
+  const ok = await worker.fetch(new Request('https://p.dev/anthropic/v1/messages', { method: 'POST', headers: { Origin: site, 'x-api-key': 'K', 'anthropic-version': '2023-06-01', Cookie: 'c' }, body: '{}' }));
+  assert.equal(ok.status, 200); assert.equal(calls[0].url, 'https://api.anthropic.com/v1/messages');
+  assert.equal(calls[0].init.headers.get('x-api-key'), 'K'); assert.equal(calls[0].init.headers.get('cookie'), null);
+  await worker.fetch(new Request('https://p.dev/openai/v1/chat/completions', { method: 'POST', headers: { Origin: site, authorization: 'Bearer K' }, body: '{}' }));
+  assert.equal(calls[1].url, 'https://api.openai.com/v1/chat/completions');
+  const bad = await worker.fetch(new Request('https://p.dev/anthropic/v1/files', { method: 'POST', headers: { Origin: site }, body: '{}' }));
+  assert.equal(bad.status, 404);
 });

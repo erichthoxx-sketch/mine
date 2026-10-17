@@ -176,6 +176,11 @@ docs/           SETUP.md (Firebase), SETUP-WRITER.md (Google Диск)
   ИИ получает данные только через «Скопировать для ИИ», а отвечает планом в блоке ```direct-plan (формат — `aiPackage`
   в `dcalc.js`; действия minus, unminus, pause, resume, bid, keywords). Новое действие — в `parsePlan`, `describe`,
   `toRequest`, `patchSnap` и тест в `tests/direct.test.js`.
+  **ИИ-таргетолог** (`direct/js/agent.js`, экран «ИИ-помощник»): владелица подключает Claude (по умолчанию, модель
+  claude-opus-5-5) или ChatGPT своим ключом API (`settings.aiKeys {claude, openai}`, `settings.ai {on, provider, model, daily}`),
+  переключает и отключает одной кнопкой. Разбор — по кнопке и сам раз в день (`maybeDailyAgent`), результат в `d_snap/ai`.
+  **ИИ ничего не применяет сам**: только план с галочками, применяет владелица («Применить отмеченное»). Запросы к нейросети —
+  через переходник v3 (`/anthropic/v1/messages`, `/openai/v1/chat/completions`), если он обновлён, иначе напрямую.
   Есть и отдельный путь для Claude Desktop — MCP-сервер nozikov/yandex-mcp (только чтение); владелице пока не нужен.
 
 ## 7. Дизайн (то, что владелица ценит больше всего)

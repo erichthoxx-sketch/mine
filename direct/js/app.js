@@ -11,7 +11,7 @@ import { demo, snap, demoLog } from './demo.js';
 import { homeView } from './views/home.js';
 import { campaignView } from './views/campaign.js';
 import { learnView } from './views/learn.js';
-import { aiView } from './views/ai.js';
+import { aiView, maybeDailyAgent } from './views/ai.js';
 import { logView } from './views/log.js';
 import { settingsView } from './views/settings.js';
 
@@ -51,6 +51,7 @@ export async function reload({ quiet = false } = {}) {
     await refresh(app, { onStep: (t) => { ui.busy = t; render(); } });
     if (d().lastError && !demo.on) await store.saveSettings({ direct: { ...d(), lastError: null } });
     if (!quiet) toast('Данные обновлены');
+    maybeDailyAgent(app); // раз в день — разбор нейросетью (только план, без изменений)
   } catch (e) {
     console.error(e);
     // перебои у Яндекса: спокойно показываем прошлые данные и сами пробуем снова через 15 минут

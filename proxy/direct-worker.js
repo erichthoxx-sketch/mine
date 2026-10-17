@@ -12,17 +12,20 @@ const TARGETS = {
   live: 'https://api.direct.yandex.com',
   sandbox: 'https://api-sandbox.direct.yandex.com',
   metrika: 'https://api-metrika.yandex.net',
+  anthropic: 'https://api.anthropic.com', // ИИ-помощник: Claude
+  openai: 'https://api.openai.com',       // ИИ-помощник: ChatGPT
 };
-const VERSION = '2'; // 2 — добавлена Метрика
+const VERSION = '3'; // 2 — добавлена Метрика, 3 — разбор кампаний нейросетью (Claude / ChatGPT)
 // Какие заголовки пропускаем в Директ и обратно
 const PASS_IN = ['authorization', 'content-type', 'client-login', 'accept-language', 'processingmode', 'returnmoneyinmicros', 'skipreportheader', 'skipcolumnheader', 'skipreportsummary'];
+const AI_IN = ['authorization', 'x-api-key', 'anthropic-version', 'anthropic-beta', 'content-type'];
 const PASS_OUT = ['content-type', 'retryin', 'reportsinqueue', 'units', 'requestid'];
 
 function cors(origin) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': PASS_IN.join(', '),
+    'Access-Control-Allow-Headers': [...new Set([...PASS_IN, ...AI_IN])].join(', '),
     'Access-Control-Expose-Headers': PASS_OUT.join(', '),
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
@@ -48,6 +51,17 @@ export default {
       return new Response(res.body, { status: res.status, headers: out });
     }
     if (request.method !== 'POST') return new Response('Только POST', { status: 405, headers: cors(origin) });
+
+    // Разбор нейросетью: только /anthropic/v1/messages и /openai/v1/chat/completions; ключ — от приложения
+    const ai = /^\/(anthropic)(\/v1\/messages)$|^\/(openai)(\/v1\/chat\/completions)$/.exec(url.pathname);
+    if (ai) {
+      const h = new Headers();
+      for (const k of AI_IN) { const v = request.headers.get(k); if (v) h.set(k, v); }
+      const res = await fetch(TARGETS[ai[1] || ai[3]] + (ai[2] || ai[4]), { method: 'POST', headers: h, body: await request.arrayBuffer() });
+      const out = new Headers(cors(origin));
+      out.set('content-type', res.headers.get('content-type') || 'application/json');
+      return new Response(res.body, { status: res.status, headers: out });
+    }
 
     // /live/json/v5/campaigns → https://api.direct.yandex.com/json/v5/campaigns
     const m = /^\/(live|sandbox)(\/json\/v5\/[a-z]+)$/.exec(url.pathname);
