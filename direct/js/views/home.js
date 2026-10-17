@@ -1,11 +1,13 @@
 // Обзор: как идёт реклама за неделю, тестовый бюджет, «что сделать сейчас», список кампаний
 import { esc, acts } from '../../../js/ui.js';
 import { rub, num, pct, fmtShort } from '../../../js/format.js';
-import { addDays } from '../../../js/calc.js';
+import { addDays, outageSet } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
-import { totals, spendSeries, budgetPace, queryHints, keywordHints, withAvgCpc, DEFAULT_TEST_BUDGET } from '../dcalc.js';
+import { totals, spendSeries, budgetPace, queryHints, keywordHints, withAvgCpc, goalHints, goalTotals, DEFAULT_TEST_BUDGET } from '../dcalc.js';
+import { metrikaOf } from './metrika.js';
 import { stateDot, tiles, actBtn, q } from './common.js';
 import { demo } from '../demo.js';
+import { OUTAGE_TEXT } from '../api.js';
 
 const app = () => window.__app;
 
@@ -17,9 +19,25 @@ function connectCard() {
 acts['d.demo'] = () => { app().ui.demo = true; app().store.emit(); };
 acts['d.demoOff'] = () => { app().ui.demo = false; app().store.emit(); };
 
-// Подсказки «что сделать сейчас»: до 6 самых важных
-export function todo(main, stats) {
+const lessonLink = (k) => `<button class="link" data-act="l.lesson" data-k="${k}" data-go="1">Почему так →</button>`;
+// Подсказки аналитика по целям Метрики (покупки): с объяснением и ссылкой на урок
+function goalTodo(main, stats, ctx) {
+  const m = metrikaOf(ctx);
+  if (!m?.counterId) return [];
+  const hs = goalHints({ campaigns: main.campaigns, keywords: main.keywords, kw: stats.kw, kwConv: stats.kwConv, daily: stats.daily, conv: stats.conv, mrows: stats.mrows, m, today: ctx.today, skip: outageSet(ctx.data.days || []) });
   const out = [];
+  for (const h of hs.slice(0, 4)) {
+    const head = { counter: `Кампания «${esc(h.name)}»: привязать счётчик`, zero: `«${esc(h.name)}»: клики есть, покупок нет`, bounce: `«${esc(h.name)}»: много уходят сразу`, noconv: `«${esc(h.phrase)}» тратит без покупок`, winner: `«${esc(h.phrase)}» приводит покупателей` }[h.kind];
+    const btn = h.kind === 'counter' ? actBtn({ do: 'counter', campaign: h.cid, counter: m.counterId, why: h.why }, 'Привязать', 'small-btn')
+      : h.kind === 'noconv' ? actBtn({ do: 'pause', target: 'keyword', ids: [h.id], why: h.why }, 'Остановить фразу', 'small-btn') : '';
+    out.push(`<div class="item${h.kind === 'winner' ? ' d-good' : ''}"><div class="row between"><b>${head}</b>${btn}</div><div class="small muted">${esc(h.why)} · ${lessonLink(h.lesson)}</div></div>`);
+  }
+  return out;
+}
+
+// Подсказки «что сделать сейчас»: до 6 самых важных
+export function todo(main, stats, ctx = null) {
+  const out = ctx ? goalTodo(main, stats, ctx) : [];
   const neg = Object.fromEntries((main.campaigns || []).map((c) => [c.id, c.negatives || []]));
   for (const h of queryHints(stats.queries, neg).slice(0, 3)) {
     out.push(`<div class="item"><div class="row between"><b>Минус-слово «${esc(h.word)}»</b>${actBtn({ do: 'minus', campaign: h.cid, phrases: [h.word], why: `${h.why}; ушло ${rub(h.cost, 0)} на ${h.queries.length} запр.` }, 'В минус', 'small-btn')}</div>
@@ -46,21 +64,28 @@ export function homeView(a) {
   const budget = Number(d.testBudget) || DEFAULT_TEST_BUDGET, from = d.testFrom || (main.campaigns || []).map((x) => x.start).filter(Boolean).sort()[0] || addDays(t, -29);
   const pace = budgetPace(daily, { budget, from, today: t });
   const delta = pw.cost ? (w.cost - pw.cost) / pw.cost : null;
-  const tasks = stats ? todo(main, stats) : [];
+  const tasks = stats ? todo(main, stats, c) : [];
+  const m = metrikaOf(c), skip = outageSet(c.data.days || []);
+  const gw = m?.counterId && stats ? goalTotals(daily, stats.conv || [], addDays(t, -6), t, { goals: m.main, skip }) : null;
+  const err = c.settings.direct?.lastError;
   const camps = (main.campaigns || []).filter((x) => x.state !== 'ARCHIVED');
   return {
     html: `${demo.on ? `<div class="alert">Это пример — так будет выглядеть ваш Директ. Можно нажимать кнопки: в примере ничего не тратится. ${c.settings.directToken ? '' : '<button class="link" data-act="go" data-to="/settings">Подключить свой</button>'}${a.store.mode !== 'local' ? ' <button class="link" data-act="d.demoOff">Закрыть пример</button>' : ''}</div>` : ''}
+    ${!demo.on && err?.transient ? `<div class="alert d-outage">${esc(OUTAGE_TEXT)} Данные от ${new Date(main.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.</div>` : ''}
+    ${stats?.mErr ? `<p class="small muted">${esc(stats.mErr)}</p>` : ''}
     <div class="card"><div class="row between"><h2 style="margin:0">За 7 дней</h2><span class="small muted">${fmtShort(addDays(t, -6))}–${fmtShort(t)}${delta != null ? ` · <span class="${delta > 0 ? 'warnc' : ''}">${delta > 0 ? '▲' : '▼'} ${pct(Math.abs(delta), 0)} к прошлой неделе</span>` : ''}</span></div>
       ${tiles(w)}
+      ${gw ? `<div class="d-goalrow small"><span>Покупки ${q('conv')} <b>${num(gw.conv)}</b></span><span>Цена покупки ${q('cpa')} <b>${gw.cpa != null ? rub(gw.cpa, 0) : '—'}</b></span><span>Из 100 кликов ${q('cr')} <b>${gw.cr != null ? String(Math.round(gw.cr * 1000) / 10).replace('.', ',') : '—'}</b></span></div>` : ''}
       <div class="bar-row"><div class="row between small"><span>Тестовый бюджет ${q('budget')}</span><span><b>${rub(pace.spent, 0)}</b> из ${rub(budget, 0)}</span></div><div class="progress ${pace.share >= 0.9 ? 'warn' : ''}"><i style="width:${Math.min(100, pace.share * 100).toFixed(1)}%"></i></div>
       <div class="small muted">${pace.left <= 0 ? 'Тестовый бюджет потрачен — время подвести итоги (ИИ-помощник поможет).' : pace.daysLeft != null ? `≈ ${rub(pace.perDay, 0)} в день — остатка хватит примерно на ${num(pace.daysLeft)} дн.` : 'Пока расходов нет.'}</div></div>
       <div class="chart" id="dSpend"></div><div class="chart-cap small muted">Расход по дням за 30 дней</div></div>
-    <div class="card"><h2>Что сделать сейчас</h2>${tasks.length ? `<div class="list">${tasks.join('')}</div>` : '<p class="muted">Ничего срочного. Загляните через пару дней — появятся новые запросы.</p>'}
+    <div class="card"><h2>Что сделать сейчас</h2>${m?.counterId ? '' : `<p class="small muted">Подключите Метрику (⚙ Настройки) — и подсказки будут учитывать покупки, а не только клики.</p>`}${tasks.length ? `<div class="list">${tasks.join('')}</div>` : '<p class="muted">Ничего срочного. Загляните через пару дней — появятся новые запросы.</p>'}
       <p class="small muted">Хотите разбор целиком — откройте <button class="link" data-act="go" data-to="/ai">ИИ-помощник</button>.</p></div>
     <div class="card"><h2>Кампании</h2>${camps.length ? `<div class="list">${camps.map((k) => {
       const kt = totals(daily, addDays(t, -6), t, k.id);
+      const kg = m?.counterId ? goalTotals(daily, stats?.conv || [], addDays(t, -6), t, { cid: k.id, goals: m.main, skip }) : null;
       return `<a class="item" href="#" data-act="go" data-to="/c/${k.id}"><div class="row between"><b>${esc(k.name)}</b>${stateDot(k)}</div>
-        <div class="small muted">за 7 дней: ${rub(kt.cost, 0)} · кликов ${num(kt.clicks)}${kt.cpc != null ? ` · клик ${rub(kt.cpc, 1)}` : ''}${k.daily ? ` · лимит ${rub(k.daily, 0)}/день` : ''}</div></a>`;
+        <div class="small muted">за 7 дней: ${rub(kt.cost, 0)} · кликов ${num(kt.clicks)}${kt.cpc != null ? ` · клик ${rub(kt.cpc, 1)}` : ''}${kg ? ` · покупок ${num(kg.conv)}${kg.cpa != null ? ` по ${rub(kg.cpa, 0)}` : ''}` : ''}${k.daily ? ` · лимит ${rub(k.daily, 0)}/день` : ''}</div></a>`;
     }).join('')}</div>` : '<p class="muted">Кампаний пока нет — их создают в кабинете Директа.</p>'}</div>`,
     after() {
       const el = document.getElementById('dSpend');

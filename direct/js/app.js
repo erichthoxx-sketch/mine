@@ -5,7 +5,7 @@ import { initAccent } from '../../js/accent.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from '../../js/ui.js';
 import { todayISO } from '../../js/calc.js';
 import { ic } from '../../js/icons.js';
-import { takeTokenFromUrl } from './api.js';
+import { takeTokenFromUrl, OUTAGE_TEXT } from './api.js';
 import { refresh } from './sync.js';
 import { demo, snap, demoLog } from './demo.js';
 import { homeView } from './views/home.js';
@@ -15,7 +15,7 @@ import { aiView } from './views/ai.js';
 import { logView } from './views/log.js';
 import { settingsView } from './views/settings.js';
 
-const store = createStore({ colls: ['d_snap', 'd_log', 'campaigns', 'reports', 'books'], localKey: 'authorDirect.v1' });
+const store = createStore({ colls: ['d_snap', 'd_log', 'campaigns', 'reports', 'books', 'days'], localKey: 'authorDirect.v1' });
 initAccent(store); // цвет акцентов — общий для всех приложений (выбирается в Мастерской)
 const ui = { route: '/', cTab: 'queries', lTab: '', lesson: '', demo: false, busy: '' };
 keepPlace(ui, ['cTab', 'lTab', 'demo']);
@@ -41,6 +41,7 @@ async function syncDemo() {
 }
 
 // Загрузить свежие данные из Директа (кнопка «Обновить» и раз в 30 минут при открытии)
+let retryT = null;
 export async function reload({ quiet = false } = {}) {
   if (ui.busy) return;
   ui.busy = 'Загружаю…'; render();
@@ -51,8 +52,11 @@ export async function reload({ quiet = false } = {}) {
     if (d().lastError && !demo.on) await store.saveSettings({ direct: { ...d(), lastError: null } });
     if (!quiet) toast('Данные обновлены');
   } catch (e) {
-    console.error(e); toast(e.message || String(e));
-    if (!demo.on) await store.saveSettings({ direct: { ...d(), lastError: { code: e.code || null, text: e.message || String(e), at: new Date().toISOString() } } }).catch(() => {});
+    console.error(e);
+    // перебои у Яндекса: спокойно показываем прошлые данные и сами пробуем снова через 15 минут
+    toast(e.transient ? OUTAGE_TEXT : e.message || String(e));
+    if (e.transient) { clearTimeout(retryT); retryT = setTimeout(() => reload({ quiet: true }), 15 * 60000); }
+    if (!demo.on) await store.saveSettings({ direct: { ...d(), lastError: { code: e.code || null, text: e.message || String(e), transient: !!e.transient, at: new Date().toISOString() } } }).catch(() => {});
   } finally { ui.busy = ''; render(); }
 }
 app.reload = reload;

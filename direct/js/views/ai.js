@@ -1,11 +1,12 @@
 // ИИ-помощник: «пакет» со всеми данными для любой нейросети и разбор её ответа в понятные действия с галочками
 import { esc, acts, forms, changes, toast, download } from '../../../js/ui.js';
-import { addDays } from '../../../js/calc.js';
+import { addDays, outageSet } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
 import { aiPackage, parsePlan, describe, totals, DEFAULT_MAX_BID, DEFAULT_TEST_BUDGET, PLAN_TAG } from '../dcalc.js';
 import { namesOf } from '../sync.js';
 import { logOf } from '../demo.js';
 import { runAction } from './common.js';
+import { metrikaOf } from './metrika.js';
 
 const app = () => window.__app;
 const plan = { text: '', actions: [], errors: [], pick: [], done: {} };
@@ -21,6 +22,13 @@ export function packageText(a, question = '') {
     ads: (main.ads || []).filter((x) => x.state !== 'ARCHIVED'),
     searchQueries30: (stats.queries || []).slice(0, 150),
     dailySpend30: daily.map(({ date, cid, impr, clicks, cost }) => ({ date, cid, impr, clicks, cost })),
+    ...(metrikaOf(c)?.counterId ? {
+      metrika: { counter: metrikaOf(c).counterName, goals: metrikaOf(c).goals, mainGoals: metrikaOf(c).main },
+      conversionsDaily30: (stats.conv || []).filter((x) => x.date >= addDays(t, -29)),
+      keywordConversions30: stats.kwConv || {},
+      pageBehavior30: stats.mrows || [],
+    } : {}),
+    outageDays: [...outageSet(c.data.days || [])].filter((x) => x >= addDays(t, -29)).sort(),
     recentChanges: logOf(a).slice().sort((x, y) => y.at.localeCompare(x.at)).slice(0, 20).map((x) => ({ at: x.at.slice(0, 10), what: x.text, why: x.why, ok: x.ok })),
   };
   return aiPackage(state, { today: t, maxBid: Number(d.maxBid) || DEFAULT_MAX_BID, budget: { test: Number(d.testBudget) || DEFAULT_TEST_BUDGET, from: d.testFrom || null }, question });

@@ -29,8 +29,8 @@ function rnd(seed) { let x = seed; return () => { x = (x * 16807) % 2147483647; 
 export function demoSnapshot(today) {
   const r = rnd(42);
   const campaigns = [
-    { id: 701, name: 'Книга — поиск', state: 'ON', status: 'ACCEPTED', type: 'TEXT_CAMPAIGN', start: addDays(today, -20), daily: 400, negatives: ['скачать', 'fb2'], strategy: { search: 'HIGHEST_POSITION', network: 'SERVING_OFF' } },
-    { id: 702, name: 'Книга — сети', state: 'ON', status: 'ACCEPTED', type: 'TEXT_CAMPAIGN', start: addDays(today, -12), daily: 200, negatives: [], strategy: { search: 'SERVING_OFF', network: 'MAXIMUM_COVERAGE' } },
+    { id: 701, name: 'Книга — поиск', state: 'ON', status: 'ACCEPTED', type: 'TEXT_CAMPAIGN', start: addDays(today, -20), daily: 400, negatives: ['скачать', 'fb2'], strategy: { search: 'HIGHEST_POSITION', network: 'SERVING_OFF' }, counters: [555] },
+    { id: 702, name: 'Книга — сети', state: 'ON', status: 'ACCEPTED', type: 'TEXT_CAMPAIGN', start: addDays(today, -12), daily: 200, negatives: [], strategy: { search: 'SERVING_OFF', network: 'MAXIMUM_COVERAGE' }, counters: [] },
   ];
   const groups = [{ id: 801, name: 'Любовное фэнтези', cid: 701 }, { id: 802, name: 'Похожие книги', cid: 701 }, { id: 803, name: 'Читательницы романов', cid: 702 }];
   const P = [
@@ -67,6 +67,11 @@ export function demoSnapshot(today) {
     ['истинная пара фильм', 701, 801, 150, 6, 52], ['читать романы онлайн', 701, 802, 900, 4, 30], ['фэнтези про драконов epub', 701, 801, 120, 5, 41],
   ];
   const queries = Q.map(([query, cid, gid, impr, clicks, cost]) => ({ query, cid, gid, kw: '', impr, clicks, cost }));
+  // покупки по цели 9001 (пример счётчика Метрики): примерно 1 из 25 кликов на поиске
+  const conv = daily.filter((x) => x.cid === 701).map((x) => ({ date: x.date, cid: x.cid, conv: { 9001: Math.round(x.clicks * (0.02 + r() * 0.04)), 9002: Math.round(x.clicks * 0.1) } })).filter((x) => x.conv[9001] || x.conv[9002]);
+  const kwConv = { 901: { 9001: 9 }, 902: { 9001: 6 }, 904: { 9001: 4 }, 906: { 9001: 3 } };
+  if (kw[903]) { kw[903].clicks = Math.max(kw[903].clicks, 30); kw[903].cost = Math.max(kw[903].cost, 900); } // фраза тратит без покупок
+  const mrows = [{ cid: 701, name: 'Книга — поиск', visits: 412, bounce: 0.21, depth: 3.4, dur: 255 }, { cid: 702, name: 'Книга — сети', visits: 160, bounce: 0.68, depth: 1.3, dur: 34 }];
   const at = new Date().toISOString();
-  return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, demo: true, daily, kw, queries }];
+  return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, demo: true, daily, kw, queries, conv, kwConv, mrows }];
 }

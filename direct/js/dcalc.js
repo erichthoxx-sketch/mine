@@ -10,6 +10,8 @@ const addDays = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 864000
 
 // ---------- отчёты Директа (TSV с заголовком колонок) ----------
 const NUMERIC = new Set(['Impressions', 'Clicks', 'Cost', 'CampaignId', 'AdGroupId', 'CriterionId', 'AdId', 'Conversions']);
+// поля по целям Метрики: Conversions_<цель>_LSC и т. п.
+const GOAL_COL = /^(Conversions|CostPerConversion|ConversionRate|Revenue|GoalsRoi)_\d+_/;
 export function parseTsv(text) {
   const lines = String(text || '').replace(/\r/g, '').split('\n').filter((l) => l.trim());
   if (lines.length < 2) return [];
@@ -18,7 +20,7 @@ export function parseTsv(text) {
     const cells = l.split('\t'), o = {};
     head.forEach((h, i) => {
       const v = cells[i] ?? '';
-      o[h] = NUMERIC.has(h) ? (v === '--' || v === '' ? 0 : Number(v)) : v;
+      o[h] = NUMERIC.has(h) || GOAL_COL.test(h) ? (v === '--' || v === '' ? 0 : Number(v)) : v;
     });
     return o;
   });
@@ -61,6 +63,71 @@ export function budgetPace(daily, { budget, from, today }) {
   const perDay = last7.activeDays ? last7.cost / 7 : 0;
   const left = Math.max(0, budget - spent);
   return { budget, spent, left, share: budget ? spent / budget : 0, perDay: r2(perDay), daysLeft: perDay > 0 ? Math.floor(left / perDay) : null };
+}
+
+// ---------- цели Метрики: покупки и другие конверсии (их считает сам Директ по целям счётчика) ----------
+const convCols = (row) => Object.keys(row).filter((k) => /^Conversions_\d+_/.test(k));
+const goalIdOf = (k) => k.split('_')[1];
+// Строки отчёта «по дням» с Goals → [{date, cid, conv: {цель: число}}] (дни без конверсий не храним)
+export function convRows(rows) {
+  return rows.map((r) => ({ date: r.Date, cid: r.CampaignId, conv: Object.fromEntries(convCols(r).map((k) => [goalIdOf(k), r[k] || 0]).filter(([, v]) => v > 0)) }))
+    .filter((x) => Object.keys(x.conv).length);
+}
+// Строки отчёта по фразам с Goals → {CriterionId: {цель: число}}
+export function kwConvRows(rows) {
+  const out = {};
+  for (const r of rows) for (const k of convCols(r)) if (r[k] > 0) { const x = (out[r.CriterionId] ||= {}); x[goalIdOf(k)] = (x[goalIdOf(k)] || 0) + r[k]; }
+  return out;
+}
+// Сумма по выбранным целям (goals — список номеров; пусто — все)
+export const sumGoals = (obj, goals = null) => Object.entries(obj || {}).reduce((a, [g, n]) => a + (!goals?.length || goals.map(String).includes(String(g)) ? n : 0), 0);
+// Конверсии за период; skip — даты, которые не считаем (сбой «не от меня»)
+export function convTotal(conv = [], from, to, cid = null, goals = null, skip = null) {
+  let n = 0;
+  for (const x of conv) if (x.date >= from && x.date <= to && (cid == null || x.cid === cid) && !skip?.has(x.date)) n += sumGoals(x.conv, goals);
+  return n;
+}
+// Итоги с покупками: расход, клики, конверсии, цена конверсии (CPA), доля кликов, ставших конверсией
+export function goalTotals(daily, conv, from, to, { cid = null, goals = null, skip = null } = {}) {
+  const t = { impr: 0, clicks: 0, cost: 0 };
+  for (const x of daily) if (x.date >= from && x.date <= to && (cid == null || x.cid === cid) && !skip?.has(x.date)) { t.impr += x.impr; t.clicks += x.clicks; t.cost += x.cost; }
+  const n = convTotal(conv, from, to, cid, goals, skip);
+  return { ...t, cost: r2(t.cost), conv: n, cpa: n ? r2(t.cost / n) : null, cr: t.clicks ? n / t.clicks : null };
+}
+// Ответ Метрики stat/v1/data по кампаниям Директа → [{cid, name, visits, bounce (доля), depth, dur (сек)}]
+export function metrikaRows(json) {
+  return (json?.data || []).map((r) => {
+    const d = r.dimensions?.[0] || {}, [visits = 0, bounce = 0, depth = 0, dur = 0] = r.metrics || [];
+    return { cid: Number(String(d.id ?? '').replace(/\D/g, '')) || null, name: d.name || '', visits: Math.round(visits), bounce: bounce / 100, depth: r2(depth), dur: Math.round(dur) };
+  });
+}
+export const metrikaFor = (rows = [], camp) => rows.find((r) => (r.cid && r.cid === camp.id) || (r.name && r.name === camp.name)) || null;
+
+// Аналитик: что видно только с целями Метрики. m — {counterId, main: [цели «покупка»]}.
+// Выводы осторожные: на малых числах не советуем (мало кликов — рано).
+export function goalHints({ campaigns = [], keywords = [], kw = {}, kwConv = {}, daily = [], conv = [], mrows = [], m = {}, today, skip = null }) {
+  const out = [], goals = m.main?.length ? m.main : null, from = addDays(today, -29);
+  for (const c of campaigns) {
+    if (c.state !== 'ON') continue;
+    if (m.counterId && /TEXT_CAMPAIGN|UNIFIED_CAMPAIGN/.test(c.type || '') && Array.isArray(c.counters) && !c.counters.map(Number).includes(Number(m.counterId))) {
+      out.push({ kind: 'counter', cid: c.id, name: c.name, why: 'к кампании не привязан ваш счётчик Метрики — Директ не видит покупки и не может учиться на них', lesson: 'goals' });
+      continue;
+    }
+    const g = goalTotals(daily, conv, from, today, { cid: c.id, goals, skip });
+    if (!g.conv && g.clicks >= 50) out.push({ kind: 'zero', cid: c.id, name: c.name, ...g, why: `за 30 дней ${g.clicks} кликов и ни одной конверсии по выбранной цели — проверьте, та ли цель выбрана, и что страница книги убеждает`, lesson: 'goals' });
+    const mr = metrikaFor(mrows, c);
+    if (mr && mr.visits >= 30 && mr.bounce >= 0.6) out.push({ kind: 'bounce', cid: c.id, name: c.name, ...mr, why: `${Math.round(mr.bounce * 100)} % посетителей уходят сразу: объявление обещает не то, что они видят на странице книги, или приходят не те люди`, lesson: 'goals' });
+    if (g.conv < 3) continue; // средняя цена покупки ещё ненадёжна
+    for (const k of keywords) {
+      if (k.cid !== c.id || k.state === 'SUSPENDED' || k.state === 'OFF') continue;
+      const s = kw[k.id], n = sumGoals(kwConv[k.id], goals);
+      if (!s) continue;
+      if (!n && s.clicks >= 15 && s.cost >= 2 * g.cpa) out.push({ kind: 'noconv', cid: c.id, id: k.id, phrase: k.phrase, ...s, cpa: g.cpa, why: `потратила ${Math.round(s.cost)} ₽ (больше двух средних покупок по ${Math.round(g.cpa)} ₽) и ни одной покупки`, lesson: 'goals' });
+      else if (n >= 2 && s.cost / n <= 0.6 * g.cpa) out.push({ kind: 'winner', cid: c.id, id: k.id, phrase: k.phrase, ...s, conv: n, cpa: r2(s.cost / n), avg: g.cpa, why: `покупка по ${Math.round(s.cost / n)} ₽ — заметно дешевле средней (${Math.round(g.cpa)} ₽): эта фраза приводит ваших читателей`, lesson: 'goals' });
+    }
+  }
+  const order = { counter: 0, noconv: 1, zero: 2, bounce: 3, winner: 4 };
+  return out.sort((a, b) => order[a.kind] - order[b.kind] || (b.cost || 0) - (a.cost || 0));
 }
 
 // ---------- подсказки ----------
@@ -145,7 +212,8 @@ export function aiPackage(state, { today, maxBid = DEFAULT_MAX_BID, budget, ques
   lines.push('');
   lines.push('Ты — опытный специалист по Яндекс Директу, который рекламирует книги (любовные романы на Литнете).');
   lines.push('Владелица не программист и учится: объясняй просто, по-русски, коротко. Не выдумывай данных, которых нет.');
-  lines.push('Реклама ведёт на страницу книги на Литнете; продаж Директ не видит — окупаемость считается в приложении «Доходы» (ниже, если есть).');
+  lines.push('Реклама ведёт на страницу книги на Литнете. На Литнете у владелицы стоит счётчик Яндекс Метрики автора: если в данных есть goals/conversions — это конверсии по его целям (атрибуция LSC). Окупаемость по настоящим деньгам считается в приложении «Доходы» по выгрузке Литнета.');
+  lines.push('Если в данных есть outageDays — это дни сбоя у Яндекса или площадки: не делай по ним выводов.');
   lines.push('');
   lines.push('Сделай: 1) короткий разбор — что работает, что сливает деньги; 2) план изменений в формате ниже.');
   lines.push(`Ограничения: бюджет не меняй (его меняет только владелица); ставка не выше ${maxBid} ₽; у каждого действия — короткое «почему».`);
@@ -226,12 +294,13 @@ export function describe(a, names = {}) {
     }
     case 'bid': return `Фраза ${nm('keywords', a.keyword)}: ставка на поиске ${String(a.rub).replace('.', ',')} ₽`;
     case 'keywords': return `Группа ${nm('groups', a.group)}: добавить фразы — ${a.phrases.join(', ')}`;
+    case 'counter': return `Кампания ${nm('campaigns', a.campaign)}: привязать счётчик Метрики №${a.counter}`;
     default: return 'Неизвестное действие';
   }
 }
 
 // Действие → запрос к API Директа. negatives — текущие минус-фразы кампании (update заменяет список целиком).
-export function toRequest(a, { negatives = [] } = {}) {
+export function toRequest(a, { negatives = [], counters = [], campType = '' } = {}) {
   const SVC = { campaign: 'campaigns', keyword: 'keywords', ad: 'ads' };
   switch (a.do) {
     case 'minus': {
@@ -249,6 +318,12 @@ export function toRequest(a, { negatives = [] } = {}) {
       return { service: 'keywordbids', method: 'set', key: 'SetResults', params: { KeywordBids: [{ KeywordId: a.keyword, SearchBid: Math.round(a.rub * MICRO) }] } };
     case 'keywords':
       return { service: 'keywords', method: 'add', key: 'AddResults', params: { Keywords: a.phrases.map((p) => ({ Keyword: p, AdGroupId: a.group })) } };
+    case 'counter': {
+      // счётчики кампании заменяются списком целиком — добавляем свой к уже привязанным
+      const items = [...new Set([...counters.map(Number), Number(a.counter)])];
+      const key = campType === 'UNIFIED_CAMPAIGN' ? 'UnifiedCampaign' : 'TextCampaign';
+      return { service: 'campaigns', method: 'update', key: 'UpdateResults', items, params: { Campaigns: [{ Id: a.campaign, [key]: { CounterIds: { Items: items } } }] } };
+    }
     default: throw new Error('неизвестное действие');
   }
 }
@@ -300,6 +375,18 @@ export function changeEffects(daily, log, today, cidOf = (x) => x.cid) {
     out.push({ log: x, days: Math.min(after, 7), ...r });
   }
   return out;
+}
+
+// Покупки неделя к неделе (по главной цели): осторожно, только когда покупок достаточно
+export function goalWeekInsight(daily, conv, today, goals = null, skip = null) {
+  const a = goalTotals(daily, conv, addDays(today, -13), addDays(today, -7), { goals, skip }), b = goalTotals(daily, conv, addDays(today, -6), today, { goals, skip });
+  if (!a.clicks && !b.clicks) return null;
+  if (a.conv < 3 || b.conv < 3) return { kind: 'few', text: `Покупок по главной цели: ${b.conv} за неделю (неделей раньше — ${a.conv}).`, why: 'Пока покупок мало, их цена скачет случайно — смотрите на месяц, а не на неделю.', lesson: 'goals' };
+  const ch = (b.cpa - a.cpa) / a.cpa;
+  if (Math.abs(ch) < 0.15) return { kind: 'calm', text: `Покупка обходится примерно так же: ${Math.round(b.cpa)} ₽ (было ${Math.round(a.cpa)} ₽), покупок ${b.conv}.`, why: 'Стабильно — можно спокойно пробовать по одной правке за раз.', lesson: 'goals' };
+  return ch < 0
+    ? { kind: 'good', text: `Покупка подешевела на ${Math.round(-ch * 100)} %: ${Math.round(b.cpa)} ₽ вместо ${Math.round(a.cpa)} ₽.`, why: 'Реклама стала приводить больше покупателей на те же деньги — посмотрите, какая правка это сделала («Что изменилось после ваших правок»).', lesson: 'goals' }
+    : { kind: 'bad', text: `Покупка подорожала на ${Math.round(ch * 100)} %: ${Math.round(b.cpa)} ₽ вместо ${Math.round(a.cpa)} ₽.`, why: 'Проверьте фразы без покупок (Обзор → «Что сделать сейчас») и не было ли сбоя площадки — дни сбоя отметьте в «Доходах».', lesson: 'goals' };
 }
 
 // Неделя к неделе: короткие выводы простыми словами (что случилось → почему это важно)

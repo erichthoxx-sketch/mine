@@ -77,6 +77,12 @@ export function setupSteps(c) {
       how: ['Откройте кампанию на Обзоре → строка «В «Доходах»» → выберите «+ Создать там кампанию».'],
       form: real ? `<div class="row"><button class="primary" data-act="go" data-to="/c/${app().snap('main').campaigns[0]?.id || ''}">Открыть кампанию</button></div>` : '<p class="small muted">Станет доступно после входа.</p>',
     },
+    {
+      id: 'metrika', title: 'Метрика: видеть покупки, а не только клики', time: '5 минут', done: !!d.metrika?.counterId,
+      why: 'Счётчик Метрики автора на Литнете знает, кто после клика купил книгу. Подключите его — и приложение будет советовать по цене покупки: какие фразы приводят читателей, а какие только тратят.',
+      how: ['Откройте ⚙ Настройки → блок «Яндекс Метрика» и пройдите 4 коротких шага там.'],
+      form: s.directToken ? '<div class="row"><button class="primary" data-act="go" data-to="/settings">Открыть Настройки</button></div>' : '<p class="small muted">Станет доступно после входа.</p>',
+    },
   ];
 }
 

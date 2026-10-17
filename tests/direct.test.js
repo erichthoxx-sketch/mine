@@ -192,3 +192,75 @@ test('наставник: этап теста, неделя к неделе, э�
   const eff = changeEffects(daily, [{ at: '2026-10-09T10:00:00Z', ok: true, cid: 1 }, { at: '2026-10-14T10:00:00Z', ok: true, cid: 1 }], '2026-10-15');
   assert.equal(eff.length, 1); assert.ok(eff[0].enough); assert.ok(eff[0].cpc < -0.2);
 });
+
+import { convRows, kwConvRows, sumGoals, convTotal, goalTotals, metrikaRows, metrikaFor, goalHints, goalWeekInsight } from '../direct/js/dcalc.js';
+
+test('директ: конверсии по целям Метрики из отчётов Директа', () => {
+  const rows = parseTsv('Date\tCampaignId\tConversions_9001_LSC\tConversions_9002_LSC\n2026-10-10\t1\t2\t--\n2026-10-11\t1\t0\t0\n2026-10-11\t2\t1\t3\n');
+  assert.equal(rows[0].Conversions_9002_LSC, 0); // «--» — ноль
+  const conv = convRows(rows);
+  assert.deepEqual(conv, [{ date: '2026-10-10', cid: 1, conv: { 9001: 2 } }, { date: '2026-10-11', cid: 2, conv: { 9001: 1, 9002: 3 } }]);
+  assert.equal(convTotal(conv, '2026-10-01', '2026-10-31', null, [9001]), 3);
+  assert.equal(convTotal(conv, '2026-10-01', '2026-10-31', 2), 4); // без выбора — все цели
+  assert.equal(convTotal(conv, '2026-10-01', '2026-10-31', null, [9001], new Set(['2026-10-10'])), 1); // день сбоя не считаем
+  assert.deepEqual(kwConvRows(parseTsv('CriterionId\tConversions_9001_LSC\n77\t2\n77\t1\n88\t0\n')), { 77: { 9001: 3 } });
+  assert.equal(sumGoals({ 9001: 2, 9002: 5 }, ['9001']), 2);
+  const daily = [{ date: '2026-10-10', cid: 1, impr: 100, clicks: 20, cost: 300 }, { date: '2026-10-11', cid: 2, impr: 50, clicks: 10, cost: 100 }];
+  const g = goalTotals(daily, conv, '2026-10-01', '2026-10-31', { goals: [9001] });
+  assert.equal(g.conv, 3); assert.equal(g.cpa, 133.33); assert.equal(g.cr, 0.1);
+});
+
+test('директ: Метрика — поведение на странице по кампаниям Директа', () => {
+  const rows = metrikaRows({ data: [{ dimensions: [{ name: 'Книга — поиск', id: '701' }], metrics: [412, 21.5, 3.41, 255.4] }, { dimensions: [{ name: 'Сети' }], metrics: [10, 70, 1, 20] }] });
+  assert.deepEqual(rows[0], { cid: 701, name: 'Книга — поиск', visits: 412, bounce: 0.215, depth: 3.41, dur: 255 });
+  assert.equal(metrikaFor(rows, { id: 5, name: 'Сети' }).visits, 10); // нет номера — по названию
+});
+
+test('директ: аналитик по покупкам — счётчик, фразы без покупок, удачные фразы, отказы', () => {
+  const today = '2026-10-17';
+  const campaigns = [{ id: 1, name: 'Поиск', state: 'ON', type: 'TEXT_CAMPAIGN', counters: [555] }, { id: 2, name: 'Сети', state: 'ON', type: 'TEXT_CAMPAIGN', counters: [] }];
+  const keywords = [{ id: 10, cid: 1, phrase: 'дорогая', state: 'ON' }, { id: 11, cid: 1, phrase: 'удачная', state: 'ON' }, { id: 12, cid: 1, phrase: 'мало данных', state: 'ON' }];
+  const daily = [{ date: '2026-10-10', cid: 1, impr: 3000, clicks: 200, cost: 2000 }];
+  const conv = [{ date: '2026-10-10', cid: 1, conv: { 9001: 10 } }]; // средняя покупка 200 ₽
+  const kw = { 10: { impr: 900, clicks: 40, cost: 600 }, 11: { impr: 900, clicks: 40, cost: 400 }, 12: { impr: 100, clicks: 5, cost: 500 } };
+  const kwConv = { 11: { 9001: 4 } };
+  const mrows = [{ cid: 1, name: 'Поиск', visits: 100, bounce: 0.7, depth: 1, dur: 20 }];
+  const h = goalHints({ campaigns, keywords, kw, kwConv, daily, conv, mrows, m: { counterId: 555, main: [9001] }, today });
+  const kinds = h.map((x) => x.kind + (x.id || x.cid));
+  assert.deepEqual(kinds, ['counter2', 'noconv10', 'bounce1', 'winner11']); // «мало данных» — 5 кликов, не советуем
+  assert.match(h[1].why, /600 ₽/);
+  // день сбоя выкидываем — покупок становится мало, по фразам не советуем
+  assert.ok(!goalHints({ campaigns, keywords, kw, kwConv, daily, conv, mrows: [], m: { counterId: 555, main: [9001] }, today, skip: new Set(['2026-10-10']) }).some((x) => x.kind === 'noconv'));
+});
+
+test('директ: покупки неделя к неделе — осторожно на малых числах', () => {
+  const daily = [{ date: '2026-10-05', cid: 1, impr: 1, clicks: 50, cost: 1000 }, { date: '2026-10-14', cid: 1, impr: 1, clicks: 50, cost: 1000 }];
+  const few = goalWeekInsight(daily, [{ date: '2026-10-05', cid: 1, conv: { 1: 2 } }, { date: '2026-10-14', cid: 1, conv: { 1: 5 } }], '2026-10-17');
+  assert.equal(few.kind, 'few');
+  const good = goalWeekInsight(daily, [{ date: '2026-10-05', cid: 1, conv: { 1: 4 } }, { date: '2026-10-14', cid: 1, conv: { 1: 8 } }], '2026-10-17');
+  assert.equal(good.kind, 'good'); assert.match(good.text, /подешевела на 50 %/);
+});
+
+test('директ: привязать счётчик к кампании — добавляем к уже привязанным', () => {
+  const a = { do: 'counter', campaign: 7, counter: 555 };
+  assert.match(describe(a, { campaigns: { 7: 'Поиск' } }), /«Поиск»: привязать счётчик Метрики №555/);
+  const q = toRequest(a, { counters: [111], campType: 'UNIFIED_CAMPAIGN' });
+  assert.deepEqual(q.params, { Campaigns: [{ Id: 7, UnifiedCampaign: { CounterIds: { Items: [111, 555] } } }] });
+  assert.ok(toRequest(a, { counters: [555] }).params.Campaigns[0].TextCampaign);
+});
+
+test('переходник: Метрика только на чтение и только с сайта владелицы', async () => {
+  const origFetch = globalThis.fetch;
+  let called = '';
+  globalThis.fetch = async (u) => { called = String(u); return new Response('{"counters":[]}', { status: 200, headers: { 'content-type': 'application/json' } }); };
+  try {
+    const ok = await worker.fetch(new Request('https://w.dev/metrika/management/v1/counters?per_page=100', { headers: { Origin: 'https://erichthoxx-sketch.github.io', Authorization: 'OAuth x' } }));
+    assert.equal(ok.status, 200); assert.equal(called, 'https://api-metrika.yandex.net/management/v1/counters?per_page=100');
+    const post = await worker.fetch(new Request('https://w.dev/metrika/management/v1/counters', { method: 'POST', headers: { Origin: 'https://erichthoxx-sketch.github.io' } }));
+    assert.equal(post.status, 405);
+    const other = await worker.fetch(new Request('https://w.dev/metrika/management/v1/counters', { headers: { Origin: 'https://evil.example' } }));
+    assert.equal(other.status, 403);
+    const ver = await worker.fetch(new Request('https://w.dev/version', { headers: { Origin: 'https://erichthoxx-sketch.github.io' } }));
+    assert.equal(await ver.text(), '2');
+  } finally { globalThis.fetch = origFetch; }
+});

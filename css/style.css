@@ -1333,3 +1333,17 @@ a.card.arc-warn .ic { width: 18px; height: 18px; flex: 0 0 auto; }
 .arc .arc-upd { flex-wrap: wrap; justify-content: space-between; }
 .arc .arc-upd .small-btn { display: inline-flex; align-items: center; gap: 6px; }
 .arc .arc-upd .small-btn .ic { width: 15px; height: 15px; }
+/* Директ: покупки по целям Метрики */
+.d-goalrow { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 8px 0 2px; color: var(--text-2); }
+.d-goalrow b { color: var(--text); white-space: nowrap; }
+.item.d-good b::before { content: "● "; color: var(--good); font-size: 11px; vertical-align: 2px; }
+.alert.d-outage { background: var(--accent-soft); }
+.mk-pick { margin-top: 12px; }
+.mk-goals { display: grid; gap: 2px; margin-top: 6px; }
+.mk-goal { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.mk-goal .d-check { margin: 0; }
+.mk-star { display: inline-flex; align-items: center; cursor: pointer; margin: 0; }
+.mk-star input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.mk-star span { font-size: 20px; color: var(--line); line-height: 1; padding: 2px 6px; }
+.mk-star input:checked + span { color: var(--accent-2); }
+.mk-star input:focus-visible + span { outline: 2px solid var(--link); border-radius: 6px; }

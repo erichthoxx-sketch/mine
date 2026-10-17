@@ -4,9 +4,10 @@
 //  • Курс — уроки на ваших же цифрах, с вопросом-проверкой и практическим заданием (прогресс сохраняется).
 import { esc, acts } from '../../../js/ui.js';
 import { rub, num, pct } from '../../../js/format.js';
-import { addDays } from '../../../js/calc.js';
+import { addDays, outageSet } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { totals, budgetPace, queryHints, testStage, weekInsights, changeEffects, DEFAULT_TEST_BUDGET, MIN_CLICKS } from '../dcalc.js';
+import { totals, budgetPace, queryHints, testStage, weekInsights, goalWeekInsight, goalTotals, changeEffects, DEFAULT_TEST_BUDGET, MIN_CLICKS } from '../dcalc.js';
+import { metrikaOf } from './metrika.js';
 import { logOf, demo } from '../demo.js';
 import { setupCard, setupSteps } from './setup.js';
 import { strategyText } from './common.js';
@@ -22,7 +23,9 @@ function live(a) {
   const from = d.testFrom || main.campaigns.map((x) => x.start).filter(Boolean).sort()[0] || '';
   const w = totals(daily, addDays(t, -6), t);
   const neg = Object.fromEntries(main.campaigns.map((x) => [x.id, x.negatives || []]));
-  return { c, t, main, stats, daily, d, budget, from, w, pace: budgetPace(daily, { budget, from: from || addDays(t, -29), today: t }), hints: queryHints(stats.queries, neg), camp0: main.campaigns[0] };
+  const m = metrikaOf(c), skip = outageSet(c.data.days || []);
+  const g30 = m?.counterId ? goalTotals(daily, stats.conv || [], addDays(t, -29), t, { goals: m.main, skip }) : null;
+  return { m, skip, g30, c, t, main, stats, daily, d, budget, from, w, pace: budgetPace(daily, { budget, from: from || addDays(t, -29), today: t }), hints: queryHints(stats.queries, neg), camp0: main.campaigns[0] };
 }
 
 // ---------- этапы теста ----------
@@ -39,7 +42,8 @@ const STAGE_TEXT = {
 
 function nowTab(a) {
   const L = live(a), st = testStage({ from: L.from, today: L.t, spent: L.pace.spent, budget: L.budget }), tx = STAGE_TEXT[st.key];
-  const ins = weekInsights(L.daily, L.t);
+  const gi = L.m?.counterId ? goalWeekInsight(L.daily, L.stats.conv || [], L.t, L.m.main, L.skip) : null;
+  const ins = [...(gi ? [gi] : []), ...weekInsights(L.daily, L.t)];
   const eff = changeEffects(L.daily, logOf(a), L.t).sort((x, y) => y.log.at.localeCompare(x.log.at)).slice(0, 4);
   const KIND = { good: 'up', bad: 'down', warn: 'warnc', calm: '', few: 'muted' };
   const ch = (v) => (v == null ? '—' : `${v > 0 ? '+' : '−'}${Math.round(Math.abs(v) * 100)} %`);
@@ -76,6 +80,14 @@ const LESSONS = [
       <p>Выводы — не раньше чем через неделю: подписки и покупки на Литнете приходят с задержкой, а у книги в процессе часть читателей ждёт продолжения.</p>`,
     q: ['100 кликов, CTR 5 %, а доход не вырос. Что вероятнее всего?', ['Директ сломался', 'Объявление хорошее, но приводит не тех читателей — или страница книги не убеждает', 'Надо поднять ставки'], 1, 'Высокий CTR значит, что объявление цепляет. Если продаж нет — дело в том, кого оно цепляет, и в странице книги: аннотация, обложка, первые главы.'],
     task: ['Свяжите кампанию с «Доходами» (страница кампании → «В «Доходах»»).', (L) => (L.camp0 ? '/c/' + L.camp0.id : '/')] },
+  { id: 'goals', t: 'Метрика и цели: от кликов к покупкам',
+    body: (L) => `<p>Клик — это интерес, а не покупка. <b>Счётчик Метрики</b> автора на Литнете видит, что человек сделал после клика, а <b>цель</b> — это событие, которое вы считаете результатом (например, покупка книги). Когда счётчик привязан к кампании, Директ сам считает <b>конверсии</b> по целям — по кампаниям и по каждой фразе.</p>
+      <p>Главная цифра — <b>цена покупки</b> = расход ÷ покупки. Сравнивайте фразы не по цене клика, а по ней: дешёвый клик без покупок дороже дорогого клика с покупками.</p>
+      <p>Осторожно с малыми числами: 1–2 покупки — случайность. Приложение советует остановить фразу, только если она потратила больше двух средних покупок и не принесла ни одной. Дни сбоя (отмеченные в «Доходах») в выводы не идут.</p>
+      <p><b>Отказы</b> (Метрика) — сколько людей ушли со страницы сразу. Много отказов — объявление обещает не то, что человек видит: проверьте, совпадают ли жанр, обложка и аннотация с текстом объявления.</p>
+      ${L.g30 ? `<p class="l-live">${ic('sparkle')} <span>Ваши цифры за 30 дней: расход ${rub(L.g30.cost, 0)}, покупок по главной цели ${num(L.g30.conv)}${L.g30.cpa != null ? `, покупка обходится в ${rub(L.g30.cpa, 0)}` : ''}${L.g30.cr != null ? `, из 100 кликов покупают ${String(Math.round(L.g30.cr * 1000) / 10).replace('.', ',')}` : ''}.</span></p>` : '<p class="l-live">' + ic('sparkle') + ' <span>Подключите Метрику в ⚙ Настройках — и здесь появятся ваши покупки и их цена.</span></p>'}`,
+    q: ['Фраза потратила 600 ₽: 40 кликов и ни одной покупки. В среднем покупка обходится в 200 ₽. Что разумно?', ['Поднять ставку — покупки придут', 'Остановить фразу или снизить ставку: она потратила три средние покупки без результата', 'Ничего, 40 кликов — мало'], 1, 'Фраза уже потратила втрое больше средней цены покупки и ничего не принесла — дальше она, скорее всего, будет так же тратить. Деньги лучше отдать фразам, которые приводят покупателей.'],
+    task: ['Подключите Метрику и выберите главную цель.', '/settings'] },
   { id: 'minus', t: 'Минус-фразы — первая уборка',
     body: (L) => `<p>Директ показывает объявление и по похожим запросам — среди них бывает мусор. Минус-фраза говорит: «по запросам с этим словом не показывать».</p>
       <p>Одно минус-слово «бесплатно» убирает все запросы с ним: «читать бесплатно», «бесплатно полностью»… Поэтому лучше одно точное слово, чем длинный запрос.</p>
@@ -157,4 +169,4 @@ export function learnView(a) {
 }
 acts['l.tab'] = (d) => { app().ui.lTab = d.k; };
 // «Подробнее в уроке →» — открыть курс на нужном уроке
-acts['l.lesson'] = (d) => { app().ui.lTab = 'course'; app().ui.lesson = d.k; window.scrollTo(0, 0); };
+acts['l.lesson'] = (d) => { app().ui.lTab = 'course'; app().ui.lesson = d.k; app().ui.route = '/learn'; window.scrollTo(0, 0); };

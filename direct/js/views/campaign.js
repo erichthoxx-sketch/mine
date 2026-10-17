@@ -1,9 +1,10 @@
 // Кампания: итоги, связь с «Доходами» и вкладки — запросы, фразы, объявления, минус-фразы
 import { esc, acts, forms, changes, openSheet, opt, toast, N, uid } from '../../../js/ui.js';
 import { rub, num, fmtShort, fmtDate } from '../../../js/format.js';
-import { addDays } from '../../../js/calc.js';
+import { addDays, outageSet } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
-import { totals, spendSeries, JUNK, hasNegative, DEFAULT_MAX_BID } from '../dcalc.js';
+import { totals, spendSeries, JUNK, hasNegative, goalTotals, metrikaFor, sumGoals, DEFAULT_MAX_BID } from '../dcalc.js';
+import { metrikaOf } from './metrika.js';
 import { pushToIncome } from '../sync.js';
 import { demo } from '../demo.js';
 import { stateDot, strategyText, manualBids, tiles, statLine, actBtn, runAction, q } from './common.js';
@@ -37,13 +38,13 @@ function keywordsTab(camp, main, stats) {
   const groups = (main.groups || []).filter((g) => g.cid === camp.id);
   const kws = (main.keywords || []).filter((k) => k.cid === camp.id);
   if (!kws.length) return '<p class="muted">Ключевых фраз нет (в сетях кампании могут работать без них — по интересам).</p>';
-  const manual = manualBids(camp);
+  const manual = manualBids(camp), m = metrikaOf(app().ctx()), goalsOn = m?.counterId ? m.main : null;
   return `${manual ? '' : '<p class="small muted">У кампании автоматическая стратегия: ставки Директ подбирает сам, менять их вручную нет смысла.</p>'}
   ${groups.map((g) => {
     const list = kws.filter((k) => k.gid === g.id);
     return `<div class="d-group"><div class="row between"><b>${esc(g.name)}</b><button class="link" data-act="d.addKw" data-g="${g.id}">+ Фразы</button></div>
     ${list.length ? `<div class="list">${list.map((k) => `<div class="item ${k.state === 'SUSPENDED' ? 'faded' : ''}"><div class="row between"><span>${esc(k.phrase)}</span>${k.state === 'SUSPENDED' ? actBtn({ do: 'resume', target: 'keyword', ids: [k.id] }, 'включить') : actBtn({ do: 'pause', target: 'keyword', ids: [k.id] }, 'остановить')}</div>
-      <div class="small muted">${stateDot(k, 'фраза')} · ${statLine(stats?.kw?.[k.id])} · ставка ${manual ? `<button class="link" data-act="d.bid" data-id="${k.id}" data-v="${k.bid ?? ''}">${k.bid != null ? rub(k.bid, 1) : 'задать'}</button>` : 'авто'}</div></div>`).join('')}</div>` : '<p class="small muted">Фраз нет.</p>'}</div>`;
+      <div class="small muted">${stateDot(k, 'фраза')} · ${statLine(stats?.kw?.[k.id])}${goalsOn ? ` · покупок ${num(sumGoals(stats?.kwConv?.[k.id], goalsOn))}` : ''} · ставка ${manual ? `<button class="link" data-act="d.bid" data-id="${k.id}" data-v="${k.bid ?? ''}">${k.bid != null ? rub(k.bid, 1) : 'задать'}</button>` : 'авто'}</div></div>`).join('')}</div>` : '<p class="small muted">Фраз нет.</p>'}</div>`;
   }).join('')}`;
 }
 acts['d.bid'] = (d) => {
@@ -106,6 +107,17 @@ changes['d.link'] = async (v, el) => {
   toast(id ? 'Связано с «Доходами»' : 'Связь убрана');
 };
 
+// Покупки по целям и поведение на странице книги (Метрика) — за 30 дней
+function goalLine(camp, c, daily, stats) {
+  const mk = metrikaOf(c);
+  if (!mk?.counterId) return '';
+  if (Array.isArray(camp.counters) && !camp.counters.map(Number).includes(Number(mk.counterId))) return `<p class="small warnc">Счётчик Метрики не привязан к кампании — Директ не видит покупки. ${actBtn({ do: 'counter', campaign: camp.id, counter: mk.counterId, why: 'чтобы Директ видел покупки' }, 'Привязать')}</p>`;
+  const t = c.today, g = goalTotals(daily, stats?.conv || [], addDays(t, -29), t, { cid: camp.id, goals: mk.main, skip: outageSet(c.data.days || []) });
+  const mr = metrikaFor(stats?.mrows || [], camp);
+  return `<div class="small">За 30 дней: покупок ${q('conv')} <b>${num(g.conv)}</b>${g.cpa != null ? ` · цена покупки ${q('cpa')} <b>${rub(g.cpa, 0)}</b>` : ''}${g.cr != null && g.conv ? ` · из 100 кликов ${String(Math.round(g.cr * 1000) / 10).replace('.', ',')}` : ''}</div>
+    ${mr ? `<div class="small muted">На странице книги (Метрика): визитов ${num(mr.visits)} · отказы ${q('bounce')} ${Math.round(mr.bounce * 100)} % · ${String(mr.depth).replace('.', ',')} стр. · ${Math.floor(mr.dur / 60)} мин ${mr.dur % 60} с</div>` : ''}`;
+}
+
 export function campaignView(a, id) {
   const c = a.ctx(), main = a.snap('main'), stats = a.snap('stats');
   const camp = main?.campaigns?.find((x) => x.id === id);
@@ -118,6 +130,7 @@ export function campaignView(a, id) {
       <div class="small muted">${[camp.start && 'старт ' + fmtDate(camp.start), camp.daily && `лимит ${rub(camp.daily, 0)} в день`, strategyText(camp.strategy)].filter(Boolean).join(' · ')}</div>
       ${tiles(w, 'за 7 дней')}
       <div class="small muted">За 30 дней: ${rub(m.cost, 0)} · кликов ${num(m.clicks)}${m.cpc != null ? ` · клик ${rub(m.cpc, 1)}` : ''}</div>
+      ${goalLine(camp, c, daily, stats)}
       <div class="chart" id="dCamp"></div>
       ${incomeLink(camp, c)}
       <div class="row">${camp.state === 'SUSPENDED' ? actBtn({ do: 'resume', target: 'campaign', ids: [camp.id] }, 'Запустить кампанию', '') : camp.state === 'ON' ? actBtn({ do: 'pause', target: 'campaign', ids: [camp.id] }, 'Остановить кампанию', '') : ''}</div></div>

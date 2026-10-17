@@ -1,8 +1,8 @@
 // Загрузка данных из Директа в базу (коллекция d_snap) и применение изменений.
 // d_snap/main  — кампании, группы, фразы, объявления;  d_snap/stats — расход по дням, фразы и запросы за 30 дней.
 // Расход связанных кампаний уходит в «Доходы» недельными отчётами (там считается окупаемость).
-import { call, report } from './api.js';
-import { MICRO, dailyRows, mergeDaily, toRequest, resultOf, describe } from './dcalc.js';
+import { call, report, metrika } from './api.js';
+import { MICRO, dailyRows, mergeDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows } from './dcalc.js';
 import { demoSnapshot, isDemo, snap, putSnap, putLog } from './demo.js';
 import { todayISO, addDays, weekStart } from '../../js/calc.js';
 import { reportId } from '../../js/parse.js';
@@ -20,16 +20,21 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   if (isDemo()) { await putSnap(app, demoSnapshot(todayISO())); return; }
   const today = todayISO();
   onStep('Кампании…');
-  const cr = await getSafe(s, 'campaigns', {
-    SelectionCriteria: {}, FieldNames: ['Id', 'Name', 'State', 'Status', 'StartDate', 'DailyBudget', 'NegativeKeywords', 'Type'],
-    TextCampaignFieldNames: ['BiddingStrategy'], UnifiedCampaignFieldNames: ['BiddingStrategy'],
-  }, { SelectionCriteria: {}, FieldNames: ['Id', 'Name', 'State', 'Status', 'StartDate', 'DailyBudget', 'NegativeKeywords'] });
+  const BASE = ['Id', 'Name', 'State', 'Status', 'StartDate', 'DailyBudget', 'NegativeKeywords', 'Type'];
+  // счётчики Метрики и приоритетные цели кампании; если Директ не примет — без них, потом совсем просто
+  let cr;
+  try { cr = await call(s, 'campaigns', 'get', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'], UnifiedCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'] }); } catch (e) {
+    if (e.transient || [53, 58, 513].includes(e.code)) throw e;
+    cr = await getSafe(s, 'campaigns', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy'], UnifiedCampaignFieldNames: ['BiddingStrategy'] }, { SelectionCriteria: {}, FieldNames: BASE.slice(0, 7) });
+  }
   const campaigns = (cr.Campaigns || []).map((c) => {
-    const st = (c.TextCampaign || c.UnifiedCampaign || {}).BiddingStrategy || {};
+    const x = c.TextCampaign || c.UnifiedCampaign || {}, st = x.BiddingStrategy || {};
     return {
       id: c.Id, name: c.Name, state: c.State, status: c.Status, type: c.Type || '', start: c.StartDate || '',
       daily: rub(c.DailyBudget?.Amount), negatives: c.NegativeKeywords?.Items || [],
       strategy: { search: st.Search?.BiddingStrategyType || '', network: st.Network?.BiddingStrategyType || '' },
+      ...(x.CounterIds !== undefined ? { counters: x.CounterIds?.Items || [] } : {}),
+      ...(x.PriorityGoals !== undefined ? { priorityGoals: (x.PriorityGoals?.Items || []).map((g) => g.GoalId) } : {}),
     };
   });
   const cids = campaigns.filter((c) => c.state !== 'ARCHIVED').map((c) => c.id);
@@ -64,10 +69,29 @@ export async function refresh(app, { onStep = () => {} } = {}) {
       .map((r) => ({ query: r.Query, cid: r.CampaignId, gid: r.AdGroupId, kw: r.Criterion, impr: r.Impressions, clicks: r.Clicks, cost: r.Cost }))
       .sort((a, b) => b.cost - a.cost).slice(0, 600);
   } catch (e) { console.warn('запросы', e); } // у кампаний только в сетях отчёта по запросам нет
+  // Цели Метрики: конверсии по дням и по фразам (Директ считает их сам) + поведение на странице книги.
+  // Любая неудача здесь не ломает загрузку: остаются прошлые данные, причина — в mErr
+  const m = s.direct?.metrika || {}, goalIds = (m.goals || []).map((g) => String(g.id)).slice(0, 10);
+  let conv = old?.conv || [], kwConv = old?.kwConv || {}, mrows = old?.mrows || [], mErr = '', mAt = old?.mAt || null;
+  if (goalIds.length && cids.length) {
+    try {
+      onStep('Покупки по целям Метрики…');
+      const cfrom = old?.conv?.length ? addDays(today, -14) : addDays(today, -89);
+      conv = mergeDaily(conv, convRows(await report(s, { name: 'conv', fields: ['Date', 'CampaignId', 'Conversions'], from: cfrom, to: today, goals: goalIds })), 400, today);
+      kwConv = kwConvRows(await report(s, { name: 'kwconv', fields: ['CriterionId', 'Conversions'], goals: goalIds }));
+      mAt = new Date().toISOString();
+    } catch (e) { mErr = e.transient ? 'Директ временно не отдал конверсии (сбой у Яндекса) — показаны прошлые.' : 'Конверсии по целям: ' + (e.message || e); }
+  }
+  if (m.counterId) {
+    try {
+      onStep('Метрика: что делают на странице книги…');
+      mrows = metrikaRows(await metrika(s, 'stat/v1/data', { ids: m.counterId, metrics: 'ym:s:visits,ym:s:bounceRate,ym:s:pageDepth,ym:s:avgVisitDurationSeconds', dimensions: 'ym:s:lastsignDirectClickOrder', date1: '30daysAgo', date2: 'today', limit: 100 }));
+    } catch (e) { mErr = [mErr, e.transient ? 'Метрика временно недоступна (сбой у Яндекса) — показаны прошлые данные.' : e.message].filter(Boolean).join(' '); }
+  }
   const at = new Date().toISOString();
   await putSnap(app, [
     { id: 'main', at, sandbox: !!s.direct?.sandbox, campaigns, groups, keywords, ads },
-    { id: 'stats', at, daily, kw, queries },
+    { id: 'stats', at, daily, kw, queries, conv, kwConv, mrows, mErr, mAt },
   ]);
   await pushToIncome(app, daily);
 }
@@ -113,7 +137,8 @@ export async function apply(app, a, { by = 'app' } = {}) {
       const r = await call(s, 'campaigns', 'get', { SelectionCriteria: { Ids: [a.campaign] }, FieldNames: ['Id', 'NegativeKeywords'] });
       negatives = r.Campaigns?.[0]?.NegativeKeywords?.Items || [];
     }
-    const q = toRequest(a, { negatives });
+    const camp = main.campaigns.find((x) => x.id === a.campaign) || {};
+    const q = toRequest(a, { negatives, counters: camp.counters || [], campType: camp.type });
     out = resultOf(await call(s, q.service, q.method, q.params), q.key);
   }
   if (!out.errors.length) await putSnap(app, [patchSnap(main, a, negatives)]);
@@ -142,6 +167,7 @@ function patchSnap(main, a, negatives) {
     for (const x of list) if (a.ids.includes(x.id)) x.state = a.do === 'pause' ? 'SUSPENDED' : 'ON';
   }
   if (a.do === 'bid') { const k = m.keywords.find((x) => x.id === a.keyword); if (k) k.bid = a.rub; }
+  if (a.do === 'counter' && camp) camp.counters = toRequest(a, { counters: camp.counters || [], campType: camp.type }).items;
   if (a.do === 'keywords') {
     const g = m.groups.find((x) => x.id === a.group);
     for (const p of a.phrases) m.keywords.push({ id: -Date.now() - m.keywords.length, phrase: p, gid: a.group, cid: g?.cid, bid: null, state: 'ON', status: 'DRAFT' });

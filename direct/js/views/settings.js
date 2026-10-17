@@ -3,6 +3,7 @@ import { esc, acts, forms, toast, ask, N } from '../../../js/ui.js';
 import { rub } from '../../../js/format.js';
 import { authorizeUrl } from '../api.js';
 import { setupCard } from './setup.js';
+import { metrikaCard } from './metrika.js';
 import { DEFAULT_MAX_BID, DEFAULT_TEST_BUDGET } from '../dcalc.js';
 
 const app = () => window.__app;
@@ -17,6 +18,7 @@ export function settingsView(a) {
     ${on ? `<div class="card"><div class="row between"><h2 style="margin:0">Ключ Яндекса</h2><span class="d-st good">● подключён</span></div>
       <p class="small">${left != null ? `Действует ещё ${left} дн.` : 'Сохранён.'} ${left != null && left < 14 ? '<b>Скоро истечёт — войдите заново.</b>' : ''}</p>
       <div class="row"><button data-act="d.login"${d.clientId ? '' : ' disabled'}>Войти заново</button><button class="link danger" data-act="d.off">Отключить</button></div></div>` : ''}
+    ${on ? metrikaCard(a.ctx()) : ''}
     <div class="card"><details><summary class="small">Вставить ключ Яндекса вручную</summary><form data-form="d.token"><input name="t" type="password" autocomplete="off" placeholder="OAuth-токен Яндекса"><div class="row"><button type="submit">Сохранить ключ</button></div></form></details></div>
     <div class="card"><h2>Тест и предохранители</h2>
       <form data-form="d.opts" class="settings-form">
