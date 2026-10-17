@@ -230,9 +230,15 @@ export function outageLoss(sales, legacyDays, date, outages = new Set(), n = 14)
 export function monthOutages(sales, legacyDays, dataEnd, outages = new Set()) {
   const mk = monthKey(dataEnd), list = [...outages].filter((d) => d.startsWith(mk) && d <= dataEnd).sort();
   const ahead = [...outages].filter((d) => d.startsWith(mk) && d > dataEnd).length;
-  let fact = 0, loss = 0;
-  for (const d of list) { const l = outageLoss(sales, legacyDays, d, outages); fact += l?.fact ?? 0; loss += l?.loss ?? 0; }
-  return { days: list.length, dates: list, fact: r2(fact), loss: r2(loss), ahead };
+  let fact = 0, loss = 0, unknown = 0;
+  for (const d of list) {
+    const l = outageLoss(sales, legacyDays, d, outages);
+    // заработанное в день сбоя считаем всегда — иначе обычный темп получается завышенным
+    if (!l) unknown++;
+    fact += l ? l.fact : incomeSeries(sales, legacyDays, d, d)[0]?.royalty || 0;
+    loss += l?.loss ?? 0;
+  }
+  return { days: list.length, dates: list, fact: r2(fact), loss: r2(loss), ahead, unknown };
 }
 export function dashboardStats(sales, legacyDays, today, outages = new Set()) {
   const last = lastSaleDate(sales);
