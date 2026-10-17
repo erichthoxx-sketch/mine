@@ -84,8 +84,9 @@ direct/js/                 — «Директ»
                 покупки по целям: convRows, goalTotals (цена покупки), goalHints (аналитик), goalWeekInsight, metrikaRows
   demo.js       пример данных (только в памяти страницы, в базу не пишется)
   views/        home (обзор, «что сделать сейчас» + подсказки по покупкам), campaign, metrika (подключение Метрики, выбор счётчика и целей), learn («Учёба»: Сейчас — этап теста testStage + разбор
-                weekInsights/changeEffects; Настройка — setup.js, шаги с галочками; Курс — уроки на живых данных,
-                вопрос-проверка, практика; прогресс в settings.direct.learn), ai, log (история), settings, common
+                weekInsights/changeEffects; Настройка — setup.js, шаги с галочками; Практикум — «Разбор ваших кампаний»
+                (auditCampaign в dcalc: улучшить/подождать/на заметку/хорошо, с кнопками действий) + темы уровня таргетолога
+                (суть, разбор данных, чек-лист settings.direct.learn[id].c, «Разобрать с ИИ»), калькулятор экономики settings.direct.econ; без тестов-викторин), ai, log (история), settings, common
 proxy/direct-worker.js     — переходник (Cloudflare Worker): браузер не может звать API Директа напрямую
 writer/js/                 — «Мастерская»
   app.js        роутинг (#/, #/books, #/book/ID, #/ed/ID/вкладка, #/ideas, #/plan, #/marketing, #/mk/ID,

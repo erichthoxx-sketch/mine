@@ -264,3 +264,24 @@ test('переходник: Метрика только на чтение и т�
     assert.equal(await ver.text(), '2');
   } finally { globalThis.fetch = origFetch; }
 });
+
+test('разбор кампании: подождать при малых данных, исправить мусор и структуру, хорошее — отдельно', async () => {
+  const { auditCampaign } = await import('../direct/js/dcalc.js');
+  const camp = { id: 1, name: 'К', start: '2026-09-01', negatives: [], strategy: { search: 'HIGHEST_POSITION', network: 'MAXIMUM_COVERAGE' } };
+  const main = { groups: [{ id: 10, cid: 1, name: 'Г' }], keywords: [{ id: 100, cid: 1, gid: 10, phrase: 'романы', state: 'ON' }], ads: [{ id: 5, cid: 1, gid: 10, state: 'ON', status: 'REJECTED', title: 'Т', note: 'Картинка' }] };
+  const stats = { daily: [{ date: '2026-10-16', cid: 1, impr: 100, clicks: 3, cost: 30 }], kw: { 100: { impr: 100, clicks: 3, cost: 30 } }, queries: [{ query: 'романы скачать', cid: 1, clicks: 1, cost: 12 }] };
+  const r = auditCampaign({ camp, main, stats, log: [{ ok: true, cid: 1, at: '2026-10-14T10:00:00Z', text: 'правка' }], today: '2026-10-16' });
+  const t = (s) => r.items.filter((x) => x.status === s).map((x) => x.area + ': ' + x.title);
+  assert.ok(t('wait').some((x) => /клик/.test(x)));
+  assert.ok(t('wait').some((x) => /прошло 2 дн/.test(x)));
+  assert.ok(t('fix').some((x) => /Поиск и сети/.test(x)));
+  assert.ok(t('fix').some((x) => /Одно объявление/.test(x)));
+  assert.ok(t('fix').some((x) => /«скачать»/.test(x)));
+  assert.ok(t('fix').some((x) => /Отклонено/.test(x)));
+  assert.ok(t('fix').some((x) => /Метрика не подключена/.test(x)));
+  assert.equal(r.items[0].status, 'fix');
+  const minus = r.items.find((x) => x.act?.do === 'minus');
+  assert.deepEqual(minus.act.phrases, ['скачать']);
+  // фразы не советуем при 3 кликах
+  assert.ok(!r.items.some((x) => x.area === 'Фразы'));
+});

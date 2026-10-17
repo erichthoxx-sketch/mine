@@ -389,15 +389,87 @@ export function goalWeekInsight(daily, conv, today, goals = null, skip = null) {
     : { kind: 'bad', text: `Покупка подорожала на ${Math.round(ch * 100)} %: ${Math.round(b.cpa)} ₽ вместо ${Math.round(a.cpa)} ₽.`, why: 'Проверьте фразы без покупок (Обзор → «Что сделать сейчас») и не было ли сбоя площадки — дни сбоя отметьте в «Доходах».', lesson: 'goals' };
 }
 
+const dec = (v) => String(r2(v)).replace('.', ','); // «8,53», как в интерфейсе
 // Неделя к неделе: короткие выводы простыми словами (что случилось → почему это важно)
 export function weekInsights(daily, today, cid = null) {
   const r = compare(daily, cid, [addDays(today, -13), addDays(today, -7)], [addDays(today, -6), today]);
   const out = [];
   if (!r.after.clicks && !r.before.clicks) return out;
   if (!r.enough) { out.push({ kind: 'few', text: `За неделю ${r.after.clicks} клик(ов) — пока мало, чтобы судить о цене клика и CTR. Нужно хотя бы ${MIN_CLICKS} кликов за неделю.`, lesson: 'numbers' }); return out; }
-  if (r.cpc != null && Math.abs(r.cpc) >= 0.1) out.push({ kind: r.cpc < 0 ? 'good' : 'bad', text: `Клик ${r.cpc < 0 ? 'подешевел' : 'подорожал'} на ${Math.round(Math.abs(r.cpc) * 100)} %: было ${r2(r.before.cpc)} ₽, стало ${r2(r.after.cpc)} ₽.`, why: r.cpc < 0 ? 'Обычно это значит, что убрали лишние дорогие запросы или объявление стало кликабельнее — Директ за это даёт скидку в аукционе.' : 'Бывает из-за конкурентов (другие авторы подняли ставки), из-за новых широких фраз или потому, что у объявления упал CTR.', lesson: 'bids' });
-  if (r.ctr != null && Math.abs(r.ctr) >= 0.15) out.push({ kind: r.ctr > 0 ? 'good' : 'bad', text: `CTR ${r.ctr > 0 ? 'вырос' : 'упал'} на ${Math.round(Math.abs(r.ctr) * 100)} %: было ${r2(r.before.ctr * 100)} %, стало ${r2(r.after.ctr * 100)} %.`, why: r.ctr > 0 ? 'Объявление чаще попадает в то, что ищут, — минус-фразы и точные фразы работают.' : 'Объявление стали показывать менее подходящим людям или оно «приелось». Проверьте запросы и попробуйте второй вариант текста.', lesson: r.ctr > 0 ? 'minus' : 'ad' });
+  if (r.cpc != null && Math.abs(r.cpc) >= 0.1) out.push({ kind: r.cpc < 0 ? 'good' : 'bad', text: `Клик ${r.cpc < 0 ? 'подешевел' : 'подорожал'} на ${Math.round(Math.abs(r.cpc) * 100)} %: было ${dec(r.before.cpc)} ₽, стало ${dec(r.after.cpc)} ₽.`, why: r.cpc < 0 ? 'Обычно это значит, что убрали лишние дорогие запросы или объявление стало кликабельнее — Директ за это даёт скидку в аукционе.' : 'Бывает из-за конкурентов (другие авторы подняли ставки), из-за новых широких фраз или потому, что у объявления упал CTR.', lesson: 'bids' });
+  if (r.ctr != null && Math.abs(r.ctr) >= 0.15) out.push({ kind: r.ctr > 0 ? 'good' : 'bad', text: `CTR ${r.ctr > 0 ? 'вырос' : 'упал'} на ${Math.round(Math.abs(r.ctr) * 100)} %: было ${dec(r.before.ctr * 100)} %, стало ${dec(r.after.ctr * 100)} %.`, why: r.ctr > 0 ? 'Объявление чаще попадает в то, что ищут, — минус-фразы и точные фразы работают.' : 'Объявление стали показывать менее подходящим людям или оно «приелось». Проверьте запросы и попробуйте второй вариант текста.', lesson: r.ctr > 0 ? 'minus' : 'ad' });
   if (r.perDay != null && r.perDay >= 0.3) out.push({ kind: 'warn', text: `Тратится в день на ${Math.round(r.perDay * 100)} % больше, чем неделей раньше.`, why: 'Проверьте, что дневной лимит в кабинете стоит так, как вы задумали.', lesson: 'budget' });
   if (!out.length) out.push({ kind: 'calm', text: 'Неделя прошла ровно: цена клика и CTR почти не изменились.', why: 'Это хорошо для теста — можно спокойно смотреть, как реклама отражается на продажах в «Доходах».', lesson: 'payback' });
   return out;
+}
+
+// ---------- разбор кампании: что настроено, что улучшить, где подождать ----------
+// Возвращает пункты {status: ok|fix|wait|info, area, title, why, how, act?, lesson} — только на основе данных;
+// советы по фразам и объявлениям — лишь когда кликов достаточно (иначе «подождать»).
+const wc = (s) => String(s || '').replace(/["!+\[\]]/g, '').trim().split(/\s+/).filter((w) => w && !w.startsWith('-')).length;
+export function auditCampaign({ camp, main = {}, stats = {}, log = [], today, econ = {}, m = null, goalHs = [], skip = null }) {
+  const out = [], add = (status, area, title, why, extra = {}) => out.push({ status, area, title, why, ...extra });
+  const daily = stats.daily || [], cid = camp.id;
+  const groups = (main.groups || []).filter((g) => g.cid === cid), kws = (main.keywords || []).filter((k) => k.cid === cid && k.state !== 'ARCHIVED');
+  const ads = (main.ads || []).filter((x) => x.cid === cid && x.state !== 'ARCHIVED'), kwS = stats.kw || {};
+  const w = totals(daily, addDays(today, -6), today, cid), m30 = totals(daily, addDays(today, -29), today, cid);
+  const age = camp.start ? daysBetween(camp.start, today) + 1 : null;
+  const search = camp.strategy?.search && camp.strategy.search !== 'SERVING_OFF', net = camp.strategy?.network && camp.strategy.network !== 'SERVING_OFF';
+
+  // подождать: мало данных или недавняя правка
+  const enough = w.clicks >= MIN_CLICKS;
+  if (age != null && age < 7) add('wait', 'Данные', `Кампании ${age} дн.`, 'Первую неделю Директ подбирает аудиторию, цифры скачут. Трогайте только явный мусор в запросах.', { lesson: 'rhythm' });
+  else if (!enough) add('wait', 'Данные', `За неделю ${w.clicks} клик(ов)`, `Для выводов по фразам и объявлениям нужно хотя бы ${MIN_CLICKS} кликов за неделю — иначе это случайность.`, { lesson: 'rhythm' });
+  const recent = log.filter((x) => x.ok && x.cid === cid).sort((x, y) => y.at.localeCompare(x.at))[0];
+  const since = recent ? daysBetween(recent.at.slice(0, 10), today) : null;
+  if (since != null && since < 7) add('wait', 'Правки', `После «${recent.text}» прошло ${since} дн.`, `Оценивайте через ${7 - since} дн.: одна правка за раз и неделя на эффект — иначе непонятно, что сработало.`, { lesson: 'rhythm' });
+
+  // структура
+  if (search && net) add('fix', 'Структура', 'Поиск и сети в одной кампании', 'У них разная цена клика и конверсия: в одной кампании расход смешивается, и сильный поиск недополучает бюджет.', { how: 'Разделите на две кампании в кабинете или оставьте одну, если это единая кампания и вы смотрите отчёт по площадкам.', lesson: 'arch' });
+  const wide = groups.filter((g) => kws.filter((k) => k.gid === g.id).length > 15);
+  if (wide.length) add('fix', 'Структура', `Размытые группы: ${wide.map((g) => `«${g.name}»`).join(', ')}`, 'Больше 15 фраз — в группе несколько смыслов, и объявление не совпадает с частью запросов.', { how: 'Разбейте по тропам/аналогам — по 5–10 фраз в группе.', lesson: 'arch' });
+  const oneAd = groups.filter((g) => ads.filter((a) => a.gid === g.id).length < 2);
+  if (oneAd.length) add('fix', 'Объявления', `Одно объявление в группах: ${oneAd.slice(0, 3).map((g) => `«${g.name}»`).join(', ')}`, 'Без второго варианта нечего сравнивать, и Директ не может выбрать лучшее.', { how: 'Добавьте 1–2 варианта с другим заголовком (троп/конфликт) — тексты подскажет ИИ.', lesson: 'creative' });
+  if (!wide.length && !oneAd.length && !(search && net) && groups.length) add('ok', 'Структура', 'Группы и объявления разложены аккуратно', '');
+
+  // семантика и минус-слова
+  if (search && kws.length) {
+    const short = kws.filter((k) => wc(k.phrase) <= 2), cost = (arr) => arr.reduce((s, k) => s + (kwS[k.id]?.cost || 0), 0), all = cost(kws);
+    if (short.length && all && cost(short) / all > 0.3) add('fix', 'Семантика', `Короткие фразы съедают ${Math.round(cost(short) / all * 100)} % бюджета`, `Широкие фразы (${short.slice(0, 3).map((k) => `«${k.phrase}»`).join(', ')}) ловят случайные запросы.`, { how: 'Уточните тропом или действием («… читать», «… про истинную пару») или возьмите в кавычки.', lesson: 'sem' });
+  }
+  const junk = queryHints((stats.queries || []).filter((q) => q.cid === cid), { [cid]: camp.negatives || [] });
+  for (const h of junk.slice(0, 2)) add('fix', 'Минус-слова', `«${h.word}» — ${Math.round(h.cost)} ₽ за 30 дней`, `${h.why}. Например: «${h.queries[0]}».`, { act: { do: 'minus', campaign: cid, phrases: [h.word], why: h.why }, actLabel: 'В минус', lesson: 'sem' });
+  if (search && !(camp.negatives || []).length && !junk.length) add('fix', 'Минус-слова', 'В кампании нет минус-слов', 'Без базового списка объявление показывается по «скачать», «fb2», «торрент» и т. п.', { how: 'Добавьте базовые минус-слова на вкладке кампании «Минус-фразы».', lesson: 'sem' });
+  else if (search && !junk.length) add('ok', 'Минус-слова', `Минус-слов ${(camp.negatives || []).length}, мусорных запросов не видно`, '');
+
+  // фразы — только на достаточных данных
+  if (enough) {
+    const h = keywordHints(withAvgCpc(kws, kwS), kwS);
+    for (const x of h.slice(0, 2)) add('fix', 'Фразы', `«${x.phrase}»`, x.why + ` (показов ${x.impr}, кликов ${x.clicks}).`, { act: { do: 'pause', target: 'keyword', ids: [x.id], why: x.why }, actLabel: 'Остановить', lesson: 'sem' });
+  }
+  for (const a of ads.filter((x) => x.status === 'REJECTED')) add('fix', 'Объявления', `Отклонено: «${a.title}»`, a.note || 'Причина — в кабинете Директа.', { how: 'Исправьте текст или картинку в кабинете — объявление снова уйдёт на модерацию.', lesson: 'creative' });
+
+  // Метрика и покупки
+  if (m?.counterId) {
+    for (const x of goalHs.filter((g) => g.cid === cid).slice(0, 3)) {
+      const act = x.kind === 'counter' ? { do: 'counter', campaign: cid, counter: m.counterId, why: x.why } : x.kind === 'noconv' ? { do: 'pause', target: 'keyword', ids: [x.id], why: x.why } : null;
+      add(x.kind === 'winner' ? 'ok' : 'fix', 'Покупки', x.kind === 'winner' ? `Удачная фраза «${x.phrase}»` : x.kind === 'counter' ? 'Счётчик не привязан' : x.phrase ? `«${x.phrase}»` : x.name || '', x.why, { act, actLabel: x.kind === 'counter' ? 'Привязать' : 'Остановить', lesson: 'goals' });
+    }
+    const g = goalTotals(daily, stats.conv || [], addDays(today, -29), today, { cid, goals: m.main, skip });
+    if (g.conv) add('info', 'Покупки', `За 30 дней ${g.conv} покупок по ${Math.round(g.cpa)} ₽`, g.conv < 5 ? 'Покупок пока мало — цена покупки ещё «плавает».' : '');
+    if (/CONVERSION|CPA/.test(camp.strategy?.search || '') && g.conv < 10) add('info', 'Стратегия', 'Стратегия на конверсии при малом числе покупок', 'Ей нужны данные, чтобы учиться. Если покупок мало, подумайте о ближней цели (например, добавление в библиотеку, если такая цель есть).', { lesson: 'strategy' });
+    // экономика
+    const rev = Number(econ.rev) || null, cr = econ.cr ? econ.cr / 100 : g.cr;
+    if (rev && cr && w.cpc != null) {
+      const max = rev * cr;
+      if (w.cpc > max) add('fix', 'Экономика', `Клик ${Math.round(w.cpc * 10) / 10} ₽ дороже допустимого ${Math.round(max * 10) / 10} ₽`, 'При такой цене клика покупатель обходится дороже, чем приносит.', { how: 'Поднимайте конверсию (объявление ↔ страница книги) или снижайте цену клика (точнее фразы, минус-слова). Расширять пока рано.', lesson: 'econ' });
+      else add('ok', 'Экономика', `Клик ${Math.round(w.cpc * 10) / 10} ₽ в пределах допустимого ${Math.round(max * 10) / 10} ₽`, 'Есть запас — эту кампанию можно расширять ступенями.', { lesson: 'scale' });
+    }
+  } else add('fix', 'Покупки', 'Метрика не подключена', 'Без неё видно только клики: непонятно, какие фразы приводят покупателей.', { how: '⚙ Настройки → «Яндекс Метрика».', lesson: 'goals' });
+  if (!econ.rev) add('info', 'Экономика', 'Не задан доход с покупателя', 'Впишите его в теме «Экономика книги» — приложение посчитает допустимую цену клика и сравнит с вашей.', { lesson: 'econ' });
+
+  // динамика
+  for (const x of weekInsights(daily, today, cid).filter((x) => x.kind !== 'few').slice(0, 1)) add(x.kind === 'good' ? 'ok' : x.kind === 'calm' ? 'info' : 'fix', 'Динамика', x.text, x.why || '', { lesson: x.lesson });
+  const order = { fix: 0, wait: 1, info: 2, ok: 3 };
+  return { items: out.sort((a, b) => order[a.status] - order[b.status]), w, m30 };
 }
