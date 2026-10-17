@@ -77,6 +77,18 @@ const FUNNEL_TIP = {
   buystart: 'Добавили, но не идут к покупке: часто ждут продолжения или скидки. Анонс даты выхода, понятный объём и цена помогают.',
   buy: 'Начали покупку, но не оплатили: смотрите цену и способ оплаты; иногда помогает временная скидка для новых читателей.',
 };
+// Свои заходы автора тоже попадают в Метрику, пока в счётчике не включён фильтр «Не учитывать мои визиты»
+function selfNote(M) {
+  const since = M.c.settings.direct?.selfOff;
+  if (since) {
+    const clean = addDays(since, 30);
+    return `<p class="small muted">Ваши заходы не считаются с ${fmtShort(since)}.${clean > M.t ? ` Цифры за 30 дней станут полностью чистыми с ${fmtShort(clean)} — до этого в них ещё есть ваши прошлые заходы.` : ''} <button class="link" data-act="an.self" data-off="1">Отменить</button></p>`;
+  }
+  return `<div class="item"><b>Ваши заходы тоже здесь</b><div class="small">Метрика считает всех, кто открыл страницу, — и вас. Если вы часто заходите на свои книги, первый шаг воронки выглядит хуже, чем на самом деле.</div>
+    <div class="small"><b>Что сделать:</b> Метрика → ваш счётчик → «Настройка» → вкладка «Фильтры» → галочка «Не учитывать мои визиты» → «Сохранить». Работает в том браузере, где вы открывали Метрику (на телефоне — откройте Метрику и там). Прошлые данные не меняются.</div>
+    <div class="row"><button class="link" data-act="an.self">Я включила фильтр</button></div></div>`;
+}
+acts['an.self'] = async (d) => { await saveD({ selfOff: d.off ? null : app().ctx().today }); toast(d.off ? 'Отменено' : 'Запомнила: с сегодняшнего дня ваши заходы не считаются'); };
 function booksTab(a, M) {
   const { mk, t, main, skip, hasGoals } = M;
   const books = byBook(mk.pages, main, M.titles);
@@ -86,7 +98,7 @@ function booksTab(a, M) {
   return `<div class="card"><h2>Воронка читателя</h2><p class="small muted">За 30 дней по целям Метрики (достижения цели: один человек может пройти шаг несколько раз).</p>
       ${f.steps.length > 1 ? f.steps.map((x) => `<div class="bar-row"><div class="row between small"><span>${esc(x.name)}${x.goal ? ` <span class="muted">· ${esc(x.goal)}</span>` : ''}</span><span><b>${num(x.n)}</b>${x.rate != null ? ` · ${pct(Math.min(x.rate, 9.99), 0)} от прошлого шага` : ''}</span></div><div class="progress"><i style="width:${(x.n / maxN * 100).toFixed(1)}%"></i></div></div>`).join('')
         + (f.worst ? `<div class="item l-hl"><b>Больше всего теряете на шаге «${esc(f.worst.name)}»: до него доходит ${pct(f.worst.rate, 0)}</b><div class="small">${FUNNEL_TIP[f.worst.id] || ''}</div></div>` : '')
-        : '<p class="muted">Отметьте в Настройках цели «Начало чтения», «Добавление в библиотеку», «Начало покупки», «Покупка» — и здесь будет путь читателя по шагам.</p>'}</div>
+        : '<p class="muted">Отметьте в Настройках цели «Начало чтения», «Добавление в библиотеку», «Начало покупки», «Покупка» — и здесь будет путь читателя по шагам.</p>'}${selfNote(M)}</div>
     <div class="card"><h2>Книги</h2><p class="small muted">По страницам входа за 30 дней. <b>Страница книги</b> — где решают купить; <b>читалка</b> — где продолжают читать: там покупок меньше всегда, это нормально.</p>
       <div class="list">${books.map((b) => {
         const rs = b.title ? royaltyPerSale(M.sales, t, { book: b.title }) : null, ps = rs?.perSale ?? M.perSale;
