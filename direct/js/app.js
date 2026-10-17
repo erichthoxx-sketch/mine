@@ -6,11 +6,12 @@ import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, t
 import { todayISO } from '../../js/calc.js';
 import { ic } from '../../js/icons.js';
 import { takeTokenFromUrl, OUTAGE_TEXT } from './api.js';
-import { refresh } from './sync.js';
+import { refresh, refreshMetrika } from './sync.js';
 import { demo, snap, demoLog } from './demo.js';
 import { homeView } from './views/home.js';
 import { campaignView } from './views/campaign.js';
 import { learnView } from './views/learn.js';
+import { analyticsView } from './views/analytics.js';
 import { aiView } from './views/ai.js';
 import { logView } from './views/log.js';
 import { settingsView } from './views/settings.js';
@@ -57,16 +58,19 @@ export async function reload({ quiet = false } = {}) {
     toast(e.transient ? OUTAGE_TEXT : e.message || String(e));
     if (e.transient) { clearTimeout(retryT); retryT = setTimeout(() => reload({ quiet: true }), 15 * 60000); }
     if (!demo.on) await store.saveSettings({ direct: { ...d(), lastError: { code: e.code || null, text: e.message || String(e), transient: !!e.transient, at: new Date().toISOString() } } }).catch(() => {});
-  } finally { ui.busy = ''; render(); }
+  }
+  // Метрика — отдельно: работает, даже если Директ ещё не одобрил заявку или отказал
+  try { ui.busy = 'Метрика…'; render(); await refreshMetrika(app); } catch (e) { console.warn(e); if (!quiet) toast(e.transient ? OUTAGE_TEXT : e.message || String(e)); }
+  finally { ui.busy = ''; render(); }
 }
 app.reload = reload;
 acts['d.reload'] = () => { reload(); return false; };
 
-const TABS = [['/', 'ads', 'Обзор'], ['/learn', 'books', 'Учёба'], ['/ai', 'sparkle', 'ИИ-помощник'], ['/log', 'receipt', 'История']];
+const TABS = [['/', 'ads', 'Обзор'], ['/an', 'data', 'Аналитика'], ['/learn', 'books', 'Учёба'], ['/ai', 'sparkle', 'ИИ'], ['/log', 'receipt', 'История']];
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'c' && b) return { tab: '/', view: (x) => campaignView(x, Number(decodeURIComponent(b))) };
-  const map = { '': homeView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
+  const map = { '': homeView, an: analyticsView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
   return { tab: '/' + (a || ''), view: map[a || ''] || homeView };
 }
 

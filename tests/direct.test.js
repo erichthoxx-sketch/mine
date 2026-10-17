@@ -285,3 +285,35 @@ test('разбор кампании: подождать при малых дан
   // фразы не советуем при 3 кликах
   assert.ok(!r.items.some((x) => x.area === 'Фразы'));
 });
+
+test('аналитика Метрики: разбор ответа, итоги, шаги с осторожностью к малым числам', async () => {
+  const { mkRows, sumDays, byWeekday, mkInsights, reach } = await import('../direct/js/mcalc.js');
+  const rows = mkRows({ data: [{ dimensions: [{ id: 'ad', name: 'Переходы по рекламе' }], metrics: [100, 80, 55.5, 2.1, 90, 4] }] }, [9001]);
+  assert.deepEqual(rows[0], { key: 'ad', name: 'Переходы по рекламе', visits: 100, users: 80, bounce: 0.555, depth: 2.1, dur: 90, goals: { 9001: 4 } });
+  const daily = [];
+  for (let i = 0; i < 28; i++) {
+    const key = new Date(Date.parse('2026-09-19T00:00:00Z') + i * 86400000).toISOString().slice(0, 10);
+    const sat = new Date(key + 'T00:00:00Z').getUTCDay() === 6;
+    daily.push({ key, visits: sat ? 200 : (i >= 21 ? 60 : 100), users: 50, bounce: 0.3, depth: 3, dur: 120, goals: { 1: 3 } });
+  }
+  const today = '2026-10-16';
+  const w = sumDays(daily, '2026-10-10', today, ['1']);
+  assert.equal(w.days, 7); assert.equal(w.conv, 21);
+  assert.equal(byWeekday(daily, ['1'])[6].avg, 200);
+  const sources = [
+    { key: 'social', name: 'Соцсети', visits: 200, bounce: 0.2, goals: { 1: 30 } },
+    { key: 'ad', name: 'Реклама', visits: 300, bounce: 0.7, goals: { 1: 2 } },
+  ];
+  const ins = mkInsights({ daily, sources, main: ['1'], hasGoals: true, today });
+  const t = ins.map((x) => x.level + ': ' + x.title);
+  assert.ok(t.some((x) => /^warn: Визитов меньше/.test(x)), t.join('\n'));
+  assert.ok(t.some((x) => /^step: «Соцсети»: покупают/.test(x)));
+  assert.ok(t.some((x) => /^warn: Из рекламы покупают реже/.test(x)));
+  assert.ok(t.some((x) => /^warn: «Реклама»: 70 % уходят сразу/.test(x)));
+  assert.ok(t.some((x) => /^step: Больше всего читателей в субботу/.test(x)));
+  assert.equal(ins[0].level, 'step');
+  // мало визитов — только «подождать»
+  const few = mkInsights({ daily: daily.map((x) => ({ ...x, visits: 1 })), main: ['1'], hasGoals: true, today });
+  assert.ok(few.every((x) => x.level === 'wait' || x.level === 'step'));
+  assert.equal(reach({ goals: { 1: 2, 2: 5 } }, ['1']), 2);
+});

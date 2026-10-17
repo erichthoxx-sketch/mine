@@ -1352,3 +1352,5 @@ a.card.arc-warn .ic { width: 18px; height: 18px; flex: 0 0 auto; }
 .l-ai-tasks { flex-wrap: wrap; gap: 8px; } .l-calc { margin: 10px 0; }
 .l-why { white-space: normal; text-align: left; padding-left: 0; }
 .ai-tasks { margin: 10px 0 4px; }
+.l-hl { background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface)); border-radius: 12px; padding: 10px 12px !important; } .l-step { color: var(--accent); font-weight: 700; }
+@media (max-width: 560px) { .app-direct .grid2 { grid-template-columns: 1fr; } }

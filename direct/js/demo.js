@@ -75,3 +75,23 @@ export function demoSnapshot(today) {
   const at = new Date().toISOString();
   return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, demo: true, daily, kw, queries, conv, kwConv, mrows }];
 }
+
+// Пример Метрики: 8 недель по дням (с ритмом недели), источники, устройства, страницы входа
+export function demoMetrikaSnap(today) {
+  const r = rnd(7), daily = [];
+  const W = [1.25, 0.9, 0.95, 1.0, 1.05, 1.1, 1.3]; // вс…сб
+  for (let i = 55; i >= 0; i--) {
+    const key = addDays(today, -i), wd = new Date(key + 'T00:00:00Z').getUTCDay();
+    const visits = Math.round((i < 7 ? 150 : 120) * W[wd] * (0.85 + r() * 0.3));
+    daily.push({ key, name: key, visits, users: Math.round(visits * 0.8), bounce: 0.28 + r() * 0.1, depth: 3.2, dur: 210, goals: { 9001: Math.round(visits * (i < 7 ? 0.035 : 0.03)), 9002: Math.round(visits * 0.09) } });
+  }
+  const S = [
+    ['internal', 'Внутренние переходы', 1900, 0.22, 0.04], ['ad', 'Переходы по рекламе', 820, 0.55, 0.012], ['social', 'Переходы из социальных сетей', 520, 0.3, 0.07],
+    ['organic', 'Переходы из поисковых систем', 410, 0.35, 0.03], ['direct', 'Прямые заходы', 300, 0.25, 0.05], ['messenger', 'Переходы из мессенджеров', 90, 0.4, 0.06],
+  ].map(([key, name, visits, bounce, cr]) => ({ key, name, visits, users: Math.round(visits * 0.8), bounce, depth: 3, dur: 200, goals: { 9001: Math.round(visits * cr), 9002: Math.round(visits * cr * 3) } }));
+  const D = [['mobile', 'Смартфоны', 2900, 0.33, 0.026], ['desktop', 'ПК', 980, 0.24, 0.055], ['tablet', 'Планшеты', 160, 0.3, 0.03]]
+    .map(([key, name, visits, bounce, cr]) => ({ key, name, visits, users: visits, bounce, depth: 3, dur: 200, goals: { 9001: Math.round(visits * cr), 9002: 0 } }));
+  const P = [['https://litnet.com/ru/book/istinnaya-para-dlya-drakona-b100001', 2100, 0.045], ['https://litnet.com/ru/book/popadanka-v-akademiyu-b100002', 1300, 0.008], ['https://litnet.com/ru/lana-freitag-u12345', 400, 0.02]]
+    .map(([key, visits, cr]) => ({ key, name: key, visits, users: visits, bounce: 0.3, depth: 3, dur: 200, goals: { 9001: Math.round(visits * cr), 9002: 0 } }));
+  return { id: 'mk', at: new Date().toISOString(), demo: true, counterId: 555, goals: [9001, 9002], daily, sources: S, engines: [], devices: D, pages: P, errors: [] };
+}

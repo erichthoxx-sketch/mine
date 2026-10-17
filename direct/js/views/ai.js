@@ -30,6 +30,7 @@ export function packageText(a, question = '') {
       keywordConversions30: stats.kwConv || {},
       pageBehavior30: stats.mrows || [],
     } : {}),
+    ...(a.snap('mk') ? { metrikaSite: ((mk) => ({ note: 'Метрика автора на Литнете за 30 дней: источники, устройства, страницы входа; по дням — 8 недель', sources: mk.sources, devices: mk.devices, pages: (mk.pages || []).slice(0, 10), daily: (mk.daily || []).map(({ key, visits, bounce, goals }) => ({ date: key, visits, bounce, goals })) }))(a.snap('mk')) } : {}),
     outageDays: [...outageSet(c.data.days || [])].filter((x) => x >= addDays(t, -29)).sort(),
     recentChanges: logOf(a).slice().sort((x, y) => y.at.localeCompare(x.at)).slice(0, 20).map((x) => ({ at: x.at.slice(0, 10), what: x.text, why: x.why, ok: x.ok })),
   };

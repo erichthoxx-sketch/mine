@@ -3,8 +3,9 @@
 // Расход связанных кампаний уходит в «Доходы» недельными отчётами (там считается окупаемость).
 import { call, report, metrika } from './api.js';
 import { MICRO, dailyRows, mergeDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows } from './dcalc.js';
-import { demoSnapshot, isDemo, snap, putSnap, putLog } from './demo.js';
+import { demoSnapshot, demoMetrikaSnap, isDemo, snap, putSnap, putLog } from './demo.js';
 import { todayISO, addDays, weekStart } from '../../js/calc.js';
+import { SESSION_METRICS, goalMetric, mkRows } from './mcalc.js';
 import { reportId } from '../../js/parse.js';
 import { uid } from '../../js/ui.js';
 
@@ -17,7 +18,7 @@ async function getSafe(s, service, full, basic) {
 
 export async function refresh(app, { onStep = () => {} } = {}) {
   const s = app.ctx().settings;
-  if (isDemo()) { await putSnap(app, demoSnapshot(todayISO())); return; }
+  if (isDemo()) { await putSnap(app, [...demoSnapshot(todayISO()), demoMetrikaSnap(todayISO())]); return; }
   const today = todayISO();
   onStep('Кампании…');
   const BASE = ['Id', 'Name', 'State', 'Status', 'StartDate', 'DailyBudget', 'NegativeKeywords', 'Type'];
@@ -173,4 +174,28 @@ function patchSnap(main, a, negatives) {
     for (const p of a.phrases) m.keywords.push({ id: -Date.now() - m.keywords.length, phrase: p, gid: a.group, cid: g?.cid, bid: null, state: 'ON', status: 'DRAFT' });
   }
   return m;
+}
+
+// ---------- Метрика сама по себе (работает, даже пока Директ не подключён или отказывает) ----------
+// d_snap/mk: по дням за 8 недель, источники, детальные источники, устройства, страницы входа — за 30 дней
+export async function refreshMetrika(app) {
+  const s = app.ctx().settings, m = s.direct?.metrika;
+  if (isDemo()) { await putSnap(app, [demoMetrikaSnap(todayISO())]); return; }
+  if (!m?.counterId || !s.directToken) return;
+  const goals = (m.goals || []).map((g) => g.id).slice(0, 10);
+  const metrics = [...SESSION_METRICS, ...goals.map(goalMetric)].join(',');
+  const today = todayISO(), errors = [];
+  const get = async (dimensions, from, limit = 100, sort = '-ym:s:visits') => {
+    try {
+      return mkRows(await metrika(s, 'stat/v1/data', { ids: m.counterId, metrics, dimensions, date1: from, date2: today, limit, sort, lang: 'ru', accuracy: 'full' }), goals);
+    } catch (e) { errors.push(e.message); if (e.transient) throw e; return null; }
+  };
+  const d30 = addDays(today, -29);
+  const daily = await get('ym:s:date', addDays(today, -55), 100, 'ym:s:date');
+  const sources = await get('ym:s:lastTrafficSource', d30, 20);
+  const engines = await get('ym:s:lastSourceEngine', d30, 30);
+  const devices = await get('ym:s:deviceCategory', d30, 10);
+  const pages = await get('ym:s:startURL', d30, 30);
+  const old = snap(app, 'mk') || {};
+  await putSnap(app, [{ id: 'mk', at: new Date().toISOString(), counterId: m.counterId, goals, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], engines: engines ?? old.engines ?? [], devices: devices ?? old.devices ?? [], pages: pages ?? old.pages ?? [], errors }]);
 }

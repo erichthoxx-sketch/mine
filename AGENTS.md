@@ -83,7 +83,9 @@ direct/js/                 — «Директ»
   dcalc.js      чистые расчёты: итоги, подсказки (JUNK — кандидаты в минус), aiPackage/parsePlan/describe/toRequest;
                 покупки по целям: convRows, goalTotals (цена покупки), goalHints (аналитик), goalWeekInsight, metrikaRows
   demo.js       пример данных (только в памяти страницы, в базу не пишется)
-  views/        home (обзор, «что сделать сейчас» + подсказки по покупкам), campaign, metrika (подключение Метрики, выбор счётчика и целей), learn («Учёба»: Сейчас — этап теста testStage + разбор
+  mcalc.js      аналитика Метрики (чистые функции): mkRows, sumDays, byWeekday, mkInsights — шаги step/warn/good/wait/info
+  views/        analytics («Аналитика», #/an: Метрика сама по себе — refreshMetrika в sync.js → d_snap/mk; работает без Директа),
+                home (обзор, «что сделать сейчас» + подсказки по покупкам), campaign, metrika (подключение Метрики, выбор счётчика и целей), learn («Учёба»: Сейчас — этап теста testStage + разбор
                 weekInsights/changeEffects; Настройка — setup.js, шаги с галочками; Практикум — «Разбор ваших кампаний»
                 (auditCampaign в dcalc: улучшить/подождать/на заметку/хорошо, с кнопками действий) + темы уровня таргетолога
                 (суть, разбор данных, чек-лист settings.direct.learn[id].c, «Разобрать с ИИ»), калькулятор экономики settings.direct.econ; без тестов-викторин), ai, log (история), settings, common
