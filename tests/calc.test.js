@@ -656,6 +656,16 @@ test('сбой «не от меня»: потеря, прогноз месяца
   assert.equal(st.avg7, 3000);
 });
 
+test('сбой в начале истории: потерю не посчитать, но заработанное в дни сбоя учтено', async () => {
+  const { monthOutages, paceForecast } = await import('../js/calc.js');
+  const rows = [];
+  for (let d = 1; d <= 10; d++) { const date = `2026-10-${String(d).padStart(2, '0')}`; const roy = d <= 2 ? 500 : 3000; rows.push(mk(date, 199, roy / 100, roy)); }
+  const m = monthOutages(rows, [], '2026-10-10', new Set(['2026-10-01', '2026-10-02']));
+  assert.deepEqual([m.days, m.unknown, m.fact, m.loss], [2, 2, 1000, 0]);
+  // обычный темп — 3000 в день (8 дней), а не 25000 / 8
+  assert.equal(paceForecast(25000, 10, 31, m), 25000 + 3000 * 21);
+});
+
 test('прогноз месяца: дни сбоя, отмеченные впереди, — по темпу сбоя', async () => {
   const { paceForecast } = await import('../js/calc.js');
   // 20 дней: 18 обычных по 3000 + 2 дня сбоя по 200; впереди ещё 2 дня сбоя из 11 оставшихся
