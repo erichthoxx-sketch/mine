@@ -1,67 +1,183 @@
-// «Аналитика»: всё о читателях по Метрике автора на Литнете — в одном месте, с подсвеченными шагами.
-// Работает и без Директа: нужна только Метрика.
-import { esc, acts } from '../../../js/ui.js';
-import { num, pct, fmtShort } from '../../../js/format.js';
+// «Аналитика»: всё о читателях по Метрике автора на Литнете — с подсвеченными шагами, книгами, воронкой,
+// метками UTM, деньгами и формулами. Работает и без Директа: нужна только Метрика.
+import { esc, acts, forms, toast, openSheet, opt, N, uid } from '../../../js/ui.js';
+import { num, pct, rub, fmtShort } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
 import { ic } from '../../../js/icons.js';
-import { sumDays, weekPair, byWeekday, mkInsights, reach, shortUrl, MIN_VISITS } from '../mcalc.js';
+import { sumDays, weekPair, byWeekday, mkInsights, reach, MIN_VISITS, byBook, funnel, goalTotals30, propCI, twoProp, sampleSize, royaltyPerSale, UTM_PRESETS, buildUtm, utmTable, litnetPage } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { packageText, sendToChat } from './ai.js';
 import { demo } from '../demo.js';
 
 const app = () => window.__app;
+const saveD = (patch) => app().store.saveSettings({ direct: { ...(app().ctx().settings.direct || {}), ...patch } });
 const LEVEL = { step: ['Сделать', 'l-step'], warn: ['Внимание', 'warnc'], good: ['Хорошо', 'up'], wait: ['Подождать', 'muted'], info: ['На заметку', ''] };
 const WD = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const mmss = (s) => (s == null ? '—' : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
 const delta = (a, b) => (a != null && b ? `<span class="small ${a >= b ? 'up' : 'down'}">${a >= b ? '▲' : '▼'} ${pct(Math.abs(a - b) / b, 0)}</span>` : '');
+const TABS = [['sum', 'Сводка'], ['books', 'Книги'], ['src', 'Источники'], ['f', 'Формулы']];
 
-function connectCard(c) {
+function connectCard() {
   return `<div class="card"><h2>Аналитика читателей</h2>
-    <p>Подключите счётчик Метрики автора с Литнета — и здесь будет всё в одном месте: откуда приходят читатели, кто из них покупает, какие страницы и дни работают лучше. Самое важное приложение подсветит как следующие шаги.</p>
+    <p>Подключите счётчик Метрики автора с Литнета — и здесь будет всё в одном месте: откуда приходят читатели, кто из них покупает, какие книги и метки работают, сколько стоит покупатель. Самое важное приложение подсветит как следующие шаги.</p>
     <p class="small muted">Работает уже сейчас, даже пока Директ не одобрил заявку: нужна только Метрика.</p>
-    <div class="row"><button class="primary" data-act="go" data-to="/settings">Подключить Метрику</button>${c.settings.directToken ? '' : '<span class="small muted">сначала — вход через Яндекс (Учёба → Настройка, шаг 4)</span>'}</div></div>`;
+    <div class="row"><button class="primary" data-act="go" data-to="/settings">Подключить Метрику</button></div></div>`;
 }
 
-export function analyticsView(a) {
-  const c = a.ctx(), m = metrikaOf(c), mk = a.snap('mk');
-  if (!m?.counterId) return { html: connectCard(c) };
-  if (!mk) return { html: `<div class="card"><h2>Аналитика читателей</h2><p class="muted">Загружаю данные Метрики… Если долго — нажмите ↻ вверху.</p></div>` };
-  const t = c.today, main = (m.main || []).map(String), skip = outageSet(c.data.days || []), hasGoals = main.length > 0;
-  // плитки — 7 полных дней (по вчера); сравнение — в среднем за день, без дней сбоя
+// Всё, что считается один раз на экран
+function model(a) {
+  const c = a.ctx(), m = metrikaOf(c), mk = a.snap('mk'), t = c.today;
+  const main = (m.main || []).map(String), skip = outageSet(c.data.days || []), hasGoals = main.length > 0;
   const y = addDays(t, -1), w = sumDays(mk.daily, addDays(y, -6), y, main), { w: wc, pw } = weekPair(mk.daily, t, main, skip);
   const m30 = sumDays(mk.daily, addDays(t, -29), t, main, skip);
+  const titles = (c.data.books || []).map((b) => b.title).filter(Boolean);
+  const sales = c.data.sales || [];
+  const allSale = royaltyPerSale(sales, t);
+  const econ = c.settings.direct?.econ || {};
+  const perSale = allSale?.perSale ?? (Number(econ.rev) || null);
+  return { c, m, mk, t, main, skip, hasGoals, w, wc, pw, m30, titles, sales, allSale, perSale, goalName: (m.goals || []).filter((g) => main.includes(String(g.id))).map((g) => g.name).join(', ') || 'покупки' };
+}
+const crOf = (x, main) => (x.visits ? reach(x, main) / x.visits : null);
+// пометка «чаще/реже среднего» — только если разница не случайна
+function vsAvg(k, n, K, N2) {
+  if (n < MIN_VISITS || !N2) return '';
+  const r = twoProp(k, n, K - k, N2 - n);
+  if (r.level === 'low') return '<span class="small muted">как в среднем</span>';
+  return `<span class="small ${r.z > 0 ? 'up' : 'down'}">${r.z > 0 ? '▲ чаще среднего' : '▼ реже среднего'}${r.level === 'mid' ? ' (вероятно)' : ''}</span>`;
+}
+
+// ---------- Сводка ----------
+function summaryTab(a, M) {
+  const { mk, t, main, skip, hasGoals, w, wc, pw } = M;
   const ins = mkInsights({ daily: mk.daily, sources: mk.sources, devices: mk.devices, pages: mk.pages, main, hasGoals, today: t, skip });
-  const goalName = (m.goals || []).filter((g) => main.includes(String(g.id))).map((g) => g.name).join(', ') || 'цели';
-  const totalV = (mk.sources || []).reduce((s, x) => s + x.visits, 0) || 1;
-  const crOf = (x) => (x.visits ? reach(x, main) / x.visits : null);
-  const crCell = (x) => { const cr = crOf(x); if (!hasGoals || cr == null || x.visits < MIN_VISITS) return '<span class="muted">—</span>'; return `<span class="${m30.cr && cr >= m30.cr * 1.3 ? 'up' : m30.cr && cr <= m30.cr * 0.6 ? 'down' : ''}">${pct(cr, 1)}</span>`; };
-  const wd = byWeekday(mk.daily, main, skip, t), maxWd = Math.max(...wd.map((x) => x.avg), 1);
   const steps = ins.filter((x) => x.level === 'step' || x.level === 'warn').length;
-  return {
-    html: `${demo.on ? '<div class="alert">Это пример — так будет выглядеть аналитика вашего счётчика.</div>' : ''}
-    <div class="card"><div class="row between"><h2 style="margin:0">Читатели за 7 дней</h2><span class="small muted">по вчера · ${esc(m.counterName || '')}${mk.at && !demo.on ? ' · ' + new Date(mk.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : ''}</span></div>
+  const wd = byWeekday(mk.daily, main, skip, t), maxWd = Math.max(...wd.map((x) => x.avg), 1);
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Читатели за 7 дней</h2><span class="small muted">по вчера · ${esc(M.m.counterName || '')}</span></div>
       <div class="tiles d-tiles">
-        <div><div class="k">Визиты</div><div class="v">${num(w.visits)}</div><div class="s">${delta(wc.avg, pw.avg)} в среднем за день к прошлой неделе</div></div>
-        <div><div class="k">${hasGoals ? esc(goalName) : 'Цели'}</div><div class="v">${hasGoals ? num(w.conv) : '—'}</div><div class="s">${hasGoals && w.cr != null ? `${pct(w.cr, 1)} визитов ${delta(wc.cr, pw.cr)}` : 'выберите цель в Настройках'}</div></div>
+        <div><div class="k">Визиты</div><div class="v">${num(w.visits)}</div><div class="s">${delta(wc.avg, pw.avg)} в день к прошлой неделе</div></div>
+        <div><div class="k">${hasGoals ? esc(M.goalName) : 'Цели'}</div><div class="v">${hasGoals ? num(w.conv) : '—'}</div><div class="s">${hasGoals && w.cr != null ? `${pct(w.cr, 1)} визитов ${delta(wc.cr, pw.cr)}` : 'выберите цель в Настройках'}</div></div>
         <div><div class="k">Отказы</div><div class="v">${w.bounce == null ? '—' : pct(w.bounce, 0)}</div><div class="s">ушли сразу</div></div>
-        <div><div class="k">Время на странице</div><div class="v">${mmss(w.dur)}</div><div class="s">${w.depth ? `${String(Math.round(w.depth * 10) / 10).replace('.', ',')} стр. за визит` : ''}</div></div>
+        <div><div class="k">Время на сайте</div><div class="v">${mmss(w.dur)}</div><div class="s">${w.depth ? `${String(Math.round(w.depth * 10) / 10).replace('.', ',')} стр. за визит` : ''}</div></div>
       </div>
+      ${M.perSale && hasGoals ? `<p class="small">Одна покупка приносит в среднем <b>${rub(M.perSale, 0)}</b>${M.allSale ? ' (по «Доходам» за 60 дней)' : ' (из «Экономики книги»)'} → один визит стоит <b>${rub((w.cr || 0) * M.perSale, 1)}</b>.</p>` : ''}
       <div class="chart" id="mkChart"></div><div class="chart-cap small muted">Визиты по дням за 8 недель</div></div>
     <div class="card"><div class="row between"><h2 style="margin:0">Главное сейчас</h2>${steps ? `<span class="small warnc">шагов: ${steps}</span>` : ''}</div>
       <div class="list">${ins.map((x) => `<div class="item ${x.level === 'step' ? 'l-hl' : ''}"><span class="small ${LEVEL[x.level][1]}">● ${LEVEL[x.level][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b>
         ${x.why ? `<div class="small">${esc(x.why)}</div>` : ''}${x.step ? `<div class="small"><b>Что сделать:</b> ${esc(x.step)}</div>` : ''}
         ${x.lesson ? `<div class="small"><button class="link l-why" data-act="l.lesson" data-k="${x.lesson}">Почему так →</button></div>` : ''}</div>`).join('') || '<p class="muted">Пока всё ровно.</p>'}</div>
       <div class="row dl-row"><button class="dl" data-act="an.ai">${ic('copy')} Глубокий разбор с Claude</button></div></div>
-    <div class="card"><h2>Откуда приходят читатели</h2><p class="small muted">За 30 дней. Зелёным — источники, где ${hasGoals ? 'покупают заметно чаще среднего' : 'лучше'}, красным — заметно реже.</p>
-      <div class="list">${(mk.sources || []).map((x) => `<div class="item"><div class="row between"><b>${esc(x.name)}</b><span class="small">${num(x.visits)} · ${pct(x.visits / totalV, 0)}</span></div>
-        <div class="progress"><i style="width:${(x.visits / totalV * 100).toFixed(1)}%"></i></div>
-        <div class="small muted">отказы ${pct(x.bounce, 0)} · время ${mmss(x.dur)}${hasGoals ? ` · ${esc(goalName)}: ${num(reach(x, main))} (` : ''}${hasGoals ? crCell(x) + ')' : ''}</div></div>`).join('') || '<p class="muted">Нет данных.</p>'}</div></div>
-    <div class="card"><h2>Страницы, с которых начинают</h2><div class="list">${(mk.pages || []).slice(0, 6).map((x) => `<div class="item"><div class="row between"><span class="small">${esc(shortUrl(x.key || x.name))}</span><span class="small">${num(x.visits)}</span></div><div class="small muted">отказы ${pct(x.bounce, 0)}${hasGoals ? ` · доля покупок ${crCell(x)}` : ''}</div></div>`).join('') || '<p class="muted">Нет данных.</p>'}</div></div>
-    <div class="grid2">
-      <div class="card"><h2>Устройства</h2>${(mk.devices || []).map((x) => `<div class="bar-row"><div class="row between small"><span>${esc(x.name)}</span><span>${num(x.visits)}${hasGoals ? ` · ${crCell(x)}` : ''}</span></div><div class="progress"><i style="width:${(x.visits / Math.max(1, ...mk.devices.map((y) => y.visits)) * 100).toFixed(1)}%"></i></div></div>`).join('') || '<p class="muted">Нет данных.</p>'}</div>
-      <div class="card"><h2>Дни недели</h2><p class="small muted">Средние визиты за день</p>${[1, 2, 3, 4, 5, 6, 0].map((i) => `<div class="bar-row"><div class="row between small"><span>${WD[i]}</span><span>${wd[i].days ? Math.round(wd[i].avg) : '—'}</span></div><div class="progress"><i style="width:${(wd[i].avg / maxWd * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>
-    </div>
+    <div class="card"><h2>Дни недели</h2><p class="small muted">Средние визиты за полный день (дни сбоя не считаются)${hasGoals ? ' · доля покупок' : ''}</p>${[1, 2, 3, 4, 5, 6, 0].map((i) => `<div class="bar-row"><div class="row between small"><span>${WD[i]}</span><span>${wd[i].days ? Math.round(wd[i].avg) : '—'}${hasGoals && wd[i].cr != null ? ` · ${pct(wd[i].cr, 1)}` : ''}</span></div><div class="progress"><i style="width:${(wd[i].avg / maxWd * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>`;
+}
+
+// ---------- Книги и воронка ----------
+const FUNNEL_TIP = {
+  read: 'Пришли, но не начали читать: страница не зацепила. Проверьте обложку, название, первые строки аннотации и метки жанра — совпадают ли они с тем, откуда пришли люди.',
+  lib: 'Читают, но не сохраняют: первые главы не держат. Сильный крючок в конце первой главы и регулярная выкладка обычно поднимают этот шаг.',
+  buystart: 'Добавили, но не идут к покупке: часто ждут продолжения или скидки. Анонс даты выхода, понятный объём и цена помогают.',
+  buy: 'Начали покупку, но не оплатили: смотрите цену и способ оплаты; иногда помогает временная скидка для новых читателей.',
+};
+function booksTab(a, M) {
+  const { mk, t, main, skip, hasGoals } = M;
+  const books = byBook(mk.pages, main, M.titles);
+  const totV = books.reduce((s, b) => s + b.book.visits, 0), totC = books.reduce((s, b) => s + b.book.conv, 0);
+  const gt = goalTotals30(mk.daily, addDays(t, -29), t, skip), f = funnel(gt, M.m.goals || []);
+  const maxN = Math.max(1, ...f.steps.map((x) => x.n));
+  return `<div class="card"><h2>Воронка читателя</h2><p class="small muted">За 30 дней по целям Метрики (достижения цели: один человек может пройти шаг несколько раз).</p>
+      ${f.steps.length > 1 ? f.steps.map((x) => `<div class="bar-row"><div class="row between small"><span>${esc(x.name)}${x.goal ? ` <span class="muted">· ${esc(x.goal)}</span>` : ''}</span><span><b>${num(x.n)}</b>${x.rate != null ? ` · ${pct(Math.min(x.rate, 9.99), 0)} от прошлого шага` : ''}</span></div><div class="progress"><i style="width:${(x.n / maxN * 100).toFixed(1)}%"></i></div></div>`).join('')
+        + (f.worst ? `<div class="item l-hl"><b>Больше всего теряете на шаге «${esc(f.worst.name)}»: до него доходит ${pct(f.worst.rate, 0)}</b><div class="small">${FUNNEL_TIP[f.worst.id] || ''}</div></div>` : '')
+        : '<p class="muted">Отметьте в Настройках цели «Начало чтения», «Добавление в библиотеку», «Начало покупки», «Покупка» — и здесь будет путь читателя по шагам.</p>'}</div>
+    <div class="card"><h2>Книги</h2><p class="small muted">По страницам входа за 30 дней. <b>Страница книги</b> — где решают купить; <b>читалка</b> — где продолжают читать: там покупок меньше всегда, это нормально.</p>
+      <div class="list">${books.map((b) => {
+        const rs = b.title ? royaltyPerSale(M.sales, t, { book: b.title }) : null, ps = rs?.perSale ?? M.perSale;
+        return `<div class="item"><div class="row between"><b>${esc(b.title || (b.slug.charAt(0).toUpperCase() + b.slug.slice(1)).replace(/-/g, ' '))}</b><span class="small">${num(b.visits)} входов</span></div>
+          <div class="small">Страница книги: ${num(b.book.visits)}${hasGoals && b.book.visits ? ` · покупают ${pct(b.book.cr, 1)} ${vsAvg(b.book.conv, b.book.visits, totC, totV)}` : ''}</div>
+          <div class="small muted">Читалка: ${num(b.reader.visits)}${hasGoals && b.reader.visits ? ` · ${pct(b.reader.cr, 1)}` : ''} · отказы: книга ${b.book.bounce != null ? pct(b.book.bounce, 0) : '—'}, читалка ${b.reader.bounce != null ? pct(b.reader.bounce, 0) : '—'}</div>
+          ${ps && hasGoals ? `<div class="small muted">Покупка приносит ≈ ${rub(ps, 0)}${rs ? '' : ' (среднее)'} · визит на страницу книги ≈ ${rub((b.book.cr || 0) * ps, 1)}</div>` : ''}
+          ${!b.title ? '<div class="small muted">Название не нашлось в «Доходах» — показано по адресу.</div>' : ''}</div>`;
+      }).join('') || '<p class="muted">Страниц книг среди страниц входа пока нет.</p>'}</div></div>`;
+}
+
+// ---------- Источники и UTM ----------
+function srcTab(a, M) {
+  const { mk, main, hasGoals } = M;
+  const totV = (mk.sources || []).reduce((s, x) => s + x.visits, 0) || 1, totC = (mk.sources || []).reduce((s, x) => s + reach(x, main), 0);
+  const rows = utmTable(mk.utm || [], M.c.settings.direct?.utms || [], main, M.perSale);
+  const cards = [...new Set((mk.pages || []).map((p) => String(p.key || '')).filter((u) => litnetPage(u).type === 'book').map((u) => u.replace(/[?#].*$/, '')))];
+  const u = a.ui.utm || {};
+  return `<div class="card"><h2>Откуда приходят читатели</h2><p class="small muted">За 30 дней. «Чаще/реже среднего» — только если разница не случайна по статистике.</p>
+      <div class="list">${(mk.sources || []).map((x) => `<div class="item"><div class="row between"><b>${esc(x.name)}</b><span class="small">${num(x.visits)} · ${pct(x.visits / totV, 0)}</span></div>
+        <div class="progress"><i style="width:${(x.visits / totV * 100).toFixed(1)}%"></i></div>
+        <div class="small muted">отказы ${pct(x.bounce, 0)} · время ${mmss(x.dur)}${hasGoals ? ` · ${esc(M.goalName)}: ${num(reach(x, main))} (${pct(crOf(x, main) || 0, 1)})` : ''} ${hasGoals ? vsAvg(reach(x, main), x.visits, totC, totV) : ''}</div></div>`).join('') || `<p class="muted">Метрика не отдала источники${(mk.errors || [])[0] ? ': ' + esc(mk.errors[0]) : ''}. Нажмите ↻ вверху.</p>`}</div></div>
+    <div class="card"><h2>Метки UTM</h2>
+      <p class="small">Метка — хвост ссылки, по которому Метрика понимает, откуда именно пришёл читатель: какой пост, канал, рассылка или реклама. Ставьте метку на каждую ссылку, которую публикуете, — и здесь будет видно, что приводит покупателей и окупается ли платное размещение.</p>
+      <form data-form="an.utm" class="settings-form">
+        <label>Куда ведёт ссылка</label><input name="url" list="anCards" value="${esc(u.url || cards[0] || '')}" placeholder="https://litnet.com/ru/book/…" required><datalist id="anCards">${cards.map((x) => `<option value="${esc(x)}">`).join('')}</datalist>
+        <div class="f2"><div><label>Где публикую</label><select name="place">${Object.entries(UTM_PRESETS).map(([k, v]) => opt(k, v[2], u.place || 'telegram')).join('')}</select></div>
+          <div><label>Кампания (книга, акция)</label><input name="campaign" value="${esc(u.campaign || '')}" placeholder="Звериная тропа — старт" required></div></div>
+        <div class="f2"><div><label>Вариант (необязательно)</label><input name="content" value="${esc(u.content || '')}" placeholder="пост 1, обложка Б"></div>
+          <div><label>Сколько заплатили, ₽ (если платно)</label><input name="cost" inputmode="decimal" value="${esc(u.cost || '')}"></div></div>
+        <div class="row d-save"><button class="primary" type="submit">Создать ссылку</button></div></form>
+      ${u.link ? `<div class="item l-hl"><div class="small" style="word-break:break-all"><b>${esc(u.link)}</b></div><div class="row dl-row"><button class="dl" data-act="an.copy">${ic('copy')} Скопировать ссылку</button><span class="small up">Метка сохранена — появится в таблице, когда по ней придут читатели.</span></div></div>` : ''}
+      <p class="small muted">Метки, созданные в кабинете Литнета, тоже появятся здесь сами — Метрика видит их так же.</p>
+      ${rows.length ? `<div class="list">${rows.map((x, i) => `<div class="item"><div class="row between"><b>${esc(x.label)}</b><span class="small">${num(x.visits)} визитов</span></div>
+        <div class="small">${hasGoals ? `покупок ${num(x.conv)}${x.cr != null ? ` (${pct(x.cr, 1)})` : ''}` : ''}${x.cost ? ` · расход ${rub(x.cost, 0)}${x.cpa != null ? ` · покупатель ${rub(x.cpa, 0)}` : ''}${x.romi != null ? ` · <span class="${x.romi >= 0 ? 'up' : 'down'}">окупаемость ${x.romi >= 0 ? '+' : ''}${pct(x.romi, 0)}</span>` : ''}` : ''}</div>
+        <div class="small muted">${esc([x.source, x.medium, x.campaign].filter(Boolean).join(' / '))}${x.visits && x.visits < MIN_VISITS ? ' · данных пока мало' : ''}</div>
+        ${x.saved ? `<div class="row"><button class="link" data-act="an.cost" data-i="${i}">${x.cost ? 'Изменить расход' : 'Указать расход'}</button><button class="link danger" data-act="an.del" data-id="${esc(x.saved.id)}">Убрать</button></div>` : ''}</div>`).join('')}</div>` : '<p class="muted">Меток пока нет.</p>'}</div>
+    <div class="grid2"><div class="card"><h2>Устройства</h2>${(mk.devices || []).map((x) => `<div class="bar-row"><div class="row between small"><span>${esc(x.name)}</span><span>${num(x.visits)}${hasGoals ? ` · ${pct(crOf(x, main) || 0, 1)}` : ''}</span></div><div class="progress"><i style="width:${(x.visits / Math.max(1, ...mk.devices.map((y) => y.visits)) * 100).toFixed(1)}%"></i></div></div>`).join('') || '<p class="muted">Нет данных.</p>'}</div>
+      <div class="card"><h2>Поисковики и сайты</h2>${(mk.engines || []).slice(0, 8).map((x) => `<div class="row between small"><span>${esc(x.name)}</span><span>${num(x.visits)}${hasGoals ? ` · ${pct(crOf(x, main) || 0, 1)}` : ''}</span></div>`).join('') || '<p class="muted">Нет данных.</p>'}</div></div>`;
+}
+forms['an.utm'] = async (fd) => {
+  const [source, medium, label] = UTM_PRESETS[fd.get('place')] || UTM_PRESETS.other;
+  const v = { url: fd.get('url').trim(), place: fd.get('place'), campaign: fd.get('campaign').trim(), content: fd.get('content').trim(), cost: N(fd.get('cost')) };
+  const link = buildUtm(v.url, { source, medium, campaign: v.campaign, content: v.content });
+  if (!link) { toast('Ссылка должна начинаться с https://'); return; }
+  const utms = app().ctx().settings.direct?.utms || [];
+  app().ui.utm = { ...v, link };
+  await saveD({ utms: [...utms, { id: uid(), label: `${label}: ${v.campaign}${v.content ? ' · ' + v.content : ''}`, url: link, source, medium, campaign: v.campaign, content: v.content, cost: v.cost || 0, at: app().ctx().today }] });
+  try { await navigator.clipboard.writeText(link); toast('Ссылка создана и скопирована'); } catch { toast('Ссылка создана'); }
+  app().rerender();
+};
+acts['an.copy'] = async () => { try { await navigator.clipboard.writeText(app().ui.utm.link); toast('Скопировано'); } catch { toast('Не получилось скопировать'); } return false; };
+acts['an.del'] = async (d) => { await saveD({ utms: (app().ctx().settings.direct?.utms || []).filter((x) => x.id !== d.id) }); };
+acts['an.cost'] = (d) => {
+  const M = model(app()), row = utmTable(M.mk.utm || [], M.c.settings.direct?.utms || [], M.main, M.perSale)[Number(d.i)];
+  openSheet('Расход на размещение', `<p class="small">${esc(row.label)}</p><label>Сколько заплатили, ₽</label><input name="v" inputmode="decimal" value="${esc(row.cost || '')}">`, async (fd) => {
+    const v = N(fd.get('v')) || 0;
+    await saveD({ utms: (app().ctx().settings.direct?.utms || []).map((x) => (x.id === row.saved.id ? { ...x, cost: v } : x)) });
+  });
+  return false;
+};
+
+// ---------- Формулы (на ваших цифрах) ----------
+function formulasTab(a, M) {
+  const { m30, perSale } = M, cr = m30.cr, ci = m30.visits ? propCI(m30.conv, m30.visits) : null;
+  const epv = cr != null && perSale ? cr * perSale : null, n = cr ? sampleSize(cr, 0.01) : null;
+  const F = (name, formula, val, note = '') => `<div class="item"><b>${name}</b><div class="small f-formula">${formula}</div>${val ? `<div class="small">У вас: <b>${val}</b></div>` : ''}${note ? `<div class="small muted">${note}</div>` : ''}</div>`;
+  return `<div class="card"><h2>Формулы аналитика</h2><p class="small muted">Всё, чем считает приложение, — на ваших цифрах за 30 дней (дни сбоя не считаются).</p><div class="list">
+    ${F('Конверсия (CR)', 'покупки ÷ визиты', cr != null ? `${num(m30.conv)} ÷ ${num(m30.visits)} = ${pct(cr, 2)}` : '', 'Сколько визитов из ста заканчиваются покупкой.')}
+    ${F('Точность конверсии', 'интервал Уилсона, 95 %: p ± 1,96·√(p(1−p)/n)', ci ? `от ${pct(ci.lo, 2)} до ${pct(ci.hi, 2)}` : '', 'Настоящая доля почти наверняка в этих пределах. Чем больше визитов, тем уже интервал.')}
+    ${F('Доход с покупки', 'роялти ÷ число покупок (по «Доходам», 60 дней)', perSale ? rub(perSale, 0) : '', perSale ? '' : 'Загрузите выгрузку Литнета в «Доходах» или впишите доход в Учёба → Практикум → Экономика книги.')}
+    ${F('Ценность визита', 'CR × доход с покупки', epv != null ? rub(epv, 2) : '', 'Сколько в среднем приносит один пришедший человек. Это потолок цены клика, при котором реклама выходит в ноль.')}
+    ${F('Допустимая цена клика', 'ценность визита × (1 − желаемая доля прибыли)', epv != null ? `в ноль — ${rub(epv, 1)}, с прибылью 30 % — ${rub(epv * 0.7, 1)}` : '', 'Цена клика выше — реклама в минус (если не считать будущие книги серии).')}
+    ${F('Цена покупателя (CPA)', 'расход ÷ покупки', '', 'Сравнивайте с доходом с покупки: CPA ниже — реклама окупается.')}
+    ${F('Окупаемость (ROMI)', '(доход − расход) ÷ расход', '', 'Плюс — заработали больше, чем потратили. Для меток UTM считается сама, если указать расход.')}
+    ${F('ДРР — доля расходов на рекламу', 'расход ÷ доход', '', 'Сколько копеек рекламы на рубль дохода. Меньше 100 % — в плюсе.')}
+    ${F('Ценность читателя серии (LTV)', 'доход с покупки × (1 + доля купивших следующую книгу × число следующих книг)', '', 'Если у книги будет продолжение, покупатель стоит больше одной покупки — за него можно платить больше.')}
+    ${F('Значима ли разница', 'z = (p₁ − p₂) ÷ √(p(1−p)(1/n₁ + 1/n₂)); |z| ≥ 1,96 — 95 %, ≥ 2,58 — 99 %', '', 'По этой формуле приложение решает, писать ли «чаще/реже среднего» или «может быть случайностью».')}
+    ${F('Сколько нужно данных', 'n ≈ 16·p(1−p) ÷ δ² визитов на каждый вариант', n ? `чтобы заметить разницу в 1 п. п. при вашей конверсии — около ${num(n)} визитов на вариант` : '', 'Поэтому тесты обложек и объявлений нельзя судить по паре дней.')}
+  </div></div>`;
+}
+
+export function analyticsView(a) {
+  const c = a.ctx(), m = metrikaOf(c), mk = a.snap('mk');
+  if (!m?.counterId) return { html: connectCard() };
+  if (!mk) return { html: '<div class="card"><h2>Аналитика читателей</h2><p class="muted">Загружаю данные Метрики… Если долго — нажмите ↻ вверху.</p></div>' };
+  const M = model(a), tab = a.ui.anTab || 'sum';
+  return {
+    html: `${demo.on ? '<div class="alert">Это пример — так будет выглядеть аналитика вашего счётчика.</div>' : ''}
+    <div class="chips l-tabs">${TABS.map(([k, t]) => `<button class="chip ${tab === k ? 'on' : ''}" data-act="an.tab" data-k="${k}">${t}</button>`).join('')}</div>
+    ${tab === 'books' ? booksTab(a, M) : tab === 'src' ? srcTab(a, M) : tab === 'f' ? formulasTab(a, M) : summaryTab(a, M)}
     ${(mk.errors || []).length ? `<p class="small muted">Часть отчётов Метрика не отдала: ${esc(mk.errors[0])}</p>` : ''}`,
     after() {
       const el = document.getElementById('mkChart');
@@ -69,4 +185,5 @@ export function analyticsView(a) {
     },
   };
 }
-acts['an.ai'] = () => { sendToChat(packageText(app(), 'Разбери аналитику читателей по Метрике (metrikaSite): откуда приходят и кто покупает, что усилить, что исправить, что подождать. Конкретные шаги с цифрами.'), 'claude'); return false; };
+acts['an.tab'] = (d) => { app().ui.anTab = d.k; };
+acts['an.ai'] = () => { sendToChat(packageText(app(), 'Разбери аналитику читателей по Метрике (metrikaSite): воронка, книги (страница книги и читалка отдельно), источники и метки UTM, что усилить, что исправить, что подождать. Конкретные шаги с цифрами и с учётом статистической значимости.'), 'claude'); return false; };

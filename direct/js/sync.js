@@ -195,7 +195,8 @@ export async function refreshMetrika(app) {
   const sources = await get('ym:s:lastTrafficSource', d30, 20);
   const engines = await get('ym:s:lastSourceEngine', d30, 30);
   const devices = await get('ym:s:deviceCategory', d30, 10);
-  const pages = await get('ym:s:startURL', d30, 30);
+  const pages = await get('ym:s:startURL', d30, 100);
+  const utm = await get('ym:s:lastUTMSource,ym:s:lastUTMMedium,ym:s:lastUTMCampaign,ym:s:lastUTMContent', d30, 100);
   const old = snap(app, 'mk') || {};
-  await putSnap(app, [{ id: 'mk', at: new Date().toISOString(), counterId: m.counterId, goals, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], engines: engines ?? old.engines ?? [], devices: devices ?? old.devices ?? [], pages: pages ?? old.pages ?? [], errors }]);
+  await putSnap(app, [{ id: 'mk', at: new Date().toISOString(), counterId: m.counterId, goals, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], engines: engines ?? old.engines ?? [], devices: devices ?? old.devices ?? [], pages: pages ?? old.pages ?? [], utm: utm ?? old.utm ?? [], errors }]);
 }

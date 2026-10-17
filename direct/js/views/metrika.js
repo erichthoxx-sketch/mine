@@ -14,7 +14,7 @@ const st = { counters: null, goals: null, err: '', busy: false };
 // цели, похожие на покупку, — отмечаем сами (владелица может поправить)
 export const looksLikeBuy = (name) => /покуп|оплат|купил|заказ|purchase|order|payment|buy/i.test(name || '');
 // пример для режима «посмотреть на примере»
-export const DEMO_METRIKA = { counterId: 555, counterName: 'Лана Фрейтаг — Литнет', goals: [{ id: 9001, name: 'Покупка книги' }, { id: 9002, name: 'Добавление в библиотеку' }], main: [9001] };
+export const DEMO_METRIKA = { counterId: 555, counterName: 'Лана Фрейтаг — Литнет', goals: [{ id: 9003, name: 'Начало чтения' }, { id: 9002, name: 'Добавление в библиотеку' }, { id: 9004, name: 'Начало покупки книги' }, { id: 9001, name: 'Покупка книги' }], main: [9001] };
 export const metrikaOf = (c) => (demo.on ? DEMO_METRIKA : c.settings.direct?.metrika || null);
 
 export function metrikaCard(c) {

@@ -308,7 +308,7 @@ test('аналитика Метрики: разбор ответа, итоги, 
   const t = ins.map((x) => x.level + ': ' + x.title);
   assert.ok(t.some((x) => /^warn: Визитов меньше/.test(x)), t.join('\n'));
   assert.ok(t.some((x) => /^step: «Соцсети»: покупают/.test(x)));
-  assert.ok(t.some((x) => /^warn: Из рекламы покупают реже/.test(x)));
+  assert.ok(t.some((x) => /^warn: «Реклама»: покупают реже/.test(x)), t.join('\n'));
   assert.ok(t.some((x) => /^warn: «Реклама»: 70 % уходят сразу/.test(x)));
   assert.ok(t.some((x) => /^step: Больше всего читателей в субботу/.test(x)));
   assert.equal(ins[0].level, 'step');
@@ -316,4 +316,35 @@ test('аналитика Метрики: разбор ответа, итоги, 
   const few = mkInsights({ daily: daily.map((x) => ({ ...x, visits: 1 })), main: ['1'], hasGoals: true, today });
   assert.ok(few.every((x) => x.level === 'wait' || x.level === 'step'));
   assert.equal(reach({ goals: { 1: 2, 2: 5 } }, ['1']), 2);
+});
+
+test('Литнет: страница книги и читалка, книги по названию, статистика, воронка, UTM и деньги', async () => {
+  const M = await import('../direct/js/mcalc.js');
+  assert.deepEqual(M.litnetPage('https://litnet.com/ru/reader/zverinaya-tropa-dlya-dvoih-b627091?c=1'), { type: 'reader', slug: 'zverinaya-tropa-dlya-dvoih', bookId: '627091' });
+  assert.equal(M.litnetPage('litnet.com/ru/book/zverinaya-tropa-dlya-dvoih-b627091').type, 'book');
+  assert.equal(M.litnetPage('https://litnet.com/ru/lana-freitag-u12345').type, 'author');
+  assert.equal(M.matchBook('zverinaya-tropa-dlya-dvoih', ['Истинная пара', 'Звериная тропа для двоих']), 'Звериная тропа для двоих');
+  assert.equal(M.matchBook('drugaya-kniga', ['Звериная тропа для двоих']), null);
+  const pages = [
+    { key: 'https://litnet.com/ru/book/zverinaya-tropa-dlya-dvoih-b627091', visits: 300, bounce: 0.2, goals: { 1: 30 } },
+    { key: 'https://litnet.com/ru/reader/zverinaya-tropa-dlya-dvoih-b627091', visits: 443, bounce: 0.1, goals: { 1: 5 } },
+  ];
+  const bb = M.byBook(pages, ['1'], ['Звериная тропа для двоих']);
+  assert.equal(bb.length, 1); assert.equal(bb[0].title, 'Звериная тропа для двоих'); assert.equal(bb[0].book.cr, 0.1); assert.equal(bb[0].visits, 743);
+  // читалка не считается «плохой страницей»
+  const ins = M.mkInsights({ daily: [], pages, main: ['1'], hasGoals: true, today: '2026-10-17' });
+  assert.ok(!ins.some((x) => /Страница книги покупают реже/.test(x.title)));
+  const ci = M.propCI(50, 1000); assert.ok(ci.lo < 0.05 && ci.hi > 0.05 && ci.lo > 0.035);
+  assert.equal(M.twoProp(60, 1000, 30, 1000).level, 'high'); assert.equal(M.twoProp(11, 200, 10, 200).level, 'low');
+  assert.equal(M.sampleSize(0.05, 0.02), 1900);
+  const f = M.funnel({ visits: 1000, goals: { 1: 400, 2: 200, 3: 100, 4: 50 } }, [{ id: 1, name: 'Начало чтения' }, { id: 2, name: 'Добавление книги в библиотеку' }, { id: 3, name: 'Начало покупки книги' }, { id: 4, name: 'Покупка книги' }]);
+  assert.deepEqual(f.steps.map((x) => x.id), ['visit', 'read', 'lib', 'buystart', 'buy']);
+  assert.equal(f.steps[4].rate, 0.5); assert.equal(f.worst.id, 'read');
+  const rps = M.royaltyPerSale([{ date: '2026-10-10', book: 'А', qty: 4, royalty: 400 }, { date: '2026-10-11', book: 'Б', qty: 1, royalty: 50 }], '2026-10-17');
+  assert.equal(rps.perSale, 90);
+  const url = M.buildUtm('https://litnet.com/ru/book/x-b1', { source: 'telegram', medium: 'social', campaign: 'Звериная тропа старт', content: 'пост 1' });
+  assert.equal(url, 'https://litnet.com/ru/book/x-b1?utm_source=telegram&utm_medium=social&utm_campaign=zverinaya_tropa_start&utm_content=post_1');
+  const rows = M.mkRows({ data: [{ dimensions: [{ name: 'telegram' }, { name: 'social' }, { name: 'zverinaya_tropa_start' }, { name: 'post_1' }], metrics: [200, 150, 10, 3, 100, 12] }, { dimensions: [{ name: null }, { name: null }, { name: null }, { name: null }], metrics: [5000, 1, 1, 1, 1, 100] }] }, [1]);
+  const t = M.utmTable(rows, [{ label: 'Пост в ТГ', source: 'telegram', medium: 'social', campaign: 'Звериная тропа старт', cost: 600 }], ['1'], 90);
+  assert.equal(t.length, 1); assert.equal(t[0].label, 'Пост в ТГ'); assert.equal(t[0].conv, 12); assert.equal(t[0].cpa, 50); assert.equal(t[0].romi, (12 * 90 - 600) / 600);
 });

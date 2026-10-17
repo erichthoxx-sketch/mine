@@ -83,7 +83,7 @@ export function demoMetrikaSnap(today) {
   for (let i = 55; i >= 0; i--) {
     const key = addDays(today, -i), wd = new Date(key + 'T00:00:00Z').getUTCDay();
     const visits = Math.round((i < 7 ? 150 : 120) * W[wd] * (0.85 + r() * 0.3));
-    daily.push({ key, name: key, visits, users: Math.round(visits * 0.8), bounce: 0.28 + r() * 0.1, depth: 3.2, dur: 210, goals: { 9001: Math.round(visits * (i < 7 ? 0.035 : 0.03)), 9002: Math.round(visits * 0.09) } });
+    daily.push({ key, name: key, visits, users: Math.round(visits * 0.8), bounce: 0.28 + r() * 0.1, depth: 3.2, dur: 210, goals: { 9001: Math.round(visits * (i < 7 ? 0.035 : 0.03)), 9002: Math.round(visits * 0.09), 9003: Math.round(visits * 0.62), 9004: Math.round(visits * 0.06) } });
   }
   const S = [
     ['internal', 'Внутренние переходы', 1900, 0.22, 0.04], ['ad', 'Переходы по рекламе', 820, 0.55, 0.012], ['social', 'Переходы из социальных сетей', 520, 0.3, 0.07],
@@ -91,7 +91,12 @@ export function demoMetrikaSnap(today) {
   ].map(([key, name, visits, bounce, cr]) => ({ key, name, visits, users: Math.round(visits * 0.8), bounce, depth: 3, dur: 200, goals: { 9001: Math.round(visits * cr), 9002: Math.round(visits * cr * 3) } }));
   const D = [['mobile', 'Смартфоны', 2900, 0.33, 0.026], ['desktop', 'ПК', 980, 0.24, 0.055], ['tablet', 'Планшеты', 160, 0.3, 0.03]]
     .map(([key, name, visits, bounce, cr]) => ({ key, name, visits, users: visits, bounce, depth: 3, dur: 200, goals: { 9001: Math.round(visits * cr), 9002: 0 } }));
-  const P = [['https://litnet.com/ru/book/istinnaya-para-dlya-drakona-b100001', 2100, 0.045], ['https://litnet.com/ru/book/popadanka-v-akademiyu-b100002', 1300, 0.008], ['https://litnet.com/ru/lana-freitag-u12345', 400, 0.02]]
-    .map(([key, visits, cr]) => ({ key, name: key, visits, users: visits, bounce: 0.3, depth: 3, dur: 200, goals: { 9001: Math.round(visits * cr), 9002: 0 } }));
-  return { id: 'mk', at: new Date().toISOString(), demo: true, counterId: 555, goals: [9001, 9002], daily, sources: S, engines: [], devices: D, pages: P, errors: [] };
+  // страница книги (решают купить) и читалка (уже читают — покупок меньше)
+  const P = [['https://litnet.com/ru/book/istinnaya-para-dlya-drakona-b100001', 1500, 0.055, 0.25], ['https://litnet.com/ru/reader/istinnaya-para-dlya-drakona-b100001', 900, 0.012, 0.12],
+    ['https://litnet.com/ru/book/popadanka-v-akademiyu-b100002', 700, 0.012, 0.42], ['https://litnet.com/ru/reader/popadanka-v-akademiyu-b100002', 450, 0.006, 0.1], ['https://litnet.com/ru/lana-freitag-u12345', 400, 0.02, 0.3]]
+    .map(([key, visits, cr, bounce]) => ({ key, name: key, visits, users: visits, bounce, depth: 3, dur: 200, goals: { 9001: Math.round(visits * cr), 9002: 0 } }));
+  // метки UTM: свои ссылки из соцсетей и рассылки
+  const U = [[['telegram', 'social', 'istinnaya_para_start', 'post_1'], 260, 0.07], [['vk', 'social', 'istinnaya_para_start', ''], 140, 0.03], [['email', 'email', 'skidka_oktyabr', ''], 90, 0.11]]
+    .map(([dims, visits, cr]) => ({ key: dims.join('|'), dims, name: dims.join(' / '), visits, users: visits, bounce: 0.2, depth: 3, dur: 240, goals: { 9001: Math.round(visits * cr), 9002: 0 } }));
+  return { id: 'mk', at: new Date().toISOString(), demo: true, counterId: 555, goals: [9001, 9002, 9003, 9004], daily, sources: S, engines: [], devices: D, pages: P, utm: U, errors: [] };
 }

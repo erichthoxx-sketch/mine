@@ -16,7 +16,7 @@ import { aiView } from './views/ai.js';
 import { logView } from './views/log.js';
 import { settingsView } from './views/settings.js';
 
-const store = createStore({ colls: ['d_snap', 'd_log', 'campaigns', 'reports', 'books', 'days'], localKey: 'authorDirect.v1' });
+const store = createStore({ colls: ['d_snap', 'd_log', 'campaigns', 'reports', 'books', 'days', 'sales'], localKey: 'authorDirect.v1' });
 initAccent(store); // цвет акцентов — общий для всех приложений (выбирается в Мастерской)
 const ui = { route: '/', cTab: 'queries', lTab: '', lesson: '', demo: false, busy: '' };
 keepPlace(ui, ['cTab', 'lTab', 'demo']);

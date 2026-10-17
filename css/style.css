@@ -1355,3 +1355,5 @@ a.card.arc-warn .ic { width: 18px; height: 18px; flex: 0 0 auto; }
 .ai-tasks { margin: 10px 0 4px; }
 .l-hl { background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface)); border-radius: 12px; padding: 10px 12px !important; } .l-step { color: var(--accent); font-weight: 700; }
 @media (max-width: 560px) { .app-direct .grid2 { grid-template-columns: 1fr; } }
+/* Аналитика: формулы — моноширинно и спокойно */
+.f-formula { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-2); margin: 2px 0; word-break: break-word; }

@@ -84,7 +84,10 @@ direct/js/                 — «Директ»
                 покупки по целям: convRows, goalTotals (цена покупки), goalHints (аналитик), goalWeekInsight, metrikaRows
   demo.js       пример данных (только в памяти страницы, в базу не пишется)
   mcalc.js      аналитика Метрики (чистые функции): mkRows, sumDays, byWeekday, mkInsights — шаги step/warn/good/wait/info
-  views/        analytics («Аналитика», #/an: Метрика сама по себе — refreshMetrika в sync.js → d_snap/mk; работает без Директа),
+  views/        analytics («Аналитика», #/an: Метрика сама по себе — refreshMetrika в sync.js → d_snap/mk; работает без Директа;
+                вкладки Сводка / Книги (воронка funnel, страница книги и читалка отдельно — litnetPage, byBook) / Источники
+                (пометки «чаще/реже среднего» только при значимой разнице — twoProp; конструктор меток UTM → settings.direct.utms,
+                таблица utmTable с расходом, ценой покупателя и окупаемостью; доход с покупки — royaltyPerSale из sales) / Формулы),
                 home (обзор, «что сделать сейчас» + подсказки по покупкам), campaign, metrika (подключение Метрики, выбор счётчика и целей), learn («Учёба»: Сейчас — этап теста testStage + разбор
                 weekInsights/changeEffects; Настройка — setup.js, шаги с галочками; Практикум — «Разбор ваших кампаний»
                 (auditCampaign в dcalc: улучшить/подождать/на заметку/хорошо, с кнопками действий) + темы уровня таргетолога

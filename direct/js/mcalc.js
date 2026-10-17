@@ -13,12 +13,15 @@ export const SESSION_METRICS = ['ym:s:visits', 'ym:s:users', 'ym:s:bounceRate', 
 export const goalMetric = (id) => `ym:s:goal${id}reaches`;
 
 // Ответ stat/v1/data → [{key, name, visits, users, bounce (доля), depth, dur, goals {id: достижения}}]
+// Несколько группировок (например, метки UTM) → key «a|b|c», dims — значения по порядку
 export function mkRows(json, goalIds = []) {
   return (json?.data || []).map((r) => {
-    const d = r.dimensions?.[0] || {}, m = r.metrics || [];
+    const ds = r.dimensions || [], d = ds[0] || {}, m = r.metrics || [];
     const goals = {};
     goalIds.forEach((g, i) => { goals[g] = Math.round(m[5 + i] || 0); });
-    return { key: d.id ?? d.name ?? '', name: d.name ?? String(d.id ?? ''), visits: Math.round(m[0] || 0), users: Math.round(m[1] || 0), bounce: (m[2] || 0) / 100, depth: m[3] || 0, dur: m[4] || 0, goals };
+    const row = { key: d.id ?? d.name ?? '', name: d.name ?? String(d.id ?? ''), visits: Math.round(m[0] || 0), users: Math.round(m[1] || 0), bounce: (m[2] || 0) / 100, depth: m[3] || 0, dur: m[4] || 0, goals };
+    if (ds.length > 1) { row.dims = ds.map((x) => x?.name ?? null); row.key = row.dims.map((x) => x ?? '').join('|'); row.name = row.dims.filter(Boolean).join(' · '); }
+    return row;
   });
 }
 export const reach = (row, ids) => (ids || Object.keys(row.goals || {})).reduce((s, id) => s + (row.goals?.[id] || 0), 0);
@@ -72,17 +75,15 @@ export function mkInsights({ daily = [], sources = [], devices = [], pages = [],
     }
   } else add('wait', 'Динамика', 'Мало визитов, чтобы сравнивать недели', `Нужно хотя бы ${MIN_VISITS} визитов за каждую из двух недель.`);
 
-  // источники: где читатели покупают чаще, где сразу уходят
+  // источники: где покупают чаще/реже остальных — только если разница не случайна
   const big = sources.filter((s) => s.visits >= MIN_VISITS);
   if (hasGoals && m30.cr != null && m30.conv >= MIN_CONV) {
-    const best = big.filter((s) => reach(s, main) >= MIN_CONV).sort((a, b) => reach(b, main) / b.visits - reach(a, main) / a.visits)[0];
-    if (best && reach(best, main) / best.visits >= 1.5 * m30.cr) add('step', 'Источники', `«${best.name}»: покупают в ${String(r1(reach(best, main) / best.visits / m30.cr)).replace('.', ',')} раза чаще среднего`, `${best.visits} визитов, ${reach(best, main)} покупок — это ваши самые «тёплые» читатели.`, 'Усильте этот источник: чаще анонсы там же, а в рекламе — похожая аудитория.', 'scale');
-    const ad = sources.find((s) => s.key === 'ad');
-    if (ad && ad.visits >= MIN_VISITS) {
-      const cr = reach(ad, main) / ad.visits;
-      if (cr < 0.5 * m30.cr) add('warn', 'Реклама', `Из рекламы покупают реже: ${pc(cr)} против ${pc(m30.cr)} в среднем`, 'Реклама приводит людей, но не тех — или объявление обещает не то, что на странице книги.', 'Уточните аудиторию и фразы; проверьте, совпадают ли жанр и тон объявления со страницей книги.', 'goals');
-      else if (cr >= m30.cr) add('good', 'Реклама', `Из рекламы покупают не хуже остальных (${pc(cr)})`, 'Реклама приводит своих читателей — её можно аккуратно расширять, если окупается.', 'Сверьте окупаемость в «Доходах» и, если в плюсе, поднимите бюджет на 20–30 %.', 'scale');
-    }
+    const totV = sources.reduce((a, x) => a + x.visits, 0), totC = sources.reduce((a, x) => a + reach(x, main), 0);
+    const cmp = big.map((x) => ({ x, k: reach(x, main), t: twoProp(reach(x, main), x.visits, totC - reach(x, main), totV - x.visits) })).filter((c) => c.t.level !== 'low');
+    const best = cmp.filter((c) => c.t.z > 0 && c.k >= MIN_CONV).sort((a, b) => b.t.z - a.t.z)[0];
+    if (best) add('step', 'Источники', `«${best.x.name}»: покупают в ${String(r1(best.k / best.x.visits / m30.cr)).replace('.', ',')} раза чаще среднего`, `${best.x.visits} визитов, ${best.k} покупок (${pc(best.k / best.x.visits)} против ${pc(m30.cr)}), ${SURE[best.t.level]}. Это ваши самые «тёплые» читатели.`, 'Усильте этот источник: чаще анонсы там же, а в рекламе — похожая аудитория. Ставьте метки UTM, чтобы видеть, какие именно посты работают.', 'scale');
+    const worst = cmp.filter((c) => c.t.z < 0 && c.x.key !== 'internal').sort((a, b) => a.t.z - b.t.z)[0];
+    if (worst) add('warn', 'Источники', `«${worst.x.name}»: покупают реже — ${pc(worst.k / worst.x.visits)} против ${pc(m30.cr)}`, `${worst.x.visits} визитов, ${SURE[worst.t.level]}. Люди приходят, но не покупают.`, worst.x.key === 'ad' ? 'Уточните аудиторию рекламы и проверьте, совпадает ли объявление с книгой.' : 'Посмотрите, куда ведут ссылки из этого источника: на страницу книги (где покупают) или в читалку.', 'goals');
   }
   const bouncy = big.filter((s) => s.bounce >= 0.6).sort((a, b) => b.visits - a.visits)[0];
   if (bouncy) add('warn', 'Источники', `«${bouncy.name}»: ${Math.round(bouncy.bounce * 100)} % уходят сразу`, 'Люди приходят и почти не смотрят страницу — источник приводит случайных посетителей или ожидания не совпадают.', bouncy.key === 'ad' ? 'Сверьте объявление со страницей книги: жанр, обложка, первые строки аннотации.' : 'Если это реклама или ссылки — уточните, где и как вы зовёте читателей.', 'rsy');
@@ -104,13 +105,137 @@ export function mkInsights({ daily = [], sources = [], devices = [], pages = [],
     if (top.avg >= low.avg * 1.3) add('step', 'Дни недели', `Больше всего читателей в ${WD[top.wd]} (в среднем ${Math.round(top.avg)}), меньше — в ${WD[low.wd]}`, 'Это ваш ритм аудитории за последние недели.', `Ставьте выход глав и анонсы на ${WD[top.wd]}; рекламу в ${WD[low.wd]} можно приглушить.`, 'rhythm');
   } else add('wait', 'Дни недели', 'Ритм по дням недели появится через 4 недели данных', 'Нужно хотя бы по 4 каждого дня недели, чтобы не путать случайность с закономерностью.');
 
-  // страницы входа: много визитов, мало покупок
+  // страницы входа: только страницы КНИГ (читалка — это уже читающие, там покупок меньше всегда)
   if (hasGoals && m30.cr) {
-    const weak = pages.filter((p) => p.visits >= MIN_VISITS * 2 && reach(p, main) / p.visits < 0.4 * m30.cr).sort((a, b) => b.visits - a.visits)[0];
-    if (weak) add('warn', 'Страницы', `Страница с ${weak.visits} входами почти не продаёт`, `${shortUrl(weak.key || weak.name)} — доля покупок ${pc(reach(weak, main) / weak.visits)} при средней ${pc(m30.cr)}.`, 'Обновите аннотацию, первые строки и обложку этой книги; проверьте цену и что продолжение выходит.', 'goals');
+    const cards = pages.filter((p) => litnetPage(p.key || p.name).type === 'book' && p.visits >= MIN_VISITS);
+    const totV = cards.reduce((a, x) => a + x.visits, 0), totC = cards.reduce((a, x) => a + reach(x, main), 0);
+    const weak = cards.map((p) => ({ p, k: reach(p, main), t: twoProp(reach(p, main), p.visits, totC - reach(p, main), totV - p.visits) })).filter((c) => c.t.z < 0 && c.t.level !== 'low').sort((a, b) => a.t.z - b.t.z)[0];
+    if (weak) add('warn', 'Страница книги', `Страница книги покупают реже других: ${pc(weak.k / weak.p.visits)}`, `${shortUrl(weak.p.key || weak.p.name)} — ${weak.p.visits} входов, ${SURE[weak.t.level]}. Здесь человек решает, покупать ли.`, 'Проверьте обложку, первые строки аннотации, цену и то, что продолжение выходит регулярно.', 'goals');
+    const rd = pages.filter((p) => litnetPage(p.key || p.name).type === 'reader').reduce((a, x) => a + x.visits, 0), all = pages.reduce((a, x) => a + x.visits, 0);
+    if (all && rd / all >= 0.3) add('info', 'Читалка', `${Math.round(rd / all * 100)} % визитов начинаются в читалке`, 'Это постоянные читатели, которые приходят за новой главой: у них доля покупок ниже, потому что многие уже купили или ждут продолжения. Это хороший знак удержания.', 'Регулярность выкладки удерживает этих людей; анонс следующей главы в конце главы — тоже.', 'rhythm');
   }
   if (hasGoals && m30.visits >= 200 && m30.conv === 0) add('warn', 'Цели', 'За 30 дней ни одной достигнутой главной цели', 'Возможно, выбрана не та цель или она перестала срабатывать.', 'Проверьте в Метрике: Цели → посмотрите, достигается ли цель вообще.', 'goals');
   return order(out);
 }
 const order = (a) => { const o = { step: 0, warn: 1, good: 2, wait: 3, info: 4 }; return a.sort((x, y) => o[x.level] - o[y.level]); };
 export const shortUrl = (u) => String(u || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\?.*$/, '').slice(0, 70);
+
+
+// ---------- страницы Литнета: книга, читалка, автор ----------
+// /ru/book/<slug>-b627091 — страница книги (здесь решают купить); /ru/reader/<slug>-b627091 — читалка
+// (сюда входят те, кто уже читает: доля покупок там естественно ниже); /ru/<имя>-u12345 — страница автора
+export function litnetPage(url) {
+  const u = String(url || '').replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '');
+  let m = /litnet\.com\/\w+\/(book|reader)\/([a-z0-9-]+?)-b(\d+)/i.exec(u);
+  if (m) return { type: m[1] === 'book' ? 'book' : 'reader', slug: m[2], bookId: m[3] };
+  m = /litnet\.com\/\w+\/([a-z0-9-]+)-u(\d+)/i.exec(u);
+  if (m) return { type: 'author', slug: m[1] };
+  return { type: 'other' };
+}
+const TR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+export const translit = (t) => String(t || '').toLowerCase().split('').map((c) => (c in TR ? TR[c] : /[a-z0-9]/.test(c) ? c : ' ')).join('').trim().split(/\s+/).filter(Boolean);
+// Книга из «Доходов» по адресу Литнета: совпадение слов названия (Литнет пишет название латиницей)
+export function matchBook(slug, titles = []) {
+  const sw = String(slug || '').split('-').filter(Boolean);
+  let best = null, score = 0;
+  for (const t of titles) {
+    const tw = translit(t); if (!tw.length) continue;
+    const hit = tw.filter((w) => sw.some((x) => x === w || (w.length > 4 && x.startsWith(w.slice(0, w.length - 1))))).length / Math.max(tw.length, sw.length);
+    if (hit > score) { score = hit; best = t; }
+  }
+  return score >= 0.6 ? best : null;
+}
+// Страницы входа → по книгам: {bookId, slug, title, book: {visits, conv…}, reader: {…}}
+export function byBook(pages = [], main = [], titles = []) {
+  const out = {};
+  for (const p of pages) {
+    const lp = litnetPage(p.key || p.name);
+    if (!lp.bookId) continue;
+    const b = (out[lp.bookId] ||= { bookId: lp.bookId, slug: lp.slug, title: matchBook(lp.slug, titles), book: { visits: 0, conv: 0, b: 0 }, reader: { visits: 0, conv: 0, b: 0 } });
+    const x = b[lp.type]; x.visits += p.visits; x.conv += reach(p, main); x.b += p.bounce * p.visits;
+  }
+  return Object.values(out).map((b) => {
+    for (const k of ['book', 'reader']) { const x = b[k]; x.cr = x.visits ? x.conv / x.visits : null; x.bounce = x.visits ? x.b / x.visits : null; }
+    b.visits = b.book.visits + b.reader.visits; b.conv = b.book.conv + b.reader.conv;
+    return b;
+  }).sort((a, b) => b.visits - a.visits);
+}
+
+// ---------- статистика: доля и её точность, значимость различия ----------
+// Интервал Уилсона для доли k из n (95 %)
+export function propCI(k, n, z = 1.96) {
+  if (!n) return null;
+  const p = k / n, d = 1 + z * z / n, c = (p + z * z / (2 * n)) / d, h = (z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / d;
+  return { p, lo: Math.max(0, c - h), hi: Math.min(1, c + h) };
+}
+// Разница двух долей: z и уверенность (high ≥ 99 %, mid ≥ 95 %, low — может быть случайностью)
+export function twoProp(k1, n1, k2, n2) {
+  if (!n1 || !n2) return { z: 0, level: 'low' };
+  const p = (k1 + k2) / (n1 + n2), se = Math.sqrt(p * (1 - p) * (1 / n1 + 1 / n2));
+  const z = se ? (k1 / n1 - k2 / n2) / se : 0;
+  return { z, level: Math.abs(z) >= 2.58 ? 'high' : Math.abs(z) >= 1.96 ? 'mid' : 'low' };
+}
+export const SURE = { high: 'уверенность высокая', mid: 'уверенность средняя', low: 'может быть случайностью' };
+// Сколько визитов нужно, чтобы заметить разницу delta (доля) при базовой доле p (95 %, мощность 80 %)
+export const sampleSize = (p, delta) => (delta > 0 && p > 0 ? Math.ceil(16 * p * (1 - p) / (delta * delta)) : null);
+
+// ---------- воронка читателя по целям ----------
+const STAGES = [
+  ['read', 'Начали читать', /начал[а-яё]*\s+чтен|начал[а-яё]*\s+чита|читать/i],
+  ['lib', 'Добавили в библиотеку', /библиотек/i],
+  ['buystart', 'Начали покупку', /начал[а-яё]*\s+покуп|оформ/i],
+  ['buy', 'Купили', /^(?!.*начал).*(покупк|купил|оплат)/i],
+];
+export function funnel(totals, goals = []) {
+  const steps = [{ id: 'visit', name: 'Пришли на страницу', n: totals.visits }];
+  for (const [id, name, re] of STAGES) {
+    const g = goals.find((x) => re.test(x.name));
+    if (g) steps.push({ id, name, goal: g.name, n: totals.goals?.[g.id] ?? 0 });
+  }
+  for (let i = 1; i < steps.length; i++) { const prev = steps[i - 1].n; steps[i].rate = prev ? steps[i].n / prev : null; }
+  const drops = steps.slice(1).filter((x) => x.rate != null && steps[0].n >= MIN_VISITS);
+  const worst = drops.length ? drops.reduce((a, b) => (b.rate < a.rate ? b : a)) : null;
+  return { steps, worst };
+}
+// Итоги по каждой цели за период (для воронки)
+export function goalTotals30(daily = [], from, to, skip = null) {
+  const t = { visits: 0, goals: {} };
+  for (const x of daily) { if (x.key < from || x.key > to || skip?.has(x.key)) continue; t.visits += x.visits; for (const [g, n] of Object.entries(x.goals || {})) t.goals[g] = (t.goals[g] || 0) + n; }
+  return t;
+}
+
+// ---------- деньги: доход с покупки из «Доходов» ----------
+// sales — строки продаж {date, book, qty, royalty}; за последние days дней; по книге или по всем
+export function royaltyPerSale(sales = [], today, { book = null, days = 60 } = {}) {
+  const from = addDays(today, -days + 1); let q = 0, r = 0;
+  for (const x of sales) { if (x.date < from || x.date > today || (book && x.book !== book)) continue; q += Number(x.qty) || 0; r += Number(x.royalty) || 0; }
+  return q ? { qty: q, royalty: r, perSale: r / q } : null;
+}
+
+// ---------- метки UTM ----------
+export const UTM_PRESETS = {
+  telegram: ['telegram', 'social', 'Телеграм'], vk: ['vk', 'social', 'ВКонтакте'], dzen: ['dzen', 'social', 'Дзен'],
+  litnet_blog: ['litnet_blog', 'blog', 'Блог на Литнете'], email: ['email', 'email', 'Рассылка'], direct: ['yandex', 'cpc', 'Яндекс Директ'],
+  partner: ['partner', 'referral', 'Другой автор / паблик'], other: ['other', 'other', 'Другое'],
+};
+const slugify = (t) => translit(t).join('_').slice(0, 40);
+export function buildUtm(url, { source, medium, campaign, content = '' }) {
+  const base = String(url || '').trim(); if (!/^https?:\/\//.test(base)) return '';
+  const u = new URL(base);
+  for (const [k, v] of [['utm_source', source], ['utm_medium', medium], ['utm_campaign', slugify(campaign) || campaign], ['utm_content', slugify(content)]]) if (v) u.searchParams.set(k, v);
+  return u.toString();
+}
+// Строки Метрики по меткам (source|medium|campaign|content) + сохранённые метки владелицы → таблица с деньгами
+export function utmTable(rows = [], saved = [], main = [], perSale = null) {
+  const real = rows.filter((r) => r.dims?.some((x) => x && !/не определ/i.test(x)));
+  const keyOf = (s, m, c) => [s || '', m || '', c || ''].join('|').toLowerCase();
+  const byKey = {};
+  for (const r of real) { const [s, m, c] = r.dims; const k = keyOf(s, m, c); const x = (byKey[k] ||= { source: s, medium: m, campaign: c, visits: 0, conv: 0 }); x.visits += r.visits; x.conv += reach(r, main); }
+  const out = [];
+  for (const t of saved) { const k = keyOf(t.source, t.medium, slugify(t.campaign) || t.campaign); out.push({ ...(byKey[k] || { visits: 0, conv: 0 }), label: t.label, cost: Number(t.cost) || 0, saved: t }); delete byKey[k]; }
+  for (const x of Object.values(byKey)) out.push({ ...x, label: [x.source, x.campaign].filter(Boolean).join(' · '), cost: 0 });
+  return out.map((x) => {
+    const value = perSale != null ? x.conv * perSale : null;
+    return { ...x, cr: x.visits ? x.conv / x.visits : null, cpa: x.cost && x.conv ? x.cost / x.conv : null, value, romi: x.cost && value != null ? (value - x.cost) / x.cost : null };
+  }).sort((a, b) => b.visits - a.visits);
+}
