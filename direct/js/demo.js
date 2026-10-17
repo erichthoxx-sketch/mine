@@ -98,5 +98,8 @@ export function demoMetrikaSnap(today) {
   // метки UTM: свои ссылки из соцсетей и рассылки
   const U = [[['telegram', 'social', 'istinnaya_para_start', 'post_1'], 260, 0.07], [['vk', 'social', 'istinnaya_para_start', ''], 140, 0.03], [['email', 'email', 'skidka_oktyabr', ''], 90, 0.11]]
     .map(([dims, visits, cr]) => ({ key: dims.join('|'), dims, name: dims.join(' / '), visits, users: visits, bounce: 0.2, depth: 3, dur: 240, goals: { 9001: Math.round(visits * cr), 9002: 0 } }));
-  return { id: 'mk', at: new Date().toISOString(), demo: true, counterId: 555, goals: [9001, 9002, 9003, 9004], daily, sources: S, engines: [], devices: D, pages: P, utm: U, errors: [] };
+  // ссылки для продвижения из кабинета Литнета (страница входа с ?utm_litref=…)
+  const L = [['https://litnet.com/ru/book/istinnaya-para-dlya-drakona-b100001?utm_litref=ol_Demo1', 640, 0.06], ['https://litnet.com/ru/book/popadanka-v-akademiyu-b100002?utm_litref=ol_Demo2', 210, 0.02]]
+    .map(([key, visits, cr]) => ({ key, name: key, visits, users: visits, bounce: 0.2, depth: 3, dur: 240, goals: { 9001: Math.round(visits * cr), 9002: 0 } }));
+  return { id: 'mk', at: new Date().toISOString(), demo: true, counterId: 555, goals: [9001, 9002, 9003, 9004], daily, sources: S, engines: [], devices: D, pages: P, utm: U, litref: L, errors: [] };
 }

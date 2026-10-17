@@ -225,14 +225,28 @@ export function buildUtm(url, { source, medium, campaign, content = '' }) {
   for (const [k, v] of [['utm_source', source], ['utm_medium', medium], ['utm_campaign', slugify(campaign) || campaign], ['utm_content', slugify(content)]]) if (v) u.searchParams.set(k, v);
   return u.toString();
 }
-// Строки Метрики по меткам (source|medium|campaign|content) + сохранённые метки владелицы → таблица с деньгами
-export function utmTable(rows = [], saved = [], main = [], perSale = null) {
+// Ссылки для продвижения из кабинета Литнета: litnet.com/ref/<код> ведёт на страницу книги с ?utm_litref=<код>
+export const litrefOf = (u) => ((/[?&]utm_litref=([\w-]+)/i.exec(String(u || '')) || /litnet\.com\/ref\/([\w-]+)/i.exec(String(u || '')) || [])[1] || null);
+// Страницы входа с utm_litref → по коду ссылки: визиты и цели, книга по адресу
+export function litrefRows(pages = [], main = [], titles = []) {
+  const out = {};
+  for (const p of pages) {
+    const u = p.key || p.name, code = litrefOf(u); if (!code) continue;
+    const lp = litnetPage(u), x = (out[code] ||= { code, slug: lp.slug || '', title: lp.slug ? matchBook(lp.slug, titles) : null, visits: 0, conv: 0 });
+    x.visits += p.visits; x.conv += reach(p, main);
+  }
+  return Object.values(out);
+}
+// Строки Метрики по меткам (source|medium|campaign|content) + ссылки Литнета (refs) + сохранённые метки владелицы → таблица с деньгами
+export function utmTable(rows = [], saved = [], main = [], perSale = null, refs = []) {
   const real = rows.filter((r) => r.dims?.some((x) => x && !/не определ/i.test(x)));
   const keyOf = (s, m, c) => [s || '', m || '', c || ''].join('|').toLowerCase();
   const byKey = {};
   for (const r of real) { const [s, m, c] = r.dims; const k = keyOf(s, m, c); const x = (byKey[k] ||= { source: s, medium: m, campaign: c, visits: 0, conv: 0 }); x.visits += r.visits; x.conv += reach(r, main); }
-  const out = [];
-  for (const t of saved) { const k = keyOf(t.source, t.medium, slugify(t.campaign) || t.campaign); out.push({ ...(byKey[k] || { visits: 0, conv: 0 }), label: t.label, cost: Number(t.cost) || 0, saved: t }); delete byKey[k]; }
+  const out = [], byRef = Object.fromEntries(refs.map((r) => [r.code.toLowerCase(), r]));
+  for (const t of saved.filter((x) => x.litref)) { const r = byRef[t.litref.toLowerCase()]; out.push({ visits: r?.visits || 0, conv: r?.conv || 0, source: 'Литнет', campaign: t.litref, label: t.label, cost: Number(t.cost) || 0, saved: t, litref: t.litref }); delete byRef[t.litref.toLowerCase()]; }
+  for (const r of Object.values(byRef)) out.push({ visits: r.visits, conv: r.conv, source: 'Литнет', campaign: r.code, label: `Ссылка Литнета: ${r.title || (r.slug ? r.slug.charAt(0).toUpperCase() + r.slug.slice(1).replace(/-/g, ' ') : r.code)}`, cost: 0, litref: r.code });
+  for (const t of saved.filter((x) => !x.litref)) { const k = keyOf(t.source, t.medium, slugify(t.campaign) || t.campaign); out.push({ ...(byKey[k] || { visits: 0, conv: 0 }), label: t.label, cost: Number(t.cost) || 0, saved: t }); delete byKey[k]; }
   for (const x of Object.values(byKey)) out.push({ ...x, label: [x.source, x.campaign].filter(Boolean).join(' · '), cost: 0 });
   return out.map((x) => {
     const value = perSale != null ? x.conv * perSale : null;

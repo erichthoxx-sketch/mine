@@ -185,9 +185,9 @@ export async function refreshMetrika(app) {
   const goals = (m.goals || []).map((g) => g.id).slice(0, 10);
   const metrics = [...SESSION_METRICS, ...goals.map(goalMetric)].join(',');
   const today = todayISO(), errors = [];
-  const get = async (dimensions, from, limit = 100, sort = '-ym:s:visits') => {
+  const get = async (dimensions, from, limit = 100, sort = '-ym:s:visits', filters = '') => {
     try {
-      return mkRows(await metrika(s, 'stat/v1/data', { ids: m.counterId, metrics, dimensions, date1: from, date2: today, limit, sort, lang: 'ru', accuracy: 'full' }), goals);
+      return mkRows(await metrika(s, 'stat/v1/data', { ids: m.counterId, metrics, dimensions, date1: from, date2: today, limit, sort, lang: 'ru', accuracy: 'full', ...(filters ? { filters } : {}) }), goals);
     } catch (e) { errors.push(e.message); if (e.transient) throw e; return null; }
   };
   const d30 = addDays(today, -29);
@@ -196,10 +196,13 @@ export async function refreshMetrika(app) {
   const engines = await get('ym:s:lastSourceEngine', d30, 30);
   const devices = await get('ym:s:deviceCategory', d30, 10);
   const pages = await get('ym:s:startURL', d30, 100);
-  const utm = await get('ym:s:lastUTMSource,ym:s:lastUTMMedium,ym:s:lastUTMCampaign,ym:s:lastUTMContent', d30, 100);
+  const d90 = addDays(today, -89); // метки и ссылки — за 90 дней: размещение часто идёт дольше месяца
+  const utm = await get('ym:s:lastUTMSource,ym:s:lastUTMMedium,ym:s:lastUTMCampaign,ym:s:lastUTMContent', d90, 100);
+  // ссылки для продвижения Литнета: страница входа с ?utm_litref=…
+  const litref = await get('ym:s:startURL', d90, 500, '-ym:s:visits', "ym:s:startURL=@'utm_litref'");
   // права на счётчик (own — свой, edit — можно менять, view — только смотреть): от них зависит, можно ли включить фильтры
   let perm = null;
   try { perm = (await metrika(s, `management/v1/counter/${m.counterId}`, {})).counter?.permission || null; } catch { /* не важно */ }
   const old = snap(app, 'mk') || {};
-  await putSnap(app, [{ id: 'mk', at: new Date().toISOString(), counterId: m.counterId, goals, perm: perm ?? old.perm ?? null, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], engines: engines ?? old.engines ?? [], devices: devices ?? old.devices ?? [], pages: pages ?? old.pages ?? [], utm: utm ?? old.utm ?? [], errors }]);
+  await putSnap(app, [{ id: 'mk', at: new Date().toISOString(), counterId: m.counterId, goals, perm: perm ?? old.perm ?? null, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], engines: engines ?? old.engines ?? [], devices: devices ?? old.devices ?? [], pages: pages ?? old.pages ?? [], utm: utm ?? old.utm ?? [], litref: litref ?? old.litref ?? [], errors }]);
 }

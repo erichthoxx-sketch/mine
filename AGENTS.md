@@ -87,6 +87,7 @@ direct/js/                 — «Директ»
   views/        analytics («Аналитика», #/an: Метрика сама по себе — refreshMetrika в sync.js → d_snap/mk; работает без Директа;
                 вкладки Сводка / Книги (воронка funnel, страница книги и читалка отдельно — litnetPage, byBook) / Источники
                 (пометки «чаще/реже среднего» только при значимой разнице — twoProp; конструктор меток UTM → settings.direct.utms,
+                ссылки для продвижения из кабинета Литнета litnet.com/ref/<код> → ?utm_litref=<код> (litrefOf, litrefRows; отчёт d_snap/mk.litref — страницы входа с utm_litref за 90 дней),
                 таблица utmTable с расходом, ценой покупателя и окупаемостью; доход с покупки — royaltyPerSale из sales) / Формулы),
                 home (обзор, «что сделать сейчас» + подсказки по покупкам), campaign, metrika (подключение Метрики, выбор счётчика и целей), learn («Учёба»: Сейчас — этап теста testStage + разбор
                 weekInsights/changeEffects; Настройка — setup.js, шаги с галочками; Практикум — «Разбор ваших кампаний»

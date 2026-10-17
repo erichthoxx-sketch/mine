@@ -5,7 +5,7 @@ import { num, pct, rub, fmtShort } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
 import { ic } from '../../../js/icons.js';
-import { sumDays, weekPair, byWeekday, mkInsights, reach, MIN_VISITS, byBook, funnel, goalTotals30, propCI, twoProp, sampleSize, royaltyPerSale, UTM_PRESETS, buildUtm, utmTable, litnetPage } from '../mcalc.js';
+import { sumDays, weekPair, byWeekday, mkInsights, reach, MIN_VISITS, byBook, funnel, goalTotals30, propCI, twoProp, sampleSize, royaltyPerSale, UTM_PRESETS, buildUtm, utmTable, litnetPage, litrefOf, litrefRows } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { packageText, sendToChat } from './ai.js';
 import { demo } from '../demo.js';
@@ -113,18 +113,33 @@ function booksTab(a, M) {
 }
 
 // ---------- Источники и UTM ----------
+// Ссылки Литнета и свои метки — одна таблица с деньгами (за 90 дней)
+const tableOf = (M) => utmTable(M.mk.utm || [], M.c.settings.direct?.utms || [], M.main, M.perSale, litrefRows(M.mk.litref || [], M.main, M.titles));
 function srcTab(a, M) {
   const { mk, main, hasGoals } = M;
   const totV = (mk.sources || []).reduce((s, x) => s + x.visits, 0) || 1, totC = (mk.sources || []).reduce((s, x) => s + reach(x, main), 0);
-  const rows = utmTable(mk.utm || [], M.c.settings.direct?.utms || [], main, M.perSale);
+  const rows = tableOf(M);
   const cards = [...new Set((mk.pages || []).map((p) => String(p.key || '')).filter((u) => litnetPage(u).type === 'book').map((u) => u.replace(/[?#].*$/, '')))];
   const u = a.ui.utm || {};
   return `<div class="card"><h2>Откуда приходят читатели</h2><p class="small muted">За 30 дней. «Чаще/реже среднего» — только если разница не случайна по статистике.</p>
       <div class="list">${(mk.sources || []).map((x) => `<div class="item"><div class="row between"><b>${esc(x.name)}</b><span class="small">${num(x.visits)} · ${pct(x.visits / totV, 0)}</span></div>
         <div class="progress"><i style="width:${(x.visits / totV * 100).toFixed(1)}%"></i></div>
         <div class="small muted">отказы ${pct(x.bounce, 0)} · время ${mmss(x.dur)}${hasGoals ? ` · ${esc(M.goalName)}: ${num(reach(x, main))} (${pct(crOf(x, main) || 0, 1)})` : ''} ${hasGoals ? vsAvg(reach(x, main), x.visits, totC, totV) : ''}</div></div>`).join('') || `<p class="muted">Метрика не отдала источники${(mk.errors || [])[0] ? ': ' + esc(mk.errors[0]) : ''}. Нажмите ↻ вверху.</p>`}</div></div>
-    <div class="card"><h2>Метки UTM</h2>
-      <p class="small">Метка — хвост ссылки, по которому Метрика понимает, откуда именно пришёл читатель: какой пост, канал, рассылка или реклама. Ставьте метку на каждую ссылку, которую публикуете, — и здесь будет видно, что приводит покупателей и окупается ли платное размещение.</p>
+    <div class="card"><h2>Ссылки и метки</h2>
+      <p class="small">Здесь видно, какая ссылка приводит покупателей и окупилось ли платное продвижение. Визиты и покупки — по Метрике за 90 дней.</p>
+      <form data-form="an.ref" class="settings-form">
+        <label>Ссылка для продвижения из кабинета Литнета</label><input name="ref" placeholder="https://litnet.com/ref/…" required>
+        <div class="f2"><div><label>Название (необязательно)</label><input name="name" placeholder="Реклама на Литнете, октябрь"></div>
+          <div><label>Сколько заплатили, ₽</label><input name="cost" inputmode="decimal"></div></div>
+        <div class="row d-save"><button class="primary" type="submit">Добавить</button></div></form>
+      <p class="small muted">Ссылки Литнета, по которым уже приходили читатели, приложение находит само — их нужно только добавить с расходом. «Новых читателей» в кабинете Литнета и визиты здесь считаются по-разному, цифры не совпадут — это нормально.</p>
+      ${rows.length ? `<div class="list">${rows.map((x, i) => `<div class="item"><div class="row between"><b>${esc(x.label)}</b><span class="small">${num(x.visits)} визитов</span></div>
+        <div class="small">${hasGoals ? `покупок ${num(x.conv)}${x.cr != null ? ` (${pct(x.cr, 1)})` : ''}` : ''}${x.cost ? ` · расход ${rub(x.cost, 0)}${x.cpa != null ? ` · покупатель ${rub(x.cpa, 0)}` : ''}${x.romi != null ? ` · <span class="${x.romi >= 0 ? 'up' : 'down'}">окупаемость ${x.romi >= 0 ? '+' : ''}${pct(x.romi, 0)}</span>` : ''}` : ''}</div>
+        <div class="small muted">${esc([x.source, x.medium, x.campaign].filter(Boolean).join(' / '))}${x.visits && x.visits < MIN_VISITS ? ' · данных пока мало' : ''}</div>
+        ${`<div class="row"><button class="link" data-act="an.cost" data-i="${i}">${x.cost ? 'Изменить расход' : 'Указать расход'}</button>${x.saved ? `<button class="link danger" data-act="an.del" data-id="${esc(x.saved.id)}">Убрать</button>` : ''}</div>`}</div>`).join('')}</div>` : '<p class="muted">Пока пусто: Метрика ещё не видела переходов по ссылкам Литнета и своим меткам.</p>'}
+
+      <details class="d-more"${u.link ? ' open' : ''}><summary>Своя метка для соцсетей, рассылки, блога</summary>
+      <p class="small">Метка — хвост ссылки, по которому Метрика понимает, откуда пришёл читатель: какой пост, канал или рассылка.</p>
       <form data-form="an.utm" class="settings-form">
         <label>Куда ведёт ссылка</label><input name="url" list="anCards" value="${esc(u.url || cards[0] || '')}" placeholder="https://litnet.com/ru/book/…" required><datalist id="anCards">${cards.map((x) => `<option value="${esc(x)}">`).join('')}</datalist>
         <div class="f2"><div><label>Где публикую</label><select name="place">${Object.entries(UTM_PRESETS).map(([k, v]) => opt(k, v[2], u.place || 'telegram')).join('')}</select></div>
@@ -133,11 +148,7 @@ function srcTab(a, M) {
           <div><label>Сколько заплатили, ₽ (если платно)</label><input name="cost" inputmode="decimal" value="${esc(u.cost || '')}"></div></div>
         <div class="row d-save"><button class="primary" type="submit">Создать ссылку</button></div></form>
       ${u.link ? `<div class="item l-hl"><div class="small" style="word-break:break-all"><b>${esc(u.link)}</b></div><div class="row dl-row"><button class="dl" data-act="an.copy">${ic('copy')} Скопировать ссылку</button><span class="small up">Метка сохранена — появится в таблице, когда по ней придут читатели.</span></div></div>` : ''}
-      <p class="small muted">Метки, созданные в кабинете Литнета, тоже появятся здесь сами — Метрика видит их так же.</p>
-      ${rows.length ? `<div class="list">${rows.map((x, i) => `<div class="item"><div class="row between"><b>${esc(x.label)}</b><span class="small">${num(x.visits)} визитов</span></div>
-        <div class="small">${hasGoals ? `покупок ${num(x.conv)}${x.cr != null ? ` (${pct(x.cr, 1)})` : ''}` : ''}${x.cost ? ` · расход ${rub(x.cost, 0)}${x.cpa != null ? ` · покупатель ${rub(x.cpa, 0)}` : ''}${x.romi != null ? ` · <span class="${x.romi >= 0 ? 'up' : 'down'}">окупаемость ${x.romi >= 0 ? '+' : ''}${pct(x.romi, 0)}</span>` : ''}` : ''}</div>
-        <div class="small muted">${esc([x.source, x.medium, x.campaign].filter(Boolean).join(' / '))}${x.visits && x.visits < MIN_VISITS ? ' · данных пока мало' : ''}</div>
-        ${x.saved ? `<div class="row"><button class="link" data-act="an.cost" data-i="${i}">${x.cost ? 'Изменить расход' : 'Указать расход'}</button><button class="link danger" data-act="an.del" data-id="${esc(x.saved.id)}">Убрать</button></div>` : ''}</div>`).join('')}</div>` : '<p class="muted">Меток пока нет.</p>'}</div>
+      </details></div>
     <div class="grid2"><div class="card"><h2>Устройства</h2>${(mk.devices || []).map((x) => `<div class="bar-row"><div class="row between small"><span>${esc(x.name)}</span><span>${num(x.visits)}${hasGoals ? ` · ${pct(crOf(x, main) || 0, 1)}` : ''}</span></div><div class="progress"><i style="width:${(x.visits / Math.max(1, ...mk.devices.map((y) => y.visits)) * 100).toFixed(1)}%"></i></div></div>`).join('') || '<p class="muted">Нет данных.</p>'}</div>
       <div class="card"><h2>Поисковики и сайты</h2>${(mk.engines || []).slice(0, 8).map((x) => `<div class="row between small"><span>${esc(x.name)}</span><span>${num(x.visits)}${hasGoals ? ` · ${pct(crOf(x, main) || 0, 1)}` : ''}</span></div>`).join('') || '<p class="muted">Нет данных.</p>'}</div></div>`;
 }
@@ -152,13 +163,25 @@ forms['an.utm'] = async (fd) => {
   try { await navigator.clipboard.writeText(link); toast('Ссылка создана и скопирована'); } catch { toast('Ссылка создана'); }
   app().rerender();
 };
+forms['an.ref'] = async (fd) => {
+  const code = litrefOf(fd.get('ref').trim());
+  if (!code) { toast('Нужна ссылка вида https://litnet.com/ref/…'); return; }
+  const utms = app().ctx().settings.direct?.utms || [];
+  if (utms.some((x) => x.litref?.toLowerCase() === code.toLowerCase())) { toast('Эта ссылка уже добавлена'); return; }
+  const found = litrefRows(model(app()).mk.litref || [], [], model(app()).titles).find((r) => r.code.toLowerCase() === code.toLowerCase());
+  const label = fd.get('name').trim() || `Ссылка Литнета: ${found?.title || (found?.slug ? found.slug.charAt(0).toUpperCase() + found.slug.slice(1).replace(/-/g, ' ') : code)}`;
+  await saveD({ utms: [...utms, { id: uid(), label, litref: code, cost: N(fd.get('cost')) || 0, at: app().ctx().today }] });
+  toast('Добавлено — визиты и покупки по ссылке будут в таблице');
+};
 acts['an.copy'] = async () => { try { await navigator.clipboard.writeText(app().ui.utm.link); toast('Скопировано'); } catch { toast('Не получилось скопировать'); } return false; };
 acts['an.del'] = async (d) => { await saveD({ utms: (app().ctx().settings.direct?.utms || []).filter((x) => x.id !== d.id) }); };
 acts['an.cost'] = (d) => {
-  const M = model(app()), row = utmTable(M.mk.utm || [], M.c.settings.direct?.utms || [], M.main, M.perSale)[Number(d.i)];
+  const row = tableOf(model(app()))[Number(d.i)];
   openSheet('Расход на размещение', `<p class="small">${esc(row.label)}</p><label>Сколько заплатили, ₽</label><input name="v" inputmode="decimal" value="${esc(row.cost || '')}">`, async (fd) => {
     const v = N(fd.get('v')) || 0;
-    await saveD({ utms: (app().ctx().settings.direct?.utms || []).map((x) => (x.id === row.saved.id ? { ...x, cost: v } : x)) });
+    const utms = app().ctx().settings.direct?.utms || [];
+    // найденная сама ссылка (ещё не сохранена) — сохраняем вместе с расходом
+    await saveD({ utms: row.saved ? utms.map((x) => (x.id === row.saved.id ? { ...x, cost: v } : x)) : [...utms, { id: uid(), label: row.label, ...(row.litref ? { litref: row.litref } : { source: row.source, medium: row.medium, campaign: row.campaign }), cost: v, at: app().ctx().today }] });
   });
   return false;
 };

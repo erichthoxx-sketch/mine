@@ -347,4 +347,11 @@ test('Литнет: страница книги и читалка, книги п
   const rows = M.mkRows({ data: [{ dimensions: [{ name: 'telegram' }, { name: 'social' }, { name: 'zverinaya_tropa_start' }, { name: 'post_1' }], metrics: [200, 150, 10, 3, 100, 12] }, { dimensions: [{ name: null }, { name: null }, { name: null }, { name: null }], metrics: [5000, 1, 1, 1, 1, 100] }] }, [1]);
   const t = M.utmTable(rows, [{ label: 'Пост в ТГ', source: 'telegram', medium: 'social', campaign: 'Звериная тропа старт', cost: 600 }], ['1'], 90);
   assert.equal(t.length, 1); assert.equal(t[0].label, 'Пост в ТГ'); assert.equal(t[0].conv, 12); assert.equal(t[0].cpa, 50); assert.equal(t[0].romi, (12 * 90 - 600) / 600);
+  // ссылки для продвижения из кабинета Литнета
+  assert.equal(M.litrefOf('https://litnet.com/ref/ol_FdlDg2NTdoyaa'), 'ol_FdlDg2NTdoyaa');
+  assert.equal(M.litrefOf('https://litnet.com/ru/book/alpiiskii-razvod-b611608?utm_litref=ol_FdlDg2NTdoyaa'), 'ol_FdlDg2NTdoyaa');
+  const refs = M.litrefRows([{ key: 'https://litnet.com/ru/book/alpiiskii-razvod-on-ostavil-menya-umirat-b611608?utm_litref=ol_Fd', visits: 300, goals: { 1: 9 } }, { key: 'https://litnet.com/ru/book/x-b2?utm_litref=ol_Zz', visits: 40, goals: { 1: 1 } }], ['1'], ['Альпийский развод. Он оставил меня умирать']);
+  assert.equal(refs[0].title, 'Альпийский развод. Он оставил меня умирать');
+  const t2 = M.utmTable([], [{ id: 'a', label: 'Литнет: реклама', litref: 'ol_Fd', cost: 900 }], ['1'], 120, refs);
+  assert.equal(t2.length, 2); assert.equal(t2[0].conv, 9); assert.equal(t2[0].cpa, 100); assert.equal(t2[0].romi, (9 * 120 - 900) / 900); assert.match(t2[1].label, /Ссылка Литнета/);
 });
