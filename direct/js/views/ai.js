@@ -16,6 +16,8 @@ export function packageText(a, question = '') {
   const c = a.ctx(), main = a.snap('main') || {}, stats = a.snap('stats') || {}, d = c.settings.direct || {}, t = c.today;
   const daily = (stats.daily || []).filter((x) => x.date >= addDays(t, -29));
   const state = {
+    ...(main.campaigns ? {} : { note: 'Директ ещё не подключён: данных кампаний нет. Помоги по вопросу владелицы и объясни, как настроить кампанию с нуля для книги.' }),
+    books: (c.data.books || []).map((b) => b.title).filter(Boolean),
     campaigns: (main.campaigns || []).filter((x) => x.state !== 'ARCHIVED').map((x) => ({ ...x, last7: totals(daily, addDays(t, -6), t, x.id), last30: totals(daily, addDays(t, -29), t, x.id) })),
     groups: main.groups || [],
     keywords: (main.keywords || []).map((k) => ({ ...k, stats30: stats.kw?.[k.id] || null })),
@@ -42,8 +44,9 @@ export function aiView(a) {
       <p class="small">Бесплатно, в вашем обычном чате. Нажмите кнопку — все данные кампаний скопируются и откроется Claude. Вставьте (<b>Ctrl+V</b>, на телефоне — долгое нажатие → «Вставить») и отправьте: разбор придёт прямо в чате.</p>
       <label for="aiQ">Что спросить (можно пусто — будет общий разбор)</label><textarea id="aiQ" rows="2" placeholder="Например: что убрать, чтобы клики были дешевле?"></textarea>
       <div class="chips ai-tasks">${ASKS.map(([t], i) => `<button type="button" class="chip" data-act="ai.ask" data-i="${i}">${t}</button>`).join('')}</div>
-      <div class="row"><button class="primary" data-act="ai.chat" data-to="claude"${has ? '' : ' disabled'}>Скопировать и открыть Claude</button></div>
-      <div class="row dl-row"><button class="dl" data-act="ai.chat" data-to="chatgpt"${has ? '' : ' disabled'}>${ic('copy')} …или ChatGPT</button><button class="dl" data-act="ai.copy"${has ? '' : ' disabled'}>${ic('copy')} Только скопировать</button><button class="dl" data-act="ai.file"${has ? '' : ' disabled'}>${ic('download')} Скачать файлом</button></div></div>
+      ${has ? '' : '<p class="small muted">Директ ещё не подключён — Claude получит ваш вопрос, ваши книги и тестовый бюджет. Можно спросить, например, как настроить первую кампанию для новой книги.</p>'}
+      <div class="row"><button class="primary" data-act="ai.chat" data-to="claude">Скопировать и открыть Claude</button></div>
+      <div class="row dl-row"><button class="dl" data-act="ai.chat" data-to="chatgpt">${ic('copy')} …или ChatGPT</button><button class="dl" data-act="ai.copy">${ic('copy')} Только скопировать</button><button class="dl" data-act="ai.file">${ic('download')} Скачать файлом</button></div></div>
     <div class="card"><h2>2. Применить советы одной кнопкой</h2>
       <p class="small muted">По желанию: скопируйте ответ Claude целиком и вставьте сюда — приложение найдёт в нём план (блок ${esc(PLAN_TAG)}) и покажет каждое действие с галочкой. Применится только то, что вы отметите.</p>
       <form data-form="ai.parse"><textarea name="v" rows="5" placeholder="Вставьте сюда ответ нейросети">${esc(plan.text)}</textarea><div class="row"><button type="submit">Разобрать</button></div></form>
