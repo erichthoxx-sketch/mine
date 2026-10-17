@@ -31,14 +31,20 @@ export function sumDays(daily = [], from, to, main = [], skip = null) {
     t.visits += x.visits; t.users += x.users; t.conv += reach(x, main); t.b += x.bounce * x.visits; t.dur += x.dur * x.visits; t.depth += x.depth * x.visits; t.days++;
   }
   const v = t.visits || 1;
-  return { visits: t.visits, users: t.users, conv: t.conv, cr: t.visits ? t.conv / t.visits : null, bounce: t.visits ? t.b / v : null, dur: t.visits ? t.dur / v : null, depth: t.visits ? t.depth / v : null, days: t.days };
+  return { visits: t.visits, users: t.users, conv: t.conv, avg: t.days ? t.visits / t.days : 0, cr: t.visits ? t.conv / t.visits : null, bounce: t.visits ? t.b / v : null, dur: t.visits ? t.dur / v : null, depth: t.visits ? t.depth / v : null, days: t.days };
+}
+
+// Две последние полные недели (вчера и 6 дней до него — и неделя перед ней), без дней сбоя
+export function weekPair(daily, today, main = [], skip = null) {
+  const y = addDays(today, -1);
+  return { w: sumDays(daily, addDays(y, -6), y, main, skip), pw: sumDays(daily, addDays(y, -13), addDays(y, -7), main, skip) };
 }
 
 // По дням недели (за все дни в данных): средние визиты и доля целей
-export function byWeekday(daily = [], main = [], skip = null) {
+export function byWeekday(daily = [], main = [], skip = null, today = null) {
   const w = Array.from({ length: 7 }, (_, i) => ({ wd: i, days: 0, visits: 0, conv: 0 }));
   for (const x of daily) {
-    if (skip?.has(x.key)) continue;
+    if (skip?.has(x.key) || (today && x.key >= today)) continue;
     const i = new Date(x.key + 'T00:00:00Z').getUTCDay();
     w[i].days++; w[i].visits += x.visits; w[i].conv += reach(x, main);
   }
@@ -48,17 +54,18 @@ export function byWeekday(daily = [], main = [], skip = null) {
 // Главное: шаги с объяснением. {level: step|warn|good|wait|info, area, title, why, step, lesson}
 export function mkInsights({ daily = [], sources = [], devices = [], pages = [], main = [], hasGoals = false, today, skip = null }) {
   const out = [], add = (level, area, title, why, step = '', lesson = '') => out.push({ level, area, title, why, step, lesson });
-  const w = sumDays(daily, addDays(today, -6), today, main, skip), pw = sumDays(daily, addDays(today, -13), addDays(today, -7), main, skip);
+  // сравниваем полные дни (сегодняшний ещё не закончился) и в среднем за день — дни сбоя не считаются
+  const w = weekPair(daily, today, main, skip).w, pw = weekPair(daily, today, main, skip).pw;
   const m30 = sumDays(daily, addDays(today, -29), today, main, skip);
 
   if (!hasGoals) add('step', 'Цели', 'Не выбрана главная цель', 'Без цели видно только посещения: непонятно, кто из читателей покупает.', 'Настройки → «Яндекс Метрика» → отметьте цели и звёздочкой главную (покупку).', 'goals');
   if (m30.visits < MIN_VISITS) { add('wait', 'Данные', `За 30 дней ${m30.visits} визит(ов)`, `Для выводов нужно хотя бы ${MIN_VISITS} визитов — пока это случайность.`, 'Выкладывайте главы и анонсы; аналитика оживёт сама.'); return order(out); }
 
   // неделя к неделе
-  if (w.visits >= MIN_VISITS && pw.visits >= MIN_VISITS) {
-    const dv = (w.visits - pw.visits) / pw.visits;
-    if (dv <= -0.25) add('warn', 'Посещаемость', `Визитов меньше на ${Math.round(-dv * 100)} %: ${w.visits} против ${pw.visits}`, 'Обычно так бывает, когда реже выходят главы, закончилась реклама или книга ушла из подборок.', 'Проверьте график выкладки и анонсы этой недели; если была реклама — не остановилась ли она.', 'rhythm');
-    else if (dv >= 0.25) add('good', 'Посещаемость', `Визитов больше на ${Math.round(dv * 100)} %: ${w.visits} против ${pw.visits}`, 'Что-то сработало — важно понять что, чтобы повторить.', 'Посмотрите ниже, какой источник вырос, и запишите, что вы делали на этой неделе.', 'rhythm');
+  if (w.visits >= MIN_VISITS && pw.visits >= MIN_VISITS && w.days >= 4 && pw.days >= 4) {
+    const dv = (w.avg - pw.avg) / pw.avg;
+    if (dv <= -0.25) add('warn', 'Посещаемость', `Визитов меньше на ${Math.round(-dv * 100)} %: в среднем ${Math.round(w.avg)} в день против ${Math.round(pw.avg)}`, 'Обычно так бывает, когда реже выходят главы, закончилась реклама или книга ушла из подборок.', 'Проверьте график выкладки и анонсы этой недели; если была реклама — не остановилась ли она.', 'rhythm');
+    else if (dv >= 0.25) add('good', 'Посещаемость', `Визитов больше на ${Math.round(dv * 100)} %: в среднем ${Math.round(w.avg)} в день против ${Math.round(pw.avg)}`, 'Что-то сработало — важно понять что, чтобы повторить.', 'Посмотрите ниже, какой источник вырос, и запишите, что вы делали на этой неделе.', 'rhythm');
     if (hasGoals && w.conv >= MIN_CONV && pw.conv >= MIN_CONV) {
       const dc = (w.cr - pw.cr) / pw.cr;
       if (Math.abs(dc) >= 0.2) add(dc > 0 ? 'good' : 'warn', 'Покупки', `Доля покупок ${dc > 0 ? 'выросла' : 'упала'}: ${pc(pw.cr)} → ${pc(w.cr)}`, dc > 0 ? 'Сейчас приходят более «свои» читатели или страница книги убеждает лучше.' : 'Приходят менее целевые люди (новый источник?) или страница книги перестала убеждать.', dc > 0 ? 'Найдите ниже источник, который это дал, — его стоит усилить.' : 'Сравните источники ниже: где упала доля, там и причина.', 'goals');
@@ -91,7 +98,7 @@ export function mkInsights({ daily = [], sources = [], devices = [], pages = [],
   }
 
   // дни недели — нужно хотя бы 4 недели данных
-  const wd = byWeekday(daily, main, skip);
+  const wd = byWeekday(daily, main, skip, today);
   if (wd.every((x) => x.days >= 4)) {
     const top = [...wd].sort((a, b) => b.avg - a.avg)[0], low = [...wd].sort((a, b) => a.avg - b.avg)[0];
     if (top.avg >= low.avg * 1.3) add('step', 'Дни недели', `Больше всего читателей в ${WD[top.wd]} (в среднем ${Math.round(top.avg)}), меньше — в ${WD[low.wd]}`, 'Это ваш ритм аудитории за последние недели.', `Ставьте выход глав и анонсы на ${WD[top.wd]}; рекламу в ${WD[low.wd]} можно приглушить.`, 'rhythm');

@@ -5,7 +5,7 @@ import { num, pct, fmtShort } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
 import { ic } from '../../../js/icons.js';
-import { sumDays, byWeekday, mkInsights, reach, shortUrl, MIN_VISITS } from '../mcalc.js';
+import { sumDays, weekPair, byWeekday, mkInsights, reach, shortUrl, MIN_VISITS } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { packageText, sendToChat } from './ai.js';
 import { demo } from '../demo.js';
@@ -28,21 +28,22 @@ export function analyticsView(a) {
   if (!m?.counterId) return { html: connectCard(c) };
   if (!mk) return { html: `<div class="card"><h2>Аналитика читателей</h2><p class="muted">Загружаю данные Метрики… Если долго — нажмите ↻ вверху.</p></div>` };
   const t = c.today, main = (m.main || []).map(String), skip = outageSet(c.data.days || []), hasGoals = main.length > 0;
-  const w = sumDays(mk.daily, addDays(t, -6), t, main, skip), pw = sumDays(mk.daily, addDays(t, -13), addDays(t, -7), main, skip);
+  // плитки — 7 полных дней (по вчера); сравнение — в среднем за день, без дней сбоя
+  const y = addDays(t, -1), w = sumDays(mk.daily, addDays(y, -6), y, main), { w: wc, pw } = weekPair(mk.daily, t, main, skip);
   const m30 = sumDays(mk.daily, addDays(t, -29), t, main, skip);
   const ins = mkInsights({ daily: mk.daily, sources: mk.sources, devices: mk.devices, pages: mk.pages, main, hasGoals, today: t, skip });
   const goalName = (m.goals || []).filter((g) => main.includes(String(g.id))).map((g) => g.name).join(', ') || 'цели';
   const totalV = (mk.sources || []).reduce((s, x) => s + x.visits, 0) || 1;
   const crOf = (x) => (x.visits ? reach(x, main) / x.visits : null);
   const crCell = (x) => { const cr = crOf(x); if (!hasGoals || cr == null || x.visits < MIN_VISITS) return '<span class="muted">—</span>'; return `<span class="${m30.cr && cr >= m30.cr * 1.3 ? 'up' : m30.cr && cr <= m30.cr * 0.6 ? 'down' : ''}">${pct(cr, 1)}</span>`; };
-  const wd = byWeekday(mk.daily, main, skip), maxWd = Math.max(...wd.map((x) => x.avg), 1);
+  const wd = byWeekday(mk.daily, main, skip, t), maxWd = Math.max(...wd.map((x) => x.avg), 1);
   const steps = ins.filter((x) => x.level === 'step' || x.level === 'warn').length;
   return {
     html: `${demo.on ? '<div class="alert">Это пример — так будет выглядеть аналитика вашего счётчика.</div>' : ''}
-    <div class="card"><div class="row between"><h2 style="margin:0">Читатели за 7 дней</h2><span class="small muted">${esc(m.counterName || '')}${mk.at && !demo.on ? ' · ' + new Date(mk.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : ''}</span></div>
+    <div class="card"><div class="row between"><h2 style="margin:0">Читатели за 7 дней</h2><span class="small muted">по вчера · ${esc(m.counterName || '')}${mk.at && !demo.on ? ' · ' + new Date(mk.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : ''}</span></div>
       <div class="tiles d-tiles">
-        <div><div class="k">Визиты</div><div class="v">${num(w.visits)}</div><div class="s">${delta(w.visits, pw.visits)} к прошлой неделе</div></div>
-        <div><div class="k">${hasGoals ? esc(goalName) : 'Цели'}</div><div class="v">${hasGoals ? num(w.conv) : '—'}</div><div class="s">${hasGoals && w.cr != null ? `${pct(w.cr, 1)} визитов ${delta(w.cr, pw.cr)}` : 'выберите цель в Настройках'}</div></div>
+        <div><div class="k">Визиты</div><div class="v">${num(w.visits)}</div><div class="s">${delta(wc.avg, pw.avg)} в среднем за день к прошлой неделе</div></div>
+        <div><div class="k">${hasGoals ? esc(goalName) : 'Цели'}</div><div class="v">${hasGoals ? num(w.conv) : '—'}</div><div class="s">${hasGoals && w.cr != null ? `${pct(w.cr, 1)} визитов ${delta(wc.cr, pw.cr)}` : 'выберите цель в Настройках'}</div></div>
         <div><div class="k">Отказы</div><div class="v">${w.bounce == null ? '—' : pct(w.bounce, 0)}</div><div class="s">ушли сразу</div></div>
         <div><div class="k">Время на странице</div><div class="v">${mmss(w.dur)}</div><div class="s">${w.depth ? `${String(Math.round(w.depth * 10) / 10).replace('.', ',')} стр. за визит` : ''}</div></div>
       </div>

@@ -296,8 +296,8 @@ test('аналитика Метрики: разбор ответа, итоги, 
     const sat = new Date(key + 'T00:00:00Z').getUTCDay() === 6;
     daily.push({ key, visits: sat ? 200 : (i >= 21 ? 60 : 100), users: 50, bounce: 0.3, depth: 3, dur: 120, goals: { 1: 3 } });
   }
-  const today = '2026-10-16';
-  const w = sumDays(daily, '2026-10-10', today, ['1']);
+  const today = '2026-10-17'; // сегодняшний день не полный — сравниваются недели по вчера
+  const w = sumDays(daily, '2026-10-10', '2026-10-16', ['1']);
   assert.equal(w.days, 7); assert.equal(w.conv, 21);
   assert.equal(byWeekday(daily, ['1'])[6].avg, 200);
   const sources = [

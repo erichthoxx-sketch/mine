@@ -1344,8 +1344,9 @@ a.card.arc-warn .ic { width: 18px; height: 18px; flex: 0 0 auto; }
 .mk-goal .d-check { margin: 0; }
 .mk-star { display: inline-flex; align-items: center; cursor: pointer; margin: 0; }
 .mk-star input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.mk-star span { font-size: 20px; color: var(--line); line-height: 1; padding: 2px 6px; }
-.mk-star input:checked + span { color: var(--accent-2); }
+.mk-star span { font-size: 24px; color: var(--muted); opacity: .35; line-height: 1; padding: 2px 6px; transition: opacity .15s, color .15s; }
+.mk-star:hover span { opacity: .7; }
+.mk-star input:checked + span { color: var(--accent); opacity: 1; }
 .mk-star input:focus-visible + span { outline: 2px solid var(--link); border-radius: 6px; }
 .l-camp { border-top: 1px solid var(--line); padding: 10px 0; } .l-camp summary { cursor: pointer; list-style: none; } .l-camp summary::-webkit-details-marker { display: none; }
 .l-camp summary b { color: var(--text); } .l-check { margin: 10px 0; } .l-check .d-check { margin: 8px 0 0; font-weight: 400; align-items: flex-start; } .l-check .d-check input { margin-top: 2px; }
