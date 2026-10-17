@@ -197,6 +197,9 @@ export async function refreshMetrika(app) {
   const devices = await get('ym:s:deviceCategory', d30, 10);
   const pages = await get('ym:s:startURL', d30, 100);
   const utm = await get('ym:s:lastUTMSource,ym:s:lastUTMMedium,ym:s:lastUTMCampaign,ym:s:lastUTMContent', d30, 100);
+  // права на счётчик (own — свой, edit — можно менять, view — только смотреть): от них зависит, можно ли включить фильтры
+  let perm = null;
+  try { perm = (await metrika(s, `management/v1/counter/${m.counterId}`, {})).counter?.permission || null; } catch { /* не важно */ }
   const old = snap(app, 'mk') || {};
-  await putSnap(app, [{ id: 'mk', at: new Date().toISOString(), counterId: m.counterId, goals, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], engines: engines ?? old.engines ?? [], devices: devices ?? old.devices ?? [], pages: pages ?? old.pages ?? [], utm: utm ?? old.utm ?? [], errors }]);
+  await putSnap(app, [{ id: 'mk', at: new Date().toISOString(), counterId: m.counterId, goals, perm: perm ?? old.perm ?? null, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], engines: engines ?? old.engines ?? [], devices: devices ?? old.devices ?? [], pages: pages ?? old.pages ?? [], utm: utm ?? old.utm ?? [], errors }]);
 }
