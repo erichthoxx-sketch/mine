@@ -176,6 +176,9 @@ docs/           SETUP.md (Firebase), SETUP-WRITER.md (Google Диск)
   ИИ получает данные только через «Скопировать для ИИ», а отвечает планом в блоке ```direct-plan (формат — `aiPackage`
   в `dcalc.js`; действия minus, unminus, pause, resume, bid, keywords). Новое действие — в `parsePlan`, `describe`,
   `toRequest`, `patchSnap` и тест в `tests/direct.test.js`.
+  Нейросеть — **бесплатно через обычный чат владелицы**: «Скопировать и открыть Claude» (`sendToChat` в views/ai.js: копирует
+  `packageText` с вопросом и открывает claude.ai/new; есть ChatGPT) — так же работают «Разобрать с Claude» в Практикуме.
+  Платное подключение по ключу API владелица отклонила — не добавлять без её просьбы.
   Есть и отдельный путь для Claude Desktop — MCP-сервер nozikov/yandex-mcp (только чтение); владелице пока не нужен.
 
 ## 7. Дизайн (то, что владелица ценит больше всего)

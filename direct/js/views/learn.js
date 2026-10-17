@@ -3,7 +3,7 @@
 //  • Настройка — подключение шаг за шагом;
 //  • Курс — уроки на ваших же цифрах, с вопросом-проверкой и практическим заданием (прогресс сохраняется).
 import { esc, acts, forms, changes, toast, N } from '../../../js/ui.js';
-import { packageText } from './ai.js';
+import { packageText, sendToChat } from './ai.js';
 import { rub, num, pct } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
@@ -169,9 +169,7 @@ const AI_TASKS = [
   ['Итоги теста', 'Подведи итоги теста: окупилось ли, что сработало, что нет, и план на следующие 2 недели.'],
 ];
 
-async function copyAi(task) {
-  try { await navigator.clipboard.writeText(packageText(app(), task)); toast('Скопировано — вставьте в чат с ИИ, его ответ — в «ИИ-помощник»'); } catch { toast('Не получилось скопировать — откройте «ИИ-помощник»'); }
-}
+function copyAi(task) { return sendToChat(packageText(app(), task), 'claude'); }
 
 // Раскрытые блоки остаются раскрытыми после перерисовки (сохранили расчёт, отметили пункт)
 const opened = {};
@@ -192,7 +190,7 @@ function auditCard(a, L) {
         <div class="list">${r.items.map((x) => `<div class="item"><div class="row between"><span><span class="small ${ST[x.status][1]}">● ${ST[x.status][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b></span>${x.act ? actBtn(x.act, x.actLabel || 'Применить', 'small-btn') : ''}</div>
           ${x.why ? `<div class="small">${esc(x.why)}</div>` : ''}${x.how ? `<div class="small muted">Как: ${esc(x.how)}</div>` : ''}
           ${x.lesson && MODULES.some((mm) => mm.id === x.lesson) ? `<div class="small"><button class="link l-why" data-act="l.lesson" data-k="${x.lesson}" title="${esc(MODULES.find((mm) => mm.id === x.lesson).t)}">Почему так →</button></div>` : ''}</div>`).join('')}</div>
-        <div class="row dl-row"><button class="dl" data-act="l.aicamp" data-name="${esc(camp.name)}">${ic('copy')} Глубокий разбор кампании с ИИ</button></div></details>`;
+        <div class="row dl-row"><button class="dl" data-act="l.aicamp" data-name="${esc(camp.name)}">${ic('copy')} Глубокий разбор кампании с Claude</button></div></details>`;
     }).join('')}</div>`;
 }
 acts['l.aicamp'] = async (d) => { await copyAi(`Проведи глубокий разбор кампании «${d.name}»: структура, семантика, минус-слова, объявления, стратегия, покупки по целям, экономика. Что улучшить сейчас, что подождать и почему. Действия — в формате direct-plan.`); return false; };
@@ -210,9 +208,9 @@ function courseTab(a) {
         <div class="small">${x.body(L)}</div>
         <div class="small">${x.data(L)}</div>
         <div class="l-check">${x.check.map((t, j) => `<label class="d-check small"><input type="checkbox" data-chg="l.chk" data-id="${x.id}" data-j="${j}"${c.includes(j) ? ' checked' : ''}> ${t}</label>`).join('')}</div>
-        <div class="row dl-row"><button class="dl" data-act="l.ai" data-id="${x.id}">${ic('copy')} Разобрать с ИИ</button></div></details>`;
+        <div class="row dl-row"><button class="dl" data-act="l.ai" data-id="${x.id}">${ic('copy')} Разобрать с Claude</button></div></details>`;
     }).join('')}</div></div>
-    <div class="card"><h2>Готовые задачи для ИИ</h2><p class="small muted">Скопирует все данные кампаний вместе с задачей. Ответ ИИ вставьте в «ИИ-помощник» — там появятся действия с галочками.</p>
+    <div class="card"><h2>Готовые задачи для ИИ</h2><p class="small muted">Скопирует все данные вместе с задачей и откроет Claude — вставьте и отправьте. Бесплатно, в вашем обычном чате.</p>
       <div class="row l-ai-tasks">${AI_TASKS.map(([t], i) => `<button data-act="l.aitask" data-i="${i}">${t}</button>`).join('')}</div></div>`;
 }
 changes['l.chk'] = async (v, el, on) => {

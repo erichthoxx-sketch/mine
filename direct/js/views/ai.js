@@ -38,12 +38,14 @@ export function aiView(a) {
   const names = namesOf(a.snap('main'));
   const has = !!a.snap('main');
   return {
-    html: `<div class="card"><h2>1. Спросить ИИ</h2>
-      <p class="small">Приложение соберёт все данные Директа в один текст. Вставьте его в Claude, ChatGPT или другую нейросеть — она разберёт кампании и пришлёт план изменений.</p>
-      <label for="aiQ">Ваш вопрос (можно пусто)</label><textarea id="aiQ" rows="2" placeholder="Например: что убрать, чтобы клики были дешевле?"></textarea>
-      <div class="row dl-row"><button class="dl" data-act="ai.copy"${has ? '' : ' disabled'}>${ic('copy')} Скопировать для ИИ</button><button class="dl" data-act="ai.file"${has ? '' : ' disabled'}>${ic('download')} Скачать файлом</button></div></div>
-    <div class="card"><h2>2. Вставьте ответ ИИ</h2>
-      <p class="small muted">Весь ответ целиком — приложение само найдёт в нём план (блок ${esc(PLAN_TAG)}) и покажет каждое действие. Применится только то, что вы отметите.</p>
+    html: `<div class="card"><h2>1. Спросить Claude</h2>
+      <p class="small">Бесплатно, в вашем обычном чате. Нажмите кнопку — все данные кампаний скопируются и откроется Claude. Вставьте (<b>Ctrl+V</b>, на телефоне — долгое нажатие → «Вставить») и отправьте: разбор придёт прямо в чате.</p>
+      <label for="aiQ">Что спросить (можно пусто — будет общий разбор)</label><textarea id="aiQ" rows="2" placeholder="Например: что убрать, чтобы клики были дешевле?"></textarea>
+      <div class="chips ai-tasks">${ASKS.map(([t], i) => `<button type="button" class="chip" data-act="ai.ask" data-i="${i}">${t}</button>`).join('')}</div>
+      <div class="row"><button class="primary" data-act="ai.chat" data-to="claude"${has ? '' : ' disabled'}>Скопировать и открыть Claude</button></div>
+      <div class="row dl-row"><button class="dl" data-act="ai.chat" data-to="chatgpt"${has ? '' : ' disabled'}>${ic('copy')} …или ChatGPT</button><button class="dl" data-act="ai.copy"${has ? '' : ' disabled'}>${ic('copy')} Только скопировать</button><button class="dl" data-act="ai.file"${has ? '' : ' disabled'}>${ic('download')} Скачать файлом</button></div></div>
+    <div class="card"><h2>2. Применить советы одной кнопкой</h2>
+      <p class="small muted">По желанию: скопируйте ответ Claude целиком и вставьте сюда — приложение найдёт в нём план (блок ${esc(PLAN_TAG)}) и покажет каждое действие с галочкой. Применится только то, что вы отметите.</p>
       <form data-form="ai.parse"><textarea name="v" rows="5" placeholder="Вставьте сюда ответ нейросети">${esc(plan.text)}</textarea><div class="row"><button type="submit">Разобрать</button></div></form>
       ${plan.errors.length ? `<div class="alert">${plan.errors.map(esc).join('<br>')}</div>` : ''}
       ${plan.actions.length ? `<div class="list">${plan.actions.map((x, i) => {
@@ -55,6 +57,24 @@ export function aiView(a) {
   };
 }
 const q = () => document.getElementById('aiQ')?.value.trim() || '';
+// Готовые вопросы — подставляются в поле одним нажатием
+const ASKS = [
+  ['Недельный аудит', 'Проведи недельный аудит всех кампаний: что работает, что сливает деньги, 3 главных действия с наибольшим эффектом и что подождать.'],
+  ['Утечки бюджета', 'Найди, куда утекает бюджет без результата: запросы, фразы, сети. Что убрать в минус и что остановить.'],
+  ['Новые фразы', 'По поисковым запросам и тропам книги предложи новые точные фразы по группам и кросс-минусовку.'],
+  ['Тексты объявлений', 'Предложи по 3 варианта объявлений для каждой группы с гипотезой теста (списком, не действиями).'],
+  ['Итоги теста', 'Подведи итоги теста: окупилось ли, что сработало, что нет, и план на следующие 2 недели.'],
+];
+acts['ai.ask'] = (d) => { const el = document.getElementById('aiQ'); if (el) el.value = ASKS[Number(d.i)][1]; return false; };
+// Скопировать данные и открыть чат: сначала копирование (пока страница в фокусе), потом новая вкладка
+export const CHATS = { claude: ['Claude', 'https://claude.ai/new'], chatgpt: ['ChatGPT', 'https://chatgpt.com/'] };
+export async function sendToChat(text, to = 'claude') {
+  let copied;
+  try { copied = navigator.clipboard.writeText(text); } catch { copied = Promise.reject(); }
+  window.open(CHATS[to][1], '_blank', 'noopener');
+  try { await copied; toast(`Скопировано — вставьте в ${CHATS[to][0]} и отправьте`); } catch { toast('Не получилось скопировать — нажмите «Скачать файлом» и приложите файл в чат'); }
+}
+acts['ai.chat'] = (d) => { sendToChat(packageText(app(), q()), d.to); return false; };
 acts['ai.copy'] = async () => {
   try { await navigator.clipboard.writeText(packageText(app(), q())); toast('Скопировано — вставьте в чат с ИИ'); } catch { toast('Не получилось скопировать — нажмите «Скачать файлом»'); }
   return false;

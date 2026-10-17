@@ -1351,3 +1351,4 @@ a.card.arc-warn .ic { width: 18px; height: 18px; flex: 0 0 auto; }
 .l-camp summary b { color: var(--text); } .l-check { margin: 10px 0; } .l-check .d-check { margin: 8px 0 0; font-weight: 400; align-items: flex-start; } .l-check .d-check input { margin-top: 2px; }
 .l-ai-tasks { flex-wrap: wrap; gap: 8px; } .l-calc { margin: 10px 0; }
 .l-why { white-space: normal; text-align: left; padding-left: 0; }
+.ai-tasks { margin: 10px 0 4px; }
