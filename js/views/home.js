@@ -79,9 +79,7 @@ acts['book.open'] = (d) => { const a = window.__app; a.ui.booksMonth = null; a.g
 // как сбои учтены в прогнозе — одной строкой
 const dn = (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'день' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'дня' : 'дней'}`;
 export function outageNote(out) {
-  // недополучено: сумма — если продажи упали; «не упали» — если в эти дни было как обычно; мало истории — честно так и пишем
-  const lost = out.loss >= 1 ? `недополучено ≈ ${rub(out.loss, 0)} — уже в факте` : out.unknown === out.days ? 'сколько недополучено, пока не посчитать — мало продаж до сбоя' : 'продажи в эти дни не упали ниже обычного';
-  return [out.days ? `Сбои: ${dn(out.days)}, ${lost}` : '', out.ahead ? `впереди ещё ${dn(out.ahead)} сбоя — посчитаны по темпу сбоя` : '', 'остальные дни — по обычному темпу'].filter(Boolean).join('; ');
+  return [out.days ? `Сбои: ${dn(out.days)}, недополучено ≈ ${rub(out.loss, 0)} — уже в факте` : '', out.ahead ? `впереди ещё ${dn(out.ahead)} сбоя — посчитаны по темпу сбоя` : '', 'остальные дни — по обычному темпу'].filter(Boolean).join('; ');
 }
 function goalCard(c, st, big = '') {
   const s = c.settings;
