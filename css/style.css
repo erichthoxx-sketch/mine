@@ -1330,3 +1330,6 @@ main a.card.arc-warn, main a.card.arc-warn:visited { display: flex; align-items:
 a.card.arc-warn .ic { width: 18px; height: 18px; flex: 0 0 auto; }
 .arc-steps a, .arc-steps a:visited { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
 .arc-gh summary { color: var(--text); }
+.arc .arc-upd { flex-wrap: wrap; justify-content: space-between; }
+.arc .arc-upd .small-btn { display: inline-flex; align-items: center; gap: 6px; }
+.arc .arc-upd .small-btn .ic { width: 15px; height: 15px; }

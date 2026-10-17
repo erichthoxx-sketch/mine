@@ -3,7 +3,7 @@ import { esc, acts, openSheet, toast, ask, download } from '../../../js/ui.js';
 import { ic } from '../../../js/icons.js';
 import { fmtDate, plural } from '../../../js/format.js';
 import * as drive from '../drive.js';
-import { INDEX_NAME, ARCHIVE_NAME, scriptCode, archiveStatus, copiesWithDiff } from '../archive.js';
+import { INDEX_NAME, ARCHIVE_NAME, SCRIPT_V, scriptCode, archiveStatus, copiesWithDiff } from '../archive.js';
 
 const app = () => window.__app;
 const grp = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -56,7 +56,9 @@ export function archiveCard(c) {
     const cs = copiesWithDiff(b), last = cs[0];
     return `<a class="item row between" href="#" data-act="arc.book" data-id="${esc(b.id)}"><span><b class="arc-name">${esc(b.name)}</b><span class="sub">${[b.path ? esc(b.path) : '', `${cs.length} ${plural(cs.length, ['копия', 'копии', 'копий'])}`, last?.chars != null ? `${grp(last.chars)} зн.` : b.kind === 'docx' ? 'Word' : ''].filter(Boolean).join(' · ')}</span></span><span class="small muted">${last ? fmtDate(last.date).slice(0, 5) : ''}</span></a>`;
   }).join('');
-  return `<div class="card arc">${head()}${line}${errs}
+  // программа у владелицы старее, чем в приложении — попросить заменить текст
+  const upd = (ix.sv || 1) < SCRIPT_V ? `<div class="arc-st warn arc-upd"><span>Есть новая версия программы архива. Скопируйте её и замените текст на script.google.com (Ctrl+A, Ctrl+V, Ctrl+S), затем нажмите Run.</span><button class="small-btn" data-act="arc.copy">${ic('copy')} Скопировать программу</button></div>` : '';
+  return `<div class="card arc">${head()}${line}${upd}${errs}
     <div class="list">${rows || '<p class="small muted">Копий пока нет — первая появится ночью.</p>'}</div>
     ${gh}
     <div class="dl-row"><a class="dl" href="https://drive.google.com/drive/folders/${esc(ix.folderId || '')}" target="_blank" rel="noopener">${ic('folder')}Папка архива</a><button class="dl" data-act="arc.reload">${ic('refresh')}Обновить</button><button class="dl" data-act="arc.setup">${ic('settings')}Настроить</button></div></div>`;

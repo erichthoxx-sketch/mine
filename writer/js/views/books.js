@@ -100,7 +100,7 @@ export function progressBlock(c, b) {
     const nums = chapterList(b).map((x) => Number((/^\s*глава\s+(\d+)/i.exec(x.title) || [])[1])).filter(Boolean);
     const newCh = nums.length ? `Глава ${Math.max(...nums) + 1}` : 'Новая глава';
     const title = s.next.ch ? `Выложить «${esc(s.next.ch)}»` : `${newCh} — написать к ${when}`;
-    const sub = s.next.ch ? `Глава написана — осталось поставить на таймер · ${esc(s.next.pf)}` : `Все написанные главы уже выложены или стоят на таймере · ${esc(s.next.pf)}`;
+    const sub = s.next.ch ? `Глава написана — осталось поставить на таймер · ${esc(s.next.pf)}` : esc(s.next.pf);
     parts.push(`<div class="next-line"><span class="nl-date"><b>${Number(d.slice(8, 10))}</b><i>${MON_SHORT[Number(d.slice(5, 7)) - 1]}</i></span>
       <span class="nl-body"><span class="nl-t">${title}</span><span class="nl-s"><span class="nl-when-m">${whenTxt(n).replace(/^./, (ch) => ch.toUpperCase())} · </span>${sub}</span></span><span class="nl-when${n < 0 ? ' late' : n <= 2 ? ' soon' : ''}">${whenTxt(n)}</span></div>`);
   }

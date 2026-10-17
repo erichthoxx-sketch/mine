@@ -8,6 +8,8 @@
 export const ARCHIVE_NAME = 'Архив Мастерской';
 export const INDEX_NAME = 'Архив Мастерской — оглавление.json';
 export const STALE_DAYS = 2;
+// версия программы Google: выросла — приложение попросит вставить программу заново
+export const SCRIPT_V = 2;
 
 // какие копии оставить: за 30 дней — все, до полугода — по одной в неделю, дальше — по одной в месяц (навсегда)
 export function thinKeep(dates, today) {
@@ -55,6 +57,8 @@ function runBackup() {
   var archive = folderIn(DriveApp.getRootFolder(), ARCHIVE_NAME);
   var index = readIndex(archive);
   var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Europe/Moscow', 'yyyy-MM-dd');
+  var ghState = JSON.parse(props.getProperty('ghstate') || '{}');
+  var withGh = !!(props.getProperty('GITHUB_TOKEN') && props.getProperty('GITHUB_REPO'));
   var errors = [], files = [], gh = [], left = false;
   walk(DriveApp.getFolderById(BOOKS_FOLDER_ID), '', files, 0, archive.getId());
   for (var i = 0; i < files.length; i++) {
@@ -62,7 +66,13 @@ function runBackup() {
     if (Date.now() - started > 4.5 * 60 * 1000) { left = true; break; }
     try {
       var upd = f.file.getLastUpdated().getTime();
-      if (state[f.id] && state[f.id] >= upd) continue;
+      var needCopy = !(state[f.id] >= upd);
+      // в GitHub — всё, чего там ещё нет в этой версии (даже если копия на Диске уже есть)
+      var needGh = withGh && f.mime !== DOCX && !(ghState[f.id] >= upd);
+      if (!needCopy && !needGh) continue;
+      var tabs = f.mime !== DOCX ? docTabs(f.id) : null;
+      if (needGh) gh.push({ id: f.id, upd: upd, name: f.name, tabs: tabs });
+      if (!needCopy) continue;
       var book = index.books[f.id] || (index.books[f.id] = { id: f.id, copies: [] });
       book.name = f.name; book.path = f.path; book.kind = f.mime === DOCX ? 'docx' : 'doc';
       var dir = folderIn(archive, safeName(f.name));
@@ -76,9 +86,7 @@ function runBackup() {
         var url = 'https://docs.google.com/document/d/' + f.id + '/export?format=docx';
         var blob = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } }).getBlob();
         copy.docxId = dir.createFile(blob.setName(stamp + ' ' + f.name + '.docx')).getId();
-        var tabs = docTabs(f.id);
         copy.chars = bookChars(tabs);
-        gh.push({ name: f.name, tabs: tabs });
       } else {
         copy.docxId = f.file.makeCopy(stamp + ' ' + f.name, dir).getId();
       }
@@ -93,9 +101,14 @@ function runBackup() {
     b.copies = b.copies.filter(function (c) { return keep.indexOf(c.date) >= 0; }).sort(function (a, c) { return a.date < c.date ? 1 : -1; });
   });
   if (gh.length) {
-    try { var msg = pushGithub(gh, stamp, props); if (msg) index.github = { repo: props.getProperty('GITHUB_REPO'), at: new Date().toISOString(), ok: true, msg: msg }; } catch (e) { index.github = { repo: props.getProperty('GITHUB_REPO'), at: new Date().toISOString(), ok: false, msg: String(e && e.message || e).slice(0, 300) }; }
+    try {
+      var msg = pushGithub(gh, stamp, props);
+      gh.forEach(function (x) { ghState[x.id] = x.upd; });
+      props.setProperty('ghstate', JSON.stringify(ghState));
+      index.github = { repo: props.getProperty('GITHUB_REPO'), at: new Date().toISOString(), ok: true, msg: msg };
+    } catch (e) { index.github = { repo: props.getProperty('GITHUB_REPO'), at: new Date().toISOString(), ok: false, msg: String(e && e.message || e).slice(0, 300) }; }
   }
-  index.folderId = archive.getId(); index.source = BOOKS_FOLDER_ID;
+  index.folderId = archive.getId(); index.source = BOOKS_FOLDER_ID; index.sv = SCRIPT_V;
   index.lastRun = new Date().toISOString(); index.errors = errors; index.left = left; index.total = files.length;
   writeIndex(archive, index);
   props.setProperty('state', JSON.stringify(state));
@@ -152,7 +165,8 @@ function trashCopy(c) {
 }
 // копия вне Google: тексты вкладок → закрытое хранилище GitHub, одной правкой за ночь (история — в самом GitHub)
 function pushGithub(items, stamp, props) {
-  var token = props.getProperty('GITHUB_TOKEN'), repo = props.getProperty('GITHUB_REPO');
+  var token = String(props.getProperty('GITHUB_TOKEN') || '').trim();
+  var repo = String(props.getProperty('GITHUB_REPO') || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, '');
   if (!token || !repo) return '';
   var api = function (path, method, body) {
     var o = { method: method || 'get', muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' } };
@@ -161,7 +175,12 @@ function pushGithub(items, stamp, props) {
     if (code >= 300) throw new Error('GitHub ' + code + ': ' + r.getContentText().slice(0, 200));
     return JSON.parse(r.getContentText() || '{}');
   };
-  var branch = api('').default_branch, parent = api('/git/ref/heads/' + branch).object.sha;
+  var branch = api('').default_branch || 'main', parent;
+  try { parent = api('/git/ref/heads/' + branch).object.sha; } catch (e) {
+    // хранилище создано без README — кладём первый файл, чтобы появилась ветка
+    api('/contents/README.md', 'put', { message: 'Архив книг', content: Utilities.base64Encode('# Архив книг\n', Utilities.Charset.UTF_8), branch: branch });
+    parent = api('/git/ref/heads/' + branch).object.sha;
+  }
   var base = api('/git/commits/' + parent).tree.sha;
   var old = api('/git/trees/' + base + '?recursive=1').tree || [], tree = [], pad = function (n) { return n < 10 ? '0' + n : String(n); };
   items.forEach(function (x) {
@@ -189,6 +208,7 @@ export function scriptCode(folderId) {
     `var ARCHIVE_NAME = ${JSON.stringify(ARCHIVE_NAME)};`,
     `var INDEX_NAME = ${JSON.stringify(INDEX_NAME)};`,
     `var DOCX = ${JSON.stringify(DOCX)};`,
+    `var SCRIPT_V = ${SCRIPT_V};`,
     '',
     ...fns.map((f) => f.toString() + '\n'),
   ].join('\n');

@@ -72,7 +72,7 @@ function fakeGoogle() {
         : path.startsWith('/git/trees/') ? { tree: [{ type: 'blob', path: 'Альпийский развод/03 Старая глава.md' }, { type: 'blob', path: 'README.md' }] } : path === '/git/trees' ? { sha: 't2' } : path === '/git/commits' ? { sha: 'c2' } : {};
       return { getResponseCode: () => 200, getContentText: () => JSON.stringify(body) };
     } },
-    Utilities: { formatDate: (d) => d.toISOString().slice(0, 10) },
+    Utilities: { formatDate: (d) => d.toISOString().slice(0, 10), base64Encode: (t) => Buffer.from(t).toString('base64'), Charset: { UTF_8: 'utf8' } },
     Session: { getScriptTimeZone: () => 'Europe/Moscow' },
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
   };
@@ -85,8 +85,14 @@ test('архив: программа Google копирует книги, пиш�
   assert.ok(!/ghp_|github_pat_/.test(code)); // ключей в тексте программы нет
   vm.createContext(g.ctx);
   vm.runInContext(code, g.ctx);
-  g.props.GITHUB_TOKEN = 'secret'; g.props.GITHUB_REPO = 'me/arhiv';
-  vm.runInContext('setup()', g.ctx);
+  vm.runInContext('setup()', g.ctx); // первый запуск — ключа GitHub ещё нет
+  assert.equal(g.fetches.filter((f) => f.url.includes('api.github.com')).length, 0);
+  const copiesBefore = Object.keys(g.files).length;
+  // ключ вписали позже (и ссылкой целиком) — книги без изменений всё равно уходят в GitHub, лишних копий на Диске нет
+  g.props.GITHUB_TOKEN = ' secret '; g.props.GITHUB_REPO = 'https://github.com/me/arhiv';
+  vm.runInContext('nightly()', g.ctx);
+  assert.equal(Object.keys(g.files).length, copiesBefore);
+  assert.ok(g.fetches.some((f) => f.url.startsWith('https://api.github.com/repos/me/arhiv/git/trees')));
   assert.equal(g.triggers.length, 1);
   const idxFile = Object.values(g.files).find((f) => f.name === INDEX_NAME);
   const idx = JSON.parse(idxFile.text);
@@ -101,10 +107,11 @@ test('архив: программа Google копирует книги, пиш�
   const tree = JSON.parse(g.fetches.find((f) => f.url.endsWith('/git/trees') && f.o.method === 'post').o.payload).tree;
   assert.deepEqual(tree.map((t) => t.path), ['Альпийский развод/01 Глава 1.md', 'Альпийский развод/02 Каркас.md', 'Альпийский развод/03 Старая глава.md']);
   assert.equal(tree[2].sha, null); // удалённая глава убрана из текущей версии
-  // вторая ночь без изменений — новых копий нет, но отметка о запуске свежая
-  const before = Object.keys(g.files).length;
+  // следующая ночь без изменений — ни копий, ни отправки в GitHub, но отметка о запуске свежая
+  const before = Object.keys(g.files).length, sent = g.fetches.length;
   vm.runInContext('nightly()', g.ctx);
   assert.equal(Object.keys(g.files).length, before);
+  assert.equal(g.fetches.length, sent);
   assert.ok(JSON.parse(idxFile.text).lastRun);
 });
 
