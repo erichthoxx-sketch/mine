@@ -1,6 +1,6 @@
 // Запуск синхронизации с Todoist: при открытии и после изменений (с паузой), не чаще раза в минуту;
 // если в планере ничего не поменялось — раз в 10 минут (узнать, что закрыто в самом Todoist).
-import { todoistTasks, syncTodoist, syncIdeas, TD_DAYS } from './todoist.js';
+import { todoistTasks, syncTodoist, syncIdeas, fetchOwnTasks, TD_DAYS } from './todoist.js';
 import { planItems } from './views/plan.js';
 import { addDays } from '../../js/calc.js';
 import { toast } from '../../js/ui.js';
@@ -15,6 +15,7 @@ export function scheduleTodoist(a, ms = 20000, { pull = false } = {}) {
 }
 export async function runTodoist(a, { force = false, pull = false } = {}) {
   const c = a.ctx(), s = c.settings, token = s.todoistToken;
+  if (busy && Date.now() - lastAt > 3 * 60000) busy = false; // прошлая синхронизация зависла — не держим очередь
   if (!token || busy || (!force && (s.todoistOff || !navigator.onLine))) return null;
   const want = todoistTasks(planItems(c, c.today, addDays(c.today, TD_DAYS)), c.wbooksById);
   const hash = JSON.stringify([want.map((w) => [w.key, w.content, w.date, w.description]), c.data.w_ideas.map((x) => [x.id, x.title, x.text, x.deletedAt || '', x.tdId || '', x.bookId || ''])]);
@@ -39,7 +40,9 @@ export async function runTodoist(a, { force = false, pull = false } = {}) {
     }
     return r;
   } catch (e) {
-    await a.store.saveSettings({ todoist: { ...(s.todoist || {}), err: e.message, errAt: new Date().toISOString() } }).catch(() => {});
+    // что-то не отправилось — свои задачи из Todoist всё равно подтягиваем, чтобы Планер их показал
+    let own = null; try { own = await fetchOwnTasks(token, s.todoist?.made || {}); } catch { /* нет связи */ }
+    await a.store.saveSettings({ todoist: { ...(s.todoist || {}), ...(own ? { own } : {}), err: e.message, errAt: new Date().toISOString() } }).catch(() => {});
     if (force) toast('Todoist: ' + e.message);
     return null;
   } finally { busy = false; }

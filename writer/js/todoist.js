@@ -65,7 +65,9 @@ export function todoistPlan(want, map = {}, closed = {}, active = [], made = nul
 
 async function tfetch(token, path, opts = {}) {
   let r;
-  try { r = await fetch(API + path, { ...opts, headers: { Authorization: 'Bearer ' + token, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } }); } catch { throw new Error('нет связи с Todoist'); }
+  // телефон уснул посреди запроса — не ждём вечно (иначе синхронизация встанет до перезапуска)
+  const ac = typeof AbortController !== 'undefined' ? new AbortController() : null, tm = ac && setTimeout(() => ac.abort(), 25000);
+  try { r = await fetch(API + path, { ...opts, ...(ac ? { signal: ac.signal } : {}), headers: { Authorization: 'Bearer ' + token, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } }); } catch { throw new Error('нет связи с Todoist'); } finally { if (tm) clearTimeout(tm); }
   if (r.status === 401 || r.status === 403) throw new Error('ключ Todoist не подходит — проверьте его в настройках');
   if (!r.ok) throw new Error('Todoist ответил ошибкой ' + r.status);
   return r.status === 204 ? null : r.json().catch(() => null);
