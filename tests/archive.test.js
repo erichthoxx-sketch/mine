@@ -17,7 +17,9 @@ test('архив: прореживание — 30 дней все, до полу
 
 test('архив: знаки книги — только главы, служебные вкладки не считаются', () => {
   assert.equal(bookChars([{ title: 'Глава 1', chars: 100 }, { title: 'Каркас', chars: 50 }, { title: 'Пролог', chars: 10 }]), 110);
-  assert.equal(bookChars([{ title: 'Черновик', chars: 70 }, { title: 'Персонажи', chars: 50 }]), 70);
+  assert.equal(bookChars([{ title: 'Черновик', chars: 70 }, { title: 'Персонажи', chars: 50 }]), 0); // глав нет — в рукопись ничего не идёт
+  assert.equal(bookChars([{ title: 'Tab 1', chars: 70 }]), 70); // документ из одной вкладки — целиком
+  assert.equal(bookChars([{ title: 'Глава 1', chars: 10 }, { title: 'От автора', chars: 5 }]), 10);
 });
 
 // заглушка Google Диска для программы

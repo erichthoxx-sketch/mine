@@ -22,6 +22,14 @@ test('Google Документ: вкладки-главы считаются от
   const withNotes = { tabs: [{ tabProperties: { title: 'Синопсис' }, documentTab: { body: { content: [para('очень длинный синопсис\n')] } } }, { tabProperties: { title: 'Пролог' }, documentTab: { body: { content: [para('abc\n')] } } }, ...doc.tabs] };
   const r2 = charsFromDocsJson(withNotes);
   assert.equal(r2.total, 23); assert.equal(r2.tabs[0].counted, false); assert.equal(r2.tabs[1].counted, true);
+  // глав нет, только промты и черновики — объём 0 (в рукопись ничего не идёт); «От автора» в объём не входит
+  const drafts = { tabs: ['Каркас', 'Промт мой', 'Tab 4', 'Tab 5'].map((t) => ({ tabProperties: { title: t }, documentTab: { body: { content: [para('текст текст\n')] } } })) };
+  assert.equal(charsFromDocsJson(drafts).total, 0);
+  const withAuthor = { tabs: [...doc.tabs, { tabProperties: { title: 'От автора' }, documentTab: { body: { content: [para('спасибо\n')] } } }] };
+  assert.equal(charsFromDocsJson(withAuthor).total, 20);
+  assert.equal(charsFromDocsJson(withAuthor).tabs.at(-1).counted, true); // в списке глав «От автора» остаётся
+  // обычный документ из одной вкладки — весь текст
+  assert.equal(charsFromDocsJson({ tabs: [{ tabProperties: { title: 'Tab 1' }, documentTab: { body: { content: [para('abc\n')] } } }] }).total, 3);
   // старый документ без вкладок
   assert.equal(charsFromDocsJson({ title: 'X', body: { content: [para('abc\n')] } }).total, 3);
 });

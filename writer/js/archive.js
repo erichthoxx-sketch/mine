@@ -24,15 +24,15 @@ export function thinKeep(dates, today) {
   return keep;
 }
 export function safeName(s) { return String(s || '').replace(/[\\/:*?"<>|#\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Без названия'; }
-// вкладки книги — как в приложении: Пролог, Главы, Эпилог, От автора; если таких нет — всё, кроме служебных
+// вкладки рукописи — как в приложении: Пролог, Главы, Эпилог («От автора» — по желанию);
+// документ из одной вкладки — целиком; промты, каркас и черновики не входят
 export function bookTabs(tabs, withAuthor) {
-  var isBook = function (t) { return /^\s*(пролог|глава|эпилог|от автора)/i.test(t) && (withAuthor || !/^\s*от автора/i.test(t)); };
-  var svc = function (t) { return /^\s*(идея|каркас|персонажи|синопсис|аннотац|от автора)/i.test(t); };
-  var any = tabs.some(function (t) { return /^\s*(пролог|глава|эпилог)/i.test(t.title); });
-  return tabs.filter(function (t) { return any ? isBook(t.title) : !svc(t.title); });
+  var svc = function (t) { return /^\s*(идея|каркас|персонажи|синопсис|аннотац|промт|промпт)/i.test(t); };
+  if (tabs.length === 1 && !svc(tabs[0].title)) return tabs;
+  return tabs.filter(function (t) { return /^\s*(пролог|глава|эпилог)/i.test(t.title) || (withAuthor && /^\s*от автора/i.test(t.title)); });
 }
 export function bookChars(tabs) {
-  return bookTabs(tabs, true).reduce(function (a, t) { return a + t.chars; }, 0);
+  return bookTabs(tabs, false).reduce(function (a, t) { return a + t.chars; }, 0);
 }
 // абзац Документа → Markdown: заголовки, жирный, курсив; спецсимволы экранируем
 export function paraMd(text, runs, heading) {

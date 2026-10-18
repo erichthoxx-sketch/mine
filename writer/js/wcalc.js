@@ -10,7 +10,7 @@ export function countChars(text) {
 export const isBookTab = (title) => /^\s*(пролог|глава|эпилог|от автора)/i.test(title || '');
 
 // Google Документ (Docs API, includeTabsContent=true) → {total, tabs:[{title, chars, counted}]}.
-// В сумму идут только вкладки книги (isBookTab); если таких нет — весь документ, как раньше.
+// В сумму идут только главы рукописи (Пролог, Главы, Эпилог); документ из одной вкладки — целиком.
 export function charsFromDocsJson(doc) {
   const textOf = (content) => {
     let t = '';
@@ -38,11 +38,14 @@ export function charsFromDocsJson(doc) {
   };
   if (doc.tabs?.length) walk(doc.tabs);
   else return { total: countChars(textOf(doc.body?.content)), tabs: [{ title: doc.title || 'Документ', chars: countChars(textOf(doc.body?.content)), counted: true }] };
-  const any = tabs.some((t) => isBookTab(t.title));
-  // вкладки Легенды («Идея», «Каркас», «Персонажи») и служебные не считаются никогда
-  const svcTab = (t) => /^\s*(идея|каркас|персонажи|синопсис|аннотац)/i.test(t);
-  for (const t of tabs) t.counted = any ? isBookTab(t.title) : !svcTab(t.title);
-  return { total: tabs.filter((t) => t.counted).reduce((a, t) => a + t.chars, 0), tabs, svc };
+  // объём книги — только то, что идёт в рукопись: «Пролог», «Глава …», «Эпилог» («От автора» — нет).
+  // Промты, черновики, каркас и другие вкладки не считаются. Исключение — обычный документ из одной вкладки:
+  // там весь текст и есть книга.
+  const svcTab = (t) => /^\s*(идея|каркас|персонажи|синопсис|аннотац|промт|промпт)/i.test(t);
+  const single = tabs.length === 1 && !svcTab(tabs[0].title);
+  for (const t of tabs) t.counted = single || isBookTab(t.title);
+  const inMs = (t) => t.counted && !/^\s*от автора/i.test(t.title);
+  return { total: tabs.filter(inMs).reduce((a, t) => a + t.chars, 0), tabs, svc };
 }
 
 // Word (.docx): word/document.xml → число знаков (текст в <w:t>, табуляция = 1 знак)

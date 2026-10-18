@@ -209,7 +209,7 @@ export function bookPage(a, id) {
 }
 
 // ---------- обновление знаков ----------
-const COUNT_RULE = 3; // 3 — считаются только вкладки «Пролог», «Глава …», «Эпилог», «От автора»
+const COUNT_RULE = 4; // 4 — объём = только рукопись: «Пролог», «Глава …», «Эпилог» (без «От автора», промтов и черновиков)
 export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
@@ -222,10 +222,11 @@ export async function refreshOne(a, b, force = false) {
   const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE, ...(r.svc ? { svc: r.svc } : {}) };
   await a.store.put('w_books', base);
   // шаг 2: начало дня / недели / месяца и (один раз) история за 2 недели — по версиям документа
-  let dayStart = b.dayStart && b.dayStart.date === c.today && b.dayStart.v === 2 ? b.dayStart : null;
-  let weekStart = b.weekStart && b.weekStart.date === c.today ? b.weekStart : null;
-  let monthStart = b.monthStart && b.monthStart.date === c.today ? b.monthStart : null;
-  let filled = !!b.histFilled || meta.mimeType !== drive.MIME.doc; // Word-файлы не восстанавливаем — это тяжело
+  // правило подсчёта поменялось — начало дня/недели/месяца и историю за 2 недели пересчитываем заново по версиям
+  let dayStart = !ruleChanged && b.dayStart && b.dayStart.date === c.today && b.dayStart.v === 2 ? b.dayStart : null;
+  let weekStart = !ruleChanged && b.weekStart && b.weekStart.date === c.today ? b.weekStart : null;
+  let monthStart = !ruleChanged && b.monthStart && b.monthStart.date === c.today ? b.monthStart : null;
+  let filled = (!ruleChanged && !!b.histFilled) || meta.mimeType !== drive.MIME.doc; // Word-файлы не восстанавливаем — это тяжело
   const fill = !filled ? Array.from({ length: 14 }, (_, i) => addDays(c.today, -i)) : [];
   if (!dayStart || !weekStart || !monthStart || fill.length) {
     const wFrom = addDays(c.today, -6), mFrom = c.today.slice(0, 8) + '01';
