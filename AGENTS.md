@@ -84,6 +84,9 @@ direct/js/                 — «Директ»
   sync.js       refresh() → d_snap; apply(действие) с записью в d_log; pushToIncome() — недельные отчёты в «Доходы»
   dcalc.js      чистые расчёты: итоги, подсказки (JUNK — кандидаты в минус), aiPackage/parsePlan/describe/toRequest;
                 покупки по целям: convRows, goalTotals (цена покупки), goalHints (аналитик), goalWeekInsight, metrikaRows
+                выгорание: adRows/mergeAdDaily (отчёт по объявлениям и площадкам → d_snap/stats.adDaily), adFatigue (CTR дней 3–16
+                показов против последних 7, z-тест 95 %: tiring ≥ 20 %, burnt ≥ 40 %, soon — сети 21 дн., поиск 45 дн.), convFatigue
+                (доля покупок с клика 14 дн. против 28), fatigueHints → разбор кампании, «Что сделать сейчас», урок fatigue, пакет для ИИ
   demo.js       пример данных (только в памяти страницы, в базу не пишется)
   mcalc.js      аналитика Метрики (чистые функции): mkRows, sumDays, byWeekday, mkInsights — шаги step/warn/good/wait/info
   views/        analytics («Аналитика», #/an: Метрика сама по себе — refreshMetrika в sync.js → d_snap/mk; работает без Директа;

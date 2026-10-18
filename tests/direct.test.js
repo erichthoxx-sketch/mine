@@ -355,3 +355,33 @@ test('Литнет: страница книги и читалка, книги п
   const t2 = M.utmTable([], [{ id: 'a', label: 'Литнет: реклама', litref: 'ol_Fd', cost: 900 }], ['1'], 120, refs);
   assert.equal(t2.length, 2); assert.equal(t2[0].conv, 9); assert.equal(t2[0].cpa, 100); assert.equal(t2[0].romi, (9 * 120 - 900) / 900); assert.match(t2[1].label, /Ссылка Литнета/);
 });
+
+test('Выгорание: CTR объявления падает значимо — устаёт/выгорело; замену предлагают заранее; покупки с клика падают', async () => {
+  const D = await import('../direct/js/dcalc.js');
+  const today = '2026-10-18', day = (i) => new Date(Date.parse(today) - i * 864e5).toISOString().slice(0, 10);
+  assert.deepEqual(D.adRows([{ Date: today, CampaignId: 7, AdId: 1, AdNetworkType: 'AD_NETWORK', Impressions: 10, Clicks: 1, Cost: 6 }])[0], { date: today, cid: 7, aid: 1, net: 'n', impr: 10, clicks: 1, cost: 6 });
+  const rows = [];
+  // 1: поиск, 40 дней, CTR 6 % → 2,4 % в последнюю неделю; 2: сети, 25 дней, ровный CTR; 3: поиск, ровный, но мало показов
+  for (let i = 40; i >= 1; i--) rows.push({ date: day(i), cid: 7, aid: 1, net: 's', impr: 300, clicks: i <= 7 ? 7 : 18, cost: (i <= 7 ? 7 : 18) * 9 });
+  for (let i = 25; i >= 1; i--) rows.push({ date: day(i), cid: 8, aid: 2, net: 'n', impr: 2000, clicks: 14, cost: 84 });
+  for (let i = 30; i >= 1; i--) rows.push({ date: day(i), cid: 7, aid: 3, net: 's', impr: 20, clicks: 1, cost: 9 });
+  const fs = D.adFatigue(rows, today);
+  const by = Object.fromEntries(fs.map((f) => [f.aid, f]));
+  assert.equal(by[1].state, 'burnt'); assert.ok(by[1].drop > 0.5);
+  assert.equal(by[2].state, 'soon'); // сети, 3+ недели — готовить замену
+  assert.equal(by[3].state, 'few');
+  // дни сбоя не считаются: если вся последняя неделя — сбой, объявление «не крутится»
+  const skip = new Set([1, 2, 3, 4, 5, 6, 7].map(day));
+  assert.ok(!D.adFatigue(rows, today, { skip }).some((f) => f.aid === 1));
+  // подсказки: остановить можно, только если в группе есть живой вариант
+  const main = { campaigns: [{ id: 7, name: 'Поиск', state: 'ON' }], ads: [{ id: 1, gid: 70, cid: 7, state: 'ON', status: 'ACCEPTED', title: 'А' }, { id: 3, gid: 70, cid: 7, state: 'ON', status: 'ACCEPTED', title: 'Б' }] };
+  const h = D.fatigueHints({ main, stats: { adDaily: rows }, today });
+  assert.equal(h[0].act.do, 'pause'); assert.equal(h[0].act.target, 'ad'); assert.deepEqual(h[0].act.ids, [1]);
+  const h1 = D.fatigueHints({ main: { ...main, ads: [main.ads[0]] }, stats: { adDaily: rows }, today });
+  assert.ok(!h1[0].act); assert.match(h1[0].how, /сначала добавьте/);
+  // аудитория: доля покупок с клика упала с 5 % до 2 %
+  const daily = [], conv = [];
+  for (let i = 42; i >= 1; i--) { daily.push({ date: day(i), cid: 7, impr: 1000, clicks: 40, cost: 360 }); conv.push({ date: day(i), cid: 7, conv: { 1: i <= 14 ? (i % 2 ? 1 : 0) : 2 } }); }
+  const cf = D.convFatigue(daily, conv, today, { cid: 7 });
+  assert.equal(cf.state, 'down'); assert.ok(cf.crB < cf.crA);
+});

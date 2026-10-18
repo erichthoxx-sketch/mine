@@ -29,7 +29,7 @@ function rnd(seed) { let x = seed; return () => { x = (x * 16807) % 2147483647; 
 export function demoSnapshot(today) {
   const r = rnd(42);
   const campaigns = [
-    { id: 701, name: 'Книга — поиск', state: 'ON', status: 'ACCEPTED', type: 'TEXT_CAMPAIGN', start: addDays(today, -20), daily: 400, negatives: ['скачать', 'fb2'], strategy: { search: 'HIGHEST_POSITION', network: 'SERVING_OFF' }, counters: [555] },
+    { id: 701, name: 'Книга — поиск', state: 'ON', status: 'ACCEPTED', type: 'TEXT_CAMPAIGN', start: addDays(today, -40), daily: 400, negatives: ['скачать', 'fb2'], strategy: { search: 'HIGHEST_POSITION', network: 'SERVING_OFF' }, counters: [555] },
     { id: 702, name: 'Книга — сети', state: 'ON', status: 'ACCEPTED', type: 'TEXT_CAMPAIGN', start: addDays(today, -12), daily: 200, negatives: [], strategy: { search: 'SERVING_OFF', network: 'MAXIMUM_COVERAGE' }, counters: [] },
   ];
   const groups = [{ id: 801, name: 'Любовное фэнтези', cid: 701 }, { id: 802, name: 'Похожие книги', cid: 701 }, { id: 803, name: 'Читательницы романов', cid: 702 }];
@@ -43,7 +43,18 @@ export function demoSnapshot(today) {
     { id: 1001, gid: 801, cid: 701, state: 'ON', status: 'ACCEPTED', note: '', title: 'Истинная пара для дракона', title2: 'Новый роман — читать на Литнете', text: 'Она сбежала со свадьбы, он нашёл её по запаху. Первые главы бесплатно.', href: 'https://litnet.com/' },
     { id: 1002, gid: 802, cid: 701, state: 'ON', status: 'ACCEPTED', note: '', title: 'Любовное фэнтези с юмором', title2: 'Читать онлайн', text: 'Попаданка, дракон и очень упрямая академия. Продолжение каждый день.', href: 'https://litnet.com/' },
     { id: 1003, gid: 803, cid: 702, state: 'ON', status: 'REJECTED', note: 'Изображение не соответствует требованиям', title: 'Роман, от которого не оторваться', title2: '', text: 'Новая история о любви и магии.', href: 'https://litnet.com/' },
+    { id: 1004, gid: 803, cid: 702, state: 'ON', status: 'ACCEPTED', note: '', title: 'Он дракон. Она — его истинная', title2: '', text: 'Обложка и первые строки — в сетях.', href: 'https://litnet.com/' },
+    { id: 1005, gid: 801, cid: 701, state: 'ON', status: 'ACCEPTED', note: '', title: 'Сбежала со свадьбы — от дракона', title2: 'Читать на Литнете', text: 'Новый вариант: другой троп в заголовке.', href: 'https://litnet.com/' },
   ];
+  // по объявлениям: 1001 выгорело (CTR упал вдвое), 1002 устаёт, 1004 в сетях 3+ недели, 1005 — свежая замена
+  const adDaily = [];
+  for (const [aid, cid, net, from, impr0, ctr0, decay] of [[1001, 701, 's', 38, 260, 0.06, 0.55], [1002, 701, 's', 36, 200, 0.05, 0.28], [1004, 702, 'n', 24, 1500, 0.007, 0], [1005, 701, 's', 6, 120, 0.065, 0]]) {
+    for (let i = from; i >= 0; i--) {
+      const date = addDays(today, -i), life = (from - i) / from, impr = Math.round(impr0 * (0.85 + r() * 0.3));
+      const clicks = Math.round(impr * ctr0 * (1 - decay * Math.max(0, life - 0.35) / 0.65) * (0.85 + r() * 0.3));
+      adDaily.push({ date, cid, aid, net, impr, clicks, cost: Math.round(clicks * (net === 'n' ? 6 : 9) * (1 + decay * life * 0.6) * 100) / 100 });
+    }
+  }
   const daily = [];
   for (let i = 29; i >= 0; i--) {
     const date = addDays(today, -i);
@@ -73,7 +84,7 @@ export function demoSnapshot(today) {
   if (kw[903]) { kw[903].clicks = Math.max(kw[903].clicks, 30); kw[903].cost = Math.max(kw[903].cost, 900); } // фраза тратит без покупок
   const mrows = [{ cid: 701, name: 'Книга — поиск', visits: 412, bounce: 0.21, depth: 3.4, dur: 255 }, { cid: 702, name: 'Книга — сети', visits: 160, bounce: 0.68, depth: 1.3, dur: 34 }];
   const at = new Date().toISOString();
-  return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, demo: true, daily, kw, queries, conv, kwConv, mrows }];
+  return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, demo: true, daily, adDaily, kw, queries, conv, kwConv, mrows }];
 }
 
 // Пример Метрики: 8 недель по дням (с ритмом недели), источники, устройства, страницы входа

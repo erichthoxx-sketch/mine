@@ -3,7 +3,7 @@ import { esc, acts } from '../../../js/ui.js';
 import { rub, num, pct, fmtShort } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
-import { totals, spendSeries, budgetPace, queryHints, keywordHints, withAvgCpc, goalHints, goalTotals, DEFAULT_TEST_BUDGET } from '../dcalc.js';
+import { totals, spendSeries, budgetPace, queryHints, keywordHints, withAvgCpc, goalHints, goalTotals, fatigueHints, DEFAULT_TEST_BUDGET } from '../dcalc.js';
 import { metrikaOf } from './metrika.js';
 import { stateDot, tiles, actBtn, q } from './common.js';
 import { demo } from '../demo.js';
@@ -38,6 +38,10 @@ function goalTodo(main, stats, ctx) {
 // Подсказки «что сделать сейчас»: до 6 самых важных
 export function todo(main, stats, ctx = null) {
   const out = ctx ? goalTodo(main, stats, ctx) : [];
+  // выгорание: сначала то, что уже выгорает, потом «пора готовить замену»
+  if (ctx) for (const h of fatigueHints({ main, stats, today: ctx.today, goals: metrikaOf(ctx)?.main || null, skip: outageSet(ctx.data.days || []) }).slice(0, 2)) {
+    out.push(`<div class="item"><div class="row between"><b>${esc(h.title)}</b>${h.act ? actBtn(h.act, h.actLabel, 'small-btn') : ''}</div><div class="small muted">${esc(h.how)} · ${lessonLink(h.lesson)}</div></div>`);
+  }
   const neg = Object.fromEntries((main.campaigns || []).map((c) => [c.id, c.negatives || []]));
   for (const h of queryHints(stats.queries, neg).slice(0, 3)) {
     out.push(`<div class="item"><div class="row between"><b>Минус-слово «${esc(h.word)}»</b>${actBtn({ do: 'minus', campaign: h.cid, phrases: [h.word], why: `${h.why}; ушло ${rub(h.cost, 0)} на ${h.queries.length} запр.` }, 'В минус', 'small-btn')}</div>

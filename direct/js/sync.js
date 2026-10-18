@@ -2,7 +2,7 @@
 // d_snap/main  — кампании, группы, фразы, объявления;  d_snap/stats — расход по дням, фразы и запросы за 30 дней.
 // Расход связанных кампаний уходит в «Доходы» недельными отчётами (там считается окупаемость).
 import { call, report, metrika } from './api.js';
-import { MICRO, dailyRows, mergeDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows } from './dcalc.js';
+import { MICRO, dailyRows, mergeDaily, adRows, mergeAdDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows } from './dcalc.js';
 import { demoSnapshot, demoMetrikaSnap, isDemo, snap, putSnap, putLog } from './demo.js';
 import { todayISO, addDays, weekStart } from '../../js/calc.js';
 import { SESSION_METRICS, goalMetric, mkRows } from './mcalc.js';
@@ -60,6 +60,13 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   const from = old?.daily?.length ? addDays(today, -14) : addDays(today, -89);
   const day = await report(s, { name: 'days', fields: ['Date', 'CampaignId', 'CampaignName', 'Impressions', 'Clicks', 'Cost'], from, to: today });
   const daily = mergeDaily(old?.daily || [], dailyRows(day), 400, today);
+  // по объявлениям и площадкам (поиск / сети) — чтобы заметить выгорание; сбой здесь не ломает загрузку
+  let adDaily = old?.adDaily || [];
+  try {
+    onStep('Объявления по дням…');
+    const afrom = adDaily.length ? addDays(today, -14) : addDays(today, -89);
+    adDaily = mergeAdDaily(adDaily, adRows(await report(s, { name: 'ads', fields: ['Date', 'CampaignId', 'AdId', 'AdNetworkType', 'Impressions', 'Clicks', 'Cost'], from: afrom, to: today })), 120, today);
+  } catch (e) { if (e.transient) throw e; console.warn('объявления', e); }
   onStep('Фразы и поисковые запросы…');
   const kwRows = await report(s, { name: 'kw', fields: ['CampaignId', 'CriterionId', 'Criterion', 'Impressions', 'Clicks', 'Cost'] });
   const kw = {};
@@ -92,7 +99,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   const at = new Date().toISOString();
   await putSnap(app, [
     { id: 'main', at, sandbox: !!s.direct?.sandbox, campaigns, groups, keywords, ads },
-    { id: 'stats', at, daily, kw, queries, conv, kwConv, mrows, mErr, mAt },
+    { id: 'stats', at, daily, adDaily, kw, queries, conv, kwConv, mrows, mErr, mAt },
   ]);
   await pushToIncome(app, daily);
 }

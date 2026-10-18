@@ -403,6 +403,88 @@ export function weekInsights(daily, today, cid = null) {
   return out;
 }
 
+// ---------- выгорание: объявление приелось, аудитория «кончилась» ----------
+// Отчёт по объявлениям по дням → [{date, cid, aid, net: s (поиск) | n (сети), impr, clicks, cost}]
+export function adRows(rows) {
+  return rows.map((r) => ({ date: r.Date, cid: r.CampaignId, aid: r.AdId, net: r.AdNetworkType === 'AD_NETWORK' ? 'n' : 's', impr: r.Impressions, clicks: r.Clicks, cost: r2(r.Cost) }));
+}
+export function mergeAdDaily(old = [], fresh = [], keep = 120, today = null) {
+  const k = (x) => `${x.date}_${x.aid}_${x.net}`, m = new Map(old.map((x) => [k(x), x]));
+  for (const x of fresh) m.set(k(x), x);
+  const from = today ? addDays(today, -keep) : '';
+  return [...m.values()].filter((x) => x.date >= from).sort((a, b) => a.date.localeCompare(b.date) || a.aid - b.aid);
+}
+// Пороги: сравниваем «свежие» дни 3–16 жизни объявления с последними 7 полными днями
+export const FATIGUE = { minImpr: 1000, minClicks: 15, warn: 0.2, bad: 0.4, cpc: 0.3, ready: { n: 21, s: 45 } };
+const zTwo = (k1, n1, k2, n2) => { const p = (k1 + k2) / (n1 + n2), se = Math.sqrt(p * (1 - p) * (1 / n1 + 1 / n2)); return se ? (k1 / n1 - k2 / n2) / se : 0; };
+// По каждому объявлению и площадке: state burnt (выгорело) | tiring (устаёт) | soon (пора готовить замену) | few | young | fresh
+export function adFatigue(rows = [], today, { skip = null } = {}) {
+  const y = addDays(today, -1), by = {};
+  for (const x of rows) if (x.date <= y && !skip?.has(x.date)) (by[`${x.aid}|${x.net}`] ||= []).push(x);
+  const sum = (list, a, b) => { const t = list.reduce((q, x) => (x.date >= a && x.date <= b ? { impr: q.impr + x.impr, clicks: q.clicks + x.clicks, cost: q.cost + x.cost } : q), { impr: 0, clicks: 0, cost: 0 }); return { ...t, cost: r2(t.cost), ctr: ctr(t), cpc: cpc(t) }; };
+  const out = [];
+  for (const list of Object.values(by)) {
+    const on = list.filter((x) => x.impr > 0).map((x) => x.date).sort();
+    if (!on.length || on[on.length - 1] < addDays(y, -6)) continue; // сейчас не крутится
+    const first = on[0], age = daysBetween(first, y) + 1, { aid, cid, net } = list[0];
+    const base = sum(list, addDays(first, 2), addDays(first, 15)), rec = sum(list, addDays(y, -6), y);
+    const f = { aid, cid, net, first, age, base, rec, drop: null, cpcUp: null, state: 'fresh' };
+    const enough = age >= 23 && base.impr >= FATIGUE.minImpr && rec.impr >= FATIGUE.minImpr && base.clicks >= FATIGUE.minClicks;
+    if (enough && base.ctr) {
+      f.drop = 1 - (rec.ctr || 0) / base.ctr;
+      f.cpcUp = base.cpc && rec.cpc ? rec.cpc / base.cpc - 1 : null;
+      const sure = Math.abs(zTwo(rec.clicks, rec.impr, base.clicks, base.impr)) >= 1.96; // не случайность (95 %)
+      if (sure && f.drop >= FATIGUE.bad) f.state = 'burnt';
+      else if (sure && f.drop >= FATIGUE.warn) f.state = 'tiring';
+    }
+    if (f.state === 'fresh' && age >= FATIGUE.ready[net]) f.state = 'soon';
+    else if (f.state === 'fresh' && !enough) f.state = age < 23 ? 'young' : 'few';
+    out.push(f);
+  }
+  const ord = { burnt: 0, tiring: 1, soon: 2, few: 3, young: 4, fresh: 5 };
+  return out.sort((a, b) => ord[a.state] - ord[b.state] || b.age - a.age);
+}
+// Аудитория «кончается»: доля покупок с клика за последние 14 дней против 28 дней до них
+export function convFatigue(daily, conv, today, { cid = null, goals = null, skip = null } = {}) {
+  const y = addDays(today, -1);
+  const a = goalTotals(daily, conv, addDays(y, -41), addDays(y, -14), { cid, goals, skip }), b = goalTotals(daily, conv, addDays(y, -13), y, { cid, goals, skip });
+  if (a.conv < 10 || b.clicks < 50 || !a.clicks) return null;
+  const crA = a.conv / a.clicks, crB = b.conv / b.clicks, drop = 1 - crB / crA, sure = Math.abs(zTwo(b.conv, b.clicks, a.conv, a.clicks)) >= 1.96;
+  return { a, b, crA, crB, drop, sure, state: sure && drop >= 0.3 ? 'down' : 'ok' };
+}
+const pc = (x) => `${dec(x * 100)} %`;
+// Подсказки по выгоранию — пункты в формате разбора кампании {status, area, title, why, how, act?, lesson}
+export function fatigueHints({ main = {}, stats = {}, today, cid = null, goals = null, skip = null }) {
+  const out = [], ads = (main.ads || []).filter((x) => x.state !== 'ARCHIVED');
+  const fs = adFatigue((stats.adDaily || []).filter((x) => cid == null || x.cid === cid), today, { skip });
+  const live = (a) => a && a.state === 'ON' && a.status !== 'REJECTED';
+  for (const f of fs) {
+    const ad = ads.find((x) => x.id === f.aid); if (!ad) continue;
+    const where = f.net === 'n' ? 'в сетях' : 'на поиске', nm = `«${ad.title || 'Объявление ' + f.aid}»`;
+    const facts = f.drop != null ? `В первые две недели кликали ${pc(f.base.ctr)} показов, за последние 7 дней — ${pc(f.rec.ctr || 0)}${f.cpcUp != null && f.cpcUp >= FATIGUE.cpc ? `, клик подорожал на ${Math.round(f.cpcUp * 100)} %` : ''}.` : '';
+    if (f.state === 'burnt' || f.state === 'tiring') {
+      const mates = ads.filter((x) => x.gid === ad.gid && x.id !== ad.id && live(x) && !fs.some((g) => g.aid === x.id && g.state === 'burnt'));
+      const burnt = f.state === 'burnt';
+      out.push({ status: 'fix', area: 'Выгорание', aid: f.aid, cid: f.cid, title: `${nm} ${burnt ? 'выгорело' : 'устаёт'} ${where}: CTR −${Math.round(f.drop * 100)} %`,
+        why: `${facts} Люди видели его много раз — оно стало «фоном», а при низком CTR клик в аукционе обычно дорожает.`,
+        how: burnt ? (mates.length ? 'Остановите его — показы перейдут к другим вариантам в группе. И добавьте в кабинете новый вариант (другая картинка или заголовок с другим тропом), чтобы в группе снова было 2–3.' : 'В группе это единственный рабочий вариант: сначала добавьте в кабинете новый (другая картинка или заголовок), потом остановите это — иначе реклама встанет.')
+          : 'Подготовьте замену сейчас, пока оно ещё работает: другой троп в заголовке или другая картинка. Добавьте её в группу — Директ сам разделит показы.',
+        ...(burnt && mates.length ? { act: { do: 'pause', target: 'ad', ids: [f.aid], why: `выгорело: CTR упал на ${Math.round(f.drop * 100)} %` }, actLabel: 'Остановить' } : {}), lesson: 'fatigue' });
+    } else if (f.state === 'soon') {
+      out.push({ status: 'info', area: 'Выгорание', aid: f.aid, cid: f.cid, title: `${nm} крутится ${where} ${f.age} дн. — пора готовить замену`,
+        why: `${facts || 'Цифры пока держатся.'} ${f.net === 'n' ? 'В сетях объявления приедаются быстрее: одни и те же люди видят их на разных сайтах.' : 'На поиске объявления устают медленнее, но конкуренты обновляют свои.'}`.trim(),
+        how: 'Сделайте новый вариант заранее и добавьте в группу, не останавливая старый: замена пройдёт без провала, а приложение покажет, какой лучше.', lesson: 'fatigue' });
+    }
+  }
+  for (const c of (main.campaigns || []).filter((x) => x.state !== 'ARCHIVED' && (cid == null || x.id === cid))) {
+    const r = convFatigue(stats.daily || [], stats.conv || [], today, { cid: c.id, goals, skip });
+    if (r?.state === 'down') out.push({ status: 'fix', area: 'Выгорание', cid: c.id, title: `«${c.name}»: покупают реже — ${pc(r.crB)} кликов против ${pc(r.crA)}`,
+      why: 'Похоже, самые заинтересованные читатели этой аудитории уже купили, а реклама продолжает показываться тем же людям.',
+      how: 'Расширьте аудиторию: новые фразы по соседним тропам и книгам-аналогам, новый сегмент в сетях, и обновите объявления. Ставки не поднимайте — это только быстрее «выжжет» ту же аудиторию.', lesson: 'fatigue' });
+  }
+  return out;
+}
+
 // ---------- разбор кампании: что настроено, что улучшить, где подождать ----------
 // Возвращает пункты {status: ok|fix|wait|info, area, title, why, how, act?, lesson} — только на основе данных;
 // советы по фразам и объявлениям — лишь когда кликов достаточно (иначе «подождать»).
@@ -468,6 +550,10 @@ export function auditCampaign({ camp, main = {}, stats = {}, log = [], today, ec
   } else add('fix', 'Покупки', 'Метрика не подключена', 'Без неё видно только клики: непонятно, какие фразы приводят покупателей.', { how: '⚙ Настройки → «Яндекс Метрика».', lesson: 'goals' });
   if (!econ.rev) add('info', 'Экономика', 'Не задан доход с покупателя', 'Впишите его в теме «Экономика книги» — приложение посчитает допустимую цену клика и сравнит с вашей.', { lesson: 'econ' });
 
+  // выгорание объявлений и аудитории
+  const fh = fatigueHints({ main, stats, today, cid, goals: m?.main || null, skip });
+  for (const x of fh) add(x.status, x.area, x.title, x.why, { how: x.how, act: x.act, actLabel: x.actLabel, lesson: x.lesson });
+  if (!fh.some((x) => x.status === 'fix') && adFatigue((stats.adDaily || []).filter((x) => x.cid === cid), today, { skip }).some((f) => f.state === 'fresh')) add('ok', 'Выгорание', 'Объявления не выгорают: CTR держится как в первые недели', '');
   // динамика
   for (const x of weekInsights(daily, today, cid).filter((x) => x.kind !== 'few').slice(0, 1)) add(x.kind === 'good' ? 'ok' : x.kind === 'calm' ? 'info' : 'fix', 'Динамика', x.text, x.why || '', { lesson: x.lesson });
   const order = { fix: 0, wait: 1, info: 2, ok: 3 };

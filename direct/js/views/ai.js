@@ -2,7 +2,7 @@
 import { esc, acts, forms, changes, toast, download } from '../../../js/ui.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
-import { aiPackage, parsePlan, describe, totals, DEFAULT_MAX_BID, DEFAULT_TEST_BUDGET, PLAN_TAG } from '../dcalc.js';
+import { aiPackage, parsePlan, describe, totals, adFatigue, DEFAULT_MAX_BID, DEFAULT_TEST_BUDGET, PLAN_TAG } from '../dcalc.js';
 import { namesOf } from '../sync.js';
 import { logOf } from '../demo.js';
 import { runAction } from './common.js';
@@ -31,6 +31,8 @@ export function packageText(a, question = '') {
       pageBehavior30: stats.mrows || [],
     } : {}),
     ...(a.snap('mk') ? { metrikaSite: ((mk) => ({ note: 'Метрика автора на Литнете за 30 дней: источники, устройства, страницы входа; по дням — 8 недель', sources: mk.sources, devices: mk.devices, pages: (mk.pages || []).slice(0, 10), daily: (mk.daily || []).map(({ key, visits, bounce, goals }) => ({ date: key, visits, bounce, goals })) }))(a.snap('mk')) } : {}),
+    // выгорание: CTR и цена клика в дни 3–16 показов против последних 7 дней, отдельно поиск (s) и сети (n)
+    adFatigue: adFatigue(stats.adDaily || [], t, { skip: outageSet(c.data.days || []) }).map((f) => ({ ad: f.aid, cid: f.cid, net: f.net, days: f.age, state: f.state, ctrFirst: f.base.ctr, ctrLast7: f.rec.ctr, cpcFirst: f.base.cpc, cpcLast7: f.rec.cpc, imprLast7: f.rec.impr })),
     outageDays: [...outageSet(c.data.days || [])].filter((x) => x >= addDays(t, -29)).sort(),
     recentChanges: logOf(a).slice().sort((x, y) => y.at.localeCompare(x.at)).slice(0, 20).map((x) => ({ at: x.at.slice(0, 10), what: x.text, why: x.why, ok: x.ok })),
   };
