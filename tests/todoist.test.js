@@ -81,3 +81,67 @@ test('Todoist: задачу, которую Лана сама пометила �
   assert.equal(ops2.update.length, 0);
   assert.equal(ops2.create.length, 1);
 });
+
+test('метки → полки: задача из «Входящих» сама переезжает на нужную полку', async () => {
+  const { routeTasks } = await import('../writer/js/todoist.js');
+  const projects = { 'входящие': 1, 'книги': 2, 'мастерская': 3 };
+  const books = [{ title: 'Звериная тропа для двоих' }, { title: 'Развод для черной вдовы. Роман' }];
+  const tasks = [
+    { id: 'a', project_id: 1, content: 'Спросить Клод почему таргет выгорает', labels: ['мастерская'] },
+    { id: 'b', project_id: 1, content: 'Написать пост', labels: ['мастерская'] },
+    { id: 'c', project_id: 1, content: 'Сюжет про остров', labels: ['идея'] },
+    { id: 'd', project_id: 1, content: 'Переписать пролог', labels: ['Развод_для_черной_вдовы'] },
+    { id: 'e', project_id: 2, content: 'Обложка для Звериной тропы', labels: ['книги'], section_id: null },
+    { id: 'f', project_id: 3, content: 'уже на месте', labels: ['мастерская'] },
+    { id: 'g', project_id: 1, content: 'создано приложением', labels: ['мастерская'] },
+    { id: 'h', project_id: 1, content: 'без меток', labels: [] },
+  ];
+  const moves = routeTasks(tasks, { projects, books, made: { g: '1' } });
+  assert.deepEqual(moves, [
+    { id: 'a', project: 'Мастерская', section: 'Деньги и реклама' },
+    { id: 'b', project: 'Мастерская', section: 'Дела' },
+    { id: 'c', project: 'Книги', section: '' },
+    { id: 'd', project: 'Книги', section: 'Развод для черной вдовы' },
+  ]);
+});
+
+test('важные задачи (p1, p2) и задачи про рекламу', async () => {
+  const { isImportant, isMoneyTask, byDue } = await import('../js/tdtasks.js');
+  assert.equal(isImportant({ pr: 4 }), true); assert.equal(isImportant({ pr: 3 }), true); assert.equal(isImportant({ pr: 1 }), false);
+  assert.equal(isMoneyTask({ p: 'Мастерская', s: 'Дела', t: 'Почему таргет выгорает' }), true);
+  assert.equal(isMoneyTask({ p: 'Мастерская', s: 'Деньги и реклама', t: 'что-то' }), true);
+  assert.equal(isMoneyTask({ p: 'Книги', s: '', t: 'реклама' }), false);
+  assert.deepEqual([{ d: '' }, { d: '2026-10-20' }, { d: '2026-10-18' }].sort(byDue).map((x) => x.d), ['2026-10-18', '2026-10-20', '']);
+});
+
+test('синхронизация: задача «мастерская» из «Входящих» с приоритетом — переехала и видна как своя', async () => {
+  const { syncTodoist } = await import('../writer/js/todoist.js');
+  const db = {
+    projects: [{ id: 'p0', name: 'Входящие' }, { id: 'p1', name: 'Книги' }, { id: 'p2', name: 'Мастерская' }],
+    sections: [{ id: 's1', name: 'Дела', project_id: 'p2' }],
+    tasks: [{ id: 'a', project_id: 'p0', section_id: null, content: 'Спросить Клод почему таргет выгорает', labels: ['мастерская'], priority: 4, due: { date: '2026-10-18' } }],
+  };
+  const calls = [], orig = globalThis.fetch;
+  const res = (x) => new Response(JSON.stringify(x), { status: 200, headers: { 'content-type': 'application/json' } });
+  globalThis.fetch = async (url, o = {}) => {
+    const u = new URL(url), path = u.pathname.replace('/api/v1', ''), body = o.body ? JSON.parse(o.body) : null;
+    calls.push((o.method || 'GET') + ' ' + path);
+    if (path === '/projects') return res({ results: db.projects });
+    if (path === '/sections' && o.method === 'POST') { const s = { id: 's' + (db.sections.length + 1), ...body }; db.sections.push(s); return res(s); }
+    if (path === '/sections') { const pid = u.searchParams.get('project_id'); return res({ results: db.sections.filter((x) => !pid || x.project_id === pid) }); }
+    if (path === '/tasks/filter') return res({ results: db.tasks.filter((t) => t.labels.includes('мастерская')) });
+    if (path === '/tasks') return res({ results: db.tasks });
+    const mv = /^\/tasks\/(\w+)\/move$/.exec(path);
+    if (mv) { const t = db.tasks.find((x) => x.id === mv[1]); if (body.section_id) { t.section_id = body.section_id; t.project_id = db.sections.find((x) => x.id === body.section_id).project_id; } else t.project_id = body.project_id; return res(null); }
+    return res({});
+  };
+  try {
+    const r = await syncTodoist('T', [], { books: [] });
+    const t = db.tasks[0], sec = db.sections.find((x) => x.id === t.section_id);
+    assert.equal(t.project_id, 'p2'); assert.equal(sec.name, 'Деньги и реклама');
+    assert.equal(r.state.own.length, 1);
+    assert.deepEqual([r.state.own[0].p, r.state.own[0].s, r.state.own[0].pr], ['Мастерская', 'Деньги и реклама', 4]);
+    assert.ok(!calls.some((c) => /close/.test(c))); // её задачу приложение не закрывает
+    assert.ok(!('books' in r.state)); // список книг в настройки не сохраняется
+  } finally { globalThis.fetch = orig; }
+});

@@ -23,7 +23,7 @@ export async function runTodoist(a, { force = false, pull = false } = {}) {
   if (!force && Date.now() - lastAt < (pull ? 30000 : 60000)) { scheduleTodoist(a, pull ? 30000 : 60000, { pull }); return null; }
   busy = true; lastAt = Date.now();
   try {
-    const r = await syncTodoist(token, want, s.todoist || {});
+    const r = await syncTodoist(token, want, { ...(s.todoist || {}), books: c.wbooks.map((b) => ({ title: b.title })) });
     lastHash = hash;
     // закрыла в Todoist дело из очереди или по связям — отмечаем и здесь
     for (const w of r.doneInTodoist) {
