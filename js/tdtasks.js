@@ -8,7 +8,11 @@ export function bookOfTask(x, books) {
   const s = x.s.trim().toLowerCase();
   return books.find((b) => { const t = short(b.title); return t === s || (s.length >= 4 && (t.startsWith(s) || s.startsWith(t))); }) || null;
 }
-export const isMoneyTask = (x) => x.p.toLowerCase() === 'мастерская' && /деньг|реклам|налог|финанс/i.test(x.s);
+export const isMoneyTask = (x) => x.p.toLowerCase() === 'мастерская' && (/деньг|реклам|налог|финанс/i.test(x.s) || (!x.s || /^дела$/i.test(x.s)) && /реклам|таргет|директ|налог|доход|бюджет/i.test(x.t));
+// приоритет в Todoist (p1–p3, любой флажок) — такая задача видна на Главной, даже без даты
+export const isImportant = (x) => (x.pr || 1) >= 2;
+// список «Важное»: сначала с датой (просроченные и ближайшие), потом без даты
+export const byDue = (a, b) => (a.d || '9999').localeCompare(b.d || '9999');
 
 // «Сделано» в приложении — закрываем задачу и в Todoist
 import { acts, toast, openSheet, closeSheet, esc } from './ui.js';

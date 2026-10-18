@@ -6,6 +6,9 @@
 const API = 'https://api.todoist.com/api/v1';
 export const TD_LABEL = 'мастерская';
 export const IDEA_LABEL = 'идея';
+export const MONEY_LABEL = 'доходы';
+// метки, которые приложение заводит в Todoist само — чтобы их можно было быстро выбрать
+export const LABELS = [['мастерская', 'lavender'], ['книги', 'salmon'], [IDEA_LABEL, 'mint_green'], [MONEY_LABEL, 'green']];
 export const TD_DAYS = 30; // на сколько дней вперёд отправляем
 const KIND_SHELF = { money: 'Деньги и реклама', waitans: 'Связи', mk: 'Маркетинг', contest: 'Конкурсы' };
 const SKIP = new Set(['done', 'wait', 'td']); // выложено / выйдет само — делать ничего не нужно; td — задачи из самого Todoist
@@ -63,6 +66,36 @@ export function todoistPlan(want, map = {}, closed = {}, active = [], made = nul
   return ops;
 }
 
+// ---------- метки → полки: задача с меткой (например, во «Входящих») сама переезжает на нужную полку ----------
+// «мастерская» → проект «Мастерская» (деньги и реклама — в «Деньги и реклама», остальное — в «Дела»);
+// «доходы» → «Мастерская», «Деньги и реклама»; «идея» → проект «Книги» (к идеям);
+// «книги» или метка с названием книги → «Книги», раздел книги.
+// Трогаем только задачи вне своей полки и не созданные самим приложением.
+export const MONEY_RE = /деньг|реклам|таргет|директ|налог|доход|бюджет|продаж|финанс|литнет плат|rocket|ракет/i;
+const lowName = (x) => String(x || '').trim().toLowerCase();
+const labelKey = (x) => lowName(x).replace(/[_\s]+/g, ' ');
+export function routeTasks(tasks, { projects = {}, books = [], made = {} } = {}) {
+  const moves = [], book = (t) => {
+    const labels = (t.labels || []).map(labelKey), text = lowName(t.content);
+    return books.find((b) => { const n = labelKey(shortTitle(b.title)); return n.length >= 3 && (labels.includes(n) || text.includes(n)); }) || null;
+  };
+  for (const t of tasks) {
+    if (t.parent_id || made[String(t.id)]) continue;
+    const labels = (t.labels || []).map(labelKey), pid = String(t.project_id || '');
+    const inBooks = pid === String(projects['книги'] || '-'), inWork = pid === String(projects['мастерская'] || '-');
+    const b = book(t);
+    if (labels.includes(IDEA_LABEL)) { if (!inBooks) moves.push({ id: t.id, project: 'Книги', section: b ? shortTitle(b.title) : '' }); continue; }
+    if (labels.includes('книги') || (b && labels.includes(labelKey(shortTitle(b.title))))) {
+      if (!inBooks || (b && !t.section_id)) moves.push({ id: t.id, project: 'Книги', section: b ? shortTitle(b.title) : '' });
+      continue;
+    }
+    // «доходы» — дела по деньгам и рекламе: видны и в «Доходах»
+    if (labels.includes(MONEY_LABEL)) { if (!inWork) moves.push({ id: t.id, project: 'Мастерская', section: 'Деньги и реклама' }); continue; }
+    if (labels.includes(TD_LABEL) && !inWork && !inBooks) moves.push({ id: t.id, project: 'Мастерская', section: MONEY_RE.test(t.content + ' ' + (t.description || '')) ? 'Деньги и реклама' : 'Дела' });
+  }
+  return moves;
+}
+
 async function tfetch(token, path, opts = {}) {
   let r;
   // телефон уснул посреди запроса — не ждём вечно (иначе синхронизация встанет до перезапуска)
@@ -108,14 +141,18 @@ async function shelves(token, want) {
 // Задачи, которые Лана сама ведёт в Todoist в проектах «Книги» и «Мастерская» (без нашей метки) —
 // показываем в приложении: в планере в свой день, на странице книги (раздел = книга), деньги — и в «Доходах»
 export async function fetchOwnTasks(token, made = {}) {
-  const projects = await all(token, '/projects'), out = [];
-  for (const p of projects.filter((x) => /^(книги|мастерская)$/i.test(String(x.name).trim()))) {
-    const secs = await all(token, `/sections?project_id=${p.id}`), sn = Object.fromEntries(secs.map((x) => [String(x.id), x.name]));
-    for (const t of await all(token, `/tasks?project_id=${p.id}`)) {
-      // служебные задачи приложения и идеи — не «свои»; но если Лана сама поставила метку «мастерская» — это её задача
-      if (((t.labels || []).includes(TD_LABEL) && made[String(t.id)]) || (t.labels || []).includes(IDEA_LABEL) || t.parent_id) continue;
-      out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: String(p.name).trim(), s: sn[String(t.section_id)] || '', pr: t.priority || 1, ds: t.description || '' });
-    }
+  const projects = await all(token, '/projects'), pn = Object.fromEntries(projects.map((p) => [String(p.id), String(p.name).trim()]));
+  const shelf = (name) => /^(книги|мастерская)$/i.test(name || '');
+  // разделы всех проектов разом; не вышло — по нашим двум проектам
+  let secs;
+  try { secs = await all(token, '/sections'); } catch { secs = []; for (const p of projects.filter((x) => shelf(x.name))) secs.push(...await all(token, `/sections?project_id=${p.id}`)); }
+  const sn = Object.fromEntries(secs.map((x) => [String(x.id), x.name])), out = [];
+  for (const t of await all(token, '/tasks')) {
+    const labels = t.labels || [], p = pn[String(t.project_id)] || '', money = labels.includes(MONEY_LABEL), mark = labels.includes(TD_LABEL) || money || labels.includes('книги');
+    // служебные задачи приложения и идеи — не «свои»; но если Лана сама поставила метку «мастерская» — это её задача,
+    // где бы она ни лежала (например, во «Входящих», пока не переехала на полку)
+    if (t.parent_id || labels.includes(IDEA_LABEL) || (mark && made[String(t.id)]) || (!shelf(p) && !mark)) continue;
+    out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: shelf(p) ? p : labels.includes('книги') && !money ? 'Книги' : 'Мастерская', s: sn[String(t.section_id)] || (shelf(p) ? '' : money || MONEY_RE.test(t.content) ? 'Деньги и реклама' : labels.includes('книги') ? '' : 'Дела'), pr: t.priority || 1, ds: t.description || '' });
   }
   return out.slice(0, 300);
 }
@@ -192,12 +229,34 @@ export async function syncIdeas(token, ideas, booksById) {
   return { puts: [...merged.values()], created: ops.create.length };
 }
 
+async function ensureLabels(token) {
+  const have = new Set((await all(token, '/labels')).map((l) => lowName(l.name)));
+  for (const [name, color] of LABELS) if (!have.has(name)) await post(token, '/labels', { name, color });
+}
+async function routeByLabels(token, books, made) {
+  const tasks = await all(token, '/tasks'), projects = await all(token, '/projects');
+  const pid = Object.fromEntries(projects.map((p) => [lowName(p.name), p.id]));
+  const moves = routeTasks(tasks, { projects: pid, books, made });
+  if (!moves.length) return 0;
+  const withSec = moves.filter((m) => m.section), sh = withSec.length ? await shelves(token, withSec) : { proj: {}, sec: {} };
+  for (const m of moves) {
+    let project_id = sh.proj[m.project] || pid[lowName(m.project)];
+    if (!project_id) project_id = (await post(token, '/projects', { name: m.project })).id;
+    await post(token, `/tasks/${m.id}/move`, m.section ? { section_id: sh.sec[m.project + '\u0000' + m.section] } : { project_id }).catch(() => {});
+  }
+  return moves.length;
+}
+
 // синхронизация: возвращает {state, stats, doneInTodoist}
 export async function syncTodoist(token, want, state = {}) {
   const map = { ...(state.map || {}) }, closed = { ...(state.closed || {}) };
   // свои задачи приложения: всё, что оно создало или к чему привязано (раньше списка не было — берём связанные)
   const made = { ...(state.made || {}) };
   for (const m of Object.values(map)) made[String(m.id)] ||= m.date || '1';
+  // метки «мастерская», «книги», «идея», «доходы» — заводим, если их нет в списке меток
+  await ensureLabels(token).catch(() => {});
+  // сначала — разложить по полкам задачи с метками, поставленные вручную (например, во «Входящих»)
+  await routeByLabels(token, state.books || [], made).catch(() => {});
   const active = await all(token, `/tasks/filter?query=${encodeURIComponent('@' + TD_LABEL)}`).catch(() => all(token, `/tasks?label=${encodeURIComponent(TD_LABEL)}`));
   const ops = todoistPlan(want, map, closed, active, made);
   const today = want.map((w) => w.date).sort()[0] || '';

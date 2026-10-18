@@ -1,7 +1,7 @@
 import { esc } from '../ui.js';
 import { npdStatusOf, npdAlert } from '../npd.js';
 import { ic } from '../icons.js';
-import { ownTasks, isMoneyTask } from '../tdtasks.js';
+import { ownTasks, isMoneyTask, isImportant, byDue } from '../tdtasks.js';
 import { bigGoalOf, bigGoalLine } from '../biggoal.js';
 import { rub, pct, fmtDate, fmtShort, fmtMonth, num } from '../format.js';
 import { addDays, dashboardStats, booksBreakdown, byWeek, byMonth, movingAverage, incomeSeries, buildPlan, planOverridesOf, monthGoalStatus, monthOutages, outageLoss, monthKey, monthsBetween, taxRows, monthFinance } from '../calc.js';
@@ -95,9 +95,10 @@ function goalCard(c, st, big = '') {
 }
 
 function moneyTasks(c) {
-  const list = ownTasks(c.settings).filter((x) => isMoneyTask(x) && x.d && x.d <= addDays(c.today, 7)).sort((a, b) => a.d.localeCompare(b.d));
+  // по деньгам и рекламе: на ближайшую неделю, а с приоритетом — всегда, даже без даты
+  const list = ownTasks(c.settings).filter((x) => isMoneyTask(x) && ((x.d && x.d <= addDays(c.today, 7)) || isImportant(x))).sort(byDue);
   if (!list.length) return '';
-  return `<div class="card td-card"><h2 style="margin:0 0 4px">Дела по деньгам и рекламе</h2><div class="plist">${list.map((x) => `<div class="pitem"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.id}"><span class="pi-body"><span class="pi-t">${esc(x.t)}</span><span class="pi-s${x.d < c.today ? ' down' : ''}">${x.d < c.today ? 'просрочено · ' : ''}${fmtDate(x.d)}</span></span></a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${ic('check')}</button></span></div>`).join('')}</div></div>`;
+  return `<div class="card td-card"><h2 style="margin:0 0 4px">Дела по деньгам и рекламе</h2><div class="plist">${list.map((x) => `<div class="pitem"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.id}"><span class="pi-body"><span class="pi-t">${esc(x.t)}</span><span class="pi-s${x.d && x.d < c.today ? ' down' : ''}">${x.d ? `${x.d < c.today ? 'просрочено · ' : ''}${fmtDate(x.d)}` : 'без даты'}</span></span></a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${ic('check')}</button></span></div>`).join('')}</div></div>`;
 }
 // сбой идёт сейчас (сегодня или в последний день с данными) — тихая карточка: что случилось и сколько недополучено
 function outageNow(c) {
