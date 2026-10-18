@@ -3,7 +3,8 @@ import { esc, acts } from '../../../js/ui.js';
 import { rub, num, pct, fmtShort } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
-import { totals, spendSeries, budgetPace, queryHints, keywordHints, withAvgCpc, goalHints, goalTotals, fatigueHints, DEFAULT_TEST_BUDGET } from '../dcalc.js';
+import { totals, spendSeries, budgetPace, queryHints, keywordHints, withAvgCpc, goalHints, goalTotals, fatigueHints, spendAdvice, spendHint, DEFAULT_TEST_BUDGET } from '../dcalc.js';
+import { royaltyPerSale } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { stateDot, tiles, actBtn, q } from './common.js';
 import { demo } from '../demo.js';
@@ -38,6 +39,15 @@ function goalTodo(main, stats, ctx) {
 // Подсказки «что сделать сейчас»: до 6 самых важных
 export function todo(main, stats, ctx = null) {
   const out = ctx ? goalTodo(main, stats, ctx) : [];
+  // расход: урезать или вернуть прежний — по окупаемости за 14 дней
+  const mm = ctx && metrikaOf(ctx);
+  if (mm?.counterId) {
+    const value = Number(ctx.settings.direct?.econ?.rev) || royaltyPerSale(ctx.data.sales || [], ctx.today)?.perSale || null;
+    for (const camp of (main.campaigns || []).filter((x) => x.state === 'ON')) {
+      const h = spendHint(camp, spendAdvice({ camp, daily: stats.daily || [], conv: stats.conv || [], today: ctx.today, goals: mm.main, skip: outageSet(ctx.data.days || []), value }));
+      if (h?.status === 'fix') out.push(`<div class="item"><b>${esc(h.title)}</b><div class="small">${esc(h.why)}</div><div class="small muted">${esc(h.how)} · ${lessonLink(h.lesson)}</div></div>`);
+    }
+  }
   // выгорание: сначала то, что уже выгорает, потом «пора готовить замену»
   if (ctx) for (const h of fatigueHints({ main, stats, today: ctx.today, goals: metrikaOf(ctx)?.main || null, skip: outageSet(ctx.data.days || []) }).slice(0, 2)) {
     out.push(`<div class="item"><div class="row between"><b>${esc(h.title)}</b>${h.act ? actBtn(h.act, h.actLabel, 'small-btn') : ''}</div><div class="small muted">${esc(h.how)} · ${lessonLink(h.lesson)}</div></div>`);

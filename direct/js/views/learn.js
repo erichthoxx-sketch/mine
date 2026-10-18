@@ -9,6 +9,7 @@ import { addDays, outageSet } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
 import { auditCampaign, goalHints, totals, budgetPace, queryHints, testStage, weekInsights, goalWeekInsight, goalTotals, changeEffects, adFatigue, FATIGUE, DEFAULT_TEST_BUDGET, MIN_CLICKS } from '../dcalc.js';
 import { metrikaOf } from './metrika.js';
+import { royaltyPerSale } from '../mcalc.js';
 import { logOf, demo } from '../demo.js';
 import { setupCard, setupSteps } from './setup.js';
 import { strategyText, actBtn } from './common.js';
@@ -167,7 +168,8 @@ const MODULES = [
 
   { id: 'scale', t: 'Масштабирование',
     body: () => P('Масштабируют только то, что <b>окупается</b>: цена покупки не выше допустимой на заметном числе покупок, а в «Доходах» — доход сверх обычного покрывает расход. Бюджет поднимают <b>ступенями</b> (+20–30 %) с паузой на обучение, а не вдвое за раз.')
-      + P('Дальше — вширь: соседние кластеры семантики, новые аналоги, сети с обложкой, <b>ретаргетинг</b> на тех, кто был на странице книги (аудитории Метрики) — особенно к выходу продолжения или новой книги серии.'),
+      + P('Дальше — вширь: соседние кластеры семантики, новые аналоги, сети с обложкой, <b>ретаргетинг</b> на тех, кто был на странице книги (аудитории Метрики) — особенно к выходу продолжения или новой книги серии.')
+      + P('<b>Когда урезать.</b> Приложение само каждые две недели сравнивает расход кампании с доходом от её покупок (доход с покупки — из «Экономики книги» или по продажам в «Доходах»; дни сбоя не считаются). Рубль рекламы возвращает меньше рубля — советует урезать на 30 %, меньше 75 копеек или потрачена цена трёх покупок без единой — вдвое. Покупка подорожала больше чем на 30 % вместе с ростом расхода — вернуть прежний расход. Окупается с запасом 30 % и покупок 10+ — можно добавить 20 %. Меньший расход — не провал: он достаётся самым заинтересованным читателям, и такая реклама может окупаться очень долго.'),
     data: (L) => liveBox(`${Object.values(L.d.links || {}).some(Boolean) ? 'Кампании связаны с «Доходами» — окупаемость смотрите в «Реклама» → «Мой таргет».' : 'Кампании не связаны с «Доходами» — без этого решение о масштабе принимается вслепую.'}${L.g30?.cpa != null ? ` Цена покупки за 30 дней — ${rub(L.g30.cpa, 0)}.` : ''}`),
     check: ['Окупаемость подтверждена в «Доходах»', 'Бюджет растёт ступенями +20–30 %', 'Есть план расширения: кластеры, аналоги, ретаргетинг'],
     ai: 'Можно ли масштабировать рекламу по моим данным? Если да — как именно (бюджет ступенями, новые кластеры, ретаргетинг), если нет — что мешает и что исправить сначала. Бюджет не меняй действиями — только рекомендации.' },
@@ -197,7 +199,7 @@ function auditCard(a, L) {
   const goalHs = L.m?.counterId ? goalHints({ campaigns: L.main.campaigns, keywords: L.main.keywords, kw: L.stats.kw, kwConv: L.stats.kwConv, daily: L.daily, conv: L.stats.conv, mrows: L.stats.mrows, m: L.m, today: L.t, skip: L.skip }) : [];
   return `<div class="card"><h2>Разбор ваших кампаний</h2><p class="small muted">По каждой кампании: что улучшить и почему, где подождать данных и что уже работает. Обновляется вместе с данными.</p>
     ${camps.map((camp) => {
-      const r = auditCampaign({ camp, main: L.main, stats: L.stats, log: logOf(a), today: L.t, econ: L.d.econ || {}, m: L.m, goalHs, skip: L.skip });
+      const r = auditCampaign({ camp, main: L.main, stats: L.stats, log: logOf(a), today: L.t, econ: { ...(L.d.econ || {}), perSale: royaltyPerSale(a.ctx().data.sales || [], L.t)?.perSale }, m: L.m, goalHs, skip: L.skip });
       const n = r.items.filter((x) => x.status === 'fix').length;
       return `<details class="l-camp" data-keep="c${camp.id}"${keepOpen('c' + camp.id, camps.length === 1) ? ' open' : ''}><summary><b>${esc(camp.name)}</b><span class="small muted"> · за 7 дней ${rub(r.w.cost, 0)}, кликов ${num(r.w.clicks)}${n ? ` · <span class="warnc">улучшить: ${n}</span>` : ''}</span></summary>
         <div class="list">${r.items.map((x) => `<div class="item"><div class="row between"><span><span class="small ${ST[x.status][1]}">● ${ST[x.status][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b></span>${x.act ? actBtn(x.act, x.actLabel || 'Применить', 'small-btn') : ''}</div>

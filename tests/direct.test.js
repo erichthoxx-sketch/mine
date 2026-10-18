@@ -385,3 +385,25 @@ test('Выгорание: CTR объявления падает значимо �
   const cf = D.convFatigue(daily, conv, today, { cid: 7 });
   assert.equal(cf.state, 'down'); assert.ok(cf.crB < cf.crA);
 });
+
+test('Сколько тратить: урезать, вернуть прежний расход, добавить, рано судить', async () => {
+  const D = await import('../direct/js/dcalc.js');
+  const today = '2026-10-18', day = (i) => new Date(Date.parse(today) - i * 864e5).toISOString().slice(0, 10);
+  const camp = { id: 7, name: 'Поиск', daily: 600 };
+  const mk = (perDay, convAt) => { const daily = [], conv = []; for (let i = 28; i >= 1; i--) { daily.push({ date: day(i), cid: 7, impr: 1000, clicks: 50, cost: perDay(i) }); const n = convAt(i); if (n) conv.push({ date: day(i), cid: 7, conv: { 1: n } }); } return { daily, conv }; };
+  // 500 ₽ в день, покупка в день, покупка приносит 300 ₽ → рубль возвращает 60 коп. → вдвое
+  let d = mk(() => 500, () => 1), r = D.spendAdvice({ camp, ...d, today, value: 300 });
+  assert.equal(r.kind, 'cut'); assert.equal(r.k, 0.5); assert.equal(r.newLimit, 300);
+  assert.match(D.spendHint(camp, r).how, /600 ₽ → 300 ₽/);
+  // возвращает 86 коп. → на 30 %
+  r = D.spendAdvice({ camp, ...d, today, value: 430 }); assert.equal(r.kind, 'cut'); assert.equal(r.k, 0.7); assert.equal(r.newLimit, 420);
+  // окупается с запасом → +20 %
+  r = D.spendAdvice({ camp, ...d, today, value: 900 }); assert.equal(r.kind, 'grow'); assert.equal(r.newLimit, 720);
+  // расход вырос, покупка подорожала >30 %, но ещё окупается → вернуть прежний (≈300 ₽ в день)
+  d = mk((i) => (i <= 14 ? 600 : 300), (i) => (i <= 14 ? 1 : 1)); r = D.spendAdvice({ camp, ...d, today, value: 700 });
+  assert.equal(r.kind, 'back'); assert.equal(r.newLimit, 300);
+  // мало потрачено → рано; дни сбоя не считаются
+  r = D.spendAdvice({ camp, ...mk(() => 20, () => 0), today, value: 300 }); assert.equal(r.kind, 'few');
+  assert.equal(D.spendAdvice({ camp, ...mk(() => 500, () => 0), today, value: 300 }).kind, 'cut');
+  assert.equal(D.spendAdvice({ camp, ...mk(() => 500, () => 1), today, value: null }), null);
+});

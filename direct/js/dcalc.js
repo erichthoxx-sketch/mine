@@ -485,6 +485,46 @@ export function fatigueHints({ main = {}, stats = {}, today, cid = null, goals =
   return out;
 }
 
+// ---------- сколько тратить: урезать, вернуть прежний расход или можно добавить ----------
+// value — доход с одной покупки (свой из «Экономики книги» или по продажам в «Доходах»).
+// Последние 14 полных дней против 14 до них; дни сбоя не считаются. Бюджет приложение не меняет — только советует.
+export function spendAdvice({ camp, daily = [], conv = [], today, goals = null, skip = null, value = null }) {
+  if (!camp || !(value > 0)) return null;
+  const y = addDays(today, -1), cid = camp.id;
+  const b = goalTotals(daily, conv, addDays(y, -13), y, { cid, goals, skip }), a = goalTotals(daily, conv, addDays(y, -27), addDays(y, -14), { cid, goals, skip });
+  if (!b.cost) return null;
+  const days = new Set(daily.filter((x) => x.cid === cid && x.date >= addDays(y, -13) && x.date <= y && x.cost > 0 && !skip?.has(x.date)).map((x) => x.date)).size || 1;
+  const perDay = b.cost / days, roi = (b.conv * value - b.cost) / b.cost, lim = Number(camp.daily) || null;
+  const base = { roi, cpa: b.cpa, value, b, a, perDay: r2(perDay), limit: lim };
+  const to = (k) => Math.max(10, Math.round(((lim || perDay) * k) / 10) * 10); // круглое число, к 10 ₽
+  if (b.cost < value * 2) return { ...base, kind: 'few' }; // потрачено меньше двух покупок — судить рано
+  if ((b.conv === 0 && b.cost >= value * 3) || (b.conv >= 5 && roi < -0.25)) return { ...base, kind: 'cut', k: 0.5, newLimit: to(0.5) };
+  if (b.conv >= 5 && roi < 0) return { ...base, kind: 'cut', k: 0.7, newLimit: to(0.7) };
+  if (b.conv >= 5 && a.conv >= 5 && b.cpa > a.cpa * 1.3 && b.cost > a.cost * 1.15) {
+    const aDays = new Set(daily.filter((x) => x.cid === cid && x.date >= addDays(y, -27) && x.date <= addDays(y, -14) && x.cost > 0 && !skip?.has(x.date)).map((x) => x.date)).size || 1;
+    return { ...base, kind: 'back', newLimit: Math.max(10, Math.round(a.cost / aDays / 10) * 10) };
+  }
+  if (b.conv >= 10 && roi >= 0.3) return { ...base, kind: 'grow', k: 1.2, newLimit: to(1.2) };
+  return { ...base, kind: 'hold' };
+}
+const rubS = (v) => `${Math.round(v).toLocaleString('ru-RU')} ₽`;
+// Совет по расходу → пункт разбора {status, area, title, why, how, lesson}
+export function spendHint(camp, r) {
+  if (!r) return null;
+  const ret = Math.round((r.roi + 1) * 100), facts = `За 14 дней ${rubS(r.b.cost)} → ${r.b.conv} покуп${r.b.conv === 1 ? 'ка' : r.b.conv >= 2 && r.b.conv <= 4 ? 'ки' : 'ок'}${r.cpa != null ? ` по ${rubS(r.cpa)}` : ''}, а покупка приносит ≈ ${rubS(r.value)}.`;
+  const where = (n) => (r.limit ? `В кабинете Директа → кампания «${camp.name}» → «Дневной бюджет»: ${rubS(r.limit)} → ${rubS(n)}.` : `Поставьте в кабинете Директа дневной бюджет ≈ ${rubS(n)} (сейчас тратится ≈ ${rubS(r.perDay)} в день).`) + ' Если кабинет не даст поставить столько — поставьте минимально возможный.';
+  if (r.kind === 'cut') return { status: 'fix', area: 'Расход', title: `«${camp.name}»: урезать расход ${r.k === 0.5 ? 'вдвое' : 'на 30 %'}`,
+    why: `${facts} Каждый рубль рекламы возвращает ${ret} коп. Когда расход меньше, реклама достаётся самым заинтересованным читателям — покупатель обычно дешевеет.`,
+    how: `${where(r.newLimit)} Через неделю приложение снова сравнит цифры.`, lesson: 'scale' };
+  if (r.kind === 'back') return { status: 'fix', area: 'Расход', title: `«${camp.name}»: покупка подорожала вместе с расходом`,
+    why: `Две недели назад покупка стоила ${rubS(r.a.cpa)}, сейчас — ${rubS(r.cpa)}, а тратится больше. Лишние деньги ушли на менее заинтересованных людей.`,
+    how: `Верните расход к прежнему: ${where(r.newLimit)}`, lesson: 'scale' };
+  if (r.kind === 'grow') return { status: 'ok', area: 'Расход', title: `«${camp.name}»: окупается, можно добавить +20 %`,
+    why: `${facts} Каждый рубль возвращает ${ret} коп.`, how: `Добавляйте ступенями: ${where(r.newLimit)} Дальше — снова не раньше чем через неделю.`, lesson: 'scale' };
+  if (r.kind === 'hold') return { status: 'ok', area: 'Расход', title: `«${camp.name}»: расход в норме`, why: `${facts} ${r.roi >= 0 ? `Каждый рубль возвращает ${ret} коп.` : 'Покупок пока мало, чтобы делать выводы.'}`, lesson: 'scale' };
+  return { status: 'wait', area: 'Расход', title: `«${camp.name}»: о расходе судить рано`, why: `Потрачено ${rubS(r.b.cost)} — меньше цены двух покупок (${rubS(r.value * 2)}). Пока это случайность.`, lesson: 'scale' };
+}
+
 // ---------- разбор кампании: что настроено, что улучшить, где подождать ----------
 // Возвращает пункты {status: ok|fix|wait|info, area, title, why, how, act?, lesson} — только на основе данных;
 // советы по фразам и объявлениям — лишь когда кликов достаточно (иначе «подождать»).
@@ -550,6 +590,9 @@ export function auditCampaign({ camp, main = {}, stats = {}, log = [], today, ec
   } else add('fix', 'Покупки', 'Метрика не подключена', 'Без неё видно только клики: непонятно, какие фразы приводят покупателей.', { how: '⚙ Настройки → «Яндекс Метрика».', lesson: 'goals' });
   if (!econ.rev) add('info', 'Экономика', 'Не задан доход с покупателя', 'Впишите его в теме «Экономика книги» — приложение посчитает допустимую цену клика и сравнит с вашей.', { lesson: 'econ' });
 
+  // сколько тратить
+  const value = Number(econ.rev) || Number(econ.perSale) || null;
+  if (m?.counterId) { const sh = spendHint(camp, spendAdvice({ camp, daily, conv: stats.conv || [], today, goals: m.main, skip, value })); if (sh) add(sh.status, sh.area, sh.title, sh.why, { how: sh.how, lesson: sh.lesson }); }
   // выгорание объявлений и аудитории
   const fh = fatigueHints({ main, stats, today, cid, goals: m?.main || null, skip });
   for (const x of fh) add(x.status, x.area, x.title, x.why, { how: x.how, act: x.act, actLabel: x.actLabel, lesson: x.lesson });
