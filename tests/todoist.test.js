@@ -95,6 +95,7 @@ test('метки → полки: задача из «Входящих» сама
     { id: 'f', project_id: 3, content: 'уже на месте', labels: ['мастерская'] },
     { id: 'g', project_id: 1, content: 'создано приложением', labels: ['мастерская'] },
     { id: 'h', project_id: 1, content: 'без меток', labels: [] },
+    { id: 'i', project_id: 1, content: 'Оплатить налог', labels: ['доходы'] },
   ];
   const moves = routeTasks(tasks, { projects, books, made: { g: '1' } });
   assert.deepEqual(moves, [
@@ -102,12 +103,13 @@ test('метки → полки: задача из «Входящих» сама
     { id: 'b', project: 'Мастерская', section: 'Дела' },
     { id: 'c', project: 'Книги', section: '' },
     { id: 'd', project: 'Книги', section: 'Развод для черной вдовы' },
+    { id: 'i', project: 'Мастерская', section: 'Деньги и реклама' },
   ]);
 });
 
 test('важные задачи (p1, p2) и задачи про рекламу', async () => {
   const { isImportant, isMoneyTask, byDue } = await import('../js/tdtasks.js');
-  assert.equal(isImportant({ pr: 4 }), true); assert.equal(isImportant({ pr: 3 }), true); assert.equal(isImportant({ pr: 1 }), false);
+  assert.equal(isImportant({ pr: 4 }), true); assert.equal(isImportant({ pr: 2 }), true); assert.equal(isImportant({ pr: 1 }), false); assert.equal(isImportant({}), false);
   assert.equal(isMoneyTask({ p: 'Мастерская', s: 'Дела', t: 'Почему таргет выгорает' }), true);
   assert.equal(isMoneyTask({ p: 'Мастерская', s: 'Деньги и реклама', t: 'что-то' }), true);
   assert.equal(isMoneyTask({ p: 'Книги', s: '', t: 'реклама' }), false);
@@ -117,6 +119,7 @@ test('важные задачи (p1, p2) и задачи про рекламу',
 test('синхронизация: задача «мастерская» из «Входящих» с приоритетом — переехала и видна как своя', async () => {
   const { syncTodoist } = await import('../writer/js/todoist.js');
   const db = {
+    labels: [{ name: 'мастерская' }],
     projects: [{ id: 'p0', name: 'Входящие' }, { id: 'p1', name: 'Книги' }, { id: 'p2', name: 'Мастерская' }],
     sections: [{ id: 's1', name: 'Дела', project_id: 'p2' }],
     tasks: [{ id: 'a', project_id: 'p0', section_id: null, content: 'Спросить Клод почему таргет выгорает', labels: ['мастерская'], priority: 4, due: { date: '2026-10-18' } }],
@@ -126,6 +129,8 @@ test('синхронизация: задача «мастерская» из «�
   globalThis.fetch = async (url, o = {}) => {
     const u = new URL(url), path = u.pathname.replace('/api/v1', ''), body = o.body ? JSON.parse(o.body) : null;
     calls.push((o.method || 'GET') + ' ' + path);
+    if (path === '/labels' && o.method === 'POST') { db.labels.push(body); return res(body); }
+    if (path === '/labels') return res({ results: db.labels });
     if (path === '/projects') return res({ results: db.projects });
     if (path === '/sections' && o.method === 'POST') { const s = { id: 's' + (db.sections.length + 1), ...body }; db.sections.push(s); return res(s); }
     if (path === '/sections') { const pid = u.searchParams.get('project_id'); return res({ results: db.sections.filter((x) => !pid || x.project_id === pid) }); }
@@ -143,5 +148,6 @@ test('синхронизация: задача «мастерская» из «�
     assert.deepEqual([r.state.own[0].p, r.state.own[0].s, r.state.own[0].pr], ['Мастерская', 'Деньги и реклама', 4]);
     assert.ok(!calls.some((c) => /close/.test(c))); // её задачу приложение не закрывает
     assert.ok(!('books' in r.state)); // список книг в настройки не сохраняется
+    assert.deepEqual(db.labels.map((l) => l.name).sort(), ['доходы', 'идея', 'книги', 'мастерская']); // недостающие метки заведены
   } finally { globalThis.fetch = orig; }
 });

@@ -1,7 +1,7 @@
 // Главная Мастерской: всё актуальное за текущий месяц по книгам и напоминания обо всём, у чего есть дата
 import { esc } from '../../../js/ui.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
-import { ownTasks, isImportant, byDue } from '../../../js/tdtasks.js';
+import { ownTasks, isImportant } from '../../../js/tdtasks.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
@@ -18,14 +18,6 @@ const zn = (n) => al(n);
 const dleft = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
 const when = (n) => (n < 0 ? `просрочено на ${-n} дн.` : n === 0 ? 'сегодня' : n === 1 ? 'завтра' : `через ${n} дн.`);
 const SOON = 14; // за сколько дней показывать напоминание
-
-// «Важное»: задачи Todoist с повышенным приоритетом (p1, p2) — всегда на виду, с датой и без
-function importantCard(c) {
-  const list = ownTasks(c.settings).filter(isImportant).sort(byDue);
-  if (!list.length) return '';
-  const t = c.today;
-  return `<div class="card td-card"><h2 style="margin:0 0 4px">Важное</h2><div class="plist">${list.map((x) => `<div class="pitem"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.id}"><span class="pi-body"><span class="pi-t">${esc(x.t)}</span><span class="pi-s${x.d && x.d < t ? ' down' : ''}">${[esc(x.s || x.p), x.d && x.d < t ? 'просрочено' : '', x.d ? fmtDate(x.d) : ''].filter(Boolean).join(' · ')}</span></span></a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${ic('check')}</button></span></div>`).join('')}</div></div>`;
-}
 
 // Все напоминания с датами: {date, title, sub, to, kind}
 export function reminders(c) {
@@ -57,7 +49,8 @@ export function reminders(c) {
   // лимит НПД (2,4 млн ₽ в год): превышен или вот-вот будет
   const na = npdAlert(npdStatusOf(d.sales || [], [], c.settings, t), t); if (na) add(t, na.title, na.sub, '/plan', 0);
   // свои задачи из Todoist (Книги, Мастерская) — на сегодня и просроченные
-  for (const x of ownTasks(c.settings)) if (x.d && !isImportant(x)) add(x.d < t ? t : x.d, esc(x.t), esc(x.s || x.p) + (x.d < t ? ' · просрочено' : ''), '/plan', 0);
+  // с приоритетом — всегда на Главной (без даты — сегодня), остальные — на сегодня и просроченные
+  for (const x of ownTasks(c.settings)) if (x.d || isImportant(x)) add(!x.d || x.d < t ? t : x.d, esc(x.t), esc(x.s || x.p) + (x.d && x.d < t ? ' · просрочено' : ''), '/plan', isImportant(x) ? 3650 : 0);
   // приоритетные показы: подать заявку до 25-го
   const wr = widgetReminder(c); if (wr) add(wr.date, wr.title, wr.sub, wr.to, 15);
   // напоминания по связям и подготовка маркетинга
@@ -128,7 +121,6 @@ export function homeView(a) {
     <div class="stat"><div class="k">В работе</div><div class="v">${inWork.length}</div><div class="s">${plural(inWork.length, ['книга', 'книги', 'книг'])}</div></div>
   </div>
   ${archiveWarn(c)}
-  ${importantCard(c)}
   ${rem.length ? `<div class="card"><h2>Напоминания</h2><div class="list">${rem.map((r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}</span></a>`).join('')}</div></div>` : ''}
   ${chartCard}
   ${inWork.length ? `<h2 style="margin-top:18px">В работе</h2>${inWork.map((r) => workCard(c, r)).join('')}` : ''}

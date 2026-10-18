@@ -6,6 +6,9 @@
 const API = 'https://api.todoist.com/api/v1';
 export const TD_LABEL = 'мастерская';
 export const IDEA_LABEL = 'идея';
+export const MONEY_LABEL = 'доходы';
+// метки, которые приложение заводит в Todoist само — чтобы их можно было быстро выбрать
+export const LABELS = [['мастерская', 'lavender'], ['книги', 'salmon'], [IDEA_LABEL, 'mint_green'], [MONEY_LABEL, 'green']];
 export const TD_DAYS = 30; // на сколько дней вперёд отправляем
 const KIND_SHELF = { money: 'Деньги и реклама', waitans: 'Связи', mk: 'Маркетинг', contest: 'Конкурсы' };
 const SKIP = new Set(['done', 'wait', 'td']); // выложено / выйдет само — делать ничего не нужно; td — задачи из самого Todoist
@@ -65,7 +68,8 @@ export function todoistPlan(want, map = {}, closed = {}, active = [], made = nul
 
 // ---------- метки → полки: задача с меткой (например, во «Входящих») сама переезжает на нужную полку ----------
 // «мастерская» → проект «Мастерская» (деньги и реклама — в «Деньги и реклама», остальное — в «Дела»);
-// «идея» → проект «Книги» (к идеям); «книги» или метка с названием книги → «Книги», раздел книги.
+// «доходы» → «Мастерская», «Деньги и реклама»; «идея» → проект «Книги» (к идеям);
+// «книги» или метка с названием книги → «Книги», раздел книги.
 // Трогаем только задачи вне своей полки и не созданные самим приложением.
 export const MONEY_RE = /деньг|реклам|таргет|директ|налог|доход|бюджет|продаж|финанс|литнет плат|rocket|ракет/i;
 const lowName = (x) => String(x || '').trim().toLowerCase();
@@ -85,6 +89,8 @@ export function routeTasks(tasks, { projects = {}, books = [], made = {} } = {})
       if (!inBooks || (b && !t.section_id)) moves.push({ id: t.id, project: 'Книги', section: b ? shortTitle(b.title) : '' });
       continue;
     }
+    // «доходы» — дела по деньгам и рекламе: видны и в «Доходах»
+    if (labels.includes(MONEY_LABEL)) { if (!inWork) moves.push({ id: t.id, project: 'Мастерская', section: 'Деньги и реклама' }); continue; }
     if (labels.includes(TD_LABEL) && !inWork && !inBooks) moves.push({ id: t.id, project: 'Мастерская', section: MONEY_RE.test(t.content + ' ' + (t.description || '')) ? 'Деньги и реклама' : 'Дела' });
   }
   return moves;
@@ -142,11 +148,11 @@ export async function fetchOwnTasks(token, made = {}) {
   try { secs = await all(token, '/sections'); } catch { secs = []; for (const p of projects.filter((x) => shelf(x.name))) secs.push(...await all(token, `/sections?project_id=${p.id}`)); }
   const sn = Object.fromEntries(secs.map((x) => [String(x.id), x.name])), out = [];
   for (const t of await all(token, '/tasks')) {
-    const labels = t.labels || [], p = pn[String(t.project_id)] || '', mark = labels.includes(TD_LABEL);
+    const labels = t.labels || [], p = pn[String(t.project_id)] || '', money = labels.includes(MONEY_LABEL), mark = labels.includes(TD_LABEL) || money || labels.includes('книги');
     // служебные задачи приложения и идеи — не «свои»; но если Лана сама поставила метку «мастерская» — это её задача,
     // где бы она ни лежала (например, во «Входящих», пока не переехала на полку)
     if (t.parent_id || labels.includes(IDEA_LABEL) || (mark && made[String(t.id)]) || (!shelf(p) && !mark)) continue;
-    out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: shelf(p) ? p : 'Мастерская', s: sn[String(t.section_id)] || (shelf(p) ? '' : MONEY_RE.test(t.content) ? 'Деньги и реклама' : 'Дела'), pr: t.priority || 1, ds: t.description || '' });
+    out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: shelf(p) ? p : labels.includes('книги') && !money ? 'Книги' : 'Мастерская', s: sn[String(t.section_id)] || (shelf(p) ? '' : money || MONEY_RE.test(t.content) ? 'Деньги и реклама' : labels.includes('книги') ? '' : 'Дела'), pr: t.priority || 1, ds: t.description || '' });
   }
   return out.slice(0, 300);
 }
@@ -223,6 +229,10 @@ export async function syncIdeas(token, ideas, booksById) {
   return { puts: [...merged.values()], created: ops.create.length };
 }
 
+async function ensureLabels(token) {
+  const have = new Set((await all(token, '/labels')).map((l) => lowName(l.name)));
+  for (const [name, color] of LABELS) if (!have.has(name)) await post(token, '/labels', { name, color });
+}
 async function routeByLabels(token, books, made) {
   const tasks = await all(token, '/tasks'), projects = await all(token, '/projects');
   const pid = Object.fromEntries(projects.map((p) => [lowName(p.name), p.id]));
@@ -243,6 +253,8 @@ export async function syncTodoist(token, want, state = {}) {
   // свои задачи приложения: всё, что оно создало или к чему привязано (раньше списка не было — берём связанные)
   const made = { ...(state.made || {}) };
   for (const m of Object.values(map)) made[String(m.id)] ||= m.date || '1';
+  // метки «мастерская», «книги», «идея», «доходы» — заводим, если их нет в списке меток
+  await ensureLabels(token).catch(() => {});
   // сначала — разложить по полкам задачи с метками, поставленные вручную (например, во «Входящих»)
   await routeByLabels(token, state.books || [], made).catch(() => {});
   const active = await all(token, `/tasks/filter?query=${encodeURIComponent('@' + TD_LABEL)}`).catch(() => all(token, `/tasks?label=${encodeURIComponent(TD_LABEL)}`));

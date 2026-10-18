@@ -95,10 +95,10 @@ function goalCard(c, st, big = '') {
 }
 
 function moneyTasks(c) {
-  // по деньгам и рекламе: на ближайшую неделю, а важные (повышенный приоритет) — всегда
+  // по деньгам и рекламе: на ближайшую неделю, а с приоритетом — всегда, даже без даты
   const list = ownTasks(c.settings).filter((x) => isMoneyTask(x) && ((x.d && x.d <= addDays(c.today, 7)) || isImportant(x))).sort(byDue);
   if (!list.length) return '';
-  return `<div class="card td-card"><h2 style="margin:0 0 4px">Дела по деньгам и рекламе</h2><div class="plist">${list.map((x) => `<div class="pitem"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.id}"><span class="pi-body"><span class="pi-t">${esc(x.t)}</span><span class="pi-s${x.d && x.d < c.today ? ' down' : ''}">${[isImportant(x) ? 'важно' : '', x.d && x.d < c.today ? 'просрочено' : '', x.d ? fmtDate(x.d) : ''].filter(Boolean).join(' · ')}</span></span></a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${ic('check')}</button></span></div>`).join('')}</div></div>`;
+  return `<div class="card td-card"><h2 style="margin:0 0 4px">Дела по деньгам и рекламе</h2><div class="plist">${list.map((x) => `<div class="pitem"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.id}"><span class="pi-body"><span class="pi-t">${esc(x.t)}</span><span class="pi-s${x.d && x.d < c.today ? ' down' : ''}">${x.d ? `${x.d < c.today ? 'просрочено · ' : ''}${fmtDate(x.d)}` : 'без даты'}</span></span></a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${ic('check')}</button></span></div>`).join('')}</div></div>`;
 }
 // сбой идёт сейчас (сегодня или в последний день с данными) — тихая карточка: что случилось и сколько недополучено
 function outageNow(c) {
