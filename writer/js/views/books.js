@@ -209,7 +209,7 @@ export function bookPage(a, id) {
 }
 
 // ---------- обновление знаков ----------
-const COUNT_RULE = 4; // 4 — объём = только рукопись: «Пролог», «Глава …», «Эпилог» (без «От автора», промтов и черновиков)
+const COUNT_RULE = 5; // 4 — объём = только рукопись: «Пролог», «Глава …», «Эпилог» (без «От автора», промтов и черновиков); 5 — прирост без промтов
 export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
@@ -231,7 +231,11 @@ export async function refreshOne(a, b, force = false) {
   if (!dayStart || !weekStart || !monthStart || fill.length) {
     const wFrom = addDays(c.today, -6), mFrom = c.today.slice(0, 8) + '01';
     let g = {};
-    try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom, ...fill])]); } catch { g = {}; }
+    // история версий считает весь текст Документа целиком; если в нём есть вкладки не из рукописи (промты, каркас,
+    // черновики, «От автора») — прирост по версиям был бы неверным, поэтому его не берём, считаем по своей истории
+    const extra = (r.tabs || []).some((x) => x.chars > 0 && (!x.counted || /^\s*от автора/i.test(x.title)));
+    if (!extra) { try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom, ...fill])]); } catch { g = {}; } }
+    else filled = true; // восстанавливать нечего — дальше история копится сама по дням
     const h2 = { ...history };
     // на конец дня d−1 было «сейчас − прирост с полуночи d»
     for (const d of fill) { const k = addDays(d, -1); if (g[d] != null && h2[k] == null) h2[k] = Math.max(0, r.total - Math.max(0, g[d])); }
