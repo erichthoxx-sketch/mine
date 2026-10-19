@@ -67,17 +67,30 @@ test('названия глав в Документе — к одному вид
   const tab = (title, id, content) => ({ tabProperties: { title, tabId: id }, documentTab: { body: { content } } });
   const doc = { tabs: [
     tab('Пролог', 't0', [p('ПРОЛОГ.\n', 1, 9, { bold: true, fontSize: { magnitude: 20, unit: 'PT' } }), p('Текст\n', 9, 15)]),
-    tab('Глава 1', 't1', [p('Глава 1\n', 1, 9, { bold: true, fontSize: { magnitude: 14, unit: 'PT' } }, { namedStyleType: 'HEADING_1', alignment: 'CENTER' })]), // уже как надо
+    tab('Глава 1', 't1', [p('Глава 1\n', 1, 9, { bold: true, fontSize: { magnitude: 14, unit: 'PT' } }, { namedStyleType: 'HEADING_1', alignment: 'CENTER', spaceBelow: { magnitude: 18, unit: 'PT' } }), p('Текст\n', 9, 15)]), // уже как надо
     tab('Глава 2', 't2', [p('Утро было тихим.\n', 1, 18)]), // названия нет — ставим сверху
     tab('Промт', 't3', [p('Глава 9\n', 1, 9)]), // не глава книги
   ] };
   const r = titleRequests(doc);
   const t0 = r.filter((x) => JSON.stringify(x).includes('"t0"')), t2 = r.filter((x) => JSON.stringify(x).includes('"t2"'));
   assert.equal(r.filter((x) => JSON.stringify(x).includes('"t1"') || JSON.stringify(x).includes('"t3"')).length, 0);
-  assert.deepEqual(t0[0].deleteContentRange.range, { startIndex: 1, endIndex: 8, tabId: 't0' }); // текст «ПРОЛОГ.» без перевода строки
-  assert.equal(t0[1].insertText.text, 'Пролог');
-  assert.deepEqual(t0[3].updateTextStyle.range, { startIndex: 1, endIndex: 7, tabId: 't0' });
-  assert.equal(t0[3].updateTextStyle.textStyle.fontSize.magnitude, 14);
-  assert.equal(t2[0].insertText.text, 'Глава 2\n'); // глава без названия — название сверху
-  assert.ok(t2[1].updateParagraphStyle);
+  const of = (list, key) => list.find((x) => x[key])[key];
+  assert.deepEqual(of(t0, 'deleteContentRange').range, { startIndex: 1, endIndex: 8, tabId: 't0' }); // текст «ПРОЛОГ.» без перевода строки
+  assert.equal(of(t0, 'insertText').text, 'Пролог');
+  assert.deepEqual(of(t0, 'updateTextStyle').range, { startIndex: 1, endIndex: 7, tabId: 't0' });
+  assert.equal(of(t0, 'updateTextStyle').textStyle.fontSize.magnitude, 14);
+  const ins = t2.find((x) => x.insertText);
+  assert.equal(ins.insertText.text, 'Глава 2\n'); // глава без названия — название сверху
+  assert.equal(t2.find((x) => x.updateParagraphStyle?.paragraphStyle.namedStyleType).updateParagraphStyle.paragraphStyle.spaceBelow.magnitude, 18);
+});
+
+test('название и текст — всегда на одном расстоянии: пустые строки между ними убираются', async () => {
+  const { titleRequests } = await import('../writer/js/docedit.js');
+  const p = (text, s, e) => ({ startIndex: s, endIndex: e, paragraph: { paragraphStyle: {}, elements: [{ textRun: { content: text, textStyle: {} } }] } });
+  const doc = { tabs: [{ tabProperties: { title: 'Глава 3', tabId: 'g' }, documentTab: { body: { content: [{ endIndex: 1, sectionBreak: {} }, p('\n', 1, 2), p('Глава 3.\n', 2, 11), p('\n', 11, 12), p('\n', 12, 13), p('Текст\n', 13, 19)] } } }] };
+  const r = titleRequests(doc);
+  assert.deepEqual(r[0].deleteContentRange.range, { startIndex: 11, endIndex: 13, tabId: 'g' }); // две пустые строки после названия
+  assert.deepEqual(r[1].updateParagraphStyle.range, { startIndex: 11, endIndex: 12, tabId: 'g' }); // у текста — без отступа сверху
+  assert.deepEqual(r[2].deleteContentRange.range, { startIndex: 1, endIndex: 2, tabId: 'g' }); // пустая строка перед названием
+  assert.equal(r[4].insertText.text, 'Глава 3'); assert.equal(r[4].insertText.location.index, 1);
 });

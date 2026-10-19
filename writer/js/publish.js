@@ -54,6 +54,9 @@ export function chaptersOf(doc) {
     if (first && (isChapterTitle(firstText.replace(/\n/g, ' ')) || plainTitle(firstText) === plainTitle(title))) { head = normTitle(firstText); paras[0] = { kind: 'h', pageBreak: true, title: true, runs: [{ t: head }] }; }
     else { head = normTitle(title); paras.unshift({ kind: 'h', pageBreak: true, runs: [{ t: head }] }); }
     head = head.split('\n')[0];
+    // от названия до текста — всегда одинаково: пустые строки после названия убираем, у первого абзаца — без отступа сверху
+    while (paras.length > 1 && isEmpty(paras[1])) paras.splice(1, 1);
+    if (paras[1]?.ps) paras[1] = { ...paras[1], ps: { ...paras[1].ps, sa: 0 } };
     out.push({ title: head, paras, chars: blocks.reduce((a, p) => a + textOf(p).replace(/\n/g, '').length, 0) });
   }
   return out;
@@ -107,7 +110,7 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
 <w:docDefaults><w:rPrDefault><w:rPr>${FONT}<w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="ru-RU"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="360" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
-<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="480"/><w:ind w:firstLine="0"/><w:jc w:val="center"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="360"/><w:ind w:firstLine="0"/><w:jc w:val="center"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:style>
 <w:style w:type="paragraph" w:styleId="Center"><w:name w:val="Center"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:firstLine="0"/><w:jc w:val="center"/></w:pPr></w:style>
 <w:style w:type="paragraph" w:styleId="Right"><w:name w:val="Right"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:firstLine="0"/><w:jc w:val="right"/></w:pPr></w:style>
 <w:style w:type="paragraph" w:styleId="BookAuthor"><w:name w:val="Book Author"/><w:basedOn w:val="Center"/><w:pPr><w:spacing w:before="2400" w:after="1200"/></w:pPr><w:rPr><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:style>
@@ -158,7 +161,7 @@ table.pg { width: 100%; border-collapse: collapse; }
 table.pg td { padding: 0; }
 .pg-top { height: 2cm; } .pg-bot { height: 2cm; }
 p { margin: 0; }
-p.h { text-align: center; font-weight: bold; font-size: 14pt; margin-bottom: 1.5em; }
+p.h { text-align: center; font-weight: bold; font-size: 14pt; margin: 0 0 18pt !important; text-indent: 0 !important; }
 p.author { text-align: center; font-size: 14pt; margin: 6cm 0 2cm; } p.title { text-align: center; font-weight: bold; font-size: 18pt; margin-bottom: 8cm; } p.meta { text-align: center; }
 p.pb { break-before: page; }
 </style></head><body><table class="pg"><thead><tr><td class="pg-top"></td></tr></thead><tfoot><tr><td class="pg-bot"></td></tr></tfoot><tbody><tr><td>${parasHtml(paras)}</td></tr></tbody></table></body></html>`;

@@ -155,41 +155,47 @@ export function normTitle(text) {
 }
 
 // Названия глав в самом Документе — одинаковые: текст по normTitle, «Заголовок 1», по центру, без отступов,
-// шрифт как у основного текста, 14 пт, жирный, без курсива и подчёркивания. Уже такие — пропускаем.
-export const TITLE_PT = 14;
+// шрифт как у основного текста, 14 пт, жирный; перед названием пустых строк нет, после — ровно TITLE_GAP пт до текста
+// (пустые строки между названием и текстом убираются). Уже такие главы — пропускаем.
+export const TITLE_PT = 14, TITLE_GAP = 18;
 export function titleRequests(doc) {
   const out = [], bookTab = (t) => /^\s*(пролог|глава|эпилог)/i.test(t || '');
   const plain = (t) => String(t || '').trim().replace(/[.\s]+$/, '').toLowerCase();
+  const txt = (e) => (e.paragraph.elements || []).map((x) => x.textRun?.content || '').join('').replace(/\n$/, '');
+  const PT = (n) => ({ magnitude: n, unit: 'PT' });
   const walk = (list) => {
     for (const tab of list || []) {
-      const title = tab.tabProperties?.title || '', tabId = tab.tabProperties?.tabId;
-      if (bookTab(title)) {
-        const el = (tab.documentTab?.body?.content || []).find((e) => e.paragraph && (e.paragraph.elements || []).some((x) => (x.textRun?.content || '').trim()));
-        if (el) {
-          const runs = (el.paragraph.elements || []).filter((x) => x.textRun), text = runs.map((x) => x.textRun.content).join('').replace(/\n$/, '');
-          const font0 = tab.documentTab?.namedStyles?.styles?.find((x) => x.namedStyleType === 'NORMAL_TEXT')?.textStyle?.weightedFontFamily;
-          const style = (s0, len, tid) => [
-            { updateParagraphStyle: { range: { startIndex: s0, endIndex: s0 + len + 1, ...tid }, paragraphStyle: { namedStyleType: 'HEADING_1', alignment: 'CENTER', indentFirstLine: { magnitude: 0, unit: 'PT' }, indentStart: { magnitude: 0, unit: 'PT' } }, fields: 'namedStyleType,alignment,indentFirstLine,indentStart' } },
-            { updateTextStyle: { range: { startIndex: s0, endIndex: s0 + len, ...tid }, textStyle: { bold: true, italic: false, underline: false, fontSize: { magnitude: TITLE_PT, unit: 'PT' }, ...(font0 ? { weightedFontFamily: font0 } : {}) }, fields: 'bold,italic,underline,fontSize' + (font0 ? ',weightedFontFamily' : '') } },
-          ];
-          if (!isChapterTitle(text.replace(/\u000b/g, ' ')) && plain(text) !== plain(title)) {
-            // строки с названием нет — глава начинается сразу с текста: ставим название сверху
-            const want = normTitle(title).replace(/\n/g, '\u000b'), tid = tabId ? { tabId } : {};
-            out.push({ insertText: { location: { index: el.startIndex, ...tid }, text: want + '\n' } }, ...style(el.startIndex, want.length, tid));
-          } else {
-            const want = normTitle(text).replace(/\n/g, '\u000b'); // вторая строка — мягкий перенос внутри того же абзаца
-            const ps = el.paragraph.paragraphStyle || {};
-            const styled = ps.namedStyleType === 'HEADING_1' && ps.alignment === 'CENTER' && !pt(ps.indentFirstLine) && !pt(ps.indentStart)
-              && runs.filter((x) => x.textRun.content.trim()).every((x) => { const ts = x.textRun.textStyle || {}; return ts.bold === true && !ts.italic && !ts.underline && pt(ts.fontSize) === TITLE_PT && (!font0 || ts.weightedFontFamily?.fontFamily === font0.fontFamily); });
-            if (text !== want || !styled) {
-              const s0 = el.startIndex, tid = tabId ? { tabId } : {};
-              if (text !== want) out.push({ deleteContentRange: { range: { startIndex: s0, endIndex: el.endIndex - 1, ...tid } } }, { insertText: { location: { index: s0, ...tid }, text: want } });
-              out.push(...style(s0, want.length, tid));
-            }
-          }
-        }
-      }
+      const title = tab.tabProperties?.title || '', tid = tab.tabProperties?.tabId ? { tabId: tab.tabProperties.tabId } : {};
       walk(tab.childTabs);
+      if (!bookTab(title)) continue;
+      const content = tab.documentTab?.body?.content || [], paras = content.filter((e) => e.paragraph);
+      const k = paras.findIndex((e) => txt(e).trim());
+      if (k < 0) continue;
+      const el = paras[k], text = txt(el);
+      const font = tab.documentTab?.namedStyles?.styles?.find((x) => x.namedStyleType === 'NORMAL_TEXT')?.textStyle?.weightedFontFamily;
+      const isTitle = isChapterTitle(text.replace(/\u000b/g, ' ')) || plain(text) === plain(title);
+      const want = normTitle(isTitle ? text : title).replace(/\n/g, '\u000b'); // вторая строка — мягкий перенос в том же абзаце
+      const body = isTitle ? paras.slice(k + 1).find((e) => txt(e).trim()) : el;
+      // только пустые абзацы между двумя точками (таблицы и картинки не трогаем)
+      const onlyEmpty = (a, b) => content.every((e) => e.endIndex <= a || e.startIndex >= b || (e.paragraph && !txt(e).trim() && !(e.paragraph.elements || []).some((x) => x.inlineObjectElement)));
+      const leadFrom = paras[0].startIndex, lead = el.startIndex > leadFrom && onlyEmpty(leadFrom, el.startIndex);
+      const gap = isTitle && body && body.startIndex > el.endIndex && onlyEmpty(el.endIndex, body.startIndex);
+      const ps = el.paragraph.paragraphStyle || {}, bps = body?.paragraph.paragraphStyle || {};
+      const styled = isTitle && text === want && !lead && !gap && ps.namedStyleType === 'HEADING_1' && ps.alignment === 'CENTER' && !pt(ps.indentFirstLine) && !pt(ps.indentStart)
+        && !pt(ps.spaceAbove) && pt(ps.spaceBelow) === TITLE_GAP && !pt(bps.spaceAbove)
+        && (el.paragraph.elements || []).filter((x) => x.textRun?.content.trim()).every((x) => { const ts = x.textRun.textStyle || {}; return ts.bold === true && !ts.italic && !ts.underline && pt(ts.fontSize) === TITLE_PT && (!font || ts.weightedFontFamily?.fontFamily === font.fontFamily); });
+      if (styled) continue;
+      // правки — снизу вверх, чтобы номера знаков выше не сдвигались
+      if (gap) out.push({ deleteContentRange: { range: { startIndex: el.endIndex, endIndex: body.startIndex, ...tid } } });
+      if (body) { const b0 = isTitle ? el.endIndex : body.startIndex; out.push({ updateParagraphStyle: { range: { startIndex: b0, endIndex: b0 + 1, ...tid }, paragraphStyle: { spaceAbove: PT(0) }, fields: 'spaceAbove' } }); }
+      if (lead) out.push({ deleteContentRange: { range: { startIndex: leadFrom, endIndex: el.startIndex, ...tid } } });
+      const s0 = lead ? leadFrom : el.startIndex;
+      if (isTitle && text !== want) out.push({ deleteContentRange: { range: { startIndex: s0, endIndex: s0 + (el.endIndex - 1 - el.startIndex), ...tid } } }, { insertText: { location: { index: s0, ...tid }, text: want } });
+      if (!isTitle) out.push({ insertText: { location: { index: s0, ...tid }, text: want + '\n' } }); // названия не было — ставим сверху
+      out.push(
+        { updateParagraphStyle: { range: { startIndex: s0, endIndex: s0 + want.length + 1, ...tid }, paragraphStyle: { namedStyleType: 'HEADING_1', alignment: 'CENTER', indentFirstLine: PT(0), indentStart: PT(0), spaceAbove: PT(0), spaceBelow: PT(TITLE_GAP) }, fields: 'namedStyleType,alignment,indentFirstLine,indentStart,spaceAbove,spaceBelow' } },
+        { updateTextStyle: { range: { startIndex: s0, endIndex: s0 + want.length, ...tid }, textStyle: { bold: true, italic: false, underline: false, fontSize: PT(TITLE_PT), ...(font ? { weightedFontFamily: font } : {}) }, fields: 'bold,italic,underline,fontSize' + (font ? ',weightedFontFamily' : '') } },
+      );
     }
   };
   walk(doc?.tabs);
