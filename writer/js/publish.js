@@ -39,7 +39,7 @@ function bodyParas(blocks, named = {}) {
 const plainTitle = (t) => String(t || '').trim().replace(/[.\s]+$/, '');
 
 // главы книги: Пролог, Главы, Эпилог («От автора» в рукопись не идёт). Название главы — из первой строки,
-// если она похожа на название, иначе — название вкладки
+// если она похожа на название, иначе — название вкладки; оформление названий у всех глав одинаковое
 export function chaptersOf(doc) {
   const out = [];
   for (const t of allTabs(doc)) {
@@ -49,7 +49,9 @@ export function chaptersOf(doc) {
     const paras = bodyParas(blocks, named);
     const first = paras[0], firstText = first ? first.runs.map((r) => r.t).join('') : '';
     let head = plainTitle(title);
-    if (first && (isChapterTitle(firstText) || plainTitle(firstText) === plainTitle(title))) { head = plainTitle(firstText); first.pageBreak = true; first.title = true; }
+    // название главы — всегда одинаково (заголовок 14 пт, жирный, по центру, с новой страницы), как бы оно ни было
+    // оформлено в Документе; текст — как в Документе («Глава 1. Встреча»)
+    if (first && (isChapterTitle(firstText) || plainTitle(firstText) === plainTitle(title))) { head = plainTitle(firstText); paras[0] = { kind: 'h', pageBreak: true, title: true, runs: [{ t: firstText.trim() }] }; }
     else paras.unshift({ kind: 'h', pageBreak: true, runs: [{ t: head }] });
     out.push({ title: head, paras, chars: blocks.reduce((a, p) => a + textOf(p).replace(/\n/g, '').length, 0) });
   }
@@ -80,7 +82,7 @@ export function serviceParas(doc, kind, { fallback = '' } = {}) {
 }
 
 // ---------- .docx ----------
-const xesc = (s) => String(s ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const xesc = (s) => String(s ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const STYLE = { p: 'Normal', h: 'Heading1', title: 'BookTitle', author: 'BookAuthor', meta: 'BookMeta', center: 'Center', right: 'Right', gap: 'Center' };
 function runXml(r) {
   // порядок важен для Word: b, i, strike, u

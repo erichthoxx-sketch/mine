@@ -27,6 +27,7 @@ test('рукопись: только главы, название из перв�
   // «Глава 1.» — своим абзацем с новой страницы; пустая строка и «***» — как в Документе
   const g1 = chs[1].paras;
   assert.equal(g1[0].pageBreak, true);
+  assert.equal(g1[0].kind, 'h'); // все названия глав — одним заголовком, без оформления из Документа
   assert.deepEqual(g1.map((p) => p.runs.map((r) => r.t).join('')), ['Глава 1.', '', 'Утро было ', '***', 'Тихо.']);
   assert.equal(g1[4].runs[0].i, true);
   // у главы без названия внутри — название вкладки заголовком
@@ -61,6 +62,7 @@ test('синопсис и аннотация — ровно текст свои�
 test('XML документа: стили, разрыв страницы, экранирование', () => {
   const x = documentXml([{ kind: 'h', pageBreak: true, runs: [{ t: 'Глава <1> & «2»' }] }, { kind: 'p', runs: [{ t: 'a\nb', b: true }] }]);
   assert.ok(x.includes('<w:pStyle w:val="Heading1"/><w:pageBreakBefore/>'));
+  assert.ok(!documentXml([{ kind: 'p', runs: [{ t: 'a\uffff\ud83db' }] }]).match(/[\uffff\ud800-\udfff]/)); // недопустимые символы убраны
   assert.ok(x.includes('Глава &lt;1&gt; &amp; «2»'));
   assert.ok(x.includes('<w:rPr><w:b/></w:rPr><w:br/><w:t xml:space="preserve">b</w:t>'));
 });
