@@ -11,7 +11,9 @@ import { fetchPageText } from '../pagetext.js';
 import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestPhase, OUTCOMES, contestFileName, contestSubmissionUrl, contestEmailPurpose, goalMult, moveGoalDay, releaseDate } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
-import { ownTasks, bookOfTask, moveOwnTask, tdText } from '../../../js/tdtasks.js';
+import { ownTasks, bookOfTask, moveOwnTask, tdText, addOwnTask } from '../../../js/tdtasks.js';
+import { bookGuess } from '../ideacalc.js';
+import { MONEY_RE } from '../todoist.js';
 import { rub, fmtMonth } from '../../../js/format.js';
 import { EVENT_TYPES } from '../../../js/charts.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
@@ -279,7 +281,7 @@ export function planView(a) {
       <button class="nav-arr next" data-act="plan.week" data-v="1" aria-label="Следующая неделя">${ic('chevron')}</button></div>
     <div class="wstrip">${strip}</div>
   </div>
-  <div class="card" data-day="${sel}"><h2 style="margin:0 0 6px">${dayName(sel, t)}</h2>
+  <div class="card" data-day="${sel}"><div class="row between plan-dayh"><h2 style="margin:0">${dayName(sel, t)}</h2><button class="small-btn" data-act="td.addPlan" data-d="${sel}">+ Дело</button></div>
     ${dayList.length || goalHtml ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">Дел на этот день нет.</p>'}</div>
   <div class="psec-h"><h2>Цели <span class="muted">${activeGoals(c).length || ''}</span></h2><button class="small-btn" data-act="goal.new">+ Цель</button></div>
   ${goalsSection(c)}
@@ -374,6 +376,29 @@ if (!window.__planDrag) {
   document.addEventListener('dragstart', (e) => { if (e.target.closest?.('[data-drag]')) e.preventDefault(); }); // ссылки внутри строки не тащим «по-браузерному»
 }
 acts['day.pick'] = (d) => { app().ui.planDay = d.v; window.scrollTo(0, 0); };
+// «+ Дело» в Планере: задача сразу в Todoist — к книге (проект «Книги», раздел книги), в «Дела» или «Деньги и реклама»
+acts['td.addPlan'] = (d) => {
+  const c = app().ctx(), short = (t) => String(t).split(/[.!?:]/)[0].trim();
+  const books = c.wbooks.filter((b) => (b.status || 'progress') !== 'done' || b.id === app().ui.planBook);
+  openSheet('Новое дело', `<label for="pdc" style="margin-top:0">Что сделать</label><input id="pdc" name="t" required autocomplete="off" placeholder="например: ответить издательству">
+    <div class="f2"><div><label for="pdd">Когда</label><input id="pdd" type="date" name="d" value="${d.d || c.today}"></div>
+    <div><label for="pdw">Куда</label><select id="pdw" name="w"><option value="">определить само</option><option value="work">Дела</option><option value="money">Деньги и реклама</option>${books.map((b) => opt('b:' + b.id, short(b.title), '')).join('')}</select></div></div>
+    <p class="small muted" style="margin:8px 0 0">Дело появится и в Todoist. Про деньги и рекламу — видно и в «Доходах».</p>`, async (fd) => {
+    const content = String(fd.get('t') || '').trim(); if (!content) return false;
+    let w = String(fd.get('w') || '');
+    if (!w) { const g = bookGuess(content, c.wbooks); w = g ? 'b:' + g.id : MONEY_RE.test(content) ? 'money' : 'work'; }
+    const b = w.startsWith('b:') ? c.wbooksById[w.slice(2)] : null;
+    const where = b ? { project: 'Книги', section: short(b.title) } : { project: 'Мастерская', section: w === 'money' ? 'Деньги и реклама' : 'Дела' };
+    try {
+      const x = await addOwnTask(c.settings, { ...where, content, date: fd.get('d') || '' });
+      const td = app().ctx().settings.todoist || {};
+      await app().store.saveSettings({ todoist: { ...td, own: [...(td.own || []), x] } });
+      toast(`Добавлено${b ? ` — к книге «${short(b.title)}»` : w === 'money' ? ' — «Деньги и реклама»' : ''}`);
+    } catch (e) { toast('Не получилось: ' + e.message); return false; }
+  }, { submitText: 'Добавить' });
+  setTimeout(() => document.getElementById('pdc')?.focus(), 50);
+  return false;
+};
 acts['plan.week'] = (d) => { const u = app().ui; u.planWeek = d.v === '0' ? 0 : (u.planWeek || 0) + Number(d.v); u.planDay = d.v === '0' ? null : addDays(app().ctx().today, 7 * u.planWeek); if (u.planWeek === 0) u.planDay = null; };
 
 // ---------- книги в работе: коротко — что дальше, сколько выложено, кнопки ----------

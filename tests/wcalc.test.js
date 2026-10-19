@@ -367,3 +367,9 @@ test('конкурс после приёма: ждём итоги → отмет
   assert.equal(contestPhase({ ...x, sentBooks: {} }, '2026-11-05'), 'past'); // не подавала — сразу в архив
   assert.equal(contestPhase({ ...x, results: '' }, '2026-11-05'), 'results');
 });
+
+test('конкурс: кнопка «Участвовать» над сроком приёма — не название', async () => {
+  const { parseContest } = await import('../writer/js/wcalc.js');
+  const t = 'Литнет\nКонкурсы\nТемное притяжение\nКонкурс на лучший темный роман\nУчаствовать\nСрок приема работ\n1 нояб. 2026 - 31 янв. 2027';
+  assert.equal(parseContest(t, 'https://litnet.com/ru/contests/x-c1', '2026-10-20').name, 'Темное притяжение');
+});

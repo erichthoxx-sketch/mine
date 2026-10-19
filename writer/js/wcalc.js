@@ -604,6 +604,8 @@ export function contestEmailPurpose(x, email) {
 }
 
 
+// строки страницы конкурса, которые не бывают названием: меню площадки и кнопки
+export const CONTEST_NAV = /^(правила(\s+конкурса)?|литнет|литрес|author\.today|литмаркет|книги|конкурсы|блоги|главная|правила|работы|участники|описание|войти|меню|поиск|участвовать|участвую|принять участие|подать заявку|подать работу|добавить книгу|подписаться|отписаться|поделиться|читать|все конкурсы|\d+)$/i;
 export function parseContest(text, url = '', today = new Date().toISOString().slice(0, 10)) {
   const t = String(text || '').replace(/[  ]/g, ' ').replace(/[ \t]+/g, ' ');
   const out = {};
@@ -616,10 +618,11 @@ export function parseContest(text, url = '', today = new Date().toISOString().sl
   const nm = /конкурс[а-яё]*(?:\s+[а-яёa-z-]+){0,3}\s*[«"]([^»"\n]{3,90})[»"]/i.exec(t) || [...t.matchAll(/[«"]([^»"\n]{3,90})[»"]/g)].find((m) => !PLAT.test(m[1].trim()));
   // страница Литнета: «Название / Конкурс на лучший роман… / Срок приема работ» — название стоит над описанием
   const lines = t.split('\n').map((x) => x.trim()).filter(Boolean);
-  const NAV = /^(правила(\s+конкурса)?|литнет|литрес|author\.today|литмаркет|книги|конкурсы|блоги|главная|правила|работы|участники|описание|войти|меню|поиск|\d+)$/i;
+  const NAV = CONTEST_NAV;
   const at = lines.findIndex((x) => /^срок\s+при[её]ма/i.test(x));
   let head = null;
-  if (at > 0) { let k = at - 1; if (/^конкурс\s+(на|для|о|об|среди)\s/i.test(lines[k]) && k > 0) k--; if (!NAV.test(lines[k]) && lines[k].length <= 90) head = lines[k]; }
+  // над «Сроком приёма» бывают кнопки («Участвовать», «Подать заявку») и подзаголовок «Конкурс на…» — пропускаем их
+  if (at > 0) { let k = at - 1; while (k > 0 && at - k <= 4 && (NAV.test(lines[k]) || /^конкурс\s+(на|для|о|об|среди)\s/i.test(lines[k]))) k--; if (!NAV.test(lines[k]) && !/^конкурс\s+(на|для|о|об|среди)\s/i.test(lines[k]) && lines[k].length <= 90) head = lines[k]; }
   if (head) out.name = head.replace(/^конкурс\s*/i, '').replace(/^[«"]|[»"]$/g, '').trim();
   else if (nm) out.name = nm[1].trim();
   else { const first = lines.find((x) => x.length <= 100 && !/^правила/i.test(x) && !NAV.test(x)); if (first) out.name = first.replace(/^конкурс\s*/i, '').trim(); }

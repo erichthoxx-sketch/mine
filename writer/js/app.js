@@ -12,7 +12,7 @@ import { homeView } from './views/home.js';
 import { planView, navToday } from './views/plan.js';
 import { scheduleTodoist } from './tdsync.js';
 import { syncFinish } from './sync.js';
-import { parseContest } from './wcalc.js';
+import { CONTEST_NAV, parseContest } from './wcalc.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
@@ -143,12 +143,15 @@ let reparsing = false;
 async function reparseContests() {
   if (reparsing) return;
   const old = (store.data.w_contests || []).filter((x) => x.conditions && (x.pv || 0) < CONTEST_PV);
-  if (!old.length) return;
+  // название попало с кнопки страницы («Участвовать») — берём настоящее из условий, остальное не трогаем
+  const badName = (store.data.w_contests || []).filter((x) => x.conditions && (x.pv || 0) >= CONTEST_PV && CONTEST_NAV.test(String(x.name || '').trim()));
+  if (!old.length && !badName.length) return;
   reparsing = true;
   try {
+    for (const x of badName) { const nm = parseContest(x.conditions, x.url || '', todayISO()).name; if (nm && !CONTEST_NAV.test(nm)) await store.put('w_contests', { ...x, name: nm }); }
     for (const x of old) {
       const r = parseContest(x.conditions, x.url || '', todayISO()), keep = {};
-      if (x.name && !/^(литнет|литрес|author\.today|литмаркет|правила( конкурса)?)$/i.test(x.name.trim())) keep.name = x.name;
+      if (x.name && !CONTEST_NAV.test(x.name.trim())) keep.name = x.name;
       const clean = { ...x };
       for (const k of ['minChars', 'maxChars', 'startChars', 'unit', 'volNote', 'fileTpl', 'chapters', 'formats']) delete clean[k];
       if (x.newOnly) delete r.newOnly; // отмечено вручную — оставляем
