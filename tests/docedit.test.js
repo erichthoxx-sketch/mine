@@ -50,3 +50,20 @@ test('цвет текста: из Документа и обратно', async (
   assert.deepEqual([rq.updateTextStyle.range.startIndex, rq.updateTextStyle.range.endIndex], [1, 8]);
   assert.equal(Math.round(rq.updateTextStyle.textStyle.foregroundColor.color.rgbColor.green * 255), 107);
 });
+
+test('названия глав в Документе — к одному виду, остальное не трогаем', async () => {
+  const { titleRequests } = await import('../writer/js/docedit.js');
+  const p = (text, s, e, ts = {}, ps = {}) => ({ startIndex: s, endIndex: e, paragraph: { paragraphStyle: ps, elements: [{ textRun: { content: text, textStyle: ts } }] } });
+  const tab = (title, id, content) => ({ tabProperties: { title, tabId: id }, documentTab: { body: { content } } });
+  const doc = { tabs: [
+    tab('Пролог', 't0', [p('ПРОЛОГ\n', 1, 8, { bold: true, fontSize: { magnitude: 20, unit: 'PT' } }), p('Текст\n', 8, 14)]),
+    tab('Глава 1', 't1', [p('Глава 1. Встреча\n', 1, 18, { bold: true, fontSize: { magnitude: 14, unit: 'PT' } }, { namedStyleType: 'HEADING_1', alignment: 'CENTER' })]), // уже как надо
+    tab('Глава 2', 't2', [p('Утро было тихим.\n', 1, 18)]), // названия нет — не трогаем
+    tab('Промт', 't3', [p('Глава 9\n', 1, 9)]), // не глава книги
+  ] };
+  const r = titleRequests(doc);
+  assert.equal(r.length, 2);
+  assert.deepEqual(r[0].updateParagraphStyle.range, { startIndex: 1, endIndex: 8, tabId: 't0' });
+  assert.deepEqual(r[1].updateTextStyle.range, { startIndex: 1, endIndex: 7, tabId: 't0' }); // без перевода строки
+  assert.equal(r[1].updateTextStyle.textStyle.fontSize.magnitude, 14);
+});

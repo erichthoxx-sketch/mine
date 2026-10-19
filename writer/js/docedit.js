@@ -139,3 +139,34 @@ export function nextChapterTab(doc) {
 
 // строка — название главы («Глава 3.», «Пролог», «Глава пятая. Утро»)
 export const isChapterTitle = (t) => { const v = String(t || '').trim(); return v.length > 0 && v.length <= 80 && /^(пролог|эпилог|глава|часть)(?=[\s.,:;!?\d]|$)/i.test(v); };
+
+// Названия глав в самом Документе — одинаковые: заголовок 1, по центру, 14 пт, жирный, без курсива и подчёркивания.
+// Текст не трогаем, только оформление первой строки главы (если это название). Уже оформленные — пропускаем.
+export const TITLE_PT = 14;
+export function titleRequests(doc) {
+  const out = [], bookTab = (t) => /^\s*(пролог|глава|эпилог)/i.test(t || '');
+  const plain = (t) => String(t || '').trim().replace(/[.\s]+$/, '').toLowerCase();
+  const walk = (list) => {
+    for (const tab of list || []) {
+      const title = tab.tabProperties?.title || '', tabId = tab.tabProperties?.tabId;
+      if (bookTab(title)) {
+        const el = (tab.documentTab?.body?.content || []).find((e) => e.paragraph && (e.paragraph.elements || []).some((x) => (x.textRun?.content || '').trim()));
+        if (el) {
+          const runs = (el.paragraph.elements || []).filter((x) => x.textRun), text = runs.map((x) => x.textRun.content).join('');
+          if (isChapterTitle(text) || plain(text) === plain(title)) {
+            const ps = el.paragraph.paragraphStyle || {};
+            const ok = ps.namedStyleType === 'HEADING_1' && ps.alignment === 'CENTER' && runs.filter((x) => x.textRun.content.trim()).every((x) => { const ts = x.textRun.textStyle || {}; return ts.bold === true && !ts.italic && !ts.underline && pt(ts.fontSize) === TITLE_PT; });
+            if (!ok) {
+              const range = { startIndex: el.startIndex, endIndex: el.endIndex, ...(tabId ? { tabId } : {}) };
+              out.push({ updateParagraphStyle: { range, paragraphStyle: { namedStyleType: 'HEADING_1', alignment: 'CENTER' }, fields: 'namedStyleType,alignment' } });
+              out.push({ updateTextStyle: { range: { ...range, endIndex: el.endIndex - 1 }, textStyle: { bold: true, italic: false, underline: false, fontSize: { magnitude: TITLE_PT, unit: 'PT' } }, fields: 'bold,italic,underline,fontSize' } });
+            }
+          }
+        }
+      }
+      walk(tab.childTabs);
+    }
+  };
+  walk(doc?.tabs);
+  return out;
+}
