@@ -211,13 +211,19 @@ export function bookPage(a, id) {
 
 // ---------- обновление знаков ----------
 const COUNT_RULE = 5; // 4 — объём = только рукопись: «Пролог», «Глава …», «Эпилог» (без «От автора», промтов и черновиков); 5 — прирост без промтов
+let lastTitles = 0; // сколько названий глав выровняли при последнем обновлении
 export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
   if (!force && !ruleChanged && b.titlesV === 1 && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled && (meta.mimeType !== drive.MIME.doc || (b.svc && (b.tabs || []).some((t) => 'lead' in t)))) return false;
   // названия глав в самом Документе — к одному виду (только если какое-то оформлено иначе)
-  if (meta.mimeType === drive.MIME.doc) { try { const reqs = titleRequests(await drive.getDoc(b.fileId)); if (reqs.length) await drive.docUpdate(b.fileId, reqs); } catch { /* не вышло — попробуем при следующем обновлении */ } }
+  let titles = 0;
+  if (meta.mimeType === drive.MIME.doc) {
+    try { const reqs = titleRequests(await drive.getDoc(b.fileId)); if (reqs.length) { await drive.docUpdate(b.fileId, reqs); titles = reqs.length / 2; } }
+    catch (e) { if (force) toast('Названия глав не выровнялись: ' + (e.message || e)); } // при ручном обновлении — честно говорим
+  }
+  lastTitles = titles;
   const r = await drive.countFile(meta);
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
   const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
@@ -267,7 +273,7 @@ export async function refreshAll(a, { quiet = false } = {}) {
   else if (!quiet) toast(n ? `Обновлено книг: ${n}` : 'Изменений в файлах нет');
 }
 acts['wbook.refresh'] = async () => { try { await drive.ensureToken(); } catch (e) { toast(e.message); return; } await refreshAll(app()); app().rerender(); };
-acts['wbook.refreshOne'] = async (d) => { try { await drive.ensureToken(); toast('Обновляю…'); await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast('Обновлено'); } catch (e) { toast('Не получилось: ' + e.message); } };
+acts['wbook.refreshOne'] = async (d) => { try { await drive.ensureToken(); toast('Обновляю…'); await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast(lastTitles ? `Обновлено · названия глав в Документе выровнены: ${lastTitles}` : 'Обновлено'); } catch (e) { toast('Не получилось: ' + e.message); } };
 acts['drive.connect'] = async () => {
   try { await drive.connect(); toast('Google Диск подключён'); refreshAll(app(), { quiet: true }); } catch (e) { toast(e.message); }
 };
