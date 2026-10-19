@@ -57,32 +57,19 @@ export function planItems(c, from, to) {
     if (b.finishBy && !s.doneWriting) add(b.finishBy, 'book', `Дописать «${bt}»`, s.planCh ? `глав ${s.written} из ≈${s.planCh}` : '', { to: '/book/' + b.id });
     if (s.until && s.remaining !== 0) add(s.until, 'book', `Последняя глава «${bt}»`, b.publishUntil ? 'срок выкладки' : 'по графику', { to: '/book/' + b.id });
   }
+  // конкурсы в Планере — только «Подать на конкурс» (и после приёма — отметить итоги); без счёта знаков и стартов
   for (const x of d.w_contests) {
-    // итоги: в день итогов (или сразу после приёма, если дата итогов неизвестна) — отметить, чем закончилось
     const ph = contestPhase(x, t);
     if (ph === 'results' || ph === 'wait') add(ph === 'results' ? t : x.results, 'contest', `Итоги «${esc(x.name)}» — чем закончилось?`, contestBookIds(x).filter((id) => id in contestSent(x) && !(x.outcome || {})[id]).map((id) => esc(c.wbooksById[id]?.title || '')).filter(Boolean).join(', '), { act: 'ct.goRes', id: x.id });
-    if (x.status === 'done') continue;
-    const books = contestBookIds(x).map((id) => c.wbooksById[id]).filter(Boolean), b = books[0] || null, st = contestStatus(x, b, t);
-    const bt = books.map((y) => esc(y.title)).join(', ');
-    add(x.end, 'contest', `Конкурс «${esc(x.name)}» — последний день приёма`, [bt, st.need ? `не хватает ${contestVol(x)(st.need)}` : ''].filter(Boolean).join(' · '), { act: 'contest.edit', id: x.id, bookId: b?.id });
-    // напомнить отправить книгу — за 3 дня до конца приёма (или сегодня, если уже поздно)
-    const unsent = contestUnsent(x).map((id) => c.wbooksById[id]).filter((y) => y && !contestFit(x, y, t).out);
-    // книга в процессе на конкурс для новых книг: сегодня — одна строчка: сколько осталось до минимума для подачи, или «можно подавать»
-    // книга пишется на конкурс: день, когда начала участвовать; сегодня — сколько до минимума / завершить к сроку / можно подавать
-    if (x.newOnly) {
-      for (const [id, d0] of Object.entries(x.joinedBooks || {})) { const y = c.wbooksById[id]; if (y && d0) add(d0, 'contest', `Участвую: «${esc(y.title)}» на «${esc(x.name)}»`, 'книга пишется на конкурс', { to: '/book/' + id, bookId: id }); }
-      if (x.end && x.end >= t && x.status !== 'sent') for (const y of unsent) {
-        const f = contestFit(x, y, t), left = Math.round((Date.parse(x.end) - Date.parse(t)) / 864e5);
-        if (f.ready) add(t, 'contest', `Подать «${esc(y.title)}» на «${esc(x.name)}»`, `книга завершена · приём до ${fmtDate(x.end)}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, { to: '/marketing', bookId: y.id });
-        else if (f.need) add(t, 'contest', `«${esc(y.title)}» на «${esc(x.name)}»: до минимума ещё ${contestVol(x)(f.need)}`, `${f.text.includes('в день') ? f.text.split('· ').pop() + ' · ' : ''}приём до ${fmtDate(x.end)}`, { to: '/book/' + y.id, bookId: y.id });
-        else if (f.writing && left <= 14) add(t, 'contest', `Завершить «${esc(y.title)}» к ${fmtDate(x.end).slice(0, 5)} — для «${esc(x.name)}»`, 'подать можно только законченную книгу', { to: '/book/' + y.id, bookId: y.id });
-      }
+    if (x.status === 'done' || x.status === 'sent' || !x.end || x.end < t) continue;
+    for (const y of contestUnsent(x).map((id) => c.wbooksById[id]).filter(Boolean)) {
+      const f = contestFit(x, y, t);
+      if (f.out) continue;
+      // законченную книгу на конкурс «для новых» — подать сразу; остальное — за 3 дня до конца приёма
+      const due = x.newOnly && f.ready ? t : addDays(x.end, -3) < t ? t : addDays(x.end, -3);
+      if (x.newOnly && !f.ready && due > t) continue;
+      add(due, 'contest', `Подать на конкурс «${esc(x.name)}»`, `«${esc(y.title)}» · приём до ${fmtDate(x.end)}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, { to: '/marketing', bookId: y.id });
     }
-    // напомнить отправить — только то, что уже можно подавать
-    const toSend = x.newOnly ? unsent.filter((y) => contestFit(x, y, t).ready) : unsent;
-    if (toSend.length && !x.newOnly && x.status !== 'sent' && x.end && x.end >= t) { const due = addDays(x.end, -3) < t ? t : addDays(x.end, -3); add(due, 'contest', `Отправить ${toSend.length > 1 ? 'книги' : `«${esc(toSend[0].title)}»`} на конкурс «${esc(x.name)}»`, `до ${fmtDate(x.end)}${(x.emails || [])[0] ? ' · ' + esc(x.emails[0]) : ''}`, { act: 'contest.edit', id: x.id, bookId: b?.id }); }
-    if (x.start && x.start >= t) add(x.start, 'contest', `Конкурс «${esc(x.name)}» — старт`, bt, { act: 'contest.edit', id: x.id, bookId: b?.id });
-    if (x.results && x.results >= t) add(x.results, 'contest', `Итоги конкурса «${esc(x.name)}»`, bt, { act: 'contest.edit', id: x.id, bookId: b?.id });
   }
   for (const x of d.w_queue) if (!x.done && x.due) add(x.due < t ? t : x.due, 'queue', esc(x.title), `${x.due < t ? 'просрочено · ' : ''}${x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди'}`, { act: 'queue.edit', id: x.id, bookId: x.bookId });
   for (const x of d.w_waiting) {
@@ -376,27 +363,32 @@ if (!window.__planDrag) {
   document.addEventListener('dragstart', (e) => { if (e.target.closest?.('[data-drag]')) e.preventDefault(); }); // ссылки внутри строки не тащим «по-браузерному»
 }
 acts['day.pick'] = (d) => { app().ui.planDay = d.v; window.scrollTo(0, 0); };
-// «+ Дело» в Планере: задача сразу в Todoist — к книге (проект «Книги», раздел книги), в «Дела» или «Деньги и реклама»
+// «+ Дело» в Планере: задача сразу в Todoist — к книге (проект «Книги», раздел книги) или в «Мастерскую»
+// («Деньги и реклама», если по тексту про деньги/рекламу, иначе «Дела»); книга подставляется сама, пока пишешь
 acts['td.addPlan'] = (d) => {
   const c = app().ctx(), short = (t) => String(t).split(/[.!?:]/)[0].trim();
-  const books = c.wbooks.filter((b) => (b.status || 'progress') !== 'done' || b.id === app().ui.planBook);
+  const order = { progress: 0, idea: 1, done: 2 };
+  const books = [...c.wbooks].sort((x, y) => (order[x.status || 'progress'] ?? 1) - (order[y.status || 'progress'] ?? 1));
   openSheet('Новое дело', `<label for="pdc" style="margin-top:0">Что сделать</label><input id="pdc" name="t" required autocomplete="off" placeholder="например: ответить издательству">
     <div class="f2"><div><label for="pdd">Когда</label><input id="pdd" type="date" name="d" value="${d.d || c.today}"></div>
-    <div><label for="pdw">Куда</label><select id="pdw" name="w"><option value="">определить само</option><option value="work">Дела</option><option value="money">Деньги и реклама</option>${books.map((b) => opt('b:' + b.id, short(b.title), '')).join('')}</select></div></div>
+    <div><label for="pdb">Книга</label><select id="pdb" name="b"><option value="">Без книги</option>${books.map((b) => opt(b.id, short(b.title), '')).join('')}</select></div></div>
     <p class="small muted" style="margin:8px 0 0">Дело появится и в Todoist. Про деньги и рекламу — видно и в «Доходах».</p>`, async (fd) => {
     const content = String(fd.get('t') || '').trim(); if (!content) return false;
-    let w = String(fd.get('w') || '');
-    if (!w) { const g = bookGuess(content, c.wbooks); w = g ? 'b:' + g.id : MONEY_RE.test(content) ? 'money' : 'work'; }
-    const b = w.startsWith('b:') ? c.wbooksById[w.slice(2)] : null;
-    const where = b ? { project: 'Книги', section: short(b.title) } : { project: 'Мастерская', section: w === 'money' ? 'Деньги и реклама' : 'Дела' };
+    const b = c.wbooksById[fd.get('b')] || null;
+    const where = b ? { project: 'Книги', section: short(b.title) } : { project: 'Мастерская', section: MONEY_RE.test(content) ? 'Деньги и реклама' : 'Дела' };
     try {
       const x = await addOwnTask(c.settings, { ...where, content, date: fd.get('d') || '' });
       const td = app().ctx().settings.todoist || {};
       await app().store.saveSettings({ todoist: { ...td, own: [...(td.own || []), x] } });
-      toast(`Добавлено${b ? ` — к книге «${short(b.title)}»` : w === 'money' ? ' — «Деньги и реклама»' : ''}`);
+      toast(`Добавлено${b ? ` — к книге «${short(b.title)}»` : where.section === 'Деньги и реклама' ? ' — «Деньги и реклама»' : ''}`);
     } catch (e) { toast('Не получилось: ' + e.message); return false; }
   }, { submitText: 'Добавить' });
-  setTimeout(() => document.getElementById('pdc')?.focus(), 50);
+  // упомянула книгу в тексте — она сама выбирается в списке (пока список не трогали руками)
+  const inp = document.getElementById('pdc'), sel = document.getElementById('pdb');
+  let touched = false;
+  sel?.addEventListener('change', (e) => { if (e.isTrusted) touched = true; });
+  inp?.addEventListener('input', () => { if (touched) return; const g = bookGuess(inp.value, c.wbooks); sel.value = g ? g.id : ''; });
+  setTimeout(() => inp?.focus(), 50);
   return false;
 };
 acts['plan.week'] = (d) => { const u = app().ui; u.planWeek = d.v === '0' ? 0 : (u.planWeek || 0) + Number(d.v); u.planDay = d.v === '0' ? null : addDays(app().ctx().today, 7 * u.planWeek); if (u.planWeek === 0) u.planDay = null; };

@@ -144,14 +144,16 @@ async function reparseContests() {
   if (reparsing) return;
   const old = (store.data.w_contests || []).filter((x) => x.conditions && (x.pv || 0) < CONTEST_PV);
   // название попало с кнопки страницы («Участвовать») — берём настоящее из условий, остальное не трогаем
-  const badName = (store.data.w_contests || []).filter((x) => x.conditions && (x.pv || 0) >= CONTEST_PV && CONTEST_NAV.test(String(x.name || '').trim()));
+  // имя с кнопки («Участвовать») или фраза из условий («2 победителя получат: …») — исправляем по условиям и адресу
+  const odd = (n) => CONTEST_NAV.test(n) || /:/.test(n) || /^\d/.test(n) || n.length > 70;
+  const badName = (store.data.w_contests || []).filter((x) => x.conditions && (x.pv || 0) >= CONTEST_PV && odd(String(x.name || '').trim()));
   if (!old.length && !badName.length) return;
   reparsing = true;
   try {
-    for (const x of badName) { const nm = parseContest(x.conditions, x.url || '', todayISO()).name; if (nm && !CONTEST_NAV.test(nm)) await store.put('w_contests', { ...x, name: nm }); }
+    for (const x of badName) { const nm = parseContest(x.conditions, x.url || '', todayISO()).name; if (nm && !odd(nm) && nm !== x.name) await store.put('w_contests', { ...x, name: nm }); }
     for (const x of old) {
       const r = parseContest(x.conditions, x.url || '', todayISO()), keep = {};
-      if (x.name && !CONTEST_NAV.test(x.name.trim())) keep.name = x.name;
+      if (x.name && !CONTEST_NAV.test(x.name.trim()) && !/:/.test(x.name)) keep.name = x.name;
       const clean = { ...x };
       for (const k of ['minChars', 'maxChars', 'startChars', 'unit', 'volNote', 'fileTpl', 'chapters', 'formats']) delete clean[k];
       if (x.newOnly) delete r.newOnly; // отмечено вручную — оставляем

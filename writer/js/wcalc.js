@@ -605,6 +605,17 @@ export function contestEmailPurpose(x, email) {
 
 
 // строки страницы конкурса, которые не бывают названием: меню площадки и кнопки
+// латиница адреса ↔ кириллица названия: «temnoe-prityazhenie» = «Темное притяжение»
+const TR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sh', ъ: '', ы: 'i', ь: '', э: 'e', ю: 'iu', я: 'ia' };
+const latKey = (s) => String(s).toLowerCase().replace(/[а-яё]/g, (ch) => TR[ch] ?? '').replace(/shch|sch/g, 'sh').replace(/kh/g, 'h').replace(/ts/g, 'c').replace(/yo/g, 'e').replace(/[yj]/g, 'i').replace(/[^a-z0-9]/g, '');
+export function nameFromSlug(lines, url) {
+  const m = /\/contests?\/([a-z0-9-]+?)(?:-c\d+)?\/?(?:[?#]|$)/i.exec(String(url || ''));
+  if (!m) return null;
+  const slug = latKey(m[1]);
+  if (slug.length < 4) return null;
+  const hit = lines.filter((x) => x.length <= 90).map((x) => x.replace(/^конкурс\s*/i, '').replace(/^[«"]|[»"]$/g, '').trim()).filter((x) => latKey(x) === slug);
+  return hit[0] || null;
+}
 export const CONTEST_NAV = /^(правила(\s+конкурса)?|литнет|литрес|author\.today|литмаркет|книги|конкурсы|блоги|главная|правила|работы|участники|описание|войти|меню|поиск|участвовать|участвую|принять участие|подать заявку|подать работу|добавить книгу|подписаться|отписаться|поделиться|читать|все конкурсы|\d+)$/i;
 export function parseContest(text, url = '', today = new Date().toISOString().slice(0, 10)) {
   const t = String(text || '').replace(/[  ]/g, ' ').replace(/[ \t]+/g, ' ');
@@ -622,8 +633,13 @@ export function parseContest(text, url = '', today = new Date().toISOString().sl
   const at = lines.findIndex((x) => /^срок\s+при[её]ма/i.test(x));
   let head = null;
   // над «Сроком приёма» бывают кнопки («Участвовать», «Подать заявку») и подзаголовок «Конкурс на…» — пропускаем их
-  if (at > 0) { let k = at - 1; while (k > 0 && at - k <= 4 && (NAV.test(lines[k]) || /^конкурс\s+(на|для|о|об|среди)\s/i.test(lines[k]))) k--; if (!NAV.test(lines[k]) && !/^конкурс\s+(на|для|о|об|среди)\s/i.test(lines[k]) && lines[k].length <= 90) head = lines[k]; }
-  if (head) out.name = head.replace(/^конкурс\s*/i, '').replace(/^[«"]|[»"]$/g, '').trim();
+  // и строки-фразы («2 победителя получат: …») — у названия нет двоеточия и оно не начинается с цифры
+  const notName = (x) => NAV.test(x) || /^конкурс\s/i.test(x) || /:/.test(x) || /^\d/.test(x) || x.length > 70;
+  if (at > 0) { let k = at - 1; while (k > 0 && at - k <= 6 && notName(lines[k])) k--; if (!notName(lines[k])) head = lines[k]; }
+  // самое надёжное — адрес страницы: у Литнета в нём название латиницей («temnoe-prityazhenie-c200»)
+  const byUrl = nameFromSlug(lines, url);
+  if (byUrl) out.name = byUrl;
+  else if (head) out.name = head.replace(/^конкурс\s*/i, '').replace(/^[«"]|[»"]$/g, '').trim();
   else if (nm) out.name = nm[1].trim();
   else { const first = lines.find((x) => x.length <= 100 && !/^правила/i.test(x) && !NAV.test(x)); if (first) out.name = first.replace(/^конкурс\s*/i, '').trim(); }
   // даты: «1 октября [2026]» и «01.10.2026»
