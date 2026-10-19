@@ -1394,3 +1394,41 @@ a.card.arc-warn .ic { width: 18px; height: 18px; flex: 0 0 auto; }
 :is(main, dialog) button.idea-ok.on { color: #fff !important; }
 .item.idea .idea-head > span.idea-main { align-items: flex-start; text-align: left; }
 :is(main, dialog) button.idea-ok.idea-ok.idea-ok { width: 26px; height: 26px; min-width: 26px; min-height: 26px !important; padding: 0 !important; border-width: 1.5px !important; }
+
+/* Идеи: книги — колонкой слева на компьютере, окном с поиском на телефоне; вкладки и вид — в одной карточке */
+.ideas-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 16px; align-items: start; }
+.ideas-side { display: none; }
+@media (min-width: 1000px) {
+  .ideas-wrap { grid-template-columns: 250px minmax(0, 1fr); }
+  .ideas-side { display: block; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; padding: 10px; }
+  .ideas-bookbtn { display: none !important; }
+}
+.ib-q { margin-bottom: 6px; }
+.ib-list { display: flex; flex-direction: column; gap: 1px; }
+:is(main, dialog) button.ib-item.ib-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 36px; padding: 7px 10px; border: 0 !important; border-radius: 10px; background: transparent; box-shadow: none; color: var(--text); font-size: 14px; font-weight: 600; text-align: left; }
+:is(main, dialog) button.ib-item.ib-item:hover { background: var(--surface-2); }
+:is(main, dialog) button.ib-item.ib-item.on { background: var(--accent-soft); }
+.ib-item > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ib-n { flex: none; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.ideas-sheet .ib-list { max-height: 60vh; overflow: auto; }
+.ideas-sheet .ib-q { position: sticky; top: 0; }
+:is(main, dialog) .idea-seg > button span { color: var(--muted); font-weight: 600; margin-left: 3px; }
+.idea-pickers { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+:is(main, dialog) .idea-pk.idea-pk { display: inline-flex; align-items: center; gap: 6px; width: auto; max-width: 100%; min-height: 34px; padding: 4px 12px; border: 1px solid var(--line) !important; border-radius: 999px; background-color: var(--surface); box-shadow: none; color: var(--text); font-size: 14px; font-weight: 600; }
+select.idea-pk.idea-pk { padding-right: 30px; }
+.ideas-bookbtn { min-width: 0; flex: 1 1 auto; }
+.ideas-bookbtn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ideas-bookbtn .ic { flex: none; width: 16px; height: 16px; color: var(--muted); }
+.ideas-bookbtn .ic:last-child { transform: rotate(90deg); width: 14px; height: 14px; }
+.idea-reset { font-size: 13px; }
+.idea-list { padding-top: 6px; padding-bottom: 6px; }
+.idea-main b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.item.idea.open .idea-main b { -webkit-line-clamp: unset; display: block; }
+.idea-more { text-align: center; padding: 10px 0 4px; }
+.idea-trash .idea-head { align-items: center; }
+.idea-trash .idea-snip { margin-left: 0 !important; }
+.idea-trash .ti-btns { flex: none; display: inline-flex; gap: 6px; align-items: center; }
+.ideas-bookbtn .ic:last-child { transform: rotate(-90deg); }
+:is(main, dialog) .idea-seg > button { min-width: 0; }
+@media (max-width: 480px) { :is(main, dialog) .idea-seg > button { padding: 4px 6px; font-size: 13px; } :is(main, dialog) .idea-seg > button span { margin-left: 1px; } }
+:is(main, dialog) button.ib-item[hidden] { display: none !important; }

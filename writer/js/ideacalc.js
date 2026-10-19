@@ -45,7 +45,7 @@ export function chapterRef(text) {
 }
 
 // заголовок записи: свой или первая строка текста
-export const ideaTitle = (x) => (x.title || String(x.text || '').split('\n')[0] || 'Без названия').trim().slice(0, 120);
+export const ideaTitle = (x) => (x.title || String(x.text || '').split('\n')[0] || 'Без названия').trim().slice(0, 300);
 
 // корзина: удалённые больше 30 дней назад — навсегда
 export const TRASH_DAYS = 30;

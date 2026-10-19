@@ -22,8 +22,8 @@ import { legendPage } from './views/legend.js';
 export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 initAccent(store);
-const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'open', openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
-keepPlace(ui, ['planTab', 'ideaBook', 'ideaSt', 'mSt', 'mTab', 'legTab']);
+const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'open', ideaKind: '', ideaN: 50, openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
+keepPlace(ui, ['planTab', 'ideaBook', 'ideaSt', 'ideaKind', 'mSt', 'mTab', 'legTab']);
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* ок */ }
 

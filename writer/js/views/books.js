@@ -243,11 +243,11 @@ export async function refreshOne(a, b, force = false) {
   if (!dayStart || !weekStart || !monthStart || fill.length) {
     const wFrom = addDays(c.today, -6), mFrom = c.today.slice(0, 8) + '01';
     let g = {};
-    // история версий считает весь текст Документа целиком; если в нём есть вкладки не из рукописи (промты, каркас,
-    // черновики, «От автора») — прирост по версиям был бы неверным, поэтому его не берём, считаем по своей истории
-    // тогда в каждой версии считаем только строки рукописи (manuscriptCounter)
+    // версия Диска — весь текст Документа подряд; если в нём есть вкладки не из рукописи (промты, каркас,
+    // черновики, «От автора»), в каждой версии считаем только строки рукописи (manuscriptCounter)
     const extra = (r.tabs || []).some((x) => x.chars > 0 && (!x.counted || /^\s*от автора/i.test(x.title)));
-    try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom, ...fill])], extra ? manuscriptCounter(doc || await drive.getDoc(b.fileId)) : undefined); } catch { g = {}; if (extra) filled = true; }
+    let gainsOk = true; // не вышло (сеть, Google) — в следующий раз попробуем снова, а не застрянем на нуле
+    try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom, ...fill])], extra ? manuscriptCounter(doc || await drive.getDoc(b.fileId)) : undefined); } catch (e) { console.error(e); g = {}; gainsOk = false; }
     const h2 = { ...history };
     // на конец дня d−1 было «сейчас − прирост с полуночи d»
     for (const d of fill) { const k = addDays(d, -1); if (g[d] != null && h2[k] == null) h2[k] = Math.max(0, r.total - Math.max(0, g[d])); }
@@ -257,7 +257,7 @@ export async function refreshOne(a, b, force = false) {
     if (!weekStart) weekStart = { date: c.today, from: wFrom, chars: g[wFrom] != null ? r.total - Math.max(0, g[wFrom]) : null };
     if (!monthStart) monthStart = { date: c.today, from: mFrom, chars: g[mFrom] != null ? r.total - Math.max(0, g[mFrom]) : null };
     const cur = a.ctx().wbooksById[b.id] || base;
-    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: 2 });
+    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: gainsOk ? 2 : 0 });
   } else if (filled !== !!b.histFilled || regain) await a.store.put('w_books', { ...base, histFilled: filled, gainsV: 2 });
   return true;
 }
