@@ -600,7 +600,7 @@ export function parseContest(text, url = '', today = new Date().toISOString().sl
   if (out.results && out.end && out.results < out.end && plusYear(out.results) >= out.end) out.results = plusYear(out.results);
   // жанры: строка после «Жанры» / «Жанр:»
   const gm = /жанр[а-яё]*\s*[:—-]?\s*\n?\s*([^\n]{2,120})/i.exec(t);
-  if (gm) out.genres = gm[1].trim().replace(/[.;]$/, '');
+  if (gm) out.genres = gm[1].split(/\.\s+(?=[А-ЯЁA-Z])/)[0].trim().replace(/[.;]$/, ''); // до конца предложения
   // куда отправлять: email-адреса из условий
   const emails = [...new Set((t.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) || []).map((e) => e.replace(/[.,;]+$/, '').toLowerCase()))];
   if (emails.length) out.emails = emails;

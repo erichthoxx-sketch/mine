@@ -2,6 +2,7 @@
 // Браузер не может обращаться к API Директа и Метрики напрямую (Яндекс не разрешает запросы со страниц сайтов),
 // поэтому приложение шлёт запрос сюда, а переходник передаёт его в Яндекс и возвращает ответ.
 // Метрика — только чтение (GET): счётчики, цели, статистика.
+// Страницы конкурсов (GET /page?url=…) — только с площадок из списка PAGE_HOSTS, чтобы «Мастерская» сама подтягивала условия.
 // Ничего не хранит и не пишет в журналы. Ключ Яндекса приходит в заголовке Authorization от самого приложения.
 // Как поставить — docs/SETUP-DIRECT.md.
 
@@ -13,7 +14,8 @@ const TARGETS = {
   sandbox: 'https://api-sandbox.direct.yandex.com',
   metrika: 'https://api-metrika.yandex.net',
 };
-const VERSION = '2'; // 2 — добавлена Метрика
+const VERSION = '3'; // 2 — добавлена Метрика; 3 — страницы конкурсов
+const PAGE_HOSTS = ['litnet.com', 'litgorod.ru', 'litmarket.ru', 'litres.ru', 'author.today', 'prodaman.ru', 'feisovet.ru', 'litsovet.ru', 'ridero.ru', 'eksmo.ru', 'ast.ru', 'vk.com', 'vk.ru', 't.me'];
 // Какие заголовки пропускаем в Директ и обратно
 const PASS_IN = ['authorization', 'content-type', 'client-login', 'accept-language', 'processingmode', 'returnmoneyinmicros', 'skipreportheader', 'skipcolumnheader', 'skipreportsummary'];
 const PASS_OUT = ['content-type', 'retryin', 'reportsinqueue', 'units', 'requestid'];
@@ -38,6 +40,17 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(origin) });
     if (url.pathname === '/version') return new Response(VERSION, { headers: cors(origin) });
 
+    // страница конкурса: только чтение и только с известных площадок
+    if (url.pathname === '/page') {
+      let target;
+      try { target = new URL(url.searchParams.get('url') || ''); } catch { return new Response('Нет ссылки', { status: 400, headers: cors(origin) }); }
+      const host = target.hostname.replace(/^www\./, '');
+      if (target.protocol !== 'https:' || !PAGE_HOSTS.some((h) => host === h || host.endsWith('.' + h))) return new Response('Эту площадку переходник не открывает', { status: 403, headers: cors(origin) });
+      const res = await fetch(target.toString(), { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'ru' }, redirect: 'follow' });
+      const out = new Headers(cors(origin));
+      out.set('content-type', 'text/html; charset=utf-8');
+      return new Response(await res.text(), { status: res.status, headers: out });
+    }
     // Метрика, только чтение: /metrika/stat/v1/data?… → https://api-metrika.yandex.net/stat/v1/data?…
     const mm = /^\/metrika(\/(?:management|stat)\/v1\/[a-z0-9_/.]+)$/i.exec(url.pathname);
     if (mm) {

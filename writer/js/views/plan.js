@@ -7,6 +7,7 @@ import { widgetReminder } from './widgets.js';
 import { linkTodos } from './links.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
+import { fetchPageText } from '../pagetext.js';
 import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestFileName, contestSubmissionUrl, contestEmailPurpose, goalMult, moveGoalDay, releaseDate } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
@@ -453,6 +454,7 @@ function conditionsHtml(text) {
   return `<div class="ct-cond">${out.join('')}</div>`;
 }
 export function contestCard(c, x, { forBook = null } = {}) {
+  autoConditions(x);
   const left = x.end ? Math.round((new Date(x.end + 'T00:00:00Z') - new Date(c.today + 'T00:00:00Z')) / 864e5) : null;
   const over = (left != null && left < 0) || x.status === 'done';
   const badge = left == null ? '' : over ? '<span class="badge">приём закрыт</span>' : `<span class="badge ${left <= 7 ? 'bad' : left <= 14 ? 'warn' : 'good'}">${left === 0 ? 'сегодня последний день' : `осталось ${left} дн.`}</span>`;
@@ -528,6 +530,36 @@ function wireContestFill(f) {
     filled.textContent = got.length ? `Заполнено из условий: ${got.join(', ')} — проверьте и поправьте, если нужно.` : '';
   };
   $('cc').addEventListener('input', run); $('cu').addEventListener('input', run);
+  // вставила только ссылку — условия со страницы подтягиваются сами
+  let timer = 0, lastUrl = '';
+  const load = () => {
+    const url = $('cu').value.trim();
+    if (!/^https?:\/\/\S+\.\S+/.test(url) || $('cc').value.trim() || url === lastUrl) return;
+    lastUrl = url; filled.textContent = 'Загружаю условия со страницы конкурса…';
+    fetchPageText(url, app().ctx().settings).then((text) => {
+      if ($('cu').value.trim() !== url || $('cc').value.trim()) return;
+      $('cc').value = text; run();
+      if (!filled.textContent) filled.textContent = 'Условия загружены — проверьте поля.';
+    }).catch(() => { if ($('cu').value.trim() === url) filled.textContent = 'Страница не открылась. Откройте её, выделите всё (Ctrl+A), скопируйте и вставьте в «Условия» выше — поля заполнятся сами.'; });
+  };
+  $('cu').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 600); });
+  load();
+}
+// у конкурса есть ссылка, а условий нет — один раз сами загружаем страницу и заполняем пустые поля
+const pageTried = new Set();
+function autoConditions(x) {
+  if (!x.url || x.conditions || pageTried.has(x.id)) return;
+  pageTried.add(x.id);
+  setTimeout(async () => {
+    const c = app().ctx();
+    let text; try { text = await fetchPageText(x.url, c.settings); } catch { return; }
+    const cur = app().ctx().data.w_contests.find((i) => i.id === x.id);
+    if (!cur || cur.conditions) return;
+    const r = parseContest(text, cur.url, c.today), patch = { conditions: text, pv: 3 };
+    for (const [k, v] of Object.entries(r)) if (v != null && v !== '' && !(Array.isArray(v) && !v.length) && (cur[k] == null || cur[k] === '' || (Array.isArray(cur[k]) && !cur[k].length))) patch[k] = v;
+    await app().store.put('w_contests', { ...cur, ...patch });
+    toast(`Условия конкурса «${cur.name || r.name || ''}» загружены со страницы`);
+  }, 300);
 }
 const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookIds: fd.getAll('bookIds'), bookId: fd.getAll('bookIds')[0] || '', results: fd.get('results') || '', genres: (fd.get('genres') || '').trim(), submissionUrl: (fd.get('submissionUrl') || '').trim(), emails: String(fd.get('emails') || '').split(/[\s,;]+/).map((e) => e.trim()).filter((e) => e.includes('@')), unit: fd.get('unit') || 'al', minChars: contestIn(fd.get('unit'), fd.get('minChars')), maxChars: contestIn(fd.get('unit'), fd.get('maxChars')), conditions: fd.get('conditions') || '', url: (fd.get('url') || '').trim(), ...extrasOf(fd.get('conditions') || ''), newOnly: !!fd.get('newOnly'), newSince: fd.get('newSince') || '', pv: 3 });
 // когда книга начала участвовать: новые — с сегодняшнего дня, убранные — без отметки
