@@ -1477,3 +1477,7 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .plan-dayh { flex-wrap: nowrap; align-items: center; }
 .plan-dayh h2 { min-width: 0; }
 .plan-dayh .small-btn { flex: none; }
+/* «+» — просто плюс, без рамки и кружка (как стрелки nav-arr) */
+:is(main, dialog) button.plus-btn.plus-btn { flex: none; width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0 !important; border-radius: 8px; background: transparent; box-shadow: none; color: var(--text-2); }
+:is(main, dialog) button.plus-btn.plus-btn:hover { color: var(--text); }
+.plus-btn .ic { width: 24px; height: 24px; stroke-width: 1.8; }

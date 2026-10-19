@@ -281,7 +281,7 @@ export function planView(a) {
       <button class="nav-arr next" data-act="plan.week" data-v="1" aria-label="Следующая неделя">${ic('chevron')}</button></div>
     <div class="wstrip">${strip}</div>
   </div>
-  <div class="card" data-day="${sel}"><div class="row between plan-dayh"><h2 style="margin:0">${dayName(sel, t)}</h2><button class="small-btn" data-act="td.addPlan" data-d="${sel}">+ Дело</button></div>
+  <div class="card" data-day="${sel}"><div class="row between plan-dayh"><h2 style="margin:0">${dayName(sel, t)}</h2><button class="plus-btn" data-act="td.addPlan" data-d="${sel}" title="Добавить дело" aria-label="Добавить дело">${ic('plus')}</button></div>
     ${dayList.length || goalHtml ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">Дел на этот день нет.</p>'}</div>
   <div class="psec-h"><h2>Цели <span class="muted">${activeGoals(c).length || ''}</span></h2><button class="small-btn" data-act="goal.new">+ Цель</button></div>
   ${goalsSection(c)}
