@@ -38,9 +38,9 @@ export function day(a) {
   const recent = c.data.days.filter((d) => (d.events?.length || d.note)).sort((x, y) => y.date.localeCompare(x.date)).slice(0, 20);
   const html = `
   <div class="day-nav card">
-    <button data-act="day.shift" data-n="-1" aria-label="Предыдущий день">←</button>
+    <button class="nav-arr" data-act="day.shift" data-n="-1" aria-label="Предыдущий день">${ic('chevron')}</button>
     <div class="day-title"><input id="dd" type="date" value="${date}" data-chg="day.date" aria-label="Дата"><div class="small muted">${WD[wd]}${date === c.today ? ' · сегодня' : ''}${date === c.dataEnd ? ' · последний день с данными' : ''}</div></div>
-    <button data-act="day.shift" data-n="1" aria-label="Следующий день">→</button>
+    <button class="nav-arr next" data-act="day.shift" data-n="1" aria-label="Следующий день">${ic('chevron')}</button>
   </div>
   <div class="row" style="margin-bottom:12px"><button class="primary" data-act="event.quick" data-date="${date}">+ Событие</button><button data-act="sale.manual" data-date="${date}">Добавить продажи вручную</button>${date !== c.today ? '<button class="link" data-act="day.today">к сегодня</button>' : ''}${date !== c.dataEnd ? `<button class="link" data-act="day.open" data-date="${c.dataEnd}">к последнему дню с данными</button>` : ''}</div>
   <a class="card tap" href="#" data-act="go" data-to="/" title="График дохода на главной">

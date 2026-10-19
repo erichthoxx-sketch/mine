@@ -670,6 +670,17 @@ export const contestBookIds = (x) => (Array.isArray(x?.bookIds) ? x.bookIds : x?
 // какие книги уже отправлены на конкурс: { bookId: дата }; старое «отправлено» на весь конкурс — все книги
 export const contestSent = (x) => (x?.sentBooks ? x.sentBooks : x?.status === 'sent' ? Object.fromEntries(contestBookIds(x).map((id) => [id, x.sentAt || ''])) : {});
 export const contestUnsent = (x) => contestBookIds(x).filter((id) => !(id in contestSent(x)));
+// после конкурса: чем закончилось для каждой поданной книги
+export const OUTCOMES = { win: 'Победа', short: 'Шорт-лист', no: 'Не прошла' };
+// где конкурс сейчас: open — идёт приём; wait — приём закрыт, ждём итоги; results — итоги пора отметить;
+// past — всё отмечено (или ничего не подавала) — в архив
+export function contestPhase(x, today) {
+  if (x.status === 'done') return 'past';
+  if (!x.end || x.end >= today) return 'open';
+  const sent = Object.keys(contestSent(x)), out = x.outcome || {};
+  if (!sent.length || sent.every((id) => out[id])) return 'past';
+  return x.results && x.results >= today ? 'wait' : 'results';
+}
 // знаки книги для конкурса — только текст: без «От автора», аннотации и синопсиса
 export function contestChars(b) {
   const tabs = (b?.tabs || []).filter((t) => t.counted !== false && isBookTab(t.title) && !/^\s*от автора/i.test(t.title));

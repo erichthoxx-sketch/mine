@@ -350,3 +350,14 @@ test('конкурс: жанры — до конца предложения', as
   const r = parseContest('Жанры: любовное фэнтези, темный триллер. Принимаются только новые произведения.', '', '2026-10-19');
   assert.equal(r.genres, 'любовное фэнтези, темный триллер');
 });
+
+test('конкурс после приёма: ждём итоги → отметить итоги → архив', async () => {
+  const { contestPhase } = await import('../writer/js/wcalc.js');
+  const x = { end: '2026-10-31', results: '2026-11-30', bookIds: ['a', 'b'], sentBooks: { a: '2026-10-19' } };
+  assert.equal(contestPhase(x, '2026-10-20'), 'open');
+  assert.equal(contestPhase(x, '2026-11-05'), 'wait');
+  assert.equal(contestPhase(x, '2026-12-01'), 'results');
+  assert.equal(contestPhase({ ...x, outcome: { a: 'short' } }, '2026-12-01'), 'past');
+  assert.equal(contestPhase({ ...x, sentBooks: {} }, '2026-11-05'), 'past'); // не подавала — сразу в архив
+  assert.equal(contestPhase({ ...x, results: '' }, '2026-11-05'), 'results');
+});
