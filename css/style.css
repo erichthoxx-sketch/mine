@@ -1457,3 +1457,13 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .nav-arr .ic { width: 24px; height: 24px; stroke-width: 1.8; }
 .nav-arr.next .ic { transform: rotate(180deg); }
 .wk-head { align-items: center; }
+
+/* Маркетинг → Реклама: переходы в «Директ» и в рекламу «Доходов» */
+.mk-go { padding-top: 4px; padding-bottom: 4px; }
+.mk-go .item { display: flex !important; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+.mk-go-ic { flex: none; display: inline-flex; color: var(--text-2); }
+.mk-go-ic .ic { width: 22px; height: 22px; }
+.mk-go-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mk-go-t .sub { font-size: 13px; color: var(--muted); }
+.mk-go .item > .ic:last-child { flex: none; width: 18px; height: 18px; color: var(--muted); transform: rotate(180deg); }
+.mk-go .item:hover > .ic:last-child { color: var(--text); }
