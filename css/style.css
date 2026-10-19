@@ -1467,3 +1467,6 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .mk-go-t .sub { font-size: 13px; color: var(--muted); }
 .mk-go .item > .ic:last-child { flex: none; width: 18px; height: 18px; color: var(--muted); transform: rotate(180deg); }
 .mk-go .item:hover > .ic:last-child { color: var(--text); }
+:is(main, dialog) button.stat.stat-btn { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+:is(main, dialog) button.stat.stat-btn .s { color: var(--link); }
+:is(main, dialog) button.stat.stat-btn.stat-btn { border: 1px solid var(--line) !important; background: var(--surface); box-shadow: var(--shadow); padding: 14px 16px 15px !important; min-height: 0; border-radius: 22px; font-weight: inherit; }

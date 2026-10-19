@@ -169,7 +169,7 @@ export function writtenMonth(book, today) {
   const now = book.chars ?? charsAt(h, today);
   if (now == null) return 0;
   if (keys.some((k) => k < from)) return Math.max(0, now - charsAt(h, addDays(from, -1)));
-  if (book.monthStart && book.monthStart.date === today && book.monthStart.chars != null) return Math.max(0, now - book.monthStart.chars);
+  if (book.monthStart && (book.monthStart.date === today || book.monthStart.from === from) && book.monthStart.chars != null) return Math.max(0, now - book.monthStart.chars);
   const first = keys.find((k) => k >= from);
   return Math.max(first ? Math.max(0, now - h[first]) : 0, writtenToday(book, today));
 }

@@ -211,13 +211,15 @@ export function bookPage(a, id) {
 }
 
 // ---------- обновление знаков ----------
+// 4 — текст версии делится по названиям вкладок; начало месяца и недели записываются в историю книги
+export const GAINS_V = 4;
 const COUNT_RULE = 5; // 4 — объём = только рукопись: «Пролог», «Глава …», «Эпилог» (без «От автора», промтов и черновиков); 5 — прирост без промтов
 let lastTitles = 0; // сколько названий глав выровняли при последнем обновлении
 export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
-  const regain = (b.gainsV || 0) < 3; // 3 — прирост по версиям в Документах с промтами: текст версии делится по названиям вкладок
+  const regain = (b.gainsV || 0) < GAINS_V; // пересчитать прирост по версиям заново (подсчёт поменялся)
   if (!force && !ruleChanged && !regain && b.titlesV === 2 && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled && (meta.mimeType !== drive.MIME.doc || (b.svc && (b.tabs || []).some((t) => 'lead' in t)))) return false;
   // названия глав в самом Документе — к одному виду (только если какое-то оформлено иначе)
   let titles = 0, doc = null;
@@ -229,7 +231,8 @@ export async function refreshOne(a, b, force = false) {
   lastTitles = titles;
   const r = await drive.countFile(meta);
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
-  const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
+  // при пересчёте прироста старая история (посчитанная прежним способом) тоже заменяется
+  const history = ruleChanged || regain ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
   // шаг 1: знаки и главы сохраняем сразу — они видны, даже если история версий долгая или недоступна
   const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE, titlesV: 2, ...(r.svc ? { svc: r.svc } : {}) };
   await a.store.put('w_books', base);
@@ -256,9 +259,12 @@ export async function refreshOne(a, b, force = false) {
     if (!dayStart) dayStart = { date: c.today, v: 2, chars: g[c.today] != null ? r.total - Math.max(0, g[c.today]) : (!ruleChanged && prev && prev >= addDays(c.today, -1) ? b.history[prev] : r.total) };
     if (!weekStart) weekStart = { date: c.today, from: wFrom, chars: g[wFrom] != null ? r.total - Math.max(0, g[wFrom]) : null };
     if (!monthStart) monthStart = { date: c.today, from: mFrom, chars: g[mFrom] != null ? r.total - Math.max(0, g[mFrom]) : null };
+    // начало месяца и недели — прямо в историю: «за месяц» верно и в дни, когда Диск не открыт
+    if (monthStart.chars != null) h2[addDays(mFrom, -1)] = monthStart.chars;
+    if (weekStart.chars != null && h2[addDays(wFrom, -1)] == null) h2[addDays(wFrom, -1)] = weekStart.chars;
     const cur = a.ctx().wbooksById[b.id] || base;
-    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: gainsOk ? 3 : 0 });
-  } else if (filled !== !!b.histFilled || regain) await a.store.put('w_books', { ...base, histFilled: filled, gainsV: 3 });
+    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: gainsOk ? GAINS_V : 0 });
+  } else if (filled !== !!b.histFilled || regain) await a.store.put('w_books', { ...base, histFilled: filled, gainsV: GAINS_V });
   return true;
 }
 export async function refreshAll(a, { quiet = false } = {}) {
