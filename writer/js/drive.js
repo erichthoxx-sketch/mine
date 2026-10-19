@@ -1,7 +1,7 @@
 // Google Диск и Google Документы. Вход Google — отдельно от входа в приложение, токен живёт ~1 час,
 // дальше Google просит подтвердить одним нажатием. На localhost — пробный «диск» для проверки интерфейса.
 import { googleClientId } from '../../js/firebase-config.js';
-import { charsFromDocsJson, charsFromDocxXml } from './wcalc.js';
+import { charsFromDocsJson, charsFromDocxXml, gainOf } from './wcalc.js';
 
 const SCOPE = 'https://www.googleapis.com/auth/drive';
 export const MIME = {
@@ -176,11 +176,13 @@ export async function countFile(file) {
 // Возвращает {дата: прирост | null}. Правок после полуночи этой даты не было — 0; узнать нельзя — null.
 // Обе версии считаются одинаково (выгрузка текста), поэтому разница честная.
 // count — как считать знаки в тексте версии (по умолчанию весь текст; для Документа с промтами — только рукопись)
-export async function gainsSince(file, dates, count = countPlain) {
+// diag — для «как посчитано»: сколько версий, с какой версией сравнивали каждую дату и каким способом
+export async function gainsSince(file, dates, count = countPlain, diag = {}) {
   const out = Object.fromEntries(dates.map((d) => [d, null]));
   if (isLocalDev) return out;
   const j = await (await gfetch(`${DRIVE}/${file.id}/revisions?fields=revisions(id,modifiedTime,exportLinks)&pageSize=1000`)).json();
   const revs = (j.revisions || []).sort((a, b) => a.modifiedTime.localeCompare(b.modifiedTime));
+  diag.revs = revs.length; diag.first = revs[0]?.modifiedTime || ''; diag.at = {};
   if (!revs.length) return out;
   const last = revs[revs.length - 1];
   // «сейчас» — сам файл, а не последняя версия: Диск собирает версии с опозданием, и утренние правки
@@ -208,7 +210,10 @@ export async function gainsSince(file, dates, count = countPlain) {
     if (lastTime < midnight) { out[d] = 0; continue; } // после этой даты файл не меняли
     const before = [...revs].reverse().find((r) => r.modifiedTime < midnight);
     if (!before) continue; // файл появился позже — честно не посчитать
-    out[d] = (await textOf(nowRev)) - (await textOf(before));
+    const now = await textOf(nowRev), was = await textOf(before), g = gainOf(now, was);
+    out[d] = g.gain;
+    const pick = (x) => (typeof x === 'number' ? x : g.mode === 'по вкладкам' ? x.titles : x.heads);
+    diag.at[d] = { rev: before.modifiedTime, mode: g.mode, now: pick(now), was: pick(was) };
   }
   return out;
 }

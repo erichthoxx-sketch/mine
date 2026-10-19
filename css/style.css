@@ -1470,3 +1470,6 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 :is(main, dialog) button.stat.stat-btn { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
 :is(main, dialog) button.stat.stat-btn .s { color: var(--link); }
 :is(main, dialog) button.stat.stat-btn.stat-btn { border: 1px solid var(--line) !important; background: var(--surface); box-shadow: var(--shadow); padding: 14px 16px 15px !important; min-height: 0; border-radius: 22px; font-weight: inherit; }
+.how-row { flex-wrap: nowrap; gap: 12px; align-items: baseline; }
+.how-row > span { flex: 1 1 45%; min-width: 0; }
+.how-row > b { flex: 1 1 55%; text-align: right; }

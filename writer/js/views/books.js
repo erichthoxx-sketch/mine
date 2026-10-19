@@ -1,7 +1,7 @@
 import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter } from '../wcalc.js';
+import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter, writtenMonth } from '../wcalc.js';
 import { goalTitle, goalToday } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
@@ -212,7 +212,7 @@ export function bookPage(a, id) {
 
 // ---------- обновление знаков ----------
 // 4 — текст версии делится по названиям вкладок; начало месяца и недели записываются в историю книги
-export const GAINS_V = 4;
+export const GAINS_V = 5; // 5 — запасной подсчёт по заголовкам глав, если в старых версиях нет названий вкладок
 const COUNT_RULE = 5; // 4 — объём = только рукопись: «Пролог», «Глава …», «Эпилог» (без «От автора», промтов и черновиков); 5 — прирост без промтов
 let lastTitles = 0; // сколько названий глав выровняли при последнем обновлении
 export async function refreshOne(a, b, force = false) {
@@ -249,8 +249,9 @@ export async function refreshOne(a, b, force = false) {
     // версия Диска — весь текст Документа подряд; если в нём есть вкладки не из рукописи (промты, каркас,
     // черновики, «От автора»), в каждой версии считаем только строки рукописи (manuscriptCounter)
     const extra = (r.tabs || []).some((x) => x.chars > 0 && (!x.counted || /^\s*от автора/i.test(x.title)));
-    let gainsOk = true; // не вышло (сеть, Google) — в следующий раз попробуем снова, а не застрянем на нуле
-    try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom, ...fill])], extra ? manuscriptCounter(doc || await drive.getDoc(b.fileId)) : undefined); } catch (e) { console.error(e); g = {}; gainsOk = false; }
+    let gainsOk = true, gerr = ''; // не вышло (сеть, Google) — в следующий раз попробуем снова, а не застрянем на нуле
+    const diag = {};
+    try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom, ...fill])], extra ? manuscriptCounter(doc || await drive.getDoc(b.fileId)) : undefined, diag); } catch (e) { console.error(e); g = {}; gainsOk = false; gerr = e.message || String(e); }
     const h2 = { ...history };
     // на конец дня d−1 было «сейчас − прирост с полуночи d»
     for (const d of fill) { const k = addDays(d, -1); if (g[d] != null && h2[k] == null) h2[k] = Math.max(0, r.total - Math.max(0, g[d])); }
@@ -263,7 +264,9 @@ export async function refreshOne(a, b, force = false) {
     if (monthStart.chars != null) h2[addDays(mFrom, -1)] = monthStart.chars;
     if (weekStart.chars != null && h2[addDays(wFrom, -1)] == null) h2[addDays(wFrom, -1)] = weekStart.chars;
     const cur = a.ctx().wbooksById[b.id] || base;
-    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: gainsOk ? GAINS_V : 0 });
+    // «как посчитано»: с какой версией Документа сравнили начало месяца и каким способом
+    const gainsDiag = { at: new Date().toISOString(), revs: diag.revs ?? null, first: diag.first || '', month: diag.at?.[mFrom] || null, extra, err: gerr };
+    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: gainsOk ? GAINS_V : 0, gainsDiag });
   } else if (filled !== !!b.histFilled || regain) await a.store.put('w_books', { ...base, histFilled: filled, gainsV: GAINS_V });
   return true;
 }
@@ -281,6 +284,25 @@ export async function refreshAll(a, { quiet = false } = {}) {
   if (fails.length) toast(`Не обновилось — ${fails.join('; ')}`);
   else if (!quiet) toast(n ? `Обновлено книг: ${n}` : 'Изменений в файлах нет');
 }
+// «как посчитано»: откуда «за месяц» — сколько было на начало месяца, по какой версии Документа, каким способом
+acts['wbook.how'] = (d) => {
+  const c = app().ctx(), b = c.wbooksById[d.id], g = b.gainsDiag || {}, m = g.month, ms = b.monthStart, from = c.today.slice(0, 8) + '01';
+  const dt = (iso) => (iso ? new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '—');
+  const row = (k, v) => `<div class="item row between how-row"><span class="muted">${k}</span><b>${v}</b></div>`, zch = (n) => `${Number(n).toLocaleString('ru-RU')} зн.`;
+  const wm = writtenMonth(b, c.today);
+  openSheet('Как посчитано «за месяц»', `<div class="list">
+    ${row('Сейчас в рукописи', zch(b.chars || 0))}
+    ${row('На начало месяца', ms?.chars != null && ms.from === from ? zch(ms.chars) : 'неизвестно')}
+    ${row('Написано за месяц', `${zch(wm)} · ${alNum(wm)} а.л.`)}
+    ${row('Сравнили с версией Документа', m ? dt(m.rev) : '—')}
+    ${row('Способ', m ? m.mode : '—')}
+    ${row('Версий у Документа', g.revs != null ? g.revs : '—')}
+    ${row('Первая версия', dt(g.first))}
+    ${row('Пересчитано', dt(g.at))}</div>
+    ${g.err ? `<p class="small down">Не получилось прочитать версии: ${esc(g.err)}</p>` : ''}
+    <p class="small muted">«За месяц» = сколько знаков рукописи (Пролог, Главы, Эпилог) сейчас минус сколько было в последней версии Документа до 1-го числа. Версии берутся из истории Google Документа.</p>`, null);
+  return false;
+};
 acts['wbook.refresh'] = async () => { try { await drive.ensureToken(); } catch (e) { toast(e.message); return; } await refreshAll(app()); app().rerender(); };
 acts['wbook.refreshOne'] = async (d) => { try { await drive.ensureToken(); toast('Обновляю…'); await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast(lastTitles ? `Обновлено · названия глав в Документе выровнены: ${lastTitles}` : 'Обновлено'); } catch (e) { toast('Не получилось: ' + e.message); } };
 acts['drive.connect'] = async () => {
@@ -485,7 +507,7 @@ function headCard(c, b, p) {
     <div class="bh-main">
       <div class="bh-top"><div class="bh-title"><h2>${esc(b.title)}</h2>${bookMeta(c, b, { full: true })}</div>
         <div class="bh-acts">${b.webViewLink ? `<a class="btn small-btn" href="${esc(b.webViewLink)}" target="_blank" rel="noopener" title="Открыть в Google Документах">${ic('doc')} Документ</a>` : ''}${b.fileId ? `<button class="ed-ic" data-act="wbook.refreshOne" data-id="${b.id}" title="Обновить с Диска" aria-label="Обновить с Диска">${ic('refresh')}</button>` : ''}</div></div>
-      <div class="bh-tiles">${tiles.join('')}</div>
+      <div class="bh-tiles">${tiles.join('')}</div>${!done && b.fileId ? `<button class="link bh-how" data-act="wbook.how" data-id="${b.id}">как посчитано</button>` : ''}
       <div class="bh-texts">${annBlock}${synBlock}</div>
       <div class="bh-foot">${b.modifiedTime ? `правка файла ${fmtDate(b.modifiedTime.slice(0, 10))}` : ''}${b.countedAt ? ` · обновлено ${fmtDate(b.countedAt.slice(0, 10)) === fmtDate(c.today) ? 'сегодня' : fmtDate(b.countedAt.slice(0, 10))} в ${b.countedAt.slice(11, 16)}` : ''}</div>
     </div>

@@ -55,6 +55,8 @@ export function charsFromDocsJson(doc) {
 // и потом перенесённый в главу, не считается написанным раньше времени.
 // Если названий в тексте не нашлось — запасной путь: строки сверяются с нынешним текстом вкладок.
 // Возвращает функцию: текст версии → знаков рукописи.
+// номер главы по строке-заголовку: «Пролог» — 0, «Глава 5», «ГЛАВА 5.» — 5, «Эпилог» — 10000; иначе null
+const headNum = (k) => { if (k.length > 60) return null; const m = /^(?:(пролог)|(эпилог)|глава\s*(\d{1,3}))(?![а-яё\d])/.exec(k); return m ? (m[1] ? 0 : m[2] ? 10000 : Number(m[3])) : null; };
 export function manuscriptCounter(doc) {
   const { tabs } = charsFromDocsJson(doc);
   const texts = [];
@@ -78,6 +80,10 @@ export function manuscriptCounter(doc) {
       const ids = byTitle.get(k);
       if (!ids) return;
       let nx = li + 1; while (nx < keys.length && !keys[nx]) nx++;
+      // название вкладки-главы в тексте версии стоит прямо перед заголовком самой главы («Глава 5» → «ГЛАВА 5. …»);
+      // строка «Глава 5» в каркасе или в черновике, за которой идёт обычный текст, — не название вкладки
+      const hn = headNum(k);
+      if (hn != null && headNum(keys[nx] || '') !== hn) return;
       for (const ti of [...ids].reverse()) cand.push({ li, ti, w: 1 + (firstKey[ti] && keys[nx] === firstKey[ti] ? 2 : 0) });
     });
     const len = cand.map((x) => x.w), prev = cand.map(() => -1);
@@ -97,16 +103,60 @@ export function manuscriptCounter(doc) {
     lines.forEach((l, i) => { if (cls[i] != null) last = cls[i]; if (last) n += l.length; });
     return n;
   };
-  return (plain) => {
+  // запасной путь, если в тексте версии нет строк-названий вкладок: рукопись начинается с заголовков глав
+  // («Пролог», «Глава 5», «ГЛАВА 5.»), идущих по возрастанию; строка, которая есть только в промтах, каркасе
+  // и других служебных вкладках, значит — рукопись кончилась (до следующего заголовка главы)
+  const byHeads = (lines, skip = new Set()) => {
+    const keys = lines.map(key), cand = [];
+    keys.forEach((k, li) => {
+      if (skip.has(li)) return;
+      const num = headNum(k);
+      if (num != null) cand.push({ li, num });
+    });
+    // вес заголовка — сколько после него строк, которые и сейчас есть в рукописи (до первой строки из промтов/каркаса):
+    // так настоящая глава перевешивает строку «Глава 5» в каркасе или в плане
+    cand.forEach((x, i) => { let L = 0; for (let j = x.li + 1; j < (cand[i + 1]?.li ?? lines.length); j++) { const k = keys[j]; if (k.length >= 3 && other.has(k) && !ms.has(k)) break; if (ms.has(k)) L += lines[j].length; } x.len = L; });
+    const best = cand.map((x) => x.len), prev = cand.map(() => -1);
+    let top = -1;
+    for (let a = 0; a < cand.length; a++) {
+      for (let b = 0; b < a; b++) if (cand[b].num < cand[a].num && best[b] + cand[a].len > best[a]) { best[a] = best[b] + cand[a].len; prev[a] = b; }
+      if (top < 0 || best[a] > best[top]) top = a;
+    }
+    const heads = new Set();
+    for (let x = top; x >= 0; x = prev[x]) heads.add(cand[x].li);
+    let n = 0, cur = false;
+    lines.forEach((l, li) => {
+      const k = keys[li];
+      if (skip.has(li)) return; // строка-название вкладки — не текст
+      if (heads.has(li)) cur = true;
+      else if (k.length >= 3 && other.has(k) && !ms.has(k)) cur = false;
+      if (cur) n += l.length;
+    });
+    return n;
+  };
+  // считает и по названиям вкладок (если они есть в тексте), и по заголовкам глав — прирост берётся одним способом
+  const count = (plain) => {
     const lines = split(plain), chain = chainOf(lines);
-    if (tabs.length < 2 || chain.length < Math.max(2, Math.ceil(tabs.length * 0.3))) return byLines(lines);
+    if (tabs.length < 2) return { titles: byLines(lines), heads: byLines(lines) };
+    // названия только глав совпадают с их первыми строками — это ещё не значит, что названия вкладок в тексте есть
+    const needOther = inMs.some((x) => !x) && !chain.some((x) => !inMs[x.ti]);
+    if (needOther || chain.length < Math.max(2, Math.ceil(tabs.length * 0.3))) return { titles: null, heads: byHeads(lines) };
+    const heads = byHeads(lines, new Set(chain.map((x) => x.li)));
     let n = 0, c = 0, cur = false; // до первой вкладки — не рукопись
     lines.forEach((l, li) => {
       if (c < chain.length && chain[c].li === li) { cur = inMs[chain[c].ti]; c++; return; } // строка-название вкладки — не текст
       if (cur) n += l.length;
     });
-    return n;
+    return { titles: n, heads };
   };
+  count.dual = true;
+  return count;
+}
+// прирост между двумя подсчётами одного способа: по названиям вкладок, если они есть в обеих версиях, иначе — по заголовкам глав
+export function gainOf(now, old) {
+  if (typeof now === 'number') return { gain: now - old, mode: 'весь текст' };
+  if (now.titles != null && old.titles != null) return { gain: now.titles - old.titles, mode: 'по вкладкам' };
+  return { gain: now.heads - old.heads, mode: 'по заголовкам глав' };
 }
 
 // Word (.docx): word/document.xml → число знаков (текст в <w:t>, табуляция = 1 знак)
