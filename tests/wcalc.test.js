@@ -329,3 +329,18 @@ test('завершённая книга: для читателя — в день
   assert.equal(releaseDate(b), '2026-11-09');
   assert.equal(releaseDate({ ...b, pub: {} }), '2026-10-26');
 });
+
+test('прирост по версиям: в Документе с промтами считается только рукопись', async () => {
+  const { manuscriptCounter } = await import('../writer/js/wcalc.js');
+  const para = (t) => ({ paragraph: { elements: [{ textRun: { content: t + '\n' } }] } });
+  const tab = (title, lines) => ({ tabProperties: { title }, documentTab: { body: { content: lines.map(para) } } });
+  const doc = { tabs: [tab('Промт', ['Напиши сцену в лесу', 'Тон тревожный']), tab('Глава 1', ['Глава 1', 'Софа шла по тропе.', 'Медведица смотрела.']), tab('Глава 2', ['Глава 2', 'Артём молчал.'])] };
+  const count = manuscriptCounter(doc);
+  const now = 'Напиши сцену в лесу\nТон тревожный\nГлава 1\nСофа шла по тропе.\nМедведица смотрела.\nГлава 2\nАртём молчал.\n';
+  // раньше: промт был длиннее (потом сократили), в главе 1 одна фраза была другой, главы 2 не было
+  const old = 'Напиши сцену в лесу\nОчень длинный старый промт, который потом удалили целиком\nГЛАВА 1.\nСофа шла по лесной тропе.\nМедведица смотрела.\n';
+  const msNow = 'Глава 1Софа шла по тропе.Медведица смотрела.Глава 2Артём молчал.'.length;
+  const msOld = 'ГЛАВА 1.Софа шла по лесной тропе.Медведица смотрела.'.length;
+  assert.equal(count(now), msNow);
+  assert.equal(count(old), msOld);
+});

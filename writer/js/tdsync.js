@@ -18,7 +18,7 @@ export async function runTodoist(a, { force = false, pull = false } = {}) {
   if (busy && Date.now() - lastAt > 3 * 60000) busy = false; // прошлая синхронизация зависла — не держим очередь
   if (!token || busy || (!force && (s.todoistOff || !navigator.onLine))) return null;
   const want = todoistTasks(planItems(c, c.today, addDays(c.today, TD_DAYS)), c.wbooksById);
-  const hash = JSON.stringify([want.map((w) => [w.key, w.content, w.date, w.description]), c.data.w_ideas.map((x) => [x.id, x.title, x.text, x.deletedAt || '', x.tdId || '', x.bookId || ''])]);
+  const hash = JSON.stringify([want.map((w) => [w.key, w.content, w.date, w.description]), c.data.w_ideas.map((x) => [x.id, x.title, x.text, x.deletedAt || '', x.tdId || '', x.bookId || '', x.status || ''])]);
   if (!force && !pull && hash === lastHash && Date.now() - lastAt < 10 * 60000) return null;
   if (!force && Date.now() - lastAt < (pull ? 30000 : 60000)) { scheduleTodoist(a, pull ? 30000 : 60000, { pull }); return null; }
   busy = true; lastAt = Date.now();

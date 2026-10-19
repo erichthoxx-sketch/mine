@@ -48,6 +48,33 @@ export function charsFromDocsJson(doc) {
   return { total: tabs.filter(inMs).reduce((a, t) => a + t.chars, 0), tabs, svc };
 }
 
+// Прирост по версиям Документа, где кроме рукописи есть промты, каркас, черновики: версия Диска — это весь текст
+// подряд, без деления на вкладки. Каждую строку версии относим к рукописи или к служебным вкладкам — по совпадению
+// с нынешним текстом вкладок; правленые и удалённые строки — к тому же, что стоит рядом (вкладки идут подряд).
+// Возвращает функцию: текст версии → знаков рукописи.
+export function manuscriptCounter(doc) {
+  const { tabs } = charsFromDocsJson(doc);
+  const texts = [];
+  const textOf = (content) => (content || []).map((el) => el.paragraph ? (el.paragraph.elements || []).map((pe) => pe.textRun?.content || '').join('') : el.table ? (el.table.tableRows || []).flatMap((r) => r.tableCells || []).map((c) => textOf(c.content)).join('\n') : '').join('');
+  const walk = (list) => { for (const t of list || []) { texts.push(textOf(t.documentTab?.body?.content)); walk(t.childTabs); } };
+  walk(doc.tabs);
+  const key = (l) => l.replace(/^\s*(?:[*\-–—•●◦▪]|\d+[.)])\s+/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const ms = new Set(), other = new Set();
+  tabs.forEach((t, i) => {
+    const inMs = t.counted && !/^\s*от автора/i.test(t.title);
+    for (const l of String(texts[i] || '').split(/[\n\u000b]/)) { const k = key(l); if (k.length >= 3) (inMs ? ms : other).add(k); }
+  });
+  return (plain) => {
+    const lines = String(plain || '').replace(/^\uFEFF/, '').split(/\r?\n|[\u000b\u000c\u2028\u2029]/);
+    // строка-название главы («ГЛАВА 1.», «Пролог») — начало рукописи, даже если тогда была оформлена иначе
+    const head = (k) => k.length <= 60 && /^(пролог|эпилог|глава\s*\d+|часть\s)/.test(k) && !other.has(k);
+    const cls = lines.map((l) => { const k = key(l); if (k.length < 3) return null; if (head(k)) return true; const a = ms.has(k), b = other.has(k); return a === b ? null : a; });
+    let last = cls.find((x) => x != null) ?? true, n = 0;
+    lines.forEach((l, i) => { if (cls[i] != null) last = cls[i]; if (last) n += l.length; });
+    return n;
+  };
+}
+
 // Word (.docx): word/document.xml → число знаков (текст в <w:t>, табуляция = 1 знак)
 export function charsFromDocxXml(xml) {
   const decode = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&amp;/g, '&');

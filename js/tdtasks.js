@@ -36,6 +36,8 @@ async function tdReq(token, path, body) {
   return r.json();
 }
 const listAll = async (token, path) => { const out = []; let cur = null; for (let i = 0; i < 10; i++) { const j = await tdReq(token, path + (cur ? `${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(cur)}` : '')); out.push(...(j.results || [])); cur = j.next_cursor; if (!cur) break; } return out; };
+// текст задачи для показа: ссылки Todoist «[название](адрес)» — одним названием, без звёздочек разметки
+export const tdText = (t) => String(t || '').replace(/\[([^\]]+)\]\((?:https?:[^)\s]+)\)/g, '$1').replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, '$1$2').trim();
 export async function addOwnTask(settings, { project, section, content, date }) {
   const token = settings.todoistToken;
   if (!token) throw new Error('Todoist не подключён (Мастерская → Настройки)');

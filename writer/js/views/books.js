@@ -1,13 +1,14 @@
 import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol } from '../wcalc.js';
+import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter } from '../wcalc.js';
 import { goalTitle, goalToday } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
 import { publisherCard, svcInfo } from './pubfiles.js';
-import { ownTasks, bookOfTask, addOwnTask } from '../../../js/tdtasks.js';
+import { ownTasks, bookOfTask, addOwnTask, tdText } from '../../../js/tdtasks.js';
+import { isOpen, ideaTitle } from '../ideacalc.js';
 import { titleRequests } from '../docedit.js';
 import { contestCard } from './plan.js';
 import { resizeImage } from '../../../js/img.js';
@@ -125,8 +126,8 @@ export function bookPage(a, id) {
   const h = b.history || {};
   const p = pace(h, c.today);
   const contests = c.data.w_contests.filter((x) => contestBookIds(x).includes(b.id)).sort((x, y) => (x.status === 'done') - (y.status === 'done') || (y.end || '').localeCompare(x.end || '') * -1);
-  // идеи к книге — самые свежие сверху; на странице книги не больше 8
-  const ideas = c.data.w_ideas.filter((x) => x.bookId === b.id && !x.deletedAt).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
+  // идеи к книге — только открытые (сделанные — в «Идеях» → «Готово»), самые свежие сверху; на странице книги не больше 8
+  const ideas = c.data.w_ideas.filter((x) => x.bookId === b.id && isOpen(x)).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
   const IDEAS_MAX = 8;
   const extra = (b.platforms || []).filter((x) => !PLATFORMS.includes(x)).join(', ');
   const chs = chapterList(b), pm = pubMap(b), pfs = pubPlatforms(b), outN = Object.keys(chapterOutDates(b, c.today)).length;
@@ -184,7 +185,7 @@ export function bookPage(a, id) {
 </div>
   ${bookContests(c, b, contests)}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
-    ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(x.title || x.text.slice(0, 60))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
+    ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(ideaTitle(x))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
       ${ideas.length > IDEAS_MAX ? `<div style="margin-top:10px"><button data-act="idea.open" data-book="${b.id}">Все идеи к книге (${ideas.length})</button></div>` : ''}` : '<p class="small muted" style="margin:8px 0 0">Идей к этой книге пока нет.</p>'}</div>
   <div class="card"><h2>Маркетинг</h2>
     <div class="list">
@@ -216,11 +217,13 @@ export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
-  if (!force && !ruleChanged && b.titlesV === 2 && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled && (meta.mimeType !== drive.MIME.doc || (b.svc && (b.tabs || []).some((t) => 'lead' in t)))) return false;
+  const regain = (b.gainsV || 0) < 2; // 2 — прирост по версиям считается и в Документах с промтами (только рукопись)
+  if (!force && !ruleChanged && !regain && b.titlesV === 2 && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled && (meta.mimeType !== drive.MIME.doc || (b.svc && (b.tabs || []).some((t) => 'lead' in t)))) return false;
   // названия глав в самом Документе — к одному виду (только если какое-то оформлено иначе)
-  let titles = 0;
+  let titles = 0, doc = null;
   if (meta.mimeType === drive.MIME.doc) {
-    try { const reqs = titleRequests(await drive.getDoc(b.fileId)); if (reqs.length) { await drive.docUpdate(b.fileId, reqs); titles = reqs.filter((x) => x.updateParagraphStyle).length; } }
+    try { doc = await drive.getDoc(b.fileId); const reqs = titleRequests(doc); if (reqs.length) { doc = null; // Документ поменялся — для подсчёта возьмём заново
+      await drive.docUpdate(b.fileId, reqs); titles = reqs.filter((x) => x.updateParagraphStyle).length; } }
     catch (e) { if (force) toast('Названия глав не выровнялись: ' + (e.message || e)); } // при ручном обновлении — честно говорим
   }
   lastTitles = titles;
@@ -232,19 +235,19 @@ export async function refreshOne(a, b, force = false) {
   await a.store.put('w_books', base);
   // шаг 2: начало дня / недели / месяца и (один раз) история за 2 недели — по версиям документа
   // правило подсчёта поменялось — начало дня/недели/месяца и историю за 2 недели пересчитываем заново по версиям
-  let dayStart = !ruleChanged && b.dayStart && b.dayStart.date === c.today && b.dayStart.v === 2 ? b.dayStart : null;
-  let weekStart = !ruleChanged && b.weekStart && b.weekStart.date === c.today ? b.weekStart : null;
-  let monthStart = !ruleChanged && b.monthStart && b.monthStart.date === c.today ? b.monthStart : null;
-  let filled = (!ruleChanged && !!b.histFilled) || meta.mimeType !== drive.MIME.doc; // Word-файлы не восстанавливаем — это тяжело
+  let dayStart = !ruleChanged && !regain && b.dayStart && b.dayStart.date === c.today && b.dayStart.v === 2 ? b.dayStart : null;
+  let weekStart = !ruleChanged && !regain && b.weekStart && b.weekStart.date === c.today ? b.weekStart : null;
+  let monthStart = !ruleChanged && !regain && b.monthStart && b.monthStart.date === c.today ? b.monthStart : null;
+  let filled = (!ruleChanged && !regain && !!b.histFilled) || meta.mimeType !== drive.MIME.doc; // Word-файлы не восстанавливаем — это тяжело
   const fill = !filled ? Array.from({ length: 14 }, (_, i) => addDays(c.today, -i)) : [];
   if (!dayStart || !weekStart || !monthStart || fill.length) {
     const wFrom = addDays(c.today, -6), mFrom = c.today.slice(0, 8) + '01';
     let g = {};
     // история версий считает весь текст Документа целиком; если в нём есть вкладки не из рукописи (промты, каркас,
     // черновики, «От автора») — прирост по версиям был бы неверным, поэтому его не берём, считаем по своей истории
+    // тогда в каждой версии считаем только строки рукописи (manuscriptCounter)
     const extra = (r.tabs || []).some((x) => x.chars > 0 && (!x.counted || /^\s*от автора/i.test(x.title)));
-    if (!extra) { try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom, ...fill])]); } catch { g = {}; } }
-    else filled = true; // восстанавливать нечего — дальше история копится сама по дням
+    try { g = await drive.gainsSince(meta, [...new Set([c.today, wFrom, mFrom, ...fill])], extra ? manuscriptCounter(doc || await drive.getDoc(b.fileId)) : undefined); } catch { g = {}; if (extra) filled = true; }
     const h2 = { ...history };
     // на конец дня d−1 было «сейчас − прирост с полуночи d»
     for (const d of fill) { const k = addDays(d, -1); if (g[d] != null && h2[k] == null) h2[k] = Math.max(0, r.total - Math.max(0, g[d])); }
@@ -254,8 +257,8 @@ export async function refreshOne(a, b, force = false) {
     if (!weekStart) weekStart = { date: c.today, from: wFrom, chars: g[wFrom] != null ? r.total - Math.max(0, g[wFrom]) : null };
     if (!monthStart) monthStart = { date: c.today, from: mFrom, chars: g[mFrom] != null ? r.total - Math.max(0, g[mFrom]) : null };
     const cur = a.ctx().wbooksById[b.id] || base;
-    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled });
-  } else if (filled !== !!b.histFilled) await a.store.put('w_books', { ...base, histFilled: filled });
+    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: 2 });
+  } else if (filled !== !!b.histFilled || regain) await a.store.put('w_books', { ...base, histFilled: filled, gainsV: 2 });
   return true;
 }
 export async function refreshAll(a, { quiet = false } = {}) {
@@ -491,7 +494,7 @@ function bookTasksCard(c, b) {
   const list = ownTasks(c.settings).filter((x) => bookOfTask(x, [b])).sort((x, y) => (x.d || '9999').localeCompare(y.d || '9999'));
   const sec = String(b.title).split(/[.!?:]/)[0].trim();
   return `<div class="card td-card"><div class="row between"><h2 style="margin:0">Задачи</h2><button class="small-btn" data-act="td.addBook" data-id="${b.id}">+ задача</button></div>
-    ${list.length ? `<div class="plist">${list.map((x) => `<div class="pitem"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.id}"><span class="pi-body"><span class="pi-t">${esc(x.t)}</span>${x.d ? `<span class="pi-s${x.d < c.today ? ' down' : ''}">${x.d < c.today ? 'просрочено · ' : ''}${fmtDate(x.d)}</span>` : ''}</span></a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${icx('check')}</button></span></div>`).join('')}</div>`
+    ${list.length ? `<div class="plist">${list.map((x) => `<div class="pitem"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.id}"><span class="pi-body"><span class="pi-t">${esc(tdText(x.t))}</span>${x.d ? `<span class="pi-s${x.d < c.today ? ' down' : ''}">${x.d < c.today ? 'просрочено · ' : ''}${fmtDate(x.d)}</span>` : ''}</span></a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.id}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${icx('check')}</button></span></div>`).join('')}</div>`
       : `<p class="small muted" style="margin:6px 0 0">Задач по книге нет. Добавляйте здесь или в Todoist (проект «Книги» → раздел «${esc(sec)}») — они видны и там, и тут, и в Планере в свой день.</p>`}</div>`;
 }
 

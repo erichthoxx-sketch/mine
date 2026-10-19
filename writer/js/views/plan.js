@@ -10,7 +10,7 @@ import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestFileName, contestSubmissionUrl, contestEmailPurpose, goalMult, moveGoalDay, releaseDate } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
-import { ownTasks, bookOfTask, moveOwnTask } from '../../../js/tdtasks.js';
+import { ownTasks, bookOfTask, moveOwnTask, tdText } from '../../../js/tdtasks.js';
 import { rub, fmtMonth } from '../../../js/format.js';
 import { EVENT_TYPES } from '../../../js/charts.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
@@ -95,7 +95,7 @@ export function planItems(c, from, to) {
   for (const x of ownTasks(c.settings)) {
     if (!x.d) continue;
     const b = bookOfTask(x, c.wbooks);
-    add(x.d < t ? t : x.d, 'td', esc(x.t), [b ? esc(b.title) : esc(x.s || x.p), x.d < t ? 'просрочено' : ''].filter(Boolean).join(' · '), { tdId: x.id });
+    add(x.d < t ? t : x.d, 'td', esc(tdText(x.t)), [b ? esc(b.title) : esc(x.s || x.p), x.d < t ? 'просрочено' : ''].filter(Boolean).join(' · '), { tdId: x.id });
   }
   // Маркетинг: подготовить материалы к старту выкладки и к рекламе
   for (const m of marketingNeeds(c)) add(m.date, 'mk', esc(m.title), esc(m.sub), { to: m.to });

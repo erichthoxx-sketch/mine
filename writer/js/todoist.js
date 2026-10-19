@@ -1,3 +1,4 @@
+import { isDone, bookGuess } from './ideacalc.js';
 // Todoist: планер Мастерской сам раскладывает дела по полочкам Todoist с нужными датами.
 // Книжное — в проект «Книги», раздел по книге (как у Ланы уже заведено); остальное — в проект «Мастерская»
 // по разделам (деньги и реклама, связи, маркетинг, конкурсы, дела). Все задачи с меткой «мастерская».
@@ -176,13 +177,13 @@ export function ideasPlan(ideas, tasks) {
   for (const t of tasks) {
     const x = byTd.get(t.id);
     if (!x) { ops.create.push(t); continue; }
-    if (x.deletedAt) { ops.close.push(x); continue; }
+    if (x.deletedAt || isDone(x)) { ops.close.push(x); continue; } // удалила или отметила «Готово» — закрываем и в Todoist
     if (t.t !== (x.tdT ?? '') || t.d !== (x.tdD ?? '')) ops.pull.push({ x, t }); // поменяла в Todoist
     else if ((x.title || '') !== (x.tdT ?? '') || (x.text || '') !== (x.tdD ?? '')) ops.update.push(x); // поменяла здесь
   }
   for (const x of ideas) {
     if (x.deletedAt) continue;
-    if (!x.tdId && !x.tdOff) ops.push.push(x);
+    if (!x.tdId && !x.tdOff && !isDone(x)) ops.push.push(x);
     else if (x.tdId && !live.has(String(x.tdId))) ops.gone.push(x);
   }
   return ops;
@@ -192,13 +193,15 @@ const shortT = (t) => String(t || '').split(/[.!?:]/)[0].trim();
 export async function syncIdeas(token, ideas, booksById) {
   const r = await fetchIdeaTasks(token), ops = ideasPlan(ideas, r.tasks), puts = [];
   const bookBySection = (sname) => { if (!sname) return ''; const low = sname.trim().toLowerCase(); const b = Object.values(booksById).find((bk) => { const t = shortT(bk.title).toLowerCase(); return t === low || (low.length >= 4 && (t.startsWith(low) || low.startsWith(t))); }); return b ? b.id : ''; };
-  for (const t of ops.create) puts.push({ id: 'i' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4), title: t.t, text: t.d, bookId: bookBySection(t.s), status: 'new', tags: [], comments: [], createdAt: t.at || new Date().toISOString(), tdId: t.id, tdT: t.t, tdD: t.d, src: 'todoist' });
+  // раздел не про книгу (например, «Входящие») — книга по словам в тексте, и задача сама переедет в раздел книги
+  const guess = (t) => bookGuess(`${t.t} ${t.d}`, Object.values(booksById))?.id || '';
+  for (const t of ops.create) puts.push({ id: 'i' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4), title: t.t, text: t.d, ...(bookBySection(t.s) ? { bookId: bookBySection(t.s) } : guess(t) ? { bookId: guess(t), tdMove: true } : { bookId: '' }), status: 'new', tags: [], comments: [], createdAt: t.at || new Date().toISOString(), tdId: t.id, tdT: t.t, tdD: t.d, src: 'todoist' });
   for (const { x, t } of ops.pull) puts.push({ ...x, title: t.t, text: t.d, tdT: t.t, tdD: t.d, bookId: x.bookId || bookBySection(t.s) });
   for (const x of ops.update) { await post(token, `/tasks/${x.tdId}`, { content: ideaContent(x), description: x.text || '' }); puts.push({ ...x, tdT: x.title || '', tdD: x.text || '' }); }
   for (const x of ops.close) { await post(token, `/tasks/${x.tdId}/close`).catch(() => {}); puts.push({ ...x, tdId: '', tdOff: true }); }
-  for (const x of ops.gone) { // закрыта или удалена в Todoist — идея остаётся, но помечается «Использована»
+  for (const x of ops.gone) { // закрыта или удалена в Todoist — запись остаётся, но становится «Готово»
     let t = null; try { t = await tfetch(token, `/tasks/${x.tdId}`); } catch (e) { if (!/404/.test(e.message)) throw e; }
-    if (!t || t.checked || t.is_deleted) puts.push({ ...x, tdId: '', tdOff: true, status: x.status === 'new' || x.status === 'work' ? 'used' : x.status });
+    if (!t || t.checked || t.is_deleted) puts.push({ ...x, tdId: '', tdOff: true, ...(isDone(x) ? {} : { status: 'used', doneAt: new Date().toISOString() }) });
   }
   // книгу выбрали в приложении — переносим задачу-идею в раздел книги
   const moves = ideas.filter((x) => x.tdMove && x.tdId && !x.deletedAt && x.bookId && booksById[x.bookId]);

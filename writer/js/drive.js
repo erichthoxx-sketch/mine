@@ -175,7 +175,8 @@ export async function countFile(file) {
 // Сколько знаков прибавилось в файле с начала каждого из дней dates (по истории версий Google Диска).
 // Возвращает {дата: прирост | null}. Правок после полуночи этой даты не было — 0; узнать нельзя — null.
 // Обе версии считаются одинаково (выгрузка текста), поэтому разница честная.
-export async function gainsSince(file, dates) {
+// count — как считать знаки в тексте версии (по умолчанию весь текст; для Документа с промтами — только рукопись)
+export async function gainsSince(file, dates, count = countPlain) {
   const out = Object.fromEntries(dates.map((d) => [d, null]));
   if (isLocalDev) return out;
   const j = await (await gfetch(`${DRIVE}/${file.id}/revisions?fields=revisions(id,modifiedTime,exportLinks)&pageSize=1000`)).json();
@@ -193,7 +194,7 @@ export async function gainsSince(file, dates) {
     if (file.mimeType === MIME.doc) {
       const url = rev.now ? `${DRIVE}/${file.id}/export?mimeType=text/plain` : rev.exportLinks?.['text/plain'];
       if (!url) throw new Error('нет выгрузки версии');
-      n = countPlain(await (await gfetch(url)).text());
+      n = count(await (await gfetch(url)).text());
     } else {
       const buf = await (await gfetch(`${DRIVE}/${file.id}/revisions/${rev.id}?alt=media`)).arrayBuffer();
       const Zip = await loadJsZip();
