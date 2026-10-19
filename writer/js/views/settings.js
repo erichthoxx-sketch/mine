@@ -6,6 +6,7 @@ import { WCOLLS } from '../app.js';
 import { runTodoist } from '../tdsync.js';
 import { TD_DAYS, TD_LABEL } from '../todoist.js';
 import { archiveCard, loadArchive } from './archive.js';
+import { proxyCard } from '../../../js/proxycard.js';
 
 const app = () => window.__app;
 
@@ -24,6 +25,7 @@ export function settingsView(a) {
     <p class="hint">Подключать нужно на каждом устройстве один раз. Google даёт браузерным приложениям доступ на час — после этого кнопка «Обновить» на Главной продлевает его одним нажатием, без повторного разрешения.</p></div>
   ${todoistCard(c)}
   ${archiveCard(c)}
+  ${proxyCard(s)}
   <div class="card"><h2>Резервная копия мастерской</h2><p class="small muted">Книги, идеи, планер и галерея (без самих файлов Диска — они и так на Диске).</p>
     <div class="row"><button class="primary" data-act="set.backup">Скачать копию</button><label class="btn">Восстановить<input type="file" accept=".json" data-chg="set.restore" hidden></label></div></div>
   <div class="card"><h2>Оформление и аккаунт</h2>
