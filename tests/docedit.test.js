@@ -51,19 +51,33 @@ test('цвет текста: из Документа и обратно', async (
   assert.equal(Math.round(rq.updateTextStyle.textStyle.foregroundColor.color.rgbColor.green * 255), 107);
 });
 
+test('названия глав единообразные: без точек и капса, подзаголовок второй строкой', async () => {
+  const { normTitle } = await import('../writer/js/docedit.js');
+  assert.equal(normTitle('ГЛАВА 11.'), 'Глава 11');
+  assert.equal(normTitle('Глава 3.'), 'Глава 3');
+  assert.equal(normTitle('ПРОЛОГ'), 'Пролог');
+  assert.equal(normTitle('Глава 1. «С папой мне ничего не страшно»'), 'Глава 1\n«С папой мне ничего не страшно»');
+  assert.equal(normTitle('Глава пятая. Утро.'), 'Глава пятая\nУтро');
+  assert.equal(normTitle('Эпилог'), 'Эпилог');
+});
+
 test('названия глав в Документе — к одному виду, остальное не трогаем', async () => {
   const { titleRequests } = await import('../writer/js/docedit.js');
   const p = (text, s, e, ts = {}, ps = {}) => ({ startIndex: s, endIndex: e, paragraph: { paragraphStyle: ps, elements: [{ textRun: { content: text, textStyle: ts } }] } });
   const tab = (title, id, content) => ({ tabProperties: { title, tabId: id }, documentTab: { body: { content } } });
   const doc = { tabs: [
-    tab('Пролог', 't0', [p('ПРОЛОГ\n', 1, 8, { bold: true, fontSize: { magnitude: 20, unit: 'PT' } }), p('Текст\n', 8, 14)]),
-    tab('Глава 1', 't1', [p('Глава 1. Встреча\n', 1, 18, { bold: true, fontSize: { magnitude: 14, unit: 'PT' } }, { namedStyleType: 'HEADING_1', alignment: 'CENTER' })]), // уже как надо
-    tab('Глава 2', 't2', [p('Утро было тихим.\n', 1, 18)]), // названия нет — не трогаем
+    tab('Пролог', 't0', [p('ПРОЛОГ.\n', 1, 9, { bold: true, fontSize: { magnitude: 20, unit: 'PT' } }), p('Текст\n', 9, 15)]),
+    tab('Глава 1', 't1', [p('Глава 1\n', 1, 9, { bold: true, fontSize: { magnitude: 14, unit: 'PT' } }, { namedStyleType: 'HEADING_1', alignment: 'CENTER' })]), // уже как надо
+    tab('Глава 2', 't2', [p('Утро было тихим.\n', 1, 18)]), // названия нет — ставим сверху
     tab('Промт', 't3', [p('Глава 9\n', 1, 9)]), // не глава книги
   ] };
   const r = titleRequests(doc);
-  assert.equal(r.length, 2);
-  assert.deepEqual(r[0].updateParagraphStyle.range, { startIndex: 1, endIndex: 8, tabId: 't0' });
-  assert.deepEqual(r[1].updateTextStyle.range, { startIndex: 1, endIndex: 7, tabId: 't0' }); // без перевода строки
-  assert.equal(r[1].updateTextStyle.textStyle.fontSize.magnitude, 14);
+  const t0 = r.filter((x) => JSON.stringify(x).includes('"t0"')), t2 = r.filter((x) => JSON.stringify(x).includes('"t2"'));
+  assert.equal(r.filter((x) => JSON.stringify(x).includes('"t1"') || JSON.stringify(x).includes('"t3"')).length, 0);
+  assert.deepEqual(t0[0].deleteContentRange.range, { startIndex: 1, endIndex: 8, tabId: 't0' }); // текст «ПРОЛОГ.» без перевода строки
+  assert.equal(t0[1].insertText.text, 'Пролог');
+  assert.deepEqual(t0[3].updateTextStyle.range, { startIndex: 1, endIndex: 7, tabId: 't0' });
+  assert.equal(t0[3].updateTextStyle.textStyle.fontSize.magnitude, 14);
+  assert.equal(t2[0].insertText.text, 'Глава 2\n'); // глава без названия — название сверху
+  assert.ok(t2[1].updateParagraphStyle);
 });

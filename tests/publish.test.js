@@ -28,7 +28,7 @@ test('рукопись: только главы, название из перв�
   const g1 = chs[1].paras;
   assert.equal(g1[0].pageBreak, true);
   assert.equal(g1[0].kind, 'h'); // все названия глав — одним заголовком, без оформления из Документа
-  assert.deepEqual(g1.map((p) => p.runs.map((r) => r.t).join('')), ['Глава 1.', '', 'Утро было ', '***', 'Тихо.']);
+  assert.deepEqual(g1.map((p) => p.runs.map((r) => r.t).join('')), ['Глава 1', '', 'Утро было ', '***', 'Тихо.']); // название — без точки
   assert.equal(g1[4].runs[0].i, true);
   // у главы без названия внутри — название вкладки заголовком
   assert.deepEqual([chs[2].paras[0].kind, chs[2].paras[0].runs[0].t], ['h', 'Глава 2']);

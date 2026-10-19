@@ -3,7 +3,7 @@
 // пустые строки. Шрифт — Times New Roman 12 (стандарт издательств), A4, поля 3 / 1,5 / 2 / 2 см, номера страниц;
 // у рукописи — титульный лист, каждая глава — с новой страницы.
 // Чистые функции (абзацы, XML) — без DOM и сети; упаковка в .docx — через JSZip, который передаём снаружи.
-import { contentToBlocks, isChapterTitle, namedStylesOf } from './docedit.js';
+import { contentToBlocks, isChapterTitle, namedStylesOf, normTitle } from './docedit.js';
 import { isBookTab, AL } from './wcalc.js';
 
 // все вкладки по порядку (вложенные — сразу после родителя)
@@ -51,8 +51,9 @@ export function chaptersOf(doc) {
     let head = plainTitle(title);
     // название главы — всегда одинаково (заголовок 14 пт, жирный, по центру, с новой страницы), как бы оно ни было
     // оформлено в Документе; текст — как в Документе («Глава 1. Встреча»)
-    if (first && (isChapterTitle(firstText) || plainTitle(firstText) === plainTitle(title))) { head = plainTitle(firstText); paras[0] = { kind: 'h', pageBreak: true, title: true, runs: [{ t: firstText.trim() }] }; }
-    else paras.unshift({ kind: 'h', pageBreak: true, runs: [{ t: head }] });
+    if (first && (isChapterTitle(firstText.replace(/\n/g, ' ')) || plainTitle(firstText) === plainTitle(title))) { head = normTitle(firstText); paras[0] = { kind: 'h', pageBreak: true, title: true, runs: [{ t: head }] }; }
+    else { head = normTitle(title); paras.unshift({ kind: 'h', pageBreak: true, runs: [{ t: head }] }); }
+    head = head.split('\n')[0];
     out.push({ title: head, paras, chars: blocks.reduce((a, p) => a + textOf(p).replace(/\n/g, '').length, 0) });
   }
   return out;

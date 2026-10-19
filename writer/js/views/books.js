@@ -220,7 +220,7 @@ export async function refreshOne(a, b, force = false) {
   // названия глав в самом Документе — к одному виду (только если какое-то оформлено иначе)
   let titles = 0;
   if (meta.mimeType === drive.MIME.doc) {
-    try { const reqs = titleRequests(await drive.getDoc(b.fileId)); if (reqs.length) { await drive.docUpdate(b.fileId, reqs); titles = reqs.length / 2; } }
+    try { const reqs = titleRequests(await drive.getDoc(b.fileId)); if (reqs.length) { await drive.docUpdate(b.fileId, reqs); titles = reqs.filter((x) => x.updateParagraphStyle).length; } }
     catch (e) { if (force) toast('Названия глав не выровнялись: ' + (e.message || e)); } // при ручном обновлении — честно говорим
   }
   lastTitles = titles;
