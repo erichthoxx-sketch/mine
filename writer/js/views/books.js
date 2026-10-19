@@ -270,19 +270,28 @@ export async function refreshOne(a, b, force = false) {
   } else if (filled !== !!b.histFilled || regain) await a.store.put('w_books', { ...base, histFilled: filled, gainsV: GAINS_V });
   return true;
 }
+// идёт ли сейчас обновление книг с Диска (на Главной — «считаю…», второй раз не запускаем)
+export const refreshing = { on: false };
 export async function refreshAll(a, { quiet = false } = {}) {
+  if (refreshing.on) { if (!quiet) toast('Уже считаю — подождите немного'); return; }
   const list = a.ctx().wbooks.filter((b) => b.fileId);
   let n = 0;
   const fails = [];
-  // каждая книга отдельно: ошибка в одной не мешает остальным
-  for (const b of list) {
-    try { if (await refreshOne(a, b)) n++; } catch (e) {
-      if (e instanceof drive.NeedAuth) { toast(e.message); return; }
-      fails.push(`«${b.title}»: ${e.message}`);
+  refreshing.on = true; a.rerender();
+  try {
+    // каждая книга отдельно: ошибка в одной не мешает остальным
+    for (const b of list) {
+      try { if (await refreshOne(a, b)) n++; } catch (e) {
+        if (e instanceof drive.NeedAuth) { toast(e.message); return; }
+        fails.push(`«${b.title}»: ${e.message}`);
+      }
     }
-  }
+  } finally { refreshing.on = false; a.rerender(); }
   if (fails.length) toast(`Не обновилось — ${fails.join('; ')}`);
-  else if (!quiet) toast(n ? `Обновлено книг: ${n}` : 'Изменений в файлах нет');
+  else if (!quiet) {
+    const c = a.ctx(), m = c.wbooks.filter((b) => (b.status || 'progress') === 'progress').reduce((s2, b) => s2 + writtenMonth(b, c.today), 0);
+    toast(n ? `Пересчитано · за месяц ${alNum(m)} а.л.` : 'Изменений в файлах нет');
+  }
 }
 // «как посчитано»: откуда «за месяц» — сколько было на начало месяца, по какой версии Документа, каким способом
 acts['wbook.how'] = (d) => {
@@ -303,7 +312,7 @@ acts['wbook.how'] = (d) => {
     <p class="small muted">«За месяц» = сколько знаков рукописи (Пролог, Главы, Эпилог) сейчас минус сколько было в последней версии Документа до 1-го числа. Версии берутся из истории Google Документа.</p>`, null);
   return false;
 };
-acts['wbook.refresh'] = async () => { try { await drive.ensureToken(); } catch (e) { toast(e.message); return; } await refreshAll(app()); app().rerender(); };
+acts['wbook.refresh'] = async () => { try { await drive.ensureToken(); } catch (e) { toast(e.message); return; } if (!refreshing.on) toast('Пересчитываю по истории Документа — это может занять минуту'); await refreshAll(app()); app().rerender(); };
 acts['wbook.refreshOne'] = async (d) => { try { await drive.ensureToken(); toast('Обновляю…'); await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast(lastTitles ? `Обновлено · названия глав в Документе выровнены: ${lastTitles}` : 'Обновлено'); } catch (e) { toast('Не получилось: ' + e.message); } };
 acts['drive.connect'] = async () => {
   try { await drive.connect(); toast('Google Диск подключён'); refreshAll(app(), { quiet: true }); } catch (e) { toast(e.message); }

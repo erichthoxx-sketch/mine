@@ -205,6 +205,9 @@ export async function gainsSince(file, dates, count = countPlain, diag = {}) {
     memo.set(rev.id, n);
     return n;
   };
+  // нужные версии скачиваем сразу по 4 — так в разы быстрее, чем по одной
+  const need = [nowRev, ...new Set(dates.map((d) => { const mid = new Date(d + 'T00:00:00').toISOString(); return lastTime < mid ? null : [...revs].reverse().find((r) => r.modifiedTime < mid); }).filter(Boolean))];
+  for (let i = 0; i < need.length; i += 4) await Promise.all(need.slice(i, i + 4).map((r) => textOf(r)));
   for (const d of dates) {
     const midnight = new Date(d + 'T00:00:00').toISOString();
     if (lastTime < midnight) { out[d] = 0; continue; } // после этой даты файл не меняли

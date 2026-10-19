@@ -6,7 +6,7 @@ import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '..
 import { monthKey, addDays, addMonths, incomeSeries, sumSeries, npdDeadline } from '../../../js/calc.js';
 import { ic } from '../../../js/icons.js';
 import { charsAt, writtenToday, contestStatus, waitingStatus, forecastDate, chapterOutDates, plannedPubs, bookSchedule, writtenMonth, goalStatus, dailyWrittenAll, al, alNum, contestVol, contestBookIds, contestUnsent } from '../wcalc.js';
-import { STATUS, progressBlock, daysTxt, driveChip, GAINS_V } from './books.js';
+import { STATUS, progressBlock, daysTxt, driveChip, GAINS_V, refreshing } from './books.js';
 import { goalTitle, goalToday, activeGoals } from './goals.js';
 import { widgetReminder } from './widgets.js';
 import { linkTodos } from './links.js';
@@ -117,7 +117,7 @@ export function homeView(a) {
   const html = `
   <div class="row between home-h"><h2 style="margin:0">${fmtMonthCap(mk)}</h2>${driveChip(c)}</div>
   <div class="grid4">
-    ${stale ? `<button class="stat stat-btn" data-act="wbook.refresh" title="Пересчитать по Google Диску"><div class="k">Написано за месяц</div><div class="v">—</div><div class="s">пересчитать</div></button>`
+    ${stale ? `<button class="stat stat-btn" data-act="wbook.refresh" title="Пересчитать по Google Диску"><div class="k">Написано за месяц</div><div class="v">—</div><div class="s">${refreshing.on ? 'считаю…' : 'пересчитать'}</div></button>`
       : `<div class="stat"><div class="k">Написано за месяц</div><div class="v">${alNum(sum('wrote'))}</div><div class="s">а.л. · сегодня +${alNum(sum('today'))}</div></div>`}
     <div class="stat"><div class="k">Глав в ${fmtMonthIn(mk).split(' ')[0]}</div><div class="v">${sum('chapters') + sum('timers')}</div><div class="s">${sum('timers') ? `${sum('chapters')} ${plural(sum('chapters'), ['вышла', 'вышли', 'вышло'])} · ${sum('timers')} на таймере` : plural(sum('chapters'), ['вышла', 'вышли', 'вышло'])}</div></div>
     <div class="stat"><div class="k">Доход за ${fmtMonth(mk).split(' ')[0]}</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div></div>
