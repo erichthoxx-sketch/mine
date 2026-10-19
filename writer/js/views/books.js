@@ -217,7 +217,7 @@ export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
-  const regain = (b.gainsV || 0) < 2; // 2 — прирост по версиям считается и в Документах с промтами (только рукопись)
+  const regain = (b.gainsV || 0) < 3; // 3 — прирост по версиям в Документах с промтами: текст версии делится по названиям вкладок
   if (!force && !ruleChanged && !regain && b.titlesV === 2 && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled && (meta.mimeType !== drive.MIME.doc || (b.svc && (b.tabs || []).some((t) => 'lead' in t)))) return false;
   // названия глав в самом Документе — к одному виду (только если какое-то оформлено иначе)
   let titles = 0, doc = null;
@@ -257,8 +257,8 @@ export async function refreshOne(a, b, force = false) {
     if (!weekStart) weekStart = { date: c.today, from: wFrom, chars: g[wFrom] != null ? r.total - Math.max(0, g[wFrom]) : null };
     if (!monthStart) monthStart = { date: c.today, from: mFrom, chars: g[mFrom] != null ? r.total - Math.max(0, g[mFrom]) : null };
     const cur = a.ctx().wbooksById[b.id] || base;
-    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: gainsOk ? 2 : 0 });
-  } else if (filled !== !!b.histFilled || regain) await a.store.put('w_books', { ...base, histFilled: filled, gainsV: 2 });
+    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: gainsOk ? 3 : 0 });
+  } else if (filled !== !!b.histFilled || regain) await a.store.put('w_books', { ...base, histFilled: filled, gainsV: 3 });
   return true;
 }
 export async function refreshAll(a, { quiet = false } = {}) {

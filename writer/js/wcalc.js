@@ -48,9 +48,12 @@ export function charsFromDocsJson(doc) {
   return { total: tabs.filter(inMs).reduce((a, t) => a + t.chars, 0), tabs, svc };
 }
 
-// Прирост по версиям Документа, где кроме рукописи есть промты, каркас, черновики: версия Диска — это весь текст
-// подряд, без деления на вкладки. Каждую строку версии относим к рукописи или к служебным вкладкам — по совпадению
-// с нынешним текстом вкладок; правленые и удалённые строки — к тому же, что стоит рядом (вкладки идут подряд).
+// Прирост по версиям Документа, где кроме рукописи есть промты, каркас, черновики. Версия Диска — весь текст подряд,
+// и перед каждой вкладкой Google ставит строку с её названием. По этим строкам текст версии делится на вкладки
+// (названия берём у нынешних вкладок, по порядку; вкладок, которых тогда ещё не было, просто нет), и считается
+// только то, что под «Прологом», «Главами», «Эпилогом». Так черновик главы, написанный сперва во вкладке с промтом
+// и потом перенесённый в главу, не считается написанным раньше времени.
+// Если названий в тексте не нашлось — запасной путь: строки сверяются с нынешним текстом вкладок.
 // Возвращает функцию: текст версии → знаков рукописи.
 export function manuscriptCounter(doc) {
   const { tabs } = charsFromDocsJson(doc);
@@ -59,18 +62,49 @@ export function manuscriptCounter(doc) {
   const walk = (list) => { for (const t of list || []) { texts.push(textOf(t.documentTab?.body?.content)); walk(t.childTabs); } };
   walk(doc.tabs);
   const key = (l) => l.replace(/^\s*(?:[*\-–—•●◦▪]|\d+[.)])\s+/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const inMs = tabs.map((t) => t.counted && !/^\s*от автора/i.test(t.title));
+  const byTitle = new Map();
+  tabs.forEach((t, i) => { const k = key(t.title); if (k) byTitle.set(k, [...(byTitle.get(k) || []), i]); });
   const ms = new Set(), other = new Set();
-  tabs.forEach((t, i) => {
-    const inMs = t.counted && !/^\s*от автора/i.test(t.title);
-    for (const l of String(texts[i] || '').split(/[\n\u000b]/)) { const k = key(l); if (k.length >= 3) (inMs ? ms : other).add(k); }
-  });
-  return (plain) => {
-    const lines = String(plain || '').replace(/^\uFEFF/, '').split(/\r?\n|[\u000b\u000c\u2028\u2029]/);
-    // строка-название главы («ГЛАВА 1.», «Пролог») — начало рукописи, даже если тогда была оформлена иначе
+  tabs.forEach((t, i) => { for (const l of String(texts[i] || '').split(/[\n\u000b]/)) { const k = key(l); if (k.length >= 3) (inMs[i] ? ms : other).add(k); } });
+  const split = (plain) => String(plain || '').replace(/^\uFEFF/, '').split(/\r?\n|[\u000b\u000c\u2028\u2029]/);
+  // первая непустая строка каждой вкладки: настоящее название вкладки в тексте версии обычно стоит прямо перед ней
+  // (у глав это строка «Глава N», поэтому «Глава 3» в каркасе или в черновике названием вкладки не считается)
+  const firstKey = texts.map((t) => String(t || '').split(/[\n\u000b]/).map(key).find(Boolean) || '');
+  // лучшая цепочка строк-названий, идущих в том же порядке, что и вкладки
+  const chainOf = (lines) => {
+    const keys = lines.map(key), cand = [];
+    keys.forEach((k, li) => {
+      const ids = byTitle.get(k);
+      if (!ids) return;
+      let nx = li + 1; while (nx < keys.length && !keys[nx]) nx++;
+      for (const ti of [...ids].reverse()) cand.push({ li, ti, w: 1 + (firstKey[ti] && keys[nx] === firstKey[ti] ? 2 : 0) });
+    });
+    const len = cand.map((x) => x.w), prev = cand.map(() => -1);
+    let best = -1;
+    for (let a = 0; a < cand.length; a++) {
+      for (let b = 0; b < a; b++) if (cand[b].li < cand[a].li && cand[b].ti < cand[a].ti && len[b] + cand[a].w > len[a]) { len[a] = len[b] + cand[a].w; prev[a] = b; }
+      if (best < 0 || len[a] > len[best]) best = a;
+    }
+    const out = [];
+    for (let x = best; x >= 0; x = prev[x]) out.unshift(cand[x]);
+    return out;
+  };
+  const byLines = (lines) => {
     const head = (k) => k.length <= 60 && /^(пролог|эпилог|глава\s*\d+|часть\s)/.test(k) && !other.has(k);
     const cls = lines.map((l) => { const k = key(l); if (k.length < 3) return null; if (head(k)) return true; const a = ms.has(k), b = other.has(k); return a === b ? null : a; });
     let last = cls.find((x) => x != null) ?? true, n = 0;
     lines.forEach((l, i) => { if (cls[i] != null) last = cls[i]; if (last) n += l.length; });
+    return n;
+  };
+  return (plain) => {
+    const lines = split(plain), chain = chainOf(lines);
+    if (tabs.length < 2 || chain.length < Math.max(2, Math.ceil(tabs.length * 0.3))) return byLines(lines);
+    let n = 0, c = 0, cur = false; // до первой вкладки — не рукопись
+    lines.forEach((l, li) => {
+      if (c < chain.length && chain[c].li === li) { cur = inMs[chain[c].ti]; c++; return; } // строка-название вкладки — не текст
+      if (cur) n += l.length;
+    });
     return n;
   };
 }
