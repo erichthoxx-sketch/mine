@@ -380,3 +380,16 @@ test('конкурс: название по адресу страницы и н�
   assert.equal(parseContest(t, 'https://litnet.com/ru/contests/temnoe-prityazhenie-c212', '2026-10-20').name, 'Темное притяжение');
   assert.equal(parseContest(t, '', '2026-10-20').name, 'Темное притяжение'); // и без адреса: подзаголовок «Конкурс …» и фраза с двоеточием пропускаются
 });
+
+test('страница конкурса: без служебных строк загрузки, меню сайта и счётчиков', async () => {
+  const { cleanContestText, rawContestText, parseContest } = await import('../writer/js/wcalc.js');
+  const raw = 'Title: Литературный конкурс: Темное притяжение\n\nURL Source: https://litnet.com/ru/contests/temnoe-prityazhenie-c154/rules\n\nMarkdown Content:\nЖанры и подборки\n\nКонкурсы\n\nБлоги\n\nМоя библиотека\n\n104 дня до конца приема работ!\n\n110\n\nТемное притяжение\n\nКонкурс на лучший роман в жанре темной романтики\n\n[Участвовать](https://litnet.com/x)\n\nСрок приема работ\n\n19 окт. 2026 - 31 янв. 2027\n\nРазмер книги\n\nОт 30 000 знаков\n\n* Принимаются только новые книги\n\nО проекте\n\nПользовательское соглашение';
+  assert.ok(rawContestText(raw));
+  const t = cleanContestText(raw);
+  assert.equal(t.split('\n')[0], 'Темное притяжение');
+  assert.ok(!/Title|URL Source|Markdown|Моя библиотека|Блоги|^110$|до конца приема|Участвовать|О проекте/m.test(t), t);
+  assert.ok(/— Принимаются только новые книги/.test(t));
+  const r = parseContest(t, 'https://litnet.com/ru/contests/temnoe-prityazhenie-c154/rules', '2026-10-20');
+  assert.equal(r.name, 'Темное притяжение');
+  assert.equal(r.end, '2027-01-31');
+});

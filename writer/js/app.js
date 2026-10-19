@@ -12,7 +12,7 @@ import { homeView } from './views/home.js';
 import { planView, navToday } from './views/plan.js';
 import { scheduleTodoist } from './tdsync.js';
 import { syncFinish } from './sync.js';
-import { CONTEST_NAV, parseContest } from './wcalc.js';
+import { CONTEST_NAV, cleanContestText, rawContestText, parseContest } from './wcalc.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
@@ -142,15 +142,22 @@ const CONTEST_PV = 3;
 let reparsing = false;
 async function reparseContests() {
   if (reparsing) return;
-  const old = (store.data.w_contests || []).filter((x) => x.conditions && (x.pv || 0) < CONTEST_PV);
-  // название попало с кнопки страницы («Участвовать») — берём настоящее из условий, остальное не трогаем
+  const old = (store.data.w_contests || []).filter((x) => x.conditions && (x.pv || 0) < CONTEST_PV && !rawContestText(x.conditions));
   // имя с кнопки («Участвовать») или фраза из условий («2 победителя получат: …») — исправляем по условиям и адресу
   const odd = (n) => CONTEST_NAV.test(n) || /:/.test(n) || /^\d/.test(n) || n.length > 70;
   const badName = (store.data.w_contests || []).filter((x) => x.conditions && (x.pv || 0) >= CONTEST_PV && odd(String(x.name || '').trim()));
-  if (!old.length && !badName.length) return;
+  const raw = (store.data.w_contests || []).filter((x) => rawContestText(x.conditions));
+  if (!old.length && !badName.length && !raw.length) return;
   reparsing = true;
   try {
-    for (const x of badName) { const nm = parseContest(x.conditions, x.url || '', todayISO()).name; if (nm && !odd(nm) && nm !== x.name) await store.put('w_contests', { ...x, name: nm }); }
+    // страница была сохранена «сырой» (служебные строки, меню сайта) — чистим; название и пустые поля — из чистого текста
+    for (const x of raw) {
+      const conditions = cleanContestText(x.conditions), r = parseContest(conditions, x.url || '', todayISO()), patch = { conditions };
+      if (r.name && (odd(String(x.name || '').trim()) || !x.name)) patch.name = r.name;
+      for (const k of ['start', 'end', 'results', 'genres', 'minChars', 'maxChars', 'unit', 'startChars', 'volNote', 'fileTpl', 'chapters', 'formats']) if (r[k] != null && r[k] !== '' && (x[k] == null || x[k] === '')) patch[k] = r[k];
+      await store.put('w_contests', { ...x, ...patch });
+    }
+    for (const x of badName.filter((y) => !raw.includes(y))) { const nm = parseContest(x.conditions, x.url || '', todayISO()).name; if (nm && !odd(nm) && nm !== x.name) await store.put('w_contests', { ...x, name: nm }); }
     for (const x of old) {
       const r = parseContest(x.conditions, x.url || '', todayISO()), keep = {};
       if (x.name && !CONTEST_NAV.test(x.name.trim()) && !/:/.test(x.name)) keep.name = x.name;

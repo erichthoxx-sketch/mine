@@ -605,11 +605,33 @@ export function contestEmailPurpose(x, email) {
 
 
 // строки страницы конкурса, которые не бывают названием: меню площадки и кнопки
+// текст страницы конкурса — без служебных строк загрузки («Title:», «URL Source:», «Markdown Content:»), разметки,
+// меню площадки, счётчиков и подвала сайта: от названия конкурса до конца условий
+const PAGE_JUNK = /^(жанры и подборки|жанры|конкурсы|блоги|моя библиотека|библиотека|участвовать|участвую|войти|вход|регистрация|поиск|меню|главная|все конкурсы|правила( конкурса)?|работы( участников)?|участники|новости|итоги|авторам|читателям|подписаться|поделиться|\d+|\d+\s+(дн[яей]|день)\s+до\s+конца\s+при[её]ма\s+работ!?|.*cookie.*|©.*)$/i;
+const PAGE_FOOT = /^(о проекте|правообладателям|пользовательское соглашение|политика конфиденциальности|служба поддержки|скачать приложение|мы в соцсетях|контакты|реклама на сайте)/i;
+export function cleanContestText(t) {
+  let s = String(t || '').replace(/\r/g, '');
+  const title = /^Title:\s*(.+)$/m.exec(s)?.[1]?.trim() || '';
+  s = s.replace(/^(Title|URL Source|Published Time|Warning):.*$/gm, '').replace(/^Markdown Content:\s*$/m, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/^#{1,6}\s*/gm, '').replace(/\*\*|__/g, '')
+    .replace(/^\s*[*+]\s+/gm, '— ').replace(/^\s*(=+|-{3,})\s*$/gm, '');
+  let lines = s.split('\n').map((x) => x.trim()).filter(Boolean);
+  const name = title.replace(/^литературный\s+конкурс:?\s*/i, '').replace(/^конкурс:?\s*/i, '').replace(/\s*[|—-]\s*(литнет|litnet).*$/i, '').trim();
+  const i0 = name ? lines.findIndex((x) => x.toLowerCase() === name.toLowerCase()) : -1;
+  if (i0 > 0) lines = lines.slice(i0);
+  lines = lines.filter((x) => !PAGE_JUNK.test(x));
+  const fi = lines.findIndex((x) => PAGE_FOOT.test(x));
+  if (fi > 3) lines = lines.slice(0, fi);
+  if (name && lines[0]?.toLowerCase() !== name.toLowerCase()) lines.unshift(name);
+  return lines.join('\n');
+}
+// условия похожи на «сырую» страницу (служебные строки загрузки, меню) — их стоит почистить
+export const rawContestText = (t) => /^(Title|URL Source):|^Markdown Content:/m.test(String(t || ''));
 // латиница адреса ↔ кириллица названия: «temnoe-prityazhenie» = «Темное притяжение»
 const TR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sh', ъ: '', ы: 'i', ь: '', э: 'e', ю: 'iu', я: 'ia' };
 const latKey = (s) => String(s).toLowerCase().replace(/[а-яё]/g, (ch) => TR[ch] ?? '').replace(/shch|sch/g, 'sh').replace(/kh/g, 'h').replace(/ts/g, 'c').replace(/yo/g, 'e').replace(/[yj]/g, 'i').replace(/[^a-z0-9]/g, '');
 export function nameFromSlug(lines, url) {
-  const m = /\/contests?\/([a-z0-9-]+?)(?:-c\d+)?\/?(?:[?#]|$)/i.exec(String(url || ''));
+  const m = /\/contests?\/([a-z0-9-]+?)(?:-c\d+)?(?:[/?#]|$)/i.exec(String(url || '')); // «…-c154/rules» тоже
   if (!m) return null;
   const slug = latKey(m[1]);
   if (slug.length < 4) return null;

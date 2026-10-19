@@ -1,6 +1,8 @@
 // Текст страницы по ссылке (условия конкурса): браузер не может открыть чужой сайт напрямую, поэтому
 // сначала — через переходник владелицы на Cloudflare (версия 3 умеет страницы площадок), потом — через
 // общедоступные «читалки» страниц. Ничего не отправляем, кроме самой ссылки.
+import { cleanContestText } from './wcalc.js';
+
 const clean = (t) => String(t || '').replace(/\r/g, '').replace(/[ \t ]+/g, ' ').replace(/\n\s*\n+/g, '\n').replace(/^ +| +$/gm, '').trim();
 
 // HTML → текст с переносами строк по абзацам и пунктам (как при «выделить всё и скопировать»)
@@ -20,7 +22,7 @@ export async function fetchPageText(url, settings = {}) {
     async () => { const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url)); if (!r.ok) throw new Error(r.status); return htmlToText(await r.text()); },
   ];
   for (const t of tries) {
-    try { const text = await t(); if (text && text.length > 200) return text; } catch { /* пробуем следующий способ */ }
+    try { const text = await t(); if (text && text.length > 200) return cleanContestText(text); } catch { /* пробуем следующий способ */ }
   }
   throw new Error('страница не открылась');
 }
