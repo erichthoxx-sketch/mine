@@ -216,7 +216,7 @@ export async function refreshOne(a, b, force = false) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
-  if (!force && !ruleChanged && b.titlesV === 1 && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled && (meta.mimeType !== drive.MIME.doc || (b.svc && (b.tabs || []).some((t) => 'lead' in t)))) return false;
+  if (!force && !ruleChanged && b.titlesV === 2 && meta.modifiedTime === b.modifiedTime && (b.history || {})[c.today] != null && b.dayStart?.date === c.today && b.dayStart.v === 2 && b.weekStart?.date === c.today && b.monthStart?.date === c.today && b.histFilled && (meta.mimeType !== drive.MIME.doc || (b.svc && (b.tabs || []).some((t) => 'lead' in t)))) return false;
   // названия глав в самом Документе — к одному виду (только если какое-то оформлено иначе)
   let titles = 0;
   if (meta.mimeType === drive.MIME.doc) {
@@ -228,7 +228,7 @@ export async function refreshOne(a, b, force = false) {
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
   const history = ruleChanged ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
   // шаг 1: знаки и главы сохраняем сразу — они видны, даже если история версий долгая или недоступна
-  const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE, titlesV: 1, ...(r.svc ? { svc: r.svc } : {}) };
+  const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE, titlesV: 2, ...(r.svc ? { svc: r.svc } : {}) };
   await a.store.put('w_books', base);
   // шаг 2: начало дня / недели / месяца и (один раз) история за 2 недели — по версиям документа
   // правило подсчёта поменялось — начало дня/недели/месяца и историю за 2 недели пересчитываем заново по версиям
