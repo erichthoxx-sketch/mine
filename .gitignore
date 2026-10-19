@@ -4,3 +4,8 @@ Statistic*.csv
 dohody*.csv
 backup-*.json
 !tests/fixtures/sample-statistic.csv
+
+# снимки экрана от проверок — не в хранилище (значки приложения — исключение)
+/*.png
+!/heart-line-180.png
+!/heart-line-512.png
