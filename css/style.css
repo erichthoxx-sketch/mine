@@ -5,6 +5,7 @@
   --font-display: "Unbounded", "Nunito", system-ui, sans-serif;
   --font-body: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --bg: #f6f4f2; --surface: #ffffff; --surface-2: #f8eef2; --line: #ece4e7;
+  --ivory: #fffdf8; /* карточки Легенды — слоновая кость */
   --text: #1c1a1b; --text-2: #5c5257; --muted: #7d7277;
   --accent: #b0466f; --link: #0b6b4f; --accent-2: #f6c9d9; --accent-ink: #1c1a1b; --accent-soft: #fbe7ef; --btn-from: #f9d5e2; --btn-to: #f3bcd0;
   --bar: #eeaac4; --bar-unk: #f6dbe5; --ma: #1c1a1b; --ma3: #8a6fc9;
@@ -16,7 +17,7 @@
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
-    --bg: #161515; --surface: #201f1f; --surface-2: #2c2427; --line: #353032;
+    --bg: #161515; --surface: #201f1f; --surface-2: #2c2427; --line: #353032; --ivory: #201f1f;
     --text: #f7f3f4; --text-2: #cfc4c8; --muted: #a2969b;
     --accent: #f2b3ca; --link: #6fd0aa; --accent-2: #f2b3ca; --accent-ink: #1c1a1b; --accent-soft: #3a2a30; --btn-from: #f6c6d7; --btn-to: #eeaac4;
     --bar: #e79ab8; --bar-unk: #5a3a46; --ma: #f7f3f4; --ma3: #b79bff;
@@ -28,7 +29,7 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #161515; --surface: #201f1f; --surface-2: #2c2427; --line: #353032;
+  --bg: #161515; --surface: #201f1f; --surface-2: #2c2427; --line: #353032; --ivory: #201f1f;
   --text: #f7f3f4; --text-2: #cfc4c8; --muted: #a2969b;
   --accent: #f2b3ca; --link: #6fd0aa; --accent-2: #f2b3ca; --accent-ink: #1c1a1b; --accent-soft: #3a2a30; --btn-from: #f6c6d7; --btn-to: #eeaac4;
   --bar: #e79ab8; --bar-unk: #5a3a46; --ma: #f7f3f4; --ma3: #b79bff;
@@ -1530,9 +1531,8 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .lg-f .lg-l { margin: 0 0 4px; font-size: 16px; font-weight: 700; color: var(--text); }
 .lg-sl { display: block; margin: 14px 0 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .lg-ch-h + .lg-sl { margin-top: 8px; }
-/* карточки Легенды — чуть серые вместо белых (серый от цвета текста — нейтральный в обеих темах);
-   поле внутри без заливки и без обводки, цвет акцента — только при наведении и правке */
-:is(.lg-f, .lg-ch:not(.lg-ghost), .lg-qs, .lg-syn, .lg-cards .lg-card:not(.lg-new)) { background: color-mix(in srgb, var(--surface) 95%, var(--text)); }
+/* карточки Легенды — цвета слоновой кости; поле внутри без заливки и без обводки, цвет акцента — только при наведении и правке */
+:is(.lg-f, .lg-ch, .lg-qs, .lg-syn, .lg-cards .lg-card:not(.lg-new)) { background: var(--ivory); }
 :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta, .lg-q-h textarea.lg-ta { display: block; width: calc(100% + 16px); margin: 2px -8px 4px; padding: 6px 8px; min-height: 0; border: 0 !important; border-radius: 10px; background: transparent !important; box-shadow: none !important; font-size: 16px; line-height: 1.6; color: var(--text); transition: background-color .15s; }
 :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:hover, .lg-q-h textarea.lg-ta:hover { background: color-mix(in srgb, var(--surface-2) 70%, transparent) !important; }
 :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:focus, .lg-q-h textarea.lg-ta:focus { background: var(--surface-2) !important; outline: none; box-shadow: none !important; }
