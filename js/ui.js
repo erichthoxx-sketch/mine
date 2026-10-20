@@ -65,11 +65,23 @@ export function installHandlers(afterChange) {
     e.preventDefault();
     try { await forms[f.dataset.form]?.(new FormData(f), f, e); } catch (err) { console.error(err); toast('Ошибка: ' + (err.message || err)); }
   });
-  document.addEventListener('change', async (e) => {
-    const el = e.target.closest('[data-chg]');
-    if (!el) return;
+  const runChg = async (el) => {
     try { await changes[el.dataset.chg]?.(el.value, el, el.type === 'checkbox' ? el.checked : undefined); } catch (err) { console.error(err); toast('Ошибка: ' + (err.message || err)); }
+  };
+  document.addEventListener('change', (e) => {
+    const el = e.target.closest('[data-chg]');
+    if (!el || e.__chgDone) return;
+    runChg(el);
   });
+  // выбор файла: пока открыто окно выбора, экран может перерисоваться и кнопка — смениться новой;
+  // тогда событие «файл выбран» приходит в старую кнопку, которой уже нет на странице, и до общего обработчика
+  // не доходит («загружается через раз»). Поэтому слушаем саму кнопку с момента нажатия.
+  document.addEventListener('click', (e) => {
+    const el = e.target;
+    if (!(el instanceof HTMLInputElement) || el.type !== 'file' || !el.dataset.chg || el.__chgWatch) return;
+    el.__chgWatch = true;
+    el.addEventListener('change', (ev) => { ev.__chgDone = true; runChg(el); });
+  }, true);
 }
 
 // Скачивание: в Claude через разрешение «downloads» (обычные ссылки там заблокированы), в обычном браузере — через ссылку

@@ -70,7 +70,9 @@ js/                        — «Доходы» + общие модули
   app.js        роутинг (#/, #/day, #/books, #/book/ID, #/ads, #/ad/ID, #/money, #/data), меню, рендер
   store.js      хранилище: Firebase (users/{uid}/{коллекция}/{id}, настройки users/{uid}/meta/settings)
                 или пробный режим в localStorage (на localhost — всегда пробный)
-  ui.js         общие помощники: acts / forms / changes, openSheet, toast, download, ask, opt, esc, N, tidyNums, keepPlace
+  ui.js         общие помощники: acts / forms / changes, openSheet, toast, download, ask, opt, esc, N, tidyNums, keepPlace;
+                выбор файла (input type=file с data-chg) слушается на самой кнопке с момента нажатия — иначе перерисовка экрана,
+                пока открыто окно выбора, «теряет» файл (выгрузка грузилась через раз)
   calc.js       ВСЕ расчёты доходов: продажи, недели/месяцы, реклама, «Литнет платит», налог, НПД-лимит,
                 цели (buildPlan, planOverridesOf, monthGoalStatus), bigGoalPlan
   parse.js      разбор выгрузок Литнета (CSV/XLSX), COLLECTIONS доходов
