@@ -8,6 +8,8 @@ import * as drive from '../drive.js';
 import { chapterList, isAuthorTab } from '../wcalc.js';
 import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests } from '../docedit.js';
 import { docxBlob, noYo } from '../publish.js';
+import { synText, synSource } from '../synopsis.js';
+import './pubfiles.js'; // «Скопировать» и «Word» синопсиса
 import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, legendContext, legendTemplate, applyTemplate, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
 
 const app = () => window.__app;
@@ -28,14 +30,14 @@ export function legendPage(a, id) {
   if (!b) return { html: '<div class="card"><p>Книга не найдена.</p></div>' };
   const L = legendOf(b), tab = a.ui.legTab || 'idea';
   const main = chapterList(b).filter((t) => !isAuthorTab(t.title));
-  const tabs = [['idea', 'Идея'], ['plan', `Каркас${L.plan.length ? ` · ${L.plan.length}` : ''}`], ['chars', `Персонажи${L.chars.length ? ` · ${L.chars.length}` : ''}`]];
+  const tabs = [['idea', 'Идея'], ['plan', `Каркас${L.plan.length ? ` · ${L.plan.length}` : ''}`], ['chars', `Персонажи${L.chars.length ? ` · ${L.chars.length}` : ''}`], ['syn', 'Синопсис']];
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a></p>
   <div class="lg-top"><h2 class="lg-book">${esc(b.title)}</h2>${bookSeg(b, 'legend')}</div>
   <div class="lg-bar"><div class="lg-tabs">${tabs.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-act="leg.tab" data-v="${k}">${t}</button>`).join('')}</div>
     <div class="lg-acts"><button class="dl" data-act="leg.ai" data-id="${b.id}">${ic('sparkle')}Для нейросети</button><button class="dl" data-act="leg.docx" data-id="${b.id}">${ic('download')}Word</button><button class="dl" data-act="leg.pdf" data-id="${b.id}">${ic('download')}PDF</button><button class="dl" data-act="leg.hist" data-id="${b.id}" title="Версии Легенды: сохранить и вернуть">${ic('timer')}Версии</button></div></div>
   ${syncLine(b, L)}
-  ${tab === 'idea' ? ideaHtml(b, L) : tab === 'plan' ? planHtml(b, L, main) : charsHtml(b, L, main)}
-  <div class="lg-tpl"><button class="dl" data-act="leg.tpl" data-id="${b.id}" data-p="${tab}">${ic('download')}Шаблон для нейросети</button><button class="dl" data-act="leg.tplin" data-id="${b.id}" data-p="${tab}">${ic('upload')}Загрузить ответ</button></div>`;
+  ${tab === 'syn' ? synHtml(c, b) : tab === 'idea' ? ideaHtml(b, L) : tab === 'plan' ? planHtml(b, L, main) : charsHtml(b, L, main)}
+  ${tab === 'syn' ? '' : `<div class="lg-tpl"><button class="dl" data-act="leg.tpl" data-id="${b.id}" data-p="${tab}">${ic('download')}Шаблон для нейросети</button><button class="dl" data-act="leg.tplin" data-id="${b.id}" data-p="${tab}">${ic('upload')}Загрузить ответ</button></div>`}`;
   return { html, after: () => document.querySelectorAll('.lg-ta').forEach(grow) };
 }
 // поле растёт по тексту — длинную мысль видно целиком
@@ -96,6 +98,18 @@ function questionsHtml(b, L) {
   return `<details class="card lg-qs"${open || !qs.length ? ' open' : ''}><summary><b>Открытые вопросы</b><span class="muted">${qs.length ? ` · ${open ? `не решено ${open}` : 'все решены'}` : ''}</span></summary>
     ${qs.length ? '' : '<p class="small muted" style="margin:6px 0 0">Что ещё мешает начать писать: запишите вопрос, потом решение — и утвердите его. Утверждённое попадёт в рабочий контекст для нейросети.</p>'}
     ${qs.map(row).join('')}<div class="lg-add" style="margin-top:8px"><button data-act="leg.qadd" data-id="${b.id}">+ Вопрос</button></div></details>`;
+}
+
+// «Синопсис» — тот же текст, что везде в Мастерской (вкладка «Синопсис» Документа); изменить — в редакторе вкладки
+function synHtml(c, b) {
+  const t = synText(b), files = c.data.w_media.filter((m) => m.bookId === b.id && m.type === 'synopsis');
+  const chars = t.replace(/\n/g, '').length;
+  return `<div class="card lg-syn">
+    <div class="row between lg-syn-h"><span class="small muted">${esc(synSource(b))}${t ? ` · ${grp(chars)} зн.` : ''}</span>
+      <span class="lg-syn-acts"><button class="dl" data-act="syn.edit" data-id="${b.id}" data-back="/legend/${b.id}">${ic('pen')}${t ? 'Редактировать' : 'Написать'}</button>${t ? `<button class="dl" data-act="svc.copy" data-id="${b.id}" data-k="synopsis">${ic('copy')}Скопировать</button><button class="dl" data-act="svc.docx" data-id="${b.id}" data-k="synopsis">${ic('download')}Word</button>` : ''}${isGDoc(b) ? `<button class="dl" data-act="wbook.refreshOne" data-id="${b.id}" title="Подтянуть свежий текст из Google Документа">${ic('refresh')}Обновить</button>` : ''}</span></div>
+    ${t ? `<div class="lg-syn-text">${t.split('\n').map((x) => `<p>${esc(x)}</p>`).join('')}</div>` : `<p class="muted" style="margin:8px 0 0">Синопсиса пока нет. ${isGDoc(b) ? '«Написать» заведёт вкладку «Синопсис» в Google Документе книги и откроет её в редакторе.' : ''}</p>`}
+    ${files.length ? `<div class="lg-syn-files"><div class="small muted">Загруженные файлы синопсиса</div>${files.map((m) => `<div class="item row between"><span>${ic('doc')} ${esc(m.name)}</span>${m.webViewLink ? `<a class="dl" href="${esc(m.webViewLink)}" target="_blank" rel="noopener">Открыть</a>` : ''}</div>`).join('')}</div>` : ''}
+  </div>`;
 }
 
 function charsHtml(b, L, main) {

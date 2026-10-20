@@ -234,7 +234,7 @@ export async function refreshOne(a, b, force = false) {
   // при пересчёте прироста старая история (посчитанная прежним способом) тоже заменяется
   const history = ruleChanged || regain ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
   // шаг 1: знаки и главы сохраняем сразу — они видны, даже если история версий долгая или недоступна
-  const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE, titlesV: 2, ...(r.svc ? { svc: r.svc } : {}) };
+  const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE, titlesV: 2, ...(r.svc ? { svc: r.svc } : {}), ...(r.svc?.synopsis ? { synopsis: r.svc.synopsis } : {}) }; // синопсис из вкладки Документа — один на всю Мастерскую
   await a.store.put('w_books', base);
   // шаг 2: начало дня / недели / месяца и (один раз) история за 2 недели — по версиям документа
   // правило подсчёта поменялось — начало дня/недели/месяца и историю за 2 недели пересчитываем заново по версиям

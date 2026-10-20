@@ -1519,3 +1519,25 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .lg-file { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-2); padding: 4px 10px; }
 .lg-file .ic { width: 16px; height: 16px; }
 @media (max-width: 480px) { .lg-tpl { gap: 2px; } :is(main, dialog) .lg-tpl button.dl.dl:not(.chip):not(.link):not(.wide) { padding: 4px 5px; font-size: 12.5px; gap: 4px; } }
+/* Легенда → Синопсис */
+.lg-syn-h { flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.lg-syn-acts { display: inline-flex; flex-wrap: wrap; gap: 2px 6px; }
+.lg-syn-text { margin-top: 12px; line-height: 1.6; }
+.lg-syn-text p { margin: 0 0 .7em; }
+.lg-syn-files { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+
+/* Легенда → Идея: читается как текст — разделы с тихими подписями, без рамок, удобная ширина строки */
+.lg-idea { padding: 6px 24px 10px; }
+.lg-idea .lg-l { margin: 0; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.lg-idea .lg-l:first-child { border-top: 0; padding-top: 14px; }
+.lg-idea textarea.lg-ta { display: block; max-width: 760px; margin: 4px -10px 16px; width: calc(100% + 20px); padding: 8px 10px; border: 0 !important; border-radius: 10px; background: transparent !important; box-shadow: none !important; font-size: 16px; line-height: 1.7; color: var(--text); }
+.lg-idea textarea.lg-ta:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent) !important; }
+.lg-idea textarea.lg-ta:focus { background: var(--surface-2) !important; outline: none; }
+.lg-idea textarea.lg-ta::placeholder { color: var(--muted); opacity: .75; }
+@media (max-width: 600px) { .lg-idea { padding: 4px 16px 8px; } .lg-idea textarea.lg-ta { font-size: 15.5px; } }
+/* каркас и синопсис — тот же спокойный ритм текста */
+.lg-ch textarea.lg-ta { line-height: 1.6; }
+.lg-syn-text { max-width: 760px; font-size: 16px; line-height: 1.75; }
+.lg-tabs { overflow-x: auto; scrollbar-width: none; }
+.lg-tabs::-webkit-scrollbar { display: none; }
+@media (max-width: 480px) { main .lg-tabs button { padding: 6px 8px; } }

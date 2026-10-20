@@ -125,7 +125,8 @@ export function editorView(a, bookId, title) {
   if (!b) return { html: '<div class="card"><p>Книга не найдена.</p></div>' };
   const key = `${bookId}:${title}`;
   if (!ed || ed.key !== key) load(key, b, title);
-  const back = `<a class="btn back" href="#" data-act="ed.back" data-id="${b.id}">← К книге</a>`;
+  const eb = a.ui.edBack || '', backTo = eb.startsWith('/legend/') ? 'К Легенде' : eb.startsWith('/mk/') ? 'К маркетингу' : 'К книге';
+  const back = `<a class="btn back" href="#" data-act="ed.back" data-id="${b.id}">← ${backTo}</a>`;
   if (ed.status === 'loading') return { html: `<p>${back}</p><div class="card"><p class="muted" style="margin:0">Загружаю «${esc(title)}» из Google Документа…</p></div>` };
   if (ed.status === 'error') return { html: `<p>${back}</p><div class="card"><p style="margin-top:0">Не получилось открыть главу: ${esc(ed.err)}</p><button data-act="ed.reload">Попробовать ещё раз</button></div>` };
   const chs = chapterList(b).map((t) => t.title), i = chs.indexOf(title);
@@ -463,7 +464,7 @@ acts['ch.add'] = async (d) => {
   return false;
 };
 acts['ed.goto'] = (d) => { clearFind(); app().go(`/ed/${ed.bookId}/${encodeURIComponent(d.t)}`); };
-acts['ed.back'] = (d) => { app().go('/book/' + d.id); };
+acts['ed.back'] = (d) => { const to = app().ui.edBack; app().ui.edBack = ''; app().go(to || '/book/' + d.id); }; // из Легенды или Маркетинга — обратно туда
 acts['ed.reload'] = () => { const k = ed?.key; ed = null; if (k) app().rerender(); };
 acts['ed.useDraft'] = () => { ed.html = ed.draft.html; ed.draft = null; ed.dirty = true; app().rerender(); };
 acts['ed.dropDraft'] = () => { ls.del(draftKey(ed.key)); ed.draft = null; app().rerender(); };

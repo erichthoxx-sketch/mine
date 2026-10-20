@@ -6,6 +6,7 @@ import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
 import { STATUS } from './books.js';
 import { widgetCard } from './widgets.js';
+import { synText, synSource } from '../synopsis.js';
 import { contests } from './plan.js';
 import { svcInfo } from './pubfiles.js';
 
@@ -46,7 +47,7 @@ export function marketingView(a) {
 }
 function bookRow(c, b) {
   const t = mediaOf(c, b, ['target']).length, d = directOf(b).ads.length;
-  const man = !!b.fileId || mediaOf(c, b, ['manuscript']).length, syn = !!(b.synopsis || '').trim() || mediaOf(c, b, ['synopsis']).length;
+  const man = !!b.fileId || mediaOf(c, b, ['manuscript']).length, syn = !!synText(b) || mediaOf(c, b, ['synopsis']).length;
   const mark = (ok) => (ok ? '<span class="up">✓</span>' : '<span class="muted">—</span>');
   return `<a class="item mk-row" href="#" data-act="go" data-to="/mk/${b.id}">
     <span class="mk-cover">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
@@ -128,8 +129,8 @@ function pubBlock(c, b) {
     ${b.fileId ? `<div class="item row between"><span>${ic('doc')} Текст книги из Google Документа<span class="sub">в пакет — в формате Word, всегда свежая версия</span></span>${b.webViewLink ? `<a class="btn" href="${esc(b.webViewLink)}" target="_blank" rel="noopener">Открыть</a>` : ''}</div>` : ''}
     <div class="list">${man.map(fileRow).join('')}</div>
     <div class="row" style="margin-top:8px">${ok ? upBtn(b, 'manuscript', '+ Загрузить файл рукописи', '.doc,.docx,.pdf,.rtf,.odt,.txt') : ''}</div></div>
-  <div class="card"><div class="row between"><h2 style="margin:0">Синопсис</h2><button data-act="mk.synopsis" data-id="${b.id}">${(b.synopsis || '').trim() ? 'Изменить' : 'Написать'}</button></div>
-    ${(b.synopsis || '').trim() ? `<div class="idea-text">${esc(b.synopsis)}</div>` : '<p class="small muted" style="margin:6px 0 0">Можно написать здесь или загрузить готовый файл.</p>'}
+  <div class="card"><div class="row between"><h2 style="margin:0">Синопсис</h2><button data-act="syn.edit" data-id="${b.id}" data-back="/mk/${b.id}">${synText(b) ? 'Изменить' : 'Написать'}</button></div>
+    ${synText(b) ? `<div class="small muted" style="margin:4px 0 6px">${esc(synSource(b))}</div><div class="idea-text">${esc(synText(b))}</div>` : '<p class="small muted" style="margin:6px 0 0">Можно написать здесь или загрузить готовый файл.</p>'}
     <div class="list">${syn.map(fileRow).join('')}</div>
     <div class="row" style="margin-top:8px">${ok ? upBtn(b, 'synopsis', '+ Загрузить файл синопсиса', '.doc,.docx,.pdf,.rtf,.odt,.txt') : ''}</div></div>
   <div class="card"><h2>Отправить в издательство</h2>
@@ -238,12 +239,7 @@ acts['mk.brief'] = (d) => {
     await app().store.put('w_books', { ...b, direct: { ...dr, link: (fd.get('link') || '').trim(), audience: (fd.get('audience') || '').trim(), notes: (fd.get('notes') || '').trim() } });
   });
 };
-acts['mk.synopsis'] = (d) => {
-  const b = app().ctx().wbooksById[d.id];
-  openSheet(`Синопсис — ${b.title}`, `<textarea name="synopsis" style="min-height:260px">${esc(b.synopsis || '')}</textarea>`, async (fd) => {
-    await app().store.put('w_books', { ...b, synopsis: (fd.get('synopsis') || '').trim() });
-  });
-};
+acts['mk.synopsis'] = (d) => acts['syn.edit']({ id: d.id, back: '/mk/' + d.id });
 
 // ---------- пакеты одной кнопкой ----------
 function targetText(c, b) {
