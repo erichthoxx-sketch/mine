@@ -19,7 +19,7 @@ import { linksView, linkPage } from './views/links.js';
 import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
 
-export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals'];
+export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 initAccent(store);
 const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'open', ideaKind: '', ideaN: 50, openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
@@ -98,7 +98,7 @@ function render() {
   let r;
   document.documentElement.classList.toggle('on-ed', ui.route.startsWith('/ed/')); // в редакторе нижнее меню прячем
   try { r = view(app) || { html: '' }; } catch (e) { console.error(e); r = { html: `<div class="card"><p>Ошибка экрана: ${esc(e.message)}</p></div>` }; }
-  const sync = store.mode === 'local' ? '' : store.sync === 'pending' ? 'сохраняется…' : store.sync === 'error' ? 'ошибка синхронизации' : navigator.onLine ? 'синхронизировано' : 'нет сети';
+  const sync = store.mode === 'local' ? '' : store.sync === 'pending' ? 'сохраняется…' : store.sync === 'error' ? 'ошибка синхронизации' : navigator.onLine ? 'всё сохранено' : 'нет сети';
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере.</div>' : ''}
   <div class="top"><div><h1>Мастерская</h1><small>${esc(c.settings.pseudonym)}${sync ? ' · ' + sync : ''}</small></div>
   <div class="row"><a class="btn" href="../">${ic('ruble')} Доходы</a><button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">${ic('settings')}</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>

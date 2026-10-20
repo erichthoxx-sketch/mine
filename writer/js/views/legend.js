@@ -8,7 +8,7 @@ import * as drive from '../drive.js';
 import { chapterList, isAuthorTab } from '../wcalc.js';
 import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests } from '../docedit.js';
 import { docxBlob, noYo } from '../publish.js';
-import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, legendOf, legendContext, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
+import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, legendOf, legendContext, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
 
 const app = () => window.__app;
 const bookOf = (id) => app().ctx().wbooksById[id];
@@ -32,7 +32,7 @@ export function legendPage(a, id) {
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a></p>
   <div class="lg-top"><h2 class="lg-book">${esc(b.title)}</h2>${bookSeg(b, 'legend')}</div>
   <div class="lg-bar"><div class="lg-tabs">${tabs.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-act="leg.tab" data-v="${k}">${t}</button>`).join('')}</div>
-    <div class="lg-acts"><button class="primary" data-act="leg.ai" data-id="${b.id}">${ic('sparkle')} Для нейросети</button><button class="dl" data-act="leg.docx" data-id="${b.id}">${ic('download')}Word</button><button class="dl" data-act="leg.pdf" data-id="${b.id}">${ic('download')}PDF</button></div></div>
+    <div class="lg-acts"><button class="primary" data-act="leg.ai" data-id="${b.id}">${ic('sparkle')} Для нейросети</button><button class="dl" data-act="leg.docx" data-id="${b.id}">${ic('download')}Word</button><button class="dl" data-act="leg.pdf" data-id="${b.id}">${ic('download')}PDF</button><button class="dl" data-act="leg.hist" data-id="${b.id}" title="Версии Легенды: сохранить и вернуть">${ic('timer')}Версии</button></div></div>
   ${syncLine(b, L)}
   ${tab === 'idea' ? ideaHtml(b, L) : tab === 'plan' ? planHtml(b, L, main) : charsHtml(b, L, main)}`;
   return { html, after: () => document.querySelectorAll('.lg-ta').forEach(grow) };
@@ -48,7 +48,9 @@ function syncLine(b, L) {
   for (const k of conf) parts.push(`<div class="lg-conf"><span>Во вкладке «${LEGEND_TABS[k]}» в Google Документе свой текст — Легенда его не перезаписала.</span><span class="row"><button class="small-btn" data-act="leg.pull" data-id="${b.id}" data-k="${k}">Подтянуть в Легенду</button><button class="link" data-act="leg.replace" data-id="${b.id}" data-k="${k}">Заменить версией из Легенды</button></span></div>`);
   if (sug && !conf.includes('plan')) parts.push(`<div class="lg-conf"><span>В Документе есть вкладка «Каркас» — разложить её по главам здесь?</span><span class="row"><button class="small-btn" data-act="leg.pull" data-id="${b.id}" data-k="plan">Подтянуть</button></span></div>`);
   const t = L.syncedAt ? new Date(L.syncedAt) : null;
-  const st = !drive.hasFreshToken() ? 'Google Документ: подключите Диск — Легенда сохранится во вкладки «Идея», «Каркас», «Персонажи»' : t ? `Google Документ: сохранено ${t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : 'Google Документ: сохранится после первой правки';
+  // где лежит Легенда: сама — в Мастерской (сохраняется сразу); копия — во вкладках Google Документа (нужен Диск)
+  const copy = !drive.hasFreshToken() ? 'копия во вкладках Google Документа обновится, когда подключите Диск' : t ? `копия во вкладках Google Документа — ${t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : 'копия во вкладках Google Документа появится после первой правки';
+  const st = `Сохранено в Мастерской · ${copy}`;
   return `${parts.join('')}<div class="lg-sync small muted">${st}</div>`;
 }
 
@@ -63,15 +65,30 @@ function planHtml(b, L, main) {
     // глава с тем же номером в Документе: написана ли и сколько знаков
     const same = real && String(real.title).trim().toLowerCase() === String(p.title || '').trim().toLowerCase();
     const st = real ? `<span class="lg-st ok" title="${esc(real.title)} в Google Документе">${same ? 'написана' : esc(real.title)}${real.chars ? ` · ${grp(real.chars)} зн.` : ''}</span>` : '<span class="lg-st">ещё не написана</span>';
-    return `<div class="card lg-ch"><div class="lg-ch-h"><span class="lg-n">${i + 1}</span><input class="lg-t" value="${esc(p.title || '')}" placeholder="Название главы" data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="title">${st}
+    const ps = planSt(p);
+    const stSel = `<label class="lg-ps ps-${ps}" title="Статус решения"><span class="dot"></span><select data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="st" aria-label="Статус">${Object.entries(PLAN_ST).map(([k, v]) => opt(k, v, ps)).join('')}</select></label>`;
+    return `<div class="card lg-ch${ps === 'no' ? ' lg-no' : ''}"><div class="lg-ch-h"><span class="lg-n">${i + 1}</span><input class="lg-t" value="${esc(p.title || '')}" placeholder="Название главы" data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="title">${stSel}${st}
       <span class="lg-mv"><button class="lg-ib" data-act="leg.move" data-id="${b.id}" data-i="${i}" data-d="-1" title="Выше" aria-label="Выше"${i ? '' : ' disabled'}>↑</button><button class="lg-ib" data-act="leg.move" data-id="${b.id}" data-i="${i}" data-d="1" title="Ниже" aria-label="Ниже"${i < L.plan.length - 1 ? '' : ' disabled'}>↓</button><button class="lg-ib" data-act="leg.ins" data-id="${b.id}" data-i="${i + 1}" title="Вставить главу после" aria-label="Вставить после">+</button><button class="lg-ib" data-act="leg.delp" data-id="${b.id}" data-i="${i}" title="Убрать из каркаса" aria-label="Убрать">${ic('trash')}</button></span></div>
       ${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="what"`, p.what, 'Что происходит: 2–3 строки, главное событие главы', 2)}
       ${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="why"`, p.why, 'Зачем эта глава: что меняется для героев, какой крючок в конце', 1)}
       ${L.chars.length ? `<div class="lg-row"><label class="lg-pov">Глазами <select data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="pov">${opts(p.pov)}</select></label>
         <span class="lg-chips">${L.chars.map((x) => `<button class="lg-chip${(p.chars || []).includes(x.id) ? ' on' : ''}" data-act="leg.pchar" data-id="${b.id}" data-i="${i}" data-c="${x.id}">${esc(x.name || 'Без имени')}</button>`).join('')}</span></div>` : ''}</div>`;
   };
-  return `${L.plan.map(card).join('')}
+  return `${questionsHtml(b, L)}${L.plan.map(card).join('')}
     <div class="lg-add"><button data-act="leg.ins" data-id="${b.id}" data-i="${L.plan.length}">+ Глава в каркас</button>${!L.plan.length && main.length ? `<button class="link" data-act="leg.fromCh" data-id="${b.id}">Создать по главам из Документа (${main.length})</button>` : ''}</div>`;
+}
+
+// «Открытые вопросы» — что ещё не решено в сюжете; у вопроса решение и отметка «утверждено»
+function questionsHtml(b, L) {
+  const qs = L.questions || [], open = qs.filter((q) => q.st !== 'ok').length;
+  const row = (q) => `<div class="lg-q${q.st === 'ok' ? ' ok' : ''}">
+    <div class="lg-q-h">${ta(`data-chg="leg.q" data-id="${b.id}" data-q="${q.id}" data-k="q"`, q.q, 'Вопрос: что ещё не решено в сюжете?', 1)}
+      <button class="lg-ib" data-act="leg.qdel" data-id="${b.id}" data-q="${q.id}" title="Убрать вопрос" aria-label="Убрать вопрос">${ic('trash')}</button></div>
+    ${ta(`data-chg="leg.q" data-id="${b.id}" data-q="${q.id}" data-k="a"`, q.a, 'Решение', 1)}
+    <div class="lg-q-f">${q.st === 'ok' ? `<span class="lg-ps ps-ok"><span class="dot"></span>Утверждено</span><button class="link" data-act="leg.qst" data-id="${b.id}" data-q="${q.id}" data-v="open">снова обсуждать</button>` : `<span class="lg-ps ps-talk"><span class="dot"></span>Обсуждается</span>${q.a ? `<button class="link" data-act="leg.qst" data-id="${b.id}" data-q="${q.id}" data-v="ok">Утвердить решение</button>` : ''}`}</div></div>`;
+  return `<details class="card lg-qs"${open || !qs.length ? ' open' : ''}><summary><b>Открытые вопросы</b><span class="muted">${qs.length ? ` · ${open ? `не решено ${open}` : 'все решены'}` : ''}</span></summary>
+    ${qs.length ? '' : '<p class="small muted" style="margin:6px 0 0">Что ещё мешает начать писать: запишите вопрос, потом решение — и утвердите его. Утверждённое попадёт в рабочий контекст для нейросети.</p>'}
+    ${qs.map(row).join('')}<div class="lg-add" style="margin-top:8px"><button data-act="leg.qadd" data-id="${b.id}">+ Вопрос</button></div></details>`;
 }
 
 function charsHtml(b, L, main) {
@@ -85,6 +102,7 @@ function charsHtml(b, L, main) {
 // ---------- сохранение ----------
 async function saveL(id, fn, { sync = true } = {}) {
   const b = bookOf(id), L = legendOf(b);
+  await autoVersion(b);
   fn(L);
   await app().store.put('w_books', { ...b, legend: L });
   if (sync) scheduleSync(id);
@@ -93,7 +111,16 @@ acts['leg.tab'] = (d) => { app().ui.legTab = d.v; };
 changes['leg.idea'] = (v, el) => saveL(el.dataset.id, (L) => { L.idea = { ...L.idea, [el.dataset.k]: v }; });
 changes['leg.plan'] = (v, el) => saveL(el.dataset.id, (L) => { const i = Number(el.dataset.i); L.plan = L.plan.map((p, j) => (j === i ? { ...p, [el.dataset.k]: v } : p)); });
 acts['leg.pchar'] = (d) => saveL(d.id, (L) => { const i = Number(d.i); L.plan = L.plan.map((p, j) => { if (j !== i) return p; const s = new Set(p.chars || []); if (s.has(d.c)) s.delete(d.c); else s.add(d.c); return { ...p, chars: [...s] }; }); });
-acts['leg.ins'] = (d) => saveL(d.id, (L) => { const i = Number(d.i); L.plan = [...L.plan.slice(0, i), { id: uid(), title: '', what: '', why: '', pov: '', chars: [] }, ...L.plan.slice(i)]; });
+acts['leg.ins'] = (d) => saveL(d.id, (L) => { const i = Number(d.i); L.plan = [...L.plan.slice(0, i), { id: uid(), title: '', what: '', why: '', pov: '', chars: [], st: 'talk' }, ...L.plan.slice(i)]; });
+// вопросы
+changes['leg.q'] = (v, el) => saveL(el.dataset.id, (L) => { L.questions = (L.questions || []).map((q) => (q.id === el.dataset.q ? { ...q, [el.dataset.k]: v } : q)); });
+acts['leg.qadd'] = (d) => { saveL(d.id, (L) => { L.questions = [...(L.questions || []), { id: uid(), q: '', a: '', st: 'open' }]; }); setTimeout(() => { const l = [...document.querySelectorAll('.lg-q textarea[data-k="q"]')].pop(); l?.focus(); }, 80); };
+acts['leg.qst'] = (d) => saveL(d.id, (L) => { L.questions = (L.questions || []).map((q) => (q.id === d.q ? { ...q, st: d.v } : q)); });
+acts['leg.qdel'] = async (d) => {
+  const q0 = (legendOf(bookOf(d.id)).questions || []).find((q) => q.id === d.q);
+  await saveL(d.id, (L) => { L.questions = (L.questions || []).filter((q) => q.id !== d.q); });
+  toast('Вопрос убран', { undo: () => saveL(d.id, (L) => { L.questions = [...(L.questions || []), q0]; }) });
+};
 acts['leg.move'] = (d) => saveL(d.id, (L) => { const i = Number(d.i), j = i + Number(d.d); if (j < 0 || j >= L.plan.length) return; const p = [...L.plan]; [p[i], p[j]] = [p[j], p[i]]; L.plan = p; });
 acts['leg.delp'] = async (d) => {
   const L0 = legendOf(bookOf(d.id)), i = Number(d.i), item = L0.plan[i];
@@ -135,10 +162,18 @@ acts['leg.delc'] = async (d) => {
 acts['leg.ai'] = (d) => {
   const b = bookOf(d.id), L = legendOf(b);
   const f = openSheet('Легенда для нейросети', `<p class="small muted" style="margin-top:0">Скопируйте и вставьте в начало разговора с нейросетью — она будет учитывать идею, план и характеры.</p>
+    <div class="idea-seg lg-mode"><button type="button" class="on" data-m="work">Рабочий</button><button type="button" data-m="full">Полный</button></div>
+    <p class="small muted lg-mode-h" style="margin:-4px 0 8px">Только утверждённое: канон, персонажи, решения. Варианты и отвергнутое сюда не попадают.</p>
     ${L.plan.length ? `<label for="lgu">Каркас</label><select id="lgu" name="upTo">${opt('0', 'весь', '0')}${L.plan.map((p, i) => opt(String(i + 1), `до главы ${i + 1}${p.title ? ' — ' + p.title : ''} (и что пишем дальше)`, '0')).join('')}</select>` : ''}
     <textarea id="lgtext" class="lg-ai" readonly rows="14"></textarea>
     <div class="dl-row"><button type="button" class="primary" data-act="leg.copy">${ic('copy')} Скопировать</button></div>`, null);
-  const upd = () => { f.querySelector('#lgtext').value = legendContext(L, { title: b.title, upTo: Number(f.querySelector('#lgu')?.value || 0) }); };
+  let mode = 'work';
+  const upd = () => { f.querySelector('#lgtext').value = legendContext(L, { title: b.title, upTo: Number(f.querySelector('#lgu')?.value || 0), mode }); };
+  f.querySelectorAll('.lg-mode button').forEach((x) => x.addEventListener('click', () => {
+    mode = x.dataset.m; f.querySelectorAll('.lg-mode button').forEach((y) => y.classList.toggle('on', y === x));
+    f.querySelector('.lg-mode-h').textContent = mode === 'work' ? 'Только утверждённое: канон, персонажи, решения. Варианты и отвергнутое сюда не попадают.' : 'Всё с пометками: утверждённое, варианты «обсуждается», открытые вопросы и отдельно — отвергнутое (не использовать).';
+    upd();
+  }));
   f.querySelector('#lgu')?.addEventListener('change', upd); upd();
   return false;
 };
@@ -232,3 +267,59 @@ export function legendPeek(b, title) {
 }
 acts['leg.open'] = (d) => { closeSheet(); app().go('/legend/' + d.id); return false; };
 acts['leg.peek'] = (d) => { openSheet('Легенда главы', legendPeek(bookOf(d.id), d.t), null); return false; };
+
+// ---------- версии Легенды (коллекция w_legver): автоснимок не чаще раза в 30 минут + «Сохранить версию» с комментарием ----------
+const AUTO_EVERY = 30 * 60000, AUTO_KEEP = 30;
+const pure = (L) => ({ idea: L.idea || {}, plan: L.plan || [], chars: L.chars || [], questions: L.questions || [] });
+const versionsOf = (bookId) => app().ctx().data.w_legver.filter((v) => v.bookId === bookId).sort((x, y) => y.at.localeCompare(x.at));
+const isEmpty = (L) => !L.plan.length && !L.chars.length && !(L.questions || []).length && !Object.values(L.idea || {}).some((v) => String(v || '').trim());
+async function putVersion(b, note = '', auto = false) {
+  await app().store.put('w_legver', { id: 'v' + uid(), bookId: b.id, at: new Date().toISOString(), note, auto, legend: pure(legendOf(b)) });
+}
+async function autoVersion(b) {
+  const L = legendOf(b);
+  if (isEmpty(L)) return;
+  const last = versionsOf(b.id)[0];
+  if (last && Date.now() - Date.parse(last.at) < AUTO_EVERY) return;
+  await putVersion(b, '', true);
+  for (const v of versionsOf(b.id).filter((x) => x.auto).slice(AUTO_KEEP)) await app().store.remove('w_legver', v.id);
+}
+const vSum = (L) => [`глав ${L.plan?.length || 0}`, `персонажей ${L.chars?.length || 0}`, (L.questions || []).length ? `вопросов ${L.questions.length}` : ''].filter(Boolean).join(' · ');
+function histSheet(id) {
+  const b = bookOf(id), list = versionsOf(id);
+  const when = (iso) => new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  openSheet('Версии Легенды', `<div class="lg-vform"><input id="lgvn" placeholder="Комментарий, например: до перестройки каркаса" autocomplete="off"><button type="button" class="primary" data-act="leg.vsave" data-id="${id}">Сохранить версию</button></div>
+    <p class="small muted" style="margin:6px 0 10px">Приложение и само сохраняет версию перед правками — не чаще раза в полчаса, последние ${AUTO_KEEP}.</p>
+    ${list.length ? `<div class="list">${list.map((v) => `<div class="item row between lg-v"><span><b>${esc(v.note || (v.auto ? 'Автосохранение' : 'Версия'))}</b><span class="sub">${when(v.at)} · ${vSum(v.legend)}</span></span><button class="small-btn" data-act="leg.vback" data-id="${id}" data-v="${v.id}">Вернуть</button></div>`).join('')}</div>` : '<p class="muted">Версий пока нет.</p>'}
+    <div class="lg-vfoot"><button type="button" class="dl" data-act="leg.bak" data-id="${id}">${ic('download')}Скачать копию книги</button><label class="dl">${ic('folder')}Восстановить из копии<input type="file" accept=".json,application/json" hidden data-chg="leg.bakin" data-id="${id}"></label></div>`, null);
+}
+acts['leg.hist'] = (d) => { histSheet(d.id); return false; };
+acts['leg.vsave'] = async (d) => {
+  const note = (document.getElementById('lgvn')?.value || '').trim();
+  await putVersion(bookOf(d.id), note || 'Сохранено вручную', false);
+  toast('Версия сохранена'); histSheet(d.id); return false;
+};
+acts['leg.vback'] = async (d) => {
+  const v = app().ctx().data.w_legver.find((x) => x.id === d.v);
+  if (!v || !(await ask('Вернуть Легенду к этой версии? Нынешняя сохранится в версиях — её тоже можно будет вернуть.', 'Вернуть'))) return false;
+  await putVersion(bookOf(d.id), 'Перед возвратом к другой версии', true);
+  await saveL(d.id, (L) => { Object.assign(L, pure(v.legend)); });
+  closeSheet(); toast('Легенда возвращена к версии');
+  return false;
+};
+// копия книги одним файлом: книга с Легендой, её идеи и версии Легенды (текст глав — в Google Документе и в «Архиве книг»)
+acts['leg.bak'] = async (d) => {
+  const c = app().ctx(), b = bookOf(d.id);
+  const data = { kind: 'masterskaya-book', v: 1, at: new Date().toISOString(), book: b, ideas: c.data.w_ideas.filter((x) => x.bookId === b.id), legver: versionsOf(b.id) };
+  if (await download(`kopiya_${latin(b.title)}_${c.today}.json`, new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }), 'application/json')) toast('Копия книги скачана'); // Blob — текст как есть, с «ё»
+  return false;
+};
+changes['leg.bakin'] = async (v, el) => {
+  const file = el.files?.[0]; if (!file) return;
+  let data; try { data = JSON.parse(await file.text()); } catch { toast('Это не файл копии книги'); return; }
+  if (data?.kind !== 'masterskaya-book' || !data.book?.legend) { toast('Это не файл копии книги'); return; }
+  if (!(await ask(`Вернуть Легенду из копии «${data.book.title}» от ${new Date(data.at).toLocaleDateString('ru-RU')}? Нынешняя сохранится в версиях.`, 'Вернуть'))) return;
+  await putVersion(bookOf(el.dataset.id), 'Перед восстановлением из копии', true);
+  await saveL(el.dataset.id, (L) => { Object.assign(L, pure(data.book.legend)); });
+  closeSheet(); toast('Легенда восстановлена из копии');
+};

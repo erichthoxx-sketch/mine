@@ -62,7 +62,8 @@ acts['set.backup'] = async () => {
   const d = app().store.data;
   const out = { app: 'author-writer', version: 1, exportedAt: new Date().toISOString() };
   for (const k of WCOLLS) out[k] = d[k];
-  if (await download(`masterskaya-${app().ctx().today}.json`, JSON.stringify(out, null, 1), 'application/json')) toast('Копия сохранена');
+  // Blob, а не строка: в резервной копии текст должен остаться как есть (с «ё»), чтобы восстановиться без потерь
+  if (await download(`masterskaya-${app().ctx().today}.json`, new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }), 'application/json')) toast('Копия сохранена');
 };
 changes['set.restore'] = async (v, el) => {
   const file = el.files[0]; el.value = '';

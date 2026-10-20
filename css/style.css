@@ -1481,3 +1481,33 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 :is(main, dialog) button.plus-btn.plus-btn { flex: none; width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0 !important; border-radius: 8px; background: transparent; box-shadow: none; color: var(--text-2); }
 :is(main, dialog) button.plus-btn.plus-btn:hover { color: var(--text); }
 .plus-btn .ic { width: 24px; height: 24px; stroke-width: 1.8; }
+
+/* Легенда: статус решения (точкой и словом), открытые вопросы, режимы «Для нейросети», версии */
+.lg-ps { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.lg-ps .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+.lg-ps.ps-ok .dot { background: var(--good); }
+.lg-ps.ps-talk .dot { background: var(--warn); }
+.lg-ps.ps-no .dot { background: var(--muted); }
+.lg-ps select { width: auto; min-height: 0; padding: 0 16px 0 0; border: 0 !important; background-color: transparent; box-shadow: none; font-size: 12.5px; color: var(--text-2); background-position: right 0 center; }
+.lg-ch.lg-no { opacity: .55; }
+.lg-ch.lg-no .lg-t { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.lg-qs > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 4px; }
+.lg-qs > summary::-webkit-details-marker { display: none; }
+.lg-qs > summary b { font-size: 16px; }
+.lg-q { padding: 10px 0; border-top: 1px solid var(--line); }
+.lg-q:first-of-type { margin-top: 8px; }
+.lg-q-h { display: flex; align-items: center; gap: 6px; }
+.lg-q-f { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.lg-q.ok .lg-t { color: var(--text-2); }
+.lg-mode { margin-bottom: 10px; }
+.lg-vform { display: flex; gap: 8px; align-items: center; }
+.lg-vform input { flex: 1; min-width: 0; }
+.lg-vform .primary { flex: none; }
+.lg-vfoot { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px; }
+.lg-vfoot label.dl { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-2); padding: 4px 10px; }
+.lg-vfoot .ic { width: 16px; height: 16px; }
+.lg-qs > summary b { color: var(--text); }
+.lg-q-h .lg-ta { flex: 1; min-width: 0; font-weight: 700; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 4px 2px; resize: none; }
+.lg-vform { flex-wrap: wrap; }
+.lg-vform input { flex: 1 1 220px; }
+@media (max-width: 480px) { .lg-vform .primary { width: 100%; } }

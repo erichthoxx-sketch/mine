@@ -1,8 +1,9 @@
 // «Легенда» книги: идея, каркас по главам и персонажи. Чистые функции — без DOM и сети (их проверяют тесты).
-// Хранится в книге: b.legend = { idea: {…}, plan: [{ id, title, what, why, pov, chars: [id] }], chars: [{ id, name, role, … }], sync: {…} }
+// Хранится в книге: b.legend = { idea: {…}, plan: [{ id, title, what, why, pov, chars: [id], st }], chars: [{ id, name, role, … }],
+//   questions: [{ id, q, a, st: open|ok }], sync: {…} }
 
 export const IDEA_FIELDS = [
-  ['logline', 'О чём книга — одной фразой', 'Бывшая жена возвращается в город, где её когда-то бросили умирать, — и встречает его снова'],
+  ['logline', 'О чём книга — одной фразой', 'кто герой, чего хочет и что ему мешает'],
   ['genre', 'Жанр и тропы', 'любовный роман, второй шанс, от ненависти до любви, властный герой'],
   ['conflict', 'Главный конфликт', 'что мешает героям быть вместе — снаружи и внутри'],
   ['stakes', 'Что на кону', 'что героиня потеряет, если проиграет'],
@@ -20,20 +21,27 @@ export const CHAR_FIELDS = [
   ['fear', 'Чего боится / рана', 'что сломало его в прошлом'],
   ['arc', 'Как меняется', 'каким был в начале → каким станет к финалу'],
   ['voice', 'Как говорит', 'словечки, манера, как обращается к другим'],
-  ['links', 'Связи', 'бывший муж Анны, брат Ильи…'],
+  ['links', 'Связи', 'кто кому кем приходится'],
   ['notes', 'Заметки', ''],
 ];
 export const LEGEND_TABS = { idea: 'Идея', plan: 'Каркас', chars: 'Персонажи' };
 
-export const emptyLegend = () => ({ idea: {}, plan: [], chars: [] });
+// статус сюжетного решения (главы каркаса): утверждено — канон; обсуждается — вариант; отвергнуто — не использовать.
+// У старых глав статуса нет — это то, что уже было в каркасе, считаем утверждённым; новая глава — «обсуждается»
+export const PLAN_ST = { ok: 'Утверждено', talk: 'Обсуждается', no: 'Отвергнуто' };
+export const planSt = (p) => (PLAN_ST[p?.st] ? p.st : 'ok');
+export const emptyLegend = () => ({ idea: {}, plan: [], chars: [], questions: [] });
 export const legendOf = (b) => ({ ...emptyLegend(), ...(b?.legend || {}) });
 const nm = (x) => String(x || '').trim();
 const charName = (L, id) => L.chars.find((c) => c.id === id)?.name || '';
 
 // ---------- текст для нейросети ----------
-// upTo — номер главы каркаса (1…): события до неё включительно и «что дальше»; 0 — весь каркас
-export function legendContext(L, { title = '', upTo = 0 } = {}) {
+// mode: work — рабочий: только утверждённое (канон), персонажи, решения; full — полный: ещё варианты, открытые вопросы
+// и отвергнутое — с пометками. upTo — номер главы каркаса (1…): события до неё включительно и «что дальше»; 0 — весь каркас
+export function legendContext(L, { title = '', upTo = 0, mode = 'work' } = {}) {
+  const full = mode === 'full', qs = L.questions || [];
   const out = [`# Легенда книги «${title}»`];
+  if (full) out.push('', 'Пометки: [утверждено] — канон; [обсуждается] — предварительный вариант, не считать решённым; раздел «Отвергнуто» — не использовать.');
   const idea = IDEA_FIELDS.filter(([k]) => nm(L.idea?.[k])).map(([k, label]) => `- ${label}: ${nm(L.idea[k])}`);
   if (idea.length) out.push('', '## Идея', ...idea);
   if (L.chars.length) {
@@ -44,15 +52,28 @@ export function legendContext(L, { title = '', upTo = 0 } = {}) {
       for (const [k, label] of CHAR_FIELDS) if (k !== 'age' && nm(c[k])) out.push(`- ${label}: ${nm(c[k])}`);
     }
   }
-  const plan = upTo > 0 ? L.plan.slice(0, upTo) : L.plan;
+  const decided = qs.filter((q) => q.st === 'ok' && nm(q.q) && nm(q.a));
+  if (decided.length) out.push('', '## Решения (утверждено)', ...decided.map((q) => `- ${nm(q.q)} — ${nm(q.a)}`));
+  const line = (p, n) => {
+    const extra = [nm(p.why) ? `зачем: ${nm(p.why)}` : '', p.pov ? `глазами: ${charName(L, p.pov)}` : '', (p.chars || []).length ? `в сцене: ${p.chars.map((id) => charName(L, id)).filter(Boolean).join(', ')}` : ''].filter(Boolean).join('; ');
+    const mark = full ? (planSt(p) === 'ok' ? ' [утверждено]' : ' [обсуждается]') : '';
+    return `${n}. ${nm(p.title) || `Глава ${n}`}${mark}${nm(p.what) ? ` — ${nm(p.what)}` : ''}${extra ? ` (${extra})` : ''}`;
+  };
+  // рабочий режим — только утверждённые главы; отвергнутые — никогда в каркасе (в полном — отдельным разделом)
+  const keep = (p) => (full ? planSt(p) !== 'no' : planSt(p) === 'ok');
+  const upto = upTo > 0 ? L.plan.slice(0, upTo) : L.plan;
+  const plan = upto.filter(keep);
   if (plan.length) {
     out.push('', upTo > 0 ? (plan.length > 1 ? `## Каркас: главы 1–${plan.length}` : '## Каркас: глава 1') : '## Каркас по главам');
-    plan.forEach((p, i) => {
-      const extra = [nm(p.why) ? `зачем: ${nm(p.why)}` : '', p.pov ? `глазами: ${charName(L, p.pov)}` : '', (p.chars || []).length ? `в сцене: ${p.chars.map((id) => charName(L, id)).filter(Boolean).join(', ')}` : ''].filter(Boolean).join('; ');
-      out.push(`${i + 1}. ${nm(p.title) || `Глава ${i + 1}`}${nm(p.what) ? ` — ${nm(p.what)}` : ''}${extra ? ` (${extra})` : ''}`);
-    });
-    const next = upTo > 0 ? L.plan[upTo] : null;
-    if (next) out.push('', `## Пишем дальше: ${nm(next.title) || `Глава ${upTo + 1}`}`, nm(next.what) || '(план главы пока не заполнен)');
+    plan.forEach((p, i) => out.push(line(p, i + 1)));
+    const next = upTo > 0 ? L.plan.slice(upTo).find(keep) : null;
+    if (next) out.push('', `## Пишем дальше: ${nm(next.title) || `Глава ${plan.length + 1}`}${full && planSt(next) !== 'ok' ? ' [обсуждается]' : ''}`, nm(next.what) || '(план главы пока не заполнен)');
+  }
+  if (full) {
+    const open = qs.filter((q) => q.st !== 'ok' && nm(q.q));
+    if (open.length) out.push('', '## Открытые вопросы (ещё не решено)', ...open.map((q) => `- ${nm(q.q)}${nm(q.a) ? ` — вариант: ${nm(q.a)}` : ''}`));
+    const no = L.plan.filter((p) => planSt(p) === 'no');
+    if (no.length) out.push('', '## Отвергнуто — не использовать', ...no.map((p) => `- ${nm(p.title) || 'Без названия'}${nm(p.what) ? ` — ${nm(p.what)}` : ''}`));
   }
   return out.join('\n');
 }
@@ -90,8 +111,16 @@ const LP = (label, t) => ({ st: {}, runs: [{ t: label + ': ', b: true }, { t }] 
 export function legendBlocks(L, part) {
   const out = [];
   if (part === 'idea') for (const [k, label] of IDEA_FIELDS) { if (nm(L.idea?.[k])) out.push(LP(label, nm(L.idea[k]))); }
+  if (part === 'plan') {
+    const qs = (L.questions || []).filter((q) => nm(q.q));
+    if (qs.length) {
+      out.push(H('Открытые вопросы', 'HEADING_3'));
+      for (const q of qs) out.push(P(`${q.st === 'ok' ? '✓ ' : '— '}${nm(q.q)}${nm(q.a) ? ` → ${nm(q.a)}` : ''}${q.st === 'ok' ? ' (утверждено)' : ''}`));
+    }
+  }
   if (part === 'plan') L.plan.forEach((p, i) => {
-    out.push(H(!nm(p.title) ? `Глава ${i + 1}` : /^(пролог|эпилог|глава)(?![а-яё])/i.test(nm(p.title)) ? nm(p.title) : `${i + 1}. ${nm(p.title)}`, 'HEADING_3'));
+    const mark = planSt(p) === 'ok' ? '' : ` (${PLAN_ST[planSt(p)].toLowerCase()})`;
+    out.push(H((!nm(p.title) ? `Глава ${i + 1}` : /^(пролог|эпилог|глава)(?![а-яё])/i.test(nm(p.title)) ? nm(p.title) : `${i + 1}. ${nm(p.title)}`) + mark, 'HEADING_3'));
     if (nm(p.what)) for (const l of nm(p.what).split('\n')) out.push(P(l));
     if (nm(p.why)) out.push(LP('Зачем', nm(p.why)));
     if (p.pov && charName(L, p.pov)) out.push(LP('Глазами', charName(L, p.pov)));
