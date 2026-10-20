@@ -50,3 +50,11 @@ test('легенда: рабочий контекст — только утве�
   assert.match(f, /## Открытые вопросы \(ещё не решено\)\n- Финальная конфронтация\?/);
   assert.match(f, /## Отвергнуто — не использовать\n- Долг — денежный долг/);
 });
+
+test('легенда: пролог без номера, главы после него — с 1', async () => {
+  const { legendContext, legendBlocks, blocksPlain } = await import('../writer/js/legend.js');
+  const L3 = { idea: {}, chars: [], plan: [{ id: 'p', title: 'Пролог', what: 'тайна' }, { id: '1', title: 'Похороны', what: 'Вера хоронит мужа' }] };
+  const t = legendContext(L3, { title: 'Вдова' });
+  assert.match(t, /\nПролог — тайна\n1\. Похороны — Вера хоронит мужа/);
+  assert.match(blocksPlain(legendBlocks(L3, 'plan')), /^Пролог\nтайна\n1\. Похороны/);
+});

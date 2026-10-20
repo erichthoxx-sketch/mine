@@ -8,7 +8,7 @@ import * as drive from '../drive.js';
 import { chapterList, isAuthorTab } from '../wcalc.js';
 import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests } from '../docedit.js';
 import { docxBlob, noYo } from '../publish.js';
-import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, legendOf, legendContext, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
+import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, legendContext, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
 
 const app = () => window.__app;
 const bookOf = (id) => app().ctx().wbooksById[id];
@@ -60,6 +60,7 @@ function ideaHtml(b, L) {
 
 function planHtml(b, L, main) {
   const opts = (sel) => `<option value="">—</option>${L.chars.map((x) => opt(x.id, x.name || 'Без имени', sel || '')).join('')}`;
+  const nums = chapterNums(L.plan);
   const card = (p, i) => {
     const real = main[i];
     // глава с тем же номером в Документе: написана ли и сколько знаков
@@ -67,14 +68,19 @@ function planHtml(b, L, main) {
     const st = real ? `<span class="lg-st ok" title="${esc(real.title)} в Google Документе">${same ? 'написана' : esc(real.title)}${real.chars ? ` · ${grp(real.chars)} зн.` : ''}</span>` : '<span class="lg-st">ещё не написана</span>';
     const ps = planSt(p);
     const stSel = `<label class="lg-ps ps-${ps}" title="Статус решения"><span class="dot"></span><select data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="st" aria-label="Статус">${Object.entries(PLAN_ST).map(([k, v]) => opt(k, v, ps)).join('')}</select></label>`;
-    return `<div class="card lg-ch${ps === 'no' ? ' lg-no' : ''}"><div class="lg-ch-h"><span class="lg-n">${i + 1}</span><input class="lg-t" value="${esc(p.title || '')}" placeholder="Название главы" data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="title">${stSel}${st}
+    const prol = isProl(p) && i === 0;
+    return `<div class="card lg-ch${ps === 'no' ? ' lg-no' : ''}${prol ? ' lg-prol' : ''}"><div class="lg-ch-h"><span class="lg-n">${nums[i] ?? (prol ? 'П' : 'Э')}</span>${prol ? '<b class="lg-t lg-tfix">Пролог</b>' : `<input class="lg-t" value="${esc(p.title || '')}" placeholder="Название главы" data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="title">`}${stSel}${st}
       <span class="lg-mv"><button class="lg-ib" data-act="leg.move" data-id="${b.id}" data-i="${i}" data-d="-1" title="Выше" aria-label="Выше"${i ? '' : ' disabled'}>↑</button><button class="lg-ib" data-act="leg.move" data-id="${b.id}" data-i="${i}" data-d="1" title="Ниже" aria-label="Ниже"${i < L.plan.length - 1 ? '' : ' disabled'}>↓</button><button class="lg-ib" data-act="leg.ins" data-id="${b.id}" data-i="${i + 1}" title="Вставить главу после" aria-label="Вставить после">+</button><button class="lg-ib" data-act="leg.delp" data-id="${b.id}" data-i="${i}" title="Убрать из каркаса" aria-label="Убрать">${ic('trash')}</button></span></div>
       ${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="what"`, p.what, 'Что происходит: 2–3 строки, главное событие главы', 2)}
       ${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="why"`, p.why, 'Зачем эта глава: что меняется для героев, какой крючок в конце', 1)}
       ${L.chars.length ? `<div class="lg-row"><label class="lg-pov">Глазами <select data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="pov">${opts(p.pov)}</select></label>
         <span class="lg-chips">${L.chars.map((x) => `<button class="lg-chip${(p.chars || []).includes(x.id) ? ' on' : ''}" data-act="leg.pchar" data-id="${b.id}" data-i="${i}" data-c="${x.id}">${esc(x.name || 'Без имени')}</button>`).join('')}</span></div>` : ''}</div>`;
   };
-  return `${questionsHtml(b, L)}${L.plan.map(card).join('')}
+  // пролог — отдельным блоком перед первой главой; пока его нет — пустой блок, заполнится — станет частью каркаса
+  const prolGhost = isProl(L.plan[0]) ? '' : `<div class="card lg-ch lg-prol lg-ghost"><div class="lg-ch-h"><span class="lg-n">П</span><b class="lg-t lg-tfix">Пролог</b><span class="lg-st">необязательно</span></div>
+    ${ta(`data-chg="leg.prol" data-id="${b.id}" data-k="what"`, '', 'Что происходит в прологе: 2–3 строки', 2)}
+    ${ta(`data-chg="leg.prol" data-id="${b.id}" data-k="why"`, '', 'Зачем пролог: какой крючок или тайну он задаёт', 1)}</div>`;
+  return `${questionsHtml(b, L)}${prolGhost}${L.plan.map(card).join('')}
     <div class="lg-add"><button data-act="leg.ins" data-id="${b.id}" data-i="${L.plan.length}">+ Глава в каркас</button>${!L.plan.length && main.length ? `<button class="link" data-act="leg.fromCh" data-id="${b.id}">Создать по главам из Документа (${main.length})</button>` : ''}</div>`;
 }
 
@@ -112,6 +118,8 @@ changes['leg.idea'] = (v, el) => saveL(el.dataset.id, (L) => { L.idea = { ...L.i
 changes['leg.plan'] = (v, el) => saveL(el.dataset.id, (L) => { const i = Number(el.dataset.i); L.plan = L.plan.map((p, j) => (j === i ? { ...p, [el.dataset.k]: v } : p)); });
 acts['leg.pchar'] = (d) => saveL(d.id, (L) => { const i = Number(d.i); L.plan = L.plan.map((p, j) => { if (j !== i) return p; const s = new Set(p.chars || []); if (s.has(d.c)) s.delete(d.c); else s.add(d.c); return { ...p, chars: [...s] }; }); });
 acts['leg.ins'] = (d) => saveL(d.id, (L) => { const i = Number(d.i); L.plan = [...L.plan.slice(0, i), { id: uid(), title: '', what: '', why: '', pov: '', chars: [], st: 'talk' }, ...L.plan.slice(i)]; });
+// пролог: первая запись в пустой блок — пролог встаёт в начало каркаса
+changes['leg.prol'] = (v, el) => { if (!String(v).trim()) return; saveL(el.dataset.id, (L) => { if (isProl(L.plan[0])) L.plan[0] = { ...L.plan[0], [el.dataset.k]: v }; else L.plan = [{ id: uid(), title: 'Пролог', what: '', why: '', pov: '', chars: [], st: 'talk', [el.dataset.k]: v }, ...L.plan]; }); };
 // вопросы
 changes['leg.q'] = (v, el) => saveL(el.dataset.id, (L) => { L.questions = (L.questions || []).map((q) => (q.id === el.dataset.q ? { ...q, [el.dataset.k]: v } : q)); });
 acts['leg.qadd'] = (d) => { saveL(d.id, (L) => { L.questions = [...(L.questions || []), { id: uid(), q: '', a: '', st: 'open' }]; }); setTimeout(() => { const l = [...document.querySelectorAll('.lg-q textarea[data-k="q"]')].pop(); l?.focus(); }, 80); };
@@ -164,7 +172,7 @@ acts['leg.ai'] = (d) => {
   const f = openSheet('Легенда для нейросети', `<p class="small muted" style="margin-top:0">Скопируйте и вставьте в начало разговора с нейросетью — она будет учитывать идею, план и характеры.</p>
     <div class="idea-seg lg-mode"><button type="button" class="on" data-m="work">Рабочий</button><button type="button" data-m="full">Полный</button></div>
     <p class="small muted lg-mode-h" style="margin:-4px 0 8px">Только утверждённое: канон, персонажи, решения. Варианты и отвергнутое сюда не попадают.</p>
-    ${L.plan.length ? `<label for="lgu">Каркас</label><select id="lgu" name="upTo">${opt('0', 'весь', '0')}${L.plan.map((p, i) => opt(String(i + 1), `до главы ${i + 1}${p.title ? ' — ' + p.title : ''} (и что пишем дальше)`, '0')).join('')}</select>` : ''}
+    ${L.plan.length ? `<label for="lgu">Каркас</label><select id="lgu" name="upTo">${opt('0', 'весь', '0')}${L.plan.map((p, i) => { const n = chapterNums(L.plan)[i]; return opt(String(i + 1), `${n ? `до главы ${n}${p.title ? ' — ' + p.title : ''}` : `до: ${p.title}`} (и что пишем дальше)`, '0'); }).join('')}</select>` : ''}
     <textarea id="lgtext" class="lg-ai" readonly rows="14"></textarea>
     <div class="dl-row"><button type="button" class="primary" data-act="leg.copy">${ic('copy')} Скопировать</button></div>`, null);
   let mode = 'work';

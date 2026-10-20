@@ -1511,3 +1511,6 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .lg-vform { flex-wrap: wrap; }
 .lg-vform input { flex: 1 1 220px; }
 @media (max-width: 480px) { .lg-vform .primary { width: 100%; } }
+.lg-tfix { flex: 1 1 160px; padding: 4px 2px; font-weight: 700; font-size: 16px; color: var(--text); }
+.lg-ghost { border-style: dashed; box-shadow: none; }
+.lg-ghost .lg-n { opacity: .6; }

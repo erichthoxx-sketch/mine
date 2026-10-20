@@ -30,6 +30,11 @@ export const LEGEND_TABS = { idea: 'Идея', plan: 'Каркас', chars: 'П�
 // У старых глав статуса нет — это то, что уже было в каркасе, считаем утверждённым; новая глава — «обсуждается»
 export const PLAN_ST = { ok: 'Утверждено', talk: 'Обсуждается', no: 'Отвергнуто' };
 export const planSt = (p) => (PLAN_ST[p?.st] ? p.st : 'ok');
+// пролог и эпилог в каркасе — без номера; главы нумеруются по порядку с 1
+export const isProl = (p) => /^\s*пролог(?![а-яё])/i.test(p?.title || '');
+export const isEpil = (p) => /^\s*эпилог(?![а-яё])/i.test(p?.title || '');
+// номер главы для показа: «Пролог»/«Эпилог» — null, остальные — 1, 2, 3…
+export function chapterNums(plan) { let n = 0; return plan.map((p) => (isProl(p) || isEpil(p) ? null : ++n)); }
 export const emptyLegend = () => ({ idea: {}, plan: [], chars: [], questions: [] });
 export const legendOf = (b) => ({ ...emptyLegend(), ...(b?.legend || {}) });
 const nm = (x) => String(x || '').trim();
@@ -57,7 +62,7 @@ export function legendContext(L, { title = '', upTo = 0, mode = 'work' } = {}) {
   const line = (p, n) => {
     const extra = [nm(p.why) ? `зачем: ${nm(p.why)}` : '', p.pov ? `глазами: ${charName(L, p.pov)}` : '', (p.chars || []).length ? `в сцене: ${p.chars.map((id) => charName(L, id)).filter(Boolean).join(', ')}` : ''].filter(Boolean).join('; ');
     const mark = full ? (planSt(p) === 'ok' ? ' [утверждено]' : ' [обсуждается]') : '';
-    return `${n}. ${nm(p.title) || `Глава ${n}`}${mark}${nm(p.what) ? ` — ${nm(p.what)}` : ''}${extra ? ` (${extra})` : ''}`;
+    return `${n ? `${n}. ` : ''}${nm(p.title) || `Глава ${n}`}${mark}${nm(p.what) ? ` — ${nm(p.what)}` : ''}${extra ? ` (${extra})` : ''}`;
   };
   // рабочий режим — только утверждённые главы; отвергнутые — никогда в каркасе (в полном — отдельным разделом)
   const keep = (p) => (full ? planSt(p) !== 'no' : planSt(p) === 'ok');
@@ -65,7 +70,8 @@ export function legendContext(L, { title = '', upTo = 0, mode = 'work' } = {}) {
   const plan = upto.filter(keep);
   if (plan.length) {
     out.push('', upTo > 0 ? (plan.length > 1 ? `## Каркас: главы 1–${plan.length}` : '## Каркас: глава 1') : '## Каркас по главам');
-    plan.forEach((p, i) => out.push(line(p, i + 1)));
+    const nums = chapterNums(plan);
+    plan.forEach((p, i) => out.push(line(p, nums[i])));
     const next = upTo > 0 ? L.plan.slice(upTo).find(keep) : null;
     if (next) out.push('', `## Пишем дальше: ${nm(next.title) || `Глава ${plan.length + 1}`}${full && planSt(next) !== 'ok' ? ' [обсуждается]' : ''}`, nm(next.what) || '(план главы пока не заполнен)');
   }
@@ -120,7 +126,8 @@ export function legendBlocks(L, part) {
   }
   if (part === 'plan') L.plan.forEach((p, i) => {
     const mark = planSt(p) === 'ok' ? '' : ` (${PLAN_ST[planSt(p)].toLowerCase()})`;
-    out.push(H((!nm(p.title) ? `Глава ${i + 1}` : /^(пролог|эпилог|глава)(?![а-яё])/i.test(nm(p.title)) ? nm(p.title) : `${i + 1}. ${nm(p.title)}`) + mark, 'HEADING_3'));
+    const n = chapterNums(L.plan)[i];
+    out.push(H((!nm(p.title) ? `Глава ${n}` : /^(пролог|эпилог|глава)(?![а-яё])/i.test(nm(p.title)) ? nm(p.title) : `${n}. ${nm(p.title)}`) + mark, 'HEADING_3'));
     if (nm(p.what)) for (const l of nm(p.what).split('\n')) out.push(P(l));
     if (nm(p.why)) out.push(LP('Зачем', nm(p.why)));
     if (p.pov && charName(L, p.pov)) out.push(LP('Глазами', charName(L, p.pov)));
