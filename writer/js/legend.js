@@ -162,6 +162,7 @@ export function legendTemplate(L, part, title = '') {
   const out = [
     `Книга: «${title}». ${TPL_ASK[part]}`,
     'Правила ответа: верни ТОЛЬКО этот шаблон целиком, сохрани разметку — строки с ## и ### и названия полей перед двоеточием не меняй, новые поля не придумывай. Текст полей — по-русски, без markdown-оформления внутри.',
+    'Верни ответ в одном блоке кода (plain text), сохранив все символы #, строки заголовков и названия полей. Не используй форматируемые блоки документов.',
     '',
     `=== ${TPL_HEAD[part]} ===`,
   ];
@@ -200,6 +201,11 @@ export function applyTemplate(L, part, text, newId = () => Math.random().toStrin
     for (const l of lines) {
       const h = head(l);
       if (h != null) { flush(); cur = byLabel[lowKey(h)] || null; continue; }
+      // при копировании из чата ## пропадают — заголовком считается строка с названием поля
+      const bare = byLabel[lowKey(l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, ''))];
+      if (bare) { flush(); cur = bare; continue; }
+      const inl = /^\s*\**([^:*]{2,60}?)\**\s*:\s*(.+)$/.exec(l);
+      if (inl && byLabel[lowKey(inl[1])]) { flush(); cur = byLabel[lowKey(inl[1])]; buf.push(inl[2]); continue; }
       if (/^===/.test(l.trim())) { flush(); cur = null; continue; }
       if (cur) buf.push(l);
     }
@@ -210,23 +216,32 @@ export function applyTemplate(L, part, text, newId = () => Math.random().toStrin
     const res = {}; let cur = null;
     for (const l of block) {
       const m = /^\s*[-*]?\s*\**([^:*]{2,60}?)\**\s*:\s*(.*)$/.exec(l), key = m ? labels[lowKey(m[1])] : null;
-      if (key) { cur = key; res[key] = m[2].trim(); } else if (cur && l.trim()) res[cur] = (res[cur] ? res[cur] + '\n' : '') + l.trim();
+      if (key) { cur = key; res[key] = m[2].trim(); } else if (cur && l.trim() && !/^\s*\(.*\)\s*$/.test(l)) res[cur] = (res[cur] ? res[cur] + '\n' : '') + l.trim();
     }
     return res;
   };
-  const blocks = (stopAt) => {
+  // заголовок вопросов — и без ===: «Открытые вопросы»
+  const QHEAD = /^[\s=#*]*открытые вопросы[\s=#*:]*$/i;
+  const fieldName = (l) => { const m = /^\s*[-*]?\s*\**([^:*]{2,60}?)\**\s*:/.exec(l); return m ? lowKey(m[1]) : null; };
+  const blocks = (stopAt, first, titleRe) => {
     const res = []; let cur = null;
-    for (const l of lines) {
-      if (/^===/.test(l.trim())) { if (stopAt.test(l)) cur = null; continue; }
-      const m = /^\s*###\s*(.+?)\s*$/.exec(l);
-      if (m) { cur = { title: m[1].replace(/\*\*/g, '').trim(), body: [] }; res.push(cur); continue; }
+    lines.forEach((l, i) => {
+      if (/^===/.test(l.trim()) || QHEAD.test(l)) { if (stopAt.test(l)) cur = null; return; }
+      const m = /^\s*#{2,4}\s*(.+?)\s*$/.exec(l);
+      let title = m ? m[1] : null;
+      if (!title && l.trim() && l.trim().length <= 90 && !fieldName(l)) {
+        const t = l.replace(/^\s*(?:[-*•]\s*)?/, '').replace(/\*\*/g, '').trim();
+        const next = lines.slice(i + 1).find((x) => x.trim());
+        if ((next && fieldName(next) === first) || (titleRe && titleRe.test(t))) title = t;
+      }
+      if (title) { cur = { title: title.replace(/\*\*/g, '').trim(), body: [] }; res.push(cur); return; }
       if (cur) cur.body.push(l);
-    }
+    });
     return res;
   };
   if (part === 'plan') {
     const labels = { 'что происходит': 'what', зачем: 'why', статус: 'st' };
-    const items = blocks(/ВОПРОС/i).map((bk) => {
+    const items = blocks(/ВОПРОС/i, 'что происходит', /^(пролог|эпилог|глава\s*\d+)(?=[\s.,:—–-]|$)/i).map((bk) => {
       const f = fieldsOf(bk.body, labels), t = bk.title;
       const title = /^пролог/i.test(t) ? 'Пролог' : /^эпилог/i.test(t) ? 'Эпилог' : t.replace(/^глава\s*\d+\s*[.:—–-]?\s*/i, '').trim() || t;
       return { title, what: f.what || '', why: f.why || '', st: ST_BY[lowKey(f.st)] || 'talk' };
@@ -236,7 +251,7 @@ export function applyTemplate(L, part, text, newId = () => Math.random().toStrin
       out.plan = items.map((x, i) => { const old = L.plan[i] || {}; return { id: old.id || newId(), pov: old.pov || '', chars: old.chars || [], ...x }; });
       n += items.length;
     }
-    const qi = lines.findIndex((l) => /^===.*ВОПРОС/i.test(l.trim()));
+    const qi = lines.findIndex((l) => /^===.*ВОПРОС/i.test(l.trim()) || QHEAD.test(l));
     if (qi >= 0) {
       const qs = [];
       for (const l of lines.slice(qi + 1)) {
@@ -251,7 +266,7 @@ export function applyTemplate(L, part, text, newId = () => Math.random().toStrin
   }
   if (part === 'chars') {
     const labels = { роль: 'role', ...Object.fromEntries(CHAR_FIELDS.map(([k, label]) => [lowKey(label), k])) };
-    for (const bk of blocks(/$^/)) {
+    for (const bk of blocks(/$^/, 'роль')) {
       const name = bk.title.replace(/\s*[—–-]\s*(героиня|герой|антагонист|друг.*|семья|второстепенный)\s*$/i, '').trim();
       if (!name || lowKey(name) === 'имя') continue;
       const f = fieldsOf(bk.body, labels), role = ROLE_BY[lowKey(f.role)] || '';

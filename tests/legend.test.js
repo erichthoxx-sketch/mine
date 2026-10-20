@@ -86,3 +86,17 @@ test('шаблон для нейросети: идея, каркас, персо
   const L1 = r3.legend, back = applyTemplate(L1, 'chars', legendTemplate(L1, 'chars', 'Вдова'), id).legend;
   assert.deepEqual(back.chars.map((c) => [c.name, c.age, c.role]), L1.chars.map((c) => [c.name, c.age, c.role]));
 });
+
+test('ответ нейросети, скопированный из чата без # и ===, тоже разбирается', async () => {
+  const { legendTemplate, applyTemplate } = await import('../writer/js/legend.js');
+  let k = 0; const id = () => 'm' + (++k);
+  const L0 = { idea: {}, chars: [{ id: 'a', name: 'Вера', role: 'heroine' }], plan: [], questions: [] };
+  assert.match(legendTemplate(L0, 'chars', 'Вдова'), /в одном блоке кода \(plain text\)/);
+  const r1 = applyTemplate(L0, 'idea', 'ИДЕЯ\nО чём книга — одной фразой\nВдова находит мошенника\nЖанр и тропы\nроман, враги — любовники\nФинал: свадьба');
+  assert.deepEqual([r1.legend.idea.logline, r1.legend.idea.genre, r1.legend.idea.ending], ['Вдова находит мошенника', 'роман, враги — любовники', 'свадьба']);
+  const r2 = applyTemplate(L0, 'plan', 'КАРКАС\nПролог\nЧто происходит: тайна\nЗачем: крючок\nСтатус: утверждено\n\nГлава 1. Похороны\nЧто происходит: Вера хоронит мужа\nЗачем: завязка\nСтатус: обсуждается\nОткрытые вопросы\n- Как раскрыли? → по выписке', id);
+  assert.deepEqual(r2.legend.plan.map((p) => [p.title, p.what, p.st]), [['Пролог', 'тайна', 'ok'], ['Похороны', 'Вера хоронит мужа', 'talk']]);
+  assert.deepEqual(r2.legend.questions.map((q) => [q.q, q.a]), [['Как раскрыли?', 'по выписке']]);
+  const r3 = applyTemplate(L0, 'chars', 'ПЕРСОНАЖИ\n\nВера\nРоль: Героиня\nВозраст: 34\nХарактер: упрямая,\nно добрая\n\nАртём\nРоль: Герой\nВнешность: высокий\n\n(Роль — одно из: Героиня, Герой.)', id);
+  assert.deepEqual(r3.legend.chars.map((c) => [c.name, c.role, c.age || '', c.nature || '', c.look || '']), [['Вера', 'heroine', '34', 'упрямая,\nно добрая', ''], ['Артём', 'hero', '', '', 'высокий']]);
+});
