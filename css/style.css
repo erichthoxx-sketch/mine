@@ -1530,13 +1530,14 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .lg-f .lg-l { margin: 0 0 4px; font-size: 16px; font-weight: 700; color: var(--text); }
 .lg-sl { display: block; margin: 14px 0 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .lg-ch-h + .lg-sl { margin-top: 8px; }
-/* поле — мягкая светло-серая подложка без обводки (серый от цвета текста — нейтральный в обеих темах);
-   при наведении — цвет акцента, как раньше; так каждое поле — своё пятно и текст не сливается */
-:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta, .lg-q-h textarea.lg-ta { display: block; width: 100%; margin: 6px 0 0; padding: 11px 14px; min-height: 0; border: 0 !important; border-radius: 12px; background: color-mix(in srgb, var(--text) 4.5%, var(--surface)) !important; box-shadow: none !important; font-size: 16px; line-height: 1.6; color: var(--text); transition: background-color .15s; }
-:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:hover, .lg-q-h textarea.lg-ta:hover { background: color-mix(in srgb, var(--surface-2) 75%, var(--surface)) !important; }
+/* карточки Легенды — чуть серые вместо белых (серый от цвета текста — нейтральный в обеих темах);
+   поле внутри без заливки и без обводки, цвет акцента — только при наведении и правке */
+:is(.lg-f, .lg-ch:not(.lg-ghost), .lg-qs, .lg-syn, .lg-cards .lg-card:not(.lg-new)) { background: color-mix(in srgb, var(--surface) 95%, var(--text)); }
+:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta, .lg-q-h textarea.lg-ta { display: block; width: calc(100% + 16px); margin: 2px -8px 4px; padding: 6px 8px; min-height: 0; border: 0 !important; border-radius: 10px; background: transparent !important; box-shadow: none !important; font-size: 16px; line-height: 1.6; color: var(--text); transition: background-color .15s; }
+:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:hover, .lg-q-h textarea.lg-ta:hover { background: color-mix(in srgb, var(--surface-2) 70%, transparent) !important; }
 :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:focus, .lg-q-h textarea.lg-ta:focus { background: var(--surface-2) !important; outline: none; box-shadow: none !important; }
 /* вопрос — тоже поле, текст вопроса чуть плотнее; подсказки — обычным начертанием */
-.lg-q-h textarea.lg-ta { margin: 0; font-weight: 700; line-height: 1.5; }
+.lg-q-h textarea.lg-ta { margin: 0 0 0 -8px; font-weight: 700; line-height: 1.5; }
 .lg-q-h textarea.lg-ta::placeholder { font-weight: 400; }
 .lg-q-h .lg-ib { align-self: center; }
 .lg-q-f { margin-top: 8px; }
