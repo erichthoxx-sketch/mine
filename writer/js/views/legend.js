@@ -20,7 +20,7 @@ const COLORS = ['#e8a5bd', '#9fc9a9', '#9cc0e4', '#bba7e6', '#efb79d', '#b9b5c0'
 const colorOf = (s) => COLORS[[...String(s || '?')].reduce((a, ch) => a + ch.charCodeAt(0), 0) % COLORS.length];
 const initials = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase() || '?';
 const avatar = (c, size = 44) => c.photo ? `<img class="lg-av" src="${c.photo}" alt="" style="width:${size}px;height:${size}px">` : `<span class="lg-av" style="width:${size}px;height:${size}px;background:${colorOf(c.name)}">${esc(initials(c.name))}</span>`;
-const ta = (attrs, v, ph, rows = 2) => `<textarea class="lg-ta" rows="${rows}" ${attrs} placeholder="${esc(ph)}">${esc(v || '')}</textarea>`;
+const ta = (attrs, v, ph) => `<textarea class="lg-ta" rows="1" ${attrs} placeholder="${esc(ph)}">${esc(v || '')}</textarea>`;
 
 // переключатель «Книга / Легенда» — сверху страницы книги и Легенды
 export const bookSeg = (b, on) => `<div class="bk-seg">${on === 'book' ? '<span class="on">Книга</span>' : `<a href="#" data-act="go" data-to="/book/${b.id}">Книга</a>`}${on === 'legend' ? '<span class="on">Легенда</span>' : `<a href="#" data-act="go" data-to="/legend/${b.id}">Легенда</a>`}</div>`;
@@ -30,7 +30,7 @@ export function legendPage(a, id) {
   if (!b) return { html: '<div class="card"><p>Книга не найдена.</p></div>' };
   const L = legendOf(b), tab = a.ui.legTab || 'idea';
   const main = chapterList(b).filter((t) => !isAuthorTab(t.title));
-  const tabs = [['idea', 'Идея'], ['plan', `Каркас${L.plan.length ? ` · ${L.plan.length}` : ''}`], ['chars', `Персонажи${L.chars.length ? ` · ${L.chars.length}` : ''}`], ['syn', 'Синопсис']];
+  const tabs = [['idea', 'Идея'], ['plan', `Каркас${L.plan.length ? `<span class="lg-cnt"> · ${L.plan.length}</span>` : ''}`], ['chars', `Персонажи${L.chars.length ? `<span class="lg-cnt"> · ${L.chars.length}</span>` : ''}`], ['syn', 'Синопсис']];
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a></p>
   <div class="lg-top"><h2 class="lg-book">${esc(b.title)}</h2>${bookSeg(b, 'legend')}</div>
   <div class="lg-bar"><div class="lg-tabs">${tabs.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-act="leg.tab" data-v="${k}">${t}</button>`).join('')}</div>
@@ -58,7 +58,8 @@ function syncLine(b, L) {
 }
 
 function ideaHtml(b, L) {
-  return `<div class="card lg-idea">${IDEA_FIELDS.map(([k, label, ph]) => `<label class="lg-l">${label}</label>${ta(`data-chg="leg.idea" data-id="${b.id}" data-k="${k}"`, L.idea?.[k], ph, k === 'logline' ? 1 : 2)}`).join('')}</div>`;
+  // каждое поле — своя карточка, как глава в каркасе: заголовок и текст под ним
+  return `<div class="lg-idea">${IDEA_FIELDS.map(([k, label, ph]) => `<div class="card lg-f"><label class="lg-l">${label}</label>${ta(`data-chg="leg.idea" data-id="${b.id}" data-k="${k}"`, L.idea?.[k], ph, k === 'logline' ? 1 : 2)}</div>`).join('')}</div>`;
 }
 
 function planHtml(b, L, main) {
@@ -74,15 +75,15 @@ function planHtml(b, L, main) {
     const prol = isProl(p) && i === 0;
     return `<div class="card lg-ch${ps === 'no' ? ' lg-no' : ''}${prol ? ' lg-prol' : ''}"><div class="lg-ch-h"><span class="lg-n">${nums[i] ?? (prol ? 'П' : 'Э')}</span>${prol ? '<b class="lg-t lg-tfix">Пролог</b>' : `<input class="lg-t" value="${esc(p.title || '')}" placeholder="Название главы" data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="title">`}${stSel}${st}
       <span class="lg-mv"><button class="lg-ib" data-act="leg.move" data-id="${b.id}" data-i="${i}" data-d="-1" title="Выше" aria-label="Выше"${i ? '' : ' disabled'}>↑</button><button class="lg-ib" data-act="leg.move" data-id="${b.id}" data-i="${i}" data-d="1" title="Ниже" aria-label="Ниже"${i < L.plan.length - 1 ? '' : ' disabled'}>↓</button><button class="lg-ib" data-act="leg.ins" data-id="${b.id}" data-i="${i + 1}" title="Вставить главу после" aria-label="Вставить после">+</button><button class="lg-ib" data-act="leg.delp" data-id="${b.id}" data-i="${i}" title="Убрать из каркаса" aria-label="Убрать">${ic('trash')}</button></span></div>
-      ${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="what"`, p.what, 'Что происходит: 2–3 строки, главное событие главы', 2)}
-      ${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="why"`, p.why, 'Зачем эта глава: что меняется для героев, какой крючок в конце', 1)}
+      <span class="lg-sl">Что происходит</span>${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="what"`, p.what, '2–3 строки, главное событие главы', 2)}
+      <span class="lg-sl">Зачем эта глава</span>${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="why"`, p.why, 'что меняется для героев, какой крючок в конце', 1)}
       ${L.chars.length ? `<div class="lg-row"><label class="lg-pov">Глазами <select data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="pov">${opts(p.pov)}</select></label>
         <span class="lg-chips">${L.chars.map((x) => `<button class="lg-chip${(p.chars || []).includes(x.id) ? ' on' : ''}" data-act="leg.pchar" data-id="${b.id}" data-i="${i}" data-c="${x.id}">${esc(x.name || 'Без имени')}</button>`).join('')}</span></div>` : ''}</div>`;
   };
   // пролог — отдельным блоком перед первой главой; пока его нет — пустой блок, заполнится — станет частью каркаса
   const prolGhost = isProl(L.plan[0]) ? '' : `<div class="card lg-ch lg-prol lg-ghost"><div class="lg-ch-h"><span class="lg-n">П</span><b class="lg-t lg-tfix">Пролог</b><span class="lg-st">необязательно</span></div>
-    ${ta(`data-chg="leg.prol" data-id="${b.id}" data-k="what"`, '', 'Что происходит в прологе: 2–3 строки', 2)}
-    ${ta(`data-chg="leg.prol" data-id="${b.id}" data-k="why"`, '', 'Зачем пролог: какой крючок или тайну он задаёт', 1)}</div>`;
+    <span class="lg-sl">Что происходит</span>${ta(`data-chg="leg.prol" data-id="${b.id}" data-k="what"`, '', '2–3 строки', 2)}
+    <span class="lg-sl">Зачем пролог</span>${ta(`data-chg="leg.prol" data-id="${b.id}" data-k="why"`, '', 'какой крючок или тайну он задаёт', 1)}</div>`;
   return `${questionsHtml(b, L)}${prolGhost}${L.plan.map(card).join('')}
     <div class="lg-add"><button data-act="leg.ins" data-id="${b.id}" data-i="${L.plan.length}">+ Глава в каркас</button>${!L.plan.length && main.length ? `<button class="link" data-act="leg.fromCh" data-id="${b.id}">Создать по главам из Документа (${main.length})</button>` : ''}</div>`;
 }

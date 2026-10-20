@@ -13,6 +13,7 @@ import { titleRequests } from '../docedit.js';
 import { contestCard } from './plan.js';
 import { resizeImage } from '../../../js/img.js';
 import { bookSeg } from './legend.js';
+import { synText, synTab } from '../synopsis.js';
 import * as drive from '../drive.js';
 import { addDays } from '../../../js/calc.js';
 import { finishEvent, removeEvent, chapterEvent, chapterUnset, syncFinish } from '../sync.js';
@@ -500,7 +501,7 @@ function headCard(c, b, p) {
   const tiles = [tile('Объём', alNum(b.chars), n ? `а.л. · ${n} ${plural(n, ['глава', 'главы', 'глав'])}` : 'а.л.')];
   if (!done) tiles.push(tile('Сегодня', '+' + alNum(writtenToday(b, c.today)), 'а.л.', 'up'), tile('За 7 дней', '+' + alNum(writtenWeek(b, c.today)), 'а.л.', 'up'), tile('Темп', p ? alNum(p) : '—', 'а.л. в день за 2 недели'));
   const icb = (act, k, icon, title) => `<button class="ed-ic" data-act="${act}" data-id="${b.id}" data-k="${k}" title="${title}" aria-label="${title}">${ic(icon)}</button>`;
-  const ann = (b.svc?.annotation ?? '') || (b.promo || {}).annotation || '', syn = (b.svc?.synopsis ?? '') || b.synopsis || '';
+  const ann = (b.svc?.annotation ?? '') || (b.promo || {}).annotation || '', syn = synText(b);
   const ai = svcInfo(b, 'annotation'), si = svcInfo(b, 'synopsis');
   const paras = (t) => esc(t).split('\n').map((x) => `<p>${x}</p>`).join('');
   const long = ann.length > 320 || ann.split('\n').length > 3;
@@ -508,8 +509,8 @@ function headCard(c, b, p) {
     ? `<div class="bh-text"><div class="bh-h"><b>Аннотация</b><span class="bh-ics">${icb('svc.view', 'annotation', 'eye', 'Посмотреть')}${icb('svc.copy', 'annotation', 'copy', 'Скопировать')}${icb('svc.docx', 'annotation', 'download', 'Скачать Word')}</span></div>
       ${long ? `<div class="bh-ann bh-tog" data-act="bh.more" title="Нажмите, чтобы развернуть или свернуть">${paras(ann)}</div>` : `<div class="bh-ann open">${paras(ann)}</div>`}</div>`
     : `<div class="bh-text"><div class="bh-h"><b>Аннотация</b></div><p class="small muted" style="margin:2px 0 0">${ai.ok ? 'Нажмите «Обновить», чтобы подтянуть текст из Документа.' : b.fileId ? 'Добавьте в Google Документ вкладку «Аннотация» — текст появится здесь.' : 'Пока нет.'}</p></div>`;
-  const synBlock = `<div class="bh-text"><div class="bh-h"><b>Синопсис</b><span class="muted small">${syn ? `${grp(syn.length)} зн.` : si.ok ? '' : 'нет вкладки «Синопсис»'}</span>
-      <span class="bh-ics">${syn || si.ok ? `${icb('svc.view', 'synopsis', 'eye', 'Прочитать')}${icb('svc.copy', 'synopsis', 'copy', 'Скопировать')}${icb('svc.docx', 'synopsis', 'download', 'Скачать Word')}` : ''}</span></div>
+  const synBlock = `<div class="bh-text"><div class="bh-h"><b>Синопсис</b><span class="muted small">${syn ? `${grp(syn.length)} зн.` : synTab(b) ? `вкладка «${esc(synTab(b).title)}» в Документе пустая` : b.fileId ? 'нет вкладки «Синопсис»' : 'пока нет'}</span>
+      <span class="bh-ics"><button class="ed-ic" data-act="syn.edit" data-id="${b.id}" data-back="/book/${b.id}" title="${syn ? 'Изменить синопсис' : 'Написать синопсис'}" aria-label="${syn ? 'Изменить синопсис' : 'Написать синопсис'}">${ic('pen')}</button>${syn ? `${icb('svc.view', 'synopsis', 'eye', 'Прочитать')}${icb('svc.copy', 'synopsis', 'copy', 'Скопировать')}${icb('svc.docx', 'synopsis', 'download', 'Скачать Word')}` : ''}</span></div>
 </div>`;
   return `<div class="card book-head2">
     <label class="bh-cover" title="${b.cover ? 'Сменить обложку' : 'Загрузить обложку'}">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}<span class="bh-cover-edit">${b.cover ? 'Сменить' : 'Загрузить обложку'}</span><input type="file" accept="image/*" data-chg="wbook.cover" data-id="${b.id}" hidden></label>
