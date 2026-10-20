@@ -1494,7 +1494,7 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .lg-qs > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 4px; }
 .lg-qs > summary::-webkit-details-marker { display: none; }
 .lg-qs > summary b { font-size: 16px; }
-.lg-q { padding: 10px 0; border-top: 1px solid var(--line); }
+.lg-q { padding: 14px 0; border-top: 1px solid var(--line); }
 .lg-q:first-of-type { margin-top: 8px; }
 .lg-q-h { display: flex; align-items: center; gap: 6px; }
 .lg-q-f { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
@@ -1528,12 +1528,18 @@ select.idea-pk.idea-pk { padding-right: 30px; }
    заголовок карточки 16 px жирный, подписи внутри — серые 13 px, текст 16 px с воздухом между строк, без рамок у полей */
 .lg-f { padding: 14px 16px 8px; margin: 0 0 10px; }
 .lg-f .lg-l { margin: 0 0 4px; font-size: 16px; font-weight: 700; color: var(--text); }
-.lg-sl { display: block; margin: 10px 0 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+.lg-sl { display: block; margin: 14px 0 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .lg-ch-h + .lg-sl { margin-top: 8px; }
-/* поле — тонкая нейтрально-серая рамка (от цвета текста — серая в обеих темах и при любом акценте), без заливки */
-:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta { display: block; width: 100%; margin: 6px 0 6px; padding: 10px 14px; min-height: 0; border: 1px solid color-mix(in srgb, var(--text) 11%, transparent) !important; border-radius: 12px; background: transparent !important; box-shadow: none !important; font-size: 16px; line-height: 1.6; color: var(--text); transition: border-color .15s; }
-:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:hover { border-color: color-mix(in srgb, var(--text) 20%, transparent) !important; }
-:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:focus { border-color: color-mix(in srgb, var(--text) 32%, transparent) !important; outline: none; }
+/* поле — мягкая светло-серая подложка без обводки (серый от цвета текста — нейтральный в обеих темах);
+   при наведении — цвет акцента, как раньше; так каждое поле — своё пятно и текст не сливается */
+:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta, .lg-q-h textarea.lg-ta { display: block; width: 100%; margin: 6px 0 0; padding: 11px 14px; min-height: 0; border: 0 !important; border-radius: 12px; background: color-mix(in srgb, var(--text) 4.5%, var(--surface)) !important; box-shadow: none !important; font-size: 16px; line-height: 1.6; color: var(--text); transition: background-color .15s; }
+:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:hover, .lg-q-h textarea.lg-ta:hover { background: color-mix(in srgb, var(--surface-2) 75%, var(--surface)) !important; }
+:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:focus, .lg-q-h textarea.lg-ta:focus { background: var(--surface-2) !important; outline: none; box-shadow: none !important; }
+/* вопрос — тоже поле, текст вопроса чуть плотнее; подсказки — обычным начертанием */
+.lg-q-h textarea.lg-ta { margin: 0; font-weight: 700; line-height: 1.5; }
+.lg-q-h textarea.lg-ta::placeholder { font-weight: 400; }
+.lg-q-h .lg-ib { align-self: center; }
+.lg-q-f { margin-top: 8px; }
 :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta::placeholder { color: var(--muted); opacity: .8; }
 .lg-ch { padding: 14px 16px 10px; }
 .lg-syn { padding: 14px 16px; }
