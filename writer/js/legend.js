@@ -146,3 +146,122 @@ export const blocksPlain = (blocks) => blocks.map((p) => p.runs.map((r) => r.t).
 // сравнение текста вкладки: без лишних пробелов и пустых строк
 export const normText = (t) => String(t || '').replace(/\r/g, '').split('\n').map((l) => l.trim()).filter(Boolean).join('\n');
 export function hashText(t) { let h = 5381; const s = normText(t); for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
+
+// ---------- шаблон для нейросети: скачать/скопировать → нейросеть заполняет → загрузить обратно ----------
+// Формат простой и устойчивый: поле — строка «## Название поля», под ней текст; глава/персонаж — «### …», внутри «Поле: текст».
+const TPL_HEAD = { idea: 'ИДЕЯ', plan: 'КАРКАС', chars: 'ПЕРСОНАЖИ' };
+const TPL_ASK = {
+  idea: 'Заполни или улучши поля идеи книги.',
+  plan: 'Распиши или доработай каркас по главам: для каждой главы — что происходит и зачем она нужна. Можно добавлять и менять главы.',
+  chars: 'Заполни или доработай карточки персонажей. Можно добавить новых персонажей.',
+};
+const lowKey = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[*_#:«»"]/g, '').replace(/\s+/g, ' ').trim();
+const ROLE_BY = Object.fromEntries(Object.entries(ROLES).map(([k, v]) => [lowKey(v), k]));
+const ST_BY = { утверждено: 'ok', обсуждается: 'talk', отвергнуто: 'no' };
+export function legendTemplate(L, part, title = '') {
+  const out = [
+    `Книга: «${title}». ${TPL_ASK[part]}`,
+    'Правила ответа: верни ТОЛЬКО этот шаблон целиком, сохрани разметку — строки с ## и ### и названия полей перед двоеточием не меняй, новые поля не придумывай. Текст полей — по-русски, без markdown-оформления внутри.',
+    '',
+    `=== ${TPL_HEAD[part]} ===`,
+  ];
+  if (part === 'idea') for (const [k, label] of IDEA_FIELDS) out.push('', `## ${label}`, nm(L.idea?.[k]));
+  if (part === 'plan') {
+    const nums = chapterNums(L.plan);
+    const qs = L.questions || [];
+    L.plan.forEach((p, i) => {
+      out.push('', `### ${isProl(p) ? 'Пролог' : isEpil(p) ? 'Эпилог' : `Глава ${nums[i]}${nm(p.title) && !/^глава\s*\d+$/i.test(nm(p.title)) ? `. ${nm(p.title)}` : ''}`}`);
+      out.push(`Что происходит: ${nm(p.what).replace(/\n+/g, ' ')}`, `Зачем: ${nm(p.why)}`, `Статус: ${PLAN_ST[planSt(p)].toLowerCase()}`);
+    });
+    if (!L.plan.length) out.push('', '### Пролог', 'Что происходит: ', 'Зачем: ', 'Статус: обсуждается', '', '### Глава 1. Название', 'Что происходит: ', 'Зачем: ', 'Статус: обсуждается');
+    out.push('', '=== ОТКРЫТЫЕ ВОПРОСЫ ===', ...(qs.length ? qs.map((q) => `- ${nm(q.q)} → ${nm(q.a)}`) : ['- Вопрос → решение (если есть)']));
+  }
+  if (part === 'chars') {
+    const list = L.chars.length ? L.chars : [{ name: 'Имя', role: 'heroine' }];
+    for (const c of list) {
+      out.push('', `### ${nm(c.name) || 'Имя'}`, `Роль: ${ROLES[c.role] || ''}`);
+      for (const [k, label] of CHAR_FIELDS) out.push(`${label}: ${nm(c[k]).replace(/\n+/g, ' ')}`);
+    }
+    out.push('', `(Роль — одно из: ${Object.values(ROLES).join(', ')}.)`);
+  }
+  return out.join('\n');
+}
+
+// ответ нейросети → поля вкладки. Возвращает { legend: новая Легенда, n: сколько заполнено/изменено }
+export function applyTemplate(L, part, text, newId = () => Math.random().toString(36).slice(2, 9)) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n').map((l) => l.replace(/^\s*>\s?/, '').trimEnd());
+  const head = (l) => { const m = /^\s*#{2,3}\s*(.+?)\s*$/.exec(l) || /^\s*\*\*(.+?)\*\*\s*:?\s*$/.exec(l); return m ? m[1].replace(/\*\*/g, '').trim() : null; };
+  const out = { ...L, idea: { ...(L.idea || {}) }, plan: [...(L.plan || [])], chars: [...(L.chars || [])], questions: [...(L.questions || [])] };
+  let n = 0;
+  if (part === 'idea') {
+    const byLabel = Object.fromEntries(IDEA_FIELDS.map(([k, label]) => [lowKey(label), k]));
+    let cur = null, buf = [];
+    const flush = () => { if (cur && buf.join('\n').trim()) { const v = buf.join('\n').trim(); if (v !== nm(out.idea[cur])) { out.idea[cur] = v; n++; } } buf = []; };
+    for (const l of lines) {
+      const h = head(l);
+      if (h != null) { flush(); cur = byLabel[lowKey(h)] || null; continue; }
+      if (/^===/.test(l.trim())) { flush(); cur = null; continue; }
+      if (cur) buf.push(l);
+    }
+    flush();
+  }
+  // строки «Поле: текст» внутри блока ### (поле может продолжаться на следующих строках)
+  const fieldsOf = (block, labels) => {
+    const res = {}; let cur = null;
+    for (const l of block) {
+      const m = /^\s*[-*]?\s*\**([^:*]{2,60}?)\**\s*:\s*(.*)$/.exec(l), key = m ? labels[lowKey(m[1])] : null;
+      if (key) { cur = key; res[key] = m[2].trim(); } else if (cur && l.trim()) res[cur] = (res[cur] ? res[cur] + '\n' : '') + l.trim();
+    }
+    return res;
+  };
+  const blocks = (stopAt) => {
+    const res = []; let cur = null;
+    for (const l of lines) {
+      if (/^===/.test(l.trim())) { if (stopAt.test(l)) cur = null; continue; }
+      const m = /^\s*###\s*(.+?)\s*$/.exec(l);
+      if (m) { cur = { title: m[1].replace(/\*\*/g, '').trim(), body: [] }; res.push(cur); continue; }
+      if (cur) cur.body.push(l);
+    }
+    return res;
+  };
+  if (part === 'plan') {
+    const labels = { 'что происходит': 'what', зачем: 'why', статус: 'st' };
+    const items = blocks(/ВОПРОС/i).map((bk) => {
+      const f = fieldsOf(bk.body, labels), t = bk.title;
+      const title = /^пролог/i.test(t) ? 'Пролог' : /^эпилог/i.test(t) ? 'Эпилог' : t.replace(/^глава\s*\d+\s*[.:—–-]?\s*/i, '').trim() || t;
+      return { title, what: f.what || '', why: f.why || '', st: ST_BY[lowKey(f.st)] || 'talk' };
+    });
+    if (items.length) {
+      // главы по порядку: у существующих сохраняем «глазами»/«в сцене», остальное берём из ответа
+      out.plan = items.map((x, i) => { const old = L.plan[i] || {}; return { id: old.id || newId(), pov: old.pov || '', chars: old.chars || [], ...x }; });
+      n += items.length;
+    }
+    const qi = lines.findIndex((l) => /^===.*ВОПРОС/i.test(l.trim()));
+    if (qi >= 0) {
+      const qs = [];
+      for (const l of lines.slice(qi + 1)) {
+        if (/^===/.test(l.trim())) break;
+        const m = /^\s*[-*•]\s*(.+?)\s*(?:→|->|—>)\s*(.*)$/.exec(l) || /^\s*[-*•]\s*(.+)$/.exec(l);
+        if (!m || /^вопрос\s*→\s*решение/i.test(m[0].replace(/^\s*[-*•]\s*/, ''))) continue;
+        const q = m[1].trim(), a = (m[2] || '').trim(), old = out.questions.find((x) => lowKey(x.q) === lowKey(q));
+        qs.push(old ? { ...old, a: a || old.a } : { id: newId(), q, a, st: 'open' });
+      }
+      if (qs.length) { const keep = out.questions.filter((x) => !qs.some((y) => y.id === x.id)); out.questions = [...keep, ...qs]; n += qs.length; }
+    }
+  }
+  if (part === 'chars') {
+    const labels = { роль: 'role', ...Object.fromEntries(CHAR_FIELDS.map(([k, label]) => [lowKey(label), k])) };
+    for (const bk of blocks(/$^/)) {
+      const name = bk.title.replace(/\s*[—–-]\s*(героиня|герой|антагонист|друг.*|семья|второстепенный)\s*$/i, '').trim();
+      if (!name || lowKey(name) === 'имя') continue;
+      const f = fieldsOf(bk.body, labels), role = ROLE_BY[lowKey(f.role)] || '';
+      delete f.role;
+      const i = out.chars.findIndex((c) => lowKey(c.name) === lowKey(name));
+      const v = { ...(i >= 0 ? out.chars[i] : { id: newId(), role: 'side' }), name, ...(role ? { role } : {}) };
+      for (const [k] of CHAR_FIELDS) if (f[k] != null && f[k] !== '') v[k] = f[k];
+      if (i >= 0) out.chars[i] = v; else out.chars.push(v);
+      n++;
+    }
+  }
+  return { legend: out, n };
+}

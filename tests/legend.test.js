@@ -58,3 +58,31 @@ test('легенда: пролог без номера, главы после н
   assert.match(t, /\nПролог — тайна\n1\. Похороны — Вера хоронит мужа/);
   assert.match(blocksPlain(legendBlocks(L3, 'plan')), /^Пролог\nтайна\n1\. Похороны/);
 });
+
+test('шаблон для нейросети: идея, каркас, персонажи — туда и обратно', async () => {
+  const { legendTemplate, applyTemplate } = await import('../writer/js/legend.js');
+  let k = 0; const id = () => 'n' + (++k);
+  const L0 = { idea: { logline: 'старое' }, chars: [{ id: 'a', name: 'Вера', role: 'heroine', age: '33' }], plan: [{ id: 'p1', title: 'Похороны', what: 'старое', pov: 'a', chars: ['a'] }], questions: [] };
+  // идея: нейросеть ответила с жирными заголовками и своим текстом
+  assert.match(legendTemplate(L0, 'idea', 'Вдова'), /## О чём книга — одной фразой\nстарое/);
+  const ai1 = 'Вот заполненный шаблон:\n=== ИДЕЯ ===\n## О чём книга — одной фразой\nВдова находит мошенника\n**Читательское обещание**\nнапряжение и страсть\n## Финал\n\n';
+  const r1 = applyTemplate(L0, 'idea', ai1);
+  assert.equal(r1.legend.idea.logline, 'Вдова находит мошенника');
+  assert.equal(r1.legend.idea.promise, 'напряжение и страсть');
+  assert.equal(r1.n, 2);
+  // каркас: пролог, главы со статусом, вопросы; у первой главы сохраняются «глазами» и «в сцене»
+  const ai2 = '=== КАРКАС ===\n### Пролог\nЧто происходит: тайна\nЗачем: крючок\nСтатус: утверждено\n### Глава 1. Похороны\nЧто происходит: Вера хоронит мужа\nи видит чужого\nЗачем: завязка\nСтатус: обсуждается\n=== ОТКРЫТЫЕ ВОПРОСЫ ===\n- Как раскрыли мошенника? → по выписке\n- Финальная конфронтация?';
+  const r2 = applyTemplate(L0, 'plan', ai2, id);
+  assert.deepEqual(r2.legend.plan.map((p) => [p.title, p.what, p.st]), [['Пролог', 'тайна', 'ok'], ['Похороны', 'Вера хоронит мужа\nи видит чужого', 'talk']]);
+  assert.equal(r2.legend.plan[0].pov, 'a');
+  assert.deepEqual(r2.legend.questions.map((q) => [q.q, q.a]), [['Как раскрыли мошенника?', 'по выписке'], ['Финальная конфронтация?', '']]);
+  // персонажи: обновить Веру, добавить нового
+  const ai3 = '=== ПЕРСОНАЖИ ===\n### Вера\nРоль: Героиня\nВозраст: 34\nХарактер: упрямая\n### Артём — герой\nРоль: Герой\nВнешность: высокий';
+  const r3 = applyTemplate(L0, 'chars', ai3, id);
+  assert.equal(r3.legend.chars.length, 2);
+  assert.equal(r3.legend.chars[0].age, '34'); assert.equal(r3.legend.chars[0].nature, 'упрямая');
+  assert.deepEqual([r3.legend.chars[1].name, r3.legend.chars[1].role, r3.legend.chars[1].look], ['Артём', 'hero', 'высокий']);
+  // шаблон → тот же шаблон обратно: ничего не теряется
+  const L1 = r3.legend, back = applyTemplate(L1, 'chars', legendTemplate(L1, 'chars', 'Вдова'), id).legend;
+  assert.deepEqual(back.chars.map((c) => [c.name, c.age, c.role]), L1.chars.map((c) => [c.name, c.age, c.role]));
+});

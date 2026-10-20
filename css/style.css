@@ -1514,3 +1514,8 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .lg-tfix { flex: 1 1 160px; padding: 4px 2px; font-weight: 700; font-size: 16px; color: var(--text); }
 .lg-ghost { border-style: dashed; box-shadow: none; }
 .lg-ghost .lg-n { opacity: .6; }
+/* Легенда: «Шаблон для нейросети» и «Загрузить ответ» — тихо, справа внизу вкладки */
+.lg-tpl { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 4px; }
+.lg-file { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-2); padding: 4px 10px; }
+.lg-file .ic { width: 16px; height: 16px; }
+@media (max-width: 480px) { .lg-tpl { gap: 2px; } :is(main, dialog) .lg-tpl button.dl.dl:not(.chip):not(.link):not(.wide) { padding: 4px 5px; font-size: 12.5px; gap: 4px; } }

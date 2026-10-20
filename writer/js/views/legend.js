@@ -8,7 +8,7 @@ import * as drive from '../drive.js';
 import { chapterList, isAuthorTab } from '../wcalc.js';
 import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests } from '../docedit.js';
 import { docxBlob, noYo } from '../publish.js';
-import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, legendContext, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
+import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, legendContext, legendTemplate, applyTemplate, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
 
 const app = () => window.__app;
 const bookOf = (id) => app().ctx().wbooksById[id];
@@ -34,7 +34,8 @@ export function legendPage(a, id) {
   <div class="lg-bar"><div class="lg-tabs">${tabs.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-act="leg.tab" data-v="${k}">${t}</button>`).join('')}</div>
     <div class="lg-acts"><button class="dl" data-act="leg.ai" data-id="${b.id}">${ic('sparkle')}Для нейросети</button><button class="dl" data-act="leg.docx" data-id="${b.id}">${ic('download')}Word</button><button class="dl" data-act="leg.pdf" data-id="${b.id}">${ic('download')}PDF</button><button class="dl" data-act="leg.hist" data-id="${b.id}" title="Версии Легенды: сохранить и вернуть">${ic('timer')}Версии</button></div></div>
   ${syncLine(b, L)}
-  ${tab === 'idea' ? ideaHtml(b, L) : tab === 'plan' ? planHtml(b, L, main) : charsHtml(b, L, main)}`;
+  ${tab === 'idea' ? ideaHtml(b, L) : tab === 'plan' ? planHtml(b, L, main) : charsHtml(b, L, main)}
+  <div class="lg-tpl"><button class="dl" data-act="leg.tpl" data-id="${b.id}" data-p="${tab}">${ic('download')}Шаблон для нейросети</button><button class="dl" data-act="leg.tplin" data-id="${b.id}" data-p="${tab}">${ic('upload')}Загрузить ответ</button></div>`;
   return { html, after: () => document.querySelectorAll('.lg-ta').forEach(grow) };
 }
 // поле растёт по тексту — длинную мысль видно целиком
@@ -330,4 +331,44 @@ changes['leg.bakin'] = async (v, el) => {
   await putVersion(bookOf(el.dataset.id), 'Перед восстановлением из копии', true);
   await saveL(el.dataset.id, (L) => { Object.assign(L, pure(data.book.legend)); });
   closeSheet(); toast('Легенда восстановлена из копии');
+};
+
+// ---------- шаблон вкладки для нейросети: скопировать/скачать → нейросеть заполняет → «Загрузить ответ» ----------
+const TPL_NAME = { idea: 'Идея', plan: 'Каркас', chars: 'Персонажи' };
+acts['leg.tpl'] = (d) => {
+  const b = bookOf(d.id), text = legendTemplate(legendOf(b), d.p, b.title);
+  openSheet(`Шаблон для нейросети — ${TPL_NAME[d.p]}`, `<p class="small muted" style="margin-top:0">Скопируйте и вставьте в чат с любой нейросетью — она заполнит поля в том же виде. Её ответ загрузите кнопкой «Загрузить ответ» — поля вкладки «${TPL_NAME[d.p]}» заполнятся сами.</p>
+    <textarea id="lgtpl" class="lg-ai" readonly rows="14">${esc(text)}</textarea>
+    <div class="dl-row"><button type="button" class="primary" data-act="leg.tplcopy">${ic('copy')} Скопировать</button><button type="button" class="dl" data-act="leg.tpldl" data-id="${d.id}" data-p="${d.p}">${ic('download')}Скачать файлом</button></div>`, null);
+  return false;
+};
+acts['leg.tplcopy'] = async () => { const t = document.getElementById('lgtpl')?.value || ''; try { await navigator.clipboard.writeText(t); toast('Шаблон скопирован — вставьте в чат с нейросетью'); } catch { document.getElementById('lgtpl')?.select(); toast('Выделено — нажмите Ctrl+C'); } return false; };
+// файлом — как есть, с «ё» (Blob): ответ потом вернётся в Легенду без искажений
+acts['leg.tpldl'] = async (d) => { const b = bookOf(d.id); const blob = new Blob([legendTemplate(legendOf(b), d.p, b.title)], { type: 'text/plain' }); if (await download(`shablon_${latin(TPL_NAME[d.p])}_${latin(b.title)}.txt`, blob, 'text/plain')) toast('Шаблон скачан'); return false; };
+// текст из файла: .txt / .md как есть, Word (.docx) — абзацы из document.xml
+async function fileText(file) {
+  if (/\.docx$/i.test(file.name)) {
+    const zip = await (await drive.loadJsZip()).loadAsync(await file.arrayBuffer());
+    const xml = await zip.file('word/document.xml').async('string');
+    const dec = (t) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+    return (xml.match(/<w:p[\s>][\s\S]*?<\/w:p>/g) || []).map((p) => dec((p.match(/<w:t[^>]*>[^<]*<\/w:t>/g) || []).map((t) => t.replace(/<[^>]+>/g, '')).join(''))).join('\n');
+  }
+  return file.text();
+}
+acts['leg.tplin'] = (d) => {
+  const f = openSheet(`Ответ нейросети — ${TPL_NAME[d.p]}`, `<p class="small muted" style="margin-top:0">Вставьте ответ нейросети целиком или выберите файл. Поля вкладки «${TPL_NAME[d.p]}» заполнятся сами; прежний вариант сохранится в «Версиях».</p>
+    <textarea id="lgans" name="t" class="lg-ai" rows="12" placeholder="Вставьте сюда ответ нейросети"></textarea>
+    <label class="dl lg-file">${ic('folder')}Выбрать файл (.txt, .md, Word)<input type="file" accept=".txt,.md,.docx,text/plain,text/markdown" hidden id="lgansf"></label>`, async (fd) => {
+    const text = String(fd.get('t') || '');
+    const b = bookOf(d.id), L0 = legendOf(b), r = applyTemplate(L0, d.p, text, uid);
+    if (!r.n) { toast('Не нашла в ответе полей шаблона — проверьте, что нейросеть сохранила строки с ## и ###'); return false; }
+    await putVersion(b, `Перед загрузкой ответа нейросети (${TPL_NAME[d.p]})`, true);
+    await saveL(d.id, (L) => { Object.assign(L, { idea: r.legend.idea, plan: r.legend.plan, chars: r.legend.chars, questions: r.legend.questions }); });
+    toast(`Заполнено из ответа: ${r.n}`, { undo: () => saveL(d.id, (L) => { Object.assign(L, pure(L0)); }) });
+  }, { submitText: 'Заполнить' });
+  f?.querySelector('#lgansf')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    try { f.querySelector('#lgans').value = await fileText(file); toast('Файл загружен — нажмите «Заполнить»'); } catch { toast('Не получилось прочитать файл'); }
+  });
+  return false;
 };

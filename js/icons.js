@@ -7,6 +7,8 @@ export const ICONS = {
   // книги на полке: две стоят, третья наклонилась
   books: svg('<rect x="3" y="4" width="4.5" height="16" rx="1"/><rect x="9" y="4" width="4.5" height="16" rx="1"/><rect x="16" y="4.5" width="4.5" height="15.5" rx="1" transform="rotate(-17 18.25 20)"/>'),
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+  // загрузить: стрелка вверх в лоток
+  upload: svg('<path d="M12 15V4.5"/><path d="M7.5 9 12 4.5 16.5 9"/><path d="M5 15.5V19h14v-3.5"/>'),
   // плюс: «добавить» без рамки
   plus: svg('<path d="M12 5v14"/><path d="M5 12h14"/>'),
   // часы: «запланировано», «на таймер»
