@@ -18,6 +18,7 @@ import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
 import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
+import { cleanText, cleanedMsg } from '../../js/cleantext.js';
 
 export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
@@ -178,6 +179,16 @@ store.subscribe(async () => {
 });
 // вернулась в приложение — подтягиваем свежие задачи из Todoist
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleTodoist(app, 800, { pull: true }); });
+// вставка в любое поле Мастерской — без невидимых символов из чатов и сайтов (редактор главы чистит сам)
+document.addEventListener('paste', (e) => {
+  const el = e.target;
+  if (!(el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && /^(text|search|url|)$/.test(el.type)))) return;
+  const x = cleanText(e.clipboardData?.getData('text/plain') || '');
+  if (!x.n) return;
+  e.preventDefault();
+  document.execCommand('insertText', false, x.text);
+  toast(cleanedMsg(x.n));
+});
 setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(app, 1000, { pull: true }); }, 3 * 60000); // и раз в 3 минуты, пока приложение открыто
 drive.preload().catch(() => {});
 let autoRefreshed = false;

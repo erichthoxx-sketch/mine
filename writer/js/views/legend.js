@@ -9,6 +9,7 @@ import { chapterList, isAuthorTab } from '../wcalc.js';
 import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests } from '../docedit.js';
 import { docxBlob, noYo } from '../publish.js';
 import { synText, synSource } from '../synopsis.js';
+import { cleanText } from '../../../js/cleantext.js';
 import './pubfiles.js'; // «Скопировать» и «Word» синопсиса
 import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, legendContext, legendTemplate, applyTemplate, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
 
@@ -375,7 +376,7 @@ acts['leg.tplin'] = (d) => {
     <textarea id="lgans" name="t" class="lg-ai" rows="12" placeholder="Вставьте сюда ответ нейросети"></textarea>
     <label class="dl lg-file">${ic('folder')}Выбрать файл (.txt, .md, Word)<input type="file" accept=".txt,.md,.docx,text/plain,text/markdown" hidden id="lgansf"></label>`, async (fd) => {
     const text = String(fd.get('t') || '');
-    const b = bookOf(d.id), L0 = legendOf(b), r = applyTemplate(L0, d.p, text, uid);
+    const b = bookOf(d.id), L0 = legendOf(b), r = applyTemplate(L0, d.p, cleanText(text).text, uid); // ответ нейросети — без невидимых символов
     if (!r.n) { toast('Не нашла в ответе полей шаблона — проверьте, что нейросеть сохранила строки с ## и ###'); return false; }
     await putVersion(b, `Перед загрузкой ответа нейросети (${TPL_NAME[d.p]})`, true);
     await saveL(d.id, (L) => { Object.assign(L, { idea: r.legend.idea, plan: r.legend.plan, chars: r.legend.chars, questions: r.legend.questions }); });

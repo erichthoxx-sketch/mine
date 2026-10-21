@@ -87,7 +87,7 @@ async function gfetch(url, opts = {}) {
   return r;
 }
 const DRIVE = 'https://www.googleapis.com/drive/v3/files';
-const FIELDS = 'id,name,mimeType,modifiedTime,webViewLink,parents,shortcutDetails(targetId,targetMimeType)';
+const FIELDS = 'id,name,mimeType,createdTime,modifiedTime,webViewLink,parents,shortcutDetails(targetId,targetMimeType)';
 const SHORTCUT = 'application/vnd.google-apps.shortcut';
 const isDoc = (m) => m === MIME.doc || m === MIME.docx;
 const q = (s) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -136,6 +136,17 @@ export async function searchDocs(name) {
 export async function fileMeta(id) {
   if (isLocalDev) return mock.meta(id);
   return (await gfetch(`${DRIVE}/${id}?fields=${FIELDS}&supportsAllDrives=true`)).json();
+}
+// даты всех версий файла из истории Google (для справки об авторстве)
+export async function revisionDates(id) {
+  if (isLocalDev) return [];
+  const out = []; let page = '';
+  do {
+    const j = await (await gfetch(`${DRIVE}/${id}/revisions?fields=nextPageToken,revisions(modifiedTime)&pageSize=1000${page ? `&pageToken=${page}` : ''}`)).json();
+    out.push(...(j.revisions || []).map((r) => r.modifiedTime));
+    page = j.nextPageToken || '';
+  } while (page);
+  return out;
 }
 // папка, в которой лежит файл (например, папка книги — там, где её Документ)
 export async function parentOf(id) { return (await fileMeta(id))?.parents?.[0] || null; }

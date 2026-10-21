@@ -1552,3 +1552,6 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 /* на телефоне все четыре вкладки помещаются: без счётчиков, плотнее */
 :is(main, dialog) .lg-tabs button:not(.link):not(.chip):not(.wide) { padding: 6px 10px; }
 @media (max-width: 480px) { :is(main, dialog) .lg-tabs button:not(.link):not(.chip):not(.wide) { padding: 6px 7px; } .lg-cnt { display: none; } }
+
+/* Маркетинг → книга: тихая ссылка «Справка об авторстве» внизу справа */
+.mk-auth { display: flex; justify-content: flex-end; margin: 4px 0 8px; }

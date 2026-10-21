@@ -9,6 +9,7 @@ import * as drive from '../drive.js';
 import './legend.js';
 import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats, nextChapterTab, isChapterTitle } from '../docedit.js';
 import { alNum, chapterList } from '../wcalc.js';
+import { cleanText, cleanedMsg } from '../../../js/cleantext.js';
 
 const app = () => window.__app;
 let ed = null; // { key, bookId, title, tabId, status, html, baseText, dirty, savedAt, err, draft, named, startChars }
@@ -112,8 +113,11 @@ async function load(key, b, title) {
     const named = tab ? namedStylesOf(tab) : {};
     const blocks = contentToBlocks(content), base = named.NORMAL_TEXT?.run?.z || 12;
     const draft = ls.get(draftKey(key));
+    // невидимые символы (из чатов и сайтов) — убираем сразу, исправленная глава сама сохранится в Документ
+    let cleaned = 0;
+    const clean = blocks.map((p) => ({ ...p, runs: p.runs.map((r) => { const x = cleanText(r.t); cleaned += x.n; return x.n ? { ...r, t: x.text } : r; }) }));
     ed = { key, bookId: b.id, title, tabId: tab?.tabProperties?.tabId || '', status: 'ready', named, base, font: named.NORMAL_TEXT?.run?.f || '',
-      html: blocksToHtml(blocks, named, base), baseText: blocksText(blocks), dirty: false, startChars: textStats(blocks).chars,
+      html: blocksToHtml(clean, named, base), baseText: blocksText(blocks), dirty: cleaned > 0, cleaned, startChars: textStats(blocks).chars,
       draft: draft && draft.text !== blocksText(blocks) ? draft : null };
   } catch (e) { ed = { key, bookId: b.id, title, status: 'error', err: e.message }; }
   if (app().ui.route.startsWith('/ed/')) app().rerender();
@@ -218,8 +222,18 @@ function wire() {
     if (e.data === '-' && before.endsWith('-')) { e.preventDefault(); document.execCommand('delete'); document.execCommand('insertText', false, '—'); return; }
     if (e.data === ' ' && /^\s*-$/.test(before)) { e.preventDefault(); document.execCommand('delete'); document.execCommand('insertText', false, '— '); }
   });
-  // вставка — только текстом, без чужого оформления
-  el.addEventListener('paste', (e) => { e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain')); });
+  // вставка — только текстом, без чужого оформления и без невидимых символов
+  el.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const x = cleanText((e.clipboardData || window.clipboardData).getData('text/plain'));
+    document.execCommand('insertText', false, x.text);
+    if (x.n) toast(cleanedMsg(x.n));
+  });
+  if (ed.cleaned) {
+    toast(`${cleanedMsg(ed.cleaned)} в главе — сохранится в Документ`);
+    ed.cleaned = 0;
+    if (pref('auto', true)) { clearTimeout(autoTimer); autoTimer = setTimeout(() => save({ auto: true }), 3000); }
+  }
   // курсор в абзаце → показываем его стиль
   document.addEventListener('selectionchange', syncStyle);
   // кнопки панели не забирают фокус у текста

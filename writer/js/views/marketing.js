@@ -9,6 +9,8 @@ import { widgetCard } from './widgets.js';
 import { synText, synSource } from '../synopsis.js';
 import { contests } from './plan.js';
 import { svcInfo } from './pubfiles.js';
+import { chaptersOf, docxBlob } from '../publish.js';
+import { authorshipParas, sha256Hex } from '../authorship.js';
 
 const app = () => window.__app;
 export const MTYPES = { banner: 'Баннер для постов', cover: 'Обложка', target: 'Креатив для таргета', manuscript: 'Рукопись', synopsis: 'Синопсис', other: 'Другое' };
@@ -80,10 +82,33 @@ export function bookMarketing(a, id) {
   <div class="row" style="gap:12px;margin-bottom:10px"><span class="mk-cover big">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
     <div><h2 style="margin:0">${esc(b.title)}</h2><div class="small muted">${STATUS[b.status] || STATUS.progress}</div></div></div>
   <div class="chips">${tab('texts', 'Тексты и баннеры')}${tab('target', 'Для таргета')}${tab('pub', 'Для издательства')}</div>
-  ${body}`;
+  ${body}
+  ${b.fileId ? `<div class="mk-auth"><button class="dl" data-act="mk.auth" data-id="${b.id}" title="Когда и как писалась книга: Документ, история версий, главы с отпечатками — в Word">${ic('download')}Справка об авторстве</button></div>` : ''}`;
   return { html };
 }
 acts['mk.tab'] = (d) => { app().ui.mTab = d.v; };
+// справка об авторстве — Word: Документ, история версий по месяцам, главы с отпечатками SHA-256
+acts['mk.auth'] = async (d) => {
+  const b = app().ctx().wbooksById[d.id];
+  try {
+    await drive.ensureToken();
+    toast('Собираю справку…');
+    const [doc, meta, revs] = await Promise.all([drive.getDoc(b.fileId), drive.fileMeta(b.fileId), drive.revisionDates(b.fileId).catch(() => [])]);
+    const chapters = [];
+    for (const ch of chaptersOf(doc)) {
+      const text = ch.paras.map((p) => (p.runs || []).map((r) => r.t).join('')).join('\n').trim();
+      chapters.push({ title: ch.title, chars: ch.chars, hash: await sha256Hex(text) });
+    }
+    const s = app().ctx().settings;
+    // даты и время — по часам владелицы, а не по Гринвичу
+    const loc = (iso) => (iso ? new Date(Date.parse(iso) - new Date(iso).getTimezoneOffset() * 60000).toISOString() : '');
+    const paras = authorshipParas({ title: b.title, author: s.pseudonym || '', now: loc(new Date().toISOString()), revs: revs.map(loc), archive: s.archive?.lastRun ? { lastRun: loc(s.archive.lastRun) } : null, chapters,
+      file: { name: meta?.name || b.title, created: loc(meta?.createdTime), modified: loc(meta?.modifiedTime), link: meta?.webViewLink || b.webViewLink || '' } });
+    const blob = await docxBlob(await drive.loadJsZip(), paras, { title: b.title, author: s.pseudonym || '' });
+    if (await download(`${latin(b.title)}_spravka_ob_avtorstve.docx`, blob, blob.type)) toast('Справка скачана');
+  } catch (e) { toast('Не получилось собрать справку: ' + (e.message || e)); }
+  return false;
+};
 
 const gallery = (items) => (items.length ? `<div class="gallery">${items.map((m) => `<button class="g-item" data-act="mk.open" data-id="${m.id}"><img src="${m.thumb}" alt="${esc(m.name || '')}"></button>`).join('')}</div>` : '');
 const upBtn = (b, type, label, accept = 'image/*') => `<label class="btn">${label}<input type="file" accept="${accept}" multiple data-chg="mk.upload" data-book="${b.id}" data-type="${type}" hidden></label>`;
