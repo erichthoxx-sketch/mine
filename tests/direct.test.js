@@ -261,7 +261,7 @@ test('переходник: Метрика только на чтение и т�
     const other = await worker.fetch(new Request('https://w.dev/metrika/management/v1/counters', { headers: { Origin: 'https://evil.example' } }));
     assert.equal(other.status, 403);
     const ver = await worker.fetch(new Request('https://w.dev/version', { headers: { Origin: 'https://erichthoxx-sketch.github.io' } }));
-    assert.equal(await ver.text(), '3');
+    assert.equal(await ver.text(), '4');
     // страницы конкурсов: только https и только площадки из списка
     const pg = await worker.fetch(new Request('https://w.dev/page?url=' + encodeURIComponent('https://litnet.com/ru/contests/x-c1'), { headers: { Origin: 'https://erichthoxx-sketch.github.io' } }));
     assert.equal(pg.status, 200); assert.equal(called, 'https://litnet.com/ru/contests/x-c1');
