@@ -14,7 +14,7 @@ const saveLaunch = async (patch) => {
 const stateTag = (text, good) => `<span class="d-st ${good ? 'good' : ''}">● ${esc(text)}</span>`;
 const money = (v) => rub(v, 0);
 const checked = (value) => value ? ' checked' : '';
-const verifiedItem = (ok, text) => `<div class="small ${ok ? 'up' : 'muted'}">${ok ? '✓' : '○'} ${esc(text)}</div>`;
+const verifiedItem = (ok, text) => `<div class="fl-check-item ${ok ? 'fl-check-done' : ''}"><span class="fl-check-icon" aria-hidden="true">${ok ? '✓' : '○'}</span><span>${esc(text)}</span></div>`;
 
 export function launchView(a) {
   const c = a.ctx(), fl = firstLaunchOf(c.settings), m = metrikaOf(c);
@@ -27,10 +27,10 @@ export function launchView(a) {
   const goals = (m?.main || []).map(String);
   const goalNames = (m?.goals || []).filter((g) => goals.includes(String(g.id))).map((g) => g.name);
   return { html: `
-    <div class="card">
-      <div class="row between"><h2 style="margin:0">Мой первый запуск</h2>${stateTag(running ? 'идет тест' : 'подготовка', running)}</div>
+    <div class="card fl-panel fl-hero">
+      <div class="row between fl-heading"><h2 style="margin:0">Мой первый запуск</h2>${stateTag(running ? 'идет тест' : 'подготовка', running)}</div>
       <p>Первый самостоятельный рекламный тест для книги <b>«${esc(fl.book)}»</b>. Твоя цель — разобраться, как получать покупателей из своего Директа, а не просто тратить рекламный бюджет.</p>
-      <div class="tiles d-tiles">
+      <div class="tiles d-tiles fl-tiles">
         <div><div class="k">Бюджет теста</div><div class="v">${money(fl.budget)}</div></div>
         <div><div class="k">Расход именно теста</div><div class="v">${running ? money(x.spent) : '—'}</div></div>
         <div><div class="k">Старт рекламы</div><div class="v">${running ? fmtShort(fl.actualStart) : 'не начат'}</div></div>
@@ -38,10 +38,10 @@ export function launchView(a) {
       <p class="small muted">1 ноября — начало подготовки, 9 ноября — первая публикация. День 1 рекламного теста наступит только после открытия подписки и твоего фактического запуска кампании в Яндексе.</p>
       ${demo.on ? '<p class="small warnc">Сейчас открыт демонстрационный режим. Первый запуск можно настраивать, но примерные кампании нельзя привязать к настоящему тесту.</p>' : ''}
     </div>
-    <div class="card">
-      <div class="row between"><h2 style="margin:0">1. Книга и экономика</h2>${stateTag(fl.subscriptionOpen && fl.subscriptionDate && fl.subscriptionDate <= c.today ? 'подписка открыта' : 'готовим книгу', !!fl.subscriptionOpen && !!fl.subscriptionDate && fl.subscriptionDate <= c.today)}</div>
+    <div class="card fl-panel">
+      <div class="row between fl-heading"><h2 style="margin:0">1. Книга и экономика</h2>${stateTag(fl.subscriptionOpen && fl.subscriptionDate && fl.subscriptionDate <= c.today ? 'подписка открыта' : 'готовим книгу', !!fl.subscriptionOpen && !!fl.subscriptionDate && fl.subscriptionDate <= c.today)}</div>
       <p class="small">Начало публикации — <b>9 ноября</b>. Подписку планируем открыть после 4–5 глав; дата пока не утверждена. Реклама с оплатой начинается уже после этого.</p>
-      <form data-form="fl.plan" class="settings-form">
+      <form data-form="fl.plan" class="settings-form fl-form">
         <div class="f2">
           <div><label>Дата открытия подписки (когда будет известна)</label><input name="subscriptionDate" type="date" value="${esc(fl.subscriptionDate)}"></div>
           <div><label>Бюджет первого теста, ₽</label><input name="budget" inputmode="decimal" value="${esc(fl.budget)}" required></div>
@@ -55,8 +55,8 @@ export function launchView(a) {
       <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="subscriptionOpen"${checked(fl.subscriptionOpen)}> Платная подписка уже открыта и книгу можно купить</label>
       <p class="small muted">Роялти нужно для предварительной оценки экономики. Это не автоматическое подтверждение фактических продаж.</p>
     </div>
-    <div class="card">
-      <div class="row between"><h2 style="margin:0">2. Проверка Метрики</h2>${stateTag(r.goal && fl.goalVerified ? 'проверено' : 'нужна проверка', !!r.goal && fl.goalVerified)}</div>
+    <div class="card fl-panel">
+      <div class="row between fl-heading"><h2 style="margin:0">2. Проверка Метрики</h2>${stateTag(r.goal && fl.goalVerified ? 'проверено' : 'нужна проверка', !!r.goal && fl.goalVerified)}</div>
       <p class="small">Подключенный счетчик — еще не доказательство того, что реальная оплата отслеживается правильно. При старте будем анализировать покупки, отнесенные Директом к твоей кампании, а не все покупки по Литнету.</p>
       <p class="small">Сейчас выбрана главная цель: <b>${esc(goalNames.join(', ') || 'не выбрана')}</b>.</p>
       ${r.goal ? verifiedItem(true, 'Одна главная цель с названием оплаты или покупки')
@@ -65,10 +65,10 @@ export function launchView(a) {
       <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="goalVerified"${checked(fl.goalVerified)}${r.goal ? '' : ' disabled'}> Я проверила в Метрике, что эта цель соответствует оплаченной покупке</label>
       <p class="small muted">До запуска рекламы у твоей будущей кампании не будет рекламных конверсий. Срабатывания той же цели от других источников не означают, что новый алгоритм уже обучился.</p>
     </div>
-    <div class="card">
-      <div class="row between"><h2 style="margin:0">3. Рекламная гипотеза</h2>${stateTag(fl.creativeReady && fl.hypothesis ? 'объявления готовы' : 'подготовить', !!fl.creativeReady && !!fl.hypothesis)}</div>
+    <div class="card fl-panel">
+      <div class="row between fl-heading"><h2 style="margin:0">3. Рекламная гипотеза</h2>${stateTag(fl.creativeReady && fl.hypothesis ? 'объявления готовы' : 'подготовить', !!fl.creativeReady && !!fl.hypothesis)}</div>
       <p class="small">Начнем с одной конкретной идеи, которую можно проверить на покупках. Например: какой конфликт «Черной вдовы» лучше привлекает читательниц — фиктивные похороны мужа или опасное знакомство с владельцем ритуального бизнеса?</p>
-      <form data-form="fl.creative" class="settings-form">
+      <form data-form="fl.creative" class="settings-form fl-form">
         <label>Что проверяем: аудитория, крючок и ожидаемый результат</label>
         <textarea name="hypothesis" rows="3" placeholder="Гипотеза для первой кампании">${esc(fl.hypothesis)}</textarea>
         <div class="row d-save"><button type="submit" class="primary">Сохранить гипотезу</button></div>
@@ -76,8 +76,8 @@ export function launchView(a) {
       <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="creativeReady"${checked(fl.creativeReady)}> Я подготовила и проверила объявление в Яндекс Директе</label>
       <p class="small muted">Приложение пока не создает кампанию с нуля. Мы готовим настройки здесь, а новое объявление создаем в самом Яндексе.</p>
     </div>
-    <div class="card">
-      <div class="row between"><h2 style="margin:0">4. Моя кампания и лимит</h2>${stateTag(r.picked?.state === 'ON' && fl.limitVerified ? 'готово' : 'пока не готово', r.picked?.state === 'ON' && !!fl.limitVerified)}</div>
+    <div class="card fl-panel">
+      <div class="row between fl-heading"><h2 style="margin:0">4. Моя кампания и лимит</h2>${stateTag(r.picked?.state === 'ON' && fl.limitVerified ? 'готово' : 'пока не готово', r.picked?.state === 'ON' && !!fl.limitVerified)}</div>
       <p class="small">Создай отдельную кампанию под «Черную вдову» в своем кабинете. Мы будем учитывать только ее расходы и конверсии — старый кабинет и реклама таргетологов сюда не попадают.</p>
       <p class="small"><a href="https://direct.yandex.ru/" target="_blank" rel="noopener">Открыть Яндекс Директ ↗</a> · <button class="link" data-act="d.reload">Обновить кампании из Яндекса</button></p>
       <label for="flCampaign">Кампания для первого теста</label>
@@ -90,16 +90,16 @@ export function launchView(a) {
       <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="limitVerified"${checked(fl.limitVerified)}> Я проверила ограничения расходов в Яндекс Директе</label>
       <p class="small muted">10 000 ₽ — бюджет нашего эксперимента, а не автоматический лимит Яндекса. Приложение не меняет бюджеты и не включает кампании самостоятельно.</p>
     </div>
-    <div class="card">
-      <div class="row between"><h2 style="margin:0">5. Старт и контроль результатов</h2><span class="small muted">${complete} из ${r.checks.length} проверок</span></div>
-      ${r.checks.map((ch) => verifiedItem(ch.ok, ch.label)).join('')}
+    <div class="card fl-panel">
+      <div class="row between fl-heading"><h2 style="margin:0">5. Старт и контроль результатов</h2><span class="small muted">${complete} из ${r.checks.length} проверок</span></div>
+      <div class="fl-checklist">${r.checks.map((ch) => verifiedItem(ch.ok, ch.label)).join('')}</div>
       ${!running ? `<p class="small">Когда все условия выполнены и ты включила кампанию в Яндексе, укажи фактическую дату запуска. До этого расходы и продажи в наш тест не попадут.</p>
-        <form data-form="fl.launch" class="settings-form">
+        <form data-form="fl.launch" class="settings-form fl-form">
           <label>Фактическая дата начала показов</label><input type="date" name="actualStart" value="${c.today}" max="${c.today}" min="${esc(fl.subscriptionDate || fl.publicationDate)}" required>
           <div class="row d-save"><button class="primary" type="submit"${r.ready ? '' : ' disabled'}>Я запустила рекламу в Яндексе</button></div>
         </form>` : `
         <p class="small">Тест идет с <b>${fmtShort(fl.actualStart)}</b>. Данные ниже относятся только к кампании «${esc(r.picked?.name || fl.campaignId)}» и периоду после ее старта.</p>
-        <div class="tiles d-tiles">
+        <div class="tiles d-tiles fl-tiles">
           <div><div class="k">Расход</div><div class="v">${money(x.spent)}</div></div>
           <div><div class="k">Остаток бюджета</div><div class="v">${money(x.balance)}</div></div>
           <div><div class="k">Клики</div><div class="v">${num(x.clicks)}</div></div>
