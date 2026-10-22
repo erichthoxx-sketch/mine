@@ -1766,3 +1766,27 @@ main .rev-actions button.dl .ic { opacity: 1; }
   .app-direct .tq .tq-types { grid-template-columns: 1fr; gap: 9px; }
   .app-direct .tq .tq-table { min-width: 620px; }
 }
+
+
+/* Эксперименты в собственном Директе: понятная последовательность решения → наблюдения. */
+.app-direct main .ex-panel { padding: clamp(19px, 3.2vw, 27px); margin-bottom: 16px; }
+.app-direct main .ex-panel h2 { font-size: clamp(16px, 2.5vw, 19px); line-height: 1.4; margin: 0 0 16px; }
+.app-direct main .ex-panel p { line-height: 1.6; margin: 0 0 13px; }
+.app-direct main .ex-panel .ex-form { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+.app-direct main .ex-panel .ex-form label { font-weight: 650; line-height: 1.5; margin: 0 0 4px; }
+.app-direct main .ex-panel .ex-form :is(input, select, textarea) { margin: 0; }
+.app-direct main .ex-panel .ex-form .d-save { margin: 5px 0 0; }
+.app-direct main .ex-panel .ex-list { display: grid; gap: 18px; }
+.app-direct main .ex-panel .ex-item { padding: 18px; background: var(--surface-2); border-radius: 15px; min-width: 0; }
+.app-direct main .ex-panel .ex-item > .row:first-child { align-items: flex-start; gap: 8px 15px; margin-bottom: 13px; }
+.app-direct main .ex-panel .ex-item > .row:first-child b { flex: 1 1 180px; }
+.app-direct main .ex-panel .ex-item .ex-results { border-top: 1px solid var(--line); padding-top: 15px; margin: 14px 0; }
+.app-direct main .ex-panel .ex-item .ex-results table { min-width: 470px; background: var(--surface); border-radius: 10px; }
+.app-direct main .ex-panel .ex-item .ex-results th, .app-direct main .ex-panel .ex-item .ex-results td { text-align: right; padding: 11px 9px; }
+.app-direct main .ex-panel .ex-item .ex-results th:first-child, .app-direct main .ex-panel .ex-item .ex-results td:first-child { text-align: left; }
+.app-direct main .ex-panel .ex-item .ex-form { padding-top: 8px; }
+@media (max-width: 560px) {
+  .app-direct main .ex-panel { padding: 18px 15px; }
+  .app-direct main .ex-panel .ex-item { padding: 15px 12px; }
+  .app-direct main .ex-panel .ex-item .ex-results table { min-width: 440px; }
+}
