@@ -5,6 +5,7 @@ import { rub, num, fmtShort } from '../../../js/format.js';
 import { firstLaunchOf, launchReadiness, launchMetrics } from '../launchcalc.js';
 import { metrikaOf } from './metrika.js';
 import { demo } from '../demo.js';
+import { creatorCard } from './creator.js';
 
 const app = () => window.__app;
 const saveLaunch = async (patch) => {
@@ -74,18 +75,19 @@ export function launchView(a) {
         <div class="row d-save"><button type="submit" class="primary">Сохранить гипотезу</button></div>
       </form>
       <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="creativeReady"${checked(fl.creativeReady)}> Я подготовила и проверила объявление в Яндекс Директе</label>
-      <p class="small muted">Приложение пока не создает кампанию с нуля. Мы готовим настройки здесь, а новое объявление создаем в самом Яндексе.</p>
+      <p class="small muted">Ниже есть конструктор: ты сможешь создать новую кампанию, группу и объявление самостоятельно, без автоматического запуска.</p>
     </div>
     <div class="card fl-panel">
       <div class="row between fl-heading"><h2 style="margin:0">4. Моя кампания и лимит</h2>${stateTag(r.picked?.state === 'ON' && fl.limitVerified ? 'готово' : 'пока не готово', r.picked?.state === 'ON' && !!fl.limitVerified)}</div>
-      <p class="small">Создай отдельную кампанию под «Черную вдову» в своем кабинете. Мы будем учитывать только ее расходы и конверсии — старый кабинет и реклама таргетологов сюда не попадают.</p>
+      <p class="small">Создадим отдельную кампанию под «Черную вдову» прямо здесь, через твой API. Старый кабинет и реклама таргетологов сюда не попадут.</p>
+      ${creatorCard(a, fl, m)}
       <p class="small"><a href="https://direct.yandex.ru/" target="_blank" rel="noopener">Открыть Яндекс Директ ↗</a> · <button class="link" data-act="d.reload">Обновить кампании из Яндекса</button></p>
       <label for="flCampaign">Кампания для первого теста</label>
       <select id="flCampaign" data-chg="fl.campaign">
         <option value="">Не выбрана</option>
         ${available.map((camp) => opt(camp.id, camp.name + (camp.state === 'ON' ? ' · включена' : ' · не запущена'), fl.campaignId)).join('')}
       </select>
-      ${!available.length ? '<p class="small muted">В этом кабинете пока нет доступных кампаний. После создания нажми «Обновить кампании».</p>' : ''}
+      ${!available.length ? '<p class="small muted">Пока в аккаунте нет кампаний. Когда сохранишь черновик через конструктор выше, обнови список.</p>' : ''}
       ${fl.campaignId && !r.picked ? '<p class="small warnc">Ранее выбранной кампании больше нет среди загруженных. Выбери ее заново.</p>' : ''}
       <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="limitVerified"${checked(fl.limitVerified)}> Я проверила ограничения расходов в Яндекс Директе</label>
       <p class="small muted">10 000 ₽ — бюджет нашего эксперимента, а не автоматический лимит Яндекса. Приложение не меняет бюджеты и не включает кампании самостоятельно.</p>
