@@ -1661,3 +1661,41 @@ select.idea-pk.idea-pk { padding-right: 30px; }
   .app-direct main .fl-panel .fl-form { gap: 13px; }
   .app-direct main .fl-panel .fl-form .f2 { grid-template-columns: 1fr; gap: 13px; }
 }
+
+
+/* Новый конструктор: отделен от карточки и показывает этапы крупными читаемыми блоками. */
+.app-direct main .fl-builder {
+  padding: 22px;
+  margin: 24px 0;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--surface-2);
+}
+.app-direct main .fl-builder > h3 { font: 700 16px/1.4 var(--font-body); margin: 0 0 10px; }
+.app-direct main .fl-builder > p { max-width: 68ch; margin-bottom: 18px; }
+.app-direct main .fl-builder > .row { margin: 16px 0; }
+.app-direct main .fl-builder .fl-form { margin: 17px 0; }
+.app-direct main .fl-builder .fl-form > label { font-weight: 700; }
+.app-direct main .fl-builder .fl-form :is(input,select,textarea) { background: var(--surface); }
+.app-direct main .fl-builder .fl-builder-alert {
+  padding: 15px 17px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  margin: 15px 0;
+  line-height: 1.55;
+}
+.app-direct main .fl-builder .fl-builder-alert p { margin: 9px 0 13px; }
+.app-direct main .fl-builder .fl-builder-alert .row { margin-top: 12px; }
+.app-direct main .fl-builder .fl-made {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 700;
+  color: var(--good);
+  margin: 18px 0 10px;
+}
+@media (max-width: 560px) {
+  .app-direct main .fl-builder { padding: 17px 14px; margin: 18px 0; }
+  .app-direct main .fl-builder .row > button { max-width: 100%; white-space: normal; }
+}
