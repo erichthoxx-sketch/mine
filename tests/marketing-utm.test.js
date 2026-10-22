@@ -1,8 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promoReminderDate, promoLinkTasks, isLitnetLink, promoToken } from '../writer/js/promolinks.js';
-import { todoistTasks } from '../writer/js/todoist.js';
-import { planItems } from '../writer/js/views/plan.js';
+import { todoistTasks, todoistPlan } from '../writer/js/todoist.js';
 import { promoLinksInline, promoLinksPanel } from '../writer/js/views/promolinks.js';
 
 const alpine = 'bk_alpine';
@@ -60,18 +59,13 @@ test('Задача на обновление UTM всегда содержит �
   assert.equal(due[0].bookId, alpine);
 });
 
-test('Планер показывает дела на воскресенье, но не создает сводку на четверг', () => {
-  const c = {
-    today: '2026-10-22', wbooks: [], wbooksById: {}, settings: { taxRate: 4, todoist: {} },
-    data: {
-      w_contests: [], w_queue: [{id:'q1',title:'Срок заявки на показы',due:'2026-10-25',done:false}],
-      w_waiting: [], w_goals: [], w_links: [], w_promolinks: [], w_media: [],
-      sales: [], months: [], campaigns: [], reports: [], days: [], books: [],
-    },
-  };
-  const items = planItems(c, '2026-10-22', '2026-10-25');
-  const deadline = items.find(x => x.kind === 'queue' && x.title === 'Срок заявки на показы');
-  assert.equal(deadline?.date, '2026-10-25');
-  assert.ok(!items.some(x => x.kind === 'weekend' || /Посмотреть дела на (субботу|воскресенье)/.test(x.title)));
-  assert.ok(!items.some(x => x.date === '2026-10-22' && x.kind === 'queue'));
+test('Старые автоматические «посмотреть дела на выходные» закрываются при синхронизации', () => {
+  const old = { key:'weekend_abc123', id:'auto444', date:'2026-10-22' };
+  const active=[{id:old.id,content:'Посмотреть дела на воскресенье (1)',due:{date:old.date},description:'Срок заявки на показы'}];
+  const ops=todoistPlan([],{[old.key]:{id:old.id,date:old.date}},{},active,{[old.id]:old.date});
+  assert.ok(ops.close.some(x => x.id === old.id));
+  // Календарное воскресное дело осталось независимым от бывшей агрегатной задачи.
+  const sunday=todoistTasks([{kind:'queue',date:'2026-10-25',title:'Срок заявки на показы',id:'q1'}],{});
+  assert.equal(sunday.length,1);
+  assert.equal(sunday[0].date,'2026-10-25');
 });
