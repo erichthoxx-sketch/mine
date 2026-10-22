@@ -34,7 +34,12 @@ test('План без фактической правки не имеет фик
 test('Пока прошло мало времени, сравнение нельзя считать завершенным', () => {
   const x = compareExperiment(experiment, { today: '2026-11-23', campaigns: [campaign], daily });
   assert.equal(x.state, 'early');
-  assert.equal(x.daysLeft, 4);
+  assert.equal(x.daysLeft, 5);
+});
+test('Полную неделю не считаем завершенной до полуночи следующего дня', () => {
+  const x = compareExperiment(experiment, { today: '2026-11-27', campaigns: [campaign], daily });
+  assert.equal(x.state, 'early');
+  assert.equal(x.daysLeft, 1);
 });
 test('Эксперимент не присваивает расходы и цели другого кабинета / кампании', () => {
   const x = compareExperiment(experiment, {
