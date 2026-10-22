@@ -1699,3 +1699,25 @@ select.idea-pk.idea-pk { padding-right: 30px; }
   .app-direct main .fl-builder { padding: 17px 14px; margin: 18px 0; }
   .app-direct main .fl-builder .row > button { max-width: 100%; white-space: normal; }
 }
+
+
+/* Отзывы: компактные строки в карточке книги, фотографии отдельно от текста. */
+.rev-card .rev-summary { margin: 9px 0 6px; }
+.rev-brief { display: grid; gap: 8px; margin-top: 10px; }
+.rev-entry { min-width: 0; }
+.rev-entry + .rev-entry { padding-top: 9px; border-top: 1px solid var(--line); }
+.rev-brief .rev-body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.rev-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; margin-top: 4px; }
+.rev-actions { gap: 9px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.rev-actions .dl { display: inline-flex; align-items: center; gap: 5px; }
+.rev-actions .dl .ic, .rev-gallery .ic { width: 17px; height: 17px; }
+.rev-list { margin-top: 14px; }
+.rev-item { display: block; }
+.rev-item .rev-body { max-height: 210px; overflow: auto; }
+.rev-gallery { margin-top: 12px; }
+.rev-gallery .g-item img { object-fit: cover; }
+@media(max-width: 480px) {
+  .rev-actions { align-items: flex-start; }
+  .rev-actions .primary { width: auto; }
+  .rev-gallery { gap: 8px; }
+}
