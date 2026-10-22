@@ -178,7 +178,6 @@ export function bookPage(a, id) {
     <label class="inline-num">Глав в книге, примерно <input type="number" min="1" inputmode="numeric" value="${b.planChapters || ''}" placeholder="—" data-chg="wb.planCh" data-id="${b.id}"></label>
     ${progressBlock(c, b)}
   </div>
-  ${promoLinksPanel(c, {bookId:b.id})}
   <div class="card goals-card"><div class="row between"><h2 style="margin:0">Цели</h2><button class="small-btn" data-act="goal.new" data-book="${b.id}">+ цель</button></div>
     ${bookGoals.length ? `<div class="plist">${bookGoals.map(({ g, st }) => `<a class="pitem tap${st.doneToday ? ' done-today' : ''}" href="#" data-act="goal.edit" data-id="${g.id}">${st.doneToday ? `<span class="pi-ok">${icx('check')}</span>` : '<span class="dot k-goal"></span>'}<span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:4px 0 0">Например, «по главе в день до 15 октября» — буду напоминать.</p>'}
     ${b.status === 'done' ? '' : `<div class="mini-chart"><div class="row between small muted"><span>Написано за 2 недели</span><b>+${al(series.reduce((a, d) => a + (d.known ? d.value : 0), 0))}</b></div><div class="chart" id="bchart1"></div></div>`}
@@ -197,7 +196,9 @@ export function bookPage(a, id) {
       <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="texts"><span>Тексты и баннеры<span class="sub">тексты ${mk.texts} из ${mk.textsAll} · картинок ${mk.banners}</span></span><span>${mark(mk.texts === mk.textsAll)}</span></a>
       <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="target"><span>Для таргета<span class="sub">креативов ${mk.creatives} · объявлений ${mk.ads}</span></span><span>${mark(mk.creatives && mk.ads)}</span></a>
     </div>
-    ${mk.creatives || mk.ads ? `<div class="row" style="margin-top:10px"><button data-act="mk.targetZip" data-id="${b.id}">Скачать пакет для таргетолога</button></div>` : ''}</div>
+    ${mk.creatives || mk.ads ? `<div class="row" style="margin-top:10px"><button data-act="mk.targetZip" data-id="${b.id}">Скачать пакет для таргетолога</button></div>` : ''}
+    ${(c.data.w_promolinks || []).some(x => x.bookId === b.id && x.status !== 'archived') ? promoLinksPanel(c, { bookId: b.id, compact: true }) : ''}
+  </div>
   ${publisherCard(b)}
   <div class="card"><h2>О книге</h2>
   <form data-form="wbook.save" data-id="${b.id}">
