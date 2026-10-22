@@ -2,7 +2,7 @@
 import { addDays } from '../../js/calc.js';
 
 const weekday = d => new Date(d + 'T00:00:00Z').getUTCDay();
-const passive = new Set(['wait', 'done', 'weekend']); // запланированное само выйдет, делать ничего не надо
+const passive = new Set(['wait', 'done', 'weekend', 'utm-expiry']); // запланированное само выйдет, делать ничего не надо
 export const weekendReminderDay = date => {
   const d = weekday(date);
   return d === 6 ? addDays(date, -2) : d === 0 ? addDays(date, -2) : '';
