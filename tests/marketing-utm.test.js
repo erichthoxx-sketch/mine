@@ -26,7 +26,7 @@ test('Рекламные ссылки остаются внутри соотве
   assert.doesNotMatch(wd, /Альпийский развод/);
   assert.match(promoLinksPanel(ctx, { bookId: alpine, compact: true }), /avdjDacd1gyIb-cN/);
   assert.doesNotMatch(promoLinksPanel(ctx, { bookId: alpine }), /Черная вдова/);
-  assert.match(promoLinksInline({...ctx,data:{w_promolinks:[]}},alpine), /\+ UTM/);
+  assert.equal(promoLinksInline({...ctx,data:{w_promolinks:[]}},alpine), '');
 });
 test('Ссылку безопасно отображаем, и счетчик UTM берем из ее пути', () => {
   assert.equal(promoToken(entries[0].url), 'avdjDacd1gyIb-cN');
