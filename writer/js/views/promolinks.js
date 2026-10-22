@@ -13,12 +13,29 @@ const displayLink = url => {
   return u ? `<a href="${esc(u)}" rel="noopener noreferrer" target="_blank" class="utm-url">${esc(u)}</a>` : '<span class="muted">нет ссылки</span>';
 };
 const status = (x, today) => x.expires < today ? 'Срок истек' : x.expires <= today ? 'Сегодня последний день' : 'Действует до ' + human(x.expires);
+// В разделе «Маркетинг» каждая ссылка находится внутри своей книги.
+export function promoLinksInline(c, bookId) {
+  const items = linkList(c, bookId);
+  return `<div class="utm-inline" data-utm-book="${esc(bookId)}">
+    <div class="utm-inline-heading">
+      <span class="small muted">UTM-ссылки${items.length ? ' · ' + items.length : ''}</span>
+      <button type="button" class="link" data-act="utm.new" data-book="${esc(bookId)}">+ Добавить</button>
+    </div>
+    ${items.map(x=>`<div class="utm-inline-item">
+      <div class="utm-inline-content">
+        <b>${esc(x.campaign || 'Кампания')}</b>
+        <span class="small muted">${esc(status(x,c.today))} · Напомнить ${human(promoReminderDate(x.expires))}</span>
+        <span class="utm-inline-url">${displayLink(x.url)}</span>
+      </div>
+      <button type="button" class="link" data-act="utm.edit" data-id="${esc(x.id)}">Изменить</button>
+    </div>`).join('')}
+  </div>`;
+}
 export function promoLinksPanel(c, { bookId = '' } = {}) {
   const items = linkList(c, bookId);
   return `<div class="card utm-panel">
-    <div class="row between"><h2 style="margin:0">UTM-ссылки Литнета</h2><button class="small-btn" data-act="utm.new"${bookId ? ` data-book="${esc(bookId)}"` : ''}>+ Ссылка</button></div>
-    <p class="small muted">Каждая ссылка привязана к книге и рекламной кампании. Планер напомнит заменить ее до окончания, а сама дата окончания останется в календаре.</p>
-    ${!items.length ? '<p class="small muted">Пока ссылок нет. Добавь первую из кабинета Литнета — приложение не может получить личный список без доступа к нему.</p>' : `
+    <div class="row between"><h2 style="margin:0">UTM-ссылки</h2><button class="small-btn" data-act="utm.new"${bookId ? ` data-book="${esc(bookId)}"` : ''}>+ Ссылка</button></div>
+    ${!items.length ? '<p class="small muted">Ссылок пока нет.</p>' : `
       <div class="utm-list">${items.map(x=>`<div class="utm-item">
         <div class="row between">
           <div class="utm-main"><b>${esc(x.campaign || 'Рекламная кампания')}</b>
@@ -27,16 +44,15 @@ export function promoLinksPanel(c, { bookId = '' } = {}) {
           <button class="link" data-act="utm.edit" data-id="${esc(x.id)}">Изменить</button>
         </div>
         <div class="utm-urlrow">${displayLink(x.url)}</div>
-        <div class="small muted utm-token">UTM-метка: <code>utm_litref=${esc(promoToken(x.url))}</code></div>
-        ${x.destination ? `<div class="small muted">Переход на книгу: ${displayLink(x.destination)}</div>` : ''}
+        <div class="small muted utm-token">utm_litref=${esc(promoToken(x.url))}</div>
+        ${x.destination ? `<div class="small muted">${displayLink(x.destination)}</div>` : ''}
         <div class="utm-meta">
           <span class="${x.expires < c.today ? 'down' : 'muted'}">${esc(status(x,c.today))}</span>
-          <span>Напоминание: <b>${human(promoReminderDate(x.expires))}</b></span>
+          <span>Напомнить: <b>${human(promoReminderDate(x.expires))}</b></span>
           ${Number.isFinite(Number(x.readers)) && x.readers !== '' ? `<span>Новых читателей: ${esc(String(x.readers))}</span>` : ''}
         </div>
       </div>`).join('')}</div>
     `}
-    <p class="small muted">Напоминания синхронизируются с Todoist, если он подключен в «Мастерской». Ссылки и сроки меняются только здесь, не в самом Литнете или действующих кампаниях.</p>
   </div>`;
 }
 const fields = (c, x={}, locked='') => `
@@ -55,7 +71,6 @@ const fields = (c, x={}, locked='') => `
     <div><label>Ссылка активна до</label><input name="expires" type="date" value="${esc(x.expires||'')}" required></div>
     <div><label>Новых читателей (необязательно)</label><input name="readers" inputmode="numeric" value="${esc(String(x.readers??''))}" placeholder="Например, 96"></div>
   </div>
-  <p class="small muted">День напоминания будет рассчитан автоматически. Суббота → четверг, воскресенье → пятница, вторник → предыдущий четверг. Календарный срок не меняем.</p>
 `;
 function entry(fd, previous = {}) {
   const bookId=String(fd.get('bookId')||''), campaign=String(fd.get('campaign')||'').trim(),
