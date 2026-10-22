@@ -38,12 +38,13 @@ export function parseReviewBatch(input, source = 'Литнет') {
 }
 
 export function uniqueReviews(bookId, candidates, existing = []) {
-  const seen = new Set(existing.filter((x) => x.bookId === bookId).map(reviewKey));
+  // Совпадения по тексту нужны, если раньше отзыв добавили вручную, а затем он пришел с ID.
+  const keys = (x) => [reviewKey(x), compact(x.source || 'Другое') + ':text:' + compact(x.text)];
+  const seen = new Set(existing.filter((x) => x.bookId === bookId).flatMap(keys));
   const result = [];
   for (const item of candidates) {
-    const key = reviewKey(item);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (keys(item).some((key) => seen.has(key))) continue;
+    keys(item).forEach((key) => seen.add(key));
     result.push({ ...item, bookId });
   }
   return result;
