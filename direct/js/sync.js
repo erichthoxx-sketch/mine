@@ -77,6 +77,24 @@ export async function refresh(app, { onStep = () => {} } = {}) {
       .map((r) => ({ query: r.Query, cid: r.CampaignId, gid: r.AdGroupId, kw: r.Criterion, impr: r.Impressions, clicks: r.Clicks, cost: r.Cost }))
       .sort((a, b) => b.cost - a.cost).slice(0, 600);
   } catch (e) { console.warn('запросы', e); } // у кампаний только в сетях отчёта по запросам нет
+  // Качество трафика: отдельный отчет по реальным площадкам и отказам (30 дней).
+  // Не запрашиваем чаще раза в 6 часов: Директ ограничивает частоту API.
+  // При ошибке сохраняем прежний отчет и дату его получения, без ложного «свежего» статуса.
+  let placements = old?.placements || [], placementAt = old?.placementAt || null, placementErr = '';
+  if (cids.length && (!placementAt || Date.now() - Date.parse(placementAt) > 6 * 3600000)) {
+    try {
+      onStep('Качество трафика: площадки…');
+      placements = await report(s, {
+        name: 'traffic-placements',
+        fields: ['CampaignId', 'Placement', 'AdNetworkType', 'Impressions', 'Clicks', 'Cost', 'BounceRate'],
+        from: addDays(today, -29), to: today,
+      });
+      placementAt = new Date().toISOString();
+    } catch (e) {
+      placementErr = 'Директ не отдал отчет по площадкам: ' + (e.message || String(e));
+      console.warn(placementErr);
+    }
+  }
   // Цели Метрики: конверсии по дням и по фразам (Директ считает их сам) + поведение на странице книги.
   // Любая неудача здесь не ломает загрузку: остаются прошлые данные, причина — в mErr
   const m = s.direct?.metrika || {}, goalIds = (m.goals || []).map((g) => String(g.id)).slice(0, 10);
@@ -99,7 +117,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   const at = new Date().toISOString();
   await putSnap(app, [
     { id: 'main', at, sandbox: !!s.direct?.sandbox, campaigns, groups, keywords, ads },
-    { id: 'stats', at, daily, adDaily, kw, queries, conv, kwConv, mrows, mErr, mAt },
+    { id: 'stats', at, daily, adDaily, kw, queries, conv, kwConv, mrows, mErr, mAt, placements, placementAt, placementErr },
   ]);
   await pushToIncome(app, daily);
 }
