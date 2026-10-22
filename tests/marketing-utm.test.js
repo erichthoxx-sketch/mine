@@ -18,12 +18,15 @@ test('Рекламные ссылки остаются внутри соотве
   const al = promoLinksInline(ctx, alpine);
   const wd = promoLinksInline(ctx, widow);
   assert.match(al, /Альпийский развод/);
-  assert.match(al, /avdjDacd1gyIb-cN/);
+  assert.match(al, /UTM · 1/);
+  assert.match(al, /18\.11\.2026/);
+  assert.doesNotMatch(al, /avdjDacd1gyIb-cN/); // длинная ссылка только в деталях
   assert.doesNotMatch(al, /Черная вдова/);
   assert.match(wd, /Черная вдова/);
   assert.doesNotMatch(wd, /Альпийский развод/);
-  assert.match(promoLinksPanel(ctx, { bookId: alpine }), /Альпийский развод/);
+  assert.match(promoLinksPanel(ctx, { bookId: alpine, compact: true }), /avdjDacd1gyIb-cN/);
   assert.doesNotMatch(promoLinksPanel(ctx, { bookId: alpine }), /Черная вдова/);
+  assert.match(promoLinksInline({...ctx,data:{w_promolinks:[]}},alpine), /\+ UTM/);
 });
 test('Ссылку безопасно отображаем, и счетчик UTM берем из ее пути', () => {
   assert.equal(promoToken(entries[0].url), 'avdjDacd1gyIb-cN');
