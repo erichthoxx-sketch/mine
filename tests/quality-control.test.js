@@ -28,7 +28,7 @@ test('Отказы без достаточного числа кликов не 
     { CampaignId: 111, Placement: 'small', AdNetworkType: 'AD_NETWORK', Clicks: 3, Cost: 80, BounceRate: 100, Impressions: 120 },
     { CampaignId: 111, Placement: 'unknown', AdNetworkType: 'AD_NETWORK', Clicks: 99, Cost: 100, BounceRate: '--', Impressions: 1200 },
   ], [campaigns[0]]);
-  assert.equal(rows[1].bounce, null);
+  assert.equal(rows.find(x => x.place === 'unknown').bounce, null);
   assert.deepEqual(qualityAlerts(rows), []);
 });
 
