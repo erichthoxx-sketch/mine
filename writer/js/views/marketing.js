@@ -36,7 +36,7 @@ export function marketingView(a) {
   <div class="chips">${chip('progress', 'В процессе', by('progress').length)}${chip('done', 'Завершённые', by('done').length)}${chip('idea', 'Идеи', by('idea').length)}${chip('all', 'Все', c.wbooks.length)}</div>
   ${c.wbooks.length > 6 ? `<input type="search" value="${esc(a.ui.mQ || '')}" placeholder="Найти книгу" data-chg="mk.q" aria-label="Найти книгу" style="margin-bottom:10px">` : ''}
   ${list.length ? `<div class="mk-book-list">${list.map((b) => bookRow(c, b)).join('')}</div>` : `<div class="card"><p class="muted" style="margin:0">${c.wbooks.length ? 'В этой группе книг нет.' : 'Книг пока нет — добавьте их на вкладке «Книги».'}</p></div>`}
-  <h2 style="margin-top:22px">Реклама</h2>
+  <h2 style="margin-top:20px">Рекламные инструменты</h2>
   <div class="card list mk-go">
     <a class="item" href="../direct/"><span class="mk-go-ic">${ic('ads')}</span><span class="mk-go-t"><b>Яндекс Директ</b><span class="sub">кампании, клики, покупки и что поправить</span></span>${ic('chevron')}</a>
     <a class="item" href="../#/ads"><span class="mk-go-ic">${ic('ruble')}</span><span class="mk-go-t"><b>Реклама в «Доходах»</b><span class="sub">расходы и окупаемость: Литнет, Директ, Rocket</span></span>${ic('chevron')}</a>
@@ -49,12 +49,14 @@ export function marketingView(a) {
 }
 function bookRow(c, b) {
   const t = mediaOf(c, b, ['target']).length, d = directOf(b).ads.length;
-  const man = !!b.fileId || mediaOf(c, b, ['manuscript']).length, syn = !!synText(b) || mediaOf(c, b, ['synopsis']).length;
-  const mark = (ok) => (ok ? '<span class="up">✓</span>' : '<span class="muted">—</span>');
-  return `<div class="card mk-book-card"><a class="mk-row" href="#" data-act="go" data-to="/mk/${b.id}">
-    <span class="mk-cover">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
-    <span class="mk-info"><b>${esc(b.title)}</b>
-      <span class="sub">Тексты ${promoFilled(b)}/${Object.keys(PROMO).length} · Таргет: ${t} креат., ${d} объявл. · Издательство: рукопись ${mark(man)} синопсис ${mark(syn)}</span></span></a>${promoLinksInline(c, b.id)}</div>`;
+  // Подробная готовность для издательства видна внутри книги, не в плотном списке.
+  return `<div class="card mk-book-card">
+    <a class="mk-row" href="#" data-act="go" data-to="/mk/${b.id}" aria-label="Открыть маркетинг книги ${esc(b.title)}">
+      <span class="mk-cover">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
+      <span class="mk-info"><b>${esc(b.title)}</b><span class="sub">Тексты ${promoFilled(b)}/${Object.keys(PROMO).length} · Креативы ${t} · Объявления ${d}</span></span>
+    </a>
+    <div class="mk-book-utm">${promoLinksInline(c, b.id)}</div>
+  </div>`;
 }
 // сводка готовности маркетинга — для страницы книги
 export function mkSummary(c, b) {
