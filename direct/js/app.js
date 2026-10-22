@@ -54,8 +54,8 @@ export async function reload({ quiet = false } = {}) {
     if (!quiet) toast('Данные обновлены');
   } catch (e) {
     console.error(e);
-    // перебои у Яндекса: спокойно показываем прошлые данные и сами пробуем снова через 15 минут
-    toast(e.transient ? OUTAGE_TEXT : e.message || String(e));
+    // при ограничении по частоте повторяем позже, не заставляя владелицу вручную обновлять страницу
+    toast(e.rateLimited ? 'Яндекс ограничил частоту запросов. Приложение попробует снова само.' : e.transient ? OUTAGE_TEXT : e.message || String(e));
     if (e.transient) { clearTimeout(retryT); retryT = setTimeout(() => reload({ quiet: true }), 15 * 60000); }
     if (!demo.on) await store.saveSettings({ direct: { ...d(), lastError: { code: e.code || null, text: e.message || String(e), transient: !!e.transient, at: new Date().toISOString() } } }).catch(() => {});
   }
