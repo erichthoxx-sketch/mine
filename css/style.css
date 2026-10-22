@@ -1555,3 +1555,109 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 
 /* Маркетинг → книга: тихая ссылка «Справка об авторстве» внизу справа */
 .mk-auth { display: flex; justify-content: flex-end; margin: 4px 0 8px; }
+
+
+/* «Директ» → «Мой первый запуск»: ясная и спокойная вертикальная иерархия. */
+.app-direct main .fl-panel {
+  padding: clamp(20px, 3.5vw, 30px);
+  margin-bottom: 18px;
+  border-radius: 20px;
+}
+.app-direct main .fl-panel .fl-heading {
+  align-items: flex-start;
+  gap: 10px 20px;
+  margin-bottom: 18px;
+}
+.app-direct main .fl-panel .fl-heading h2 {
+  font-size: clamp(16px, 2.5vw, 19px);
+  line-height: 1.4;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.app-direct main .fl-panel .fl-heading .d-st {
+  flex: none;
+  margin-top: 3px;
+}
+.app-direct main .fl-panel p {
+  line-height: 1.65;
+  max-width: 72ch;
+  margin: 0 0 17px;
+}
+.app-direct main .fl-panel p.small {
+  line-height: 1.65;
+}
+.app-direct main .fl-panel p.muted,
+.app-direct main .fl-panel p.small.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.app-direct main .fl-panel p:last-child { margin-bottom: 0; }
+.app-direct main .fl-panel .fl-tiles {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.app-direct main .fl-panel .fl-tiles > div {
+  padding: 15px 16px;
+  border-radius: 14px;
+}
+.app-direct main .fl-panel .fl-tiles .k { line-height: 1.5; margin-bottom: 8px; }
+.app-direct main .fl-panel .fl-tiles .v { font-size: clamp(15px, 2.5vw, 20px); line-height: 1.35; white-space: normal; overflow-wrap: normal; }
+.app-direct main .fl-panel .fl-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 20px 0;
+}
+.app-direct main .fl-panel .fl-form .f2 { gap: 14px; align-items: end; }
+.app-direct main .fl-panel .fl-form .f2 > div { justify-content: flex-start; }
+.app-direct main .fl-panel .fl-form label { margin: 0 0 7px; line-height: 1.5; font-size: 13px; }
+.app-direct main .fl-panel .fl-form :is(input, select, textarea) { margin: 0; }
+.app-direct main .fl-panel .fl-form .d-save { margin: 5px 0 0; }
+.app-direct main .fl-panel .d-check {
+  align-items: flex-start;
+  gap: 11px;
+  line-height: 1.55;
+  margin: 16px 0;
+}
+.app-direct main .fl-panel .d-check input { margin-top: 3px; }
+.app-direct main .fl-panel .fl-checklist {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 22px;
+}
+.app-direct main .fl-panel .fl-check-item {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  line-height: 1.55;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.app-direct main .fl-panel .fl-check-item.fl-check-done { color: var(--text); }
+.app-direct main .fl-panel .fl-check-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  height: 20px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.app-direct main .fl-panel .fl-check-done .fl-check-icon { color: var(--good); }
+.app-direct main .fl-panel > .row:not(.fl-heading) { margin: 12px 0 18px; }
+.app-direct main .fl-panel > label:not(.d-check) { margin: 16px 0 7px; }
+.app-direct main .fl-panel > select { margin: 0 0 12px; }
+.app-direct main .fl-panel > .small:has(> a) { line-height: 1.8; }
+.app-direct main .fl-panel.fl-hero { background: var(--surface); }
+@media (max-width: 560px) {
+  .app-direct main .fl-panel { padding: 19px 17px; margin-bottom: 14px; }
+  .app-direct main .fl-panel .fl-heading { margin-bottom: 15px; }
+  .app-direct main .fl-panel .fl-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-direct main .fl-panel .fl-tiles > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .app-direct main .fl-panel .fl-form { gap: 13px; }
+  .app-direct main .fl-panel .fl-form .f2 { grid-template-columns: 1fr; gap: 13px; }
+}
