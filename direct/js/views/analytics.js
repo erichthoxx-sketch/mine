@@ -30,7 +30,8 @@ function model(a) {
   const c = a.ctx(), m = metrikaOf(c), mk = a.snap('mk'), t = c.today;
   const main = (m.main || []).map(String), skip = outageSet(c.data.days || []), hasGoals = main.length > 0;
   const y = addDays(t, -1), w = sumDays(mk.daily, addDays(y, -6), y, main), { w: wc, pw } = weekPair(mk.daily, t, main, skip);
-  const m30 = sumDays(mk.daily, addDays(t, -29), t, main, skip);
+  // Фактические итоги должны совпадать с Метрикой: дни сбоя исключаем только из сравнений обычного темпа.
+  const m30 = sumDays(mk.daily, addDays(t, -29), t, main);
   const titles = (c.data.books || []).map((b) => b.title).filter(Boolean);
   const sales = c.data.sales || [];
   const allSale = royaltyPerSale(sales, t);
@@ -95,9 +96,9 @@ function booksTab(a, M) {
   const { mk, t, main, skip, hasGoals } = M;
   const books = byBook(mk.pages, main, M.titles);
   const totV = books.reduce((s, b) => s + b.book.visits, 0), totC = books.reduce((s, b) => s + b.book.conv, 0);
-  const gt = goalTotals30(mk.daily, addDays(t, -29), t, skip), f = funnel(gt, M.m.goals || []);
+  const gt = goalTotals30(mk.daily, addDays(t, -29), t), f = funnel(gt, M.m.goals || []);
   const maxN = Math.max(1, ...f.steps.map((x) => x.n));
-  return `<div class="card"><h2>Воронка читателя</h2><p class="small muted">За 30 дней по целям Метрики (достижения цели: один человек может пройти шаг несколько раз).</p>
+  return `<div class="card"><h2>Воронка читателя</h2><p class="small muted">За 30 дней по целям Метрики (целевые визиты; один посетитель может совершить несколько визитов).</p>
       ${f.steps.length > 1 ? f.steps.map((x) => `<div class="bar-row"><div class="row between small"><span>${esc(x.name)}${x.goal ? ` <span class="muted">· ${esc(x.goal)}</span>` : ''}</span><span><b>${num(x.n)}</b>${x.rate != null ? ` · ${pct(Math.min(x.rate, 9.99), 0)} от прошлого шага` : ''}</span></div><div class="progress"><i style="width:${(x.n / maxN * 100).toFixed(1)}%"></i></div></div>`).join('')
         + (f.worst ? `<div class="item l-hl"><b>Больше всего теряете на шаге «${esc(f.worst.name)}»: до него доходит ${pct(f.worst.rate, 0)}</b><div class="small">${FUNNEL_TIP[f.worst.id] || ''}</div></div>` : '')
         : '<p class="muted">Отметьте в Настройках цели «Начало чтения», «Добавление в библиотеку», «Начало покупки», «Покупка» — и здесь будет путь читателя по шагам.</p>'}${selfNote(M)}</div>
