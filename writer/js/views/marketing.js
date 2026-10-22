@@ -49,13 +49,14 @@ export function marketingView(a) {
 }
 function bookRow(c, b) {
   const t = mediaOf(c, b, ['target']).length, d = directOf(b).ads.length;
-  // Подробная готовность для издательства видна внутри книги, не в плотном списке.
+  // Нет UTM-ссылок — нет лишнего элемента в карточке.
+  const utm = promoLinksInline(c, b.id);
   return `<div class="card mk-book-card">
     <a class="mk-row" href="#" data-act="go" data-to="/mk/${b.id}" aria-label="Открыть маркетинг книги ${esc(b.title)}">
       <span class="mk-cover">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
       <span class="mk-info"><b>${esc(b.title)}</b><span class="sub">Тексты ${promoFilled(b)}/${Object.keys(PROMO).length} · Креативы ${t} · Объявления ${d}</span></span>
     </a>
-    <div class="mk-book-utm">${promoLinksInline(c, b.id)}</div>
+    ${utm ? `<div class="mk-book-utm">${utm}</div>` : ''}
   </div>`;
 }
 // сводка готовности маркетинга — для страницы книги
