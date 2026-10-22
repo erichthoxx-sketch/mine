@@ -10,9 +10,10 @@ const pc = (x) => `${String(r1(x * 100)).replace('.', ',')} %`;
 const WD = ['воскресенье', 'понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу'];
 
 export const SESSION_METRICS = ['ym:s:visits', 'ym:s:users', 'ym:s:bounceRate', 'ym:s:pageDepth', 'ym:s:avgVisitDurationSeconds'];
-export const goalMetric = (id) => `ym:s:goal${id}reaches`;
+// Для долей и конверсии нужны целевые визиты, а не число повторных срабатываний цели.
+export const goalMetric = (id) => `ym:s:goal${id}visits`;
 
-// Ответ stat/v1/data → [{key, name, visits, users, bounce (доля), depth, dur, goals {id: достижения}}]
+// Ответ stat/v1/data → [{key, name, visits, users, bounce (доля), depth, dur, goals {id: целевые визиты}}]
 // Несколько группировок (например, метки UTM) → key «a|b|c», dims — значения по порядку
 export function mkRows(json, goalIds = []) {
   return (json?.data || []).map((r) => {
@@ -26,7 +27,7 @@ export function mkRows(json, goalIds = []) {
 }
 export const reach = (row, ids) => (ids || Object.keys(row.goals || {})).reduce((s, id) => s + (row.goals?.[id] || 0), 0);
 
-// Сумма по дням [from, to] без дней сбоя; доля отказов — средняя, взвешенная по визитам
+// Сумма по дням [from, to] (skip по желанию); доля отказов — средняя, взвешенная по визитам
 export function sumDays(daily = [], from, to, main = [], skip = null) {
   const t = { visits: 0, users: 0, conv: 0, b: 0, dur: 0, depth: 0, days: 0 };
   for (const x of daily) {
