@@ -6,6 +6,7 @@ import { goalTitle, goalToday } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
+import { reviewsCard } from './reviews.js';
 import { publisherCard, svcInfo } from './pubfiles.js';
 import { ownTasks, bookOfTask, addOwnTask, tdText } from '../../../js/tdtasks.js';
 import { isOpen, ideaTitle } from '../ideacalc.js';
@@ -185,6 +186,7 @@ export function bookPage(a, id) {
     ${chs.length ? chaptersBlock() : `<p class="small muted" style="margin:8px 0 0">${canEdit ? 'Глав пока нет. Нажмите «+ Глава» — в Google Документе появится новая вкладка.' : 'Глав пока нет. Когда отмечаете выкладку, просто впишите название главы.'}</p>`}
 </div>
   ${bookContests(c, b, contests)}
+  ${reviewsCard(c, b)}
   <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(ideaTitle(x))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
       ${ideas.length > IDEAS_MAX ? `<div style="margin-top:10px"><button data-act="idea.open" data-book="${b.id}">Все идеи к книге (${ideas.length})</button></div>` : ''}` : '<p class="small muted" style="margin:8px 0 0">Идей к этой книге пока нет.</p>'}</div>
