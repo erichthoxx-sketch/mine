@@ -27,7 +27,7 @@ export function qualityView(a) {
   const reportNote = stats.placementAt ? (reportCurrent ? 'Обновлено' : 'Данные могут быть устаревшими') + ': ' + dateText(stats.placementAt) : 'Пока отчет по площадкам не загружен';
   return { html: `
   <div class="card tq">
-    <h2>Контроль качества трафика</h2>
+    <div class="row between"><h2 style="margin:0">Контроль качества трафика</h2><button data-act="go" data-to="/experiments">Журнал решений</button></div>
     <p>Проверяем, куда расходуются деньги в твоем Директе и что делают читательницы после клика. <b>Ни один показатель не доказывает наличие ботов сам по себе.</b></p>
     <p class="small muted">Последние 30 дней: ${from} — ${to}. Реклама таргетологов из их отдельного кабинета не учитывается.</p>
     ${all.length ? `<label for="tq-select">Кампания</label><select id="tq-select" data-chg="tq.select">
