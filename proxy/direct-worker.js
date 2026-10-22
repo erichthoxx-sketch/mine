@@ -14,7 +14,7 @@ const TARGETS = {
   sandbox: 'https://api-sandbox.direct.yandex.com',
   metrika: 'https://api-metrika.yandex.net',
 };
-const VERSION = '3'; // 2 — добавлена Метрика; 3 — страницы конкурсов
+const VERSION = '4'; // 4 — поддержка API v501 для новых единых перфоманс-кампаний
 const PAGE_HOSTS = ['litnet.com', 'litgorod.ru', 'litmarket.ru', 'litres.ru', 'author.today', 'prodaman.ru', 'feisovet.ru', 'litsovet.ru', 'ridero.ru', 'eksmo.ru', 'ast.ru', 'vk.com', 'vk.ru', 't.me'];
 // Какие заголовки пропускаем в Директ и обратно
 const PASS_IN = ['authorization', 'content-type', 'client-login', 'accept-language', 'processingmode', 'returnmoneyinmicros', 'skipreportheader', 'skipcolumnheader', 'skipreportsummary'];
@@ -62,8 +62,9 @@ export default {
     }
     if (request.method !== 'POST') return new Response('Только POST', { status: 405, headers: cors(origin) });
 
-    // /live/json/v5/campaigns → https://api.direct.yandex.com/json/v5/campaigns
-    const m = /^\/(live|sandbox)(\/json\/v5\/[a-z]+)$/.exec(url.pathname);
+    // /live/json/v501/campaigns → https://api.direct.yandex.com/json/v501/campaigns
+    // старый /json/v5 для чтения и существующих кампаний тоже поддерживается
+    const m = /^\/(live|sandbox)(\/json\/v(?:5|501)\/[a-z]+)$/.exec(url.pathname);
     if (!m) return new Response('Неизвестный адрес', { status: 404, headers: cors(origin) });
 
     const headers = new Headers();
