@@ -1790,3 +1790,25 @@ main .rev-actions button.dl .ic { opacity: 1; }
   .app-direct main .ex-panel .ex-item { padding: 15px 12px; }
   .app-direct main .ex-panel .ex-item .ex-results table { min-width: 440px; }
 }
+
+
+/* Маркетинг / Книга: UTM-ссылки, сроки замены и журнал обновлений. */
+.utm-panel { margin: 16px 0; padding: clamp(18px, 2.7vw, 25px); }
+.utm-panel > .row.between { gap: 12px; margin: 0 0 12px; align-items: center; }
+.utm-panel > .row.between h2 { font-size: clamp(16px, 2.2vw, 19px); line-height: 1.35; }
+.utm-panel p.small { line-height: 1.6; margin: 10px 0 15px; }
+.utm-list { display: grid; gap: 12px; margin-top: 17px; }
+.utm-item { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); min-width: 0; }
+.utm-item .row.between { align-items: flex-start; gap: 9px 15px; margin-bottom: 11px; }
+.utm-item .utm-main { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; line-height: 1.45; }
+.utm-item .utm-urlrow { min-width: 0; font-size: 13px; line-height: 1.55; }
+.utm-panel .utm-url { overflow-wrap: anywhere; word-break: break-word; text-decoration: underline; text-underline-offset: 3px; }
+.utm-item .utm-token { margin-top: 8px; overflow-wrap: anywhere; }
+.utm-item .utm-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; border-top: 1px solid var(--line); padding-top: 11px; margin-top: 14px; font-size: 13px; line-height: 1.55; }
+.utm-item .utm-meta span:first-child { font-weight: 650; }
+.utm-item code { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .utm-panel { padding: 17px 14px; }
+  .utm-item { padding: 13px; }
+  .utm-item .utm-meta { flex-direction: column; gap: 5px; }
+}
