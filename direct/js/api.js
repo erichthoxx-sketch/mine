@@ -9,11 +9,12 @@ const ERR = {
   513: 'Этот аккаунт Яндекса не подключён к Директу.',
 };
 
-export function apiBase(s) {
+export function apiBase(s, version = 'v5') {
   const d = s.direct || {};
   if (!d.proxy) throw new Error('Не указан адрес переходника — откройте Настройки.');
   if (!s.directToken) throw new Error('Директ не подключён — откройте Настройки и войдите через Яндекс.');
-  return `${d.proxy.replace(/\/+$/, '')}/${d.sandbox ? 'sandbox' : 'live'}/json/v5/`;
+  if (!['v5', 'v501'].includes(version)) throw new Error('Неизвестная версия API Директа.');
+  return `${d.proxy.replace(/\/+$/, '')}/${d.sandbox ? 'sandbox' : 'live'}/json/${version}/`;
 }
 function headers(s, extra = {}) {
   const h = { Authorization: 'Bearer ' + s.directToken, 'Content-Type': 'application/json; charset=utf-8', 'Accept-Language': 'ru', ...extra };
@@ -43,8 +44,8 @@ function apiError(e) {
 }
 
 // Обычный запрос: call(s, 'campaigns', 'get', {…}) → result
-export async function call(s, service, method, params, retry = 2, wait = sleep) {
-  const res = await post(apiBase(s) + service, s, { method, params });
+export async function call(s, service, method, params, retry = 2, wait = sleep, version = 'v5') {
+  const res = await post(apiBase(s, version) + service, s, { method, params });
   let data = null;
   try { data = await res.json(); } catch { /* не JSON */ }
   if (data?.error) {
@@ -52,7 +53,7 @@ export async function call(s, service, method, params, retry = 2, wait = sleep) 
     // повтор только для чтения: запись при сбое не дублируем
     if (e.transient && retry > 0 && method === 'get') {
       await wait(e.rateLimited ? RATE_LIMIT_WAIT_MS : 3000);
-      return call(s, service, method, params, retry - 1, wait);
+      return call(s, service, method, params, retry - 1, wait, version);
     }
     throw e;
   }
