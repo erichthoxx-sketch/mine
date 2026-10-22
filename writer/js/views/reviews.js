@@ -55,7 +55,6 @@ async function addBatch(bookId, text, source) {
   const c = app().ctx();
   const candidates = uniqueReviews(bookId, parseReviewBatch(text, source), c.data.w_reviews || []);
   if (!candidates.length) return 0;
-  const now = new Date().toISOString();
   await app().store.putMany('w_reviews', candidates.map((x, i) => ({ ...x, id: 'rv' + uid(), addedAt: new Date(Date.now() + i).toISOString() })));
   return candidates.length;
 }
@@ -66,7 +65,7 @@ acts['rev.import'] = (d) => {
   if (!b) return;
   openSheet('Отзывы · ' + b.title, '<p class="small muted">Можно вставить все сразу. Один отзыв отделяется от другого строкой <b>---</b>. Также принимается JSON-массив с полями text, author, date, source, url.</p>' +
     '<label for="rv_source">Площадка</label><select id="rv_source" name="source">' + REVIEW_SOURCES.map((x) => opt(x, x, 'Литнет')).join('') + '</select>' +
-    '<label for="rv_text">Текст отзывов</label><textarea id="rv_text" name="text" rows="10" required placeholder="Первый отзыв&#10;---&#10;Второй отзыв"></textarea>' +
+    '<label for="rv_text">Текст отзывов</label><textarea id="rv_text" name="text" rows="10" placeholder="Первый отзыв&#10;---&#10;Второй отзыв"></textarea>' +
     '<p class="small muted">Или импортируйте подготовленный файл .txt / .json:</p><input type="file" accept=".txt,.json,text/plain,application/json" name="file">',
     async (fd) => {
       const file = fd.get('file');
