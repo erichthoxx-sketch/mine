@@ -17,7 +17,7 @@ const status = (x, today) => x.expires < today ? 'Срок истек' : x.expir
 // Полная карточка ссылок показывается после открытия книги → «Для таргета».
 export function promoLinksInline(c, bookId) {
   const items = linkList(c, bookId);
-  if (!items.length) return `<button type="button" class="mk-utm-action mk-utm-add" data-act="utm.new" data-book="${esc(bookId)}" title="Добавить рекламную ссылку из Литнета">+ UTM</button>`;
+  if (!items.length) return ''; // Никакой пустой секции и даже кнопки: ссылка добавляется внутри книги.
   const nearest = items[0];
   const expired = nearest.expires < c.today;
   return `<button type="button" class="mk-utm-action mk-utm-ready${expired ? ' is-expired' : ''}" data-act="mk.go" data-id="${esc(bookId)}" data-tab="target" title="${esc(nearest.campaign || 'Открыть UTM-ссылки')}">
