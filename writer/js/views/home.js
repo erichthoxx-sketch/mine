@@ -54,8 +54,8 @@ export function reminders(c) {
   // напоминания по связям и подготовка маркетинга
   for (const x of linkTodos(c)) add(x.date, x.text, x.name, '/link/' + x.linkId, 1);
   for (const m of marketingNeeds(c)) add(m.date, m.title, esc(m.sub), m.to, 0);
-  // Напоминания о продлении UTM и обзор выходных — те же даты, что в Планере.
-  for (const task of planItems(c, t, addDays(t, 14)).filter(x => x.kind === 'utm' || x.kind === 'weekend'))
+  // Только конкретные UTM-обновления заранее. Общих обзоров выходных нет.
+  for (const task of planItems(c, t, addDays(t, 14)).filter(x => x.kind === 'utm'))
     add(task.date, task.title, task.sub, task.to, 14);
   for (const x of d.w_queue) if (!x.done && x.due) add(x.due, x.title, x.bookId && c.wbooksById[x.bookId] ? esc(c.wbooksById[x.bookId].title) : 'из очереди «Что пишу дальше»', '/plan');
   for (const x of d.w_waiting) {
