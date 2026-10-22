@@ -1721,3 +1721,20 @@ select.idea-pk.idea-pk { padding-right: 30px; }
   .rev-actions .primary { width: auto; }
   .rev-gallery { gap: 8px; }
 }
+
+/* Отзывы: вторичные кнопки должны читаться и при пустом архиве. */
+main .rev-actions button.dl.dl:not(.chip):not(.link):not(.wide) {
+  color: var(--text);
+  font-weight: 700;
+}
+main .rev-actions button.dl.dl:not(.chip):not(.link):not(.wide):hover:not(:disabled),
+main .rev-actions button.dl.dl:not(.chip):not(.link):not(.wide):focus-visible {
+  background: var(--surface-2);
+  color: var(--text);
+}
+main .rev-actions button.dl:disabled {
+  opacity: .78;
+  color: var(--text-2);
+  cursor: not-allowed;
+}
+main .rev-actions button.dl .ic { opacity: 1; }
