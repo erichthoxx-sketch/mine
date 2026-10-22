@@ -7,6 +7,7 @@ import { writtenToday, writtenWeek } from './wcalc.js';
 import * as drive from './drive.js';
 import { ic } from '../../js/icons.js';
 import { booksView, bookPage, refreshAll } from './views/books.js';
+import { reviewsPage } from './views/reviews.js';
 import { ideasView } from './views/ideas.js';
 import { homeView } from './views/home.js';
 import { planView, navToday } from './views/plan.js';
@@ -20,7 +21,7 @@ import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
 import { cleanText, cleanedMsg } from '../../js/cleantext.js';
 
-export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver'];
+export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 initAccent(store);
 const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'open', ideaKind: '', ideaN: 50, openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
@@ -65,6 +66,7 @@ const TABS = [['/', 'house', 'Главная'], ['/books', 'books', 'Книги'
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'book' && b) return { tab: '/books', view: (x) => bookPage(x, decodeURIComponent(b)) };
+  if (a === 'reviews' && b) return { tab: '/books', view: (x) => reviewsPage(x, decodeURIComponent(b)) };
   if (a === 'legend' && b) return { tab: '/books', view: (x) => legendPage(x, decodeURIComponent(b)) };
   if (a === 'ed' && b) { const [, , bid, ...rest] = ('#' + ui.route).split('/'); return { tab: '/books', view: (x) => editorView(x, decodeURIComponent(bid), decodeURIComponent(rest.join('/'))) }; }
   if (a === 'link' && b) return { tab: '/links', view: (x) => linkPage(x, decodeURIComponent(b)) };
