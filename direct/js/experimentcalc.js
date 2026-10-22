@@ -53,16 +53,18 @@ export function compareExperiment(experiment, {
   const firstImportedSale = sales.reduce((m, x) => x.date && (!m || x.date < m) ? x.date : m, '');
   const salesBefore = bookSales(sales, experiment.book, p.beforeFrom, p.beforeTo);
   const salesAfter = bookSales(sales, experiment.book, p.afterFrom, p.afterTo);
-  const fullWindow = today >= p.afterTo;
-  const directFresh = !!directUpdatedAt && Date.parse(directUpdatedAt) >= Date.parse(p.afterTo + 'T00:00:00Z');
-  const goalFresh = !!goalId && !!goalsUpdatedAt && Date.parse(goalsUpdatedAt) >= Date.parse(p.afterTo + 'T00:00:00Z');
+  // Полная неделя заканчивается в полночь дня, следующего за последним днем периода.
+  const completeFrom = addDays(p.afterTo, 1);
+  const fullWindow = today >= completeFrom;
+  const directFresh = !!directUpdatedAt && Date.parse(directUpdatedAt) >= Date.parse(completeFrom + 'T00:00:00Z');
+  const goalFresh = !!goalId && !!goalsUpdatedAt && Date.parse(goalsUpdatedAt) >= Date.parse(completeFrom + 'T00:00:00Z');
   const salesComplete = !!lastImportedSale && lastImportedSale >= p.afterTo;
   const hasBaseline = before.clicks >= 20 && after.clicks >= 20;
   return {
     state: fullWindow ? 'comparison' : 'early',
     periods: p, before, after,
     salesBefore, salesAfter,
-    daysLeft: fullWindow ? 0 : Math.max(1, Math.round((Date.parse(p.afterTo + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000)),
+    daysLeft: fullWindow ? 0 : Math.max(1, Math.round((Date.parse(completeFrom + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000)),
     lastImportedSale, firstImportedSale,
     directFresh, goalFresh, salesComplete, hasBaseline,
     costDelta: round(after.cost - before.cost),
