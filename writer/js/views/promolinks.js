@@ -24,9 +24,9 @@ export function promoLinksInline(c, bookId) {
     UTM · ${items.length} <span>${expired ? 'истекла ' : 'до '}${human(nearest.expires)}</span>
   </button>`;
 }
-export function promoLinksPanel(c, { bookId = '' } = {}) {
+export function promoLinksPanel(c, { bookId = '', compact = false } = {}) {
   const items = linkList(c, bookId);
-  return `<div class="card utm-panel">
+  return `<div class="${compact ? 'utm-panel utm-panel-compact' : 'card utm-panel'}">
     <div class="row between"><h2 style="margin:0">UTM-ссылки</h2><button class="small-btn" data-act="utm.new"${bookId ? ` data-book="${esc(bookId)}"` : ''}>+ Ссылка</button></div>
     ${!items.length ? '<p class="small muted">Ссылок пока нет.</p>' : `
       <div class="utm-list">${items.map(x=>`<div class="utm-item">
