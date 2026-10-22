@@ -27,6 +27,8 @@ export function promoLinksPanel(c, { bookId = '' } = {}) {
           <button class="link" data-act="utm.edit" data-id="${esc(x.id)}">Изменить</button>
         </div>
         <div class="utm-urlrow">${displayLink(x.url)}</div>
+        <div class="small muted utm-token">UTM-метка: <code>utm_litref=${esc(promoToken(x.url))}</code></div>
+        ${x.destination ? `<div class="small muted">Переход на книгу: ${displayLink(x.destination)}</div>` : ''}
         <div class="utm-meta">
           <span class="${x.expires < c.today ? 'down' : 'muted'}">${esc(status(x,c.today))}</span>
           <span>Напоминание: <b>${human(promoReminderDate(x.expires))}</b></span>
