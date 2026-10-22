@@ -14,7 +14,7 @@ const current = () => {
 };
 const save = async patch => {
   const { a, s, fl, d } = current();
-  await a.store.saveSettings({ direct: { ...s.direct, firstLaunch: { ...fl, creator: { ...d, ...patch } } } });
+  await a.store.saveSettings({ direct: { ...s.direct, firstLaunch: { ...fl, ...(patch.campaignId ? { campaignId: String(patch.campaignId) } : {}), creator: { ...d, ...patch } } } });
 };
 const done = (label, id) => `<p class="fl-made">✓ ${esc(label)} №${esc(String(id))}</p>`;
 const btn = (action, label, disabled) => `<button class="primary" data-act="${action}"${disabled || busy ? ' disabled' : ''}>${label}</button>`;
@@ -176,6 +176,7 @@ acts['fl.createKeywords'] = async () => {
   busy=true;
   try{const res=await createKeywords(s,payload);const fail=(res.AddResults||[]).flatMap(x=>x.Errors||[]);
     if(fail.length)throw new Error(fail.map(x=>x.Message).join('; '));
+    if((res.AddResults || []).length !== payload.Keywords.length)throw new Error('Не все фразы подтверждены Яндексом. Проверь их в кабинете перед повтором.');
     await save({keywordDone:true});toast('Фразы добавлены');}
   catch(e){toast('Ошибка фраз: '+(e.message||e));}
   finally{busy=false;a.rerender();}
