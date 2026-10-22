@@ -49,7 +49,7 @@ export function planItems(c, from, to) {
       if (v.date > t) add(v.date, 'wait', `${icx('timer')} ${esc(ch)} — выйдет сама`, `${bt} · ${esc(pf)}`, { to: '/book/' + b.id });
       else if (v.date >= from) add(v.date, 'done', `✓ ${esc(ch)} — выложена`, `${bt} · ${esc(pf)}`, { to: '/book/' + b.id });
     }
-    if (st0 === 'done') { const rd = releaseDate(b); if (rd && rd > t) add(rd, 'book', `«${bt}» завершится для читателей`, 'выйдет последняя глава — в «Доходах» книга станет завершённой', { to: '/book/' + b.id }); continue; }
+    if (st0 === 'done') { const rd = releaseDate(b); if (rd && rd > t) add(rd, 'wait', `«${bt}» завершится для читателей`, 'выйдет последняя глава автоматически', { to: '/book/' + b.id }); continue; }
     // свободные дни графика: какую главу выкладывать
     s.free.forEach((date, i) => {
       const ch = s.queue[i];
@@ -82,7 +82,7 @@ export function planItems(c, from, to) {
   // заявка на приоритетные показы — на сегодня, пока актуально, и в день срока
   const wr = widgetReminder(c);
   if (wr) { add(t, 'money', esc(wr.title), esc(wr.sub), { to: wr.to }); if (wr.date !== t) add(wr.date, 'money', `Срок заявки на показы`, '19:00 МСК', { to: wr.to }); }
-  for (const x of incomeItems(c, from, to)) add(x.date, 'money', x.title, x.sub, { href: '../' });
+  for (const x of incomeItems(c, from, to)) add(x.date, x.kind || 'money', x.title, x.sub, { href: '../' });
   // Связи: напоминания по контактам (просроченные — на сегодня)
   for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', `${esc(x.text)}`, `${esc(x.name)}${x.date < t ? ' · просрочено' : ''}`, { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k });
   // свои задачи из Todoist (проекты «Книги» и «Мастерская»)
@@ -99,13 +99,13 @@ export function planItems(c, from, to) {
   for (const x of activePromoLinks(utms)) if (x.expires) add(x.expires, 'utm-expiry', 'Истекает UTM-ссылка: ' + esc(x.book), esc(x.campaign || 'Реклама') + ' · ссылка остается активной только до этого дня', { to: '/marketing' });
   // Никаких общих «Посмотреть дела на выходные». Автовыкладка и сроки остаются в своих датах.
   // Отдельная подготовка заранее только там, где действительно нужна: UTM и осмысленные дедлайны.
-  const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5, utm: 5.4, 'utm-expiry': 5.6 };
+  const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5, utm: 5.4, 'utm-expiry': 5.6, event: 8 };
   return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
 }
 // Важное из «Доходов» по датам: налог (до 28-го), цифры Rocket (с 20-го), старт и конец рекламы, события дней
 function incomeItems(c, from, to) {
   const d = c.data, t = c.today, out = [];
-  const add = (date, title, sub = '') => { if (date >= from && date <= to) out.push({ date, title: esc(title), sub: esc(sub) }); };
+  const add = (date, title, sub = '', kind = 'money') => { if (date >= from && date <= to) out.push({ date, title: esc(title), sub: esc(sub), kind }); };
   const mOf = (k) => (d.months || []).find((m) => m.id === k) || {};
   const rate = (Number(c.settings.taxRate) || 4) / 100;
   // налог: за каждый месяц с продажами — до 28-го следующего; неоплаченный просроченный — на сегодня
@@ -141,7 +141,7 @@ function incomeItems(c, from, to) {
     for (const e of day.events || []) {
       if (e.src && String(e.src).startsWith('w:')) continue;
       const ty = EVENT_TYPES[e.type] || EVENT_TYPES.note;
-      add(day.date, `${ty.label}${e.text ? ': ' + e.text : ''}`, e.type === 'outage' ? 'продажи ниже обычного — не по вашей вине' : e.bookId ? (d.books || []).find((b) => b.id === e.bookId)?.title || '' : '');
+      add(day.date, `${ty.label}${e.text ? ': ' + e.text : ''}`, e.type === 'outage' ? 'событие в статистике' : e.bookId ? (d.books || []).find((b) => b.id === e.bookId)?.title || '' : '', 'event');
     }
   }
   return out;
@@ -262,7 +262,7 @@ export function planView(a) {
   // дальше: следующие 14 дней после выбранного
   // «Дальше»: всё на 10 дней, а важное из «Доходов» (налог, Rocket, реклама) — на месяц вперёд
   const far = addDays(sel, 10);
-  for (const k of Object.keys(by)) if (k > far) { by[k] = by[k].filter((x) => ['money', 'utm', 'utm-expiry'].includes(x.kind)); if (!by[k].length) delete by[k]; }
+  for (const k of Object.keys(by)) if (k > far) { by[k] = by[k].filter((x) => ['money', 'utm', 'utm-expiry', 'event'].includes(x.kind)); if (!by[k].length) delete by[k]; }
   const nextDays = Object.keys(by).filter((k) => k > sel && k <= addDays(sel, 35)).sort();
   const multi = c.wbooks.filter((b) => (b.status || 'progress') === 'progress').length > 1;
   const inWork = c.wbooks.filter((b) => (b.status || 'progress') === 'progress');
