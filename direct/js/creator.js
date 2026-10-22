@@ -100,7 +100,12 @@ export function addedId(result, what) {
 }
 // Вызовы только после явного подтверждения интерфейса, без автоматических повторов записи.
 export const createCampaign = (s, params) => call(s, 'campaigns', 'add', params, 0, undefined, 'v501');
-export const pauseCampaign = (s, id) => call(s, 'campaigns', 'suspend', { SelectionCriteria: { Ids: [Number(id)] } }, 0, undefined, 'v501');
+export async function pauseCampaign(s, id) {
+  const r = await call(s, 'campaigns', 'suspend', { SelectionCriteria: { Ids: [Number(id)] } }, 0, undefined, 'v501');
+  const x = r.SuspendResults?.[0];
+  if (!x || x.Errors?.length) throw new Error('Остановка не подтверждена: ' + (x?.Errors || []).map(e => e.Message).join('; '));
+  return r;
+}
 export const createGroup = (s, params) => call(s, 'adgroups', 'add', params, 0, undefined, 'v501');
 export const createAd = (s, params) => call(s, 'ads', 'add', params, 0, undefined, 'v501');
 export const createKeywords = (s, params) => call(s, 'keywords', 'add', params, 0, undefined, 'v5');
