@@ -14,6 +14,8 @@ import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask, moveOwnTask, tdText, addOwnTask } from '../../../js/tdtasks.js';
 import { bookGuess } from '../ideacalc.js';
 import { MONEY_RE } from '../todoist.js';
+import { promoLinkTasks, activePromoLinks } from '../promolinks.js';
+import { weekendReviewItems } from '../weekendplanner.js';
 import { rub, fmtMonth } from '../../../js/format.js';
 import { EVENT_TYPES } from '../../../js/charts.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
@@ -34,7 +36,7 @@ const dayName = (d, today) => {
 const monday = (d) => addDays(d, -dowI(d));
 
 // Все дела с датами в диапазоне [from, to]: выкладка глав по графику, отложенные главы, конкурсы, сроки книг, очередь, «жду ответа», «Доходы»
-export function planItems(c, from, to) {
+export function planItems(c, from, to, noWeekendReview = false) {
   const out = [], t = c.today, d = c.data;
   const add = (date, kind, title, sub, extra = {}) => { if (date && date >= from && date <= to) out.push({ date, kind, title, sub, ...extra }); };
   for (const b of c.wbooks) {
@@ -92,7 +94,17 @@ export function planItems(c, from, to) {
   }
   // Маркетинг: подготовить материалы к старту выкладки и к рекламе
   for (const m of marketingNeeds(c)) add(m.date, 'mk', esc(m.title), esc(m.sub), { to: m.to });
-  const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5 };
+  // UTM: дата задачи опережает истечение. Дата истечения остается отдельным пассивным событием.
+  const utms = (d.w_promolinks || []).map(x => ({ ...x, book: c.wbooksById[x.bookId]?.title || 'Книга' }));
+  for (const x of promoLinkTasks(utms, t)) add(x.date, 'utm', esc(x.title), esc(x.sub), { to: '/marketing', id: x.id, book: x.bookId, dueRaw: x.due, expires: x.expires });
+  for (const x of activePromoLinks(utms)) if (x.expires) add(x.expires, 'utm-expiry', 'Истекает UTM-ссылка: ' + esc(x.book), esc(x.campaign || 'Реклама') + ' · ссылка остается активной только до этого дня', { to: '/marketing' });
+  // Дела на выходные сохраняют даты. Дополнительно показываем обзор в четверг/пятницу, без переноса задач.
+  if (!noWeekendReview) {
+    const source = planItems(c, from, addDays(to, 3), true);
+    for (const x of weekendReviewItems(source, from, to, t))
+      add(x.date, 'weekend', esc(x.title), esc(x.sub), { to: '/plan', id: x.id, dueRaw: x.dueRaw, eventDate: x.eventDate });
+  }
+  const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5, utm: 5.4, 'utm-expiry': 5.6, weekend: 4.8 };
   return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
 }
 // Важное из «Доходов» по датам: налог (до 28-го), цифры Rocket (с 20-го), старт и конец рекламы, события дней
@@ -255,7 +267,7 @@ export function planView(a) {
   // дальше: следующие 14 дней после выбранного
   // «Дальше»: всё на 10 дней, а важное из «Доходов» (налог, Rocket, реклама) — на месяц вперёд
   const far = addDays(sel, 10);
-  for (const k of Object.keys(by)) if (k > far) { by[k] = by[k].filter((x) => x.kind === 'money'); if (!by[k].length) delete by[k]; }
+  for (const k of Object.keys(by)) if (k > far) { by[k] = by[k].filter((x) => ['money', 'utm', 'utm-expiry', 'weekend'].includes(x.kind)); if (!by[k].length) delete by[k]; }
   const nextDays = Object.keys(by).filter((k) => k > sel && k <= addDays(sel, 35)).sort();
   const multi = c.wbooks.filter((b) => (b.status || 'progress') === 'progress').length > 1;
   const inWork = c.wbooks.filter((b) => (b.status || 'progress') === 'progress');
