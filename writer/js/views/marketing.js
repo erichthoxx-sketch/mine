@@ -11,6 +11,7 @@ import { contests } from './plan.js';
 import { svcInfo } from './pubfiles.js';
 import { chaptersOf, docxBlob } from '../publish.js';
 import { authorshipParas, sha256Hex } from '../authorship.js';
+import { promoLinksPanel } from './promolinks.js';
 
 const app = () => window.__app;
 export const MTYPES = { banner: 'Баннер для постов', cover: 'Обложка', target: 'Креатив для таргета', manuscript: 'Рукопись', synopsis: 'Синопсис', 'review-shot': 'Отзывы (скриншот)', other: 'Другое' };
@@ -37,6 +38,7 @@ export function marketingView(a) {
   ${list.length ? `<div class="card list">${list.map((b) => bookRow(c, b)).join('')}</div>` : `<div class="card"><p class="muted" style="margin:0">${c.wbooks.length ? 'В этой группе книг нет.' : 'Книг пока нет — добавьте их на вкладке «Книги».'}</p></div>`}
   <div class="hint">У каждой книги три блока: тексты для постов, материалы для таргета (Яндекс Директ) и пакет для издательства.</div>
   <h2 style="margin-top:22px">Реклама</h2>
+  ${promoLinksPanel(c)}
   <div class="card list mk-go">
     <a class="item" href="../direct/"><span class="mk-go-ic">${ic('ads')}</span><span class="mk-go-t"><b>Яндекс Директ</b><span class="sub">кампании, клики, покупки и что поправить</span></span>${ic('chevron')}</a>
     <a class="item" href="../#/ads"><span class="mk-go-ic">${ic('ruble')}</span><span class="mk-go-t"><b>Реклама в «Доходах»</b><span class="sub">расходы и окупаемость: Литнет, Директ, Rocket</span></span>${ic('chevron')}</a>
