@@ -5,6 +5,7 @@ import { parseTsv } from './dcalc.js';
 const ERR = {
   53: 'Ключ Яндекса недействителен или устарел — войдите заново в Настройках.',
   58: 'Яндекс ещё не одобрил заявку на доступ к API Директа (или она не подана).',
+  56: 'Яндекс ограничил частоту запросов (код 56). Обновление можно повторить позже.',
   513: 'Этот аккаунт Яндекса не подключён к Директу.',
 };
 
@@ -21,7 +22,8 @@ function headers(s, extra = {}) {
 }
 // Перебои у Яндекса (сбой, перегрузка): такие ошибки не значат, что что-то настроено не так —
 // повторяем один раз, а если опять — приложение покажет последние сохранённые данные
-const TRANSIENT = new Set([52, 1000, 1001, 1002]);
+const TRANSIENT = new Set([52, 56, 1000, 1001, 1002]);
+const RATE_LIMIT_WAIT_MS = 11000; // при коде 56 ждём дольше указанного Яндексом интервала (10 секунд)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const OUTAGE_TEXT = 'Яндекс сейчас отвечает с перебоями — показаны последние сохранённые данные. Приложение попробует снова само.';
 function transientErr(msg) { const e = new Error(msg); e.transient = true; return e; }
@@ -36,18 +38,22 @@ function apiError(e) {
   const err = new Error(ERR[code] || (TRANSIENT.has(code) ? 'Директ временно недоступен (сбой у Яндекса).' : `Директ отказал (код ${code}): ${e?.error_string || ''}${e?.error_detail ? ' — ' + e.error_detail : ''}`));
   err.code = code;
   err.transient = TRANSIENT.has(code);
+  err.rateLimited = code === 56;
   return err;
 }
 
 // Обычный запрос: call(s, 'campaigns', 'get', {…}) → result
-export async function call(s, service, method, params, retry = 1) {
+export async function call(s, service, method, params, retry = 2, wait = sleep) {
   const res = await post(apiBase(s) + service, s, { method, params });
   let data = null;
   try { data = await res.json(); } catch { /* не JSON */ }
   if (data?.error) {
     const e = apiError(data.error);
     // повтор только для чтения: запись при сбое не дублируем
-    if (e.transient && retry > 0 && method === 'get') { await sleep(3000); return call(s, service, method, params, retry - 1); }
+    if (e.transient && retry > 0 && method === 'get') {
+      await wait(e.rateLimited ? RATE_LIMIT_WAIT_MS : 3000);
+      return call(s, service, method, params, retry - 1, wait);
+    }
     throw e;
   }
   if (!res.ok || !data) { const e = new Error(`Директ ответил ошибкой ${res.status}`); e.transient = res.status >= 500; throw e; }
@@ -63,13 +69,18 @@ export async function report(s, { name, type = 'CUSTOM_REPORT', fields, range = 
   const body = { params: { SelectionCriteria: sel, FieldNames: fields, ReportName: `${name}-${Date.now()}`, ReportType: type, DateRangeType: from && to ? 'CUSTOM_DATE' : range, Format: 'TSV', IncludeVAT: 'YES', IncludeDiscount: 'NO' } };
   if (goals?.length) { body.params.Goals = goals.slice(0, 10).map(String); body.params.AttributionModels = ['LSC']; }
   const extra = { processingMode: 'auto', returnMoneyInMicros: 'false', skipReportHeader: 'true', skipReportSummary: 'true' };
+  let rateRetries = 0;
   for (let i = 0; i < 20; i++) {
     const res = await post(apiBase(s) + 'reports', s, body, extra);
     if (res.status === 200) return parseTsv(await res.text());
     if (res.status === 201 || res.status === 202) { await wait(Math.min(Number(res.headers.get('retryIn')) || 5, 20) * 1000); continue; }
     let data = null;
     try { data = await res.json(); } catch { /* не JSON */ }
-    if (data?.error) throw apiError(data.error);
+    if (data?.error) {
+      const e = apiError(data.error);
+      if (e.rateLimited && rateRetries < 2) { rateRetries++; await wait(RATE_LIMIT_WAIT_MS); continue; }
+      throw e;
+    }
     const e = new Error(`Отчёт Директа: ошибка ${res.status}`); e.transient = res.status >= 500; throw e;
   }
   throw new Error('Директ долго готовит отчёт — попробуйте обновить через минуту.');
