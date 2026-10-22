@@ -68,7 +68,7 @@ export function launchView(a) {
     </div>
     <div class="card fl-panel">
       <div class="row between fl-heading"><h2 style="margin:0">3. Рекламная гипотеза</h2>${stateTag(fl.creativeReady && fl.hypothesis ? 'объявления готовы' : 'подготовить', !!fl.creativeReady && !!fl.hypothesis)}</div>
-      <p class="small">Начнем с одной конкретной идеи, которую можно проверить на покупках. Например: какой конфликт «Черной вдовы» лучше привлекает читательниц — фиктивные похороны мужа или опасное знакомство с владельцем ритуального бизнеса?</p>
+      <p class="small">Рекламное обещание должно совпадать с самой книгой. Пока жанр и центральный конфликт уточняются, не называем роман дарк-романом и не обещаем сюжетные повороты, которых в тексте нет.</p>
       <form data-form="fl.creative" class="settings-form fl-form">
         <label>Что проверяем: аудитория, крючок и ожидаемый результат</label>
         <textarea name="hypothesis" rows="3" placeholder="Гипотеза для первой кампании">${esc(fl.hypothesis)}</textarea>
@@ -81,6 +81,7 @@ export function launchView(a) {
       <div class="row between fl-heading"><h2 style="margin:0">4. Моя кампания и лимит</h2>${stateTag(r.picked?.state === 'ON' && fl.limitVerified ? 'готово' : 'пока не готово', r.picked?.state === 'ON' && !!fl.limitVerified)}</div>
       <p class="small">Создадим отдельную кампанию под «Черную вдову» прямо здесь, через твой API. Старый кабинет и реклама таргетологов сюда не попадут.</p>
       ${creatorCard(a, fl, m)}
+      <p class="small"><button class="link" data-act="go" data-to="/quality">Контроль качества трафика — что проверять после запуска →</button></p>
       <p class="small"><a href="https://direct.yandex.ru/" target="_blank" rel="noopener">Открыть Яндекс Директ ↗</a> · <button class="link" data-act="d.reload">Обновить кампании из Яндекса</button></p>
       <label for="flCampaign">Кампания для первого теста</label>
       <select id="flCampaign" data-chg="fl.campaign">
