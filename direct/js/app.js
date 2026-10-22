@@ -10,6 +10,7 @@ import { refresh, refreshMetrika } from './sync.js';
 import { demo, snap, demoLog } from './demo.js';
 import { homeView } from './views/home.js';
 import { launchView } from './views/launch.js';
+import { qualityView } from './views/quality.js';
 import { campaignView } from './views/campaign.js';
 import { learnView } from './views/learn.js';
 import { analyticsView } from './views/analytics.js';
@@ -71,8 +72,8 @@ const TABS = [['/', 'ads', 'Обзор'], ['/an', 'data', 'Аналитика'],
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'c' && b) return { tab: '/', view: (x) => campaignView(x, Number(decodeURIComponent(b))) };
-  const map = { '': homeView, launch: launchView, an: analyticsView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
-  return { tab: a === 'launch' ? '/' : '/' + (a || ''), view: map[a || ''] || homeView };
+  const map = { '': homeView, launch: launchView, quality: qualityView, an: analyticsView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
+  return { tab: ['launch', 'quality'].includes(a) ? '/' : '/' + (a || ''), view: map[a || ''] || homeView };
 }
 
 function authScreen() {
