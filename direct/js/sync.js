@@ -13,7 +13,7 @@ const rub = (micros) => (micros == null ? null : Math.round(micros / MICRO * 100
 
 // Запрос с запасным вариантом: если Директ не принял расширенные поля — повторяем с основными
 async function getSafe(s, service, full, basic) {
-  try { return await call(s, service, 'get', full); } catch (e) { if (e.code === 53 || e.code === 58 || e.code === 513 || !basic) throw e; return call(s, service, 'get', basic); }
+  try { return await call(s, service, 'get', full); } catch (e) { if (e.transient || e.code === 53 || e.code === 58 || e.code === 513 || !basic) throw e; return call(s, service, 'get', basic); }
 }
 
 export async function refresh(app, { onStep = () => {} } = {}) {
