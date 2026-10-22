@@ -13,7 +13,7 @@ import { chaptersOf, docxBlob } from '../publish.js';
 import { authorshipParas, sha256Hex } from '../authorship.js';
 
 const app = () => window.__app;
-export const MTYPES = { banner: 'Баннер для постов', cover: 'Обложка', target: 'Креатив для таргета', manuscript: 'Рукопись', synopsis: 'Синопсис', other: 'Другое' };
+export const MTYPES = { banner: 'Баннер для постов', cover: 'Обложка', target: 'Креатив для таргета', manuscript: 'Рукопись', synopsis: 'Синопсис', 'review-shot': 'Отзывы (скриншот)', other: 'Другое' };
 const isImg = (m) => !!m.thumb;
 
 // Тексты для продвижения книги: всё, что нужно под рукой для постов, рекламы и конкурсов
@@ -165,26 +165,28 @@ function pubBlock(c, b) {
 }
 
 // ---------- сохранение файлов: уменьшенная копия картинки — в базу, оригинал — в папку книги на Диске ----------
-const FOLDER = { target: 'Таргет', manuscript: 'Издательство', synopsis: 'Издательство', banner: 'Посты', cover: 'Посты', other: 'Посты' };
+const FOLDER = { target: 'Таргет', manuscript: 'Издательство', synopsis: 'Издательство', banner: 'Посты', cover: 'Посты', 'review-shot': 'Отзывы', other: 'Посты' };
 async function bookFolder(b, type) {
   const c = app().ctx(), root = c.settings.wMarketingFolder;
   if (!root || !drive.hasFreshToken()) return null;
   const bf = await drive.ensureFolder(b.title, root);
   const sub = await drive.ensureFolder(FOLDER[type] || 'Посты', bf.id);
-  const key = type === 'target' ? 'target' : type === 'manuscript' || type === 'synopsis' ? 'pub' : 'posts';
+  const key = type === 'review-shot' ? 'reviews' : type === 'target' ? 'target' : type === 'manuscript' || type === 'synopsis' ? 'pub' : 'posts';
   if (!b.mkFolders?.[key]) await app().store.put('w_books', { ...app().ctx().wbooksById[b.id], mkFolders: { ...(b.mkFolders || {}), [key]: { id: sub.id, link: sub.webViewLink } } });
   return sub.id;
 }
-export async function saveMedia(file, { type = 'banner', bookId = '', thumb } = {}) {
+export async function saveMedia(file, { type = 'banner', bookId = '', thumb, requireOriginal = false } = {}) {
   const c = app().ctx(), b = bookId ? c.wbooksById[bookId] : null;
   const image = /^image\//.test(file.type);
   const item = { id: 'm' + uid(), name: file.name, type, bookId, mime: file.type, thumb: image ? (thumb || await resizeImage(file, 600)) : '', createdAt: new Date().toISOString() };
+  if (requireOriginal && (!drive.hasFreshToken() || !c.settings.wMarketingFolder)) throw new Error('Нужен подключенный Google Диск и папка маркетинга');
   if (drive.hasFreshToken() && c.settings.wMarketingFolder) {
     try {
       const folder = b ? await bookFolder(b, type) : c.settings.wMarketingFolder;
       const f = await drive.uploadFile(file, file.name, folder); item.driveId = f.id; item.webViewLink = f.webViewLink;
-    } catch (e) { toast('На Диск не загрузилось: ' + e.message); }
+    } catch (e) { if (requireOriginal) throw e; toast('На Диск не загрузилось: ' + e.message); }
   }
+  if (requireOriginal && !item.driveId) throw new Error('Оригинал не загрузился на Google Диск');
   if (!image && !item.driveId) { toast('Файлы рукописи и синопсиса сохраняются только на Google Диск — подключите его.'); return null; }
   await app().store.put('w_media', item);
   return item;
