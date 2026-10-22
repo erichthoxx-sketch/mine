@@ -1792,148 +1792,219 @@ main .rev-actions button.dl .ic { opacity: 1; }
 }
 
 
-/* Маркетинг / Книга: UTM-ссылки, сроки замены и журнал обновлений. */
-.utm-panel { margin: 16px 0; padding: clamp(18px, 2.7vw, 25px); }
-.utm-panel > .row.between { gap: 12px; margin: 0 0 12px; align-items: center; }
-.utm-panel > .row.between h2 { font-size: clamp(16px, 2.2vw, 19px); line-height: 1.35; }
-.utm-panel p.small { line-height: 1.6; margin: 10px 0 15px; }
-.utm-list { display: grid; gap: 12px; margin-top: 17px; }
-.utm-item { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); min-width: 0; }
-.utm-item .row.between { align-items: flex-start; gap: 9px 15px; margin-bottom: 11px; }
-.utm-item .utm-main { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; line-height: 1.45; }
-.utm-item .utm-urlrow { min-width: 0; font-size: 13px; line-height: 1.55; }
-.utm-panel .utm-url { overflow-wrap: anywhere; word-break: break-word; text-decoration: underline; text-underline-offset: 3px; }
-.utm-item .utm-token { margin-top: 8px; overflow-wrap: anywhere; }
-.utm-item .utm-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; border-top: 1px solid var(--line); padding-top: 11px; margin-top: 14px; font-size: 13px; line-height: 1.55; }
-.utm-item .utm-meta span:first-child { font-weight: 650; }
-.utm-item code { white-space: normal; overflow-wrap: anywhere; }
+/* Маркетинг и UTM: используем общую типографику Мастерской:
+   Unbounded 16/600 — заголовок; Nunito 15/700 — основное;
+   Nunito 13/400 — подписи, 13/700 — небольшие действия. */
+.app-writer .utm-panel {
+  margin: 16px 0;
+  padding: 20px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.app-writer .utm-panel > .row.between {
+  gap: 12px;
+  margin: 0 0 12px;
+  align-items: center;
+}
+.app-writer .utm-panel > .row.between h2 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.app-writer .utm-panel :is(.small-btn, button.link) {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.app-writer .utm-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 15px;
+}
+.app-writer .utm-item {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2);
+  min-width: 0;
+}
+.app-writer .utm-item .row.between {
+  align-items: flex-start;
+  gap: 10px 16px;
+  margin-bottom: 10px;
+}
+.app-writer .utm-item .utm-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.app-writer .utm-item .utm-main > b {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.app-writer .utm-item :is(.utm-urlrow, .utm-token, .utm-meta) {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.app-writer .utm-item .utm-urlrow { min-width: 0; }
+.app-writer .utm-panel .utm-url {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.app-writer .utm-item .utm-token { margin-top: 8px; overflow-wrap: anywhere; }
+.app-writer .utm-item .utm-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 11px;
+  margin-top: 14px;
+}
+.app-writer .utm-item .utm-meta span:first-child { font-weight: 700; }
+.app-writer .utm-item code { white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 560px) {
-  .utm-panel { padding: 17px 14px; }
-  .utm-item { padding: 13px; }
-  .utm-item .utm-meta { flex-direction: column; gap: 5px; }
+  .app-writer .utm-panel { padding: 16px; }
+  .app-writer .utm-item { padding: 12px; }
+  .app-writer .utm-item .utm-meta { flex-direction: column; gap: 5px; }
 }
 
-
-
-/* Маркетинг: одна компактная строка на книгу. Статус UTM справа, без пустых секций. */
-.mk-book-list {
+/* Маркетинг: компактные карточки, тот же Nunito 15/13, что и в остальных разделах. */
+.app-writer .mk-book-list {
   display: grid;
   gap: 10px;
   margin: 14px 0 20px;
 }
-.mk-book-card {
+.app-writer .mk-book-card {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
   min-height: 84px;
-  padding: 10px 16px;
-  border-radius: 17px;
   margin: 0;
+  padding: 11px 16px;
+  border-radius: 17px;
+  font-family: var(--font-body);
+  font-size: 15px;
 }
-.mk-book-card > a.mk-row {
+.app-writer .mk-book-card > a.mk-row {
   display: flex;
   align-items: center;
   flex: 1 1 auto;
   gap: 13px;
   min-width: 0;
   padding: 0;
-  color: inherit;
+  color: var(--text);
   text-decoration: none;
 }
-.mk-book-card > a.mk-row:focus-visible,
-.mk-book-card .mk-utm-action:focus-visible {
+.app-writer .mk-book-card > a.mk-row:focus-visible,
+.app-writer .mk-book-card .mk-utm-action:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-.mk-book-card .mk-cover {
+.app-writer .mk-book-card .mk-cover {
   flex: 0 0 44px;
   width: 44px;
   height: 62px;
 }
-.mk-book-card .mk-info {
+.app-writer .mk-book-card .mk-info {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
   gap: 5px;
 }
-.mk-book-card .mk-info > b {
+.app-writer .mk-book-card .mk-info > b {
+  font-family: var(--font-body);
   font-size: 15px;
-  line-height: 1.35;
+  font-weight: 700;
+  line-height: 1.4;
   color: var(--text);
 }
-.mk-book-card .mk-info > .sub {
-  font-size: 12px;
-  line-height: 1.45;
+.app-writer .mk-book-card .mk-info > .sub {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
   color: var(--muted);
 }
-.mk-book-card .mk-book-utm {
+.app-writer .mk-book-card .mk-book-utm {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
 }
-.mk-book-card .mk-utm-action {
+.app-writer .mk-book-card .mk-utm-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-height: 36px;
+  padding: 8px 11px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface-2);
   color: var(--text-2);
-  padding: 9px 11px;
   cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 650;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
   white-space: nowrap;
   box-shadow: none;
-  min-height: 36px;
 }
-.mk-book-card .mk-utm-add {
-  color: var(--muted);
-  border-color: transparent;
-  background: transparent;
-}
-.mk-book-card .mk-utm-action:hover {
+.app-writer .mk-book-card .mk-utm-action:hover {
   color: var(--text);
   border-color: var(--accent);
 }
-.mk-book-card .mk-utm-ready span {
-  font-weight: 450;
+.app-writer .mk-book-card .mk-utm-ready span {
+  font-weight: 400;
   color: var(--muted);
 }
-.mk-book-card .mk-utm-ready.is-expired,
-.mk-book-card .mk-utm-ready.is-expired span {
+.app-writer .mk-book-card .mk-utm-ready.is-expired,
+.app-writer .mk-book-card .mk-utm-ready.is-expired span {
   color: var(--bad);
 }
-.utm-panel.utm-panel-compact {
-  padding: 15px 0 0;
+.app-writer .utm-panel.utm-panel-compact {
   margin: 15px 0 0;
+  padding: 15px 0 0;
   border: 0;
   border-top: 1px solid var(--line);
   box-shadow: none;
   background: transparent;
   border-radius: 0;
 }
-.utm-panel.utm-panel-compact > .row.between h2 {
-  font-size: 15px;
+.app-writer .utm-panel.utm-panel-compact > .row.between h2 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
 }
-.utm-panel.utm-panel-compact .utm-item {
-  background: var(--surface-2);
-}
+.app-writer .utm-panel.utm-panel-compact .utm-item { background: var(--surface-2); }
 @media (max-width: 600px) {
-  .mk-book-card {
-    padding: 10px 12px;
+  .app-writer .mk-book-card {
+    padding: 11px 12px;
     min-height: 78px;
     gap: 8px;
   }
-  .mk-book-card > a.mk-row { gap: 10px; }
-  .mk-book-card .mk-cover { width: 40px; height: 56px; flex-basis: 40px; }
-  .mk-book-card .mk-info > b { font-size: 14px; }
-  .mk-book-card .mk-info > .sub { font-size: 11px; }
-  .mk-book-card .mk-utm-action { padding: 7px 8px; min-height: 33px; }
-  .mk-book-card .mk-utm-ready span { display: none; }
+  .app-writer .mk-book-card > a.mk-row { gap: 10px; }
+  .app-writer .mk-book-card .mk-cover {
+    width: 40px;
+    height: 56px;
+    flex-basis: 40px;
+  }
+  .app-writer .mk-book-card .mk-utm-action {
+    padding: 7px 9px;
+    min-height: 34px;
+  }
+  .app-writer .mk-book-card .mk-utm-ready span { display: none; }
 }
