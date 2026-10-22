@@ -21,7 +21,7 @@ import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
 import { cleanText, cleanedMsg } from '../../js/cleantext.js';
 
-export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews'];
+export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews', 'w_promolinks'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 initAccent(store);
 const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'open', ideaKind: '', ideaN: 50, openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
