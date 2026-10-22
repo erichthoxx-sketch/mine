@@ -12,7 +12,7 @@ export const MONEY_LABEL = 'доходы';
 export const LABELS = [['мастерская', 'lavender'], ['книги', 'salmon'], [IDEA_LABEL, 'mint_green'], [MONEY_LABEL, 'green']];
 export const TD_DAYS = 30; // на сколько дней вперёд отправляем
 const KIND_SHELF = { money: 'Деньги и реклама', waitans: 'Связи', mk: 'Маркетинг', contest: 'Конкурсы' };
-const SKIP = new Set(['done', 'wait', 'td', 'utm-expiry', 'weekend']); // weekend — старые общие обзоры: никогда не создавать // выложено / выйдет само — делать ничего не нужно; td — задачи из самого Todoist
+const SKIP = new Set(['done', 'wait', 'td', 'utm-expiry', 'weekend', 'event']); // weekend — старые общие обзоры: никогда не создавать // выложено / выйдет само — делать ничего не нужно; td — задачи из самого Todoist
 
 // ключ — короткий и безопасный для базы (Firestore): вид + хеш
 const hash = (str) => { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return h.toString(36); };
