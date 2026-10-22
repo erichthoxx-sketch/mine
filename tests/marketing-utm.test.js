@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promoReminderDate, promoLinkTasks, isLitnetLink, promoToken } from '../writer/js/promolinks.js';
-import { weekendReminderDay, weekendReviewItems } from '../writer/js/weekendplanner.js';
+import { todoistTasks } from '../writer/js/todoist.js';
 import { promoLinksInline, promoLinksPanel } from '../writer/js/views/promolinks.js';
 
 const alpine = 'bk_alpine';
@@ -37,11 +37,17 @@ test('Напоминание: 18 ноября ср -> 17 ноября вт; вт
 test('Суббота и воскресенье: напоминания в четверг и пятницу', () => {
   assert.equal(promoReminderDate('2026-11-21'), '2026-11-19');
   assert.equal(promoReminderDate('2026-11-22'), '2026-11-20');
-  const todo = weekendReviewItems([{ kind: 'pub', title: 'Выложить главу', date: '2026-11-21' }], '2026-11-19', '2026-11-25', '2026-11-19');
-  assert.equal(todo.length, 1);
-  assert.equal(todo[0].date, '2026-11-19');
-  assert.equal(weekendReminderDay('2026-11-22'), '2026-11-20');
-  assert.equal(todo[0].eventDate, '2026-11-21');
+  // Выходные события и автовыкладки живут в своих датах, не создавая «посмотри дела в четверг».
+  const tasks = todoistTasks([
+    { kind: 'wait', title: 'Глава выйдет сама', date: '2026-11-21' },
+    { kind: 'weekend', title: 'Посмотреть дела на субботу', date: '2026-11-19' },
+    { kind: 'pub', title: 'Выложить главу', date: '2026-11-21', book: alpine },
+    { kind: 'utm', title: 'Обновить UTM', date: '2026-11-19', dueRaw: '2026-11-19', id: 'u2', expires: '2026-11-21', book: widow },
+  ], ctx.wbooksById);
+  assert.equal(tasks.length, 2);
+  assert.equal(tasks.find(x => x.item.kind === 'pub').date, '2026-11-21');
+  assert.equal(tasks.find(x => x.item.kind === 'utm').date, '2026-11-19');
+  assert.equal(tasks.some(x => /Посмотреть дела/.test(x.content)), false);
 });
 test('Задача на обновление UTM всегда содержит название книги и кампании', () => {
   const links = entries.map(x => ({ ...x, book: ctx.wbooksById[x.bookId].title }));
