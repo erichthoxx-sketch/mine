@@ -1738,3 +1738,31 @@ main .rev-actions button.dl:disabled {
   cursor: not-allowed;
 }
 main .rev-actions button.dl .ic { opacity: 1; }
+
+
+/* Контроль качества трафика — спокойные акценты и разделение блоков. */
+.app-direct .tq { padding: clamp(18px, 3vw, 26px); margin-bottom: 16px; }
+.app-direct .tq h2 { font-size: clamp(16px, 2vw, 19px); line-height: 1.35; margin-bottom: 14px; }
+.app-direct .tq p { line-height: 1.6; margin: 0 0 14px; }
+.app-direct .tq .muted { color: var(--muted); }
+.app-direct .tq select { margin: 7px 0 18px; }
+.app-direct .tq .tq-tiles { margin: 17px 0 18px; }
+.app-direct .tq .tq-tiles .v { font-size: clamp(16px, 2.3vw, 20px); }
+.app-direct .tq .tq-types { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+.app-direct .tq .tq-types > div { min-width: 0; padding: 16px; border-radius: 14px; background: var(--surface-2); display: flex; flex-direction: column; gap: 7px; line-height: 1.5; }
+.app-direct .tq .tq-types span { font-size: 13px; color: var(--text-2); }
+.app-direct .tq .tq-flags { display: grid; gap: 12px; margin: 16px 0 21px; }
+.app-direct .tq .tq-flag { background: var(--surface-2); border-radius: 12px; padding: 13px 15px; display: grid; gap: 6px; }
+.app-direct .tq .tq-flag span { font-size: 13px; color: var(--text-2); }
+.app-direct .tq .tq-flag p { margin: 0; }
+.app-direct .tq details { margin-top: 17px; border-top: 1px solid var(--line); padding-top: 15px; }
+.app-direct .tq details summary { cursor: pointer; font-weight: 700; }
+.app-direct .tq .tq-table { margin-top: 15px; font-size: 12px; }
+.app-direct .tq .tq-table td:first-child { max-width: 260px; overflow-wrap: anywhere; }
+.app-direct .tq .tq-table th, .app-direct .tq .tq-table td { text-align: left; }
+.app-direct .tq .list .item { line-height: 1.7; }
+@media (max-width: 520px) {
+  .app-direct .tq { padding: 18px 16px; }
+  .app-direct .tq .tq-types { grid-template-columns: 1fr; gap: 9px; }
+  .app-direct .tq .tq-table { min-width: 620px; }
+}
