@@ -6,6 +6,7 @@ import { goalTitle, goalToday } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
+import { promoLinksPanel } from './promolinks.js';
 import { reviewsCard } from './reviews.js';
 import { publisherCard, svcInfo } from './pubfiles.js';
 import { ownTasks, bookOfTask, addOwnTask, tdText } from '../../../js/tdtasks.js';
@@ -177,6 +178,7 @@ export function bookPage(a, id) {
     <label class="inline-num">Глав в книге, примерно <input type="number" min="1" inputmode="numeric" value="${b.planChapters || ''}" placeholder="—" data-chg="wb.planCh" data-id="${b.id}"></label>
     ${progressBlock(c, b)}
   </div>
+  ${promoLinksPanel(c, {bookId:b.id})}
   <div class="card goals-card"><div class="row between"><h2 style="margin:0">Цели</h2><button class="small-btn" data-act="goal.new" data-book="${b.id}">+ цель</button></div>
     ${bookGoals.length ? `<div class="plist">${bookGoals.map(({ g, st }) => `<a class="pitem tap${st.doneToday ? ' done-today' : ''}" href="#" data-act="goal.edit" data-id="${g.id}">${st.doneToday ? `<span class="pi-ok">${icx('check')}</span>` : '<span class="dot k-goal"></span>'}<span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:4px 0 0">Например, «по главе в день до 15 октября» — буду напоминать.</p>'}
     ${b.status === 'done' ? '' : `<div class="mini-chart"><div class="row between small muted"><span>Написано за 2 недели</span><b>+${al(series.reduce((a, d) => a + (d.known ? d.value : 0), 0))}</b></div><div class="chart" id="bchart1"></div></div>`}
