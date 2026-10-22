@@ -34,10 +34,10 @@ export function promoLinkTasks(links = [], today = '', { includeOverdue = true }
     .map(x => {
       const due = promoReminderDate(x.expires);
       return {
-        id: x.id, expires: x.expires, due,
+        id: x.id, bookId: x.bookId, expires: x.expires, due,
         date: includeOverdue && today && due < today ? today : due,
         overdue: !!today && due < today,
-        title: 'Обновить UTM-ссылку' + (x.campaign ? ': ' + x.campaign : x.book ? ': ' + x.book : ''),
+        title: 'Обновить UTM «' + (x.book || 'книга') + '»' + (x.campaign ? ': ' + x.campaign : ''),
         sub: 'Литнет · действует до ' + x.expires + (x.book ? ' · ' + x.book : ''),
         to: '/marketing',
       };
