@@ -81,7 +81,7 @@ export function launchView(a) {
       <div class="row between fl-heading"><h2 style="margin:0">4. Моя кампания и лимит</h2>${stateTag(r.picked?.state === 'ON' && fl.limitVerified ? 'готово' : 'пока не готово', r.picked?.state === 'ON' && !!fl.limitVerified)}</div>
       <p class="small">Создадим отдельную кампанию под «Черную вдову» прямо здесь, через твой API. Старый кабинет и реклама таргетологов сюда не попадут.</p>
       ${creatorCard(a, fl, m)}
-      <p class="small"><button class="link" data-act="go" data-to="/quality">Контроль качества трафика — что проверять после запуска →</button></p>
+      <p class="small"><button class="link" data-act="go" data-to="/quality">Контроль качества трафика →</button> · <button class="link" data-act="go" data-to="/experiments">Журнал рекламных решений →</button></p>
       <p class="small"><a href="https://direct.yandex.ru/" target="_blank" rel="noopener">Открыть Яндекс Директ ↗</a> · <button class="link" data-act="d.reload">Обновить кампании из Яндекса</button></p>
       <label for="flCampaign">Кампания для первого теста</label>
       <select id="flCampaign" data-chg="fl.campaign">
