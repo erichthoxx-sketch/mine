@@ -13,23 +13,16 @@ const displayLink = url => {
   return u ? `<a href="${esc(u)}" rel="noopener noreferrer" target="_blank" class="utm-url">${esc(u)}</a>` : '<span class="muted">нет ссылки</span>';
 };
 const status = (x, today) => x.expires < today ? 'Срок истек' : x.expires <= today ? 'Сегодня последний день' : 'Действует до ' + human(x.expires);
-// В разделе «Маркетинг» каждая ссылка находится внутри своей книги.
+// На списке книг — только компактная кнопка и статус, а не целый пустой UTM-блок.
+// Полная карточка ссылок показывается после открытия книги → «Для таргета».
 export function promoLinksInline(c, bookId) {
   const items = linkList(c, bookId);
-  return `<div class="utm-inline" data-utm-book="${esc(bookId)}">
-    <div class="utm-inline-heading">
-      <span class="small muted">UTM-ссылки${items.length ? ' · ' + items.length : ''}</span>
-      <button type="button" class="link" data-act="utm.new" data-book="${esc(bookId)}">+ Добавить</button>
-    </div>
-    ${items.map(x=>`<div class="utm-inline-item">
-      <div class="utm-inline-content">
-        <b>${esc(x.campaign || 'Кампания')}</b>
-        <span class="small muted">${esc(status(x,c.today))} · Напомнить ${human(promoReminderDate(x.expires))}</span>
-        <span class="utm-inline-url">${displayLink(x.url)}</span>
-      </div>
-      <button type="button" class="link" data-act="utm.edit" data-id="${esc(x.id)}">Изменить</button>
-    </div>`).join('')}
-  </div>`;
+  if (!items.length) return `<button type="button" class="mk-utm-action mk-utm-add" data-act="utm.new" data-book="${esc(bookId)}" title="Добавить рекламную ссылку из Литнета">+ UTM</button>`;
+  const nearest = items[0];
+  const expired = nearest.expires < c.today;
+  return `<button type="button" class="mk-utm-action mk-utm-ready${expired ? ' is-expired' : ''}" data-act="mk.go" data-id="${esc(bookId)}" data-tab="target" title="${esc(nearest.campaign || 'Открыть UTM-ссылки')}">
+    UTM · ${items.length} <span>${expired ? 'истекла ' : 'до '}${human(nearest.expires)}</span>
+  </button>`;
 }
 export function promoLinksPanel(c, { bookId = '' } = {}) {
   const items = linkList(c, bookId);
