@@ -23,11 +23,11 @@ const renderResults=(x,a)=>{
     <div class="scroll"><table><thead><tr><th>Показатель</th><th>До</th><th>После</th></tr></thead><tbody>
       <tr><td>Расход</td><td>${money(r.before.cost)}</td><td>${money(r.after.cost)}</td></tr>
       <tr><td>Клики</td><td>${num(r.before.clicks)}</td><td>${num(r.after.clicks)}</td></tr>
-      <tr><td>Цена клика</td><td>${r.before.cpc==null?'—':rub(r.before.cpc,1)}</td><td>${r.after.cpc==null?'—':rub(r.after.cpc,1)}</td></tr>
+      <tr><td>Цена клика</td><td>${!r.before.clicks?'—':rub(r.before.cost/r.before.clicks,1)}</td><td>${!r.after.clicks?'—':rub(r.after.cost/r.after.clicks,1)}</td></tr>
       <tr><td>Покупки по цели</td><td>${goalReady?num(r.before.conv):'—'}</td><td>${goalReady?num(r.after.conv):'—'}</td></tr>
       <tr><td>Цена покупки</td><td>${goalReady&&r.before.conv>=3?money(r.before.cpa):'—'}</td><td>${goalReady&&r.after.conv>=3?money(r.after.cpa):'—'}</td></tr>
-      <tr><td>Роялти книги, все источники</td><td>${r.salesComplete&&r.firstImportedSale<=r.periods.beforeFrom?money(r.salesBefore.royalty):'—'}</td><td>${r.salesComplete?money(r.salesAfter.royalty):'—'}</td></tr>
-      <tr><td>Продажи книги, все источники</td><td>${r.salesComplete&&r.firstImportedSale<=r.periods.beforeFrom?num(r.salesBefore.qty):'—'}</td><td>${r.salesComplete?num(r.salesAfter.qty):'—'}</td></tr>
+      <tr><td>Роялти книги, все источники</td><td>${r.salesComplete&&r.firstImportedSale&&r.firstImportedSale<=r.periods.beforeFrom?money(r.salesBefore.royalty):'—'}</td><td>${r.salesComplete?money(r.salesAfter.royalty):'—'}</td></tr>
+      <tr><td>Продажи книги, все источники</td><td>${r.salesComplete&&r.firstImportedSale&&r.firstImportedSale<=r.periods.beforeFrom?num(r.salesBefore.qty):'—'}</td><td>${r.salesComplete?num(r.salesAfter.qty):'—'}</td></tr>
     </tbody></table></div>
     ${!r.directFresh?'<p class="small warnc">Директ не обновлен после этой недели.</p>':''}
     ${!r.hasBaseline?'<p class="small warnc">Меньше 20 кликов в одном из периодов. Выводы ненадежны.</p>':''}
