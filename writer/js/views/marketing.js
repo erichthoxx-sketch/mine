@@ -39,6 +39,7 @@ export function marketingView(a) {
   <h2 style="margin-top:20px">Рекламные инструменты</h2>
   <div class="card list mk-go">
     <a class="item" href="../direct/"><span class="mk-go-ic">${ic('ads')}</span><span class="mk-go-t"><b>Яндекс Директ</b><span class="sub">кампании, клики, покупки и что поправить</span></span>${ic('chevron')}</a>
+    <a class="item" href="#" data-act="go" data-to="/social"><span class="mk-go-ic">${ic('links')}</span><span class="mk-go-t"><b>Соцсети</b><span class="sub">ссылки Threads и других площадок</span></span>${ic('chevron')}</a>
     <a class="item" href="../#/ads"><span class="mk-go-ic">${ic('ruble')}</span><span class="mk-go-t"><b>Реклама в «Доходах»</b><span class="sub">расходы и окупаемость: Литнет, Директ, Rocket</span></span>${ic('chevron')}</a>
   </div>
   <div class="psec-h" style="margin-top:22px"><h2>Конкурсы</h2><button class="small-btn" data-act="contest.new">+ Конкурс</button></div>
@@ -86,7 +87,7 @@ export function bookMarketing(a, id) {
     <div><h2 style="margin:0">${esc(b.title)}</h2><div class="small muted">${STATUS[b.status] || STATUS.progress}</div></div></div>
   <div class="chips">${tab('texts', 'Тексты и баннеры')}${tab('target', 'Для таргета')}${tab('pub', 'Для издательства')}</div>
   ${body}
-  ${t === 'target' ? promoLinksPanel(c, { bookId: b.id }) : ''}
+  ${t === 'target' ? promoLinksPanel(c, { bookId: b.id, channel: 'direct' }) : ''}
   ${b.fileId ? `<div class="mk-auth"><button class="dl" data-act="mk.auth" data-id="${b.id}" title="Когда и как писалась книга: Документ, история версий, главы с отпечатками — в Word">${ic('download')}Справка об авторстве</button></div>` : ''}`;
   return { html };
 }
