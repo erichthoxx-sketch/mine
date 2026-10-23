@@ -1,10 +1,10 @@
 // UTM/реферальные ссылки Литнета: единый реестр в Маркетинге + карточках книг.
 import { esc, acts, toast, openSheet, ask, opt, uid } from '../../../js/ui.js';
 import { fmtDate } from '../../../js/format.js';
-import { activePromoLinks, isLitnetLink, promoReminderDate, promoToken } from '../promolinks.js';
+import { activePromoLinks, isLitnetLink, promoReminderDate, promoToken, promoChannel, promoChannelName } from '../promolinks.js';
 
 const app = () => window.__app;
-const linkList = (c, bookId = '') => activePromoLinks(c.data.w_promolinks || []).filter(x => !bookId || x.bookId === bookId);
+const linkList = (c, bookId = '', channel = '') => activePromoLinks(c.data.w_promolinks || []).filter(x => (!bookId || x.bookId === bookId) && (!channel || promoChannel(x) === channel));
 const human = value => value ? fmtDate(value) : 'Не указана';
 const bookTitle = (c, x) => c.wbooksById[x.bookId]?.title || 'Книга не найдена';
 const safeLink = url => isLitnetLink(url) ? url : '';
@@ -16,7 +16,7 @@ const status = (x, today) => x.expires < today ? 'Новые привязки з
 // На списке книг — только компактная кнопка и статус, а не целый пустой UTM-блок.
 // Полная карточка ссылок показывается после открытия книги → «Для таргета».
 export function promoLinksInline(c, bookId) {
-  const items = linkList(c, bookId);
+  const items = linkList(c, bookId, 'direct');
   if (!items.length) return ''; // Никакой пустой секции и даже кнопки: ссылка добавляется внутри книги.
   const nearest = items[0];
   const expired = nearest.expires < c.today;
@@ -24,14 +24,15 @@ export function promoLinksInline(c, bookId) {
     UTM · ${items.length} <span>${expired ? 'истекла ' : 'до '}${human(nearest.expires)}</span>
   </button>`;
 }
-export function promoLinksPanel(c, { bookId = '', compact = false } = {}) {
-  const items = linkList(c, bookId);
+export function promoLinksPanel(c, { bookId = '', compact = false, channel = '' } = {}) {
+  const items = linkList(c, bookId, channel);
   return `<div class="${compact ? 'utm-panel utm-panel-compact' : 'card utm-panel'}">
-    <div class="row between"><h2 style="margin:0">UTM-ссылки</h2><button class="small-btn" data-act="utm.new"${bookId ? ` data-book="${esc(bookId)}"` : ''}>+ Ссылка</button></div>
+    <div class="row between"><h2 style="margin:0">${channel==='social'?'Ссылки соцсетей':channel==='direct'?'Ссылки Директа':'UTM-ссылки'}</h2><button class="small-btn" data-act="utm.new"${bookId ? ` data-book="${esc(bookId)}"` : ''}${channel ? ` data-channel="${channel}"` : ''}>+ Ссылка</button></div>
     ${!items.length ? '<p class="small muted">Ссылок пока нет.</p>' : `
       <div class="utm-list">${items.map(x=>`<div class="utm-item">
         <div class="row between">
-          <div class="utm-main"><b>${esc(x.campaign || 'Рекламная кампания')}</b>
+          <div class="utm-main"><b>${esc(x.campaign || 'Источник')}</b>
+            ${!channel ? `<span class="small muted">${promoChannelName(x)}</span>` : ''}
             ${!bookId ? `<span class="small muted">${esc(bookTitle(c,x))}</span>` : ''}
           </div>
           <button class="link" data-act="utm.edit" data-id="${esc(x.id)}">Изменить</button>
@@ -48,14 +49,16 @@ export function promoLinksPanel(c, { bookId = '', compact = false } = {}) {
     `}
   </div>`;
 }
-const fields = (c, x={}, locked='') => `
+const fields = (c, x={}, locked='', presetChannel='') => `
   <label>Книга</label>
   <select name="bookId" required>
     <option value="">Выбрать книгу</option>
     ${c.wbooks.map(b=>opt(b.id,b.title,locked||x.bookId||'')).join('')}
   </select>
-  <label>Название кампании (для себя)</label>
-  <input name="campaign" value="${esc(x.campaign||'')}" maxlength="180" placeholder="Альпийский развод · реклама таргетолога" required>
+  <label>Канал</label>
+  <select name="channel"><option value="direct"${(presetChannel||promoChannel(x))==='direct'?' selected':''}>Директ</option><option value="social"${(presetChannel||promoChannel(x))==='social'?' selected':''}>Соцсети</option></select>
+  <label>Кампания / площадка</label>
+  <input name="campaign" value="${esc(x.campaign||'')}" maxlength="180" placeholder="Threads · шапка профиля / реклама таргетолога" required>
   <label>Ссылка для продвижения из Литнета</label>
   <input name="url" type="url" value="${esc(x.url||'')}" placeholder="https://litnet.com/ref/..." required>
   <label>Ссылка на книгу (необязательно)</label>
@@ -78,13 +81,16 @@ function entry(fd, previous = {}) {
   const changed = previous.url !== url || previous.expires !== expires;
   const history = [...(previous.history||[])];
   if (previous.url && changed) history.push({ url: previous.url, expires: previous.expires, savedAt: new Date().toISOString() });
-  return { ...previous, bookId,campaign,url,destination,expires,readers:rawReaders===''?'':Number(rawReaders),
+  const channel=String(fd.get('channel')||promoChannel(previous));
+  if(channel!=='direct'&&channel!=='social') throw new Error('Выбери Директ или Соцсети');
+  return { ...previous, bookId,campaign,channel,url,destination,expires,readers:rawReaders===''?'':Number(rawReaders),
+    ...(channel==='social'?{directCampaignId:'',appliedTag:'',appliedAt:''}:{}),
     history:history.slice(-20), ...(changed ? {reminderDoneFor:''} : {}),
     status:'active', modifiedAt:new Date().toISOString() };
 }
 acts['utm.new'] = d => {
   const c=app().ctx();
-  openSheet('Новая рекламная UTM-ссылка',fields(c,{},d.book||''),async fd=>{
+  openSheet('Новая персональная ссылка',fields(c,{},d.book||'',d.channel||''),async fd=>{
     try { const v=entry(fd); await app().store.put('w_promolinks',{id:'utm_'+uid(),createdAt:new Date().toISOString(),...v});
       toast('Ссылка сохранена. Задача появится в Планере.'); }
     catch(e){toast(e.message);return false;}
