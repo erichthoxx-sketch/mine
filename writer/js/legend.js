@@ -26,6 +26,15 @@ export const CHAR_FIELDS = [
   ['links', 'Связи', 'кто кому кем приходится'],
   ['notes', 'Заметки', ''],
 ];
+export function formatCharacterAge(age) {
+  const raw = String(age ?? '').trim().replace(/\s+/g, ' ');
+  if (!raw) return '';
+  const m = /^(\d{1,3})(?:\s*(?:год|года|лет)(?:\s+лет)?)?$/i.exec(raw);
+  if (!m) return raw; // Произвольные пометки, например «около 30», не меняем.
+  const n = Number(m[1]), mod100 = n % 100, mod10 = n % 10;
+  const word = mod100 >= 11 && mod100 <= 14 ? 'лет' : mod10 === 1 ? 'год' : mod10 >= 2 && mod10 <= 4 ? 'года' : 'лет';
+  return n + ' ' + word;
+}
 export const LEGEND_TABS = { idea: 'Идея', plan: 'Каркас', chars: 'Персонажи' };
 
 // статус сюжетного решения (главы каркаса): утверждено — канон; обсуждается — вариант; отвергнуто — не использовать.
