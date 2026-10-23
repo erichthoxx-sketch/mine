@@ -10,6 +10,7 @@ export const CREATOR_DEFAULT = {
   start: '',
   end: '',
   region: 225,        // Россия в справочнике геотаргетинга Яндекса
+  litnetLinkId: '', // выбранная персональная ссылка из «Мой Литнет»
   groupName: 'Криминальная романтика',
   titles: 'Развод для черной вдовы. Новый роман',
   texts: 'Новый остросюжетный любовный роман. Читайте на Литнете.',
@@ -51,7 +52,7 @@ function activeStrategy(c, goalId) {
   if (name === 'WB_MAXIMUM_CONVERSION_RATE') params.GoalId = Number(goalId);
   return { BiddingStrategyType: name, [name === 'WB_MAXIMUM_CLICKS' ? 'WbMaximumClicks' : 'WbMaximumConversionRate']: params };
 }
-export function campaignPayload(c, { counterId = null, goalId = null } = {}) {
+export function campaignPayload(c, { counterId = null, goalId = null, trackingParams = '' } = {}) {
   const on = activeStrategy(c, goalId);
   const active = c.placement === 'search';
   const search = active
@@ -66,6 +67,7 @@ export function campaignPayload(c, { counterId = null, goalId = null } = {}) {
     UnifiedCampaign: {
       BiddingStrategy: { Search: search, Network: network },
       AttributionModel: 'AUTO',
+      ...(trackingParams ? { TrackingParams: trackingParams } : {}),
       ...(counterId ? { CounterIds: { Items: [Number(counterId)] } } : {}),
     },
   };
