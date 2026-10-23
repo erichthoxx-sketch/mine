@@ -28,6 +28,18 @@ export function promoToken(link) {
   if (!isLitnetLink(link)) return '';
   return new URL(link).pathname.split('/').filter(Boolean)[1] || '';
 }
+// Два канала: реклама или соцсети. Старые ссылки не переименовываем,
+ // но распознаем явно названные Threads как соцсети.
+export const PROMO_CHANNELS = [['direct','Директ'],['social','Соцсети']];
+export function promoChannel(x = {}) {
+  if (x.channel === 'social' || x.channel === 'direct') return x.channel;
+  const source = String(x.campaign || x.socialPlatform || '').toLocaleLowerCase('ru');
+  return /threads|тредс|инстаграм|instagram|вконтакте|\bvk\b|соцсет|tiktok|тик ?ток/.test(source) ? 'social' : 'direct';
+}
+export const promoChannelName = x => promoChannel(x) === 'social' ? 'Соцсети' : 'Директ';
+export const promoSourceName = x => promoChannel(x) === 'social' ? String(x.socialPlatform || x.campaign || 'Соцсети').trim() : 'Директ';
+export const promoSection = x => promoChannel(x) === 'social' ? '/social' : '/marketing';
+
 export function promoLinkTasks(links = [], today = '', { includeOverdue = true } = {}) {
   return links.filter(x => x && x.status !== 'archived' && validDay(x.expires) &&
       x.reminderDoneFor !== x.expires)
@@ -35,11 +47,12 @@ export function promoLinkTasks(links = [], today = '', { includeOverdue = true }
       const due = promoReminderDate(x.expires);
       return {
         id: x.id, bookId: x.bookId, expires: x.expires, due,
+        channel: promoChannel(x), source: promoSourceName(x),
         date: includeOverdue && today && due < today ? today : due,
         overdue: !!today && due < today,
-        title: 'Обновить UTM «' + (x.book || 'книга') + '»' + (x.campaign ? ': ' + x.campaign : ''),
-        sub: 'Литнет · действует до ' + x.expires + (x.book ? ' · ' + x.book : ''),
-        to: '/marketing',
+        title: (promoChannel(x) === 'social' ? 'Соцсети' + (promoSourceName(x) !== 'Соцсети' ? ' · ' + promoSourceName(x) : '') : 'Директ') + ': обновить ссылку — «' + (x.book || 'книга') + '»',
+        sub: 'Мой Литнет · новые привязки до ' + x.expires + (x.campaign ? ' · ' + x.campaign : ''),
+        to: promoSection(x),
       };
     }).sort((a,b) => a.date.localeCompare(b.date) || a.expires.localeCompare(b.expires));
 }
