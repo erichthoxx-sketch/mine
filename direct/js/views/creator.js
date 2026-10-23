@@ -6,6 +6,7 @@ import { creatorOf, validateCreator, campaignPayload, groupPayload, adPayload, k
   addedId, createCampaign, pauseCampaign, createGroup, createAd, createKeywords } from '../creator.js';
 import { purchaseGoal } from '../launchcalc.js';
 import { exactTag, bookMatches, readyForCampaign } from '../litnetcalc.js';
+import { promoChannel } from '../../../writer/js/promolinks.js';
 
 const app = () => window.__app;
 let busy = false;
@@ -26,7 +27,7 @@ export function creatorCard(a, fl, m) {
   const bookTitles = Object.fromEntries((a.ctx().data.w_books || []).map(b => [String(b.id), b.title]));
   const candidates = (a.ctx().data.w_promolinks || []).filter(x => x.status !== 'archived')
     .map(x => ({ ...x, bookTitle: bookTitles[String(x.bookId)] || x.book || '' }))
-    .filter(x => bookMatches(x.bookTitle, fl.book));
+    .filter(x => promoChannel(x)==='direct' && bookMatches(x.bookTitle, fl.book));
   const linked = candidates.find(x => String(x.id) === String(d.litnetLinkId));
   const staleTag = !!d.litnetLinkId && !readyForCampaign(linked, d.start, fl.book);
   const blocked = !a.ctx().settings.directToken || a.ctx().settings.direct?.sandbox || v < 4;
