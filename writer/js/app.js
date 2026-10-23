@@ -17,6 +17,7 @@ import { CONTEST_NAV, cleanContestText, rawContestText, parseContest } from './w
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
+import { socialView } from './views/social.js';
 import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
 import { cleanText, cleanedMsg } from '../../js/cleantext.js';
@@ -71,8 +72,8 @@ function route() {
   if (a === 'ed' && b) { const [, , bid, ...rest] = ('#' + ui.route).split('/'); return { tab: '/books', view: (x) => editorView(x, decodeURIComponent(bid), decodeURIComponent(rest.join('/'))) }; }
   if (a === 'link' && b) return { tab: '/links', view: (x) => linkPage(x, decodeURIComponent(b)) };
   if (a === 'mk' && b) return { tab: '/marketing', view: (x) => bookMarketing(x, decodeURIComponent(b)) };
-  const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, marketing: marketingView, links: linksView, settings: settingsView };
-  return { tab: '/' + (a || ''), view: map[a || ''] || homeView };
+  const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, marketing: marketingView, links: linksView, social: socialView, settings: settingsView };
+  return { tab: a === 'social' ? '/links' : '/' + (a || ''), view: map[a || ''] || homeView };
 }
 
 function authScreen() {
