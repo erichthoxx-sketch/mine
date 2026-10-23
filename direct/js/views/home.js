@@ -9,6 +9,7 @@ import { metrikaOf } from './metrika.js';
 import { stateDot, tiles, actBtn, q } from './common.js';
 import { demo } from '../demo.js';
 import { OUTAGE_TEXT } from '../api.js';
+import { litnetSummary } from './litnet.js';
 
 const app = () => window.__app;
 
@@ -92,6 +93,7 @@ export function homeView(a) {
   return {
     html: `${demo.on ? `<div class="alert">Это пример — так будет выглядеть ваш Директ. Можно нажимать кнопки: в примере ничего не тратится. ${c.settings.directToken ? '' : '<button class="link" data-act="go" data-to="/settings">Подключить свой</button>'}${a.store.mode !== 'local' ? ' <button class="link" data-act="d.demoOff">Закрыть пример</button>' : ''}</div>` : ''}
     ${!demo.on ? `<div class="card"><div class="row between"><h2 style="margin:0">Мой первый запуск</h2><button class="primary" data-act="go" data-to="/launch">Открыть план</button></div><p class="small">«Развод для черной вдовы»: с 1 ноября подготовка, после 4–5 глав — подписка и первый собственный тест на 10 000 ₽. Здесь будут только его расходы и конверсии.</p></div>` : ''}
+    ${litnetSummary(a)}
     <div class="card"><div class="row between"><h2 style="margin:0">Контроль качества трафика</h2><button data-act="go" data-to="/quality">Проверить</button></div><p class="small muted">Поиск и РСЯ, расходы по площадкам, отказы и покупки. Без автоматических блокировок и неподтвержденных обвинений в ботах.</p></div>
     <div class="card"><div class="row between"><h2 style="margin:0">Журнал рекламных решений</h2><button data-act="go" data-to="/experiments">Открыть</button></div><p class="small muted">Записывай гипотезы и проверяй, что изменилось после каждого решения: расходы, покупки и продажи конкретной книги.</p></div>
     ${!demo.on && err?.transient ? `<div class="alert d-outage">${esc(err.code === 56 ? 'Яндекс ограничил частоту запросов — приложение повторит загрузку автоматически.' : OUTAGE_TEXT)} Данные от ${new Date(main.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.</div>` : ''}
