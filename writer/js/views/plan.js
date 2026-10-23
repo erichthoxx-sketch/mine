@@ -96,7 +96,7 @@ export function planItems(c, from, to) {
   // UTM: дата задачи опережает истечение. Дата истечения остается отдельным пассивным событием.
   const utms = (d.w_promolinks || []).map(x => ({ ...x, book: c.wbooksById[x.bookId]?.title || 'Книга' }));
   for (const x of promoLinkTasks(utms, t)) add(x.date, 'utm', esc(x.title), esc(x.sub), { to: '/marketing', id: x.id, book: x.bookId, dueRaw: x.due, expires: x.expires });
-  for (const x of activePromoLinks(utms)) if (x.expires) add(x.expires, 'utm-expiry', 'Истекает UTM-ссылка: ' + esc(x.book), esc(x.campaign || 'Реклама') + ' · ссылка остается активной только до этого дня', { to: '/marketing' });
+  for (const x of activePromoLinks(utms)) if (x.expires) add(x.expires, 'utm-expiry', 'Заканчиваются новые привязки: ' + esc(x.book), esc(x.campaign || 'Реклама') + ' · ссылка продолжает открываться после этой даты', { to: '/marketing' });
   // Никаких общих «Посмотреть дела на выходные». Автовыкладка и сроки остаются в своих датах.
   // Отдельная подготовка заранее только там, где действительно нужна: UTM и осмысленные дедлайны.
   const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5, utm: 5.4, 'utm-expiry': 5.6, event: 8 };
