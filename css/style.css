@@ -1525,124 +1525,36 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .lg-syn-acts { display: inline-flex; flex-wrap: wrap; gap: 2px 6px; }
 .lg-syn-files { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
 
-/* Легенда: общая типографика на всех вкладках.
-   Внутри карточек — очень светлая нейтрально-серая поверхность с тонкой рамкой.
-   Сохраняет контраст и в темной теме, не добавляет цветных акцентов к тексту. */
-.app-writer {
-  --lg-content-bg: color-mix(in srgb, var(--surface) 96%, var(--text));
-  --lg-content-border: color-mix(in srgb, var(--surface) 81%, var(--text));
-}
-.lg-f { padding: 16px 18px; margin: 0 0 12px; }
-.lg-f .lg-l { margin: 0 0 10px; font-size: 16px; font-weight: 700; color: var(--text); }
-.lg-sl { display: block; margin: 15px 0 7px; font-size: 13px; font-weight: 700; color: var(--text-2); }
-.lg-ch-h + .lg-sl { margin-top: 12px; }
-/* Карточки не меняем: легкий оттенок слоновой кости и штатный контур. */
-:is(.lg-f, .lg-ch, .lg-qs, .lg-syn, .lg-cards .lg-card:not(.lg-new)) { background: var(--ivory); }
-
-/* Все редактируемые описания — одна рамка, одинаковые отступы и читабельный размер.
-   Не использовать прежние отрицательные поля и ширину >100%: рамка должна идти строго по карточке. */
-.app-writer :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta,
-.app-writer .lg-q-h textarea.lg-ta,
-.app-writer dialog textarea.lg-ta {
-  display: block;
-  width: 100%;
-  margin: 4px 0 10px;
-  padding: 12px 14px;
-  min-height: 48px;
-  border: 1px solid var(--lg-content-border) !important;
-  border-radius: 12px;
-  background: var(--lg-content-bg) !important;
-  box-shadow: none !important;
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 1.6;
-  overflow-wrap: break-word;
-  transition: border-color .16s, background-color .16s;
-}
-.app-writer :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:hover,
-.app-writer .lg-q-h textarea.lg-ta:hover,
-.app-writer dialog textarea.lg-ta:hover {
-  border-color: color-mix(in srgb, var(--lg-content-border) 70%, var(--text-2)) !important;
-  background: var(--lg-content-bg) !important;
-}
-.app-writer :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:focus,
-.app-writer .lg-q-h textarea.lg-ta:focus,
-.app-writer dialog textarea.lg-ta:focus {
-  outline: 2px solid color-mix(in srgb, var(--accent-2) 65%, transparent);
-  outline-offset: 1px;
-  border-color: var(--accent-2) !important;
-  background: var(--surface) !important;
-}
-.app-writer :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta::placeholder,
-.app-writer .lg-q-h textarea.lg-ta::placeholder,
-.app-writer dialog textarea.lg-ta::placeholder {
-  color: var(--muted);
-  font-weight: 400;
-  opacity: .85;
-}
-/* Каркас: каждая область "Что происходит" и "Зачем эта глава" получает ту же рамку. */
-.lg-ch { padding: 16px 18px 14px; }
-.app-writer .lg-ch textarea.lg-ta { margin: 3px 0 8px; }
-.lg-ch .lg-row { margin-top: 10px; }
-/* Открытые вопросы: и вопрос, и решение — одинаковая обводка. */
-.lg-q { padding: 15px 0; }
-.app-writer .lg-q-h { align-items: flex-start; }
-.app-writer .lg-q-h textarea.lg-ta { flex: 1 1 auto; min-width: 0; margin: 0; font-weight: 700; line-height: 1.5; }
-.app-writer .lg-q > textarea.lg-ta { margin: 9px 0 6px; }
-.lg-q-f { margin-top: 10px; }
-/* Синопсис: готовый текст заключен в ту же светло-серую рамку. */
-.lg-syn { padding: 16px 18px; }
-.app-writer .lg-syn-text {
-  margin-top: 13px;
-  padding: 15px 17px;
-  border: 1px solid var(--lg-content-border);
-  border-radius: 12px;
-  background: var(--lg-content-bg);
-  font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.65;
-  color: var(--text);
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.app-writer .lg-syn-text p { margin: 0 0 .75em; }
-.app-writer .lg-syn-text p:last-child { margin-bottom: 0; }
-/* Персонажи: только содержательное описание, а не имя и метаданные в рамке. */
-.app-writer .lg-char-details {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 11px 12px;
-  margin-top: 7px;
-  min-width: 0;
-  border: 1px solid var(--lg-content-border);
-  border-radius: 11px;
-  background: var(--lg-content-bg);
-}
-.app-writer .lg-char-details .lg-sn {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font: 400 14px/1.5 var(--font-body);
-  color: var(--text);
-}
-.app-writer .lg-char-details .lg-in { font: 400 12px/1.45 var(--font-body); color: var(--muted); }
+/* Легенда — один вид на всех вкладках: карточка на тему (поле Идеи, глава, вопрос, синопсис),
+   заголовок карточки 16 px жирный, подписи внутри — серые 13 px, текст 16 px с воздухом между строк, без рамок у полей */
+.lg-f { padding: 14px 16px 8px; margin: 0 0 10px; }
+.lg-f .lg-l { margin: 0 0 4px; font-size: 16px; font-weight: 700; color: var(--text); }
+.lg-sl { display: block; margin: 14px 0 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.lg-ch-h + .lg-sl { margin-top: 8px; }
+/* Внешние карточки — светло-серые, текстовые поля без заливки и контура до наведения; розовое выделение при наведении и вводе сохраняем. */
+/* Светло-серая ЗАЛИВКА ВНЕШНИХ КАРТОЧЕК. Редактируемый текст внутри остается прозрачным
+   и как раньше подсвечивается розовым на наведении и при вводе. */
+.app-writer { --lg-outer-fill: color-mix(in srgb, var(--surface) 93%, var(--text)); }
+.app-writer :is(.lg-f, .lg-ch, .lg-qs, .lg-syn, .lg-cards .lg-card:not(.lg-new)) { background: var(--lg-outer-fill); }
+:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta, .lg-q-h textarea.lg-ta { display: block; width: calc(100% + 16px); margin: 2px -8px 4px; padding: 6px 8px; min-height: 0; border: 0 !important; border-radius: 10px; background: transparent !important; box-shadow: none !important; font-size: 16px; line-height: 1.6; color: var(--text); transition: background-color .15s; }
+:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:hover, .lg-q-h textarea.lg-ta:hover { background: color-mix(in srgb, var(--surface-2) 70%, transparent) !important; }
+:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta:focus, .lg-q-h textarea.lg-ta:focus { background: var(--surface-2) !important; outline: none; box-shadow: none !important; }
+/* вопрос — тоже поле, текст вопроса чуть плотнее; подсказки — обычным начертанием */
+.lg-q-h textarea.lg-ta { margin: 0 0 0 -8px; font-weight: 700; line-height: 1.5; }
+.lg-q-h textarea.lg-ta::placeholder { font-weight: 400; }
+.lg-q-h .lg-ib { align-self: center; }
+.lg-q-f { margin-top: 8px; }
+:is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta::placeholder { color: var(--muted); opacity: .8; }
+.lg-ch { padding: 14px 16px 10px; }
+.lg-syn { padding: 14px 16px; }
+.lg-syn-text { margin-top: 10px; font-size: 16px; line-height: 1.6; color: var(--text); }
+.lg-syn-text p { margin: 0 0 .6em; }
 .lg-cb b { font-size: 16px; }
 .lg-tabs { overflow-x: auto; scrollbar-width: none; }
 .lg-tabs::-webkit-scrollbar { display: none; }
+/* на телефоне все четыре вкладки помещаются: без счётчиков, плотнее */
 :is(main, dialog) .lg-tabs button:not(.link):not(.chip):not(.wide) { padding: 6px 10px; }
-@media (max-width: 480px) {
-  :is(main, dialog) .lg-tabs button:not(.link):not(.chip):not(.wide) { padding: 6px 7px; }
-  .lg-cnt { display: none; }
-  .lg-f, .lg-ch, .lg-syn { padding: 14px 15px; }
-  .app-writer :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta,
-  .app-writer .lg-q-h textarea.lg-ta,
-  .app-writer dialog textarea.lg-ta { padding: 11px 12px; font-size: 16px; }
-  .app-writer .lg-syn-text { padding: 12px 14px; }
-}
+@media (max-width: 480px) { :is(main, dialog) .lg-tabs button:not(.link):not(.chip):not(.wide) { padding: 6px 7px; } .lg-cnt { display: none; } }
 
 /* Маркетинг → книга: тихая ссылка «Справка об авторстве» внизу справа */
 .mk-auth { display: flex; justify-content: flex-end; margin: 4px 0 8px; }
