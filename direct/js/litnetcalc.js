@@ -1,7 +1,7 @@
 // "Мой Литнет": только собственные персональные ссылки и реферальные метки.
 // Литнет API для их выдачи нет — ссылки создаются в личном кабинете Литнета.
 // Данные w_promolinks общие с Мастерской и ее будничными напоминаниями.
-import { promoReminderDate, promoToken, isLitnetLink, validDay } from '../../writer/js/promolinks.js';
+import { promoReminderDate, promoToken, isLitnetLink, validDay, promoChannel } from '../../writer/js/promolinks.js';
 import { addDays } from '../../js/calc.js';
 
 const name = x => String(x || '').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ');
@@ -29,7 +29,7 @@ export function visibleLinks(data = [], books = [], {today = ''} = {}) {
   })).sort((a,b)=>a.expires.localeCompare(b.expires));
 }
 export function readyForCampaign(link, campaignStart, bookName = '') {
-  if (!link || link.status==='archived') return false;
+  if (!link || link.status==='archived' || promoChannel(link)!=='direct') return false;
   if (!exactTag(link.url) || !validDay(link.expires)) return false;
   if (campaignStart && link.expires < campaignStart) return false;
   return !bookName || bookMatches(link.bookTitle||link.book||'',bookName);
