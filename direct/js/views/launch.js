@@ -53,6 +53,7 @@ export function launchView(a) {
         <input name="royalty" inputmode="decimal" value="${esc(fl.royalty)}" placeholder="После выбора цены подписки">
         <div class="row d-save"><button type="submit" class="primary">Сохранить план</button></div>
       </form>
+      <p class="small"><button class="link" data-act="go" data-to="/litnet">Мой Литнет: ссылки, срок новых привязок и метка для рекламы →</button></p>
       <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="subscriptionOpen"${checked(fl.subscriptionOpen)}> Платная подписка уже открыта и книгу можно купить</label>
       <p class="small muted">Роялти нужно для предварительной оценки экономики. Это не автоматическое подтверждение фактических продаж.</p>
     </div>
