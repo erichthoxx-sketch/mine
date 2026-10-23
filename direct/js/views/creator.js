@@ -150,7 +150,11 @@ acts['fl.createCampaign'] = async () => {
     const id = addedId(response,'Кампания');
     await save({campaignId:String(id),suspended:false});
     if (link && trackingParams) {
-      await a.store.put('w_promolinks',{...link,directCampaignId:String(id),appliedTag:trackingParams,appliedAt:new Date().toISOString()});
+      try {
+        await a.store.put('w_promolinks',{...link,directCampaignId:String(id),appliedTag:trackingParams,appliedAt:new Date().toISOString()});
+      } catch(e) {
+        toast('Кампания №'+id+' создана с меткой, но связь с Литнетом не сохранилась: '+(e.message||e));
+      }
     }
     try { await pauseCampaign(s,id); await save({suspended:true}); toast('Кампания создана и остановлена'); }
     catch(e) { toast('Кампания создана, но Яндекс не подтвердил остановку. Не добавляй объявления, пока не остановим ее. '+(e.message||e)); }
