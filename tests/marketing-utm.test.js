@@ -58,7 +58,8 @@ test('Задача на обновление UTM всегда содержит �
   assert.equal(due.length, 2);
   assert.equal(due[0].due, '2026-11-17');
   assert.match(due[0].title, /Альпийский развод/);
-  assert.match(due[0].title, /таргетолог/);
+  assert.match(due[0].title, /Директ/);
+  assert.match(due[0].sub, /таргетолог/);
   assert.equal(due[0].bookId, alpine);
 });
 
