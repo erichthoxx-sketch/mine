@@ -11,7 +11,7 @@ import { docxBlob, noYo } from '../publish.js';
 import { synText, synSource } from '../synopsis.js';
 import { cleanText } from '../../../js/cleantext.js';
 import './pubfiles.js'; // «Скопировать» и «Word» синопсиса
-import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, legendContext, legendTemplate, applyTemplate, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
+import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, formatCharacterAge, legendContext, legendTemplate, applyTemplate, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
 
 const app = () => window.__app;
 const bookOf = (id) => app().ctx().wbooksById[id];
@@ -117,7 +117,7 @@ function synHtml(c, b) {
 function charsHtml(b, L, main) {
   const inCh = (id) => L.plan.map((p, i) => ((p.chars || []).includes(id) || p.pov === id ? i + 1 : 0)).filter(Boolean);
   return `<div class="lg-cards">${L.chars.map((x) => { const ch = inCh(x.id); return `<a href="#" class="card lg-card tap" data-act="leg.char" data-id="${b.id}" data-c="${x.id}">${avatar(x)}
-    <span class="lg-cb"><b>${esc(x.name || 'Без имени')}</b><span class="lg-role">${[ROLES[x.role], x.age ? `${esc(x.age)} лет` : ''].filter(Boolean).join(' · ')}</span>
+    <span class="lg-cb"><b>${esc(x.name || 'Без имени')}</b><span class="lg-role">${[ROLES[x.role], formatCharacterAge(x.age) ? esc(formatCharacterAge(x.age)) : ''].filter(Boolean).join(' · ')}</span>
     ${x.nature || ch.length ? `<span class="lg-char-details">${x.nature ? `<span class="lg-sn">${esc(x.nature)}</span>` : ''}${ch.length ? `<span class="lg-in">в главах: ${ch.slice(0, 12).join(', ')}${ch.length > 12 ? '…' : ''}</span>` : ''}</span>` : ''}</span></a>`; }).join('')}
     <button class="card lg-card lg-new" data-act="leg.char" data-id="${b.id}">+ Персонаж</button></div>`;
 }
