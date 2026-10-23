@@ -4,6 +4,7 @@ import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask } from '.
 import { fmtDate, plural } from '../../../js/format.js';
 import { waitingStatus } from '../wcalc.js';
 import { addDays } from '../../../js/calc.js';
+import { promoChannel } from '../promolinks.js';
 
 const app = () => window.__app;
 export const LKINDS = { publisher: 'Издательства', social: 'Соцсети', platform: 'Площадки', people: 'Люди', other: 'Другое' };
@@ -23,14 +24,19 @@ export function linksView(a) {
   const list = all.filter((x) => matches(x, q));
   const reqs = c.data.w_waiting.filter((r) => !r.done).sort((x, y) => (x.since || '').localeCompare(y.since || ''));
   const done = c.data.w_waiting.filter((r) => r.done).sort((x, y) => (y.answeredAt || '').localeCompare(x.answeredAt || ''));
-  const groups = Object.keys(LKINDS).map((k) => [k, list.filter((x) => (x.kind || 'other') === k)]).filter(([, l]) => l.length);
+  // Ссылки Threads находятся среди соцсетей, а не отдельной кнопкой между заголовками.
+  // Используем те же .card.list / .item / .sub и существующие шрифты, что и для площадок.
+  const showSocialHub = !q || 'мой литнет соцсети threads тредс'.includes(q.toLowerCase());
+  const socialCount = (c.data.w_promolinks || []).filter(x => x.status !== 'archived' && promoChannel(x) === 'social').length;
+  const socialHub = showSocialHub ? `<a class="item row between" href="#" data-act="go" data-to="/social"><span><b>Мой Литнет</b><span class="sub">Персональные ссылки · ${socialCount} ${plural(socialCount, ['ссылка', 'ссылки', 'ссылок'])}</span></span></a>` : '';
+  const groups = Object.keys(LKINDS).map((k) => [k, list.filter((x) => (x.kind || 'other') === k)])
+    .filter(([k, l]) => l.length || (k === 'social' && showSocialHub));
   const html = `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Связи</h2><button class="primary" data-act="link.new">+ Добавить</button></div>
-  <div class="row" style="margin-bottom:14px"><button data-act="go" data-to="/social">Соцсети · ссылки «Мой Литнет» →</button></div>
   ${all.length > 5 ? `<input type="search" value="${esc(q)}" placeholder="Поиск: имя, ник, заметка…" data-chg="link.q" aria-label="Поиск по связям" style="margin-bottom:12px">` : ''}
   <div class="psec-h" style="margin-top:4px"><h2>Запросы без ответа <span class="muted">${reqs.length || ''}</span></h2><button class="small-btn" data-act="wait.new">+ Запрос</button></div>
   ${reqs.length ? `<div class="card plist-card"><div class="plist">${reqs.map((r) => reqRow(c, r)).join('')}</div></div>` : '<div class="card"><p class="small muted" style="margin:0">Открытых запросов нет. Отправили рукопись, заявку или письмо — добавьте запрос, и приложение напомнит, если ответа долго нет.</p></div>'}
-  ${groups.length ? groups.map(([k, l]) => `<div class="psec-h"><h2>${LKINDS[k]} <span class="muted">${l.length}</span></h2><button class="small-btn" data-act="link.new" data-kind="${k}">+ ${KIND1[k]}</button></div>
-    <div class="card list">${l.map((x) => linkRow(c, x)).join('')}</div>`).join('')
+  ${groups.length ? groups.map(([k, l]) => `<div class="psec-h"><h2>${LKINDS[k]}${l.length ? ` <span class="muted">${l.length}</span>` : ''}</h2><button class="small-btn" data-act="link.new" data-kind="${k}">+ ${KIND1[k]}</button></div>
+    <div class="card list">${k === 'social' ? socialHub : ''}${l.map((x) => linkRow(c, x)).join('')}</div>`).join('')
     : `<div class="card" style="margin-top:16px"><p class="small muted" style="margin-top:0">${q ? 'Ничего не нашлось.' : 'Соберите здесь всё, что вне книг: издательства, соцсети, площадки, нужных людей. У каждой связи — ссылки, ники, история общения и запросы.'}</p>
       ${q ? '' : `<div class="row">${Object.keys(LKINDS).filter((k) => k !== 'other').map((k) => `<button data-act="link.new" data-kind="${k}">+ ${KIND1[k]}</button>`).join('')}</div>`}</div>`}
   ${done.length ? `<details class="card" style="margin-top:16px"><summary>Ответы получены (${done.length})</summary>${done.map((r) => `<div class="item small"><b>${esc(r.who)}</b>${r.what ? ': ' + esc(r.what) : ''}${r.answer ? `<br>→ ${esc(r.answer)}` : ''}<span class="sub">${r.answeredAt ? fmtDate(r.answeredAt) : ''}</span></div>`).join('')}</details>` : ''}`;
