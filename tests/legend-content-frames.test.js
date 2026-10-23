@@ -2,34 +2,30 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const css = readFileSync(new URL('../css/style.css', import.meta.url),'utf8');
-const js = readFileSync(new URL('../writer/js/views/legend.js', import.meta.url),'utf8');
+const css=readFileSync(new URL('../css/style.css', import.meta.url),'utf8');
+const legend=readFileSync(new URL('../writer/js/views/legend.js', import.meta.url),'utf8');
+const a=css.indexOf('/* Легенда — один вид'), b=css.indexOf('/* Маркетинг → книга:',a);
+const section=css.slice(a,b);
 
-const section = css.slice(css.indexOf('/* Легенда: общая типографика'), css.indexOf('/* Маркетинг → книга:'));
-test('Все текстовые поля Легенды имеют единую тонкую нейтрально-серую рамку', () => {
-  assert.match(section,/--lg-content-bg:\s*color-mix\(in srgb,\s*var\(--surface\) 96%,\s*var\(--text\)\)/);
-  assert.match(section,/--lg-content-border:\s*color-mix\(in srgb,\s*var\(--surface\) 81%,\s*var\(--text\)\)/);
-  for(const selector of [
-    '.app-writer :is(.lg-f, .lg-ch, .lg-q) > textarea.lg-ta',
-    '.app-writer .lg-q-h textarea.lg-ta',
-    '.app-writer dialog textarea.lg-ta',
-    '.app-writer .lg-syn-text',
-    '.app-writer .lg-char-details'
-  ]) assert.ok(section.includes(selector), 'Нет общего обрамления: ' + selector);
-  assert.match(section,/border:\s*1px solid var\(--lg-content-border\) !important;/);
-  assert.match(section,/border-radius:\s*12px/);
-  assert.match(section,/font-family:\s*var\(--font-body\)/);
+test('Серая заливка у ВНЕШНИХ карточек всех вкладок, а не у поля текста',()=>{
+  assert.ok(a>0&&b>a);
+  assert.match(section, /--lg-outer-fill:\s*color-mix\(in srgb,\s*var\(--surface\) 93%,\s*var\(--text\)\)/);
+  assert.match(section, /\.app-writer :is\(\.lg-f, \.lg-ch, \.lg-qs, \.lg-syn, \.lg-cards \.lg-card:not\(\.lg-new\)\) \{\s*background:\s*var\(--lg-outer-fill\)/);
+  assert.doesNotMatch(section, /--lg-content-bg|--lg-content-border|lg-char-details/);
 });
-test('Ввод и автоувеличение поля, а также темная тема не ломаются', () => {
-  assert.match(js, /function grow\(el\)/);
-  assert.match(js, /document\.querySelectorAll\('\.lg-ta'\)\.forEach\(grow\)/);
-  assert.match(section,/textarea\.lg-ta:focus/);
-  assert.match(section,/var\(--surface\).*var\(--text\)/);
-  assert.doesNotMatch(section,/textarea\.lg-ta\s*\{[^}]*border:\s*0\s*!important/);
-  assert.match(section,/@media \(max-width: 480px\)/);
+
+test('Сами текстовые поля БЕЗ рамок и заливки, цветное выделение при наведении и фокусе возвращено',()=>{
+  assert.match(section, /textarea\.lg-ta.*border:\s*0\s*!important;\s*border-radius:\s*10px;\s*background:\s*transparent\s*!important;/);
+  assert.match(section, /textarea\.lg-ta:hover.*background:\s*color-mix\(in srgb,\s*var\(--surface-2\) 70%,\s*transparent\)\s*!important;/);
+  assert.match(section, /textarea\.lg-ta:focus.*background:\s*var\(--surface-2\)\s*!important;/);
+  assert.doesNotMatch(section, /border:\s*1px solid var\(--lg-content-border\)/);
+  assert.doesNotMatch(section, /\.lg-syn-text\s*\{[^}]*background:/);
 });
-test('Описание персонажей находится в общей контентной рамке, а не в заголовке карточки', () => {
-  assert.match(js, /class="lg-char-details"/);
-  assert.match(js, /class="lg-sn"/);
-  assert.match(js, /class="lg-in"/);
+
+test('Персонажи и синопсис используют наружную карточку без дополнительных внутренних рамок',()=>{
+  assert.doesNotMatch(legend, /lg-char-details/);
+  assert.match(legend, /class="lg-sn"/);
+  assert.match(legend, /class="lg-in"/);
+  assert.match(legend, /class="card lg-syn"/);
+  assert.match(legend, /class="card lg-ch/);
 });
