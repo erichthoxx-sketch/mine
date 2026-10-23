@@ -2,8 +2,8 @@
 // Никогда не редактируем чужие кампании и не генерируем ссылки вместо самого Литнета.
 import { esc, acts, toast, openSheet, ask, opt, uid } from '../../../js/ui.js';
 import { visibleLinks, exactTag, linkStatus, expiresFromCreated } from '../litnetcalc.js';
-import { isLitnetLink, promoReminderDate } from '../../../writer/js/promolinks.js';
-import { fmtDate } from '../../../js/format.js';
+import { isLitnetLink, promoReminderDate, promoChannel, promoChannelName } from '../../../writer/js/promolinks.js';
+import { fmtDate, plural } from '../../../js/format.js';
 
 const app=()=>window.__app;
 const links=a=>visibleLinks(a.ctx().data.w_promolinks||[],a.ctx().data.w_books||[],{today:a.ctx().today});
@@ -23,7 +23,7 @@ export function litnetSummary(a){
   const nearest=soon[0];
   return `<div class="card ln-summary">
     <div class="row between"><h2 style="margin:0">Мой Литнет</h2><button data-act="go" data-to="/litnet">Ссылки и метки</button></div>
-    <div class="small muted">${list.length} ссылок${nearest?' · внимание: '+esc(nearest.bookTitle)+', '+human(nearest.expires):''}</div>
+    <div class="small muted">${list.length} ${plural(list.length, ['ссылка','ссылки','ссылок'])}${nearest?' · внимание: '+esc(nearest.bookTitle)+', '+human(nearest.expires):''}</div>
   </div>`;
 }
 export function litnetView(a) {
@@ -37,7 +37,7 @@ export function litnetView(a) {
   ${!list.length ? `<div class="card ln-empty"><h3>Пока нет ссылок</h3><p class="small muted">Добавь ссылку из «Мой Литнет» вместе с датой окончания — напоминание появится и в Планере «Мастерской».</p><button data-act="ln.new">Добавить ссылку</button></div>` : `
     <div class="ln-list">${list.map(x=>`<section class="card ln-item">
       <div class="row between ln-item-head">
-        <div class="ln-title"><b>${esc(x.bookTitle)}</b><span class="small muted">${esc(x.campaign||'Источник не указан')}</span></div>
+        <div class="ln-title"><b>${esc(x.bookTitle)}</b><span class="small muted">${esc(promoChannelName(x))}${x.campaign ? ' · '+esc(x.campaign) : ''}</span></div>
         <span class="ln-status ${esc(x.state.type)}">${esc(x.state.label)}</span>
       </div>
       <div class="ln-fields">
