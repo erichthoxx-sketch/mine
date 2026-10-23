@@ -12,7 +12,7 @@ const displayLink = url => {
   const u = safeLink(url);
   return u ? `<a href="${esc(u)}" rel="noopener noreferrer" target="_blank" class="utm-url">${esc(u)}</a>` : '<span class="muted">нет ссылки</span>';
 };
-const status = (x, today) => x.expires < today ? 'Срок истек' : x.expires <= today ? 'Сегодня последний день' : 'Действует до ' + human(x.expires);
+const status = (x, today) => x.expires < today ? 'Новые привязки завершены' : x.expires === today ? 'Последний день новых привязок' : 'Привязки до ' + human(x.expires);
 // На списке книг — только компактная кнопка и статус, а не целый пустой UTM-блок.
 // Полная карточка ссылок показывается после открытия книги → «Для таргета».
 export function promoLinksInline(c, bookId) {
@@ -61,7 +61,7 @@ const fields = (c, x={}, locked='') => `
   <label>Ссылка на книгу (необязательно)</label>
   <input name="destination" type="url" value="${esc(x.destination||'')}" placeholder="https://litnet.com/ru/book/...">
   <div class="f2">
-    <div><label>Ссылка активна до</label><input name="expires" type="date" value="${esc(x.expires||'')}" required></div>
+    <div><label>Новые привязки до</label><input name="expires" type="date" value="${esc(x.expires||'')}" required></div>
     <div><label>Новых читателей (необязательно)</label><input name="readers" inputmode="numeric" value="${esc(String(x.readers??''))}" placeholder="Например, 96"></div>
   </div>
 `;
