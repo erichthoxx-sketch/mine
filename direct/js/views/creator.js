@@ -5,6 +5,7 @@ import { proxyVersion } from '../api.js';
 import { creatorOf, validateCreator, campaignPayload, groupPayload, adPayload, keywordsPayload,
   addedId, createCampaign, pauseCampaign, createGroup, createAd, createKeywords } from '../creator.js';
 import { purchaseGoal } from '../launchcalc.js';
+import { exactTag, bookMatches, readyForCampaign } from '../litnetcalc.js';
 
 const app = () => window.__app;
 let busy = false;
@@ -22,6 +23,12 @@ export function creatorCard(a, fl, m) {
   const d = creatorOf(fl), id = d.campaignId, group = d.groupId, ad = d.adId;
   const goal = purchaseGoal(m), v = Number(a.ctx().settings.direct?.proxyV) || 0;
   const issues = validateCreator(d, { today: a.ctx().today, bookUrl: fl.bookUrl, goalId: goal?.id });
+  const bookTitles = Object.fromEntries((a.ctx().data.w_books || []).map(b => [String(b.id), b.title]));
+  const candidates = (a.ctx().data.w_promolinks || []).filter(x => x.status !== 'archived')
+    .map(x => ({ ...x, bookTitle: bookTitles[String(x.bookId)] || x.book || '' }))
+    .filter(x => bookMatches(x.bookTitle, fl.book));
+  const linked = candidates.find(x => String(x.id) === String(d.litnetLinkId));
+  const staleTag = !!d.litnetLinkId && !readyForCampaign(linked, d.start, fl.book);
   const blocked = !a.ctx().settings.directToken || a.ctx().settings.direct?.sandbox || v < 4;
   return `
   <div class="fl-builder">
@@ -54,10 +61,16 @@ export function creatorCard(a, fl, m) {
           <div><label>География</label><select name="region">${opt('225','Россия',d.region)}${opt('0','Все регионы',d.region)}</select></div>
         </div>
         <p class="small muted">Бюджет за весь период, без автоматического продления. Стратегия на конверсии не означает, что покупки появятся сразу. Одна кампания — одна площадка показа.</p>
+        <label>Персональная ссылка «Мой Литнет» (необязательно)</label>
+        <select name="litnetLinkId"><option value="">Пока нет — добавлю перед запуском</option>
+          ${candidates.map(x => opt(x.id, `${x.campaign || 'Реклама'} · до ${x.expires}`, d.litnetLinkId)).join('')}
+        </select>
+        ${linked ? `<p class="small muted">Параметры URL для кампании: <code>${esc(exactTag(linked.url))}</code></p>` : '<p class="small muted"><button type="button" class="link" data-act="go" data-to="/litnet">Добавить ссылку в «Мой Литнет» →</button></p>'}
+        ${staleTag ? '<p class="small warnc">Ссылка истечет до старта рекламы. Выбери новую ссылку из Литнета.</p>' : ''}
         <div class="row d-save"><button class="primary" type="submit">Сохранить настройки</button></div>
       </form>
       ${issues.length ? `<div class="fl-builder-alert"><b>Для создания не хватает:</b><p class="small">${issues.map(esc).join(' • ')}</p></div>` : ''}
-      ${btn('fl.createCampaign','Создать черновик кампании',blocked || issues.length > 0)}
+      ${btn('fl.createCampaign','Создать черновик кампании',blocked || issues.length > 0 || staleTag)}
     ` : `
       ${done('Кампания',id)}
       <p class="small muted">Создана как ЕПК. ${d.suspended ? 'Остановлена, показы выключены.' : 'Остановка пока не подтверждена, дальше идти нельзя.'}</p>
@@ -106,7 +119,8 @@ acts['fl.checkWorker'] = async () => {
 };
 forms['fl.creatorSave'] = async fd => {
   const x = { name: fd.get('name').trim(), placement: fd.get('placement'), strategy: fd.get('strategy'),
-    start: fd.get('start'), end: fd.get('end'), budget: N(fd.get('budget')), region: Number(fd.get('region')) };
+    start: fd.get('start'), end: fd.get('end'), budget: N(fd.get('budget')), region: Number(fd.get('region')),
+    litnetLinkId: String(fd.get('litnetLinkId') || '') };
   await save(x); toast('Настройки сохранены');
 };
 forms['fl.creatorGroup'] = async fd => { await save({ groupName: fd.get('groupName').trim() }); toast('Группа сохранена'); };
@@ -120,13 +134,24 @@ acts['fl.createCampaign'] = async () => {
   if (s.direct?.sandbox) { toast('Выключи песочницу в Настройках'); return false; }
   if ((await proxyVersion(s)) < 4) { toast('Сначала обнови Cloudflare'); return false; }
   const goal = purchaseGoal(m), err = validateCreator(d, { today, bookUrl: fl.bookUrl, goalId: goal?.id });
+  const titles = Object.fromEntries((a.ctx().data.w_books || []).map(b => [String(b.id), b.title]));
+  const link = (a.ctx().data.w_promolinks || []).find(x => String(x.id) === String(d.litnetLinkId));
+  const linkBook = link && (titles[String(link.bookId)] || link.book || '');
+  const withBook = link && { ...link, bookTitle: linkBook };
+  if (d.litnetLinkId && (!readyForCampaign(withBook, d.start, fl.book) || !bookMatches(linkBook, fl.book))) {
+    toast('Выбранная ссылка «Мой Литнет» не подходит этой книге или уже истекает. Выбери другую.');return false;
+  }
+  const trackingParams = link ? exactTag(link.url) : '';
   if (err.length) { toast(err[0]); return false; }
   if (!(await confirmWrite('Создать кампанию «'+d.name+'» в реальном Директе? Лимит '+rub(d.budget,0)+' на период, без автопродления. Без запуска показов.', 'Создать черновик'))) return false;
   busy = true;
   try {
-    const response = await createCampaign(s,campaignPayload(d,{counterId:m?.counterId,goalId:goal?.id}));
+    const response = await createCampaign(s,campaignPayload(d,{counterId:m?.counterId,goalId:goal?.id,trackingParams}));
     const id = addedId(response,'Кампания');
     await save({campaignId:String(id),suspended:false});
+    if (link && trackingParams) {
+      await a.store.put('w_promolinks',{...link,directCampaignId:String(id),appliedTag:trackingParams,appliedAt:new Date().toISOString()});
+    }
     try { await pauseCampaign(s,id); await save({suspended:true}); toast('Кампания создана и остановлена'); }
     catch(e) { toast('Кампания создана, но Яндекс не подтвердил остановку. Не добавляй объявления, пока не остановим ее. '+(e.message||e)); }
     // Не загружаем все отчеты автоматически: лишние вызовы вызывают ограничение 56.
