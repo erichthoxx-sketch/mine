@@ -12,6 +12,7 @@ import { homeView } from './views/home.js';
 import { launchView } from './views/launch.js';
 import { qualityView } from './views/quality.js';
 import { experimentsView } from './views/experiments.js';
+import { litnetView } from './views/litnet.js';
 import { campaignView } from './views/campaign.js';
 import { learnView } from './views/learn.js';
 import { analyticsView } from './views/analytics.js';
@@ -19,7 +20,7 @@ import { aiView } from './views/ai.js';
 import { logView } from './views/log.js';
 import { settingsView } from './views/settings.js';
 
-const store = createStore({ colls: ['d_snap', 'd_log', 'd_tests', 'campaigns', 'reports', 'books', 'days', 'sales'], localKey: 'authorDirect.v1' });
+const store = createStore({ colls: ['d_snap', 'd_log', 'd_tests', 'w_promolinks', 'w_books', 'campaigns', 'reports', 'books', 'days', 'sales'], localKey: 'authorDirect.v1' });
 initAccent(store); // цвет акцентов — общий для всех приложений (выбирается в Мастерской)
 const ui = { route: '/', cTab: 'queries', lTab: '', lesson: '', demo: false, busy: '' };
 keepPlace(ui, ['cTab', 'lTab', 'demo']);
@@ -73,8 +74,8 @@ const TABS = [['/', 'ads', 'Обзор'], ['/an', 'data', 'Аналитика'],
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'c' && b) return { tab: '/', view: (x) => campaignView(x, Number(decodeURIComponent(b))) };
-  const map = { '': homeView, launch: launchView, quality: qualityView, experiments: experimentsView, an: analyticsView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
-  return { tab: ['launch', 'quality', 'experiments'].includes(a) ? '/' : '/' + (a || ''), view: map[a || ''] || homeView };
+  const map = { '': homeView, launch: launchView, quality: qualityView, experiments: experimentsView, litnet: litnetView, an: analyticsView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
+  return { tab: ['launch', 'quality', 'experiments', 'litnet'].includes(a) ? '/' : '/' + (a || ''), view: map[a || ''] || homeView };
 }
 
 function authScreen() {
