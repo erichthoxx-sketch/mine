@@ -14,7 +14,7 @@ import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask, moveOwnTask, tdText, addOwnTask } from '../../../js/tdtasks.js';
 import { bookGuess } from '../ideacalc.js';
 import { MONEY_RE } from '../todoist.js';
-import { promoLinkTasks, activePromoLinks } from '../promolinks.js';
+import { promoLinkTasks, activePromoLinks, promoSection, promoChannelName } from '../promolinks.js';
 import { rub, fmtMonth } from '../../../js/format.js';
 import { EVENT_TYPES } from '../../../js/charts.js';
 import { PLATFORMS, progressBlock, daysTxt } from './books.js';
@@ -94,9 +94,9 @@ export function planItems(c, from, to) {
   // Маркетинг: подготовить материалы к старту выкладки и к рекламе
   for (const m of marketingNeeds(c)) add(m.date, 'mk', esc(m.title), esc(m.sub), { to: m.to });
   // UTM: дата задачи опережает истечение. Дата истечения остается отдельным пассивным событием.
-  const utms = (d.w_promolinks || []).map(x => ({ ...x, book: c.wbooksById[x.bookId]?.title || 'Книга' }));
-  for (const x of promoLinkTasks(utms, t)) add(x.date, 'utm', esc(x.title), esc(x.sub), { to: '/marketing', id: x.id, book: x.bookId, dueRaw: x.due, expires: x.expires });
-  for (const x of activePromoLinks(utms)) if (x.expires) add(x.expires, 'utm-expiry', 'Заканчиваются новые привязки: ' + esc(x.book), esc(x.campaign || 'Реклама') + ' · ссылка продолжает открываться после этой даты', { to: '/marketing' });
+  const utms = (d.w_promolinks || []).map(x => ({ ...x, book: c.wbooksById[x.bookId]?.title || x.book || 'Книга' }));
+  for (const x of promoLinkTasks(utms, t)) add(x.date, 'utm', esc(x.title), esc(x.sub), { to: x.to, id: x.id, book: x.bookId, dueRaw: x.due, expires: x.expires, channel: x.channel });
+  for (const x of activePromoLinks(utms)) if (x.expires) add(x.expires, 'utm-expiry', promoChannelName(x) + ': заканчиваются новые привязки — «' + esc(x.book) + '»', esc(x.campaign || 'Мой Литнет') + ' · ссылка продолжает открываться', { to: promoSection(x) });
   // Никаких общих «Посмотреть дела на выходные». Автовыкладка и сроки остаются в своих датах.
   // Отдельная подготовка заранее только там, где действительно нужна: UTM и осмысленные дедлайны.
   const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5, utm: 5.4, 'utm-expiry': 5.6, event: 8 };
