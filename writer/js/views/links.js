@@ -25,6 +25,7 @@ export function linksView(a) {
   const done = c.data.w_waiting.filter((r) => r.done).sort((x, y) => (y.answeredAt || '').localeCompare(x.answeredAt || ''));
   const groups = Object.keys(LKINDS).map((k) => [k, list.filter((x) => (x.kind || 'other') === k)]).filter(([, l]) => l.length);
   const html = `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Связи</h2><button class="primary" data-act="link.new">+ Добавить</button></div>
+  <div class="row" style="margin-bottom:14px"><button data-act="go" data-to="/social">Соцсети · ссылки «Мой Литнет» →</button></div>
   ${all.length > 5 ? `<input type="search" value="${esc(q)}" placeholder="Поиск: имя, ник, заметка…" data-chg="link.q" aria-label="Поиск по связям" style="margin-bottom:12px">` : ''}
   <div class="psec-h" style="margin-top:4px"><h2>Запросы без ответа <span class="muted">${reqs.length || ''}</span></h2><button class="small-btn" data-act="wait.new">+ Запрос</button></div>
   ${reqs.length ? `<div class="card plist-card"><div class="plist">${reqs.map((r) => reqRow(c, r)).join('')}</div></div>` : '<div class="card"><p class="small muted" style="margin:0">Открытых запросов нет. Отправили рукопись, заявку или письмо — добавьте запрос, и приложение напомнит, если ответа долго нет.</p></div>'}
