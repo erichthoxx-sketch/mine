@@ -12,6 +12,12 @@ const campaigns=a=>(a.snap('main')?.campaigns||[]).filter(x=>x.state!=='ARCHIVED
 const bookName=(a,id)=>bookList(a).find(b=>String(b.id)===String(id))?.title||'';
 const human=d=>d?fmtDate(d):'—';
 const inactive=l=>l.state.type==='expired'||l.state.type==='today';
+const readerChange=x=>{
+  const history=x.readersHistory||[];
+  if(history.length<2)return '';
+  const last=history[history.length-1].readers, previous=history[history.length-2].readers;
+  return last>previous?' +'+(last-previous)+' с прошлого замера':last<previous?' скорректировано':'';
+};
 export function litnetSummary(a){
   const list=links(a), soon=list.filter(x=>x.state.type==='soon'||x.state.type==='today'||x.state.type==='expired');
   const nearest=soon[0];
@@ -35,7 +41,7 @@ export function litnetView(a) {
         <span class="ln-status ${esc(x.state.type)}">${esc(x.state.label)}</span>
       </div>
       <div class="ln-fields">
-        <div><span class="ln-label">Новые читатели</span><strong>${x.readers===''||x.readers==null?'—':esc(x.readers)}</strong></div>
+        <div><span class="ln-label">Новые читатели · вручную</span><strong>${x.readers===''||x.readers==null?'—':esc(x.readers)}</strong>${readerChange(x)?`<span class="small up">${esc(readerChange(x))}</span>`:''}</div>
         <div><span class="ln-label">Ссылка до</span><strong>${human(x.expires)}</strong></div>
         <div><span class="ln-label">Напоминание</span><strong>${human(x.state.renew)}</strong></div>
       </div>
@@ -61,7 +67,7 @@ export function litnetView(a) {
   <div class="card ln-guide">
     <h2>Как обновлять</h2>
     <div class="ln-steps"><span>1. Создать ссылку в Литнете</span><span>2. Скопировать <code>utm_litref</code></span><span>3. Внести в «Параметры URL» кампании</span></div>
-    <p class="small muted">Для ЕПК это единые параметры, не нужно менять каждое объявление. Яндекс может отправить объявления на повторную модерацию после изменения параметров URL. Приложение пока ничего не меняет в кампаниях автоматически.</p>
+    <p class="small muted">Метки в группе или объявлении могут перекрыть параметры кампании. После замены Яндекс может отправить объявления на повторную модерацию. Автоматически ничего не меняем.</p>
     <div class="row"><a href="https://litnet.com/" target="_blank" rel="noopener">Литнет ↗</a><a href="https://direct.yandex.ru/" target="_blank" rel="noopener">Яндекс Директ ↗</a></div>
   </div>`};
 }
@@ -99,9 +105,16 @@ function collect(a,fd,old={}) {
   if(directCampaignId&&!campaigns(a).some(x=>String(x.id)===directCampaignId))throw Error('Выбери свою кампанию из списка');
   const changed=old.url!==url||old.expires!==expires;
   const history=[...(old.history||[])];
+  const readers=raw===''?'':Number(raw);
+  const readersHistory=[...(old.readersHistory||[])];
+  if(readers!==''&&readers!==old.readers) {
+    if(readersHistory.length===0&&old.readers!==''&&old.readers!=null)
+      readersHistory.push({at:old.modifiedAt||old.createdAt||new Date().toISOString(),readers:Number(old.readers)});
+    readersHistory.push({at:new Date().toISOString(),readers});
+  }
   if(old.url&&changed)history.push({url:old.url,expires:old.expires,savedAt:new Date().toISOString()});
   return {...old,bookId,book,campaign,directCampaignId,url,expires,
-    readers:raw===''?'':Number(raw),status:'active',
+    readers,readersHistory:readersHistory.slice(-90),status:'active',
     history:history.slice(-20),modifiedAt:new Date().toISOString(),
     ...(changed?{reminderDoneFor:''}:{})};
 }
