@@ -66,22 +66,25 @@ export function litnetView(a) {
   `}
   <div class="card ln-guide">
     <h2>Как обновлять</h2>
-    <div class="ln-steps"><span>1. Создать ссылку в Литнете</span><span>2. Скопировать <code>utm_litref</code></span><span>3. Внести в «Параметры URL» кампании</span></div>
-    <p class="small muted">Метки в группе или объявлении могут перекрыть параметры кампании. После замены Яндекс может отправить объявления на повторную модерацию. Автоматически ничего не меняем.</p>
+    <div class="ln-steps"><span>1. Создать новую ссылку в Литнете</span><span>2. Директ — заменить <code>utm_litref</code> в кампании</span><span>3. Соцсети — заменить ссылку в профиле или публикации</span></div>
+    <p class="small muted">В Директе изменение параметров может потребовать повторной модерации. Приложение ничего не заменяет автоматически.</p>
     <div class="row"><a href="https://litnet.com/" target="_blank" rel="noopener">Литнет ↗</a><a href="https://direct.yandex.ru/" target="_blank" rel="noopener">Яндекс Директ ↗</a></div>
   </div>`};
 }
 function fields(a,x={}) {
-  const bs=bookList(a), cs=campaigns(a);
+  const bs=bookList(a);
   return `
     <label>Книга</label>
     <select name="bookId"><option value="">Другая книга / пока не в Мастерской</option>${bs.map(b=>opt(b.id,b.title,x.bookId||'')).join('')}</select>
     <label>Название книги, если ее нет в списке</label>
     <input name="book" value="${esc(x.book||'')}" placeholder="Развод для черной вдовы" maxlength="180">
-    <label>Кампания или источник</label>
-    <input name="campaign" value="${esc(x.campaign||'')}" placeholder="Альпийский развод · таргетолог" maxlength="180" required>
-    <label>Моя кампания Яндекс Директа (необязательно)</label>
-    <select name="directCampaignId"><option value="">Не привязана / кабинет таргетолога</option>${cs.map(z=>opt(z.id,z.name,x.directCampaignId||'')).join('')}</select>
+    <label>Канал продвижения</label>
+    <select name="channel">
+      <option value="direct"${promoChannel(x)==='direct'?' selected':''}>Директ</option>
+      <option value="social"${promoChannel(x)==='social'?' selected':''}>Соцсети</option>
+    </select>
+    <label>Кампания / площадка</label>
+    <input name="campaign" value="${esc(x.campaign||'')}" placeholder="Threads · шапка профиля / реклама таргетолога" maxlength="180" required>
     <label>Персональная ссылка из «Мой Литнет»</label>
     <input type="url" name="url" value="${esc(x.url||'')}" placeholder="https://litnet.com/ref/..." required>
     <div class="f2">
@@ -94,7 +97,8 @@ function collect(a,fd,old={}) {
   const bookId=String(fd.get('bookId')||'');
   const book=bookName(a,bookId)||String(fd.get('book')||'').trim();
   const campaign=String(fd.get('campaign')||'').trim();
-  const directCampaignId=String(fd.get('directCampaignId')||'');
+  const channel=String(fd.get('channel')||promoChannel(old));
+  const directCampaignId=channel==='direct' ? String(old.directCampaignId||'') : '';
   const url=String(fd.get('url')||'').trim(), expires=String(fd.get('expires')||'');
   const raw=String(fd.get('readers')||'').trim();
   if(!book)throw Error('Укажи книгу');
@@ -102,7 +106,7 @@ function collect(a,fd,old={}) {
   if(!isLitnetLink(url)||!exactTag(url))throw Error('Нужна персональная ссылка вида https://litnet.com/ref/...');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(expires)||!promoReminderDate(expires))throw Error('Укажи дату окончания из Литнета');
   if(raw&&!/^\d{1,9}$/.test(raw))throw Error('Количество читателей должно быть целым неотрицательным числом');
-  if(directCampaignId&&!campaigns(a).some(x=>String(x.id)===directCampaignId))throw Error('Выбери свою кампанию из списка');
+  if(channel!=='direct'&&channel!=='social')throw Error('Выбери Директ или Соцсети');
   const changed=old.url!==url||old.expires!==expires;
   const history=[...(old.history||[])];
   const readers=raw===''?'':Number(raw);
@@ -113,10 +117,11 @@ function collect(a,fd,old={}) {
     readersHistory.push({at:new Date().toISOString(),readers});
   }
   if(old.url&&changed)history.push({url:old.url,expires:old.expires,savedAt:new Date().toISOString()});
-  return {...old,bookId,book,campaign,directCampaignId,url,expires,
+  return {...old,bookId,book,campaign,channel,directCampaignId,url,expires,
     readers,readersHistory:readersHistory.slice(-90),status:'active',
     history:history.slice(-20),modifiedAt:new Date().toISOString(),
-    ...(changed?{reminderDoneFor:''}:{})};
+    ...(changed?{reminderDoneFor:''}:{}),
+    ...(channel==='social'?{appliedTag:'',appliedAt:''}:{})};
 }
 acts['ln.new']=()=>{
   const a=app();
