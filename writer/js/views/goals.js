@@ -54,7 +54,7 @@ export function goalsSection(c) {
 
 // ---------- форма цели ----------
 function goalForm(c, g = {}) {
-  const type = g.type || 'finish', days = new Set((g.days && g.days.length ? g.days : [1, 2, 3, 4, 5, 6, 7]).map(Number));
+  const type = g.type || 'finish', days = new Set((Array.isArray(g.days) ? (g.days.length ? g.days : [1, 2, 3, 4, 5, 6, 7]) : [1, 2, 3, 4, 5]).map(Number));
   const auto = g.autoDeadline === true || (!g.deadline && g.autoDeadline !== false);
   const b = g.bookId ? c.wbooksById[g.bookId] : c.wbooks.find((x) => (x.status || 'progress') === 'progress');
   return `<label for="gt" style="margin-top:0">Какая цель</label><select id="gt" name="type">${Object.entries(GOAL_TYPES).map(([k, v]) => opt(k, v, type)).join('')}</select>
@@ -64,10 +64,10 @@ function goalForm(c, g = {}) {
       <div class="small muted">Изменится и в книге. Учтено глав (в документе или отмечено к публикации): <span data-wch>${b ? completedCount(b) : '—'}</span></div></div>
     <div data-g="finish"><label for="gpc">Глав в день</label><input id="gpc" name="perDayCh" inputmode="numeric" value="${g.type === 'finish' ? g.perDay || 1 : 1}"></div>
     <div data-g="daily"><label for="gp">Авторских листов в день</label><input id="gp" name="perDay" inputmode="decimal" value="${g.type === 'daily' && g.perDay ? alNum(g.perDay) : ''}" placeholder="например, 0,4"></div>
+    <label>Дни письма</label><div class="checks dow">${DOW.map((x, i) => `<label class="check"><input type="checkbox" name="dow" value="${i + 1}"${days.has(i + 1) ? ' checked' : ''}>${x}</label>`).join('')}</div>
     <div data-g="finish" style="margin:10px 0 8px"><label class="check"><input type="checkbox" name="autoDeadline"${auto ? ' checked' : ''}> Рассчитать срок автоматически</label></div>
     <label for="gd">Срок завершения</label><input id="gd" type="date" name="deadline" value="${g.deadline || ''}"${type==='finish'&&auto?' readonly':''}>
     <div data-g="finish" class="small muted" data-forecast aria-live="polite" style="margin-top:6px"></div>
-    <label>Дни цели</label><div class="checks dow">${DOW.map((x, i) => `<label class="check"><input type="checkbox" name="dow" value="${i + 1}"${days.has(i + 1) ? ' checked' : ''}>${x}</label>`).join('')}</div>
     <div class="hint" data-ghint></div>`;
 }
 const HINT = {
