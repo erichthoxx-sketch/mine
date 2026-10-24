@@ -413,6 +413,28 @@ export function dailyWrittenAll(books, from, to, today) {
   return rows.length ? rows[0].map((r, i) => ({ date: r.date, value: rows.reduce((s, x) => s + x[i].value, 0), known: rows.some((x) => x[i].known) })) : [];
 }
 
+// Прогноз дня завершения книги по оставшимся главам и рабочему графику.
+// День старта включаем, если он отмечен. Срок ориентировочный; ничего не переносим в календаре.
+// days: 1=пн ... 7=вс. Пустой список (сохраненная цель) означает все семь дней.
+export function finishGoalForecast({ from, chapters, completed = 0, perDay = 1, days = [], moved = {} } = {}) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '')) return null;
+  const total = Number(chapters), done = Number(completed), pace = Number(perDay);
+  if (!Number.isInteger(total) || total < 1 || !Number.isFinite(done) || done < 0 ||
+      !Number.isFinite(pace) || pace <= 0) return null;
+  const allowed = new Set((days || []).map(Number));
+  if ([...allowed].some(x => !Number.isInteger(x) || x < 1 || x > 7)) return null;
+  const remain = Math.max(0, total - done);
+  if (!remain) return from;
+  const goal = { days: [...allowed], moved };
+  let work = 0;
+  for (let i = 0, d = from; i < 36525; i++, d = addDays(d, 1)) {
+    // Перенесенные в календаре рабочие дни учитываем так же, как в Планере.
+    const multiplier = goalMult(goal, d);
+    work += pace * multiplier;
+    if (work + 1e-9 >= remain) return d;
+  }
+  return null;
+}
 // ---- цели ----
 // g = { type: 'finish' | 'daily' | 'custom', bookId, title, deadline, days:[1..7], perDay (знаков, для daily), checks:{date:true}, done }
 export const GOAL_TYPES = { finish: 'Главы к сроку (по главе в день)', daily: 'Писать N а.л. в день', custom: 'Своя цель' };
