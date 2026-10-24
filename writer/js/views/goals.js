@@ -1,8 +1,9 @@
 // Цели: «главы к сроку», «N а.л. в день», «своя цель» — с напоминанием в дни цели
 import { esc, acts, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { GOAL_TYPES, goalStatus, DOW, pubMap, pubPlatforms, al, alNum, fromAl } from '../wcalc.js';
+import { GOAL_TYPES, goalStatus, DOW, pubMap, pubPlatforms, writtenChapters, finishGoalForecast, al, alNum, fromAl } from '../wcalc.js';
 const markedCount = (b) => { const pf = pubPlatforms(b)[0]; return Object.values(pubMap(b)).filter((x) => x[pf]?.date).length; };
+const completedCount = (b) => b ? Math.max(writtenChapters(b), markedCount(b)) : 0;
 
 const app = () => window.__app;
 const zn = (n) => al(n);
@@ -54,20 +55,23 @@ export function goalsSection(c) {
 // ---------- форма цели ----------
 function goalForm(c, g = {}) {
   const type = g.type || 'finish', days = new Set((g.days && g.days.length ? g.days : [1, 2, 3, 4, 5, 6, 7]).map(Number));
+  const auto = g.autoDeadline === true || (!g.deadline && g.autoDeadline !== false);
   const b = g.bookId ? c.wbooksById[g.bookId] : c.wbooks.find((x) => (x.status || 'progress') === 'progress');
   return `<label for="gt" style="margin-top:0">Какая цель</label><select id="gt" name="type">${Object.entries(GOAL_TYPES).map(([k, v]) => opt(k, v, type)).join('')}</select>
     <div data-g="finish daily"><label for="gb">Книга</label><select id="gb" name="bookId"><option value="">— все книги —</option>${c.wbooks.map((x) => opt(x.id, x.title, b?.id || '')).join('')}</select></div>
     <div data-g="custom"><label for="gn">Что сделать</label><input id="gn" name="title" value="${esc(g.type === 'custom' ? g.title || '' : '')}" placeholder="например: пост в Telegram, 30 минут редактуры"></div>
     <div data-g="finish"><label for="gc">Глав в книге, примерно</label><input id="gc" name="chapters" inputmode="numeric" value="${g.chapters || b?.planChapters || ''}" placeholder="например, 25">
-      <div class="small muted">Изменится и в книге. Уже отмечено (выложено или на таймере): <span data-wch>${b ? markedCount(b) : '—'}</span></div></div>
+      <div class="small muted">Изменится и в книге. Учтено глав (в документе или отмечено к публикации): <span data-wch>${b ? completedCount(b) : '—'}</span></div></div>
     <div data-g="finish"><label for="gpc">Глав в день</label><input id="gpc" name="perDayCh" inputmode="numeric" value="${g.type === 'finish' ? g.perDay || 1 : 1}"></div>
     <div data-g="daily"><label for="gp">Авторских листов в день</label><input id="gp" name="perDay" inputmode="decimal" value="${g.type === 'daily' && g.perDay ? alNum(g.perDay) : ''}" placeholder="например, 0,4"></div>
-    <label for="gd">Срок</label><input id="gd" type="date" name="deadline" value="${g.deadline || ''}">
+    <div data-g="finish" style="margin:10px 0 8px"><label class="check"><input type="checkbox" name="autoDeadline"${auto ? ' checked' : ''}> Рассчитать срок автоматически</label></div>
+    <label for="gd">Срок завершения</label><input id="gd" type="date" name="deadline" value="${g.deadline || ''}"${type==='finish'&&auto?' readonly':''}>
+    <div data-g="finish" class="small muted" data-forecast aria-live="polite" style="margin-top:6px"></div>
     <label>Дни цели</label><div class="checks dow">${DOW.map((x, i) => `<label class="check"><input type="checkbox" name="dow" value="${i + 1}"${days.has(i + 1) ? ' checked' : ''}>${x}</label>`).join('')}</div>
     <div class="hint" data-ghint></div>`;
 }
 const HINT = {
-  finish: 'Глава засчитывается, когда вы отмечаете её выложенной или ставите на таймер. В каждый день цели, пока глава не отмечена, на Главной будет напоминание. Если по главе в день к сроку не успеть — подскажу, сколько нужно.',
+  finish: 'Срок — прогноз по оставшимся главам, темпу и выбранным дням. Учтены главы из документа и отмеченные к публикации. Напоминания о выполнении цели остаются в рабочие дни.',
   daily: 'В дни цели на Главной будет напоминание, пока норма не набрана. Объём берётся из Google Документа (кнопка «Обновить» на Главной).',
   custom: 'В дни цели на Главной будет напоминание, пока не отметите «Сделала».',
 };
@@ -80,18 +84,37 @@ function wire() {
     f.querySelectorAll('[data-g]').forEach((el) => { el.hidden = !el.dataset.g.split(' ').includes(t); });
     f.querySelector('[data-ghint]').textContent = HINT[t];
     const b = c.wbooksById[f.elements.bookId.value];
-    const w = f.querySelector('[data-wch]'); if (w) w.textContent = b ? markedCount(b) : '—';
+    const w = f.querySelector('[data-wch]'); if (w) w.textContent = b ? completedCount(b) : '—';
+    const auto = t === 'finish' && f.elements.autoDeadline.checked;
+    f.elements.deadline.readOnly = auto;
+    const note = f.querySelector('[data-forecast]');
+    if (t === 'finish' && note) {
+      const total = Number(f.elements.chapters.value);
+      const pace = Number(String(f.elements.perDayCh.value).replace(',', '.'));
+      const days = [...f.querySelectorAll('[name="dow"]:checked')].map(x => Number(x.value));
+      const date = days.length ? finishGoalForecast({from:c.today,chapters:total,completed:completedCount(b),perDay:pace,days}) : null;
+      if (auto) f.elements.deadline.value = date || '';
+      note.textContent = !days.length ? 'Выбери хотя бы один день письма.' :
+        !date ? 'Укажи количество глав и темп — рассчитаю дату.' :
+        `${Math.max(0,total-completedCount(b))} ${plural(Math.max(0,total-completedCount(b)), ['глава','главы','глав'])} осталось · при таком графике: ${fmtDate(date)}${auto ? '' : ' (автоматический прогноз)'}`;
+    }
   };
   f.elements.type.addEventListener('change', upd);
-  f.elements.bookId.addEventListener('change', () => { const b = c.wbooksById[f.elements.bookId.value]; if (b && b.planChapters && !f.elements.chapters.value) f.elements.chapters.value = b.planChapters; upd(); });
+  f.elements.bookId.addEventListener('change', () => { const b = c.wbooksById[f.elements.bookId.value]; if (b && b.planChapters) f.elements.chapters.value = b.planChapters; upd(); });
+  for (const name of ['chapters','perDayCh','autoDeadline']) f.elements[name].addEventListener('input',upd);
+  for (const ch of f.querySelectorAll('[name="dow"]')) ch.addEventListener('change',upd);
   upd();
 }
 async function saveGoal(c, fd, g = {}) {
   const type = fd.get('type');
-  const v = { type, bookId: type === 'custom' ? '' : fd.get('bookId') || '', title: type === 'custom' ? (fd.get('title') || '').trim() : '', deadline: fd.get('deadline') || '', days: fd.getAll('dow').map(Number), perDay: type === 'daily' ? fromAl(fd.get('perDay')) : type === 'finish' ? N(fd.get('perDayCh')) || 1 : null, chapters: type === 'finish' ? N(fd.get('chapters')) : null };
+  const v = { type, bookId: type === 'custom' ? '' : fd.get('bookId') || '', title: type === 'custom' ? (fd.get('title') || '').trim() : '', deadline: fd.get('deadline') || '', days: fd.getAll('dow').map(Number), perDay: type === 'daily' ? fromAl(fd.get('perDay')) : type === 'finish' ? Number(String(fd.get('perDayCh') || '').replace(',', '.')) : null, chapters: type === 'finish' ? Number(fd.get('chapters')) : null, autoDeadline: type === 'finish' && fd.get('autoDeadline') === 'on' };
   if (type === 'custom' && !v.title) { toast('Напишите, что сделать'); return false; }
   if (type === 'finish' && !v.bookId) { toast('Выберите книгу'); return false; }
-  if (type === 'finish' && !v.deadline) { toast('Укажите срок'); return false; }
+  if (type === 'finish' && (!Number.isInteger(v.chapters) || v.chapters < 1 || !(v.perDay > 0))) { toast('Укажи число глав и темп письма'); return false; }
+  if (type === 'finish' && v.autoDeadline && v.days.length) {
+    v.deadline = finishGoalForecast({from:c.today,chapters:v.chapters,completed:completedCount(c.wbooksById[v.bookId]),perDay:v.perDay,days:v.days}) || '';
+  }
+  if (type === 'finish' && !v.deadline) { toast('Нужен срок: выбери рабочие дни или введи дату вручную'); return false; }
   if (type === 'daily' && !(v.perDay > 0)) { toast('Сколько а.л. в день?'); return false; }
   if (!v.days.length) { toast('Выберите хотя бы один день'); return false; }
   if (v.days.length === 7) v.days = [];
