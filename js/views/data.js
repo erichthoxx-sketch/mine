@@ -65,11 +65,13 @@ acts['auth.out'] = () => app().store.signOut();
 // Никаких импортов поверх еще не загруженной или неподтвержденной сервером базы.
 function salesReady() {
   const st = app().store;
+  // Для безопасного CSV-импорта нужны только подтвержденные коллекции продаж и книг.
+  // Загрузка рекламных отчетов, событий и остальных разделов не должна мешать импорту.
   if (st.mode === 'firebase' && (
-    !['sales','books','days','campaigns','reports','months','adnotes'].every(name => st.loaded?.[name])
-    || !st.settingsServerLoaded || st.sync === 'error' || st.pending?.sales || !navigator.onLine
+    !st.loaded?.sales || !st.loaded?.books ||
+    st.sync === 'error' || st.pending?.sales || !navigator.onLine
   )) {
-    toast('Финансовые данные еще не сверены или сохраняются. Импорт пока заблокирован.');
+    toast('Не удалось проверить сохраненные продажи. Проверь соединение перед импортом.');
     return false;
   }
   return true;
