@@ -35,7 +35,7 @@ forms['dbook.tags']=async (data,form)=>{
   if(!b){toast('Книга не найдена');return false;}
   const tags=uniqueWords(data.get('tags')||'',100);
   if(tags.length>20){toast('Можно сохранить не больше 20 тегов');return false;}
-  await window.__app.store.put('w_books',{...b,tags});
+  await window.__app.store.patch('w_books',b.id,{tags});
   toast('Теги сохранены для обоих приложений');
 };
 forms['dbook.genres']=async (data,form)=>{
@@ -44,6 +44,6 @@ forms['dbook.genres']=async (data,form)=>{
   const genres=[data.get('genre1'),data.get('genre2')].map(x=>String(x||'').trim()).filter(Boolean);
   if(new Set(genres).size!==genres.length){toast('Жанры должны отличаться');return false;}
   if(genres.some(x=>!BOOK_GENRES.includes(x))){toast('Выбери жанр из списка');return false;}
-  await window.__app.store.put('w_books',{...b,genres});
+  await window.__app.store.patch('w_books',b.id,{genres});
   toast('Жанры сохранены для обоих приложений');
 };
