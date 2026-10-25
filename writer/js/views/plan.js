@@ -8,7 +8,7 @@ import { linkTodos } from './links.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { fetchPageText } from '../pagetext.js';
-import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestPhase, OUTCOMES, cleanContestText, rawContestText, contestFileName, contestSubmissionUrl, contestEmailPurpose, goalMult, moveGoalDay, releaseDate } from '../wcalc.js';
+import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestPhase, OUTCOMES, cleanContestText, rawContestText, contestHasDiscussion, contestFileName, contestSubmissionUrl, contestEmailPurpose, goalMult, moveGoalDay, releaseDate } from '../wcalc.js';
 import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask, moveOwnTask, tdText, addOwnTask } from '../../../js/tdtasks.js';
@@ -498,7 +498,7 @@ const fnChip = (name, label = '') => `<span class="ct-fnc">${label ? `<i>${label
 const COND_KEYS = /^(правила конкурса|срок при[её]ма работ|оглашение результатов|размер книги|жанры|призовой фонд|приз[ы]?|участники|работы|описание)$/i;
 // условия для показа: «сырая» страница — почищенной; первая строка-название (уже в заголовке карточки) — не повторяем
 function condText(x) {
-  const lines = String(rawContestText(x.conditions) ? cleanContestText(x.conditions) : x.conditions || '').split('\n');
+  const lines = cleanContestText(x.conditions || '').split('\n');
   if (lines[0]?.trim().toLowerCase() === String(x.name || '').trim().toLowerCase()) lines.shift();
   return lines.join('\n');
 }
@@ -653,8 +653,10 @@ const putSent = async (x, sentBooks) => { const all = contestBookIds(x).every((i
 acts['contest.sent'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id), ids = d.b ? [d.b] : contestBookIds(x); await putSent(x, { ...contestSent(x), ...Object.fromEntries(ids.map((id) => [id, app().ctx().today])) }); toast('Отмечено: отправлена'); };
 acts['contest.unsend'] = async (d) => { const x = app().ctx().data.w_contests.find((i) => i.id === d.id), sb = { ...contestSent(x) }; delete sb[d.b]; await putSent(x, sb); toast('Отметка снята'); };
 acts['contest.reparse'] = async (d) => {
-  const c = app().ctx(), x = c.data.w_contests.find((i) => i.id === d.id), r = parseContest(x.conditions || '', x.url || '', c.today);
-  await app().store.put('w_contests', { ...x, ...r, submissionUrl: x.submissionUrl || r.submissionUrl || '', pv: 3 });
+  const c = app().ctx(), x = c.data.w_contests.find((i) => i.id === d.id);
+  const conditions = cleanContestText(x.conditions || '');
+  const r = parseContest(conditions, x.url || '', c.today);
+  await app().store.put('w_contests', { ...x, ...r, conditions, submissionUrl: x.submissionUrl || r.submissionUrl || '', pv: 3 });
   toast('Условия разобраны заново — проверьте карточку');
 };
 acts['contest.edit'] = (d) => {
