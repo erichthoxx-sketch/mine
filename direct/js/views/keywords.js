@@ -3,7 +3,7 @@ import { acts, forms, changes, esc, opt, toast, download, ask } from '../../../j
 import { num, fmtDate } from '../../../js/format.js';
 import { call } from '../api.js';
 import { normKey, keywordId, csvRows, plainPhrases, preparedKeywords, interestHint, intentLabel, exportList } from '../keywordcalc.js';
-import {bookGenres, bookTags, marketingTopics} from '../../../writer/js/bookmeta.js';
+import {bookGenres, bookTags} from '../../../writer/js/bookmeta.js';
 
 const app=()=>window.__app;
 const books=a=>a.ctx().data.w_books||[];
@@ -64,7 +64,6 @@ export function keywordsView(a){
       <h2>Темы книги из «Мастерской»</h2>
       ${seeds.length ? `<div class="kw-terms">${seeds.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>`:''}
       ${!seeds.length ? '<p class="small muted">Заполни жанры и теги в карточке книги «Мастерской» — они появятся здесь без повторного ввода.</p>' : ''}
-      ${book?.legend?.idea?.genre ? `<p class="small muted">Легенда: ${esc(book.legend.idea.genre)}</p>`:''}
       <div class="row"><button data-act="kw.seed" ${!seeds.length?'disabled':''}>Добавить жанры и теги в подборку</button></div>
     </div>
     <div class="card kw-input">
