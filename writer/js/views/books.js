@@ -15,6 +15,7 @@ import { titleRequests } from '../docedit.js';
 import { contestCard } from './plan.js';
 import { resizeImage } from '../../../js/img.js';
 import { bookSeg } from './legend.js';
+import { BOOK_GENRES, bookGenres, bookTags, uniqueWords } from '../bookmeta.js';
 import { synText, synTab } from '../synopsis.js';
 import * as drive from '../drive.js';
 import { addDays } from '../../../js/calc.js';
@@ -204,6 +205,13 @@ export function bookPage(a, id) {
   <form data-form="wbook.save" data-id="${b.id}">
     <label for="bt" style="margin-top:0">Название</label><input id="bt" name="title" value="${esc(b.title)}" required>
     <label for="bs">Статус</label><select id="bs" name="status">${Object.entries(STATUS).map(([k, v]) => opt(k, v, b.status || 'progress')).join('')}</select>
+    <div class="book-taxonomy-edit">
+      <label>Жанры Литнета · до двух</label>
+      <div class="checks book-genre-checks">${BOOK_GENRES.map(x=>`<label class="check"><input type="checkbox" name="genres" value="${esc(x)}"${bookGenres(b).includes(x)?' checked':''}>${esc(x)}</label>`).join('')}</div>
+      <label for="bookTags">Теги и тропы</label>
+      <input id="bookTags" name="tags" value="${esc(bookTags(b).join(', '))}" placeholder="одержимый герой, похищение, второй шанс" maxlength="1500">
+      <span class="small muted">Через запятую. Эти данные используются в поиске похожих книг и подборе ключей.</span>
+    </div>
     <label>Где выкладывается</label><div class="checks">${PLATFORMS.map((x) => `<label class="check"><input type="checkbox" name="pf" value="${x}"${(b.platforms || []).includes(x) ? ' checked' : ''}>${x}</label>`).join('')}</div>
     <label for="bx">Другие площадки (через запятую)</label><input id="bx" name="pfx" value="${esc(extra)}">
     <div class="f2"><div><label for="bp">Глав в книге, примерно</label><input id="bp" name="planChapters" inputmode="numeric" value="${b.planChapters ?? ''}"></div>
@@ -385,7 +393,9 @@ acts['wbook.addFile'] = async (d) => {
 forms['wbook.save'] = async (fd, f) => {
   const c = app().ctx(), b = c.wbooksById[f.dataset.id];
   const platforms = [...fd.getAll('pf'), ...String(fd.get('pfx') || '').split(',').map((x) => x.trim()).filter(Boolean)];
-  const patch = { title: fd.get('title').trim(), status: fd.get('status'), platforms, planChapters: N(fd.get('planChapters')) || null, incomeBookId: fd.get('incomeBookId') || '', note: fd.get('note') || '' };
+  const genres=fd.getAll('genres');
+  if(genres.length>2){toast('Выбери не более двух жанров');return false;}
+  const patch = { title: fd.get('title').trim(), status: fd.get('status'), platforms, genres, tags: uniqueWords(fd.get('tags')||'',20), planChapters: N(fd.get('planChapters')) || null, incomeBookId: fd.get('incomeBookId') || '', note: fd.get('note') || '' };
   if (!b.fileId) {
     patch.webViewLink = (fd.get('link') || '').trim();
     const m = fromAl(fd.get('manualChars'));
@@ -507,6 +517,7 @@ function headCard(c, b, p) {
   if (!done) tiles.push(tile('Сегодня', '+' + alNum(writtenToday(b, c.today)), 'а.л.', 'up'), tile('За 7 дней', '+' + alNum(writtenWeek(b, c.today)), 'а.л.', 'up'), tile('Темп', p ? alNum(p) : '—', 'а.л. в день за 2 недели'));
   const icb = (act, k, icon, title) => `<button class="ed-ic" data-act="${act}" data-id="${b.id}" data-k="${k}" title="${title}" aria-label="${title}">${ic(icon)}</button>`;
   const ann = (b.svc?.annotation ?? '') || (b.promo || {}).annotation || '', syn = synText(b);
+  const genreTags = [...bookGenres(b).map(x=>`<span class="bm-genre">${esc(x)}</span>`), ...bookTags(b).map(x=>`<span class="bm-tag">${esc(x)}</span>`)].join('');
   const ai = svcInfo(b, 'annotation'), si = svcInfo(b, 'synopsis');
   const paras = (t) => esc(t).split('\n').map((x) => `<p>${x}</p>`).join('');
   const long = ann.length > 320 || ann.split('\n').length > 3;
@@ -520,7 +531,7 @@ function headCard(c, b, p) {
   return `<div class="card book-head2">
     <label class="bh-cover" title="${b.cover ? 'Сменить обложку' : 'Загрузить обложку'}">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}<span class="bh-cover-edit">${b.cover ? 'Сменить' : 'Загрузить обложку'}</span><input type="file" accept="image/*" data-chg="wbook.cover" data-id="${b.id}" hidden></label>
     <div class="bh-main">
-      <div class="bh-top"><div class="bh-title"><h2>${esc(b.title)}</h2>${bookMeta(c, b, { full: true })}</div>
+      <div class="bh-top"><div class="bh-title"><h2>${esc(b.title)}</h2>${bookMeta(c, b, { full: true })}${genreTags ? `<div class="bm-taxonomy">${genreTags}</div>` : ''}</div>
         <div class="bh-acts">${b.webViewLink ? `<a class="btn small-btn" href="${esc(b.webViewLink)}" target="_blank" rel="noopener" title="Открыть в Google Документах">${ic('doc')} Документ</a>` : ''}${b.fileId ? `<button class="ed-ic" data-act="wbook.refreshOne" data-id="${b.id}" title="Обновить с Диска" aria-label="Обновить с Диска">${ic('refresh')}</button>` : ''}</div></div>
       <div class="bh-tiles">${tiles.join('')}</div>${!done && b.fileId ? `<button class="link bh-how" data-act="wbook.how" data-id="${b.id}">как посчитано</button>` : ''}
       <div class="bh-texts">${annBlock}${synBlock}</div>
