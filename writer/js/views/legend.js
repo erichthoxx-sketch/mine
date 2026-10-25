@@ -198,7 +198,12 @@ acts['leg.char'] = (d) => {
     const file = fd.get('photoFile');
     if (file && file.size) { try { v.photo = await resizeImage(file, 960, 0.88); } catch { toast('Не удалось обработать фото — изменения не сохранены'); return false; } }
     if (fd.get('nophoto')) v.photo = '';
-    await saveL(d.id, (L) => { L.chars = x.id ? L.chars.map((y) => (y.id === x.id ? v : y)) : [...L.chars, v]; });
+    try {
+      await saveL(d.id, (L) => { L.chars = x.id ? L.chars.map((y) => (y.id === x.id ? v : y)) : [...L.chars, v]; });
+    } catch (e) {
+      toast('Не удалось сохранить карточку и фото: ' + (e.message || 'ошибка'));
+      return false;
+    }
     toast(x.id ? 'Сохранено' : `${name} — в Легенде`);
   }, { submitText: x.id ? 'Сохранить' : 'Добавить' });
   f?.querySelectorAll('.lg-ta').forEach(grow);
