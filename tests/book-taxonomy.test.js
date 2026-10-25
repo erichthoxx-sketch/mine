@@ -60,3 +60,16 @@ test('Редактор жанров и тегов расположен в сек
     assert.equal(result.status, 0, path + ': ' + result.stderr);
   }
 });
+
+test('В верхней карточке жанры и теги отображаются всегда, даже если поля пусты', () => {
+  const src = readFileSync(new URL('../writer/js/views/books.js', import.meta.url), 'utf8');
+  const header = src.slice(src.indexOf('function headCard(c, b, p) {'), src.indexOf('const grp = (n)'));
+  assert.match(header, /const taxonomy =/);
+  assert.match(header, /\$\{taxonomy\}/);
+  assert.match(header, /bh-tax-label">Жанры/);
+  assert.match(header, /bh-tax-label">Теги/);
+  assert.match(header, /Не указаны/);
+  assert.match(header, /data-act="wbook\.editMeta"/);
+  assert.doesNotMatch(header, /genreTags\s*\?/);
+  assert.match(src, /id="bookTaxonomyEdit"/);
+});
