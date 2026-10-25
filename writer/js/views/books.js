@@ -246,7 +246,7 @@ export function bookPage(a, id) {
   <form data-form="wbook.save" data-id="${b.id}">
     <label for="bt" style="margin-top:0">Название</label><input id="bt" name="title" value="${esc(b.title)}" required>
     <label for="bs">Статус</label><select id="bs" name="status">${Object.entries(STATUS).map(([k, v]) => opt(k, v, b.status || 'progress')).join('')}</select>
-    <section class="book-taxonomy-edit" aria-label="Жанры и теги книги">
+    <section id="bookTaxonomyEdit" class="book-taxonomy-edit" aria-label="Жанры и теги книги">
       <div class="bm-tax-head"><strong>Жанры и теги</strong><span>Из карточки книги — в «Директ» автоматически</span></div>
       <div class="bm-genre-grid">
         <div class="bm-field"><label for="bmGenre1">Основной жанр</label>
@@ -568,7 +568,16 @@ function headCard(c, b, p) {
   if (!done) tiles.push(tile('Сегодня', '+' + alNum(writtenToday(b, c.today)), 'а.л.', 'up'), tile('За 7 дней', '+' + alNum(writtenWeek(b, c.today)), 'а.л.', 'up'), tile('Темп', p ? alNum(p) : '—', 'а.л. в день за 2 недели'));
   const icb = (act, k, icon, title) => `<button class="ed-ic" data-act="${act}" data-id="${b.id}" data-k="${k}" title="${title}" aria-label="${title}">${ic(icon)}</button>`;
   const ann = (b.svc?.annotation ?? '') || (b.promo || {}).annotation || '', syn = synText(b);
-  const genreTags = [...bookGenres(b).map(x=>`<span class="bm-genre">${esc(x)}</span>`), ...bookTags(b).map(x=>`<span class="bm-tag">${esc(x)}</span>`)].join('');
+  const genres = bookGenres(b), tags = bookTags(b);
+  const genreHtml = genres.length ? genres.map(x => `<span class="bh-tax-chip bh-tax-genre">${esc(x)}</span>`).join('') : '<span class="bh-tax-empty">Не указаны</span>';
+  const tagsHtml = tags.length ? tags.map(x => `<span class="bh-tax-chip bh-tax-tag">${esc(x)}</span>`).join('') : '<span class="bh-tax-empty">Не указаны</span>';
+  const taxonomy = `<div class="bh-taxonomy" aria-label="Жанры и теги книги">
+    <div class="bh-tax-lines">
+      <div class="bh-tax-row"><span class="bh-tax-label">Жанры</span><div class="bh-tax-values">${genreHtml}</div></div>
+      <div class="bh-tax-row"><span class="bh-tax-label">Теги</span><div class="bh-tax-values">${tagsHtml}</div></div>
+    </div>
+    <button class="bh-tax-edit" type="button" data-act="wbook.editMeta" data-id="${esc(b.id)}" aria-label="Изменить жанры и теги" title="Изменить жанры и теги">${ic('pen')}</button>
+  </div>`;
   const ai = svcInfo(b, 'annotation'), si = svcInfo(b, 'synopsis');
   const paras = (t) => esc(t).split('\n').map((x) => `<p>${x}</p>`).join('');
   const long = ann.length > 320 || ann.split('\n').length > 3;
@@ -582,8 +591,9 @@ function headCard(c, b, p) {
   return `<div class="card book-head2">
     <label class="bh-cover" title="${b.cover ? 'Сменить обложку' : 'Загрузить обложку'}">${b.cover ? `<img src="${b.cover}" alt="">` : `<div class="cover-ph"><span>${esc(b.title)}</span></div>`}<span class="bh-cover-edit">${b.cover ? 'Сменить' : 'Загрузить обложку'}</span><input type="file" accept="image/*" data-chg="wbook.cover" data-id="${b.id}" hidden></label>
     <div class="bh-main">
-      <div class="bh-top"><div class="bh-title"><h2>${esc(b.title)}</h2>${bookMeta(c, b, { full: true })}${genreTags ? `<div class="bm-taxonomy">${genreTags}</div>` : ''}</div>
+      <div class="bh-top"><div class="bh-title"><h2>${esc(b.title)}</h2>${bookMeta(c, b, { full: true })}</div>
         <div class="bh-acts">${b.webViewLink ? `<a class="btn small-btn" href="${esc(b.webViewLink)}" target="_blank" rel="noopener" title="Открыть в Google Документах">${ic('doc')} Документ</a>` : ''}${b.fileId ? `<button class="ed-ic" data-act="wbook.refreshOne" data-id="${b.id}" title="Обновить с Диска" aria-label="Обновить с Диска">${ic('refresh')}</button>` : ''}</div></div>
+      ${taxonomy}
       <div class="bh-tiles">${tiles.join('')}</div>${!done && b.fileId ? `<button class="link bh-how" data-act="wbook.how" data-id="${b.id}">как посчитано</button>` : ''}
       <div class="bh-texts">${annBlock}${synBlock}</div>
       <div class="bh-foot">${b.modifiedTime ? `правка файла ${fmtDate(b.modifiedTime.slice(0, 10))}` : ''}${b.countedAt ? ` · обновлено ${fmtDate(b.countedAt.slice(0, 10)) === fmtDate(c.today) ? 'сегодня' : fmtDate(b.countedAt.slice(0, 10))} в ${b.countedAt.slice(11, 16)}` : ''}</div>
@@ -591,7 +601,16 @@ function headCard(c, b, p) {
   </div>`;
 }
 const grp = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-acts['bh.more'] = (d, el) => { if (!String(window.getSelection() || '')) el.classList.toggle('open'); return false; }; // выделяла текст — не сворачиваем
+acts['bh.more'] = (d, el) => { if (!String(window.getSelection() || '')) el.classList.toggle('open'); return false; };
+acts['wbook.editMeta'] = () => {
+  const section = document.getElementById('bookTaxonomyEdit');
+  if (!section) return false;
+  section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // Переносим фокус на выбор жанра, сохраняя плавную прокрутку.
+  section.querySelector('select')?.focus({ preventScroll: true });
+  return false;
+};
+ // выделяла текст — не сворачиваем
 
 // задачи по книге из Todoist: проект «Книги», раздел с названием книги
 function bookTasksCard(c, b) {
