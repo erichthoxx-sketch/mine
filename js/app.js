@@ -124,6 +124,13 @@ acts['auth.reset'] = async () => {
 let afterFn = null;
 function render() {
   if (!store.user) { authScreen(); return; }
+  // Не показываем неполную денежную картину, пока Firestore не подтвердил
+  // первую полную серверную выгрузку всех строк продаж.
+  if (store.mode === 'firebase' && navigator.onLine && !store.loaded?.sales) {
+    document.getElementById('app').innerHTML = '<main class="income-verifying"><div class="card"><h2>Сверяю продажи с сервером</h2><p class="muted">До завершения загрузки суммы скрыты, чтобы не показывать частичные данные как итоговые.</p></div></main>';
+    afterFn = null;
+    return;
+  }
   const { tab, view } = route();
   const c = getCtx();
   const r = view(app) || { html: '' };
@@ -131,7 +138,11 @@ function render() {
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере. Синхронизация появится после настройки Firebase.</div>' : ''}
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
   <div class="row"><a class="btn" href="pisatel/">${ic('sparkle')} Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
-  <main>${tidyNums(r.html)}</main>
+  <main>${store.mode === 'firebase' && (!navigator.onLine || store.pending?.sales) ?
+    `<div class="alert"><b>${navigator.onLine ? 'Продажи сохраняются' : 'Нет связи с сервером'}</b> · ${navigator.onLine ? 'Изменения еще не подтверждены Firebase. Текущие суммы предварительные.' : 'Видна локальная копия, ее точность пока не подтверждена.'}</div>` : ''}
+  ${c.ledgerWarnings?.length || (c.salesReconciliation && !c.salesReconciliation.ok) ?
+    `<div class="alert bad"><b>Нужна проверка финансовых данных</b><p class="small">Найдены несверенные ручные записи или некорректные данные (${c.ledgerWarnings?.length || 0}). Проверь раздел «Данные» и исходный CSV. До сверки суммы могут быть предварительными.</p></div>` : ''}
+  ${tidyNums(r.html)}</main>
   ${wide() ? `<aside class="side">${(() => { try { return tidyNums(sideIncome(c)); } catch (e) { console.error(e); return ''; } })()}</aside><button class="side-grip" aria-label="Скрыть или показать панель «Сегодня»" title="Потяните вправо, чтобы скрыть"><span></span></button>` : ''}
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h.slice(1)}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
   afterFn = r.after || null;
