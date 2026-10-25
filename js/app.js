@@ -127,7 +127,7 @@ function render() {
   const { tab, view } = route();
   const c = getCtx();
   const r = view(app) || { html: '' };
-  const syncText = store.mode === 'local' ? '' : store.sync === 'error' ? 'ошибка синхронизации' : store.sync === 'pending' ? 'сохраняется…' : navigator.onLine ? 'синхронизировано' : 'нет сети — локальные данные';
+  const syncText = store.mode === 'local' ? '' : store.sync === 'error' ? 'ошибка синхронизации' : store.sync === 'pending' ? 'сохраняется…' : !navigator.onLine ? 'нет сети — локальные данные' : store.loaded?.sales ? 'синхронизировано' : '';
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере. Синхронизация появится после настройки Firebase.</div>' : ''}
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
   <div class="row"><a class="btn" href="pisatel/">${ic('sparkle')} Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
