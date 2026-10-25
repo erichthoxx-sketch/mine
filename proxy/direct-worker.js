@@ -54,7 +54,7 @@ async function authorizedWordstatUser(token,env) {
   const head=decoded(parts[0]),payload=decoded(parts[1]);
   if(head.alg!=='RS256'||!head.kid||payload.aud!==project||
      payload.iss!=='https://securetoken.google.com/'+project||!payload.sub||
-     String(payload.email||'').toLowerCase()!==owner||payload.email_verified!==true||
+     String(payload.email||'').toLowerCase()!==owner||
      !Number.isFinite(payload.exp)||payload.exp<=Date.now()/1000||
      !Number.isFinite(payload.iat)||payload.iat>Date.now()/1000) return false;
   const jwksRes=await fetch('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com');
