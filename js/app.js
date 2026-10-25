@@ -124,17 +124,24 @@ acts['auth.reset'] = async () => {
 let afterFn = null;
 function render() {
   if (!store.user) { authScreen(); return; }
-  // Не показываем неполную денежную картину, пока Firestore не подтвердил
-  // первую полную серверную выгрузку всех строк продаж.
-  if (store.mode === 'firebase' && navigator.onLine && !store.loaded?.sales) {
-    document.getElementById('app').innerHTML = '<main class="income-verifying"><div class="card"><h2>Сверяю продажи с сервером</h2><p class="muted">До завершения загрузки суммы скрыты, чтобы не показывать частичные данные как итоговые.</p></div></main>';
+  // Деньги, продажи, реклама, налоги и цели опираются на несколько коллекций.
+  // Не выдаем частичную начальную загрузку за реальную финансовую картину.
+  const verified = COLLECTIONS.every(name => store.loaded?.[name]) && store.settingsServerLoaded;
+  if (store.mode === 'firebase' && navigator.onLine && !verified) {
+    const failed = store.sync === 'error';
+    document.getElementById('app').innerHTML = '<main class="income-verifying"><div class="card"><h2>' +
+      (failed ? 'Не удалось проверить финансовые данные' : 'Проверяю финансовые данные') +
+      '</h2><p class="muted">' +
+      (failed ? 'Есть ошибка Firebase. Не показываю неподтвержденные суммы. Проверь подключение или обнови страницу.' :
+      'Загружаю продажи, книги, рекламу, события и настройки с сервера. До сверки суммы скрыты.') +
+      '</p></div></main>';
     afterFn = null;
     return;
   }
   const { tab, view } = route();
   const c = getCtx();
   const r = view(app) || { html: '' };
-  const syncText = store.mode === 'local' ? '' : store.sync === 'error' ? 'ошибка синхронизации' : store.sync === 'pending' ? 'сохраняется…' : !store.loaded?.sales ? 'продажи еще сверяются с сервером' : navigator.onLine ? 'синхронизировано' : 'нет сети — сохранится позже';
+  const syncText = store.mode === 'local' ? '' : store.sync === 'error' ? 'ошибка синхронизации' : store.sync === 'pending' ? 'сохраняется…' : !verified ? 'данные не сверены с сервером' : navigator.onLine ? 'синхронизировано' : 'нет сети — сохранится позже';
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере. Синхронизация появится после настройки Firebase.</div>' : ''}
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
   <div class="row"><a class="btn" href="pisatel/">${ic('sparkle')} Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
