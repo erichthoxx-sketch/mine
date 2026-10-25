@@ -89,7 +89,8 @@ changes['imp.any'] = async (v, el) => {
   el.value = '';
   if (!file) return;
   const text = decodeBuffer(await readFile(file));
-  if (parseStatistic(text).rows.length) return importStatistic(text);
+  const stat = parseStatistic(text);
+  if (stat.rows.length || stat.invalidRows.length || /Статистика продаж|Подписка\/продажа|Дата\/месяц\s*\t/i.test(text.slice(0,1500))) return importStatistic(text);
   if (parseLegacy(text).days.length) return importLegacy(text);
   toast('Не узнала формат файла. Подходят выгрузка Литнета (Statistic.csv) и таблица dohody.csv (дата, доход, события, заметка).');
 };
