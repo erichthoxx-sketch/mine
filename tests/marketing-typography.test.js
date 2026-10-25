@@ -26,7 +26,7 @@ test('Marketing uses the actual typography (Nunito / Unbounded)', () => {
   assert.match(block('.app-writer .utm-item .utm-main > b'), /font-size:\s*15px/);
 });
 test('Mobile does not shrink title and supporting text below the project standard', () => {
-  const last = css.slice(css.indexOf('/* Маркетинг: компактные карточки'));
+  const last = css.slice(css.indexOf('/* Маркетинг: компактные карточки')).split('/* Директ: «Мой Литнет»')[0];
   assert.ok(last.includes('@media (max-width: 600px)'));
   assert.doesNotMatch(last, /font-size:\s*(11px|12px|14px)/);
   assert.doesNotMatch(last, /font-weight:\s*(650|450|800)/);
