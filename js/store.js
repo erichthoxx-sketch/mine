@@ -95,6 +95,7 @@ class FirebaseStore extends Base {
           this.loaded = {};
           this.pending = {};
           this.settingsLoaded = false;
+          this.settingsServerLoaded = false;
           this.sync = 'ok';
           this.error = null;
         }
@@ -120,6 +121,7 @@ class FirebaseStore extends Base {
     this.unsubs.push(onSnapshot(doc(this.db, 'users', uid, 'meta', 'settings'), { includeMetadataChanges: true }, (d) => {
       this.data.settings = { ...DEFAULT_SETTINGS, ...(d.exists() ? d.data() : {}) };
       this.settingsLoaded = !d.metadata?.fromCache || d.exists();
+      if (!d.metadata?.fromCache) this.settingsServerLoaded = true;
       this.emit();
     }));
   }
