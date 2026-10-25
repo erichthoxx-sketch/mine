@@ -2262,18 +2262,43 @@ main .rev-actions button.dl .ic { opacity: 1; }
 }
 
 
-/* Мастерская: компактная таксономия книги (те же Nunito/Unbounded и спокойные нейтральные поверхности). */
-.app-writer .bm-taxonomy {
-  display: flex; flex-wrap: wrap; gap: 5px 7px; margin-top: 8px;
+/* Мастерская: жанры и теги всегда видны прямо под названием книги, без отдельной карточки. */
+.app-writer .book-head2 .bh-taxonomy {
+  display: flex; align-items: flex-start; gap: 10px; min-width: 0;
+  padding: 0 0 2px;
 }
-.app-writer .bm-taxonomy > span {
-  display: inline-flex; align-items: center;
-  padding: 4px 8px; border-radius: 8px;
-  font: 600 12px/1.45 var(--font-body);
-  max-width: 100%; overflow-wrap: anywhere;
+.app-writer .book-head2 .bh-tax-lines { display: grid; gap: 7px; flex: 1; min-width: 0; }
+.app-writer .book-head2 .bh-tax-row { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.app-writer .book-head2 .bh-tax-label {
+  flex: 0 0 48px; color: var(--text-2);
+  font: 700 12px/1.6 var(--font-body);
 }
-.app-writer .bm-genre { background: var(--surface-2); color: var(--text); }
-.app-writer .bm-tag { border: 1px solid var(--line); color: var(--text-2); background: transparent; }
+.app-writer .book-head2 .bh-tax-values {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px;
+  min-width: 0; overflow-wrap: anywhere;
+}
+.app-writer .book-head2 .bh-tax-chip {
+  display: inline-flex; align-items: center; max-width: 100%;
+  padding: 3px 8px; border-radius: 7px;
+  color: var(--text); font: 600 12px/1.45 var(--font-body);
+  overflow-wrap: anywhere;
+}
+.app-writer .book-head2 .bh-tax-genre { background: var(--surface-2); }
+.app-writer .book-head2 .bh-tax-tag { border: 1px solid var(--line); color: var(--text-2); }
+.app-writer .book-head2 .bh-tax-empty { color: var(--muted); font: 500 12px/1.6 var(--font-body); }
+.app-writer .book-head2 .bh-tax-edit {
+  display: inline-flex; justify-content: center; align-items: center;
+  flex: 0 0 28px; width: 28px; height: 28px; min-width: 0; min-height: 0;
+  padding: 0; border: 0; border-radius: 7px;
+  background: transparent; color: var(--text-2); box-shadow: none;
+}
+.app-writer .book-head2 .bh-tax-edit:hover,
+.app-writer .book-head2 .bh-tax-edit:focus-visible { color: var(--text); background: var(--surface-2); }
+.app-writer .book-head2 .bh-tax-edit .ic { width: 16px; height: 16px; }
+@media (max-width: 640px) {
+  .app-writer .book-head2 .bh-taxonomy { grid-column: 1 / -1; }
+  .app-writer .book-head2 .bh-tax-row { gap: 9px; }
+}
 /* «О книге»: минималистичные жанры и редактируемые теги, без длинного списка флажков. */
 .app-writer .book-taxonomy-edit {
   margin: 22px 0 20px;
