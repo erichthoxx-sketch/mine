@@ -34,6 +34,13 @@ class Base {
   async putMany(coll, items) { for (let i = 0; i < items.length; i += 400) await this._write(coll, items.slice(i, i + 400), []); }
   async removeMany(coll, ids) { for (let i = 0; i < ids.length; i += 400) await this._write(coll, [], ids.slice(i, i + 400)); }
   put(coll, item) { return this.putMany(coll, [item]); }
+  // Обновляет только указанные поля, чтобы фоновая синхронизация
+  // не могла стереть изменения другой формы или вкладки.
+  async patch(coll, id, fields) {
+    const previous = this.data[coll]?.find(item => String(item.id) === String(id));
+    if (!previous) throw new Error('Запись не найдена — изменения не сохранены');
+    return this.put(coll, { ...previous, ...clean(fields), id: previous.id });
+  }
   remove(coll, id) { return this.removeMany(coll, [id]); }
   async replaceAll(backup) {
     await this.saveSettings({ ...(backup.settings || {}) });
@@ -133,6 +140,16 @@ class FirebaseStore extends Base {
     // Без сети запись ставится в очередь и уйдёт при появлении связи, поэтому не ждём подтверждения сервера
     const p = b.commit();
     p.catch((e) => { this.sync = 'error'; this.error = e; this.emit(); });
+    if (navigator.onLine) await p;
+  }
+  async patch(coll, id, fields) {
+    if (!this.user) throw new Error('Нужно войти в аккаунт');
+    const { updateDoc, doc } = this.F;
+    // Firestore обновит поля атомарно, без подмены остальных полей документа.
+    const update = { ...clean(fields) };
+    delete update.id;
+    const p = updateDoc(doc(this.db, 'users', this.user.uid, coll, String(id)), update);
+    p.catch(e => { this.sync = 'error'; this.error = e; this.emit(); });
     if (navigator.onLine) await p;
   }
   async saveSettings(s) {
