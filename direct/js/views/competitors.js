@@ -4,7 +4,7 @@ import { competitorPublicPreview, competitorInsights, safePublicBookUrl } from '
 
 const app=()=>window.__app;
 const books=a=>a.ctx().data.w_books||[];
-const selectedBook=a=>a.ui.kwBook||books(a)[0]?.id||'';
+const selectedBook=a=>a.ui?.kwBook||books(a)[0]?.id||'';
 const list=a=>(a.ctx().data.d_competitors||[]).filter(x=>x.status!=='archived' && String(x.bookId||'')===String(selectedBook(a)));
 const my=a=>(a.ctx().data.d_keywords||[]).filter(x=>x.status==='keep'&&String(x.bookId||'')===String(selectedBook(a))).map(x=>x.phrase).join(' ');
 export function competitorsView(a){
