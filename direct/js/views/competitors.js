@@ -1,15 +1,21 @@
 // Конкуренты: только публичные карточки и заметки. Метрики чужой рекламы недоступны.
-import { acts, forms, esc, toast, openSheet, uid, ask } from '../../../js/ui.js';
+import { acts, forms, esc, opt, toast, openSheet, uid, ask } from '../../../js/ui.js';
 import { competitorPublicPreview, competitorInsights, safePublicBookUrl } from '../competition.js';
 
 const app=()=>window.__app;
-const list=a=>(a.ctx().data.d_competitors||[]).filter(x=>x.status!=='archived');
-const my=a=>(a.ctx().data.d_keywords||[]).filter(x=>x.status==='keep').map(x=>x.phrase).join(' ');
+const books=a=>a.ctx().data.w_books||[];
+const selectedBook=a=>a.ui.kwBook||books(a)[0]?.id||'';
+const list=a=>(a.ctx().data.d_competitors||[]).filter(x=>x.status!=='archived' && String(x.bookId||'')===String(selectedBook(a)));
+const my=a=>(a.ctx().data.d_keywords||[]).filter(x=>x.status==='keep'&&String(x.bookId||'')===String(selectedBook(a))).map(x=>x.phrase).join(' ');
 export function competitorsView(a){
   const rows=list(a),insight=competitorInsights(my(a),rows);
   return {html:`
     <div class="card">
       <div class="row between"><h2 style="margin:0">Конкурентная разведка</h2><button class="primary" data-act="cmp.new">+ Книга</button></div>
+      <label>Моя книга для сравнения</label>
+      <select data-chg="kw.book">
+        ${books(a).map(x=>opt(x.id,x.title,selectedBook(a))).join('')}
+      </select>
       <p class="small muted">Анализ открытых карточек конкурентов: позиционирование, тропы, обещания в аннотациях. Данные о чужих расходах, покупках и конверсиях недоступны — приложение их не выдумывает.</p>
     </div>
     ${rows.length?`
@@ -24,7 +30,7 @@ export function competitorsView(a){
       <div class="row between"><div><h3>${esc(x.title||'Книга конкурента')}</h3>${x.author?`<span class="small muted">${esc(x.author)}</span>`:''}</div>
         <div class="row"><button data-act="cmp.refresh" data-id="${esc(x.id)}" ${!x.url?'disabled':''}>Обновить описание</button><button data-act="cmp.edit" data-id="${esc(x.id)}">Изменить</button></div></div>
       ${x.url?`<a class="small" target="_blank" rel="noopener" href="${esc(x.url)}">Открытая карточка ↗</a>`:''}
-      ${x.description?`<p class="cmp-description">${esc(x.description)}</p>`:''}
+      ${x.description?`<details class="cmp-description"><summary>Открытая аннотация</summary><p>${esc(x.description)}</p></details>`:''}
       ${x.adText?`<p class="small"><b>Рекламное сообщение (публичное наблюдение):</b> ${esc(x.adText)}</p>`:''}
       ${x.note?`<p class="small muted">${esc(x.note)}</p>`:''}
       <p class="small muted">${x.checkedAt?'Проверено '+esc(new Date(x.checkedAt).toLocaleDateString('ru-RU')):'Введено вручную'} · Никаких выводов о чужой окупаемости</p>
@@ -33,7 +39,10 @@ export function competitorsView(a){
   `};
 }
 function fields(x={}){
+ const a=app();
  return `
+  <label>Моя книга для сравнения</label>
+  <select name="bookId">${books(a).map(v=>opt(v.id,v.title,x.bookId||selectedBook(a))).join('')}</select>
   <label>Название книги</label><input name="title" maxlength="180" value="${esc(x.title||'')}" placeholder="Название конкурента" required>
   <label>Автор (необязательно)</label><input name="author" maxlength="180" value="${esc(x.author||'')}">
   <label>Ссылка на публичную книгу</label><input type="url" name="url" value="${esc(x.url||'')}" placeholder="https://litnet.com/ru/book/..." required>
@@ -54,7 +63,7 @@ async function save(x,fd){
     }catch(e){toast('Публичное описание не загрузилось: '+(e.message||e));}
   }
   if(!title){toast('Укажи название');return false;}
-  await a.store.put('d_competitors',{...x,id:x.id||'cmp_'+uid(),title,author:String(fd.get('author')||'').trim(),url,description,
+  await a.store.put('d_competitors',{...x,id:x.id||'cmp_'+uid(),bookId:String(fd.get('bookId')||selectedBook(a)),title,author:String(fd.get('author')||'').trim(),url,description,
     adText:String(fd.get('adText')||'').trim(),note:String(fd.get('note')||'').trim(),checkedAt,updatedAt:new Date().toISOString()});
   toast('Конкурентная карточка сохранена');return true;
 }
