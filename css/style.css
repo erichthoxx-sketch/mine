@@ -2355,7 +2355,7 @@ main .rev-actions button.dl .ic { opacity: 1; }
 
 /* Директ: единые отступы действий и редактирование метаданных без нагромождений. */
 .app-direct main .d-actions { display:flex; align-items:center; flex-wrap:wrap; gap: 10px 14px; margin-top: 16px; }
-.app-direct main .d-actions > button { margin:0; flex: 0 0 auto; }
+.app-direct main .d-actions > button { margin:0; flex: 0 1 auto; max-width:100%; }
 .app-direct main .d-actions > button.link { padding-left: 2px; padding-right: 2px; }
 .app-direct main .d-actions > .small { flex:1 1 180px; line-height:1.5; }
 .app-direct main .kw-input .row.between,
