@@ -4,6 +4,7 @@ import { num, fmtDate } from '../../../js/format.js';
 import { call } from '../api.js';
 import { normKey, keywordId, csvRows, plainPhrases, preparedKeywords, interestHint, intentLabel, exportList } from '../keywordcalc.js';
 import {bookGenres, bookTags} from '../../../writer/js/bookmeta.js';
+import { taxonomyPanel } from './book-taxonomy.js';
 
 const app=()=>window.__app;
 const books=a=>a.ctx().data.w_books||[];
@@ -53,7 +54,7 @@ export function keywordsView(a){
           <span><b>${campaignWords(a).length}</b> ключей в кампании</span>
           <span><b>${campaignQueries(a).length}</b> поисковых запросов</span>
         </div>
-        <div class="row"><button data-act="kw.reload">Обновить данные Директа</button><button data-act="kw.importCampaign" ${!campaignWords(a).length?'disabled':''}>Копировать ключи в подборку</button><button data-act="kw.importQueries" ${!campaignQueries(a).length?'disabled':''}>Разобрать реальные запросы</button></div>
+        <div class="row d-actions"><button data-act="kw.reload">Обновить данные Директа</button><button data-act="kw.importCampaign" ${!campaignWords(a).length?'disabled':''}>Копировать ключи в подборку</button><button data-act="kw.importQueries" ${!campaignQueries(a).length?'disabled':''}>Разобрать реальные запросы</button></div>
         <p class="small muted">Синхронизация только на чтение. Данные обновляются вместе со статистикой Директа. Добавление слов в рабочую кампанию, минус-фразы и изменение ставок требуют отдельного подтверждения.</p>
         ${campaignQueries(a).length?`<details><summary>Реальные поисковые запросы — последние 30 дней</summary>
           <div class="kw-list">${campaignQueries(a).slice(0,30).map(q=>`<div class="kw-item"><div class="kw-main"><b>${esc(q.query)}</b><div class="small muted">${Number(q.impr)||0} показов · ${Number(q.clicks)||0} кликов · ${Number(q.cost)||0} ₽ расход</div></div></div>`).join('')}</div>
@@ -61,17 +62,18 @@ export function keywordsView(a){
       `}
     </div>
     <div class="card kw-input">
-      <h2>Темы книги из «Мастерской»</h2>
-      ${seeds.length ? `<div class="kw-terms">${seeds.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>`:''}
-      ${!seeds.length ? '<p class="small muted">Заполни жанры и теги в карточке книги «Мастерской» — они появятся здесь без повторного ввода.</p>' : ''}
-      <div class="row"><button data-act="kw.seed" ${!seeds.length?'disabled':''}>Добавить жанры и теги в подборку</button></div>
+      <h2>Семантика книги</h2>
+      <p class="small muted">Жанры и теги можно изменить здесь или в «Мастерской». Сохраняются в общей карточке книги.</p>
+      ${taxonomyPanel(book)}
+      <div class="row d-actions d-meta-seed"><button data-act="kw.seed" ${!seeds.length?'disabled':''}>Добавить жанры и теги в ключевые слова</button></div>
+      <p class="small muted">Стартовые фразы — это гипотезы, а не измеренная частотность. Повторно добавленные фразы не дублируются.</p>
     </div>
     <div class="card kw-input">
       <div class="row between"><h2 style="margin:0">Wordstat API</h2><span class="small muted">0,02 ₽ за подбор · после подключения</span></div>
       <p class="small muted">Сначала один запрос по твоей фразе. Сходные запросы и частотность сохраняются в библиотеке; рекламы это не меняет. Без ключа на Cloudflare платные запросы заблокированы.</p>
       <label for="kwWord">Фраза для проверки</label>
       <input id="kwWord" data-chg="kw.wphrase" value="${esc(seed)}" placeholder="Например: криминальный любовный роман">
-      <div class="row"><button data-act="kw.wordstat">Подобрать через Wordstat</button>
+      <div class="row d-actions"><button data-act="kw.wordstat">Подобрать через Wordstat</button>
         <button class="link" data-act="go" data-to="/settings">Настроить API →</button></div>
     </div>
     <div class="card kw-input">
@@ -79,18 +81,18 @@ export function keywordsView(a){
       <form data-form="kw.add" class="settings-form">
         <label for="kwPhrases">Стартовые ключи — по одному на строку</label>
         <textarea id="kwPhrases" name="phrases" rows="3" maxlength="12000" placeholder="остросюжетный любовный роман&#10;психологический любовный роман&#10;криминальный любовный роман" required></textarea>
-        <div class="row"><button type="submit" class="primary">Добавить фразы</button>
+        <div class="row d-actions"><button type="submit" class="primary">Добавить фразы</button>
           <button type="button" data-act="kw.demand" ${!all.length?'disabled':''}>Проверить наличие спроса</button></div>
       </form>
       <div class="kw-import">
         <label>Частотность из Вордстата</label>
-        <div class="row"><label class="kw-upload">Импорт CSV / TSV <input type="file" data-chg="kw.file" accept=".csv,.tsv,.txt,text/csv,text/plain" aria-label="Выбрать файл выгрузки Вордстата"></label></div>
+        <div class="row d-actions"><label class="kw-upload">Импорт CSV / TSV <input type="file" data-chg="kw.file" accept=".csv,.tsv,.txt,text/csv,text/plain" aria-label="Выбрать файл выгрузки Вордстата"></label></div>
       </div>
       <p class="small muted">Частотность — только из загруженного файла, без придуманных цифр. «Наличие спроса» проверяется через API Директа и не показывает число запросов. Фразы не добавляются в рекламу автоматически.</p>
     </div>
     <div class="card kw-results">
       <div class="row between kw-results-top"><h2 style="margin:0">Список фраз</h2>
-        <div class="row"><button data-act="kw.export" ${!picked.length?'disabled':''}>Скачать подборку CSV</button>
+        <div class="row d-actions"><button data-act="kw.export" ${!picked.length?'disabled':''}>Скачать подборку CSV</button>
         <button data-act="kw.copy" ${!picked.length?'disabled':''}>Копировать</button></div>
       </div>
       <div class="kw-filters">${Object.entries(modeLabel).map(([k,v])=>`<button class="${filter===k?'on':''}" data-act="kw.filter" data-filter="${k}">${v} · ${k==='all'?all.length:all.filter(x=>x.status===k).length}</button>`).join('')}</div>
