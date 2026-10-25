@@ -44,3 +44,28 @@ export function competitorInsights(bookWords,items) {
   return {analyzed:(items||[]).length,repeated:shared.map(([term,books])=>({term,books})),overlap,
     gap:shared.map(([term])=>term).filter(x=>!a.has(x)).slice(0,8)};
 }
+
+
+// Поиск заявленных тропов, а НЕ оценка качества/продаж: срабатывает только на
+// явные слова в публичном описании или записанном рекламном сообщении.
+const TROPE_PATTERNS=[
+ ['Опасный герой',/\b(?:опасн\w*\s+геро[йя]|властн\w*|безжалостн\w*|жесток\w*)/i],
+ ['Одержимость',/\b(?:одержим\w*|собственничеств\w*|одержимост\w*)/i],
+ ['Похищение',/\b(?:похищ\w*|пленниц\w*|похит\w*)/i],
+ ['Вынужденная близость',/\b(?:вынужденн\w*\s+(?:близост\w*|соседств\w*|брак\w*)|одна\s+кровать)/i],
+ ['Криминал / мафия',/\b(?:мафи\w*|криминал\w*|преступн\w*|клан\w*)/i],
+ ['Предательство',/\b(?:предательств\w*|предал\w*|изменил\w*|измен\w*\s+мужа)/i],
+ ['Развод / бывшие',/\b(?:развод\w*|бывш\w*\s+(?:муж|жен\w*|любов\w*))/i],
+ ['Вторая попытка',/\b(?:втор\w*\s+шанс|бывш\w*\s+любов\w*|снова\s+вместе)/i],
+ ['Запретная любовь',/\b(?:запретн\w*\s+(?:любов\w*|чувств\w*|отношен\w*)|табу)/i],
+ ['Тайна прошлого',/\b(?:тайн\w*\s+прошл\w*|секрет\w*\s+прошл\w*)/i],
+ ['Фиктивный брак',/\b(?:фиктивн\w*\s+(?:брак\w*|жен\w*|муж\w*|свадьб\w*))/i]
+];
+export function tropeRadar(items=[]){
+  const counts=new Map();
+  for(const x of items){
+    const text=[x.description,x.adText].filter(Boolean).join(' ');
+    for(const [name,re] of TROPE_PATTERNS)if(re.test(text))counts.set(name,(counts.get(name)||0)+1);
+  }
+  return [...counts].sort((a,b)=>b[1]-a[1]).map(([trope,books])=>({trope,books}));
+}
