@@ -13,7 +13,7 @@ export function data(a) {
   <div class="card"><h2>Продажи</h2>
     <div class="row"><label class="btn primary" style="cursor:pointer">Загрузить отчёт о продажах<input type="file" accept=".csv,.txt" data-chg="imp.any" hidden></label>
     <button data-act="sale.manual">Добавить продажи вручную</button></div>
-    <p class="hint">Загрузка: выгрузка Литнета (Statistic.csv) или таблица старого трекера (dohody.csv) — приложение само узнает формат. Повторная загрузка не задваивает. Вручную — например, пара продаж с другой площадки.</p>
+    <p class="hint">Загрузка: выгрузка Литнета (Statistic.csv) или таблица старого трекера (dohody.csv). Совпадающие строки обновляются, новые добавляются. Неполная выгрузка больше не удаляет прежние продажи. Перед исправлением старых цифр сохрани резервную копию.</p>
     <div class="hint">Сейчас в базе: ${c.sales.length} строк продаж${c.hasData ? ` за ${fmtDate(c.firstDate)} – ${fmtDate(c.dataEnd)}` : ''}.</div></div>
   ${reportCard(a)}
   <div class="card"><h2>Резервная копия</h2>
@@ -68,7 +68,8 @@ changes['imp.any'] = async (v, el) => {
 async function importStatistic(text) {
   const r = parseStatistic(text);
   const c = app().ctx();
-  const d = diffSales(c.sales, r.rows, true);
+  // Неполная выгрузка не должна стирать ранее сохраненные продажи.
+  const d = diffSales(c.sales, r.rows, false);
   const fm = /(\d[\d  ]*[.,]\d{2})[  ]*RUB/i.exec(text);
   const fileTotal = fm ? parseNum(fm[1]) : null;
   const from = r.rows.reduce((x, s) => (s.date < x ? s.date : x), r.rows[0].date), to = r.rows.reduce((x, s) => (s.date > x ? s.date : x), r.rows[0].date);
@@ -79,11 +80,11 @@ async function importStatistic(text) {
   openSheet('Импорт выгрузки', `<p>Период <b>${fmtDate(from)} – ${fmtDate(to)}</b>, строк: ${r.rows.length}, гонорар <b>${rub(r.total)}</b>.</p>${check}
     <table><tr><th>Месяц</th><th>Гонорар</th></tr>${Object.keys(perMonth).sort().map((k) => `<tr><td>${fmtMonth(k)}</td><td>${rub(perMonth[k])}</td></tr>`).join('')}</table>
     <h3>Что изменится</h3><ul><li>новых строк: <b>${d.added}</b></li><li>обновится: <b>${d.changed}</b></li><li>без изменений: ${d.same}</li>${newBooks.length ? `<li>новые книги: ${newBooks.map(([, t]) => esc(t)).join(', ')}</li>` : ''}</ul>
-    ${d.removeIds.length ? `<label><input type="checkbox" name="rm" checked>Убрать ${d.removeIds.length} старых строк за этот период, которых нет в файле</label>` : ''}`, async (fd) => {
+    <div class="alert ok"><b>Без удаления данных.</b> При загрузке добавятся отсутствующие продажи и обновятся совпадающие строки. Продажи других книг и дней, которых нет в файле, останутся в базе.</div>
+    <p class="small muted">Если исправляешь данные из прошлой выгрузки, сначала сравни суммы с кабинетом Литнета. Импорт больше не удаляет пропущенные строки автоматически.</p>`, async () => {
     const have = new Map(c.sales.map((s) => [s.id, s]));
     const write = r.rows.filter((s) => { const e = have.get(s.id); return !e || e.qty !== s.qty || Math.abs(e.royalty - s.royalty) > 0.004; });
     await app().store.putMany('sales', write);
-    if (d.removeIds.length && fd.get('rm')) await app().store.removeMany('sales', d.removeIds);
     for (const [bookId, title] of newBooks) {
       await app().store.put('books', { id: bookId, title, status: 'progress', startDate: '', lastChapterDate: '', priceHistory: inferPriceChanges(r.rows, bookId) });
     }
