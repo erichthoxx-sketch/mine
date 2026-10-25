@@ -8,6 +8,11 @@ const app=()=>window.__app;
 const books=a=>a.ctx().data.w_books||[];
 const chosen=a=>a.ui.kwBook||books(a).find(x=>x.title==='Развод для черной вдовы')?.id||books(a)[0]?.id||'';
 const allFor=a=>(a.ctx().data.d_keywords||[]).filter(x=>String(x.bookId||'')===String(chosen(a)));
+const campaigns=a=>(a.snap('main')?.campaigns||[]).filter(x=>x.state!=='ARCHIVED');
+const activeBinding=a=>(a.ctx().data.d_kw_bindings||[]).find(x=>String(x.bookId)===String(chosen(a)));
+const campaignId=a=>Number(activeBinding(a)?.campaignId)||null;
+const campaignWords=a=>(a.snap('main')?.keywords||[]).filter(x=>Number(x.cid)===campaignId(a));
+const campaignQueries=a=>(a.snap('stats')?.queries||[]).filter(x=>Number(x.cid)===campaignId(a)).sort((a,b)=>b.clicks-a.clicks||b.impr-a.impr);
 const modeLabel = {all:'Все',review:'На проверку',keep:'В подборе',negative:'Минус-кандидаты',reject:'Исключены'};
 const safeName = s=>String(s||'книга').slice(0,60).replace(/[^а-яa-z0-9_-]+/gi,'_');
 const wordstatUrl='https://wordstat.yandex.ru/';
@@ -31,6 +36,26 @@ export function keywordsView(a){
         ${!b.length?'<option value="">Без книги</option>':b.map(x=>opt(x.id,x.title,selected)).join('')}
       </select>
       <div class="kw-stat-row"><span><b>${all.length}</b> фраз</span><span><b>${picked.length}</b> в подборе</span><span><b>${candidates.length}</b> на проверку в минус</span></div>
+    </div>
+    <div class="card kw-input">
+      <div class="row between"><h2 style="margin:0">Связь с моей кампанией</h2><button class="link" data-act="go" data-to="/competitors">Изучать конкурентов →</button></div>
+      <label for="kwCamp">Кампания из моего Яндекс Директа</label>
+      <select id="kwCamp" data-chg="kw.campaign">
+        <option value="">Пока не привязана</option>
+        ${campaigns(a).map(x=>opt(String(x.id),x.name,String(campaignId(a)||''))).join('')}
+      </select>
+      ${!campaigns(a).length?'<p class="small muted">В твоем кабинете пока нет кампаний. Кампании таргетологов из другого кабинета недоступны — их данные здесь не появятся.</p>':
+         !campaignId(a)?'<p class="small muted">Выбери собственную кампанию. Ее фразы и запросы будут подтягиваться из данных Директа при обновлении статистики.</p>':`
+        <div class="kw-stat-row">
+          <span><b>${campaignWords(a).length}</b> ключей в кампании</span>
+          <span><b>${campaignQueries(a).length}</b> поисковых запросов</span>
+        </div>
+        <div class="row"><button data-act="kw.reload">Обновить данные Директа</button><button data-act="kw.importCampaign" ${!campaignWords(a).length?'disabled':''}>Копировать ключи в подборку</button><button data-act="kw.importQueries" ${!campaignQueries(a).length?'disabled':''}>Разобрать реальные запросы</button></div>
+        <p class="small muted">Синхронизация только на чтение. Данные обновляются вместе со статистикой Директа. Добавление слов в рабочую кампанию, минус-фразы и изменение ставок требуют отдельного подтверждения.</p>
+        ${campaignQueries(a).length?`<details><summary>Реальные поисковые запросы — последние 30 дней</summary>
+          <div class="kw-list">${campaignQueries(a).slice(0,30).map(q=>`<div class="kw-item"><div class="kw-main"><b>${esc(q.query)}</b><div class="small muted">${Number(q.impr)||0} показов · ${Number(q.clicks)||0} кликов · ${Number(q.cost)||0} ₽ расход</div></div></div>`).join('')}</div>
+        </details>`:''}
+      `}
     </div>
     <div class="card kw-input">
       <h2>Найти и собрать</h2>
@@ -72,6 +97,25 @@ export function keywordsView(a){
   `};
 }
 changes['kw.book'] = value => {app().ui.kwBook=value;app().ui.kwFilter='all';app().rerender();};
+changes['kw.campaign']=async value=>{
+  const a=app(),b=chosen(a),chosenId=String(value||'');
+  if(!b)return;
+  if(chosenId&&!campaigns(a).some(x=>String(x.id)===chosenId)){toast('Нет такой кампании в твоем кабинете');return;}
+  await a.store.put('d_kw_bindings',{id:'kwbook_'+b,bookId:b,campaignId:chosenId,modifiedAt:new Date().toISOString()});
+};
+acts['kw.reload']=()=>{app().reload();return false;};
+acts['kw.importCampaign']=async ()=>{
+  const a=app(),items=campaignWords(a).filter(x=>x.phrase&&!/AUTO_TARGET/i.test(x.phrase));
+  if(!items.length){toast('В выбранной кампании пока нет фраз');return false;}
+  await addRows(a,items.map(x=>({phrase:x.phrase,count:null})),'direct-sync');
+  return false;
+};
+acts['kw.importQueries']=async ()=>{
+  const a=app(),items=campaignQueries(a).filter(x=>x.query).slice(0,80);
+  if(!items.length){toast('За последние 30 дней поисковых запросов нет');return false;}
+  await addRows(a,items.map(x=>({phrase:x.query,count:null})),'direct-queries');
+  return false;
+};
 acts['kw.filter']=d=>{app().ui.kwFilter=d.filter||'all';return true;};
 async function addRows(a,entries,source='manual'){
   if(!entries.length){toast('Не нашла ни одной подходящей фразы');return;}
