@@ -1,6 +1,7 @@
 // Конкуренты: только публичные карточки и заметки. Метрики чужой рекламы недоступны.
-import { acts, forms, esc, opt, toast, openSheet, uid, ask } from '../../../js/ui.js';
+import { acts, forms, changes, esc, opt, toast, openSheet, uid, ask } from '../../../js/ui.js';
 import { competitorPublicPreview, competitorInsights, safePublicBookUrl, tropeRadar } from '../competition.js';
+import { searchPublicCompetitors } from '../competitor-discovery.js';
 
 const app=()=>window.__app;
 const books=a=>a.ctx().data.w_books||[];
@@ -9,6 +10,8 @@ const list=a=>(a.ctx().data.d_competitors||[]).filter(x=>x.status!=='archived' &
 const my=a=>(a.ctx().data.d_keywords||[]).filter(x=>x.status==='keep'&&String(x.bookId||'')===String(selectedBook(a))).map(x=>x.phrase).join(' ');
 export function competitorsView(a){
   const rows=list(a),insight=competitorInsights(my(a),rows),radar=tropeRadar(rows);
+  const suggestions=a.ui?.cmpSuggestionBook===selectedBook(a) ? a.ui.cmpSuggestions||[] : [];
+  const discoveryErrors=a.ui?.cmpSuggestionBook===selectedBook(a) ? a.ui.cmpErrors||[] : [];
   return {html:`
     <div class="card">
       <div class="row between"><h2 style="margin:0">Конкурентная разведка</h2><button class="primary" data-act="cmp.new">+ Книга</button></div>
@@ -16,8 +19,30 @@ export function competitorsView(a){
       <select data-chg="kw.book">
         ${books(a).map(x=>opt(x.id,x.title,selectedBook(a))).join('')}
       </select>
-      <p class="small muted">Анализ открытых карточек конкурентов: позиционирование, тропы, обещания в аннотациях. Данные о чужих расходах, покупках и конверсиях недоступны — приложение их не выдумывает.</p>
+      <p class="small muted">Анализируем только открытые аннотации и тропы. Статистика чужих продаж и рекламы недоступна.</p>
+      <div class="cmp-find">
+        <label for="cmpTopics">Темы и тропы твоей книги</label>
+        <input id="cmpTopics" data-chg="cmp.topics" value="${esc(a.ui?.cmpTopics||'')}" placeholder="дарк роман, одержимый герой, похищение">
+        <div class="row"><button class="primary" data-act="cmp.find" ${a.ui?.cmpFinding?'disabled':''}>${a.ui?.cmpFinding?'Ищу книги…':'Найти похожие книги'}</button></div>
+        <p class="small muted">Бесплатный подбор из открытых тематических коллекций Литнета. Сходство предварительное, результаты проверяешь ты.</p>
+      </div>
     </div>
+    ${a.ui?.cmpSuggestionBook===selectedBook(a) ? `
+      <div class="card cmp-found">
+        <div class="row between"><h2 style="margin:0">Найденные книги</h2><span class="small muted">${suggestions.length} кандидатов</span></div>
+        ${!suggestions.length?'<p class="small muted">Пока кандидатов нет. Можно добавить книгу вручную.</p>':''}
+        ${suggestions.map((x,i)=>`<div class="cmp-suggestion">
+          <div class="cmp-suggest-content"><b>${esc(x.title)}</b>
+            <span class="small muted">${esc(x.sourceName||'Тематическая подборка')} · ${x.overlap?'Есть общие темы':'Сходство требует проверки'}</span>
+            ${x.hints?.length?`<span class="small muted">Тропы: ${esc(x.hints.join(', '))}</span>`:''}
+            ${x.description?`<details><summary>Аннотация</summary><p>${esc(x.description)}</p></details>`:''}
+            <a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">Открыть книгу</a>
+          </div>
+          <button data-act="cmp.addsuggest" data-idx="${i}">В анализ</button>
+        </div>`).join('')}
+        ${discoveryErrors.length?`<details class="small muted"><summary>Недоступные источники · ${discoveryErrors.length}</summary><p>${esc(discoveryErrors.join('; '))}</p></details>`:''}
+      </div>
+    ` : ''}
     ${rows.length?`
       <div class="card"><div class="row between"><h2 style="margin:0">Повторяющиеся темы</h2><span class="small muted">${rows.length} книг</span></div>
       ${radar.length?`<p class="small"><b>Заявленные тропы:</b> ${radar.map(x=>`<span class="tag">${esc(x.trope)} · ${x.books}</span>`).join(" ")}</p>`:""}
