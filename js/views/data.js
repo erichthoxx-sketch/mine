@@ -1,7 +1,7 @@
-import { esc, acts, forms, changes, openSheet, opt, toast, N, download, readFile, closeSheet } from '../ui.js';
+import { esc, acts, forms, changes, openSheet, opt, toast, N, download, readFile, closeSheet, uid } from '../ui.js';
 import { rub, fmtDate, fmtMonth, num, parseNum } from '../format.js';
 import { decodeBuffer, parseStatistic, parseLegacy, parseSalesText, makeBackup, readBackup, toCsv, csvDec } from '../parse.js';
-import { diffSales, inferPriceChanges, monthKey, r2, addDays, manualSaleRow } from '../calc.js';
+import { safeSalesImport, inferPriceChanges, monthKey, r2, addDays, manualSaleRow } from '../calc.js';
 import { buildReportModel, toMarkdown, toHtml, toJson, toXlsxBook } from '../report.js';
 
 const app = () => window.__app;
@@ -55,6 +55,34 @@ forms.settings = async (fd) => {
 changes.theme = (v) => app().setTheme(v);
 acts['auth.out'] = () => app().store.signOut();
 
+// Никаких импортов поверх еще не загруженной или неподтвержденной сервером базы.
+function salesReady() {
+  const st = app().store;
+  if (st.mode === 'firebase' && (!st.loaded?.sales || st.sync === 'error' || !navigator.onLine)) {
+    toast('Продажи еще не сверены с сервером. Проверь подключение и повтори загрузку позже.');
+    return false;
+  }
+  return true;
+}
+
+// Журнал до любых правок: предыдущее значение каждой затронутой записи + новая версия.
+// Храним частями, чтобы не превысить лимит размера документа Firestore.
+async function saveImportHistory(changes, previous, source) {
+  if (!changes.length) return;
+  const id = 'import_' + new Date().toISOString().replace(/[:.]/g, '-') + '_' + uid();
+  const oldById = new Map(previous.map(s => [s.id, s]));
+  const now = new Date().toISOString();
+  for (let i = 0; i < changes.length; i += 100) {
+    const part = changes.slice(i, i + 100);
+    await app().store.put('sales_history', {
+      id: id + '_' + String(i / 100).padStart(3, '0'),
+      batch: id, createdAt: now, source,
+      before: part.map(s => oldById.get(s.id) || null),
+      after: part,
+    });
+  }
+}
+
 // ---------- импорт продаж ----------
 changes['imp.any'] = async (v, el) => {
   const file = el.files[0];
@@ -66,42 +94,50 @@ changes['imp.any'] = async (v, el) => {
   toast('Не узнала формат файла. Подходят выгрузка Литнета (Statistic.csv) и таблица dohody.csv (дата, доход, события, заметка).');
 };
 async function importStatistic(text) {
+  if (!salesReady()) return;
   const r = parseStatistic(text);
+  if (!r.rows.length) { toast('В файле нет распознанных продаж'); return; }
   const c = app().ctx();
-  // Неполная выгрузка не должна стирать ранее сохраненные продажи.
-  const d = diffSales(c.sales, r.rows, false);
-  const have = new Map(c.sales.map(s => [s.id, s]));
-  const reductions = r.rows.filter(s => {
-    const prev = have.get(s.id);
-    return prev && (s.qty < prev.qty || s.royalty + 0.004 < prev.royalty);
-  });
-  const fm = /(\d[\d  ]*[.,]\d{2})[  ]*RUB/i.exec(text);
-  const fileTotal = fm ? parseNum(fm[1]) : null;
-  const from = r.rows.reduce((x, s) => (s.date < x ? s.date : x), r.rows[0].date), to = r.rows.reduce((x, s) => (s.date > x ? s.date : x), r.rows[0].date);
-  const perMonth = {};
-  for (const s of r.rows) perMonth[monthKey(s.date)] = r2((perMonth[monthKey(s.date)] || 0) + s.royalty);
-  const newBooks = [...new Map(r.rows.filter((s) => !c.booksById[s.bookId]).map((s) => [s.bookId, s.book])).entries()];
-  const check = fileTotal == null ? '' : Math.abs(fileTotal - r.total) < 0.01 ? `<div class="alert ok">✔︎ Сумма строк ${rub(r.total)} совпадает с «Итого» в файле.</div>` : `<div class="alert bad">⚠︎ Сумма строк ${rub(r.total)} не совпадает с «Итого» в файле (${rub(fileTotal)}).</div>`;
-  openSheet('Импорт выгрузки', `<p>Период <b>${fmtDate(from)} – ${fmtDate(to)}</b>, строк: ${r.rows.length}, гонорар <b>${rub(r.total)}</b>.</p>${check}
-    <table><tr><th>Месяц</th><th>Гонорар</th></tr>${Object.keys(perMonth).sort().map((k) => `<tr><td>${fmtMonth(k)}</td><td>${rub(perMonth[k])}</td></tr>`).join('')}</table>
-    <h3>Что изменится</h3><ul><li>новых строк: <b>${d.added}</b></li><li>обновится: <b>${d.changed}</b></li><li>без изменений: ${d.same}</li>${newBooks.length ? `<li>новые книги: ${newBooks.map(([, t]) => esc(t)).join(', ')}</li>` : ''}</ul>
-    <div class="alert ok"><b>Без удаления данных.</b> При загрузке добавятся отсутствующие продажи и обновятся совпадающие строки. Продажи других книг и дней, которых нет в файле, останутся в базе.</div>
-    ${reductions.length ? `<div class="alert bad"><b>Внимание: ${reductions.length} строк в файле меньше сохраненных.</b> Это может быть неполная выгрузка. По умолчанию старые суммы не уменьшаются.<label><input type="checkbox" name="allowLower"> Я сверила отчет с Литнетом и разрешаю уменьшить эти ${reductions.length} строки</label></div>` : ''}
-    <p class="small muted">Перед исправлением цифр сохрани резервную копию. Импорт больше не удаляет пропущенные строки автоматически.</p>`, async (fd) => {
-    const allowLower = !!fd.get('allowLower');
-    const write = r.rows.filter(s => {
-      const e = have.get(s.id);
-      if (!e) return true;
-      if (!allowLower && (s.qty < e.qty || s.royalty + 0.004 < e.royalty)) return false;
-      return e.qty !== s.qty || Math.abs(e.royalty - s.royalty) > 0.004;
-    });
-    await app().store.putMany('sales', write);
-    for (const [bookId, title] of newBooks) {
-      await app().store.put('books', { id: bookId, title, status: 'progress', startDate: '', lastChapterDate: '', priceHistory: inferPriceChanges(r.rows, bookId) });
+  const initial = safeSalesImport(app().store.data.sales, r.rows);
+  const from = r.rows.reduce((x, s) => s.date < x ? s.date : x, r.rows[0].date);
+  const to = r.rows.reduce((x, s) => s.date > x ? s.date : x, r.rows[0].date);
+  const monthly = {};
+  for (const s of r.rows) monthly[monthKey(s.date)] = r2((monthly[monthKey(s.date)] || 0) + s.royalty);
+  const newBooks = [...new Map(r.rows.filter(s => !c.booksById[s.bookId]).map(s => [s.bookId,s.book])).entries()];
+  const sameSum = r.rows.reduce((sum,s) => sum + Math.round(s.royalty * 100), 0) / 100;
+  if (Math.abs(sameSum - r.total) > 0.005) {
+    toast('Ошибка сверки сумм CSV. Данные не изменены.');
+    return;
+  }
+  const warn = [];
+  if (initial.held) warn.push(`Сохранены ${initial.held} старых строк: в файле значения меньше. Не перезаписываю их без сверки с Литнетом.`);
+  if (initial.retained) warn.push(`${initial.retained} прежних строк за эти даты не встретились в файле. Они сохранены.`);
+  if (initial.potentialDuplicates) warn.push(`${initial.potentialDuplicates} ручных записей пересекаются с CSV. Аналитика исключит повторный подсчет.`);
+  openSheet('Сверка продаж из Литнета', `<p>Период <b>${fmtDate(from)} – ${fmtDate(to)}</b>. ${r.rows.length} строк, гонорар по файлу <b>${rub(r.total)}</b>.</p>
+    <table><tr><th>Месяц</th><th>Гонорар по файлу</th></tr>${Object.keys(monthly).sort().map(k => `<tr><td>${fmtMonth(k)}</td><td>${rub(monthly[k])}</td></tr>`).join('')}</table>
+    <p class="small">Добавятся <b>${initial.added}</b>, обновятся без уменьшения <b>${initial.increased}</b>, совпадают <b>${initial.same}</b>.</p>
+    ${warn.length ? `<div class="alert"><strong>Нужна сверка отдельных строк</strong><p class="small">${warn.map(esc).join('<br>')}</p></div>` : '<div class="alert ok">Повторная загрузка ничего не удаляет и не уменьшает.</div>'}
+    <p class="small muted">Перед любым изменением автоматически сохраняется история прежних значений. Никаких галочек и скрытого удаления.</p>`, async () => {
+    if (!salesReady()) return false;
+    // Пока окно было открыто, данные могли измениться на другом устройстве.
+    const old = app().store.data.sales;
+    const plan = safeSalesImport(old,r.rows);
+    const books = app().ctx().booksById;
+    const additions = [...new Map(r.rows.filter(s => !books[s.bookId]).map(s => [s.bookId,s.book])).entries()];
+    if (!plan.rows.length && !additions.length) { toast('Все строки уже учтены, доход не изменился'); app().go('/'); return; }
+    try {
+      await saveImportHistory(plan.rows, old, 'Statistic.csv');
+      await app().store.putMany('sales', plan.rows);
+      for (const [bookId,title] of additions) {
+        await app().store.put('books', { id:bookId,title,status:'progress',startDate:'',lastChapterDate:'',priceHistory:inferPriceChanges(r.rows,bookId) });
+      }
+      toast(`Сверено: ${plan.added} новых, ${plan.increased} обновлено${plan.held ? ', старые суммы защищены' : ''}`);
+      app().go('/');
+    } catch (e) {
+      toast('Не удалось безопасно сохранить импорт: ' + (e?.message || e));
+      return false;
     }
-    toast(`Импорт готов: записано ${write.length} строк${reductions.length && !allowLower ? ', возможные уменьшения пропущены' : ''}`);
-    app().go('/');
-  }, { submitText: 'Загрузить' });
+  }, { submitText: 'Сохранить проверенные строки' });
 };
 
 // ---------- старый трекер ----------
