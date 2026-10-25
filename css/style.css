@@ -2204,3 +2204,59 @@ main .rev-actions button.dl .ic { opacity: 1; }
   .app-direct .kw-item { flex-direction: column; }
   .app-direct .kw-buttons { justify-content: flex-start; gap: 9px 13px; }
 }
+
+
+/* Директ: бесплатный тематический поиск похожих книг в открытых подборках. */
+.app-direct .cmp-find {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+.app-direct .cmp-find > label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.app-direct .cmp-find > input {
+  width: 100%;
+  font-size: 15px;
+  font-family: var(--font-body);
+}
+.app-direct .cmp-find > .row { margin: 10px 0 0; }
+.app-direct .cmp-find > p { margin: 10px 0 0; line-height: 1.5; }
+.app-direct .cmp-found { margin-top: 12px; }
+.app-direct .cmp-found > .row { margin-bottom: 8px; }
+.app-direct .cmp-found > .row > h2 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+}
+.app-direct .cmp-suggestion {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding: 13px 0;
+}
+.app-direct .cmp-suggest-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  font-size: 15px;
+}
+.app-direct .cmp-suggest-content > b { font-weight: 700; line-height: 1.4; }
+.app-direct .cmp-suggest-content > span.small {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.app-direct .cmp-suggest-content details { margin-top: 4px; font-size: 13px; }
+.app-direct .cmp-suggest-content details p { margin: 8px 0 2px; line-height: 1.55; }
+.app-direct .cmp-suggest-content > a { font-size: 13px; font-weight: 700; }
+.app-direct .cmp-suggestion > button { flex: 0 0 auto; font-size: 13px; }
+@media(max-width: 560px) {
+  .app-direct .cmp-suggestion { align-items: flex-start; flex-direction: column; }
+}
