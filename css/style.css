@@ -1501,6 +1501,22 @@ select.idea-pk.idea-pk { padding-right: 30px; }
 .lg-q-f { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 .lg-q.ok .lg-t { color: var(--text-2); }
 .lg-mode { margin-bottom: 10px; }
+/* Экспорт Легенды: прямой выбор вкладки вместо списка глав */
+#sheetForm .lg-mode-h { margin: -3px 0 16px; line-height: 1.5; }
+#sheetForm .lg-export-label { margin: 0 0 9px; font: 700 13px/1.4 var(--font-body); color: var(--text); }
+#sheetForm .lg-export-sections { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+#sheetForm button.lg-export-choice {
+  min-height: 36px; padding: 7px 12px;
+  border-radius: 10px; border: 1px solid var(--line) !important;
+  background: var(--surface); color: var(--text-2);
+  box-shadow: none; font: 700 13px/1.35 var(--font-body);
+}
+#sheetForm button.lg-export-choice.on {
+  background: var(--accent-soft); border-color: var(--accent-2) !important; color: var(--text);
+}
+#sheetForm button.lg-export-choice:hover { border-color: var(--accent) !important; color: var(--text); }
+#sheetForm .lg-export-sections + .lg-ai { margin-top: 16px; }
+
 .lg-vform { display: flex; gap: 8px; align-items: center; }
 .lg-vform input { flex: 1; min-width: 0; }
 .lg-vform .primary { flex: none; }
