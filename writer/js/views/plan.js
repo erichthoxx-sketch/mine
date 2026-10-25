@@ -564,7 +564,7 @@ export function contestCard(c, x, { forBook = null } = {}) {
   </div>`;
 }
 function contestForm(c, x = {}) {
-  return `<div class="c-fill"><label for="cc" style="margin-top:0">Условия со страницы конкурса</label><textarea id="cc" name="conditions" style="min-height:96px" placeholder="Откройте страницу конкурса, выделите всё (Ctrl+A), скопируйте и вставьте сюда — название, даты, площадка и объём заполнятся сами">${esc(x.conditions || '')}</textarea>
+  return `<div class="c-fill"><label for="cc" style="margin-top:0">Условия со страницы конкурса</label><textarea id="cc" name="conditions" style="min-height:96px" placeholder="Откройте страницу конкурса, выделите всё (Ctrl+A), скопируйте и вставьте сюда — название, даты, площадка и объём заполнятся сами">${esc(cleanContestText(x.conditions || ''))}</textarea>
   <label for="cu">Ссылка на страницу конкурса</label><input id="cu" name="url" value="${esc(x.url || '')}" placeholder="https://litnet.com/…"><div class="small muted c-filled" id="cfilled"></div></div>
   <label for="cn">Название</label><input id="cn" name="name" value="${esc(x.name || '')}" required>
   <div class="f2"><div><label for="cp">Площадка</label><input id="cp" name="platform" list="pl" value="${esc(x.platform || '')}"><datalist id="pl">${PLATFORMS.map((p) => `<option value="${p}">`).join('')}</datalist></div>
@@ -588,7 +588,7 @@ function wireContestFill(f) {
   for (const id of ['cn', 'cp', 'c1', 'c2', 'cmin', 'cmax', 'cun', 'c3', 'cg', 'ce', 'csubmit']) $(id)?.addEventListener('input', (e) => { if (e.isTrusted) delete e.target.dataset.auto; });
   const put = (id, v) => { const el = $(id); if (!el || v == null || v === '') return false; if (el.value && !el.dataset.auto) return false; el.value = v; el.dataset.auto = '1'; return true; };
   const run = () => {
-    const r = parseContest($('cc').value, $('cu').value, app().ctx().today), got = [];
+    const r = parseContest(cleanContestText($('cc').value), $('cu').value, app().ctx().today), got = [];
     if (put('cn', r.name)) got.push('название');
     if (put('cp', r.platform)) got.push('площадка');
     const d1 = put('c1', r.start), d2 = put('c2', r.end); if (d1 || d2) got.push('даты');
@@ -638,7 +638,7 @@ function autoConditions(x) {
   }, 300);
 }
 acts['ct.reload'] = (d) => { pageTried.delete(d.id); pageFailed.delete(d.id); toast('Загружаю условия…'); };
-const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookIds: fd.getAll('bookIds'), bookId: fd.getAll('bookIds')[0] || '', results: fd.get('results') || '', genres: (fd.get('genres') || '').trim(), submissionUrl: (fd.get('submissionUrl') || '').trim(), emails: String(fd.get('emails') || '').split(/[\s,;]+/).map((e) => e.trim()).filter((e) => e.includes('@')), unit: fd.get('unit') || 'al', minChars: contestIn(fd.get('unit'), fd.get('minChars')), maxChars: contestIn(fd.get('unit'), fd.get('maxChars')), conditions: fd.get('conditions') || '', url: (fd.get('url') || '').trim(), ...extrasOf(fd.get('conditions') || ''), newOnly: !!fd.get('newOnly'), newSince: fd.get('newSince') || '', pv: 3 });
+const contestFrom = (fd) => ({ name: fd.get('name').trim(), platform: (fd.get('platform') || '').trim(), status: fd.get('status'), start: fd.get('start') || '', end: fd.get('end') || '', bookIds: fd.getAll('bookIds'), bookId: fd.getAll('bookIds')[0] || '', results: fd.get('results') || '', genres: (fd.get('genres') || '').trim(), submissionUrl: (fd.get('submissionUrl') || '').trim(), emails: String(fd.get('emails') || '').split(/[\s,;]+/).map((e) => e.trim()).filter((e) => e.includes('@')), unit: fd.get('unit') || 'al', minChars: contestIn(fd.get('unit'), fd.get('minChars')), maxChars: contestIn(fd.get('unit'), fd.get('maxChars')), conditions: cleanContestText(fd.get('conditions') || ''), url: (fd.get('url') || '').trim(), ...extrasOf(cleanContestText(fd.get('conditions') || '')), newOnly: !!fd.get('newOnly'), newSince: fd.get('newSince') || '', pv: 3 });
 // когда книга начала участвовать: новые — с сегодняшнего дня, убранные — без отметки
 const joinOf = (jb = {}, ids = []) => Object.fromEntries(ids.map((id) => [id, jb[id] || app().ctx().today]));
 // из условий — то, чего нет в форме: имя файла, первые главы, формат, минимум на старте, откуда взят объём
