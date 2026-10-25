@@ -177,7 +177,7 @@ async function bookFolder(b, type) {
   const bf = await drive.ensureFolder(b.title, root);
   const sub = await drive.ensureFolder(FOLDER[type] || 'Посты', bf.id);
   const key = type === 'review-shot' ? 'reviews' : type === 'target' ? 'target' : type === 'manuscript' || type === 'synopsis' ? 'pub' : 'posts';
-  if (!b.mkFolders?.[key]) await app().store.put('w_books', { ...app().ctx().wbooksById[b.id], mkFolders: { ...(b.mkFolders || {}), [key]: { id: sub.id, link: sub.webViewLink } } });
+  if (!b.mkFolders?.[key]) await app().store.patch('w_books', b.id, { mkFolders: { ...(app().ctx().wbooksById[b.id]?.mkFolders || {}), [key]: { id: sub.id, link: sub.webViewLink } } });
   return sub.id;
 }
 export async function saveMedia(file, { type = 'banner', bookId = '', thumb, requireOriginal = false } = {}) {
@@ -241,7 +241,7 @@ acts['mk.del'] = async (d) => {
 acts['mk.promo'] = (d) => {
   const b = app().ctx().wbooksById[d.id], p = promoOf(b);
   openSheet(`Тексты — ${b.title}`, Object.entries(PROMO).map(([k, label]) => `<label for="pr_${k}">${label}</label><textarea id="pr_${k}" name="${k}" style="min-height:${k === 'annotation' || k === 'quotes' ? 140 : 80}px">${esc(p[k] || '')}</textarea>`).join('') + '<div class="hint">Цитаты — каждая с новой строки.</div>', async (fd) => {
-    await app().store.put('w_books', { ...b, promo: Object.fromEntries(Object.keys(PROMO).map((k) => [k, (fd.get(k) || '').trim()])) });
+    await app().store.patch('w_books', b.id, { promo: Object.fromEntries(Object.keys(PROMO).map((k) => [k, (fd.get(k) || '').trim()])) });
     toast('Тексты сохранены');
   });
 };
@@ -255,12 +255,12 @@ acts['mk.ad'] = (d) => {
     ${i != null ? `<p><button type="button" class="link danger" data-act="mk.adDel" data-id="${b.id}" data-i="${i}">Удалить объявление</button></p>` : ''}`, async (fd) => {
     const ad = { h1: (fd.get('h1') || '').trim(), h2: (fd.get('h2') || '').trim(), text: (fd.get('text') || '').trim() };
     const ads = [...dr.ads]; if (i != null) ads[i] = ad; else ads.push(ad);
-    await app().store.put('w_books', { ...b, direct: { ...dr, ads } });
+    await app().store.patch('w_books', b.id, { direct: { ...dr, ads } });
   });
 };
 acts['mk.adDel'] = async (d) => {
   const b = app().ctx().wbooksById[d.id], dr = directOf(b);
-  await app().store.put('w_books', { ...b, direct: { ...dr, ads: dr.ads.filter((_, k) => k !== Number(d.i)) } });
+  await app().store.patch('w_books', b.id, { direct: { ...dr, ads: dr.ads.filter((_, k) => k !== Number(d.i)) } });
   document.getElementById('sheet').close();
 };
 acts['mk.brief'] = (d) => {
@@ -268,7 +268,7 @@ acts['mk.brief'] = (d) => {
   openSheet('Для таргетолога', `<label for="bl">Ссылка на книгу на Литнете</label><input id="bl" name="link" value="${esc(dr.link || '')}" placeholder="https://litnet.com/ru/book/…">
     <label for="ba">Аудитория и интересы</label><textarea id="ba" name="audience" placeholder="женщины 25–55, любовные романы, бытовое фэнтези…">${esc(dr.audience || '')}</textarea>
     <label for="bn">Пожелания</label><textarea id="bn" name="notes" placeholder="бюджет, сроки, что уже пробовали">${esc(dr.notes || '')}</textarea>`, async (fd) => {
-    await app().store.put('w_books', { ...b, direct: { ...dr, link: (fd.get('link') || '').trim(), audience: (fd.get('audience') || '').trim(), notes: (fd.get('notes') || '').trim() } });
+    await app().store.patch('w_books', b.id, { direct: { ...dr, link: (fd.get('link') || '').trim(), audience: (fd.get('audience') || '').trim(), notes: (fd.get('notes') || '').trim() } });
   });
 };
 acts['mk.synopsis'] = (d) => acts['syn.edit']({ id: d.id, back: '/mk/' + d.id });
