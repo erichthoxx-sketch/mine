@@ -29,8 +29,6 @@ export function bookTags(b={}){
 }
 export function marketingTopics(b={}){
   const explicit=[...bookGenres(b),...bookTags(b)];
-  // «Легенда» — единственный источник свободной формулировки тропов, если теги еще не заполнены.
-  const ideaGenre=String(b.legend?.idea?.genre||'').trim();
-  const promo=String(b.promo?.annotation||b.svc?.annotation||'').trim();
-  return [...explicit,ideaGenre,promo].filter(Boolean).join(', ');
+  // Жанры и теги берутся только из «О книге», без скрытого дополнения из «Легенды».
+  return explicit.filter(Boolean).join(', ');
 }
