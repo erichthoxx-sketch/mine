@@ -2,7 +2,7 @@
 import { acts, forms, changes, esc, opt, toast, openSheet, uid, ask } from '../../../js/ui.js';
 import { competitorPublicPreview, competitorInsights, safePublicBookUrl, tropeRadar } from '../competition.js';
 import { searchPublicCompetitors } from '../competitor-discovery.js';
-import { bookGenres, bookTags, marketingTopics } from '../../../writer/js/bookmeta.js';
+import { bookGenres, bookTags } from '../../../writer/js/bookmeta.js';
 
 const app=()=>window.__app;
 const books=a=>a.ctx().data.w_books||[];
@@ -22,7 +22,7 @@ export function competitorsView(a){
       </select>
       <p class="small muted">Анализируем только открытые аннотации и тропы. Статистика чужих продаж и рекламы недоступна.</p>
       <div class="cmp-find">
-        <div class="small muted">Источник: «Мастерская» → карточка книги (жанры и теги) + «Легенда» (жанр и тропы).</div>
+        <div class="small muted">Источник: «Мастерская» → «О книге» → жанры и теги. Дублировать их здесь не нужно.</div>
         ${bookGenres(books(a).find(x=>String(x.id)===String(selectedBook(a)))).length||bookTags(books(a).find(x=>String(x.id)===String(selectedBook(a)))).length ?
           `<div class="kw-terms">${[...bookGenres(books(a).find(x=>String(x.id)===String(selectedBook(a)))),...bookTags(books(a).find(x=>String(x.id)===String(selectedBook(a))))].map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>` :
           '<p class="small muted">Жанры и теги еще не заполнены. Добавь их в карточку книги — здесь они появятся автоматически.</p>'}
