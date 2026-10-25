@@ -1,14 +1,14 @@
 // Бесплатный первый этап автоподбора конкурентов: открытые тематические коллекции Литнета.
 // Не является полным поиском по каталогу, не требует Wordstat и не копирует чужую аналитику.
 import {safePublicBookUrl, tokens, tropeRadar} from './competition.js';
-import { bookGenres, bookTags, marketingTopics } from '../../writer/js/bookmeta.js';
+import { bookGenres, bookTags } from '../../writer/js/bookmeta.js';
 const CATALOGS = [
   {name:'Дарк романс',url:'https://litnet.com/ru/bundle/dark-romans',keys:['дарк','dark','одерж','похищ','кримин','мафи','вдов','смерт','опасн','запрет','ритуаль']},
   {name:'Страсть и опасность',url:'https://litnet.com/ru/bundle/strast-i-opasnost',keys:['любов','опасн','спас','кримин','развод','тайн','похищ','детектив','триллер']},
   {name:'Одержимые любовью',url:'https://litnet.com/ru/bundle/litmob-oderzhimye-lyubovyu',keys:['одерж','ревност','властн','дарк','похищ','муж','притяж','предател']},
 ];
 export function discoverySources(book={},keywords=[],topics=''){
-  const source=[book.title,book.genre,book.subgenre,book.annotation,book.description,book.tropes,...bookGenres(book),...bookTags(book),marketingTopics(book),topics,
+  const source=[book.title,book.annotation,book.description,...bookGenres(book),...bookTags(book),topics,
     ...keywords.map(x=>x.phrase||'')].filter(Boolean).join(' ').toLowerCase().replace(/ё/g,'е');
   return [...CATALOGS].map(x=>({...x,match:x.keys.reduce((n,k)=>n+(source.includes(k)?1:0),0)}))
     .sort((a,b)=>b.match-a.match).slice(0,3);
@@ -62,8 +62,7 @@ export async function searchPublicCompetitors({proxy,book,keywords=[],topics='',
   }
   const excluded=new Set(exclude.map(x=>x.url).filter(Boolean));
   let candidates=[...found.values()].filter(x=>!excluded.has(x.url));
-  // Весь контекст берется из карточки книги и Легенды, без отдельного ручного ввода.
-  const q=[book.title,marketingTopics(book),topics,...keywords.map(x=>x.phrase)].filter(Boolean).join(' ');
+  // Источник жанров и тропов — только метаданные книги.
   if(!candidates.length)return {items:[],issues,sources:sources.map(x=>x.name)};
   // За один запуск загружаем не более 12 публичных описаний, чтобы не перегружать Литнет.
   candidates=rankPublicBooks(candidates,book,keywords,topics).slice(0,12);
