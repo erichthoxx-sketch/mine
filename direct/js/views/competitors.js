@@ -23,13 +23,14 @@ export function competitorsView(a){
       </select>
       <p class="small muted">Анализируем только открытые аннотации и тропы. Статистика чужих продаж и рекламы недоступна.</p>
       <div class="cmp-find">
+        <p class="small muted">Жанры и теги из раздела «О книге» в «Мастерской». Можно изменить прямо здесь.</p>
         ${taxonomyPanel(book)}
         <details class="cmp-optional"><summary>Дополнительная тема только для этого поиска</summary>
           <input id="cmpTopics" data-chg="cmp.topics" value="${esc(a.ui?.cmpTopics||'')}" placeholder="Например, фиктивное вдовство" aria-label="Дополнительная тема поиска">
           <p class="small muted">Это необязательное уточнение, оно не меняет сохраненные теги книги.</p>
         </details>
         <div class="row d-actions"><button class="primary" data-act="cmp.find" ${a.ui?.cmpFinding?'disabled':''}>${a.ui?.cmpFinding?'Ищу книги…':'Найти похожие книги'}</button></div>
-        <p class="small muted">Бесплатный поиск по открытым тематическим подборкам Литнета, не по всему каталогу. Для работы нужен подключенный переходник Cloudflare. Найденные совпадения проверяй вручную.</p>
+        <p class="small muted">Бесплатный подбор по открытым тематическим подборкам Литнета, не по всему каталогу. Для работы нужен подключенный переходник Cloudflare. Найденные совпадения проверяй вручную.</p>
       </div>
     </div>
     ${a.ui?.cmpSuggestionBook===selectedBook(a) ? `
