@@ -1,42 +1,84 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { diffSales } from '../js/calc.js';
+import { safeSalesImport, incomeSeries, dayStats, booksBreakdown, sumSeries, monthFinance } from '../js/calc.js';
+import { parseStatistic } from '../js/parse.js';
+import { financialLedger, financialReconcile } from '../js/sales-integrity.js';
 
-test('Неполный Statistic.csv не может инициировать удаление продаж остальных книг',()=>{
- const old=[
-  {id:'a',date:'2026-10-25',book:'Альпийский развод',qty:6,royalty:736,platform:'Литнет'},
-  {id:'b',date:'2026-10-25',book:'Звериная тропа',qty:12,royalty:1400,platform:'Литнет'}
- ];
- const uploaded=[old[0]];
- const safe=diffSales(old,uploaded,false);
- assert.deepEqual(safe.removeIds,[]);
- const view=readFileSync(new URL('../js/views/data.js',import.meta.url),'utf8');
- assert.match(view,/diffSales\(c\.sales, r\.rows, false\)/);
- assert.doesNotMatch(view,/removeMany\('sales', d\.removeIds\)/);
- assert.doesNotMatch(view,/name="rm" checked/);
+const sample = (id,royalty,qty,book='Альпийский развод',date='2026-10-25') =>
+  ({ id,date,book,bookId:'b_'+book,platform:'Литнет',kind:'sale',price:169,qty,royalty });
+const earlier = [sample('a',736,6),sample('b',1400,12,'Звериная тропа')];
+
+test('Неполная выгрузка одной книги не удаляет продажи остальных',()=>{
+  const r=safeSalesImport(earlier,[sample('a',736,6)]);
+  assert.equal(r.rows.length,0);
+  assert.equal(r.retained,1);
+  assert.equal(earlier.reduce((s,x)=>s+x.royalty,0),2136);
 });
-
-test('Сокращение количества или гонорара требует явного подтверждения',()=>{
- const view=readFileSync(new URL('../js/views/data.js',import.meta.url),'utf8');
- assert.match(view,/const reductions = r\.rows\.filter/);
- assert.match(view,/name="allowLower"/);
- assert.match(view,/const allowLower = !!fd\.get\('allowLower'\)/);
- assert.match(view,/!allowLower && \(s\.qty < e\.qty \|\| s\.royalty \+ 0\.004 < e\.royalty\)/);
+test('Загрузка старой выгрузки не может уменьшить уже сохраненную строку',()=>{
+  const r=safeSalesImport(earlier,[sample('a',400,3)]);
+  assert.equal(r.held,1);
+  assert.deepEqual(r.rows,[]);
 });
-
-test('Файл, в котором осталась одна книга, не может понизить доход за день за счет удаления других книг',()=>{
- const old=[
-  {id:'a',date:'2026-10-25',book:'Альпийский развод',qty:6,royalty:736,platform:'Литнет'},
-  {id:'b',date:'2026-10-25',book:'Звериная тропа',qty:12,royalty:1400,platform:'Литнет'}
- ];
- const incoming=[{...old[0],qty:4,royalty:480}];
- const d=diffSales(old,incoming,false);
- assert.deepEqual(d.removeIds,[]);
- const lower=incoming.filter(s=>{
-   const ex=old.find(e=>e.id===s.id);
-   return ex && (s.qty<ex.qty||s.royalty+0.004<ex.royalty);
- });
- assert.equal(lower.length,1);
- assert.equal(old.reduce((s,x)=>s+x.royalty,0),2136);
+test('Новая выгрузка увеличивает строку, оставляя остальные продажи',()=>{
+  const r=safeSalesImport(earlier,[sample('a',850,7)]);
+  assert.equal(r.increased,1);
+  const updated=earlier.map(x=>r.rows.find(s=>s.id===x.id)||x);
+  assert.equal(updated.reduce((s,x)=>s+x.royalty,0),2250);
+});
+test('Ручные продажи не удваиваются при импорте точных строк',()=>{
+  const manual={...sample('manual',2100,18),manual:true};
+  const imported=[sample('csv',2200,20)];
+  const out=financialLedger([manual,...imported]);
+  assert.equal(out.sales.length,1);
+  assert.equal(out.sales[0].id,'csv');
+  assert.equal(out.warnings.length,0);
+});
+test('Ручная оценка не заменяется неполной выгрузкой молча',()=>{
+  const manual={...sample('manual',2100,18),manual:true};
+  const out=financialLedger([manual,sample('csv',736,6)]);
+  assert.equal(out.sales.length,1);
+  assert.equal(out.sales[0].royalty,2100);
+  assert.equal(out.warnings[0].type,'manual-conflict');
+});
+test('Несколько цен и книг корректно складываются по дням, книгам и месяцам',()=>{
+  const data=[sample('a',736,6),sample('b',1400,12,'Звериная тропа'),sample('c',200,2,'Звериная тропа','2026-10-24')];
+  const ledger=financialLedger(data).sales;
+  const expected=2336;
+  const raw=financialReconcile(ledger,'2026-10-01','2026-10-31');
+  assert.equal(raw.total,expected);
+  assert.equal(raw.booksTotal,expected);
+  assert.equal(raw.daysTotal,expected);
+  assert.equal(sumSeries(incomeSeries(ledger,[],'2026-10-01','2026-10-31')),expected);
+  assert.equal(booksBreakdown(ledger,'2026-10-01','2026-10-31').reduce((s,x)=>s+x.royalty,0),expected);
+  assert.equal(dayStats(ledger,[],'2026-10-25').royalty,2136);
+});
+test('Некорректная денежная строка не портит сумму всей аналитики',()=>{
+  const out=financialLedger([sample('a',736,6),{...sample('bad',Infinity,8)}]);
+  assert.equal(out.sales.length,1);
+  assert.equal(out.warnings[0].type,'invalid-rows');
+});
+test('Парсер сообщает о поврежденных строках и указанном в CSV итоговом гонораре',()=>{
+  const text=[
+    'Статистика продаж',
+    'Дата/месяц\tКнига\tПодписка/продажа\tЦена\tКол-во\tГонорар',
+    '25.10.2026\tАльпийский развод\tПродажа\t169.00\t6\t736.00',
+    '25.10.2026\tЗвериная тропа\tПродажа\t169.00\tошибка\t1400.00',
+    '\t\t\tИтого: 18\t2136,00 RUB',
+  ].join('\n');
+  const result=parseStatistic(text);
+  assert.equal(result.rows.length,1);
+  assert.deepEqual(result.invalidRows,[4]);
+  assert.equal(result.totalReported,2136);
+  assert.equal(result.total,736);
+});
+test('Повторный импорт не требует галочек и ведет историю перед записью',()=>{
+  const source=readFileSync(new URL('../js/views/data.js',import.meta.url),'utf8');
+  assert.match(source,/safeSalesImport\(old,r\.rows\)/);
+  assert.match(source,/await saveImportHistory\(plan\.rows, old, 'Statistic\.csv'\)/);
+  assert.match(source,/r\.invalidRows\.length/);
+  assert.match(source,/r\.totalReported != null/);
+  assert.doesNotMatch(source,/name="rm"/);
+  assert.doesNotMatch(source,/name="allowLower"/);
+  assert.doesNotMatch(source,/removeMany\('sales'/);
 });
