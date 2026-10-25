@@ -2,6 +2,7 @@
 import { acts, forms, changes, esc, opt, toast, openSheet, uid, ask } from '../../../js/ui.js';
 import { competitorPublicPreview, competitorInsights, safePublicBookUrl, tropeRadar } from '../competition.js';
 import { searchPublicCompetitors } from '../competitor-discovery.js';
+import { bookGenres, bookTags, marketingTopics } from '../../../writer/js/bookmeta.js';
 
 const app=()=>window.__app;
 const books=a=>a.ctx().data.w_books||[];
@@ -21,10 +22,15 @@ export function competitorsView(a){
       </select>
       <p class="small muted">Анализируем только открытые аннотации и тропы. Статистика чужих продаж и рекламы недоступна.</p>
       <div class="cmp-find">
-        <label for="cmpTopics">Темы и тропы твоей книги</label>
-        <input id="cmpTopics" data-chg="cmp.topics" value="${esc(a.ui?.cmpTopics||'')}" placeholder="дарк роман, одержимый герой, похищение">
+        <div class="small muted">Источник: «Мастерская» → карточка книги (жанры и теги) + «Легенда» (жанр и тропы).</div>
+        ${bookGenres(books(a).find(x=>String(x.id)===String(selectedBook(a)))).length||bookTags(books(a).find(x=>String(x.id)===String(selectedBook(a)))).length ?
+          `<div class="kw-terms">${[...bookGenres(books(a).find(x=>String(x.id)===String(selectedBook(a)))),...bookTags(books(a).find(x=>String(x.id)===String(selectedBook(a))))].map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>` :
+          '<p class="small muted">Жанры и теги еще не заполнены. Добавь их в карточку книги — здесь они появятся автоматически.</p>'}
+        <details class="cmp-optional"><summary>Уточнить поиск (необязательно)</summary>
+          <input id="cmpTopics" data-chg="cmp.topics" value="${esc(a.ui?.cmpTopics||'')}" placeholder="Дополнительная тема" aria-label="Дополнительная тема">
+        </details>
         <div class="row"><button class="primary" data-act="cmp.find" ${a.ui?.cmpFinding?'disabled':''}>${a.ui?.cmpFinding?'Ищу книги…':'Найти похожие книги'}</button></div>
-        <p class="small muted">Бесплатный подбор из открытых тематических коллекций Литнета. Сходство предварительное, результаты проверяешь ты.</p>
+        <p class="small muted">Бесплатный подбор из открытых тематических коллекций Литнета. Результаты требуют проверки.</p>
       </div>
     </div>
     ${a.ui?.cmpSuggestionBook===selectedBook(a) ? `
