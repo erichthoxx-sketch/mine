@@ -127,7 +127,7 @@ async function saveL(id, fn, { sync = true } = {}) {
   const b = bookOf(id), L = legendOf(b);
   await autoVersion(b);
   fn(L);
-  await app().store.put('w_books', { ...b, legend: L });
+  await app().store.patch('w_books', b.id, { legend: L });
   if (sync) scheduleSync(id);
 }
 acts['leg.tab'] = (d) => { app().ui.legTab = d.v; };
@@ -301,7 +301,7 @@ export async function syncLegend(id, { replace = '' } = {}) {
     sync[part] = hashText(text); delete conflicts[part];
   }
   const nb = bookOf(id);
-  await app().store.put('w_books', { ...nb, legend: { ...legendOf(nb), sync, conflicts, syncedAt: new Date().toISOString() } });
+  await app().store.patch('w_books', nb.id, { legend: { ...legendOf(nb), sync, conflicts, syncedAt: new Date().toISOString() } });
 }
 // подтянуть текст вкладки из Документа: «Каркас» — по главам; «Идея» и «Персонажи» — в заметки идеи
 acts['leg.pull'] = async (d) => {
