@@ -88,6 +88,16 @@ class FirebaseStore extends Base {
     this.db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) });
     await new Promise((resolve) => {
       A.onAuthStateChanged(this.auth, (u) => {
+        const nextUid = u?.uid || null;
+        // Смена аккаунта: не показываем/не используем прошлую кешированную базу.
+        if ((this.user?.uid || null) !== nextUid) {
+          this.data = emptyData(this.colls);
+          this.loaded = {};
+          this.pending = {};
+          this.settingsLoaded = false;
+          this.sync = 'ok';
+          this.error = null;
+        }
         this.user = u ? { email: u.email, uid: u.uid } : null;
         this.unsubs.forEach((f) => f()); this.unsubs = [];
         if (u) this._listen(u.uid);
