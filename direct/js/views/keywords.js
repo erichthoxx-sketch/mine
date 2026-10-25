@@ -129,6 +129,8 @@ acts['kw.wordstat']=async ()=>{
   if(!a.store?.auth?.currentUser){toast('Нужен вход в аккаунт — Wordstat доступен только владелице');return false;}
   const endpoint=String(a.ctx().settings.direct?.proxy||'').replace(/\/+$/,'');
   if(!/^https:\/\/[^/]+$/.test(endpoint)){toast('Сначала подключи Cloudflare');return false;}
+  try { const v=await fetch(endpoint+'/version',{cache:'no-store'}); if(!v.ok||Number(await v.text())<5){toast('Сначала обнови переходник Cloudflare до версии 5 в Настройках');return false;} }
+  catch {toast('Cloudflare сейчас недоступен');return false;}
   if(!(await ask('Проверить фразу «'+phrase+'» через платный Wordstat API? Один запрос по тарифу 0,02 ₽. Без настроенного ключа ничего не спишется.','Проверить')))return false;
   try{
     const jwt=await a.store.auth.currentUser.getIdToken();
