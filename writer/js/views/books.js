@@ -260,6 +260,10 @@ export function bookPage(a, id) {
         <div id="bmTagPreview" class="bm-tag-preview" aria-live="polite"></div>
         <span class="bm-hint">Разделяй теги запятыми. Нажми на тег, чтобы удалить его.</span>
       </div>
+      <div class="bm-tax-save-row">
+        <button type="submit" class="primary">Сохранить жанры и теги</button>
+        <span>Появятся и в «Директе»</span>
+      </div>
     </section>
     <label>Где выкладывается</label><div class="checks">${PLATFORMS.map((x) => `<label class="check"><input type="checkbox" name="pf" value="${x}"${(b.platforms || []).includes(x) ? ' checked' : ''}>${x}</label>`).join('')}</div>
     <label for="bx">Другие площадки (через запятую)</label><input id="bx" name="pfx" value="${esc(extra)}">
@@ -455,7 +459,7 @@ forms['wbook.save'] = async (fd, f) => {
   if (patch.status === 'done' && b.status !== 'done') { patch.finishedAt = b.finishedAt || c.today; await syncFinish(c, { ...b, ...patch }); }
   if (patch.status !== 'done' && b.status === 'done') { patch.finishedAt = ''; await removeEvent(`w:${b.id}:finish`); }
   await app().store.patch('w_books', b.id, patch);
-  toast(patch.status === 'done' && b.status !== 'done' ? `Сохранено — в «Доходах» книга завершится ${(releaseDate({ ...b, ...patch }) || c.today) > c.today ? 'в день выхода последней главы' : 'сегодня'}` : 'Сохранено');
+  toast(patch.status === 'done' && b.status !== 'done' ? `Сохранено — в «Доходах» книга завершится ${(releaseDate({ ...b, ...patch }) || c.today) > c.today ? 'в день выхода последней главы' : 'сегодня'}` : 'Книга, жанры и теги сохранены');
 };
 // ---------- выкладка глав: «выложила» / «запланировала» (отложенная) / «снять» — по главам и площадкам ----------
 acts['pub.mark'] = (d) => {
