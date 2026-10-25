@@ -120,7 +120,7 @@ export function progressBlock(c, b) {
 const diffD = (a, b) => Math.round((new Date(a + 'T00:00:00Z') - new Date(b + 'T00:00:00Z')) / 86400000);
 changes['wb.planCh'] = async (v, el) => {
   const b = app().ctx().wbooksById[el.dataset.id], n = N(v);
-  await app().store.put('w_books', { ...b, planChapters: n && n > 0 ? Math.round(n) : null });
+  await app().store.patch('w_books', b.id, { planChapters: n && n > 0 ? Math.round(n) : null });
 };
 
 function mountBookTaxonomy() {
@@ -298,7 +298,7 @@ export async function refreshOne(a, b, force = false) {
   const history = ruleChanged || regain ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
   // шаг 1: знаки и главы сохраняем сразу — они видны, даже если история версий долгая или недоступна
   const base = { ...b, title: b.title || meta.name, chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: new Date().toISOString(), history, countRule: COUNT_RULE, titlesV: 2, ...(r.svc ? { svc: r.svc } : {}), ...(r.svc?.synopsis ? { synopsis: r.svc.synopsis } : {}) }; // синопсис из вкладки Документа — один на всю Мастерскую
-  await a.store.put('w_books', base);
+  await a.store.patch('w_books', b.id, { ...(b.title ? {} : { title: meta.name }), chars: r.total, tabs: r.tabs, modifiedTime: meta.modifiedTime, webViewLink: meta.webViewLink, mimeType: meta.mimeType, countedAt: base.countedAt, history, countRule: COUNT_RULE, titlesV: 2, ...(r.svc ? { svc: r.svc } : {}), ...(r.svc?.synopsis ? { synopsis: r.svc.synopsis } : {}) });
   // шаг 2: начало дня / недели / месяца и (один раз) история за 2 недели — по версиям документа
   // правило подсчёта поменялось — начало дня/недели/месяца и историю за 2 недели пересчитываем заново по версиям
   let dayStart = !ruleChanged && !regain && b.dayStart && b.dayStart.date === c.today && b.dayStart.v === 2 ? b.dayStart : null;
@@ -329,8 +329,8 @@ export async function refreshOne(a, b, force = false) {
     const cur = a.ctx().wbooksById[b.id] || base;
     // «как посчитано»: с какой версией Документа сравнили начало месяца и каким способом
     const gainsDiag = { at: new Date().toISOString(), revs: diag.revs ?? null, first: diag.first || '', month: diag.at?.[mFrom] || null, extra, err: gerr };
-    await a.store.put('w_books', { ...cur, history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: gainsOk ? GAINS_V : 0, gainsDiag });
-  } else if (filled !== !!b.histFilled || regain) await a.store.put('w_books', { ...base, histFilled: filled, gainsV: GAINS_V });
+    await a.store.patch('w_books', b.id, { history: h2, dayStart, weekStart, monthStart, histFilled: filled, gainsV: gainsOk ? GAINS_V : 0, gainsDiag });
+  } else if (filled !== !!b.histFilled || regain) await a.store.patch('w_books', b.id, { histFilled: filled, gainsV: GAINS_V });
   return true;
 }
 // идёт ли сейчас обновление книг с Диска (на Главной — «считаю…», второй раз не запускаем)
@@ -454,7 +454,7 @@ forms['wbook.save'] = async (fd, f) => {
   }
   if (patch.status === 'done' && b.status !== 'done') { patch.finishedAt = b.finishedAt || c.today; await syncFinish(c, { ...b, ...patch }); }
   if (patch.status !== 'done' && b.status === 'done') { patch.finishedAt = ''; await removeEvent(`w:${b.id}:finish`); }
-  await app().store.put('w_books', { ...b, ...patch });
+  await app().store.patch('w_books', b.id, patch);
   toast(patch.status === 'done' && b.status !== 'done' ? `Сохранено — в «Доходах» книга завершится ${(releaseDate({ ...b, ...patch }) || c.today) > c.today ? 'в день выхода последней главы' : 'сегодня'}` : 'Сохранено');
 };
 // ---------- выкладка глав: «выложила» / «запланировала» (отложенная) / «снять» — по главам и площадкам ----------
@@ -506,7 +506,7 @@ acts['pub.mark'] = (d) => {
       }
       if (!Object.keys(next[ch]).length) delete next[ch];
     }
-    await app().store.put('w_books', { ...b, pub: next, published: null });
+    await app().store.patch('w_books', b.id, { pub: next, published: null });
     await syncFinish(c, { ...b, pub: next, published: null }); // дописанная книга завершается в «Доходах» с последней главой
     const n = list.length, dts = Object.values(dateOf[plats[0]] || {}).sort();
     toast(mode === 'past' ? `Отмечено выложенными: ${n} — без событий в «Доходах»` : mode === 'clear' ? 'Отметка снята' : mode === 'plan' ? (bySch ? `Запланировано ${n} ${plural(n, ['глава', 'главы', 'глав'])} по графику: ${dm(dts[0])} – ${dm(dts[dts.length - 1])}` : `Запланировано на ${dm(date)} — в «Доходах» тоже`) : `${n > 1 ? 'Главы отмечены' : 'Глава отмечена'} — и в «Доходах» тоже`);
@@ -546,7 +546,7 @@ changes['wbook.cover'] = async (v, el) => {
   const c = app().ctx(), b = c.wbooksById[el.dataset.id];
   try {
     const cover = await resizeImage(file, 480);
-    await app().store.put('w_books', { ...b, cover });
+    await app().store.patch('w_books', b.id, { cover });
     toast('Обложка загружена');
     // заодно кладём в галерею маркетинга, оригинал — на Диск, если подключён
     const { saveMedia } = await import('./marketing.js');
