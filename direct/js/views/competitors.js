@@ -116,3 +116,39 @@ acts['cmp.archive']=async d=>{
   await a.store.put('d_competitors',{...x,status:'archived'});
   document.getElementById('sheet')?.close();return false;
 };
+
+changes['cmp.topics']=value=>{app().ui.cmpTopics=String(value||'').slice(0,350);};
+acts['cmp.find']=async ()=>{
+  const a=app(),book=books(a).find(x=>String(x.id)===String(selectedBook(a)));
+  if(!book){toast('Сначала выбери свою книгу');return false;}
+  if(a.ui.cmpFinding)return false;
+  a.ui.cmpFinding=true;a.ui.cmpSuggestionBook=String(book.id);
+  a.ui.cmpSuggestions=[];a.ui.cmpErrors=[];a.rerender();
+  try{
+    const res=await searchPublicCompetitors({
+      proxy:a.ctx().settings.direct?.proxy,book,
+      topics:a.ui.cmpTopics||'',
+      keywords:(a.ctx().data.d_keywords||[]).filter(x=>String(x.bookId)===String(book.id)&&x.status==='keep'),
+      exclude:list(a),
+    });
+    if(String(selectedBook(a))===String(book.id)){
+      a.ui.cmpSuggestions=res.items;a.ui.cmpErrors=res.issues;
+      toast(res.items.length?'Найдено кандидатов: '+res.items.length:'Открытые источники не дали кандидатов');
+    }
+  }catch(e){a.ui.cmpErrors=[e.message||String(e)];toast(e.message||String(e));}
+  finally{a.ui.cmpFinding=false;a.rerender();}
+  return false;
+};
+acts['cmp.addsuggest']=async d=>{
+  const a=app(),bookId=selectedBook(a);
+  if(String(a.ui.cmpSuggestionBook)!==String(bookId))return false;
+  const item=a.ui.cmpSuggestions?.[Number(d.idx)];
+  if(!item||!safePublicBookUrl(item.url)||list(a).some(x=>x.url===item.url))return false;
+  await a.store.put('d_competitors',{
+    id:'cmp_'+uid(),bookId,title:item.title,url:item.url,description:item.description||'',
+    sourceName:item.sourceName,checkedAt:new Date().toISOString(),updatedAt:new Date().toISOString()
+  });
+  a.ui.cmpSuggestions=a.ui.cmpSuggestions.filter(x=>x.url!==item.url);
+  toast('Книга добавлена для анализа');
+  return false;
+};
