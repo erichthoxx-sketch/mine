@@ -164,13 +164,18 @@ function showCharacterPhoto(src, name) {
     dlg.id = 'lgPhotoViewer';
     dlg.className = 'lg-photo-viewer';
     dlg.setAttribute('aria-label', 'Просмотр фото персонажа');
-    dlg.innerHTML = '<button type="button" class="lg-photo-close" aria-label="Закрыть просмотр">×</button><img alt="">';
+    dlg.innerHTML = '<button type="button" class="lg-photo-close" aria-label="Закрыть просмотр">×</button><img alt=""><p class="lg-photo-hint" role="status"></p>';
     dlg.addEventListener('click', (e) => {
       if (e.target === dlg || e.target.closest('.lg-photo-close')) dlg.close();
     });
     document.body.appendChild(dlg);
   }
   const img = dlg.querySelector('img');
+  const hint = dlg.querySelector('.lg-photo-hint');
+  hint.textContent = '';
+  img.onload = () => {
+    hint.textContent = img.naturalWidth < 400 ? 'Это старое фото сохранено в низком разрешении. Для четкого увеличения замените его исходным файлом.' : '';
+  };
   img.src = src;
   img.alt = name ? 'Фото персонажа ' + name : 'Фото персонажа';
   dlg.showModal();
@@ -191,7 +196,7 @@ acts['leg.char'] = (d) => {
     const v = { ...x, id: x.id || uid(), name, role: fd.get('role') };
     for (const [k] of CHAR_FIELDS) v[k] = String(fd.get(k) || '').trim();
     const file = fd.get('photoFile');
-    if (file && file.size) { try { v.photo = await resizeImage(file, 640, 0.82); } catch { toast('Фото не получилось уменьшить'); } }
+    if (file && file.size) { try { v.photo = await resizeImage(file, 960, 0.88); } catch { toast('Не удалось обработать фото — изменения не сохранены'); return false; } }
     if (fd.get('nophoto')) v.photo = '';
     await saveL(d.id, (L) => { L.chars = x.id ? L.chars.map((y) => (y.id === x.id ? v : y)) : [...L.chars, v]; });
     toast(x.id ? 'Сохранено' : `${name} — в Легенде`);
@@ -200,6 +205,45 @@ acts['leg.char'] = (d) => {
   f?.querySelector('.lg-photo-open')?.addEventListener('click', (e) => {
     showCharacterPhoto(e.currentTarget.querySelector('img')?.src, x.name);
   });
+  // Новое фото видно сразу после выбора: старую миниатюру больше не принимаем за новую.
+  const photoInput = f?.querySelector('input[name="photoFile"]');
+  let previewUrl = null;
+  photoInput?.addEventListener('change', () => {
+    const file = photoInput.files?.[0];
+    if (!file) return;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(file);
+    let open = f.querySelector('.lg-photo-open');
+    if (!open) {
+      const old = f.querySelector('.lg-ch-top .lg-av');
+      open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'lg-photo-open';
+      open.setAttribute('aria-label', 'Увеличить фото персонажа');
+      open.title = 'Увеличить фото';
+      old?.replaceWith(open);
+      open.addEventListener('click', () => showCharacterPhoto(open.querySelector('img')?.src, x.name));
+    }
+    const image = document.createElement('img');
+    image.className = 'lg-av';
+    image.style.width = '64px';
+    image.style.height = '64px';
+    image.alt = '';
+    image.src = previewUrl;
+    open.replaceChildren(image);
+    const rm = f.querySelector('input[name="nophoto"]');
+    if (rm) rm.checked = false;
+    let note = f.querySelector('.lg-photo-new-note');
+    if (!note) {
+      note = document.createElement('span');
+      note.className = 'lg-photo-new-note';
+      f.querySelector('.lg-ch-top')?.append(note);
+    }
+    note.textContent = 'Фото выбрано — нажмите «Сохранить»';
+  });
+  document.getElementById('sheet')?.addEventListener('close', () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, { once: true });
 };
 acts['leg.delc'] = async (d) => {
   if (!(await ask('Удалить персонажа из Легенды?', 'Удалить'))) return false;
