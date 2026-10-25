@@ -127,6 +127,7 @@ async function importStatistic(text) {
   }
   const warn = [];
   if (initial.held) warn.push(`Сохранены ${initial.held} старых строк: в файле значения меньше. Не перезаписываю их без сверки с Литнетом.`);
+  if (initial.ambiguous) warn.push(`Отложены ${initial.ambiguous} строки с другой ценой за ту же книгу и день: файл может быть неполным.`);
   if (initial.retained) warn.push(`${initial.retained} прежних строк за эти даты не встретились в файле. Они сохранены.`);
   if (initial.potentialDuplicates) warn.push(`${initial.potentialDuplicates} ручных записей пересекаются с CSV. Аналитика исключит повторный подсчет.`);
   openSheet('Сверка продаж из Литнета', `<p>Период <b>${fmtDate(from)} – ${fmtDate(to)}</b>. ${r.rows.length} строк, гонорар по файлу <b>${rub(r.total)}</b>.</p>
@@ -148,7 +149,7 @@ async function importStatistic(text) {
       for (const [bookId,title] of additions) {
         await app().store.put('books', { id:bookId,title,status:'progress',startDate:'',lastChapterDate:'',priceHistory:inferPriceChanges(r.rows,bookId) });
       }
-      toast(`Сверено: ${plan.added} новых, ${plan.increased} обновлено${plan.held ? ', старые суммы защищены' : ''}`);
+      toast(`Импорт: ${plan.added} новых, ${plan.increased} обновлено${plan.held || plan.ambiguous ? ', спорные строки оставлены без изменения' : ''}`);
       app().go('/');
     } catch (e) {
       toast('Не удалось безопасно сохранить импорт: ' + (e?.message || e));
