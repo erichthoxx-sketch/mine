@@ -136,8 +136,7 @@ async function importStatistic(text) {
     <p class="small ${r.totalReported == null ? 'muted' : 'up'}">${r.totalReported == null ? 'Итоговая строка в файле не найдена — сверены суммы распознанных записей.' : 'Сумма всех строк совпадает с итогом, указанным в CSV.'}</p>
     <table><tr><th>Месяц</th><th>Гонорар по файлу</th></tr>${Object.keys(monthly).sort().map(k => `<tr><td>${fmtMonth(k)}</td><td>${rub(monthly[k])}</td></tr>`).join('')}</table>
     <p class="small">Добавятся <b>${initial.added}</b>, обновятся без уменьшения <b>${initial.increased}</b>, совпадают <b>${initial.same}</b>.</p>
-    ${warn.length ? `<div class="alert"><strong>Нужна сверка отдельных строк</strong><p class="small">${warn.map(esc).join('<br>')}</p></div>` : '<div class="alert ok">Повторная загрузка ничего не удаляет и не уменьшает.</div>'}
-    <p class="small muted">Перед любым изменением автоматически сохраняется история прежних значений. Никаких галочек и скрытого удаления.</p>`, async () => {
+    ${warn.length ? `<div class="alert"><strong>Нужна сверка отдельных строк</strong><p class="small">${warn.map(esc).join('<br>')}</p></div>` : ''}`, async () => {
     if (!salesReady()) return false;
     // Пока окно было открыто, данные могли измениться на другом устройстве.
     const old = app().store.data.sales;
