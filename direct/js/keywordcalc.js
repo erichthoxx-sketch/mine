@@ -59,7 +59,7 @@ export function preparedKeywords(rows,bookId,source,existing=[],stamp=''){
     const id=keywordId(bookId,row.phrase),old=byId.get(id),hasCount=Number.isFinite(row.count)&&row.count>=0;
     return {
       ...(old||{}),id,bookId:bookId||'',phrase:row.phrase,status:old?.status||'review',
-      ...(hasCount?{count:row.count,source:'wordstat-import',measuredAt:stamp||new Date().toISOString()}:
+      ...(hasCount?{count:row.count,source:source==='wordstat-api'?'wordstat-api':'wordstat-import',measuredAt:stamp||new Date().toISOString()}:
         old?{}:{count:null,source:source||'manual',measuredAt:''}),
       updatedAt:new Date().toISOString(),
     };
