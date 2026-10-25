@@ -65,8 +65,11 @@ acts['auth.out'] = () => app().store.signOut();
 // Никаких импортов поверх еще не загруженной или неподтвержденной сервером базы.
 function salesReady() {
   const st = app().store;
-  if (st.mode === 'firebase' && (!st.loaded?.sales || st.sync === 'error' || !navigator.onLine)) {
-    toast('Продажи еще не сверены с сервером. Проверь подключение и повтори загрузку позже.');
+  if (st.mode === 'firebase' && (
+    !['sales','books','days','campaigns','reports','months','adnotes'].every(name => st.loaded?.[name])
+    || !st.settingsServerLoaded || st.sync === 'error' || st.pending?.sales || !navigator.onLine
+  )) {
+    toast('Финансовые данные еще не сверены или сохраняются. Импорт пока заблокирован.');
     return false;
   }
   return true;
