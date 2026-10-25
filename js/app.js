@@ -124,19 +124,14 @@ acts['auth.reset'] = async () => {
 let afterFn = null;
 function render() {
   if (!store.user) { authScreen(); return; }
-  // Не блокируем всё приложение ожиданием каждой коллекции Firestore:
-  // даже пустые/недоступные коллекции не должны превращаться в бесконечную загрузку.
-  const verified = store.mode !== 'firebase' || (COLLECTIONS.every(name => store.loaded?.[name]) && store.settingsServerLoaded);
   const { tab, view } = route();
   const c = getCtx();
   const r = view(app) || { html: '' };
-  const syncText = store.mode === 'local' ? '' : store.sync === 'error' ? 'ошибка синхронизации' : store.sync === 'pending' ? 'сохраняется…' : !verified ? 'данные не сверены с сервером' : navigator.onLine ? 'синхронизировано' : 'нет сети — сохранится позже';
+  const syncText = store.mode === 'local' ? '' : store.sync === 'error' ? 'ошибка синхронизации' : store.sync === 'pending' ? 'сохраняется…' : navigator.onLine ? 'синхронизировано' : 'нет сети — локальные данные';
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере. Синхронизация появится после настройки Firebase.</div>' : ''}
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
   <div class="row"><a class="btn" href="pisatel/">${ic('sparkle')} Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
-  <main>${store.mode === 'firebase' && (!verified || !navigator.onLine || store.pending?.sales) ?
-    `<div class="alert"><b>${store.sync === 'error' ? 'Ошибка синхронизации' : !navigator.onLine ? 'Нет связи с сервером' : 'Данные еще сверяются с Firebase'}</b> · Отображаемые суммы предварительные, до подтверждения не используйте их для решений. Навигация и сохраненные записи доступны.</div>` : ''}
-  ${c.ledgerWarnings?.length || (c.salesReconciliation && !c.salesReconciliation.ok) ?
+  <main>${c.ledgerWarnings?.length || (c.salesReconciliation && !c.salesReconciliation.ok) ?
     `<div class="alert bad"><b>Нужна проверка финансовых данных</b><p class="small">Найдены несверенные ручные записи или некорректные данные (${c.ledgerWarnings?.length || 0}). Проверь раздел «Данные» и исходный CSV. До сверки суммы могут быть предварительными.</p></div>` : ''}
   ${tidyNums(r.html)}</main>
   ${wide() ? `<aside class="side">${(() => { try { return tidyNums(sideIncome(c)); } catch (e) { console.error(e); return ''; } })()}</aside><button class="side-grip" aria-label="Скрыть или показать панель «Сегодня»" title="Потяните вправо, чтобы скрыть"><span></span></button>` : ''}
