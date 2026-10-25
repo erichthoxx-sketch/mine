@@ -2351,3 +2351,46 @@ main .rev-actions button.dl .ic { opacity: 1; }
 .app-direct .cmp-optional { margin: 8px 0 10px; }
 .app-direct .cmp-optional summary { cursor:pointer; font-size:13px; color:var(--text-2); }
 .app-direct .cmp-optional input { width:100%;margin-top:9px; }
+
+
+/* Директ: единые отступы действий и редактирование метаданных без нагромождений. */
+.app-direct main .d-actions { display:flex; align-items:center; flex-wrap:wrap; gap: 10px 14px; margin-top: 16px; }
+.app-direct main .d-actions > button { margin:0; flex: 0 0 auto; }
+.app-direct main .d-actions > button.link { padding-left: 2px; padding-right: 2px; }
+.app-direct main .d-actions > .small { flex:1 1 180px; line-height:1.5; }
+.app-direct main .kw-input .row.between,
+.app-direct main .cmp-card > .row.between,
+.app-direct main .card > .row.between { column-gap:16px; row-gap:12px; flex-wrap:wrap; }
+.app-direct main .cmp-card > .row.between > .d-actions { margin-top:0; }
+.app-direct main .d-book-meta { display:grid; gap:0; min-width:0; padding:15px 0 5px; border-top:1px solid var(--line); }
+.app-direct main .d-meta-top { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:4px 15px; margin-bottom:13px; }
+.app-direct main .d-meta-top strong { font:700 14px/1.4 var(--font-body); color:var(--text); }
+.app-direct main .d-meta-top span { color:var(--text-2); font:500 12px/1.5 var(--font-body); }
+.app-direct main .d-meta-label { color:var(--text-2); font:700 12px/1.4 var(--font-body); }
+.app-direct main .d-meta-values { display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin:7px 0 8px; }
+.app-direct main .d-meta-chip { display:inline-flex; max-width:100%; padding:4px 9px; border-radius:8px; color:var(--text); background:var(--surface-2); font:600 12px/1.45 var(--font-body); overflow-wrap:anywhere; }
+.app-direct main .d-meta-none { color:var(--muted); font:500 12px/1.5 var(--font-body); }
+.app-direct main .d-meta-genres { margin:0 0 12px; }
+.app-direct main .d-meta-genres summary { width:fit-content; color:var(--link); font:700 12px/1.5 var(--font-body); cursor:pointer; padding:3px 0; }
+.app-direct main .d-meta-genres > form { padding:12px 0 3px; }
+.app-direct main .d-meta-selects { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; }
+.app-direct main .d-meta-selects > div { min-width:0; }
+.app-direct main .d-meta-selects label { margin:0 0 6px; color:var(--text-2); }
+.app-direct main .d-meta-selects select { min-width:0; width:100%; max-width:100%; background:var(--surface); }
+.app-direct main .d-meta-tag-form { border-top:1px solid var(--line); padding-top:13px; }
+.app-direct main .d-meta-tag-form > label { display:flex; align-items:center; gap:8px; margin:0 0 7px; font:700 13px/1.4 var(--font-body); color:var(--text); }
+.app-direct main .d-meta-count { font:500 12px/1.5 var(--font-body); color:var(--text-2); }
+.app-direct main .d-meta-tag-form input { border-radius:10px; min-width:0; }
+.app-direct main .d-meta-actions { margin-top:10px; }
+.app-direct main .d-meta-seed { margin-top:16px; border-top:1px solid var(--line); padding-top:14px; }
+.app-direct main .cmp-find .d-book-meta { margin:0 0 14px; padding-top:0; border-top:0; }
+.app-direct main .cmp-optional { border-top:1px solid var(--line); padding-top:11px; margin-top:14px; }
+.app-direct main .cmp-optional p { margin:8px 0 0; }
+.app-direct main .cmp-errors { margin-top:15px; padding:12px 14px; border:1px solid var(--line); border-radius:10px; }
+.app-direct main .cmp-errors b { font-size:13px; color:var(--text); }
+.app-direct main .cmp-errors p { margin:5px 0 0; font-size:12px; color:var(--text-2); line-height:1.55; overflow-wrap:anywhere; }
+@media (max-width:560px) {
+  .app-direct main .d-meta-selects { grid-template-columns:1fr; }
+  .app-direct main .d-actions { gap:10px; }
+  .app-direct main .d-actions > button { white-space:normal; text-align:center; }
+}
