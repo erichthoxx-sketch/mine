@@ -15,6 +15,7 @@ import { experimentsView } from './views/experiments.js';
 import { litnetView } from './views/litnet.js';
 import { keywordsView } from './views/keywords.js';
 import { competitorsView } from './views/competitors.js';
+import { autoSyncKeywordLibrary } from './key-sync.js';
 import { campaignView } from './views/campaign.js';
 import { learnView } from './views/learn.js';
 import { analyticsView } from './views/analytics.js';
@@ -67,7 +68,7 @@ export async function reload({ quiet = false } = {}) {
   }
   // Метрика — отдельно: работает, даже если Директ ещё не одобрил заявку или отказал
   try { ui.busy = 'Метрика…'; render(); await refreshMetrika(app); } catch (e) { console.warn(e); if (!quiet) toast(e.transient ? OUTAGE_TEXT : e.message || String(e)); }
-  finally { ui.busy = ''; render(); }
+  finally { try { await autoSyncKeywordLibrary(app); } catch(e){console.warn('Keyword library sync:',e);} ui.busy = ''; render(); }
 }
 app.reload = reload;
 acts['d.reload'] = () => { reload(); return false; };
