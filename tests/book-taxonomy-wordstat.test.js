@@ -21,11 +21,11 @@ test('Категории названы как на Литнете, теги н�
  assert.deepEqual(uniqueWords('Одержимый герой; одержимый герой, похищение'),['Одержимый герой','похищение']);
  assert.deepEqual(bookGenres({genres:['a','b','c']}),['a','b']);
 });
-test('Темы из книги и Легенды автоматически доступны подбору конкурентов',()=>{
+test('Темы из жанров и тегов доступны подбору конкурентов',()=>{
  const topics=marketingTopics(book);
  assert.match(topics,/Криминальный любовный роман/);
  assert.match(topics,/похищение/);
- assert.match(topics,/дарк роман/);
+ assert.doesNotMatch(topics,/дарк роман/);
  assert.equal(discoverySources(book,[],undefined)[0].name,'Дарк романс');
  const items=rankPublicBooks([{title:'Сюрприз',description:'Его одержимый герой похищает героиню'},
   {title:'Дождь',description:'Солнечные каникулы'}],book);
@@ -35,7 +35,7 @@ test('В карточке книги можно редактировать жа�
  const s=readFileSync(new URL('../writer/js/views/books.js',import.meta.url),'utf8');
  assert.match(s,/name="genres"/);
  assert.match(s,/name="tags"/);
- assert.match(s,/bm-taxonomy/);
+ assert.match(s,/bh-taxonomy/);
  assert.match(s,/uniqueWords\(fd\.get\('tags'\)/);
 });
 test('Ключи предлагают импорт жанров и отдельный подтверждаемый Wordstat',()=>{
