@@ -2,7 +2,7 @@
 import { acts, forms, changes, esc, opt, toast, openSheet, uid, ask } from '../../../js/ui.js';
 import { competitorPublicPreview, competitorInsights, safePublicBookUrl, tropeRadar } from '../competition.js';
 import { searchPublicCompetitors } from '../competitor-discovery.js';
-import { bookGenres, bookTags } from '../../../writer/js/bookmeta.js';
+import { taxonomyPanel } from './book-taxonomy.js';
 
 const app=()=>window.__app;
 const books=a=>a.ctx().data.w_books||[];
@@ -11,6 +11,7 @@ const list=a=>(a.ctx().data.d_competitors||[]).filter(x=>x.status!=='archived' &
 const my=a=>(a.ctx().data.d_keywords||[]).filter(x=>x.status==='keep'&&String(x.bookId||'')===String(selectedBook(a))).map(x=>x.phrase).join(' ');
 export function competitorsView(a){
   const rows=list(a),insight=competitorInsights(my(a),rows),radar=tropeRadar(rows);
+  const book=books(a).find(x=>String(x.id)===String(selectedBook(a)));
   const suggestions=a.ui?.cmpSuggestionBook===selectedBook(a) ? a.ui.cmpSuggestions||[] : [];
   const discoveryErrors=a.ui?.cmpSuggestionBook===selectedBook(a) ? a.ui.cmpErrors||[] : [];
   return {html:`
@@ -22,15 +23,13 @@ export function competitorsView(a){
       </select>
       <p class="small muted">Анализируем только открытые аннотации и тропы. Статистика чужих продаж и рекламы недоступна.</p>
       <div class="cmp-find">
-        <div class="small muted">Источник: «Мастерская» → «О книге» → жанры и теги. Дублировать их здесь не нужно.</div>
-        ${bookGenres(books(a).find(x=>String(x.id)===String(selectedBook(a)))).length||bookTags(books(a).find(x=>String(x.id)===String(selectedBook(a)))).length ?
-          `<div class="kw-terms">${[...bookGenres(books(a).find(x=>String(x.id)===String(selectedBook(a)))),...bookTags(books(a).find(x=>String(x.id)===String(selectedBook(a))))].map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>` :
-          '<p class="small muted">Жанры и теги еще не заполнены. Добавь их в карточку книги — здесь они появятся автоматически.</p>'}
-        <details class="cmp-optional"><summary>Уточнить поиск (необязательно)</summary>
-          <input id="cmpTopics" data-chg="cmp.topics" value="${esc(a.ui?.cmpTopics||'')}" placeholder="Дополнительная тема" aria-label="Дополнительная тема">
+        ${taxonomyPanel(book)}
+        <details class="cmp-optional"><summary>Дополнительная тема только для этого поиска</summary>
+          <input id="cmpTopics" data-chg="cmp.topics" value="${esc(a.ui?.cmpTopics||'')}" placeholder="Например, фиктивное вдовство" aria-label="Дополнительная тема поиска">
+          <p class="small muted">Это необязательное уточнение, оно не меняет сохраненные теги книги.</p>
         </details>
-        <div class="row"><button class="primary" data-act="cmp.find" ${a.ui?.cmpFinding?'disabled':''}>${a.ui?.cmpFinding?'Ищу книги…':'Найти похожие книги'}</button></div>
-        <p class="small muted">Бесплатный подбор из открытых тематических коллекций Литнета. Результаты требуют проверки.</p>
+        <div class="row d-actions"><button class="primary" data-act="cmp.find" ${a.ui?.cmpFinding?'disabled':''}>${a.ui?.cmpFinding?'Ищу книги…':'Найти похожие книги'}</button></div>
+        <p class="small muted">Бесплатный поиск по открытым тематическим подборкам Литнета, не по всему каталогу. Для работы нужен подключенный переходник Cloudflare. Найденные совпадения проверяй вручную.</p>
       </div>
     </div>
     ${a.ui?.cmpSuggestionBook===selectedBook(a) ? `
@@ -46,7 +45,7 @@ export function competitorsView(a){
           </div>
           <button data-act="cmp.addsuggest" data-idx="${i}">В анализ</button>
         </div>`).join('')}
-        ${discoveryErrors.length?`<details class="small muted"><summary>Недоступные источники · ${discoveryErrors.length}</summary><p>${esc(discoveryErrors.join('; '))}</p></details>`:''}
+        ${discoveryErrors.length?`<div class="cmp-errors" role="status"><b>Не удалось проверить часть источников</b><p>${esc(discoveryErrors.join('; '))}</p></div>`:''}
       </div>
     ` : ''}
     ${rows.length?`
@@ -60,7 +59,7 @@ export function competitorsView(a){
     ${rows.map(x=>`
     <div class="card cmp-card">
       <div class="row between"><div><h3>${esc(x.title||'Книга конкурента')}</h3>${x.author?`<span class="small muted">${esc(x.author)}</span>`:''}</div>
-        <div class="row"><button data-act="cmp.refresh" data-id="${esc(x.id)}" ${!x.url?'disabled':''}>Обновить описание</button><button data-act="cmp.edit" data-id="${esc(x.id)}">Изменить</button></div></div>
+        <div class="row d-actions"><button data-act="cmp.refresh" data-id="${esc(x.id)}" ${!x.url?'disabled':''}>Обновить описание</button><button data-act="cmp.edit" data-id="${esc(x.id)}">Изменить</button></div></div>
       ${x.url?`<a class="small" target="_blank" rel="noopener" href="${esc(x.url)}">Открытая карточка ↗</a>`:''}
       ${x.description?`<details class="cmp-description"><summary>Открытая аннотация</summary><p>${esc(x.description)}</p></details>`:''}
       ${x.adText?`<p class="small"><b>Рекламное сообщение (публичное наблюдение):</b> ${esc(x.adText)}</p>`:''}
