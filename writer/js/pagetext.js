@@ -8,7 +8,16 @@ const clean = (t) => String(t || '').replace(/\r/g, '').replace(/[ \t ]+/g, ' '
 // HTML → текст с переносами строк по абзацам и пунктам (как при «выделить всё и скопировать»)
 export function htmlToText(html) {
   const d = new DOMParser().parseFromString(html, 'text/html');
-  d.querySelectorAll('script, style, noscript, svg, iframe, header, footer, nav, form').forEach((e) => e.remove());
+  // Обсуждения на конкурсных страницах Литнета / других площадок:
+  // вырезаем КОНТЕЙНЕРЫ до преобразования HTML в текст, иначе в условиях
+  // оказываются имена, даты, реплики и повторы одних и тех же комментариев.
+  d.querySelectorAll([
+    'script', 'style', 'noscript', 'svg', 'iframe', 'header', 'footer', 'nav', 'form',
+    '[id*="comment" i]', '[class*="comment" i]', '[data-testid*="comment" i]',
+    '[id*="discussion" i]', '[class*="discussion" i]',
+    '[class*="replies" i]', '[class*="reply-list" i]',
+    '[aria-label*="комментар" i]', '[aria-label*="comment" i]'
+  ].join(',')).forEach((e) => e.remove());
   d.querySelectorAll('br').forEach((e) => e.replaceWith('\n'));
   d.querySelectorAll('p, div, li, tr, h1, h2, h3, h4, h5, h6, section, article, dt, dd, time, span.date').forEach((e) => { e.prepend('\n'); e.append('\n'); });
   return clean(d.body?.textContent || '');
