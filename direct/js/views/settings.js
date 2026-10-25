@@ -20,6 +20,20 @@ export function settingsView(a) {
       <p class="small">${left != null ? `Действует ещё ${left} дн.` : 'Сохранён.'} ${left != null && left < 14 ? '<b>Скоро истечёт — войдите заново.</b>' : ''}</p>
       <div class="row"><button data-act="d.login"${d.clientId ? '' : ' disabled'}>Войти заново</button><button class="link danger" data-act="d.off">Отключить</button></div></div>` : ''}
     ${proxyCard(s)}
+    <div class="card"><div class="row between"><h2 style="margin:0">Wordstat API</h2><span class="d-st">требует настройки</span></div>
+      <p class="small muted">Подбор ключей по реальной частотности. Платные обращения не выполняются автоматически: только после твоего подтверждения. За один запуск — одна фраза, ориентировочно 0,02 ₽.</p>
+      <details class="d-more"><summary class="small">Как включить через Yandex Cloud</summary>
+        <ol class="small st-how">
+          <li>В <a href="https://console.yandex.cloud/" target="_blank" rel="noopener">Yandex Cloud</a> выбери каталог. Сервисный аккаунт должен иметь роль <code>search-api.webSearch.user</code>.</li>
+          <li>Создай API-ключ с областью <code>yc.search-api.execute</code>. Ключ никому не пересылай и не вставляй в наше приложение.</li>
+          <li>Открой Cloudflare → Worker <b>direct</b> → Settings → Variables and Secrets. Добавь секреты <code>WORDSTAT_API_KEY</code>, <code>WORDSTAT_FOLDER_ID</code>, <code>WORDSTAT_OWNER_EMAIL</code>, <code>FIREBASE_PROJECT_ID</code>.</li>
+          <li>Создай KV namespace и привяжи к Worker как <code>WORDSTAT_COUNTER</code>. Затем задай <code>WORDSTAT_ENABLED=true</code> и разверни переходник версии 5.</li>
+          <li>Установи уведомление о бюджете в биллинге Yandex Cloud: учет Worker ориентировочный и не заменяет финансовые ограничения облака.</li>
+        </ol>
+        <p class="small muted">Пока эти настройки не сделаны, Wordstat останется выключенным. Другие функции Директа продолжат работать.</p>
+        <a href="https://aistudio.yandex.ru/ru/docs/search-api/operations/wordstat-gettop" target="_blank" rel="noopener">Официальная инструкция Яндекса ↗</a>
+      </details>
+    </div>
     ${on ? metrikaCard(a.ctx()) : ''}
     <div class="card"><details><summary class="small">Вставить ключ Яндекса вручную</summary><form data-form="d.token"><input name="t" type="password" autocomplete="off" placeholder="OAuth-токен Яндекса"><div class="row"><button type="submit">Сохранить ключ</button></div></form></details></div>
     <div class="card"><h2>Тест и предохранители</h2>
