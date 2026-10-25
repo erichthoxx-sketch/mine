@@ -9,7 +9,7 @@ test('A Wordstat export can be safely read: quoted CSV, Cyrillic, duplicates and
   assert.equal(rows.length,3);
   assert.deepEqual(rows.map(x=>x.count),[1250,75,null]);
   assert.equal(rows[0].phrase,'дарк роман');
-  assert.equal(csvRows('phrase\tcount\nNew adult romance\t10\n'),[{phrase:'New adult romance',count:10}]);
+  assert.deepEqual(csvRows('phrase\tcount\nNew adult romance\t10\n'),[{phrase:'New adult romance',count:10}]);
 });
 test('Phrases are normalized, namespaced per book, and user decisions survive reimports',()=>{
   assert.equal(normKey('  ЧЁРНАЯ  вдова '),'черная вдова');
