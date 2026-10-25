@@ -5,6 +5,7 @@ import {BOOK_GENRES,bookGenres,bookTags,uniqueWords,marketingTopics} from '../wr
 import {discoverySources,rankPublicBooks} from '../direct/js/competitor-discovery.js';
 import {keywordsView} from '../direct/js/views/keywords.js';
 import worker from '../proxy/direct-worker.js';
+import {preparedKeywords} from '../direct/js/keywordcalc.js';
 
 const book={
  id:'black',title:'Развод для черной вдовы',
@@ -56,4 +57,12 @@ test('Worker без настройки Wordstat не вызывает платн
  assert.equal(forbidden.status,403);
  const missing=await worker.fetch(req,{WORDSTAT_ENABLED:'true'});
  assert.equal(missing.status,503);
+});
+
+test('Source from official Wordstat API is distinguished from manual CSV imports',()=>{
+ const rows=preparedKeywords([{phrase:'криминальный любовный роман',count:124}],'black','wordstat-api');
+ assert.equal(rows[0].source,'wordstat-api');
+ assert.equal(rows[0].count,124);
+ const uploaded=preparedKeywords([{phrase:'похищение',count:3}],'black','wordstat-import');
+ assert.equal(uploaded[0].source,'wordstat-import');
 });
