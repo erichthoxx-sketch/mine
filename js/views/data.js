@@ -14,7 +14,14 @@ export function data(a) {
     <div class="row"><label class="btn primary" style="cursor:pointer">Загрузить отчёт о продажах<input type="file" accept=".csv,.txt" data-chg="imp.any" hidden></label>
     <button data-act="sale.manual">Добавить продажи вручную</button></div>
     <p class="hint">Загрузка: выгрузка Литнета (Statistic.csv) или таблица старого трекера (dohody.csv). Совпадающие строки обновляются, новые добавляются. Неполная выгрузка больше не удаляет прежние продажи. Перед исправлением старых цифр сохрани резервную копию.</p>
-    <div class="hint">Сейчас в базе: ${c.sales.length} строк продаж${c.hasData ? ` за ${fmtDate(c.firstDate)} – ${fmtDate(c.dataEnd)}` : ''}.</div></div>
+    <div class="hint">Сейчас в расчете: ${c.sales.length} строк продаж${c.hasData ? ` за ${fmtDate(c.firstDate)} – ${fmtDate(c.dataEnd)}` : ''}.</div></div>
+  <div class="card">
+    <h2>Контроль финансовых данных</h2>
+    <p class="small">${c.salesReconciliation?.ok ? 'Суммы по дням и книгам внутри базы сходятся.' : c.salesReconciliation ? 'Обнаружено расхождение между итогами по дням и книгам.' : 'Нет сохраненных продаж для проверки.'}</p>
+    <div class="small muted">Учтено ${c.sales.length} строк · история изменений: ${st.data.sales_history?.length || 0} сохраненных частей импорта.</div>
+    ${c.ledgerWarnings?.length ? `<div class="alert bad"><b>Требуется сверка ${c.ledgerWarnings.length} замечаний</b><p class="small">Есть несовпадения ручного ввода с CSV, повторные идентификаторы или некорректные записи. До сверки суммы могут быть приблизительными.</p></div>` : ''}
+    <p class="hint">Этот контроль сверяет расчеты внутри приложения. Актуальные продажи подтверждает только выгрузка из кабинета Литнета.</p>
+  </div>
   ${reportCard(a)}
   <div class="card"><h2>Резервная копия</h2>
     <div class="row"><button class="primary" data-act="backup.save">Скачать копию (JSON)</button><label class="btn" style="cursor:pointer">Восстановить из копии<input type="file" accept=".json,application/json" data-chg="backup.restore" hidden></label></div>
