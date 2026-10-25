@@ -155,11 +155,33 @@ acts['leg.delp'] = async (d) => {
 };
 acts['leg.fromCh'] = (d) => saveL(d.id, (L) => { L.plan = chapterList(bookOf(d.id)).filter((t) => !isAuthorTab(t.title)).map((t) => ({ id: uid(), title: t.title, what: t.lead || '', why: '', pov: '', chars: [] })); });
 
+// Просмотр фото поверх формы персонажа, без закрытия и потери несохранённых полей.
+function showCharacterPhoto(src, name) {
+  if (!src) return;
+  let dlg = document.getElementById('lgPhotoViewer');
+  if (!dlg) {
+    dlg = document.createElement('dialog');
+    dlg.id = 'lgPhotoViewer';
+    dlg.className = 'lg-photo-viewer';
+    dlg.setAttribute('aria-label', 'Просмотр фото персонажа');
+    dlg.innerHTML = '<button type="button" class="lg-photo-close" aria-label="Закрыть просмотр">×</button><img alt="">';
+    dlg.addEventListener('click', (e) => {
+      if (e.target === dlg || e.target.closest('.lg-photo-close')) dlg.close();
+    });
+    document.body.appendChild(dlg);
+  }
+  const img = dlg.querySelector('img');
+  img.src = src;
+  img.alt = name ? 'Фото персонажа ' + name : 'Фото персонажа';
+  dlg.showModal();
+}
+
 // персонаж — окно с полями и подсказками
 acts['leg.char'] = (d) => {
   const L = legendOf(bookOf(d.id)), x = L.chars.find((y) => y.id === d.c) || { id: '', role: L.chars.length ? 'side' : 'heroine' };
+  const photoButton = x.photo ? `<button type="button" class="lg-photo-open" aria-label="Увеличить фото персонажа" title="Увеличить фото">${avatar(x, 64)}</button>` : avatar(x, 64);
   const f = openSheet(x.id ? x.name || 'Персонаж' : 'Новый персонаж', `
-    <div class="lg-ch-top">${avatar(x, 64)}<label class="link lg-photo">${x.photo ? 'Заменить фото' : 'Добавить фото'}<input type="file" accept="image/*" name="photoFile" hidden></label>${x.photo ? '<label class="check"><input type="checkbox" name="nophoto">убрать фото</label>' : ''}</div>
+    <div class="lg-ch-top">${photoButton}<label class="link lg-photo">${x.photo ? 'Заменить фото' : 'Добавить фото'}<input type="file" accept="image/*" name="photoFile" hidden></label>${x.photo ? '<label class="check"><input type="checkbox" name="nophoto">убрать фото</label>' : ''}</div>
     <div class="f2"><div><label for="lcn">Имя</label><input id="lcn" name="name" value="${esc(x.name || '')}" required placeholder="Анна Лебедева"></div>
     <div><label for="lcr">Роль</label><select id="lcr" name="role">${Object.entries(ROLES).map(([k, v]) => opt(k, v, x.role)).join('')}</select></div></div>
     ${CHAR_FIELDS.map(([k, label, ph]) => k === 'age' ? `<label for="lc_${k}">${label}</label><input id="lc_${k}" name="${k}" value="${esc(x[k] || '')}" placeholder="${ph}" inputmode="numeric">` : `<label for="lc_${k}">${label}</label><textarea id="lc_${k}" class="lg-ta" name="${k}" rows="2" placeholder="${esc(ph)}">${esc(x[k] || '')}</textarea>`).join('')}
@@ -175,6 +197,9 @@ acts['leg.char'] = (d) => {
     toast(x.id ? 'Сохранено' : `${name} — в Легенде`);
   }, { submitText: x.id ? 'Сохранить' : 'Добавить' });
   f?.querySelectorAll('.lg-ta').forEach(grow);
+  f?.querySelector('.lg-photo-open')?.addEventListener('click', (e) => {
+    showCharacterPhoto(e.currentTarget.querySelector('img')?.src, x.name);
+  });
 };
 acts['leg.delc'] = async (d) => {
   if (!(await ask('Удалить персонажа из Легенды?', 'Удалить'))) return false;
