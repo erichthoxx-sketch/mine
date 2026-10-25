@@ -82,3 +82,26 @@ test('Повторный импорт не требует галочек и ве
   assert.doesNotMatch(source,/name="allowLower"/);
   assert.doesNotMatch(source,/removeMany\('sales'/);
 });
+
+test('Новая цена без старой строки в файле не приводит к двойному начислению',()=>{
+  const previous=[sample('price169',736,6)];
+  const partial=[{...sample('price169',736,6),id:'price199',price:199}];
+  const plan=safeSalesImport(previous,partial);
+  assert.equal(plan.ambiguous,1);
+  assert.equal(plan.rows.length,0);
+  const full=safeSalesImport(previous,[previous[0],partial[0]]);
+  assert.equal(full.added,1);
+});
+test('Первичная загрузка и повторный импорт одинакового файла идемпотентны',()=>{
+  const first=safeSalesImport([],earlier);
+  assert.equal(first.added,2);
+  const second=safeSalesImport(earlier,earlier);
+  assert.equal(second.rows.length,0);
+  assert.equal(second.same,2);
+});
+test('До подтверждения загрузки всех финансовых коллекций суммы скрыты',()=>{
+  const app=readFileSync(new URL('../js/app.js',import.meta.url),'utf8');
+  assert.match(app,/COLLECTIONS\.every\(name => store\.loaded\?\.\[name\]\)/);
+  assert.match(app,/store\.settingsServerLoaded/);
+  assert.match(app,/До сверки суммы скрыты/);
+});
