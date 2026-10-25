@@ -1,6 +1,6 @@
 // «Легенда» книги: идея, каркас по главам, персонажи. Сохраняется в книге (b.legend) и сама переписывается
 // во вкладки Google Документа «Идея», «Каркас», «Персонажи» (в рукопись и подсчёт знаков они не входят).
-// «Для нейросети» — всё одним текстом, можно «до главы N»: план и характеры для контекста.
+// «Для нейросети» — можно копировать всю Легенду или отдельно Идею, Каркас, Персонажей, Синопсис.
 import { esc, acts, changes, openSheet, closeSheet, opt, toast, uid, ask, download } from '../../../js/ui.js';
 import { ic } from '../../../js/icons.js';
 import { resizeImage } from '../../../js/img.js';
@@ -186,20 +186,39 @@ acts['leg.delc'] = async (d) => {
 // ---------- «Для нейросети» ----------
 acts['leg.ai'] = (d) => {
   const b = bookOf(d.id), L = legendOf(b);
-  const f = openSheet('Легенда для нейросети', `<p class="small muted" style="margin-top:0">Скопируйте и вставьте в начало разговора с нейросетью — она будет учитывать идею, план и характеры.</p>
+  const sections = [['all', 'Все'], ['idea', 'Идея'], ['plan', 'Каркас'], ['chars', 'Персонажи'], ['syn', 'Синопсис']];
+  const f = openSheet('Легенда для нейросети', `<p class="small muted" style="margin-top:0">Выбери раздел Легенды и скопируй готовый текст для нейросети.</p>
     <div class="idea-seg lg-mode"><button type="button" class="on" data-m="work">Рабочий</button><button type="button" data-m="full">Полный</button></div>
-    <p class="small muted lg-mode-h" style="margin:-4px 0 8px">Только утверждённое: канон, персонажи, решения. Варианты и отвергнутое сюда не попадают.</p>
-    ${L.plan.length ? `<label for="lgu">Каркас</label><select id="lgu" name="upTo">${opt('0', 'весь', '0')}${L.plan.map((p, i) => { const n = chapterNums(L.plan)[i]; return opt(String(i + 1), `${n ? `до главы ${n}${p.title ? ' — ' + p.title : ''}` : `до: ${p.title}`} (и что пишем дальше)`, '0'); }).join('')}</select>` : ''}
-    <textarea id="lgtext" class="lg-ai" readonly rows="14"></textarea>
+    <p class="small muted lg-mode-h">Только утвержденное: канон, персонажи, решения. Варианты и отвергнутое сюда не попадают.</p>
+    <div class="lg-export-label">Что скопировать</div>
+    <div class="lg-export-sections" role="group" aria-label="Разделы Легенды">
+      ${sections.map(([key, label]) => `<button type="button" class="lg-export-choice${key === 'all' ? ' on' : ''}" data-section="${key}" aria-pressed="${key === 'all'}">${label}</button>`).join('')}
+    </div>
+    <textarea id="lgtext" class="lg-ai" readonly rows="14" aria-label="Текст выбранного раздела"></textarea>
     <div class="dl-row"><button type="button" class="primary" data-act="leg.copy">${ic('copy')} Скопировать</button></div>`, null);
-  let mode = 'work';
-  const upd = () => { f.querySelector('#lgtext').value = legendContext(L, { title: b.title, upTo: Number(f.querySelector('#lgu')?.value || 0), mode }); };
+  let mode = 'work', selected = 'all';
+  const upd = () => {
+    const parts = selected === 'all' ? ['idea', 'plan', 'chars', 'syn'] : [selected];
+    f.querySelector('#lgtext').value = legendContext(L, { title: b.title, mode, sections: parts, synopsis: synText(b) });
+  };
   f.querySelectorAll('.lg-mode button').forEach((x) => x.addEventListener('click', () => {
-    mode = x.dataset.m; f.querySelectorAll('.lg-mode button').forEach((y) => y.classList.toggle('on', y === x));
-    f.querySelector('.lg-mode-h').textContent = mode === 'work' ? 'Только утверждённое: канон, персонажи, решения. Варианты и отвергнутое сюда не попадают.' : 'Всё с пометками: утверждённое, варианты «обсуждается», открытые вопросы и отдельно — отвергнутое (не использовать).';
+    mode = x.dataset.m;
+    f.querySelectorAll('.lg-mode button').forEach((y) => y.classList.toggle('on', y === x));
+    f.querySelector('.lg-mode-h').textContent = mode === 'work'
+      ? 'Только утвержденное: канон, персонажи, решения. Варианты и отвергнутое сюда не попадают.'
+      : 'Всё с пометками: утвержденное, варианты «обсуждается», открытые вопросы и отдельно — отвергнутое.';
     upd();
   }));
-  f.querySelector('#lgu')?.addEventListener('change', upd); upd();
+  f.querySelectorAll('.lg-export-choice').forEach((x) => x.addEventListener('click', () => {
+    selected = x.dataset.section;
+    f.querySelectorAll('.lg-export-choice').forEach((y) => {
+      const on = y === x;
+      y.classList.toggle('on', on);
+      y.setAttribute('aria-pressed', String(on));
+    });
+    upd();
+  }));
+  upd();
   return false;
 };
 acts['leg.copy'] = async () => { const t = document.getElementById('lgtext')?.value || ''; try { await navigator.clipboard.writeText(t); toast('Скопировано — вставьте в чат с нейросетью'); } catch { document.getElementById('lgtext')?.select(); toast('Выделено — нажмите Ctrl+C'); } return false; };
