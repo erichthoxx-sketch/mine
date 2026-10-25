@@ -424,7 +424,7 @@ acts['wb.dates'] = (d) => {
     <div><label for="fb">Допишу к</label><input id="fb" type="date" name="finishBy" value="${b.finishBy || ''}"><div class="small muted">${s.finishAuto ? `по темпу: ${fmtDate(s.finishAuto)}` : 'посчитаю по темпу письма'}</div></div></div>
     <div class="hint">Даты можно не заполнять — они считаются сами по графику, числу глав и темпу письма. Своя дата заменит расчёт. В дни выкладки на Главной появится напоминание выложить главу, если она ещё не отмечена и не стоит на таймере. Начало выкладки отметится событием «Старт книги» в «Доходах» (если выкладка началась больше недели назад — событие не ставлю).</div>`, async (fd) => {
     const patch = { publishStart: fd.get('publishStart') || '', pubDays: fd.getAll('dow').map(Number), planChapters: N(fd.get('planChapters')) || null, publishUntil: fd.get('publishUntil') || '', finishBy: fd.get('finishBy') || '' };
-    await app().store.put('w_books', { ...b, ...patch });
+    await app().store.patch('w_books', b.id, patch);
     // старт давно прошедшей выкладки событием не ставим — оно уже неактуально (если не стояло раньше)
     const had = (app().store.data.days || []).some((x) => (x.events || []).some((e) => e.src === `w:${b.id}:start`));
     if (patch.publishStart && (had || patch.publishStart >= addDays(c.today, -7))) await startEvent(c, { ...b, ...patch }, patch.publishStart);
@@ -437,7 +437,7 @@ acts['wb.finish'] = (d) => {
   openSheet(`Книга завершена — ${b.title}`, `<label for="fd">Дата завершения</label><input id="fd" type="date" name="date" value="${c.today}" required>
     <div class="hint">Книга получит статус «Завершена» (дописана). В «Доходах» событие «Завершение книги» встанет на день выхода последней главы или «От автора», если выкладка ещё идёт.</div>`, async (fd) => {
     const date = fd.get('date') || c.today;
-    await app().store.put('w_books', { ...b, status: 'done', finishedAt: date });
+    await app().store.patch('w_books', b.id, { status: 'done', finishedAt: date });
     await syncFinish(c, { ...b, status: 'done', finishedAt: date }); // в «Доходах» — в день выхода последней главы
     toast('Поздравляю с завершением!');
   }, { submitText: 'Завершена' });
