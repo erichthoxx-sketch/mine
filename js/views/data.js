@@ -70,6 +70,11 @@ async function importStatistic(text) {
   const c = app().ctx();
   // Неполная выгрузка не должна стирать ранее сохраненные продажи.
   const d = diffSales(c.sales, r.rows, false);
+  const have = new Map(c.sales.map(s => [s.id, s]));
+  const reductions = r.rows.filter(s => {
+    const prev = have.get(s.id);
+    return prev && (s.qty < prev.qty || s.royalty + 0.004 < prev.royalty);
+  });
   const fm = /(\d[\d  ]*[.,]\d{2})[  ]*RUB/i.exec(text);
   const fileTotal = fm ? parseNum(fm[1]) : null;
   const from = r.rows.reduce((x, s) => (s.date < x ? s.date : x), r.rows[0].date), to = r.rows.reduce((x, s) => (s.date > x ? s.date : x), r.rows[0].date);
@@ -81,14 +86,20 @@ async function importStatistic(text) {
     <table><tr><th>Месяц</th><th>Гонорар</th></tr>${Object.keys(perMonth).sort().map((k) => `<tr><td>${fmtMonth(k)}</td><td>${rub(perMonth[k])}</td></tr>`).join('')}</table>
     <h3>Что изменится</h3><ul><li>новых строк: <b>${d.added}</b></li><li>обновится: <b>${d.changed}</b></li><li>без изменений: ${d.same}</li>${newBooks.length ? `<li>новые книги: ${newBooks.map(([, t]) => esc(t)).join(', ')}</li>` : ''}</ul>
     <div class="alert ok"><b>Без удаления данных.</b> При загрузке добавятся отсутствующие продажи и обновятся совпадающие строки. Продажи других книг и дней, которых нет в файле, останутся в базе.</div>
-    <p class="small muted">Если исправляешь данные из прошлой выгрузки, сначала сравни суммы с кабинетом Литнета. Импорт больше не удаляет пропущенные строки автоматически.</p>`, async () => {
-    const have = new Map(c.sales.map((s) => [s.id, s]));
-    const write = r.rows.filter((s) => { const e = have.get(s.id); return !e || e.qty !== s.qty || Math.abs(e.royalty - s.royalty) > 0.004; });
+    ${reductions.length ? `<div class="alert bad"><b>Внимание: ${reductions.length} строк в файле меньше сохраненных.</b> Это может быть неполная выгрузка. По умолчанию старые суммы не уменьшаются.<label><input type="checkbox" name="allowLower"> Я сверила отчет с Литнетом и разрешаю уменьшить эти ${reductions.length} строки</label></div>` : ''}
+    <p class="small muted">Перед исправлением цифр сохрани резервную копию. Импорт больше не удаляет пропущенные строки автоматически.</p>`, async (fd) => {
+    const allowLower = !!fd.get('allowLower');
+    const write = r.rows.filter(s => {
+      const e = have.get(s.id);
+      if (!e) return true;
+      if (!allowLower && (s.qty < e.qty || s.royalty + 0.004 < e.royalty)) return false;
+      return e.qty !== s.qty || Math.abs(e.royalty - s.royalty) > 0.004;
+    });
     await app().store.putMany('sales', write);
     for (const [bookId, title] of newBooks) {
       await app().store.put('books', { id: bookId, title, status: 'progress', startDate: '', lastChapterDate: '', priceHistory: inferPriceChanges(r.rows, bookId) });
     }
-    toast(`Импорт готов: добавлено ${d.added}, обновлено ${d.changed}`);
+    toast(`Импорт готов: записано ${write.length} строк${reductions.length && !allowLower ? ', возможные уменьшения пропущены' : ''}`);
     app().go('/');
   }, { submitText: 'Загрузить' });
 };
