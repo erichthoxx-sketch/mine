@@ -100,3 +100,41 @@ test('ответ нейросети, скопированный из чата б
   const r3 = applyTemplate(L0, 'chars', 'ПЕРСОНАЖИ\n\nВера\nРоль: Героиня\nВозраст: 34\nХарактер: упрямая,\nно добрая\n\nАртём\nРоль: Герой\nВнешность: высокий\n\n(Роль — одно из: Героиня, Герой.)', id);
   assert.deepEqual(r3.legend.chars.map((c) => [c.name, c.role, c.age || '', c.nature || '', c.look || '']), [['Вера', 'heroine', '34', 'упрямая,\nно добрая', ''], ['Артём', 'hero', '', '', 'высокий']]);
 });
+
+test('Легенда для нейросети: экспорт каждой вкладки отдельно', () => {
+  const idea = legendContext(L, { title: 'Развод', sections: ['idea'] });
+  assert.match(idea, /## Идея/);
+  assert.doesNotMatch(idea, /## Персонажи|## Каркас|## Синопсис/);
+
+  const chars = legendContext(L, { title: 'Развод', sections: ['chars'] });
+  assert.match(chars, /## Персонажи/);
+  assert.match(chars, /Анна/);
+  assert.doesNotMatch(chars, /## Идея|## Каркас|## Синопсис/);
+
+  const plan = legendContext(L, { title: 'Развод', sections: ['plan'] });
+  assert.match(plan, /## Каркас по главам/);
+  assert.doesNotMatch(plan, /## Идея|## Персонажи|## Синопсис/);
+
+  const syn = legendContext(L, { title: 'Развод', sections: ['syn'], synopsis: 'Героиня узнает тайну мужа.' });
+  assert.match(syn, /## Синопсис\\nГероиня узнает тайну мужа/);
+  assert.doesNotMatch(syn, /## Идея|## Персонажи|## Каркас/);
+
+  const all = legendContext(L, { title: 'Развод', sections: ['idea','plan','chars','syn'], synopsis: 'Синопсис романа.' });
+  for (const section of ['Идея', 'Персонажи', 'Каркас по главам', 'Синопсис']) {
+    assert.ok(all.includes('## ' + section), section);
+  }
+});
+
+test('Экспорт пустой вкладки не подставляет чужие разделы', () => {
+  const text = legendContext(L, { title: 'Развод', sections: ['syn'], synopsis: '' });
+  assert.match(text, /Выбранный раздел пока не заполнен/);
+  assert.doesNotMatch(text, /## Каркас|## Идея|## Персонажи/);
+});
+
+test('Полный режим при выборе персонажей не добавляет вопросы и отвергнутые главы', () => {
+  const legends = { ...L, questions: [{ q: 'Вопрос?', a: 'Ответ', st: 'open' }],
+    plan: [{ title: 'Отвергнутая сцена', st: 'no' }] };
+  const text = legendContext(legends, { title: 'Развод', mode: 'full', sections: ['chars'] });
+  assert.match(text, /## Персонажи/);
+  assert.doesNotMatch(text, /Вопрос\\?|Отвергнутая сцена|Отвергнуто/);
+});
