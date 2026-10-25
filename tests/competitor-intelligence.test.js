@@ -26,7 +26,7 @@ test('Competitor UI describes evidence limits and links to public books only',()
   const a={ctx:()=>({data:{d_competitors:[],d_keywords:[]},settings:{}})};
   const html=competitorsView(a).html;
   assert.match(html,/Конкурентная разведка/);
-  assert.match(html,/закрытой статистики|Данные о чужих расходах/);
+  assert.match(html,/Статистика чужих продаж и рекламы недоступна/);
   assert.match(html,/data-act="cmp.new"/);
 });
 test('Keywords UI links read-only campaign and competitor research without adding to ads',()=>{
