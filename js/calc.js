@@ -715,8 +715,38 @@ export function diffSales(existing, incoming, replacePeriod = true) {
   return { added, changed, same, removeIds };
 }
 
+// Безопасная повторная загрузка: неполный CSV дополняет базу, но не удаляет строки
+// и не уменьшает уже сохраненные суммы без отдельной сверки первоисточника.
+// При конфликте количества ИЛИ гонорара оставляем старую строку целиком.
+export function safeSalesImport(existing = [], incoming = []) {
+  const have = new Map(existing.map(s => [s.id, s]));
+  const result = { rows: [], added: 0, increased: 0, same: 0, held: 0, retained: 0, potentialDuplicates: 0 };
+  const incomingIds = new Set(incoming.map(s => s.id));
+  const dates = new Set(incoming.map(s => s.date));
+  for (const row of incoming) {
+    const prev = have.get(row.id);
+    if (!prev) { result.rows.push(row); result.added++; continue; }
+    if (row.qty === prev.qty && Math.abs(row.royalty - prev.royalty) < 0.005) { result.same++; continue; }
+    // Не смешиваем новую сумму и старое количество: это мог быть частичный отчет.
+    if (row.qty < prev.qty || row.royalty + 0.005 < prev.royalty) {
+      result.held++; continue;
+    }
+    result.rows.push(row); result.increased++;
+  }
+  result.retained = existing.filter(s => dates.has(s.date)
+    && (!s.platform || String(s.platform).toLowerCase() === 'литнет')
+    && !incomingIds.has(s.id)).length;
+  // Ручные продажи за дату, книгу и тип могут пересечься с выгрузкой;
+  // автоматически удалять их небезопасно, поэтому сообщаем об этом отдельно.
+  const groups = new Set(incoming.map(s => [s.date, s.bookId, s.kind].join('|')));
+  result.potentialDuplicates = existing.filter(s => s.manual
+    && (!s.platform || String(s.platform).toLowerCase() === 'литнет')
+    && groups.has([s.date, s.bookId, s.kind].join('|'))).length;
+  return result;
+}
+
 // Ручной результат дня (пока нет выгрузки Литнета). Полная цена восстанавливается из роялти 70 %.
-// Когда загрузите выгрузку за этот период, ручные строки заменятся точными (галочка «убрать старые строки»).
+// Если ручной ввод пересекается с выгрузкой, показываем предупреждение — не удаляем его молча.
 // platform — площадка (Литнет, Литмаркет…); gross — сколько заплатили читатели (если не указано — роялти ÷ 70 %)
 export function manualSaleRow({ date, book, bookId, kind, qty, royalty, gross = null, platform = 'Литнет' }) {
   const q = Math.max(1, Number(qty) || 1);
