@@ -191,7 +191,7 @@ acts['leg.char'] = (d) => {
     const v = { ...x, id: x.id || uid(), name, role: fd.get('role') };
     for (const [k] of CHAR_FIELDS) v[k] = String(fd.get(k) || '').trim();
     const file = fd.get('photoFile');
-    if (file && file.size) { try { v.photo = await resizeImage(file, 160); } catch { toast('Фото не получилось уменьшить'); } }
+    if (file && file.size) { try { v.photo = await resizeImage(file, 640, 0.82); } catch { toast('Фото не получилось уменьшить'); } }
     if (fd.get('nophoto')) v.photo = '';
     await saveL(d.id, (L) => { L.chars = x.id ? L.chars.map((y) => (y.id === x.id ? v : y)) : [...L.chars, v]; });
     toast(x.id ? 'Сохранено' : `${name} — в Легенде`);
