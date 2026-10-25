@@ -7,6 +7,7 @@ import {
   outageSet,
 } from './calc.js';
 import { fmtDate } from './format.js';
+import { financialLedger, financialReconcile } from './sales-integrity.js';
 import { COLLECTIONS } from './parse.js';
 import { ic } from './icons.js';
 import { home } from './views/home.js';
@@ -18,7 +19,7 @@ import { data } from './views/data.js';
 import { sideIncome } from './views/side.js';
 
 // d_snap — сводка из приложения «Директ» (для баннера во вкладке «Реклама»)
-const store = createStore({ colls: [...COLLECTIONS, 'd_snap'] });
+const store = createStore({ colls: [...COLLECTIONS, 'd_snap', 'sales_history'] });
 initAccent(store);
 const ui = { route: '/', range: 90, table: 'weeks', day: null, month: null };
 keepPlace(ui, ['range', 'table', 'day', 'month', 'adMonth', 'booksMonth']);
@@ -49,17 +50,19 @@ function applyTheme() {
 let cache = null, cacheKey = '';
 function getCtx() {
   const d = store.data;
+  const ledger = financialLedger(d.sales);
+  const financialSales = ledger.sales;
   const today = todayISO();
   const key = [d.sales.length, d.books.length, d.days.length, d.campaigns.length, d.reports.length, d.months.length, JSON.stringify(d.settings), today, store.version || 0].join('|');
   if (cache && key === cacheKey) return cache;
   const legacyDays = d.days.filter((x) => x.income != null);
-  const first = firstKnownDate(d.sales, legacyDays);
+  const first = firstKnownDate(financialSales, legacyDays);
   // «данные по» — по продажам Литнета (ручные продажи других площадок не сдвигают дату)
-  const litnetSales = d.sales.filter((s) => !s.platform || s.platform.toLowerCase() === 'литнет');
-  const lastS = lastSaleDate(litnetSales.length ? litnetSales : d.sales);
+  const litnetSales = financialSales.filter((s) => !s.platform || s.platform.toLowerCase() === 'литнет');
+  const lastS = lastSaleDate(litnetSales.length ? litnetSales : financialSales);
   const dataEnd = lastS && lastS < today ? lastS : today;
   const hasData = !!first;
-  const series = hasData ? incomeSeries(d.sales, legacyDays, first, dataEnd) : [];
+  const series = hasData ? incomeSeries(financialSales, legacyDays, first, dataEnd) : [];
   const monthsMap = Object.fromEntries(d.months.map((m) => [m.id, m]));
   const spend = spendByMonthChannel(d.campaigns, d.reports, monthsMap, today);
   const forecast = monthSpendForecast(d.campaigns, d.reports, today);
@@ -72,7 +75,9 @@ function getCtx() {
   const discounts = litnetDiscounts(litnetDiscountBase(spend, forecast, today), { threshold: Number(d.settings.litnetThreshold), pct: Number(d.settings.litnetPct) / 100, forecastMonth: monthKey(today), payments: litnetPayments, caps, toDate: { used: spend[monthKey(today)]?.litnet || 0, fee: litnetMoney[monthKey(today)]?.fee ?? 0 } }, confirmed);
   const booksById = Object.fromEntries(d.books.map((b) => [b.id, b]));
   cache = {
-    data: d, settings: d.settings, today, sales: d.sales, legacyDays, books: d.books, booksById, campaigns: d.campaigns,
+    data: d, settings: d.settings, today, sales: financialSales, ledgerWarnings: ledger.warnings,
+    salesReconciliation: hasData ? financialReconcile(financialSales, first, dataEnd) : null,
+    legacyDays, books: d.books, booksById, campaigns: d.campaigns,
     // для выбора в формах — без снятых с продажи; сначала книги в процессе
     activeBooks: d.books.filter((b) => b.status !== 'removed').sort((a, b) => (a.status === 'done') - (b.status === 'done') || a.title.localeCompare(b.title)),
     firstDate: first, dataEnd, hasData, series, ma: movingAverage(series.map((x) => x.royalty), 7),
