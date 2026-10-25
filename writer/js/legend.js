@@ -274,7 +274,13 @@ export function applyTemplate(L, part, text, newId = () => Math.random().toStrin
         const q = m[1].trim(), a = (m[2] || '').trim(), old = out.questions.find((x) => lowKey(x.q) === lowKey(q));
         qs.push(old ? { ...old, a: a || old.a } : { id: newId(), q, a, st: 'open' });
       }
-      if (qs.length) { const keep = out.questions.filter((x) => !qs.some((y) => y.id === x.id)); out.questions = [...keep, ...qs]; n += qs.length; }
+      if (qs.length) {
+        // Явная замена списка: для повторной загрузки Легенды без накопления устаревших вопросов.
+        const replace = /^===\s*ЗАМЕНИТЬ ОТКРЫТЫЕ ВОПРОСЫ\s*===\s*$/i.test(lines[qi].trim());
+        if (replace) out.questions = qs;
+        else { const keep = out.questions.filter((x) => !qs.some((y) => y.id === x.id)); out.questions = [...keep, ...qs]; }
+        n += qs.length;
+      }
     }
   }
   if (part === 'chars') {
