@@ -1,3 +1,4 @@
+import { incomeSeries, sumSeries, booksBreakdown, byMonth } from './calc.js';
 // Единый слой контроля финансовых строк для всех экранов.
 // Source CSV и предварительный ручной ввод никогда не суммируются дважды.
 const cents = value => Math.round(Number(value || 0) * 100);
@@ -59,6 +60,13 @@ export function financialReconcile(sales = [], from, to) {
   }
   const booksCents=[...map.values()].reduce((s,x)=>s+x,0);
   const daysCents=[...days.values()].reduce((s,x)=>s+x,0);
-  return { total:totalCents/100, qty, booksTotal:booksCents/100, daysTotal:daysCents/100,
-    ok:totalCents===booksCents && totalCents===daysCents };
+  const series = incomeSeries(inPeriod, [], from, to);
+  const chartCents = cents(sumSeries(series));
+  const cardsCents = cents(booksBreakdown(inPeriod, from, to).reduce((n,b)=>n+b.royalty,0));
+  const monthCents = cents(byMonth(series).reduce((n,m)=>n+m.royalty,0));
+  const seriesQty = series.reduce((n,d)=>n+d.qty,0);
+  return { total:totalCents/100, qty, booksTotal:cardsCents/100, daysTotal:chartCents/100,
+    ok:totalCents===booksCents && totalCents===daysCents &&
+       totalCents===chartCents && totalCents===cardsCents && totalCents===monthCents &&
+       qty===seriesQty };
 }
