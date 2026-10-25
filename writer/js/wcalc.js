@@ -631,6 +631,17 @@ export function contestEmailPurpose(x, email) {
 // меню площадки, счётчиков и подвала сайта: от названия конкурса до конца условий
 const PAGE_JUNK = /^(жанры и подборки|жанры|конкурсы|блоги|моя библиотека|библиотека|участвовать|участвую|войти|вход|регистрация|поиск|меню|главная|все конкурсы|правила( конкурса)?|работы( участников)?|участники|новости|итоги|авторам|читателям|подписаться|поделиться|\d+|\d+\s+(дн[яей]|день)\s+до\s+конца\s+при[её]ма\s+работ!?|.*cookie.*|©.*)$/i;
 const PAGE_FOOT = /^(о проекте|правообладателям|пользовательское соглашение|политика конфиденциальности|служба поддержки|скачать приложение|мы в соцсетях|контакты|реклама на сайте)/i;
+// Не включаем дискуссии под конкурсом в условия. На Литнете комментарии часто
+// дублируются в HTML (текст карточки + текст ответа) и могут содержать ложные даты,
+// жанры и адреса — поэтому обрезаем раздел ЦЕЛИКОМ, а не отдельные реплики.
+const CONTEST_DISCUSSION = /^(?:комментарии(?:\s*\(\d+\)|\s+\d+)?|комментариев?\s*:?\s*\d+|обсуждение(?:\s+конкурса)?|оставить\s+комментарий|написать\s+комментарий|авторизуйтесь,?\s*чтобы\s+(?:оставить|оставлять)\s+комментарии?|все\s+ответы|показать\s+все\s+ответы|ответить\s+на\s+комментарий)$/i;
+const CONTEST_RULE_ANCHOR = /^(?:срок\s+при[её]ма|условия\s+(?:конкурса|участия)|правила\s+конкурса|размер\s+книги|жанр[ы:]?|принимаются\s+|требовани[яй]|призовой\s+фонд|описание|как\s+участвовать|порядок\s+подачи)/i;
+export function contestHasDiscussion(t) {
+  const ls = String(t || '').replace(/\r/g, '').split('\n').map(x=>x.trim()).filter(Boolean);
+  const rule = ls.findIndex(x=>CONTEST_RULE_ANCHOR.test(x));
+  return ls.some((x,i)=>CONTEST_DISCUSSION.test(x) && (rule<0 ? i>=2 : i>rule));
+}
+
 export function cleanContestText(t) {
   let s = String(t || '').replace(/\r/g, '');
   const title = /^Title:\s*(.+)$/m.exec(s)?.[1]?.trim() || '';
@@ -638,10 +649,17 @@ export function cleanContestText(t) {
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/^#{1,6}\s*/gm, '').replace(/\*\*|__/g, '')
     .replace(/^\s*[*+]\s+/gm, '— ').replace(/^\s*(=+|-{3,})\s*$/gm, '');
   let lines = s.split('\n').map((x) => x.trim()).filter(Boolean);
+  // Комментарии — конец содержимого конкурса. Сохраняем всё до него,
+  // включая требования, критерии, сроки и ссылки для подачи.
+  const rulesAt = lines.findIndex(x => CONTEST_RULE_ANCHOR.test(x));
+  const discussionAt = lines.findIndex((x,i) => CONTEST_DISCUSSION.test(x) && (rulesAt<0 ? i>=2 : i>rulesAt));
+  if (discussionAt >= 0) lines = lines.slice(0,discussionAt);
   const name = title.replace(/^литературный\s+конкурс:?\s*/i, '').replace(/^конкурс:?\s*/i, '').replace(/\s*[|—-]\s*(литнет|litnet).*$/i, '').trim();
   const i0 = name ? lines.findIndex((x) => x.toLowerCase() === name.toLowerCase()) : -1;
   if (i0 > 0) lines = lines.slice(i0);
   lines = lines.filter((x) => !PAGE_JUNK.test(x));
+  // Удаляем соседние дубли, характерные для HTML-версий страниц.
+  lines = lines.filter((x,i)=> i===0 || x!==lines[i-1]);
   const fi = lines.findIndex((x) => PAGE_FOOT.test(x));
   if (fi > 3) lines = lines.slice(0, fi);
   if (name && lines[0]?.toLowerCase() !== name.toLowerCase()) lines.unshift(name);
