@@ -4,11 +4,18 @@ const cents = value => Math.round(Number(value || 0) * 100);
 const norm = s => String(s || '').toLocaleLowerCase('ru').replace(/ё/g, 'е').trim().replace(/\s+/g, ' ');
 const group = s => [s.date, norm(s.book || s.bookId), s.kind === 'sub' ? 'sub' : 'sale', norm(s.platform || 'Литнет')].join('|');
 const litnet = s => norm(s.platform || 'Литнет') === 'литнет';
+const validSale = s => !!s && /^\d{4}-\d{2}-\d{2}$/.test(String(s.date || ''))
+  && !!String(s.book || s.bookId || '').trim()
+  && ['sale', 'sub'].includes(s.kind)
+  && Number.isFinite(s.qty) && Number.isInteger(s.qty) && s.qty >= 0
+  && Number.isFinite(s.price) && s.price >= 0 && Number.isFinite(s.royalty);
 
 export function financialLedger(rows = []) {
   const raw = Array.isArray(rows) ? rows : [];
+  const valid = raw.filter(validSale);
+  const invalid = raw.length - valid.length;
   const grouped = new Map();
-  for (const s of raw) {
+  for (const s of valid) {
     const key = group(s);
     if (!grouped.has(key)) grouped.set(key, { manual: [], imported: [] });
     grouped.get(key)[s.manual ? 'manual' : 'imported'].push(s);
@@ -31,10 +38,7 @@ export function financialLedger(rows = []) {
         importRoyalty:importRoyalty / 100, manualQty, importQty });
     }
   }
-  const invalid = raw.filter(s=>!s.date || !s.book || !Number.isFinite(Number(s.qty))
-    || !Number.isFinite(Number(s.royalty)) || !Number.isFinite(Number(s.price))
-    || Number(s.qty) < 0 || !Number.isInteger(Number(s.qty)));
-  if(invalid.length) warnings.push({type:'invalid-rows',count:invalid.length});
+  if(invalid) warnings.push({type:'invalid-rows',count:invalid});
   const byId=new Map();
   for(const s of raw)byId.set(s.id,(byId.get(s.id)||0)+1);
   const duplicates=[...byId].filter(([id,n])=>id && n>1);
@@ -44,7 +48,7 @@ export function financialLedger(rows = []) {
 
 // Инварианты вычисляются независимо: строка = сумма по книгам = сумма за день = сумма за месяц.
 export function financialReconcile(sales = [], from, to) {
-  const inPeriod = sales.filter(s => s.date >= from && s.date <= to);
+  const inPeriod = sales.filter(s => validSale(s) && s.date >= from && s.date <= to);
   const totalCents = inPeriod.reduce((sum,s)=>sum+cents(s.royalty),0);
   const qty = inPeriod.reduce((sum,s)=>sum+Number(s.qty||0),0);
   const map = new Map(), days = new Map();
