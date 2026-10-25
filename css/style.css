@@ -2364,6 +2364,9 @@ main .rev-actions button.dl .ic { opacity: 1; }
 .app-writer .bm-edit-tag:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
 .app-writer .bm-edit-tag-cross { font-size: 16px; font-weight: 400; line-height: 1; color: var(--text-2); }
 .app-writer .bm-hint { display: block; margin: 9px 0 0; color: var(--text-2); font: 500 12px/1.45 var(--font-body); }
+.app-writer .bm-tax-save-row { display:flex; align-items:center; flex-wrap:wrap; gap: 8px 15px; margin-top: 16px; }
+.app-writer .bm-tax-save-row button { margin:0; border-radius: 10px; }
+.app-writer .bm-tax-save-row > span { font:500 12px/1.5 var(--font-body); color:var(--text-2); }
 @media (max-width: 560px) {
   .app-writer .book-taxonomy-edit { padding: 14px; }
   .app-writer .bm-genre-grid { grid-template-columns: 1fr; gap: 12px; }
