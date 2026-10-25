@@ -3,7 +3,7 @@
 import { acts, toast } from './ui.js';
 import { ic } from './icons.js';
 
-export const PROXY_LATEST = 3; // 2 — Метрика; 3 — страницы конкурсов
+export const PROXY_LATEST = 5; // 4 — новые ЕПК; 5 — платный Wordstat, выключен до ручной настройки
 const app = () => window.__app;
 const saveD = (patch) => app().store.saveSettings({ direct: { ...(app().ctx().settings.direct || {}), ...patch } });
 const base = (s) => (s.direct?.proxy || '').replace(/\/+$/, '');
@@ -18,7 +18,7 @@ export function proxyCard(s) {
   if (!checked) { checked = true; proxyVersion(s).then((v) => { if (v && v !== d.proxyV) saveD({ proxyV: v }); }); }
   if (!d.proxyV || d.proxyV >= PROXY_LATEST) return '';
   return `<div class="card"><div class="row between"><h2 style="margin:0">Обновить переходник</h2><span class="d-st">версия ${d.proxyV} → ${PROXY_LATEST}</span></div>
-    <p class="small">Переходник на Cloudflare общий для «Директа» и «Мастерской». Новая версия умеет открывать страницы конкурсов — «Мастерская» сама подтянет условия по ссылке. Займёт минуту:</p>
+    <p class="small">Переходник на Cloudflare общий для «Директа» и «Мастерской». Обновление сохраняет Директ, Метрику и страницы конкурсов; добавляет защищенный Wordstat. Без его отдельной настройки платные запросы не работают:</p>
     <ol class="small st-how">
       <li>Нажмите <button type="button" class="dl" data-act="px.copy">${ic('copy')} Скопировать новый код</button></li>
       <li>Откройте <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener">Cloudflare</a> → слева <b>Compute → Workers & Pages</b> → <b>direct</b> → справа вверху <b>Edit code</b>.</li>
