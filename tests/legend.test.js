@@ -116,7 +116,7 @@ test('Легенда для нейросети: экспорт каждой вк
   assert.doesNotMatch(plan, /## Идея|## Персонажи|## Синопсис/);
 
   const syn = legendContext(L, { title: 'Развод', sections: ['syn'], synopsis: 'Героиня узнает тайну мужа.' });
-  assert.match(syn, /## Синопсис\\nГероиня узнает тайну мужа/);
+  assert.match(syn, /## Синопсис\nГероиня узнает тайну мужа/);
   assert.doesNotMatch(syn, /## Идея|## Персонажи|## Каркас/);
 
   const all = legendContext(L, { title: 'Развод', sections: ['idea','plan','chars','syn'], synopsis: 'Синопсис романа.' });
