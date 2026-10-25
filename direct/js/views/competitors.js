@@ -1,6 +1,6 @@
 // Конкуренты: только публичные карточки и заметки. Метрики чужой рекламы недоступны.
 import { acts, forms, esc, opt, toast, openSheet, uid, ask } from '../../../js/ui.js';
-import { competitorPublicPreview, competitorInsights, safePublicBookUrl } from '../competition.js';
+import { competitorPublicPreview, competitorInsights, safePublicBookUrl, tropeRadar } from '../competition.js';
 
 const app=()=>window.__app;
 const books=a=>a.ctx().data.w_books||[];
@@ -8,7 +8,7 @@ const selectedBook=a=>a.ui?.kwBook||books(a)[0]?.id||'';
 const list=a=>(a.ctx().data.d_competitors||[]).filter(x=>x.status!=='archived' && String(x.bookId||'')===String(selectedBook(a)));
 const my=a=>(a.ctx().data.d_keywords||[]).filter(x=>x.status==='keep'&&String(x.bookId||'')===String(selectedBook(a))).map(x=>x.phrase).join(' ');
 export function competitorsView(a){
-  const rows=list(a),insight=competitorInsights(my(a),rows);
+  const rows=list(a),insight=competitorInsights(my(a),rows),radar=tropeRadar(rows);
   return {html:`
     <div class="card">
       <div class="row between"><h2 style="margin:0">Конкурентная разведка</h2><button class="primary" data-act="cmp.new">+ Книга</button></div>
@@ -20,6 +20,7 @@ export function competitorsView(a){
     </div>
     ${rows.length?`
       <div class="card"><div class="row between"><h2 style="margin:0">Повторяющиеся темы</h2><span class="small muted">${rows.length} книг</span></div>
+      ${radar.length?`<p class="small"><b>Заявленные тропы:</b> ${radar.map(x=>`<span class="tag">${esc(x.trope)} · ${x.books}</span>`).join(" ")}</p>`:""}
       ${insight.repeated.length?`<div class="kw-terms">
         ${insight.repeated.map(v=>`<span class="tag">${esc(v.term)} · ${v.books}</span>`).join('')}
       </div>`:'<p class="small muted">Чтобы увидеть общие мотивы, добавь описания хотя бы двух конкурентных книг.</p>'}
