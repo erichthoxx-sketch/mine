@@ -44,13 +44,28 @@ export function parseStatistic(text) {
   const table = parseCsv(text.replace(/^﻿/, ''), '\t');
   const map = new Map();
   let skipped = 0;
-  for (const r of table) {
+  const invalidRows = [];
+  let totalReported = null;
+  for (const [index, r] of table.entries()) {
     const iso = parseDateRu(r[0]);
-    if (!iso) { if (r.some((x) => x)) skipped++; continue; } // «Статистика продаж», заголовок, «Итого»
+    if (!iso) {
+      if (r.some(x => x)) skipped++;
+      if (r.some(x => /итого\s*:/i.test(x))) {
+        const rubToken = r.find(x => /\bRUB\b|₽/i.test(x));
+        const numbers = (rubToken ? [rubToken] : r).map(parseNum).filter(Number.isFinite);
+        if (numbers.length) totalReported = numbers[numbers.length - 1];
+      }
+      continue;
+    }
     const book = (r[1] || '').trim();
     const price = parseNum(r[3]), qty = parseNum(r[4]), royalty = parseNum(r[5]);
-    if (!book || [price, qty, royalty].some(Number.isNaN)) { skipped++; continue; }
-    const kind = /^подп/i.test(r[2] || '') ? 'sub' : 'sale';
+    const type = String(r[2] || '').trim();
+    const kind = /^подп/i.test(type) ? 'sub' : /^прод/i.test(type) ? 'sale' : null;
+    if (!book || !kind || !Number.isFinite(price) || price < 0 || !Number.isInteger(qty) || qty < 0 || !Number.isFinite(royalty)) {
+      skipped++;
+      invalidRows.push(index + 1);
+      continue;
+    }
     const row = { date: iso, book, bookId: bookIdFor(book), kind, price, qty, royalty };
     const id = saleId(row);
     const e = map.get(id);
@@ -58,7 +73,7 @@ export function parseStatistic(text) {
     else map.set(id, { id, ...row });
   }
   const rows = [...map.values()];
-  return { rows, total: r2(rows.reduce((a, s) => a + s.royalty, 0)), skipped };
+  return { rows, total: r2(rows.reduce((a, s) => a + s.royalty, 0)), skipped, invalidRows, totalReported };
 }
 
 // ---- Отчёт таргетологов (копирование таблицы или CSV) ----
