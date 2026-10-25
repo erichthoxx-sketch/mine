@@ -123,6 +123,47 @@ changes['wb.planCh'] = async (v, el) => {
   await app().store.put('w_books', { ...b, planChapters: n && n > 0 ? Math.round(n) : null });
 };
 
+function mountBookTaxonomy() {
+  const form = document.querySelector('form[data-form="wbook.save"]');
+  if (!form) return;
+  const first = form.querySelector('#bmGenre1'), second = form.querySelector('#bmGenre2');
+  const avoidDuplicate = (changed, other) => {
+    if (changed.value && changed.value === other.value) other.value = '';
+  };
+  first.addEventListener('change', () => avoidDuplicate(first, second));
+  second.addEventListener('change', () => avoidDuplicate(second, first));
+  const input = form.querySelector('#bookTags'), preview = form.querySelector('#bmTagPreview');
+  const count = form.querySelector('#bmTagCount');
+  function drawTags() {
+    const tags = uniqueWords(input.value, 100);
+    count.textContent = tags.length + ' из 20';
+    count.classList.toggle('bm-overlimit', tags.length > 20);
+    preview.replaceChildren();
+    for (const tag of tags) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'bm-edit-tag';
+      chip.title = 'Удалить тег';
+      const caption = document.createElement('span');
+      caption.textContent = tag;
+      const cross = document.createElement('span');
+      cross.className = 'bm-edit-tag-cross';
+      cross.textContent = '×';
+      cross.setAttribute('aria-hidden', 'true');
+      chip.setAttribute('aria-label', 'Удалить тег ' + tag);
+      chip.append(caption, cross);
+      chip.addEventListener('click', () => {
+        input.value = uniqueWords(input.value, 100).filter(v => v !== tag).join(', ');
+        drawTags();
+        input.focus();
+      });
+      preview.append(chip);
+    }
+  }
+  input.addEventListener('input', drawTags);
+  drawTags();
+}
+
 export function bookPage(a, id) {
   const c = a.ctx();
   const b = c.wbooksById[id];
@@ -205,13 +246,21 @@ export function bookPage(a, id) {
   <form data-form="wbook.save" data-id="${b.id}">
     <label for="bt" style="margin-top:0">Название</label><input id="bt" name="title" value="${esc(b.title)}" required>
     <label for="bs">Статус</label><select id="bs" name="status">${Object.entries(STATUS).map(([k, v]) => opt(k, v, b.status || 'progress')).join('')}</select>
-    <div class="book-taxonomy-edit">
-      <label>Жанры Литнета · до двух</label>
-      <div class="checks book-genre-checks">${BOOK_GENRES.map(x=>`<label class="check"><input type="checkbox" name="genres" value="${esc(x)}"${bookGenres(b).includes(x)?' checked':''}>${esc(x)}</label>`).join('')}</div>
-      <label for="bookTags">Теги и тропы</label>
-      <input id="bookTags" name="tags" value="${esc(bookTags(b).join(', '))}" placeholder="одержимый герой, похищение, второй шанс" maxlength="1500">
-      <span class="small muted">Через запятую. Эти данные используются в поиске похожих книг и подборе ключей.</span>
-    </div>
+    <section class="book-taxonomy-edit" aria-label="Жанры и теги книги">
+      <div class="bm-tax-head"><strong>Жанры и теги</strong><span>Из карточки книги — в «Директ» автоматически</span></div>
+      <div class="bm-genre-grid">
+        <div class="bm-field"><label for="bmGenre1">Основной жанр</label>
+          <select id="bmGenre1" name="genres"><option value="">Выбрать жанр</option>${BOOK_GENRES.map(x=>opt(x,x,bookGenres(b)[0]||'')).join('')}</select></div>
+        <div class="bm-field"><label for="bmGenre2">Дополнительный жанр <span class="bm-optional">необязательно</span></label>
+          <select id="bmGenre2" name="genres"><option value="">Не выбран</option>${BOOK_GENRES.map(x=>opt(x,x,bookGenres(b)[1]||'')).join('')}</select></div>
+      </div>
+      <div class="bm-field bm-tag-field">
+        <div class="bm-label-row"><label for="bookTags">Теги и тропы</label><span id="bmTagCount" class="bm-optional">0 из 20</span></div>
+        <input id="bookTags" name="tags" value="${esc(bookTags(b).join(', '))}" placeholder="одержимый герой, похищение, фиктивный брак" maxlength="1500" autocomplete="off">
+        <div id="bmTagPreview" class="bm-tag-preview" aria-live="polite"></div>
+        <span class="bm-hint">Разделяй теги запятыми. Нажми на тег, чтобы удалить его.</span>
+      </div>
+    </section>
     <label>Где выкладывается</label><div class="checks">${PLATFORMS.map((x) => `<label class="check"><input type="checkbox" name="pf" value="${x}"${(b.platforms || []).includes(x) ? ' checked' : ''}>${x}</label>`).join('')}</div>
     <label for="bx">Другие площадки (через запятую)</label><input id="bx" name="pfx" value="${esc(extra)}">
     <div class="f2"><div><label for="bp">Глав в книге, примерно</label><input id="bp" name="planChapters" inputmode="numeric" value="${b.planChapters ?? ''}"></div>
@@ -221,7 +270,7 @@ export function bookPage(a, id) {
     <label for="bn">Заметки</label><textarea id="bn" name="note">${esc(b.note || '')}</textarea>
     <div class="row between" style="margin-top:14px"><button class="primary" type="submit">Сохранить</button><button type="button" class="danger" data-act="wbook.del" data-id="${b.id}">Убрать из приложения</button></div>
   </form></div>`;
-  return { html, after: () => { writtenChart(document.getElementById('bchart1'), { days: series, target, height: 86, mini: true }); } };
+  return { html, after: () => { writtenChart(document.getElementById('bchart1'), { days: series, target, height: 86, mini: true }); mountBookTaxonomy(); } };
 }
 
 // ---------- обновление знаков ----------
@@ -393,9 +442,11 @@ acts['wbook.addFile'] = async (d) => {
 forms['wbook.save'] = async (fd, f) => {
   const c = app().ctx(), b = c.wbooksById[f.dataset.id];
   const platforms = [...fd.getAll('pf'), ...String(fd.get('pfx') || '').split(',').map((x) => x.trim()).filter(Boolean)];
-  const genres=fd.getAll('genres');
-  if(genres.length>2){toast('Выбери не более двух жанров');return false;}
-  const patch = { title: fd.get('title').trim(), status: fd.get('status'), platforms, genres, tags: uniqueWords(fd.get('tags')||'',20), planChapters: N(fd.get('planChapters')) || null, incomeBookId: fd.get('incomeBookId') || '', note: fd.get('note') || '' };
+  const genres = fd.getAll('genres').filter(Boolean);
+  if (genres.length > 2 || new Set(genres).size !== genres.length) { toast('Выбери два разных жанра или оставь один'); return false; }
+  const tags = uniqueWords(fd.get('tags') || '', 100);
+  if (tags.length > 20) { toast('Можно сохранить не больше 20 тегов'); return false; }
+  const patch = { title: fd.get('title').trim(), status: fd.get('status'), platforms, genres, tags, planChapters: N(fd.get('planChapters')) || null, incomeBookId: fd.get('incomeBookId') || '', note: fd.get('note') || '' };
   if (!b.fileId) {
     patch.webViewLink = (fd.get('link') || '').trim();
     const m = fromAl(fd.get('manualChars'));
