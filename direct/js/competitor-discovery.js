@@ -14,7 +14,7 @@ export function discoverySources(book={},keywords=[],topics=''){
     .sort((a,b)=>b.match-a.match).slice(0,3);
 }
 export function rankPublicBooks(candidates,book={},keywords=[],topics=''){
-  const query=[book.title,book.genre,book.subgenre,book.annotation,book.description,book.tropes,...bookGenres(book),...bookTags(book),marketingTopics(book),topics,
+  const query=[book.title,book.annotation,book.description,...bookGenres(book),...bookTags(book),topics,
     ...keywords.map(x=>x.phrase||'')].filter(Boolean).join(' ');
   const own=tokens(query).filter(x=>x.length>=5),short=new Set(own.map(x=>x.slice(0,5)));
   return (candidates||[]).map(c=>{
