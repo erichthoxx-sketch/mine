@@ -53,14 +53,16 @@ const charName = (L, id) => L.chars.find((c) => c.id === id)?.name || '';
 
 // ---------- текст для нейросети ----------
 // mode: work — рабочий: только утверждённое (канон), персонажи, решения; full — полный: ещё варианты, открытые вопросы
-// и отвергнутое — с пометками. upTo — номер главы каркаса (1…): события до неё включительно и «что дальше»; 0 — весь каркас
-export function legendContext(L, { title = '', upTo = 0, mode = 'work' } = {}) {
-  const full = mode === 'full', qs = L.questions || [];
+// и отвергнутое — с пометками. sections — разделы «Легенды» для экспорта (по умолчанию прежние три);
+// synopsis — содержимое вкладки «Синопсис» для экспорта по выбору.
+// upTo сохраняем для старых вызовов, но в окне экспорта теперь выбираются целые разделы.
+export function legendContext(L, { title = '', upTo = 0, mode = 'work', sections = ['idea', 'plan', 'chars'], synopsis = '' } = {}) {
+  const full = mode === 'full', qs = L.questions || [], selected = new Set(Array.isArray(sections) ? sections : [sections]);
   const out = [`# Легенда книги «${title}»`];
-  if (full) out.push('', 'Пометки: [утверждено] — канон; [обсуждается] — предварительный вариант, не считать решённым; раздел «Отвергнуто» — не использовать.');
+  if (full && selected.has('plan')) out.push('', 'Пометки: [утверждено] — канон; [обсуждается] — предварительный вариант, не считать решённым; раздел «Отвергнуто» — не использовать.');
   const idea = IDEA_FIELDS.filter(([k]) => nm(L.idea?.[k])).map(([k, label]) => `- ${label}: ${nm(L.idea[k])}`);
-  if (idea.length) out.push('', '## Идея', ...idea);
-  if (L.chars.length) {
+  if (selected.has('idea') && idea.length) out.push('', '## Идея', ...idea);
+  if (selected.has('chars') && L.chars.length) {
     out.push('', '## Персонажи');
     for (const c of L.chars) {
       const head = [ROLES[c.role], nm(c.age) ? `${nm(c.age)} лет` : ''].filter(Boolean).join(', ');
@@ -69,7 +71,7 @@ export function legendContext(L, { title = '', upTo = 0, mode = 'work' } = {}) {
     }
   }
   const decided = qs.filter((q) => q.st === 'ok' && nm(q.q) && nm(q.a));
-  if (decided.length) out.push('', '## Решения (утверждено)', ...decided.map((q) => `- ${nm(q.q)} — ${nm(q.a)}`));
+  if (selected.has('plan') && decided.length) out.push('', '## Решения (утверждено)', ...decided.map((q) => `- ${nm(q.q)} — ${nm(q.a)}`));
   const line = (p, n) => {
     const extra = [nm(p.why) ? `зачем: ${nm(p.why)}` : '', p.pov ? `глазами: ${charName(L, p.pov)}` : '', (p.chars || []).length ? `в сцене: ${p.chars.map((id) => charName(L, id)).filter(Boolean).join(', ')}` : ''].filter(Boolean).join('; ');
     const mark = full ? (planSt(p) === 'ok' ? ' [утверждено]' : ' [обсуждается]') : '';
@@ -79,19 +81,21 @@ export function legendContext(L, { title = '', upTo = 0, mode = 'work' } = {}) {
   const keep = (p) => (full ? planSt(p) !== 'no' : planSt(p) === 'ok');
   const upto = upTo > 0 ? L.plan.slice(0, upTo) : L.plan;
   const plan = upto.filter(keep);
-  if (plan.length) {
+  if (selected.has('plan') && plan.length) {
     out.push('', upTo > 0 ? (plan.length > 1 ? `## Каркас: главы 1–${plan.length}` : '## Каркас: глава 1') : '## Каркас по главам');
     const nums = chapterNums(plan);
     plan.forEach((p, i) => out.push(line(p, nums[i])));
     const next = upTo > 0 ? L.plan.slice(upTo).find(keep) : null;
     if (next) out.push('', `## Пишем дальше: ${nm(next.title) || `Глава ${plan.length + 1}`}${full && planSt(next) !== 'ok' ? ' [обсуждается]' : ''}`, nm(next.what) || '(план главы пока не заполнен)');
   }
-  if (full) {
+  if (full && selected.has('plan')) {
     const open = qs.filter((q) => q.st !== 'ok' && nm(q.q));
     if (open.length) out.push('', '## Открытые вопросы (ещё не решено)', ...open.map((q) => `- ${nm(q.q)}${nm(q.a) ? ` — вариант: ${nm(q.a)}` : ''}`));
     const no = L.plan.filter((p) => planSt(p) === 'no');
     if (no.length) out.push('', '## Отвергнуто — не использовать', ...no.map((p) => `- ${nm(p.title) || 'Без названия'}${nm(p.what) ? ` — ${nm(p.what)}` : ''}`));
   }
+  if (selected.has('syn') && nm(synopsis)) out.push('', '## Синопсис', nm(synopsis));
+  if (out.length === 1) out.push('', '(Выбранный раздел пока не заполнен)');
   return out.join('\n');
 }
 
