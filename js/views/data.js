@@ -96,7 +96,12 @@ changes['imp.any'] = async (v, el) => {
 async function importStatistic(text) {
   if (!salesReady()) return;
   const r = parseStatistic(text);
+  if (r.invalidRows.length) { toast('CSV содержит некорректные строки продаж: ' + r.invalidRows.slice(0, 5).join(', ') + '. Импорт заблокирован.'); return; }
   if (!r.rows.length) { toast('В файле нет распознанных продаж'); return; }
+  if (r.totalReported != null && Math.abs(r.totalReported - r.total) > 0.015) {
+    toast('Итог выгрузки ' + rub(r.totalReported) + ' не совпадает с распознанными строками ' + rub(r.total) + '. Импорт заблокирован.');
+    return;
+  }
   const c = app().ctx();
   const initial = safeSalesImport(app().store.data.sales, r.rows);
   const from = r.rows.reduce((x, s) => s.date < x ? s.date : x, r.rows[0].date);
@@ -114,6 +119,7 @@ async function importStatistic(text) {
   if (initial.retained) warn.push(`${initial.retained} прежних строк за эти даты не встретились в файле. Они сохранены.`);
   if (initial.potentialDuplicates) warn.push(`${initial.potentialDuplicates} ручных записей пересекаются с CSV. Аналитика исключит повторный подсчет.`);
   openSheet('Сверка продаж из Литнета', `<p>Период <b>${fmtDate(from)} – ${fmtDate(to)}</b>. ${r.rows.length} строк, гонорар по файлу <b>${rub(r.total)}</b>.</p>
+    <p class="small ${r.totalReported == null ? 'muted' : 'up'}">${r.totalReported == null ? 'Итоговая строка в файле не найдена — сверены суммы распознанных записей.' : 'Сумма всех строк совпадает с итогом, указанным в CSV.'}</p>
     <table><tr><th>Месяц</th><th>Гонорар по файлу</th></tr>${Object.keys(monthly).sort().map(k => `<tr><td>${fmtMonth(k)}</td><td>${rub(monthly[k])}</td></tr>`).join('')}</table>
     <p class="small">Добавятся <b>${initial.added}</b>, обновятся без уменьшения <b>${initial.increased}</b>, совпадают <b>${initial.same}</b>.</p>
     ${warn.length ? `<div class="alert"><strong>Нужна сверка отдельных строк</strong><p class="small">${warn.map(esc).join('<br>')}</p></div>` : '<div class="alert ok">Повторная загрузка ничего не удаляет и не уменьшает.</div>'}
