@@ -99,9 +99,10 @@ test('Первичная загрузка и повторный импорт о�
   assert.equal(second.rows.length,0);
   assert.equal(second.same,2);
 });
-test('До подтверждения загрузки всех финансовых коллекций суммы скрыты',()=>{
+test('Финансовое приложение не блокирует навигацию при медленном Firebase и помечает непроверенные суммы',()=>{
   const app=readFileSync(new URL('../js/app.js',import.meta.url),'utf8');
   assert.match(app,/COLLECTIONS\.every\(name => store\.loaded\?\.\[name\]\)/);
   assert.match(app,/store\.settingsServerLoaded/);
-  assert.match(app,/До сверки суммы скрыты/);
+  assert.match(app,/Отображаемые суммы предварительные/);
+  assert.doesNotMatch(app,/if \(store\.mode === 'firebase' && navigator\.onLine && !verified\) \{/);
 });
