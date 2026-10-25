@@ -124,20 +124,9 @@ acts['auth.reset'] = async () => {
 let afterFn = null;
 function render() {
   if (!store.user) { authScreen(); return; }
-  // Деньги, продажи, реклама, налоги и цели опираются на несколько коллекций.
-  // Не выдаем частичную начальную загрузку за реальную финансовую картину.
-  const verified = COLLECTIONS.every(name => store.loaded?.[name]) && store.settingsServerLoaded;
-  if (store.mode === 'firebase' && navigator.onLine && !verified) {
-    const failed = store.sync === 'error';
-    document.getElementById('app').innerHTML = '<main class="income-verifying"><div class="card"><h2>' +
-      (failed ? 'Не удалось проверить финансовые данные' : 'Проверяю финансовые данные') +
-      '</h2><p class="muted">' +
-      (failed ? 'Есть ошибка Firebase. Не показываю неподтвержденные суммы. Проверь подключение или обнови страницу.' :
-      'Загружаю продажи, книги, рекламу, события и настройки с сервера. До сверки суммы скрыты.') +
-      '</p></div></main>';
-    afterFn = null;
-    return;
-  }
+  // Не блокируем всё приложение ожиданием каждой коллекции Firestore:
+  // даже пустые/недоступные коллекции не должны превращаться в бесконечную загрузку.
+  const verified = store.mode !== 'firebase' || (COLLECTIONS.every(name => store.loaded?.[name]) && store.settingsServerLoaded);
   const { tab, view } = route();
   const c = getCtx();
   const r = view(app) || { html: '' };
@@ -145,8 +134,8 @@ function render() {
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере. Синхронизация появится после настройки Firebase.</div>' : ''}
   <div class="top"><div><h1>${esc(c.settings.pseudonym)}</h1><small>${c.hasData ? 'данные по ' + fmtDate(c.dataEnd) : 'данных пока нет'}${syncText ? ' · ' + syncText : ''}</small></div>
   <div class="row"><a class="btn" href="pisatel/">${ic('sparkle')} Мастерская</a><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
-  <main>${store.mode === 'firebase' && (!navigator.onLine || store.pending?.sales) ?
-    `<div class="alert"><b>${navigator.onLine ? 'Продажи сохраняются' : 'Нет связи с сервером'}</b> · ${navigator.onLine ? 'Изменения еще не подтверждены Firebase. Текущие суммы предварительные.' : 'Видна локальная копия, ее точность пока не подтверждена.'}</div>` : ''}
+  <main>${store.mode === 'firebase' && (!verified || !navigator.onLine || store.pending?.sales) ?
+    `<div class="alert"><b>${store.sync === 'error' ? 'Ошибка синхронизации' : !navigator.onLine ? 'Нет связи с сервером' : 'Данные еще сверяются с Firebase'}</b> · Отображаемые суммы предварительные, до подтверждения не используйте их для решений. Навигация и сохраненные записи доступны.</div>` : ''}
   ${c.ledgerWarnings?.length || (c.salesReconciliation && !c.salesReconciliation.ok) ?
     `<div class="alert bad"><b>Нужна проверка финансовых данных</b><p class="small">Найдены несверенные ручные записи или некорректные данные (${c.ledgerWarnings?.length || 0}). Проверь раздел «Данные» и исходный CSV. До сверки суммы могут быть предварительными.</p></div>` : ''}
   ${tidyNums(r.html)}</main>
