@@ -73,3 +73,19 @@ test('В верхней карточке жанры и теги отобража
   assert.doesNotMatch(header, /genreTags\s*\?/);
   assert.match(src, /id="bookTaxonomyEdit"/);
 });
+
+test('Жанры и теги можно сохранить прямо в своем блоке, без прокрутки к концу карточки', () => {
+  const src = readFileSync(new URL('../writer/js/views/books.js', import.meta.url), 'utf8');
+  const details = src.slice(src.indexOf('<div class="card"><h2>О книге</h2>'), src.indexOf('// ---------- обновление знаков ----------'));
+  assert.match(details, /<button type="submit" class="primary">Сохранить жанры и теги<\/button>/);
+  assert.match(src, /app\(\)\.store\.patch\('w_books', b\.id, patch\)/);
+});
+test('Обновление рукописи с Google Диска не перезаписывает поля жанров и тегов', () => {
+  const src = readFileSync(new URL('../writer/js/views/books.js', import.meta.url), 'utf8');
+  const refresh = src.slice(src.indexOf('export async function refreshOne('), src.indexOf('export const refreshing'));
+  assert.doesNotMatch(refresh, /store\.put\('w_books'/);
+  assert.match(refresh, /store\.patch\('w_books'/);
+  const store = readFileSync(new URL('../js/store.js', import.meta.url), 'utf8');
+  assert.match(store, /async patch\(coll, id, fields\)/);
+  assert.match(store, /updateDoc\(doc\(this\.db/);
+});
