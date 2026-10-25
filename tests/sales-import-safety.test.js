@@ -99,10 +99,18 @@ test('Первичная загрузка и повторный импорт о�
   assert.equal(second.rows.length,0);
   assert.equal(second.same,2);
 });
-test('Финансовое приложение не блокирует навигацию при медленном Firebase и помечает непроверенные суммы',()=>{
+test('Финансовое приложение показывает доходы без постоянной плашки Firebase',()=>{
   const app=readFileSync(new URL('../js/app.js',import.meta.url),'utf8');
-  assert.match(app,/COLLECTIONS\.every\(name => store\.loaded\?\.\[name\]\)/);
-  assert.match(app,/store\.settingsServerLoaded/);
-  assert.match(app,/Отображаемые суммы предварительные/);
-  assert.doesNotMatch(app,/if \(store\.mode === 'firebase' && navigator\.onLine && !verified\) \{/);
+  assert.doesNotMatch(app,/Данные еще сверяются с Firebase/);
+  assert.doesNotMatch(app,/Отображаемые суммы предварительные/);
+  assert.doesNotMatch(app,/данные не сверены с сервером/);
+  assert.doesNotMatch(app,/COLLECTIONS\.every\(name => store\.loaded/);
+  assert.match(app,/store\.sync === 'error' \? 'ошибка синхронизации'/);
+});
+test('Импорт не зависит от загрузки рекламы и событий, но требует полной базы продаж',()=>{
+  const source=readFileSync(new URL('../js/views/data.js',import.meta.url),'utf8');
+  const guard=source.slice(source.indexOf('function salesReady()'),source.indexOf('// Журнал до любых правок'));
+  assert.match(guard,/!st\.loaded\?\.sales/);
+  assert.match(guard,/!st\.loaded\?\.books/);
+  assert.doesNotMatch(guard,/adnotes|campaigns|reports|settingsServerLoaded/);
 });
