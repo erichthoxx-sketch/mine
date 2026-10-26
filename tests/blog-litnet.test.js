@@ -50,7 +50,8 @@ test('Todoist относит публикацию без книги в марк�
 test('Редактор сохраняет черновик отдельно, публикует только по подтверждению, не запускает Литнет автоматически',()=>{
   const blog=source('../writer/js/views/blog.js');
   assert.match(blog,/contenteditable="true"/);
-  assert.match(blog,/data-act="blog\.fmt"/);
+  assert.match(blog,/editorToolbar\('blog'/);
+  assert.match(source('../writer/js/editor-ui.js'),/data-act="\$\{prefix\}\.fmt"/);
   assert.match(blog,/localStorage\.setItem\(draftKey/);
   assert.match(blog,/store\.patch\('w_blog'/);
   assert.match(blog,/Запись уже опубликована на Литнете/);
