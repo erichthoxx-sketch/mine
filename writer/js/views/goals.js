@@ -94,8 +94,8 @@ function wire() {
       const days = [...f.querySelectorAll('[name="dow"]:checked')].map(x => Number(x.value));
       const date = days.length ? finishGoalForecast({from:c.today,chapters:total,completed:completedCount(b),perDay:pace,days}) : null;
       if (auto) f.elements.deadline.value = date || '';
-      note.textContent = !days.length ? 'Выбери хотя бы один день письма.' :
-        !date ? 'Укажи количество глав и темп — рассчитаю дату.' :
+      note.textContent = !days.length ? 'Выберите хотя бы один день для письма.' :
+        !date ? 'Укажите количество глав и темп — дата рассчитается автоматически.' :
         `${Math.max(0,total-completedCount(b))} ${plural(Math.max(0,total-completedCount(b)), ['глава','главы','глав'])} осталось · при таком графике: ${fmtDate(date)}${auto ? '' : ' (автоматический прогноз)'}`;
     }
   };
@@ -110,11 +110,11 @@ async function saveGoal(c, fd, g = {}) {
   const v = { type, bookId: type === 'custom' ? '' : fd.get('bookId') || '', title: type === 'custom' ? (fd.get('title') || '').trim() : '', deadline: fd.get('deadline') || '', days: fd.getAll('dow').map(Number), perDay: type === 'daily' ? fromAl(fd.get('perDay')) : type === 'finish' ? Number(String(fd.get('perDayCh') || '').replace(',', '.')) : null, chapters: type === 'finish' ? Number(fd.get('chapters')) : null, autoDeadline: type === 'finish' && fd.get('autoDeadline') === 'on' };
   if (type === 'custom' && !v.title) { toast('Напишите, что сделать'); return false; }
   if (type === 'finish' && !v.bookId) { toast('Выберите книгу'); return false; }
-  if (type === 'finish' && (!Number.isInteger(v.chapters) || v.chapters < 1 || !(v.perDay > 0))) { toast('Укажи число глав и темп письма'); return false; }
+  if (type === 'finish' && (!Number.isInteger(v.chapters) || v.chapters < 1 || !(v.perDay > 0))) { toast('Укажите число глав и темп письма'); return false; }
   if (type === 'finish' && v.autoDeadline && v.days.length) {
     v.deadline = finishGoalForecast({from:c.today,chapters:v.chapters,completed:completedCount(c.wbooksById[v.bookId]),perDay:v.perDay,days:v.days}) || '';
   }
-  if (type === 'finish' && !v.deadline) { toast('Нужен срок: выбери рабочие дни или введи дату вручную'); return false; }
+  if (type === 'finish' && !v.deadline) { toast('Для расчета срока выберите рабочие дни или укажите дату вручную'); return false; }
   if (type === 'daily' && !(v.perDay > 0)) { toast('Сколько а.л. в день?'); return false; }
   if (!v.days.length) { toast('Выберите хотя бы один день'); return false; }
   if (v.days.length === 7) v.days = [];
