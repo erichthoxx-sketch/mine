@@ -33,10 +33,10 @@ export function blogList(c, { bookId='', heading=true }={}) {
     </div></section>`;
 }
 export function blogBookCard(c, bookId) {
-  const posts=blogPosts(c,bookId);
-  return `<section class="blog-in-book">
-    ${blogList(c,{bookId})}
-  </section>`;
+  // В карточке книги не создаем пустую секцию: показываем блог, только когда
+  // есть хотя бы одна запись, привязанная к этой книге.
+  if (!blogPosts(c,bookId).length) return '';
+  return `<section class="blog-in-book">${blogList(c,{bookId})}</section>`;
 }
 function sanitized(html) {
   const doc=new DOMParser().parseFromString(String(html || ''),'text/html');
