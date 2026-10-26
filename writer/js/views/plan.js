@@ -83,6 +83,13 @@ export function planItems(c, from, to) {
   const wr = widgetReminder(c);
   if (wr) { add(t, 'money', esc(wr.title), esc(wr.sub), { to: wr.to }); if (wr.date !== t) add(wr.date, 'money', `Срок заявки на показы`, '19:00 МСК', { to: wr.to }); }
   for (const x of incomeItems(c, from, to)) add(x.date, x.kind || 'money', x.title, x.sub, { href: '../' });
+  // Блог Литнет: дата — напоминание выложить вручную, а не автопубликация.
+  for (const p of (d.w_blog || [])) {
+    if (p.status === 'published' || !p.planDate) continue;
+    add(p.planDate < t ? t : p.planDate, 'blog', `Выложить в блог: ${esc(p.title || 'Без названия')}`,
+      p.bookId && c.wbooksById[p.bookId] ? esc(c.wbooksById[p.bookId].title) : 'Блог Литнет',
+      { id:p.id, to:'/blog/' + p.id, bookId:p.bookId || '', dueRaw:p.planDate, section:'Маркетинг' });
+  }
   // Связи: напоминания по контактам (просроченные — на сегодня)
   for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', esc(x.text), esc(x.name) + (x.date < t ? ' · просрочено' : ''), { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k, section: x.section || 'Связи', ...(x.bookId ? { bookId: x.bookId } : {}), ...(x.detail ? { description: x.detail } : {}) });
   // свои задачи из Todoist (проекты «Книги» и «Мастерская»)
@@ -99,7 +106,7 @@ export function planItems(c, from, to) {
   for (const x of activePromoLinks(utms)) if (x.expires) add(x.expires, 'utm-expiry', promoChannelName(x) + ': заканчиваются новые привязки — «' + esc(x.book) + '»', esc(x.campaign || 'Мой Литнет') + ' · ссылка продолжает открываться', { to: promoSection(x) });
   // Никаких общих «Посмотреть дела на выходные». Автовыкладка и сроки остаются в своих датах.
   // Отдельная подготовка заранее только там, где действительно нужна: UTM и осмысленные дедлайны.
-  const ord = { goal: -1, mk: 5.5, pub: 0, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5, utm: 5.4, 'utm-expiry': 5.6, event: 8 };
+  const ord = { goal: -1, mk: 5.5, pub: 0, blog: 0.5, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5, utm: 5.4, 'utm-expiry': 5.6, event: 8 };
   return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
 }
 // Важное из «Доходов» по датам: налог (до 28-го), цифры Rocket (с 20-го), старт и конец рекламы, события дней
@@ -182,6 +189,7 @@ function itemHtml(c, x) {
     const today = x.date <= c.today;
     return `<div class="pitem">${body}<span class="pi-btns">${today ? `<button class="primary" data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="done">Выложила</button>` : ''}<button data-act="pub.mark" data-id="${x.book}" data-ch="${esc(x.ch || '')}" data-pf="${esc(x.pf)}" data-mode="plan" data-date="${x.date}" title="Поставить на таймер" aria-label="Поставить на таймер">${icx('timer')}</button></span></div>`;
   }
+  if (x.kind === 'blog') return `<div class="pitem"><a href="#" class="pi-open tap" data-act="go" data-to="${esc(x.to)}">${body}</a><span class="pi-btns"><button class="primary" data-act="blog.published" data-id="${esc(x.id)}" title="Отметить после фактической публикации">Выложено</button></span></div>`;
   if (x.kind === 'td') return `<div class="pitem" data-drag="td" data-id="${x.tdId}"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.tdId}">${body}</a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.tdId}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${icx('check')}</button></span></div>`;
   if (x.linkId && x.todoK) return `<div class="pitem"><a href="#" class="pi-open tap" data-act="go" data-to="/link/${esc(x.linkId)}">${body}</a><span class="pi-btns"><button class="td-ok" data-act="link.todoDone" data-id="${esc(x.linkId)}" data-k="${esc(x.todoK)}" title="Готово — отметится и в Todoist" aria-label="Готово">${icx('check')}</button></span></div>`;
 
