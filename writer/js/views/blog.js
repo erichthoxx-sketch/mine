@@ -43,7 +43,7 @@ export function blogBookCard(c, bookId) {
 }
 function sanitized(html) {
   const doc=new DOMParser().parseFromString(String(html || ''),'text/html');
-  const keep = new Set(['P','DIV','BR','B','STRONG','I','EM','U','H2','H3','UL','OL','LI','BLOCKQUOTE']);
+  const keep = new Set(['P','DIV','BR','B','STRONG','I','EM','U','H1','H2','H3','H4','H5','H6','UL','OL','LI','BLOCKQUOTE','SPAN']);
   const drop = new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','SVG','MATH','FORM','VIDEO','AUDIO','IMG']);
   function children(from,to) {
     for(const n of [...from.childNodes]) {
@@ -51,6 +51,12 @@ function sanitized(html) {
       if(n.nodeType !== 1 || drop.has(n.tagName))continue;
       if(keep.has(n.tagName)){
         const element=document.createElement(n.tagName.toLowerCase());
+        if(['P','DIV','H1','H2','H3','H4','H5','H6','BLOCKQUOTE','LI'].includes(n.tagName) &&
+           ['center','right','justify'].includes(n.style.textAlign)) element.style.textAlign=n.style.textAlign;
+        // Не переносим произвольный CSS и внешние ссылки: только цвет пометки,
+        // который использует редактор главы.
+        if(n.tagName==='SPAN' && /^(rgb\\(11,\\s*107,\\s*79\\)|#0b6b4f)$/i.test(n.style.color.trim()))
+          element.style.color='#0b6b4f';
         children(n,element);to.append(element);
       } else children(n,to);
     }
@@ -181,14 +187,110 @@ acts['blog.new']=async(d)=>{
   a.go('/blog/'+id);
 };
 acts['blog.back']=()=>{app().go('/links');return false;};
+// Глава и блог используют один набор кнопок из editor-ui.js. Команды работают
+// с разными текстовыми узлами и никогда не отправляют блог в Google Документ.
+const body = () => document.getElementById('blogBody');
+const touch = () => body()?.dispatchEvent(new Event('input',{bubbles:true}));
+const focus = () => {const el=body();el?.focus();return el;};
+const selectedBlock = () => {
+  const el=body(),sel=window.getSelection();
+  let n=sel?.anchorNode;
+  while(n && n!==el){
+    if(n.nodeType===1 && /^(P|DIV|H[1-6]|LI|BLOCKQUOTE)$/.test(n.tagName)&&el.contains(n))return n;
+    n=n.parentNode;
+  }
+  return null;
+};
+const BLOG_STYLES={NORMAL_TEXT:'p',TITLE:'h1',SUBTITLE:'h6',HEADING_1:'h2',HEADING_2:'h3',HEADING_3:'h4'};
+const blogFind={ranges:[],at:-1};
+function findBlogRanges(q) {
+  const el=body(),list=[];
+  if(!el || !q)return list;
+  const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
+  for(let node=walker.nextNode();node;node=walker.nextNode()){
+    const value=node.nodeValue.toLocaleLowerCase('ru'),needle=q.toLocaleLowerCase('ru');
+    for(let at=value.indexOf(needle);at>=0;at=value.indexOf(needle,at+needle.length)){
+      const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+q.length);list.push(range);
+    }
+  }
+  return list;
+}
+function highlightBlogMatches(reset=false) {
+  const q=document.getElementById('blogq')?.value||'';
+  blogFind.ranges=findBlogRanges(q);
+  if(reset)blogFind.at=blogFind.ranges.length?0:-1;
+  if(blogFind.at>=blogFind.ranges.length)blogFind.at=blogFind.ranges.length-1;
+  const found=document.getElementById('blogfound');
+  if(found)found.textContent=!q?'':blogFind.ranges.length?`${blogFind.at+1} из ${blogFind.ranges.length}`:'не найдено';
+  const range=blogFind.ranges[blogFind.at];
+  if(range){
+    const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+    const rect=range.getBoundingClientRect();
+    if(rect.top<100||rect.bottom>window.innerHeight-90)range.startContainer.parentElement?.scrollIntoView({block:'center'});
+  }
+}
+function stepBlogMatch(direction){
+  const len=blogFind.ranges.length;
+  if(len)blogFind.at=(blogFind.at+direction+len)%len;
+  highlightBlogMatches();
+  return false;
+}
 acts['blog.fmt']=(d)=>{
-  const editor=document.getElementById('blogBody');
-  if(!editor)return false;
-  editor.focus();
-  document.execCommand(d.cmd,false,d.tag||null);
-  editor.dispatchEvent(new Event('input',{bubbles:true}));
+  const el=focus();if(!el)return false;
+  document.execCommand(d.v,false,null);touch();return false;
+};
+changes['blog.style']=(value)=>{
+  const el=body();if(!el)return false;
+  el.focus();document.execCommand('formatBlock',false,BLOG_STYLES[value]||'p');touch();return false;
+};
+acts['blog.align']=(d)=>{
+  const el=body();if(!el)return false;
+  const block=selectedBlock();
+  if(block)block.style.textAlign=d.v==='left'?'':d.v;
+  else {el.focus();document.execCommand(({left:'justifyLeft',center:'justifyCenter',right:'justifyRight',justify:'justifyFull'})[d.v]||'justifyLeft');}
+  touch();return false;
+};
+acts['blog.color']=()=>{
+  const el=body(),sel=window.getSelection();
+  if(!el||!sel?.rangeCount||sel.isCollapsed||!el.contains(sel.anchorNode)){toast('Выделите текст для цветовой пометки');return false;}
+  el.focus();document.execCommand('styleWithCSS',false,true);
+  document.execCommand('foreColor',false,'#0b6b4f');touch();return false;
+};
+acts['blog.dash']=()=>{focus();document.execCommand('insertText',false,'— ');touch();return false;};
+acts['blog.undo']=()=>{focus();document.execCommand('undo');touch();return false;};
+acts['blog.redo']=()=>{focus();document.execCommand('redo');touch();return false;};
+acts['blog.zoom']=(d)=>{
+  const el=body();if(!el)return false;
+  const current=Number(el.style.getPropertyValue('--ed-zoom')||1);
+  el.style.setProperty('--ed-zoom',String(Math.max(.8,Math.min(1.6,Math.round((current+Number(d.v)*.1)*10)/10))));
   return false;
 };
+acts['blog.find']=()=>{
+  const panel=document.getElementById('blogfind');if(!panel)return false;
+  panel.hidden=!panel.hidden;
+  if(!panel.hidden){document.getElementById('blogq')?.focus();highlightBlogMatches(true);}
+  else {blogFind.ranges=[];blogFind.at=-1;}
+  return false;
+};
+acts['blog.findNext']=()=>stepBlogMatch(1);
+acts['blog.findPrev']=()=>stepBlogMatch(-1);
+acts['blog.replaceOne']=()=>{
+  const r=blogFind.ranges[blogFind.at];
+  if(!r)return stepBlogMatch(1);
+  const rep=document.getElementById('blogr')?.value??'';
+  r.deleteContents();r.insertNode(document.createTextNode(rep));
+  body()?.normalize();touch();highlightBlogMatches(true);return false;
+};
+acts['blog.replaceAll']=()=>{
+  const q=document.getElementById('blogq')?.value||'';
+  if(!q)return false;
+  const rep=document.getElementById('blogr')?.value??'',list=findBlogRanges(q).reverse();
+  for(const range of list){range.deleteContents();range.insertNode(document.createTextNode(rep));}
+  body()?.normalize();if(list.length)touch();highlightBlogMatches(true);
+  toast(list.length?`Заменено: ${list.length}`:'Совпадений не найдено');
+  return false;
+};
+
 acts['blog.save']=async d=>{
   const a=app(),p=(a.ctx().data.w_blog||[]).find(x=>x.id===d.id);
   if(!p)return false;
