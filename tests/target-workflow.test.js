@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {todoistTasks} from '../writer/js/todoist.js';
+import { linkPage, linkTodos, addLinkedTask } from '../writer/js/views/links.js';
 
 const read = p => readFileSync(new URL(p,import.meta.url),'utf8');
 
@@ -49,4 +50,31 @@ test('Изменение коммуникаций не записывает де
   assert.match(src,/scheduleTodoist\?\.\(\)/);
   assert.doesNotMatch(src,/store\.(?:put|patch)\('(sales|reports|campaigns|months|adnotes)'/);
   assert.match(src,/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$/);
+});
+
+test('Реальный рендер карточки таргетолога показывает единую ленту и позволяет создать дело',async()=>{
+  const target={id:'t1',kind:'target',name:'Рекламное агентство',bookIds:[],
+    log:[{k:'log1',date:'2026-10-28',kind:'note',text:'Текст будущего письма'}],todos:[]};
+  const data={w_links:[target],w_waiting:[]};
+  const c={today:'2026-10-26',data,wbooks:[],wbooksById:{},settings:{}};
+  let scheduled=0;
+  globalThis.window={__app:{ctx:()=>c,store:{patch:async(coll,id,fields)=>{
+    assert.equal(coll,'w_links');assert.equal(id,'t1');Object.assign(target,fields);
+  }},scheduleTodoist:()=>{scheduled++}}};
+  let html=linkPage({ctx:()=>c},'t1').html;
+  assert.match(html,/Общение и дела/);
+  assert.match(html,/Текст будущего письма/);
+  assert.match(html,/В Планер/);
+  assert.doesNotMatch(html,/<h2>Напоминания/);
+  assert.doesNotMatch(html,/<h2>Запросы/);
+  const task=await addLinkedTask('t1',{date:'2026-10-28',text:'Написать таргетологам',
+    detail:'Запросить отчет по рекламе',section:'Деньги и реклама'});
+  assert.equal(scheduled,1);
+  assert.equal(linkTodos(c).length,1);
+  assert.equal(linkTodos(c)[0].date,'2026-10-28');
+  assert.equal(linkTodos(c)[0].k,task.k);
+  html=linkPage({ctx:()=>c},'t1').html;
+  assert.match(html,/Написать таргетологам/);
+  assert.match(html,/Запросить отчет по рекламе/);
+  delete globalThis.window;
 });
