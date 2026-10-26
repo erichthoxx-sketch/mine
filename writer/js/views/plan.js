@@ -420,13 +420,13 @@ acts['td.addPlan'] = (d) => {
   contact?.addEventListener('change', e => { if (e.isTrusted) contactTouched = true; });
   inp?.addEventListener('input', () => {
     const text = inp.value.trim(), guessed = bookGuess(text,c.wbooks);
-    if (!folderTouched) folder.value = guessed ? 'book:'+guessed.id : MONEY_RE.test(text) ? 'Деньги и реклама' :
+    const name = String(one?.name || '').toLocaleLowerCase('ru');
+    const linked = !!(name && text.toLocaleLowerCase('ru').includes(name)) ||
+      (one?.kind === 'target' && /(?:написать|позвонить|ответить|сообщени|спросить|запросить).{0,35}(?:таргетолог|агентств)/i.test(text));
+    if (!folderTouched) folder.value = guessed ? 'book:'+guessed.id :
+      (one?.kind === 'target' && linked) || MONEY_RE.test(text) ? 'Деньги и реклама' :
       /написать|ответить|сообщени|позвонить|связаться|письмо/i.test(text) ? 'Связи' : 'Дела';
-    if (one && !contactTouched && contact?.type === 'checkbox') {
-      const name = String(one.name || '').toLocaleLowerCase('ru');
-      contact.checked = !!(name && text.toLocaleLowerCase('ru').includes(name)) ||
-        (one.kind==='target' && /(?:написать|позвонить|ответить|сообщени|спросить|запросить).{0,35}(?:таргетолог|агентств)/i.test(text));
-    }
+    if (one && !contactTouched && contact?.type === 'checkbox') contact.checked = linked;
   });
   inp?.focus();
   return false;
