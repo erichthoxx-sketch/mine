@@ -29,7 +29,7 @@ export function blogList(c, { bookId='', heading=true }={}) {
           <b>${esc(p.title || 'Без названия')}</b>
           <span>${esc(status(p,c.today))}${!bookId && p.bookId && c.wbooksById[p.bookId] ? ' · '+esc(c.wbooksById[p.bookId].title) : ''}</span>
         </a>${actions(p,c.today)}
-      </div>`).join('')}</div>` : `<p class="small muted blog-empty">Записей пока нет. Создай текст, выбери дату — публикация появится в Планере.</p>`}
+      </div>`).join('')}</div>` : `<p class="small muted blog-empty">Записей пока нет. Создайте текст и укажите дату публикации — она появится в Планере.</p>`}
     </div></section>`;
 }
 export function blogBookCard(c, bookId) {
@@ -115,7 +115,7 @@ export function blogEditor(a,id) {
         <span class="blog-toolbar-spacer"></span>
         <button type="button" data-act="blog.copy" data-id="${esc(p.id)}" title="Скопировать оформленный текст">${ic('copy')} Скопировать</button>
       </div>
-      <div id="blogBody" class="blog-body editor" contenteditable="true" spellcheck="true" role="textbox" aria-label="Текст записи" aria-multiline="true" data-placeholder="Начни писать публикацию…">${sanitized(p.html||'')}</div>
+      <div id="blogBody" class="blog-body editor" contenteditable="true" spellcheck="true" role="textbox" aria-label="Текст записи" aria-multiline="true" data-placeholder="Текст публикации…">${sanitized(p.html||'')}</div>
       <div class="blog-bottom">
         <span id="blogCount" class="small muted"></span>
         <span class="small muted">Текст сохраняется в «Мастерской». На Литнет его нужно выложить вручную.</span>
@@ -183,10 +183,10 @@ acts['blog.save']=async d=>{
   const a=app(),p=(a.ctx().data.w_blog||[]).find(x=>x.id===d.id);
   if(!p)return false;
   const changes=fields(p);
-  if(!changes.title){toast('Укажи заголовок блога');return false;}
-  if(!dateValid(changes.planDate)){toast('Проверь дату публикации');return false;}
+  if(!changes.title){toast('Укажите заголовок записи');return false;}
+  if(!dateValid(changes.planDate)){toast('Проверьте дату публикации');return false;}
   if(changes.url && !/^https:\/\/(www\.)?litnet\.com\//i.test(changes.url)){
-    toast('Укажи ссылку публикации на litnet.com');return false;
+    toast('Укажите ссылку на публикацию на litnet.com');return false;
   }
   if(changes.html.length>95000){toast('Запись слишком длинная для сохранения');return false;}
   const state=document.getElementById('blogSaveState');
@@ -221,8 +221,8 @@ acts['blog.copy']=async()=>{
 acts['blog.published']=async d=>{
   const a=app(),p=(a.ctx().data.w_blog||[]).find(x=>x.id===d.id);
   if(!p)return false;
-  if(!p.title?.trim() || !bodyPlain(p.html||'')){toast('Сначала сохрани заголовок и текст');return false;}
-  if(!(await ask('Ты уже опубликовала эту запись на Литнете? Отметить ее как выложенную?','Да, выложила')))return false;
+  if(!p.title?.trim() || !bodyPlain(p.html||'')){toast('Сначала сохраните заголовок и текст');return false;}
+  if(!(await ask('Запись уже опубликована на Литнете? Отметить публикацию в Мастерской?','Да, выложила')))return false;
   await a.store.patch('w_blog',p.id,{status:'published',publishedAt:a.ctx().today,modifiedAt:new Date().toISOString()});
   toast('Отмечено как опубликованное');
   a.scheduleTodoist?.();
@@ -241,7 +241,7 @@ acts['blog.restore']=d=>{
   const body=document.getElementById('blogBody');if(body)body.innerHTML=sanitized(saved.html||'');
   document.getElementById('blogCount').textContent=(body?.innerText||'').trim().length.toLocaleString('ru')+' знаков';
   document.querySelector('.blog-restore')?.remove();
-  toast('Черновик восстановлен, нажми «Сохранить»');
+  toast('Черновик восстановлен. Нажмите «Сохранить»');
   return false;
 };
 acts['blog.discard']=()=>{document.querySelector('.blog-restore')?.remove();return false;};
