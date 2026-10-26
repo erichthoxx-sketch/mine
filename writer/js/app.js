@@ -109,7 +109,7 @@ function render() {
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере.</div>' : ''}
   <div class="top"><div><h1>Мастерская</h1><small>${esc(c.settings.pseudonym)}${sync ? ' · ' + sync : ''}</small></div>
   <div class="row"><a class="btn" href="../">${ic('ruble')} Доходы</a><button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">${ic('settings')}</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
-  <main>${ui.route.startsWith('/ed/') ? r.html : tidyNums(r.html)}</main>
+  <main>${ui.route.startsWith('/ed/') || ui.route.startsWith('/blog/') ? r.html : tidyNums(r.html)}</main>
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}${wide() ? (() => { try { return tidyNums(navToday(c)); } catch (e) { console.error(e); return ''; } })() : ''}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
   afterFn = r.after || null;
   afterFn?.();
