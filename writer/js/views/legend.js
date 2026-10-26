@@ -11,7 +11,7 @@ import { docxBlob, noYo } from '../publish.js';
 import { synText, synSource } from '../synopsis.js';
 import { cleanText } from '../../../js/cleantext.js';
 import './pubfiles.js'; // «Скопировать» и «Word» синопсиса
-import { IDEA_FIELDS, ROLES, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, formatCharacterAge, legendContext, legendTemplate, applyTemplate, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
+import { IDEA_FIELDS, ROLES, PERSON, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, formatCharacterAge, legendContext, legendTemplate, applyTemplate, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
 
 const app = () => window.__app;
 const bookOf = (id) => app().ctx().wbooksById[id];
@@ -78,8 +78,8 @@ function planHtml(b, L, main) {
       <span class="lg-mv"><button class="lg-ib" data-act="leg.move" data-id="${b.id}" data-i="${i}" data-d="-1" title="Выше" aria-label="Выше"${i ? '' : ' disabled'}>↑</button><button class="lg-ib" data-act="leg.move" data-id="${b.id}" data-i="${i}" data-d="1" title="Ниже" aria-label="Ниже"${i < L.plan.length - 1 ? '' : ' disabled'}>↓</button><button class="lg-ib" data-act="leg.ins" data-id="${b.id}" data-i="${i + 1}" title="Вставить главу после" aria-label="Вставить после">+</button><button class="lg-ib" data-act="leg.delp" data-id="${b.id}" data-i="${i}" title="Убрать из каркаса" aria-label="Убрать">${ic('trash')}</button></span></div>
       <span class="lg-sl">Что происходит</span>${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="what"`, p.what, '2–3 строки, главное событие главы', 2)}
       <span class="lg-sl">Зачем эта глава</span>${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="why"`, p.why, 'что меняется для героев, какой крючок в конце', 1)}
-      ${L.chars.length ? `<div class="lg-row"><label class="lg-pov">Глазами <select data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="pov">${opts(p.pov)}</select></label>
-        <span class="lg-chips">${L.chars.map((x) => `<button class="lg-chip${(p.chars || []).includes(x.id) ? ' on' : ''}" data-act="leg.pchar" data-id="${b.id}" data-i="${i}" data-c="${x.id}">${esc(x.name || 'Без имени')}</button>`).join('')}</span></div>` : ''}</div>`;
+      <div class="lg-row">${L.chars.length ? `<label class="lg-pov">Глазами <select data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="pov">${opts(p.pov)}</select></label>` : ''}
+        <label class="lg-pov"><select data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="person" aria-label="От какого лица">${opt('', 'лицо не выбрано', p.person || '')}${Object.entries(PERSON).map(([k, v]) => opt(k, v, String(p.person || ''))).join('')}</select></label></div></div>`;
   };
   // пролог — отдельным блоком перед первой главой; пока его нет — пустой блок, заполнится — станет частью каркаса
   const prolGhost = isProl(L.plan[0]) ? '' : `<div class="card lg-ch lg-prol lg-ghost"><div class="lg-ch-h"><span class="lg-n">П</span><b class="lg-t lg-tfix">Пролог</b><span class="lg-st">необязательно</span></div>
@@ -93,10 +93,10 @@ function planHtml(b, L, main) {
 function questionsHtml(b, L) {
   const qs = L.questions || [], open = qs.filter((q) => q.st !== 'ok').length;
   const row = (q) => `<div class="lg-q${q.st === 'ok' ? ' ok' : ''}">
-    <div class="lg-q-h">${ta(`data-chg="leg.q" data-id="${b.id}" data-q="${q.id}" data-k="q"`, q.q, 'Вопрос: что ещё не решено в сюжете?', 1)}
-      <button class="lg-ib" data-act="leg.qdel" data-id="${b.id}" data-q="${q.id}" title="Убрать вопрос" aria-label="Убрать вопрос">${ic('trash')}</button></div>
+    <div class="lg-q-h">${ta(`data-chg="leg.q" data-id="${b.id}" data-q="${q.id}" data-k="q"`, q.q, 'Вопрос: что ещё не решено в сюжете?', 1)}</div>
     ${ta(`data-chg="leg.q" data-id="${b.id}" data-q="${q.id}" data-k="a"`, q.a, 'Решение', 1)}
-    <div class="lg-q-f">${q.st === 'ok' ? `<span class="lg-ps ps-ok"><span class="dot"></span>Утверждено</span><button class="link" data-act="leg.qst" data-id="${b.id}" data-q="${q.id}" data-v="open">снова обсуждать</button>` : `<span class="lg-ps ps-talk"><span class="dot"></span>Обсуждается</span>${q.a ? `<button class="link" data-act="leg.qst" data-id="${b.id}" data-q="${q.id}" data-v="ok">Утвердить решение</button>` : ''}`}</div></div>`;
+    <div class="lg-q-f">${q.st === 'ok' ? `<span class="lg-ps ps-ok"><span class="dot"></span>Утверждено</span><button class="link" data-act="leg.qst" data-id="${b.id}" data-q="${q.id}" data-v="open">снова обсуждать</button>` : `<span class="lg-ps ps-talk"><span class="dot"></span>Обсуждается</span>${q.a ? `<button class="link" data-act="leg.qst" data-id="${b.id}" data-q="${q.id}" data-v="ok">Утвердить решение</button>` : ''}`}
+      <button class="lg-ib lg-q-del" data-act="leg.qdel" data-id="${b.id}" data-q="${q.id}" title="Убрать вопрос" aria-label="Убрать вопрос">${ic('trash')}</button></div></div>`;
   return `<details class="card lg-qs"${open || !qs.length ? ' open' : ''}><summary><b>Открытые вопросы</b><span class="muted">${qs.length ? ` · ${open ? `не решено ${open}` : 'все решены'}` : ''}</span></summary>
     ${qs.length ? '' : '<p class="small muted" style="margin:6px 0 0">Что ещё мешает начать писать: запишите вопрос, потом решение — и утвердите его. Утверждённое попадёт в рабочий контекст для нейросети.</p>'}
     ${qs.map(row).join('')}<div class="lg-add" style="margin-top:8px"><button data-act="leg.qadd" data-id="${b.id}">+ Вопрос</button></div></details>`;

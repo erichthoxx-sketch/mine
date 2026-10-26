@@ -2750,3 +2750,38 @@ main .rev-actions button.dl .ic { opacity: 1; }
     margin-bottom:14px;gap:12px;
   }
 }
+
+/* Легенда — одна шкала шрифтов: заголовок карточки 16 px жирный, текст полей 16 px,
+   всё служебное (статус, «написана», «Утвердить решение», счётчики) — 13 px; значки-кнопки одного серого цвета */
+.app-writer .lg-qs > summary b { font-weight: 700; }
+.app-writer .lg-q-h textarea.lg-ta { font-weight: 600; }
+.app-writer main .lg-ps, .app-writer main .lg-ps select, .app-writer main .lg-st, .app-writer main .lg-q-f .link { font: 400 13px/1.4 var(--font-body) !important; }
+.app-writer main .lg-q-f .link { font-weight: 600 !important; }
+.app-writer main .lg-ps select { color: var(--text-2) !important; }
+.app-writer main .lg-st.ok { color: var(--good) !important; }
+.app-writer main button.lg-ib, .app-writer main button.lg-ib:disabled { color: var(--muted) !important; }
+.app-writer main button.lg-ib:disabled { opacity: .35; }
+/* вопрос: поле вопроса и поле решения одной ширины; статус, «Утвердить решение» и корзина — одной строкой под ними */
+.app-writer .lg-q-h { display: block; }
+.app-writer .lg-q-h textarea.lg-ta { width: 100%; margin: 0 0 8px; }
+.app-writer .lg-q > textarea.lg-ta { margin: 0 0 4px; }
+.app-writer .lg-q-f { display: flex; align-items: center; gap: 14px; margin-top: 6px; min-height: 30px; }
+.app-writer main .lg-q-f button.lg-q-del { margin: 0 0 0 auto !important; }
+/* Блог Литнет в списках (Связи, страница книги): название записи чёрное, как названия книг; под ним — серая строка 13 px */
+.app-writer main .blog-row-main, .app-writer main .blog-row-main > b { color: var(--text) !important; }
+.app-writer main .blog-row-main > b { font: 600 15px/1.45 var(--font-body) !important; }
+.app-writer main .blog-row-main > span { font: 400 13px/1.45 var(--font-body) !important; color: var(--text-2) !important; }
+.app-writer main .blog-row-main:hover > b { text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+/* шапка главы каркаса: кружок — только у статуса решения; «написана · N зн.» — серым текстом без второго кружка */
+.app-writer main .lg-st.ok { color: var(--text-2) !important; }
+.app-writer main .lg-st.ok::before { content: none; }
+.app-writer main .lg-ps select { padding-right: 14px !important; }
+/* под главой каркаса: «Глазами» и «от какого лица» — два тихих выпадающих списка в строку, без кружков с именами */
+.app-writer main .lg-ch .lg-row { gap: 6px 18px; }
+.app-writer main .lg-pov { font: 400 13px/1.4 var(--font-body); color: var(--text-2); gap: 6px; }
+.app-writer main .lg-pov select { width: auto; min-height: 30px; padding: 2px 22px 2px 8px; border: 0 !important; border-radius: 8px; background-color: transparent; box-shadow: none; font: 600 13px/1.4 var(--font-body) !important; color: var(--text); background-position: right 4px center; }
+.app-writer main .lg-pov select:hover, .app-writer main .lg-pov select:focus { background-color: var(--surface-2); outline: none; }
+@media (max-width: 640px) {
+  .app-writer main .lg-ch-h .lg-ps { margin-left: 34px; }
+  .app-writer main .lg-ch-h .lg-st { flex: 1 1 auto; padding-left: 0; }
+}

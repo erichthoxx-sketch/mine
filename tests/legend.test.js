@@ -138,3 +138,9 @@ test('Полный режим при выборе персонажей не до
   assert.match(text, /## Персонажи/);
   assert.doesNotMatch(text, /Вопрос\\?|Отвергнутая сцена|Отвергнуто/);
 });
+
+test('каркас: «от какого лица» попадает в текст для нейросети', async () => {
+  const { legendContext } = await import('../writer/js/legend.js');
+  const L = { idea: {}, chars: [{ id: 'a', name: 'Вера', role: 'heroine' }], plan: [{ id: '1', title: 'Похороны', what: 'Вера хоронит мужа', pov: 'a', person: '1', st: 'ok' }], questions: [] };
+  assert.match(legendContext(L, { title: 'Вдова' }), /глазами: Вера; от первого лица/);
+});

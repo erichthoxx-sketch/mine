@@ -1,5 +1,5 @@
 // «Легенда» книги: идея, каркас по главам и персонажи. Чистые функции — без DOM и сети (их проверяют тесты).
-// Хранится в книге: b.legend = { idea: {…}, plan: [{ id, title, what, why, pov, chars: [id], st }], chars: [{ id, name, role, … }],
+// Хранится в книге: b.legend = { idea: {…}, plan: [{ id, title, what, why, pov, person: 1|3, chars: [id], st }], chars: [{ id, name, role, … }],
 //   questions: [{ id, q, a, st: open|ok }], sync: {…} }
 
 export const IDEA_FIELDS = [
@@ -14,6 +14,8 @@ export const IDEA_FIELDS = [
   ['rules', 'Правила мира и важные факты', 'то, что нельзя нарушать: даты, имена, кто что знает'],
   ['notes', 'Заметки', 'всё остальное'],
 ];
+// от какого лица написана глава
+export const PERSON = { 1: 'от первого лица', 3: 'от третьего лица' };
 export const ROLES = { heroine: 'Героиня', hero: 'Герой', villain: 'Антагонист', friend: 'Друг / подруга', family: 'Семья', side: 'Второстепенный' };
 export const CHAR_FIELDS = [
   ['age', 'Возраст', 'например, 29'],
@@ -73,7 +75,7 @@ export function legendContext(L, { title = '', upTo = 0, mode = 'work', sections
   const decided = qs.filter((q) => q.st === 'ok' && nm(q.q) && nm(q.a));
   if (selected.has('plan') && decided.length) out.push('', '## Решения (утверждено)', ...decided.map((q) => `- ${nm(q.q)} — ${nm(q.a)}`));
   const line = (p, n) => {
-    const extra = [nm(p.why) ? `зачем: ${nm(p.why)}` : '', p.pov ? `глазами: ${charName(L, p.pov)}` : '', (p.chars || []).length ? `в сцене: ${p.chars.map((id) => charName(L, id)).filter(Boolean).join(', ')}` : ''].filter(Boolean).join('; ');
+    const extra = [nm(p.why) ? `зачем: ${nm(p.why)}` : '', p.pov ? `глазами: ${charName(L, p.pov)}` : '', PERSON[p.person] || '', (p.chars || []).length ? `в сцене: ${p.chars.map((id) => charName(L, id)).filter(Boolean).join(', ')}` : ''].filter(Boolean).join('; ');
     const mark = full ? (planSt(p) === 'ok' ? ' [утверждено]' : ' [обсуждается]') : '';
     return `${n ? `${n}. ` : ''}${nm(p.title) || `Глава ${n}`}${mark}${nm(p.what) ? ` — ${nm(p.what)}` : ''}${extra ? ` (${extra})` : ''}`;
   };
@@ -146,6 +148,7 @@ export function legendBlocks(L, part) {
     if (nm(p.what)) for (const l of nm(p.what).split('\n')) out.push(P(l));
     if (nm(p.why)) out.push(LP('Зачем', nm(p.why)));
     if (p.pov && charName(L, p.pov)) out.push(LP('Глазами', charName(L, p.pov)));
+    if (PERSON[p.person]) out.push(LP('Повествование', PERSON[p.person]));
     const cs = (p.chars || []).map((id) => charName(L, id)).filter(Boolean);
     if (cs.length) out.push(LP('В сцене', cs.join(', ')));
   });
@@ -261,7 +264,7 @@ export function applyTemplate(L, part, text, newId = () => Math.random().toStrin
     });
     if (items.length) {
       // главы по порядку: у существующих сохраняем «глазами»/«в сцене», остальное берём из ответа
-      out.plan = items.map((x, i) => { const old = L.plan[i] || {}; return { id: old.id || newId(), pov: old.pov || '', chars: old.chars || [], ...x }; });
+      out.plan = items.map((x, i) => { const old = L.plan[i] || {}; return { id: old.id || newId(), pov: old.pov || '', person: old.person || '', chars: old.chars || [], ...x }; });
       n += items.length;
     }
     const qi = lines.findIndex((l) => /^===.*ВОПРОС/i.test(l.trim()) || QHEAD.test(l));
