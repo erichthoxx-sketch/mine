@@ -2641,51 +2641,57 @@ main .rev-actions button.dl .ic { opacity: 1; }
   .app-writer .blog-row { gap: 7px; }
 }
 
-/* Единая шрифтовая система «Мастерской» (все разделы).
-   22 — заголовок страницы, 17 — раздел, 16 — карточка,
-   14 — название записи, 12 — метаданные. Не меняет книжный текст редакторов. */
+/* ТИПОГРАФИКА МАСТЕРСКОЙ: один размер для каждой роли, а не отдельные
+   размеры в баннерах. Шапка > страница > секция > карточка > подпись. */
 .app-writer {
-  --w-page-heading: 22px;
-  --w-section-heading: 17px;
-  --w-card-heading: 16px;
+  --w-top-heading: 24px;
+  --w-page-heading: 23px;
+  --w-section-heading: 19px;
+  --w-card-heading: 15px;
   --w-item-heading: 14px;
   --w-meta: 12px;
 }
-.app-writer main .psec-h > h2 {
-  font-family: var(--font-display);
-  font-size: var(--w-section-heading);
-  font-weight: 600;
-  line-height: 1.45;
+.app-writer .top h1 {
+  font: 600 var(--w-top-heading)/1.4 var(--font-display);
+  letter-spacing: -.015em;
+}
+.app-writer main .links-page .links-title > h2 {
+  font: 600 var(--w-page-heading)/1.4 var(--font-display);
   letter-spacing: -.012em;
+}
+.app-writer main .psec-h > h2,
+.app-writer main .links-page .psec-h > h2 {
+  font: 600 var(--w-section-heading)/1.4 var(--font-display);
+  letter-spacing: -.01em;
+  margin: 0;
+}
+.app-writer main .psec-h > h2 .muted {
+  font: 600 12px/1.4 var(--font-body);
+  margin-left: 5px;
 }
 .app-writer main .card > h2,
 .app-writer main .card > .row.between > h2,
-.app-writer main .card > .row > h2 {
-  font-family: var(--font-display);
-  font-size: var(--w-card-heading);
-  font-weight: 600;
-  line-height: 1.45;
+.app-writer main .card > .row > h2,
+.app-writer main .target-work-heading > h2 {
+  font: 600 var(--w-card-heading)/1.45 var(--font-display);
+  margin-top: 0;
   letter-spacing: -.01em;
 }
-.app-writer main .item > span > b,
-.app-writer main .item > b {
-  font-family: var(--font-body);
-  font-size: var(--w-item-heading);
-  font-weight: 750;
-  line-height: 1.5;
+.app-writer main .links-page .item b,
+.app-writer main .links-page .blog-row-main > b {
+  font: 700 var(--w-item-heading)/1.5 var(--font-body);
 }
-.app-writer main .item .sub,
-.app-writer main .item > .small {
-  font-family: var(--font-body);
-  font-size: var(--w-meta);
-  line-height: 1.5;
+.app-writer main .links-page :is(.item .sub,.item .small,.blog-row-main > span) {
+  font: 500 var(--w-meta)/1.5 var(--font-body);
 }
-.app-writer .links-page .links-title > h2 {
-  font-family: var(--font-display);
-  font-size: var(--w-page-heading);
-  font-weight: 600;
-  line-height: 1.4;
+.app-writer .links-page .card p,
+.app-writer .links-page .blog-list-card p {
+  font-size: 14px;
+  line-height: 1.55;
 }
-.app-writer .links-page .psec-h > h2 { font-size: var(--w-section-heading); }
-.app-writer .links-page .blog-row-main > b { font: 750 var(--w-item-heading)/1.5 var(--font-body); }
-.app-writer .links-page .blog-row-main > span { font: 500 var(--w-meta)/1.5 var(--font-body); }
+.app-writer .links-page .psec-h .small-btn {
+  font: 700 13px/1.4 var(--font-body);
+}
+@media (max-width:560px) {
+  .app-writer { --w-top-heading: 21px; --w-page-heading: 21px; --w-section-heading: 18px; }
+}
