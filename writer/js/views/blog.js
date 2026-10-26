@@ -264,7 +264,20 @@ acts['blog.fmt']=(d)=>{
 };
 changes['blog.style']=(value)=>{
   const el=body();if(!el)return false;
-  el.focus();document.execCommand('formatBlock',false,BLOG_STYLES[value]||'p');touch();return false;
+  const tag=BLOG_STYLES[value]||'p',current=selectedBlock();
+  if(current && current.tagName.toLowerCase()!==tag){
+    const replacement=document.createElement(tag);
+    if(current.style.textAlign)replacement.style.textAlign=current.style.textAlign;
+    replacement.innerHTML=current.innerHTML;
+    current.replaceWith(replacement);
+    el.focus();
+    const selection=window.getSelection(),range=document.createRange();
+    range.selectNodeContents(replacement);range.collapse(false);
+    selection?.removeAllRanges();selection?.addRange(range);
+  }else if(!current){
+    el.focus();document.execCommand('formatBlock',false,tag);
+  }
+  touch();return false;
 };
 acts['blog.align']=(d)=>{
   const el=body();if(!el)return false;
@@ -276,8 +289,13 @@ acts['blog.align']=(d)=>{
 acts['blog.color']=()=>{
   const el=body(),sel=window.getSelection();
   if(!el||!sel?.rangeCount||sel.isCollapsed||!el.contains(sel.anchorNode)){toast('Выделите текст для цветовой пометки');return false;}
+  const node=sel.anchorNode?.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode;
+  const marked=node?.closest?.('span[style*="color"]');
+  const current=(marked?.style.color||'').replace(/\s/g,'').toLowerCase();
+  const on=current==='#0b6b4f'||current==='rgb(11,107,79)';
   el.focus();document.execCommand('styleWithCSS',false,true);
-  document.execCommand('foreColor',false,'#0b6b4f');touch();return false;
+  document.execCommand('foreColor',false,on?'#3a3532':'#0b6b4f');
+  touch();return false;
 };
 acts['blog.dash']=()=>{focus();document.execCommand('insertText',false,'— ');touch();return false;};
 acts['blog.undo']=()=>{focus();document.execCommand('undo');touch();return false;};
