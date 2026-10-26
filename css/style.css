@@ -2500,3 +2500,15 @@ main .rev-actions button.dl .ic { opacity: 1; }
   .app-writer .target-entry { gap:6px; }
   .app-writer .target-entry-actions { gap:4px; flex-direction:column; }
 }
+
+/* Планер: единственный контакт не требует выпадающего списка. */
+.app-writer .plan-contact-one {
+  display: inline-flex; align-items: center; gap: 9px;
+  margin: 12px 0 0; padding: 6px 0;
+  color: var(--text-2); font: 600 13px/1.5 var(--font-body);
+  cursor: pointer;
+}
+.app-writer .plan-contact-one input[type="checkbox"] {
+  margin: 0; width: 16px; height: 16px; flex: 0 0 16px;
+  accent-color: var(--accent);
+}
