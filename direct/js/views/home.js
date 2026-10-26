@@ -10,11 +10,25 @@ import { stateDot, tiles, actBtn, q } from './common.js';
 import { demo } from '../demo.js';
 import { OUTAGE_TEXT } from '../api.js';
 import { litnetSummary } from './litnet.js';
+import { linkedTargetologists, targetReminders } from '../../../js/target-partners.js';
 
 const app = () => window.__app;
 
-function connectCard() {
-  return `<div class="card"><h2>Подключите Директ</h2>
+function partnerPanel(c) {
+  const people=linkedTargetologists(c.data,'direct');
+  if (!people.length) return '';
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Внешние таргетологи</h2><span class="small muted">Связи · Мастерская</span></div>
+    <div class="list">${people.map(p=>{
+      const tasks=targetReminders(p,c.today);
+      const last=[...(p.log||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
+      return `<a class="item target-linked-item" href="../pisatel/#/link/${encodeURIComponent(p.id)}"><b>${esc(p.name)}</b>
+        <span class="sub">${[p.campaignNote, p.partnerStatus==='paused'?'На паузе':p.partnerStatus==='done'?'Завершено':'В работе'].filter(Boolean).map(esc).join(' · ')}</span>
+        ${tasks.length?`<span class="small muted">Следующее: ${esc(tasks[0].text)}${tasks[0].date?' · '+tasks[0].date:''}</span>`:last?`<span class="small muted">Последнее: ${esc(last.text)}</span>`:''}</a>`;
+    }).join('')}</div><p class="small muted" style="margin:8px 0 0">Здесь только договоренности и дела. Расходы и ставки не меняются.</p></div>`;
+}
+
+function connectCard(c) {
+  return `${partnerPanel(c)}<div class="card"><h2>Подключите Директ</h2>
     <p>Здесь будет вся ваша реклама в Яндекс Директе: сколько потрачено, что ищут люди, какие фразы сливают деньги — и кнопки, чтобы это исправить.</p>
     <div class="row"><button class="primary" data-act="go" data-to="/settings">Подключить</button><button data-act="d.demo">Посмотреть на примере</button></div></div>`;
 }
@@ -73,7 +87,7 @@ acts['d.toAds'] = (d) => { app().ui.cTab = 'ads'; app().ui.route = '/c/' + d.cid
 export function homeView(a) {
   const c = a.ctx(), main = a.snap('main'), stats = a.snap('stats');
   if (!main) {
-    if (!c.settings.directToken) return { html: connectCard() };
+    if (!c.settings.directToken) return { html: connectCard(c) };
     const last = c.settings.direct?.lastError;
     if (a.ui.busy || !last) return { html: '<div class="card"><p class="muted">Загружаю данные из Директа…</p></div>' };
     const msg = last.code === 56 ? 'Яндекс временно ограничил частоту запросов. Приложение повторит загрузку автоматически.' : last.text || 'Не получилось получить данные Директа.';
@@ -101,6 +115,7 @@ export function homeView(a) {
       <div class="small muted">${pace.left <= 0 ? 'Тестовый бюджет потрачен — время подвести итоги (ИИ-помощник поможет).' : pace.daysLeft != null ? `≈ ${rub(pace.perDay, 0)} в день — остатка хватит примерно на ${num(pace.daysLeft)} дн.` : 'Пока расходов нет.'}</div></div>
       <div class="chart" id="dSpend"></div><div class="chart-cap small muted">Расход по дням за 30 дней</div></div>
     ${!demo.on ? `<div class="card"><div class="row between"><h2 style="margin:0">Мой первый запуск</h2><button class="primary" data-act="go" data-to="/launch">Открыть план</button></div><p class="small">«Развод для черной вдовы»: с 1 ноября подготовка, после 4–5 глав — подписка и первый собственный тест на 10 000 ₽. Здесь будут только его расходы и конверсии.</p></div>` : ''}
+    ${partnerPanel(c)}
     ${litnetSummary(a)}
     <div class="card"><div class="row between"><h2 style="margin:0">Контроль качества трафика</h2><button data-act="go" data-to="/quality">Проверить</button></div><p class="small muted">Поиск и РСЯ, расходы по площадкам, отказы и покупки. Без автоматических блокировок и неподтвержденных обвинений в ботах.</p></div>
     <div class="card"><div class="row between"><h2 style="margin:0">Журнал рекламных решений</h2><button data-act="go" data-to="/experiments">Открыть</button></div><p class="small muted">Записывай гипотезы и проверяй, что изменилось после каждого решения: расходы, покупки и продажи конкретной книги.</p></div>
