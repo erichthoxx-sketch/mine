@@ -2512,3 +2512,131 @@ main .rev-actions button.dl .ic { opacity: 1; }
   margin: 0; width: 16px; height: 16px; flex: 0 0 16px;
   accent-color: var(--accent);
 }
+
+/* Шрифтовая иерархия Мастерской · Связи.
+   Заголовок страницы > секции > название записи; Unbounded только для заголовков. */
+.app-writer .links-page .links-title > h2 {
+  font: 600 22px/1.4 var(--font-display);
+  letter-spacing: -.015em;
+}
+.app-writer .links-page .psec-h h2 {
+  font: 600 17px/1.45 var(--font-display);
+  letter-spacing: -.012em;
+  margin: 0;
+}
+.app-writer .links-page .psec-h h2 .muted {
+  font: 600 13px/1.4 var(--font-body);
+  color: var(--text-2);
+}
+.app-writer .links-page .item b {
+  font: 750 14px/1.5 var(--font-body);
+  color: var(--text);
+}
+.app-writer .links-page .sub, .app-writer .links-page .item .small {
+  font: 500 12px/1.5 var(--font-body);
+}
+.app-writer .links-page .psec-h .small-btn {
+  font: 700 13px/1.4 var(--font-body);
+  min-height: 36px;
+  padding: 7px 13px;
+}
+.app-writer .links-page .card p { line-height: 1.5; }
+
+/* Блог Литнет: компактная библиотека записей */
+.app-writer .blog-list-section .psec-h { margin-top: 16px; }
+.app-writer .blog-list-card { padding: 7px 16px; }
+.app-writer .blog-row {
+  display: flex; align-items: center; gap: 12px;
+  border-top: 1px solid var(--line); padding: 11px 0;
+}
+.app-writer .blog-row:first-child { border-top: none; }
+.app-writer .blog-row-main {
+  flex: 1 1 auto; min-width: 0; display: grid; gap: 3px;
+  color: var(--text); text-decoration: none;
+}
+.app-writer .blog-row-main b { font: 750 14px/1.5 var(--font-body); overflow-wrap: anywhere; }
+.app-writer .blog-row-main span { color: var(--text-2); font: 500 12px/1.5 var(--font-body); }
+.app-writer .blog-row > button {
+  flex: 0 0 auto; margin: 0; min-height: 34px;
+  font: 700 12px/1.3 var(--font-body); padding: 6px 12px;
+}
+.app-writer .blog-empty { margin: 10px 0; }
+
+/* Редактор блога: тот же принцип чистого листа, что в редакторе глав. */
+.app-writer .blog-editor { max-width: 920px; margin: 0 auto; }
+.app-writer .blog-editor-top {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 9px;
+  margin-bottom: 13px;
+}
+.app-writer .blog-editor-top > #blogSaveState { flex: 1 1 auto; text-align: right; }
+.app-writer .blog-editor-top > button { margin: 0; }
+.app-writer .blog-page {
+  background: var(--surface); border: 1px solid var(--line);
+  box-shadow: var(--shadow); border-radius: 20px;
+  padding: clamp(17px, 3vw, 28px);
+}
+.app-writer .blog-page > label, .app-writer .blog-meta label, .app-writer .blog-posting label {
+  display: block; margin: 0 0 7px;
+  color: var(--text-2); font: 650 12px/1.5 var(--font-body);
+}
+.app-writer .blog-page :is(input,select) {
+  width: 100%; margin: 0; border-radius: 10px;
+  font: 500 14px/1.5 var(--font-body); background: var(--surface);
+}
+.app-writer .blog-page #blogTitle {
+  font: 650 18px/1.5 var(--font-body); margin-bottom: 17px;
+}
+.app-writer .blog-meta {
+  display: grid; grid-template-columns: minmax(0,1.4fr) minmax(160px,1fr);
+  gap: 13px; margin-bottom: 22px;
+}
+.app-writer .blog-meta > div { min-width: 0; }
+.app-writer .blog-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  background: var(--surface-2); padding: 7px;
+  border: 1px solid var(--line); border-radius: 11px 11px 0 0;
+}
+.app-writer .blog-toolbar > button {
+  min-height: 34px; border: 0; border-radius: 8px;
+  padding: 5px 9px; font: 700 13px/1.35 var(--font-body);
+  background: transparent; box-shadow: none;
+}
+.app-writer .blog-toolbar > button:hover { background: var(--surface); }
+.app-writer .blog-toolbar-spacer { flex: 1 1 12px; }
+.app-writer .blog-page .blog-body.editor {
+  display: block; width: 100%; margin: 0; padding: 25px clamp(12px,4vw,36px);
+  border: 1px solid var(--line); border-top: 0; border-radius: 0 0 11px 11px;
+  min-height: 350px; max-height: none; outline: none;
+  background: var(--surface); color: var(--text);
+  font: 400 16px/1.75 Georgia, 'Times New Roman', serif;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.app-writer .blog-body:focus { box-shadow: inset 0 0 0 1px var(--accent-2); }
+.app-writer .blog-body:empty:before { content: attr(data-placeholder); color: var(--muted); }
+.app-writer .blog-body h2 { margin: 18px 0 10px; font: 700 19px/1.5 Georgia, serif; }
+.app-writer .blog-body h3 { margin: 16px 0 8px; font: 700 17px/1.5 Georgia, serif; }
+.app-writer .blog-body p { margin: 0 0 .8em; }
+.app-writer .blog-bottom {
+  display: flex; gap: 8px 20px; justify-content: space-between;
+  flex-wrap: wrap; margin-top: 9px;
+}
+.app-writer .blog-posting {
+  display: grid; gap: 12px; padding-top: 20px;
+  border-top: 1px solid var(--line); margin-top: 24px;
+}
+.app-writer .blog-post-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.app-writer .blog-post-actions > * { margin: 0; }
+.app-writer .blog-danger { margin-top: 25px; text-align: right; }
+.app-writer .blog-restore {
+  display:flex; align-items: center; flex-wrap: wrap; gap: 9px;
+  padding: 9px 12px; margin-bottom: 12px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px;
+  font: 500 12px/1.5 var(--font-body);
+}
+.app-writer .blog-restore > span { flex: 1 1 auto; }
+@media (max-width: 560px) {
+  .app-writer .blog-meta { grid-template-columns: 1fr; }
+  .app-writer .blog-page { padding: 14px; }
+  .app-writer .blog-editor-top > #blogSaveState { order: 3; flex-basis: 100%; text-align: left; }
+  .app-writer .blog-row { gap: 7px; }
+}
