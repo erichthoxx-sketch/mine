@@ -29,8 +29,10 @@ test('Карточка книги показывает только записи
 test('Редактор предоставляет форматирование, черновик и только ручную публикацию', () => {
   const file=read('../writer/js/views/blog.js');
   assert.match(file,/contenteditable="true"/);
-  assert.match(file,/data-act="blog\.fmt"/);
-  assert.match(file,/data-act="blog\.copy"/);
+  assert.match(file,/editorToolbar\('blog'/);
+  assert.match(source('../writer/js/editor-ui.js'),/data-act="\$\{prefix\}\.fmt"/);
+  assert.match(file,/editorToolbar\('blog'/);
+  assert.match(source('../writer/js/editor-ui.js'),/data-act="\$\{prefix\}\.fmt"/);
   assert.match(file,/store\.patch\('w_blog'/);
   assert.match(file,/localStorage\.setItem/);
   assert.match(file,/status:'published'/);
