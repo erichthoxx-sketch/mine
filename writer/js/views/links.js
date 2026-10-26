@@ -71,6 +71,7 @@ export function linkPage(a, id) {
     <div class="row">${url ? `<a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener">Открыть ${x.kind === 'social' ? 'страницу' : 'сайт'}</a>` : ''}${x.handle ? `<button data-act="copy" data-text="${esc(x.handle)}">Скопировать ник</button>` : ''}${x.contact ? `<button data-act="copy" data-text="${esc(x.contact)}">Скопировать контакт</button>` : ''}</div>
     ${x.kind === 'target' ? `<div class="target-details"><div class="small muted">${associated.length ? 'Книги: ' + associated.map(esc).join(' · ') : 'Книги пока не привязаны'}${x.campaignNote ? ' · Рекламные кампании: ' + esc(x.campaignNote) : ''}</div><div class="small muted">${x.showDirect ? 'Видно в «Директе»' : '«Директ» не подключен к контакту'} · ${x.showIncome ? 'Видно в «Доходах» (без учета сумм)' : 'В «Доходах» не показывать'}</div></div>` : ''}
     ${x.note ? `<p class="idea-text" style="margin-bottom:0">${esc(x.note)}</p>` : ''}</div>
+  ${x.kind === 'target' ? targetWorkPanel(c,x) : `
   <div class="psec-h"><h2>Запросы <span class="muted">${open.length || ''}</span></h2><button class="small-btn" data-act="wait.new" data-contact="${x.id}">+ Запрос</button></div>
   ${open.length ? `<div class="card plist-card"><div class="plist">${open.map((r) => reqRow(c, r)).join('')}</div></div>` : '<div class="card"><p class="small muted" style="margin:0">Открытых запросов нет.</p></div>'}
   <div class="psec-h"><h2>Напоминания <span class="muted">${todos.length || ''}</span></h2><button class="small-btn" data-act="link.todo" data-id="${x.id}">+ Напомнить</button></div>
@@ -79,7 +80,7 @@ export function linkPage(a, id) {
   <div class="card">
     <form data-form="link.log" data-id="${x.id}" class="link-log-form"><input type="date" name="date" value="${c.today}" aria-label="Дата">${x.kind === 'target' ? `<select name="logKind" aria-label="Тип записи"><option value="sent">Написала</option><option value="received">Ответили</option><option value="agreement">Договорились</option><option value="call">Созвон</option><option value="note">Заметка</option></select>` : ''}<input name="text" placeholder="${x.kind === 'target' ? 'Что обсудили, решили или ждешь в ответ…' : 'Что было: письмо, звонок, договоренность…'}" aria-label="Запись" required><button class="primary" type="submit">Записать</button></form>
     ${log.length ? `<div class="list" style="margin-top:8px">${log.map((l) => `<div class="item row between"><span><span class="sub">${fmtDate(l.date)}</span>${x.kind === 'target' && l.kind ? `<span class="target-log-kind">${esc({ sent: 'Написала', received: 'Ответили', agreement: 'Договорились', call: 'Созвон', note: 'Заметка' }[l.kind] || 'Запись')}</span>` : ''}${esc(l.text)}</span><button class="icon-btn" data-act="link.logDel" data-id="${x.id}" data-k="${esc(l.k)}" aria-label="Удалить запись">${ic('trash')}</button></div>`).join('')}</div>` : '<p class="small muted" style="margin:8px 0 0">Записей пока нет. Запросы и ответы попадают сюда сами.</p>'}
-  </div>`;
+  </div>`}`;
   return { html };
 }
 
