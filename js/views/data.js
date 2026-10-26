@@ -63,18 +63,19 @@ changes.theme = (v) => app().setTheme(v);
 acts['auth.out'] = () => app().store.signOut();
 
 // Никаких импортов поверх еще не загруженной или неподтвержденной сервером базы.
-function salesReady() {
+async function salesReady() {
   const st = app().store;
-  // Для безопасного CSV-импорта нужны только подтвержденные коллекции продаж и книг.
-  // Загрузка рекламных отчетов, событий и остальных разделов не должна мешать импорту.
-  if (st.mode === 'firebase' && (
-    !st.loaded?.sales || !st.loaded?.books ||
-    st.sync === 'error' || st.pending?.sales || !navigator.onLine
-  )) {
-    toast('Не удалось проверить сохраненные продажи. Проверь соединение перед импортом.');
+  if (st.mode !== 'firebase') return true;
+  try {
+    // Всегда сравниваем CSV с текущей полной базой с сервера, а не с флагами
+    // долгоживущих listeners, которые могут оставаться в состоянии fromCache.
+    await st.prepareSalesImport();
+    return true;
+  } catch (e) {
+    console.error('Не удалось сверить данные перед импортом', e);
+    toast(e?.message || 'Не удалось получить сохраненные продажи из Firebase.');
     return false;
   }
-  return true;
 }
 
 // Журнал до любых правок: предыдущее значение каждой затронутой записи + новая версия.
@@ -107,7 +108,7 @@ changes['imp.any'] = async (v, el) => {
   toast('Не узнала формат файла. Подходят выгрузка Литнета (Statistic.csv) и таблица dohody.csv (дата, доход, события, заметка).');
 };
 async function importStatistic(text) {
-  if (!salesReady()) return;
+  if (!await salesReady()) return;
   const r = parseStatistic(text);
   if (r.invalidRows.length) { toast('CSV содержит некорректные строки продаж: ' + r.invalidRows.slice(0, 5).join(', ') + '. Импорт заблокирован.'); return; }
   if (!r.rows.length) { toast('В файле нет распознанных продаж'); return; }
@@ -137,7 +138,7 @@ async function importStatistic(text) {
     <table><tr><th>Месяц</th><th>Гонорар по файлу</th></tr>${Object.keys(monthly).sort().map(k => `<tr><td>${fmtMonth(k)}</td><td>${rub(monthly[k])}</td></tr>`).join('')}</table>
     <p class="small">Добавятся <b>${initial.added}</b>, обновятся без уменьшения <b>${initial.increased}</b>, совпадают <b>${initial.same}</b>.</p>
     ${warn.length ? `<div class="alert"><strong>Нужна сверка отдельных строк</strong><p class="small">${warn.map(esc).join('<br>')}</p></div>` : ''}`, async () => {
-    if (!salesReady()) return false;
+    if (!await salesReady()) return false;
     // Пока окно было открыто, данные могли измениться на другом устройстве.
     const old = app().store.data.sales;
     const plan = safeSalesImport(old,r.rows);
