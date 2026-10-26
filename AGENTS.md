@@ -168,6 +168,8 @@ docs/           SETUP.md (Firebase), SETUP-WRITER.md (Google Диск)
   (type finish|daily|custom, perDay, days [дни недели], deadline, moved {откуда: куда}, checks), `w_queue` (что пишу дальше),
   `w_waiting` (жду ответа), `w_links` (контакты), `w_media`.
   В разделе «Связи» есть тип `target` — внешние таргетологи: контакт, книги `bookIds`, зона работы `campaignNote`, статус `partnerStatus`, история общения `log` (виды sent/received/agreement/call/note) и задачи `todos`.
+  Дело и запись в «Общении и делах» правятся (`target.edit`: нажать на текст или карандаш — текст, подробности, дата; у записи — вид);
+  дело после правки само обновляется в Планере и Todoist (ключ `linkId:todoK`).
   Задачи из `w_links` уже выводятся в Планере и на Главной через `linkTodos`. `showDirect` и `showIncome` — независимые явные разрешения **показа** контакта в «Директе» и «Доходах» → «Реклама»; общий helper `js/target-partners.js`. В Директе и Доходах читается коллекция `w_links` без изменений финансов; новые расходы/отчеты/кампании из переписки автоматически не создаются. Это внутренний журнал, не отправка реальных сообщений через мессенджер.
 - Конкурс `w_contests`: name, platform, url, conditions (текст условий), start, end, results, genres, emails,
   unit (chars|al), minChars, maxChars, startChars, volNote, fileTpl (имя файла по условиям), chapters (первые N глав),

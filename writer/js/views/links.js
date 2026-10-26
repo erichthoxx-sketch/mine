@@ -96,13 +96,15 @@ function targetWorkPanel(c, x) {
       ${entries.length ? `<div class="target-timeline">${entries.map(e => {
         if(e.entryType === 'task') return `<div class="target-entry ${e.done ? 'target-entry-done' : ''}">
           <div class="target-entry-main"><span class="target-entry-date">${fmtDate(e.date)}</span><span class="target-entry-type">Дело${e.done ? ' · сделано' : ''}</span>
-            <div class="target-entry-text">${esc(e.text)}${e.detail ? `<p class="target-entry-detail">${esc(e.detail)}</p>` : ''}</div></div>
+            <div class="target-entry-text tap" data-act="target.edit" data-id="${esc(x.id)}" data-k="${esc(e.k)}" data-t="task" title="Изменить">${esc(e.text)}${e.detail ? `<p class="target-entry-detail">${esc(e.detail)}</p>` : ''}</div></div>
           <div class="target-entry-actions">${!e.done ? `<button class="link" data-act="link.todoDone" data-id="${esc(x.id)}" data-k="${esc(e.k)}">Готово</button>` : ''}
+          <button class="icon-btn" data-act="target.edit" data-id="${esc(x.id)}" data-k="${esc(e.k)}" data-t="task" title="Изменить" aria-label="Изменить дело">${ic('pen')}</button>
           <button class="icon-btn" data-act="link.todoDel" data-id="${esc(x.id)}" data-k="${esc(e.k)}" title="Удалить дело" aria-label="Удалить дело">${ic('trash')}</button></div></div>`;
         const promoted = (x.todos || []).some(t=>t.sourceLogK===e.k);
         return `<div class="target-entry"><div class="target-entry-main"><span class="target-entry-date">${fmtDate(e.date)}</span><span class="target-entry-type">${esc({sent:'Написала',received:'Ответили',agreement:'Договорились',call:'Созвон',note:'Запись'}[e.kind]||'Запись')}</span>
-          <div class="target-entry-text">${esc(e.text)}</div></div><div class="target-entry-actions">
+          <div class="target-entry-text tap" data-act="target.edit" data-id="${esc(x.id)}" data-k="${esc(e.k)}" data-t="log" title="Изменить">${esc(e.text)}</div></div><div class="target-entry-actions">
           ${!promoted ? `<button class="link" data-act="target.logToTask" data-id="${esc(x.id)}" data-k="${esc(e.k)}" title="Создать дело на дату записи">В Планер</button>` : ''}
+          <button class="icon-btn" data-act="target.edit" data-id="${esc(x.id)}" data-k="${esc(e.k)}" data-t="log" title="Изменить" aria-label="Изменить запись">${ic('pen')}</button>
           <button class="icon-btn" data-act="link.logDel" data-id="${esc(x.id)}" data-k="${esc(e.k)}" title="Удалить запись" aria-label="Удалить запись">${ic('trash')}</button></div></div>`;
       }).join('')}</div>` : '<p class="small muted target-empty">Пока нет записей. Добавьте дело с датой или заметку о разговоре.</p>'}
     </div>
@@ -280,6 +282,30 @@ forms['target.entry']=async(fd,form)=>{
       toast('Дело добавлено в Планер' + (app().ctx().settings.todoistToken ? ' · Todoist синхронизируется' : ''));
     }
   } catch(e) {toast('Не получилось сохранить: '+e.message);return false;}
+};
+// правка дела или записи в «Общении и делах»: текст, подробности, дата (у записи — ещё вид); дело само обновится в Планере и Todoist
+const LOG_KINDS={sent:'Написала',received:'Ответили',agreement:'Договорились',call:'Созвон',note:'Запись'};
+acts['target.edit']=(d)=>{
+  const x=app().ctx().data.w_links.find(l=>l.id===d.id), task=d.t==='task';
+  const e=(task ? x?.todos : x?.log || [])?.find(y=>y.k===d.k);
+  if(!e) return false;
+  openSheet(task ? 'Дело' : 'Запись', task
+    ? `<label for="teT" style="margin-top:0">Что сделать</label><input id="teT" name="text" required maxlength="500" value="${esc(e.text||'')}">
+       <label for="teD">Текст сообщения или подробности</label><textarea id="teD" name="detail" rows="6">${esc(e.detail||'')}</textarea>
+       <label for="teW">Когда</label><input id="teW" type="date" name="date" value="${esc(e.date||'')}" required>`
+    : `<div class="f2"><div><label for="teK" style="margin-top:0">Что было</label><select id="teK" name="kind">${Object.entries(LOG_KINDS).map(([k,v])=>opt(k,v,e.kind||'note')).join('')}</select></div>
+       <div><label for="teW" style="margin-top:0">Когда</label><input id="teW" type="date" name="date" value="${esc(e.date||'')}" required></div></div>
+       <label for="teT">Текст</label><textarea id="teT" name="text" rows="6" required>${esc(e.text||'')}</textarea>`, async(fd)=>{
+    const text=String(fd.get('text')||'').trim(), date=String(fd.get('date')||'');
+    if(!text || !/^\d{4}-\d{2}-\d{2}$/.test(date)){toast('Укажите текст и дату');return false;}
+    const cur=app().ctx().data.w_links.find(l=>l.id===d.id);
+    if(task){
+      await app().store.patch('w_links',cur.id,{todos:(cur.todos||[]).map(t=>t.k===d.k?{...t,text,date,detail:String(fd.get('detail')||'').trim()}:t)});
+      app().scheduleTodoist?.();
+    } else await app().store.patch('w_links',cur.id,{log:(cur.log||[]).map(l=>l.k===d.k?{...l,text,date,kind:String(fd.get('kind')||'note')}:l)});
+    toast('Сохранено');
+  },{submitText:'Сохранить'});
+  return false;
 };
 acts['target.logToTask']=async(d)=>{
   const x=app().ctx().data.w_links.find(l=>l.id===d.id),entry=(x?.log || []).find(l=>l.k===d.k);
