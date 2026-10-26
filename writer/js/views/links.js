@@ -104,7 +104,7 @@ function targetWorkPanel(c, x) {
           <div class="target-entry-text">${esc(e.text)}</div></div><div class="target-entry-actions">
           ${!promoted ? `<button class="link" data-act="target.logToTask" data-id="${esc(x.id)}" data-k="${esc(e.k)}" title="Создать дело на дату записи">В Планер</button>` : ''}
           <button class="icon-btn" data-act="link.logDel" data-id="${esc(x.id)}" data-k="${esc(e.k)}" title="Удалить запись" aria-label="Удалить запись">${ic('trash')}</button></div></div>`;
-      }).join('')}</div>` : '<p class="small muted target-empty">Пока записей нет. Добавь дело с датой или заметку о разговоре.</p>'}
+      }).join('')}</div>` : '<p class="small muted target-empty">Пока нет записей. Добавьте дело с датой или заметку о разговоре.</p>'}
     </div>
   </section>`;
 }
@@ -245,7 +245,7 @@ export async function addLinkedTask(contactId, { date, text, section = '', detai
   const c=app().ctx(), contact=c.data.w_links.find(l=>l.id===contactId);
   if(!contact) throw new Error('Контакт не найден');
   const dateOK=/^\d{4}-\d{2}-\d{2}$/.test(date || '');
-  if(!dateOK || !String(text || '').trim()) throw new Error('Укажи дело и дату');
+  if(!dateOK || !String(text || '').trim()) throw new Error('Укажите дело и дату');
   const bookId=String(section || '').startsWith('book:') ? section.slice(5) : '';
   if(bookId && !c.wbooksById[bookId]) throw new Error('Книга больше не найдена');
   const task={ k:uid(), date, text:String(text).trim(), detail:String(detail || '').trim(), done:false,
@@ -269,7 +269,7 @@ changes['target.entryType'] = (v, el) => {
 forms['target.entry']=async(fd,form)=>{
   const contactId=form.dataset.id, text=String(fd.get('text') || '').trim();
   const date=String(fd.get('date') || ''),detail=String(fd.get('detail') || '').trim();
-  if(!text || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {toast('Укажи текст и дату');return false;}
+  if(!text || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {toast('Укажите текст и дату');return false;}
   try {
     if(fd.get('entryType')==='log') {
       const x=app().ctx().data.w_links.find(l=>l.id===contactId);
