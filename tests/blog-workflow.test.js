@@ -47,7 +47,7 @@ test('Запланированная запись блога находится 
 });
 test('В Связях и карточках соблюдается единый шрифтовой масштаб', () => {
   const css=read('../css/style.css');
-  const value = name => Number(new RegExp('--w-' + name + ':\\\\s*(\\\\d+)px').exec(css)?.[1] || 0);
+  const value = name => Number(css.split('--w-' + name + ':')[1]?.match(/[0-9]+(?=px)/)?.[0] || 0);
   const [top,page,section,card,item] = ['top-heading','page-heading','section-heading','card-heading','item-heading'].map(value);
   assert.ok(top >= page && page > section && section > card && card >= item,
     'Шапка > страница > секция > карточка > запись: ' + [top,page,section,card,item].join(' > '));
