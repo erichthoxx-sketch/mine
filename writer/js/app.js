@@ -122,9 +122,11 @@ acts['theme.toggle'] = () => app.setTheme({ auto: 'light', light: 'dark', dark: 
 
 let pending = false;
 function safeRender() {
-  // в редакторе главы не перерисовываем страницу из-за изменений в базе — иначе теряются история правок и курсор
-  // (блок «сегодня» в меню всё же обновляем — после сохранения там свежее «написано сегодня»)
-  if (ui.route.startsWith('/ed/') && document.getElementById('ed')) {
+  // Оба текстовых редактора нельзя перерисовывать из-за фоновой синхронизации:
+  // иначе теряются несохраненный ввод, фокус и позиция курсора.
+  // «Сегодня» в боковом меню можно обновить отдельно.
+  if ((ui.route.startsWith('/ed/') && document.getElementById('ed')) ||
+      (ui.route.startsWith('/blog/') && document.getElementById('blogBody'))) {
     const nt = document.querySelector('.nav-day');
     if (nt) try { nt.outerHTML = navToday(getCtx()); } catch (e) { console.error(e); }
     return;
