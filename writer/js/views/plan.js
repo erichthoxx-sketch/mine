@@ -387,27 +387,24 @@ acts['td.addPlan'] = (d) => {
   const order = { progress: 0, idea: 1, done: 2 };
   const books = [...c.wbooks].sort((x, y) => (order[x.status || 'progress'] ?? 1) - (order[y.status || 'progress'] ?? 1));
   const contacts = (c.data.w_links || []).filter(x => x.kind === 'target' || x.kind === 'people');
-  const one = contacts.length === 1 ? contacts[0] : null;
   const selected = String(d.contact || '');
-  const folders = [['Дела', 'Мастерская · Дела'], ['Связи', 'Мастерская · Связи'], ['Деньги и реклама', 'Мастерская · Деньги и реклама']];
-  const contactControl = !contacts.length ? '' : one
-    ? `<label class="plan-contact-one"><input id="pcontact" type="checkbox" name="contact" value="${esc(one.id)}"${selected === one.id ? ' checked' : ''}> Связать с «${esc(one.name)}»</label>`
-    : `<label for="pcontact">Контакт <span class="small muted">необязательно</span></label><select id="pcontact" name="contact"><option value="">Без контакта</option>${contacts.map(x => opt(x.id, x.name, selected)).join('')}</select>`;
+  const SECS = ['Дела', 'Связи', 'Деньги и реклама'];
+  // раздел «Мастерской» по смыслу: деньги/реклама/таргетолог → «Деньги и реклама», переписка → «Связи», остальное → «Дела»
+  const autoSec = (text, ct) => (ct?.kind === 'target' || MONEY_RE.test(text) ? 'Деньги и реклама'
+    : ct || /написать|ответить|сообщени|позвонить|связаться|письмо/i.test(text) ? 'Связи' : 'Дела');
+  const sel0 = contacts.find(x => x.id === selected);
   openSheet('Новое дело', `<label for="pdc" style="margin-top:0">Что сделать</label>
     <input id="pdc" name="t" required autocomplete="off" placeholder="Например: написать таргетологу">
     <div class="f2"><div><label for="pdd">Когда</label><input id="pdd" type="date" name="d" value="${d.d || c.today}" required></div>
-    <div><label for="pdwhere">Куда в Todoist</label><select id="pdwhere" name="folder">
-      ${folders.map(([value,label])=>opt(value,label, selected ? (contacts.find(x=>x.id===selected)?.kind==='target' ? 'Деньги и реклама':'Связи') : 'Дела')).join('')}
-      ${books.map(b=>opt('book:'+b.id,'Книги · '+short(b.title),'')).join('')}
-    </select></div></div>
-    ${contactControl}`, async (fd) => {
+    <div><label for="pdbook">Книга</label><select id="pdbook" name="book"><option value="">Без книги</option>${books.map(b => opt(b.id, short(b.title), '')).join('')}</select></div></div>
+    ${contacts.length ? `<label for="pcontact">С кем связано <span class="small muted">необязательно</span></label><select id="pcontact" name="contact"><option value="">Ни с кем</option>${contacts.map(x => opt(x.id, x.name, selected)).join('')}</select>` : ''}
+    <p class="pd-where">В Todoist: <span id="pdproj">Мастерская</span> → <select id="pdsec" name="sec" aria-label="Раздел в Todoist">${SECS.map(x => opt(x, x, autoSec('', sel0))).join('')}</select><span id="pdbsec" hidden></span></p>`, async (fd) => {
     const content = String(fd.get('t') || '').trim(), date = String(fd.get('d') || '');
     if (!content || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {toast('Укажите дело и дату');return false;}
-    const whereId = String(fd.get('folder') || 'Дела');
-    const bid = whereId.startsWith('book:') ? whereId.slice(5) : '';
+    const bid = String(fd.get('book') || '');
     const b = bid ? app().ctx().wbooksById[bid] : null;
     if (bid && !b) {toast('Книга больше не найдена');return false;}
-    const section = b ? short(b.title) : folders.some(([key])=>key===whereId) ? whereId : 'Дела';
+    const section = b ? short(b.title) : SECS.includes(fd.get('sec')) ? String(fd.get('sec')) : 'Дела';
     const contact = contacts.find(x=>x.id===fd.get('contact'));
     // окно закрывается сразу, задача уходит в Todoist в фоне — без ожидания и без повторного нажатия
     closeSheet();
@@ -424,20 +421,29 @@ acts['td.addPlan'] = (d) => {
       toast('Добавлено в Todoist · '+project+' → '+section);
     } catch (e) { toast(`Не получилось добавить «${content}»: ${e.message}`); }
   }, { submitText: 'Добавить' });
-  const inp = document.getElementById('pdc'), folder = document.getElementById('pdwhere'), contact = document.getElementById('pcontact');
-  let folderTouched = false, contactTouched = false;
-  folder?.addEventListener('change', e => { if (e.isTrusted) folderTouched = true; });
-  contact?.addEventListener('change', e => { if (e.isTrusted) contactTouched = true; });
+  const inp = document.getElementById('pdc'), book = document.getElementById('pdbook'), contact = document.getElementById('pcontact');
+  const sec = document.getElementById('pdsec'), proj = document.getElementById('pdproj'), bsec = document.getElementById('pdbsec');
+  const touched = {};
+  for (const [el, k] of [[book, 'book'], [contact, 'contact'], [sec, 'sec']]) el?.addEventListener('change', e => { if (e.isTrusted) touched[k] = true; sync(); });
+  // строка «В Todoist: …» — с книгой: «Книги → книга»; без книги: «Мастерская → раздел» (раздел можно поменять)
+  function sync() {
+    const b = c.wbooksById[book.value], ct = contacts.find(x => x.id === contact?.value), text = inp.value.trim();
+    if (!touched.sec) sec.value = autoSec(text, ct);
+    proj.textContent = b ? 'Книги' : 'Мастерская';
+    sec.hidden = !!b; bsec.hidden = !b; bsec.textContent = b ? short(b.title) : '';
+  }
   inp?.addEventListener('input', () => {
-    const text = inp.value.trim(), guessed = bookGuess(text,c.wbooks);
-    const name = String(one?.name || '').toLocaleLowerCase('ru');
-    const linked = !!(name && text.toLocaleLowerCase('ru').includes(name)) ||
-      (one?.kind === 'target' && /(?:написать|позвонить|ответить|сообщени|спросить|запросить).{0,35}(?:таргетолог|агентств)/i.test(text));
-    if (!folderTouched) folder.value = guessed ? 'book:'+guessed.id :
-      (one?.kind === 'target' && linked) || MONEY_RE.test(text) ? 'Деньги и реклама' :
-      /написать|ответить|сообщени|позвонить|связаться|письмо/i.test(text) ? 'Связи' : 'Дела';
-    if (one && !contactTouched && contact?.type === 'checkbox') contact.checked = linked;
+    const text = inp.value.trim(), low = text.toLocaleLowerCase('ru');
+    if (!touched.book) book.value = bookGuess(text, c.wbooks)?.id || '';
+    // контакт — если его имя есть в тексте (или «таргетолог», когда таргетолог один)
+    if (contact && !touched.contact) {
+      const byName = contacts.find(x => x.name && low.includes(String(x.name).toLocaleLowerCase('ru')));
+      const targets = contacts.filter(x => x.kind === 'target');
+      contact.value = byName?.id || (targets.length === 1 && /таргетолог/i.test(text) ? targets[0].id : '') || (text ? '' : selected);
+    }
+    sync();
   });
+  sync();
   inp?.focus();
   return false;
 };

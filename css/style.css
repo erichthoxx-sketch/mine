@@ -2807,3 +2807,10 @@ main .rev-actions button.dl .ic { opacity: 1; }
 .app-writer main .blog-pick select { padding-right: 22px; background-position: right 4px center; }
 .app-writer main .blog-pick :is(select, input):hover, .app-writer main .blog-pick :is(select, input):focus { background-color: var(--surface-2) !important; outline: none; }
 @media (max-width: 640px) { .app-writer main .blog-title-in { font-size: 19px; } }
+/* «Новое дело»: куда попадёт в Todoist — одной тихой строкой; раздел «Мастерской» меняется прямо в строке */
+#sheetForm .pd-where { margin: 14px 0 0; font: 400 13px/1.5 var(--font-body); color: var(--text-2); }
+#sheetForm .pd-where #pdproj, #sheetForm .pd-where #pdbsec { color: var(--text); font-weight: 600; }
+#sheetForm .pd-where select { display: inline-block; width: auto; min-height: 0; margin: 0; padding: 1px 22px 1px 6px; border: 0 !important; border-radius: 6px; background-color: transparent; box-shadow: none; font: 600 13px/1.5 var(--font-body); color: var(--text); background-position: right 4px center; }
+#sheetForm .pd-where select:hover, #sheetForm .pd-where select:focus { background-color: var(--surface-2); outline: none; }
+#sheetForm .pd-where [hidden] { display: none !important; }
+#sheetForm .pd-where select { width: auto !important; max-width: max-content; field-sizing: content; }
