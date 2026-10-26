@@ -17,12 +17,13 @@ import { CONTEST_NAV, cleanContestText, rawContestText, parseContest } from './w
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
+import { blogEditor } from './views/blog.js';
 import { socialView } from './views/social.js';
 import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
 import { cleanText, cleanedMsg } from '../../js/cleantext.js';
 
-export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews', 'w_promolinks'];
+export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews', 'w_promolinks', 'w_blog'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 initAccent(store);
 const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'open', ideaKind: '', ideaN: 50, openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
@@ -72,6 +73,7 @@ function route() {
   if (a === 'legend' && b) return { tab: '/books', view: (x) => legendPage(x, decodeURIComponent(b)) };
   if (a === 'ed' && b) { const [, , bid, ...rest] = ('#' + ui.route).split('/'); return { tab: '/books', view: (x) => editorView(x, decodeURIComponent(bid), decodeURIComponent(rest.join('/'))) }; }
   if (a === 'link' && b) return { tab: '/links', view: (x) => linkPage(x, decodeURIComponent(b)) };
+  if (a === 'blog' && b) return { tab: '/links', view: (x) => blogEditor(x, decodeURIComponent(b)) };
   if (a === 'mk' && b) return { tab: '/marketing', view: (x) => bookMarketing(x, decodeURIComponent(b)) };
   const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, marketing: marketingView, links: linksView, social: socialView, settings: settingsView };
   return { tab: a === 'social' ? '/links' : '/' + (a || ''), view: map[a || ''] || homeView };
