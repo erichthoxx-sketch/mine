@@ -260,7 +260,7 @@ export function bookPage(a, id) {
         <div class="bm-label-row"><label for="bookTags">Теги и тропы</label><span id="bmTagCount" class="bm-optional">0 из 20</span></div>
         <input id="bookTags" name="tags" value="${esc(bookTags(b).join(', '))}" placeholder="одержимый герой, похищение, фиктивный брак" maxlength="1500" autocomplete="off">
         <div id="bmTagPreview" class="bm-tag-preview" aria-live="polite"></div>
-        <span class="bm-hint">Разделяй теги запятыми. Нажми на тег, чтобы удалить его.</span>
+        <span class="bm-hint">Разделяйте теги запятыми. Чтобы удалить тег, нажмите на него.</span>
       </div>
       <div class="bm-tax-save-row">
         <button type="submit" class="primary">Сохранить жанры и теги</button>
@@ -449,7 +449,7 @@ forms['wbook.save'] = async (fd, f) => {
   const c = app().ctx(), b = c.wbooksById[f.dataset.id];
   const platforms = [...fd.getAll('pf'), ...String(fd.get('pfx') || '').split(',').map((x) => x.trim()).filter(Boolean)];
   const genres = fd.getAll('genres').filter(Boolean);
-  if (genres.length > 2 || new Set(genres).size !== genres.length) { toast('Выбери два разных жанра или оставь один'); return false; }
+  if (genres.length > 2 || new Set(genres).size !== genres.length) { toast('Выберите два разных жанра или оставьте один'); return false; }
   const tags = uniqueWords(fd.get('tags') || '', 100);
   if (tags.length > 20) { toast('Можно сохранить не больше 20 тегов'); return false; }
   const patch = { title: fd.get('title').trim(), status: fd.get('status'), platforms, genres, tags, planChapters: N(fd.get('planChapters')) || null, incomeBookId: fd.get('incomeBookId') || '', note: fd.get('note') || '' };
