@@ -47,3 +47,16 @@ test('Доходы и Директ читают одну коллекцию, н�
   assert.doesNotMatch(ads.slice(ads.indexOf('function externalTargetSection'),ads.indexOf('export function ads')),/store\.put|store\.patch|campaigns\.push|reports\.push/);
   assert.doesNotMatch(dh.slice(dh.indexOf('function partnerPanel'),dh.indexOf('function connectCard')),/store\.put|store\.patch|d\.apply/);
 });
+
+test('В Планере единственный контакт показывается галочкой, а не выпадающим списком',()=>{
+  const s=read('../writer/js/views/plan.js');
+  const dialog=s.slice(s.indexOf("acts['td.addPlan']"),s.indexOf("acts['plan.week']"));
+  assert.match(dialog,/contacts\.length === 1 \? contacts\[0\] : null/);
+  assert.match(dialog,/type="checkbox" name="contact"/);
+  assert.match(dialog,/contacts\.map\(x => opt\(x\.id, x\.name, selected\)\)/);
+  assert.match(dialog,/if \(one && !contactTouched/);
+  assert.match(dialog,/one\?\.kind === 'target' && linked/);
+  assert.match(dialog,/name="folder"/);
+  assert.match(dialog,/await addLinkedTask\(contact\.id/);
+  assert.match(dialog,/await addOwnTask\(app\(\)\.ctx\(\)\.settings/);
+});
