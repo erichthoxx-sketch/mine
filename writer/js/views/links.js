@@ -237,6 +237,59 @@ acts['wait.answer'] = (d) => {
   }, { submitText: 'Сохранить' });
 };
 
+// Одна точка создания связанных дел из карточки и Планера. Дело хранится в
+// контакте, откуда автоматически идет в Планер и в правильный раздел Todoist.
+export async function addLinkedTask(contactId, { date, text, section = '', detail = '', sourceLogK = '' }) {
+  const c=app().ctx(), contact=c.data.w_links.find(l=>l.id===contactId);
+  if(!contact) throw new Error('Контакт не найден');
+  const dateOK=/^\\d{4}-\\d{2}-\\d{2}$/.test(date || '');
+  if(!dateOK || !String(text || '').trim()) throw new Error('Укажи дело и дату');
+  const bookId=String(section || '').startsWith('book:') ? section.slice(5) : '';
+  if(bookId && !c.wbooksById[bookId]) throw new Error('Книга больше не найдена');
+  const task={ k:uid(), date, text:String(text).trim(), detail:String(detail || '').trim(), done:false,
+    section:bookId ? '' : section || (contact.kind === 'target' ? 'Деньги и реклама' : 'Связи'),
+    ...(bookId ? { bookId } : {}), ...(sourceLogK ? { sourceLogK } : {}) };
+  // Читаем текущую запись перед записью: не заменяем историю старой копией карточки.
+  const latest=app().ctx().data.w_links.find(l=>l.id===contactId);
+  await app().store.patch('w_links', contactId, { todos: [...(latest.todos || []),task] });
+  app().scheduleTodoist?.();
+  return task;
+}
+changes['target.entryType'] = (v, el) => {
+  const form=el.closest('form');
+  const folder=form?.querySelector('select[name="section"]');
+  if(folder) { folder.disabled=v==='log'; folder.closest('.target-quick-grid')?.classList.toggle('target-log-mode',v==='log'); }
+  const input=form?.querySelector('input[name="text"]');
+  if(input) input.placeholder=v==='log' ? 'Что обсудили или о чем договорились…' : 'Написать таргетологу, запросить отчет…';
+  const submit=form?.querySelector('button[type="submit"]');
+  if(submit) submit.textContent=v==='log' ? 'Записать' : 'Добавить';
+};
+forms['target.entry']=async(fd,form)=>{
+  const contactId=form.dataset.id, text=String(fd.get('text') || '').trim();
+  const date=String(fd.get('date') || ''),detail=String(fd.get('detail') || '').trim();
+  if(!text || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {toast('Укажи текст и дату');return false;}
+  try {
+    if(fd.get('entryType')==='log') {
+      const x=app().ctx().data.w_links.find(l=>l.id===contactId);
+      await app().store.patch('w_links', contactId, { log:[...(x.log || []),{k:uid(),date,kind:'note',text:detail ? text+'\\n'+detail : text}] });
+      toast('Сохранено в истории');
+    } else {
+      await addLinkedTask(contactId,{date,text,detail,section:String(fd.get('section') || 'Деньги и реклама')});
+      toast('Дело добавлено в Планер' + (app().ctx().settings.todoistToken ? ' · Todoist синхронизируется' : ''));
+    }
+  } catch(e) {toast('Не получилось сохранить: '+e.message);return false;}
+};
+acts['target.logToTask']=async(d)=>{
+  const x=app().ctx().data.w_links.find(l=>l.id===d.id),entry=(x?.log || []).find(l=>l.k===d.k);
+  if(!entry) return;
+  if((x.todos || []).some(t=>t.sourceLogK===entry.k)){toast('Это дело уже в Планере');return;}
+  try {
+    await addLinkedTask(x.id,{date:entry.date >= app().ctx().today ? entry.date : app().ctx().today,
+      text:'Отправить сообщение — '+x.name,detail:entry.text,sourceLogK:entry.k});
+    toast('Сообщение добавлено в Планер');
+  } catch(e){toast('Не удалось создать дело: '+e.message);}
+};
+
 // напоминания по связи: дата + что сделать → в Планере и на Главной
 acts['link.todo'] = (d) => {
   const c = app().ctx(), x = c.data.w_links.find((l) => l.id === d.id);
