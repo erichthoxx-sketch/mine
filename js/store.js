@@ -132,6 +132,34 @@ class FirebaseStore extends Base {
       this.emit();
     }));
   }
+  // CSV нельзя сопоставлять с неполным офлайн-кешем.
+  // Считываем обе необходимые коллекции непосредственно с Firestore при импорте,
+  // не требуя прихода metadata-only onSnapshot-событий от других разделов.
+  async prepareSalesImport() {
+    if (!this.user) throw new Error('Нужно войти в аккаунт');
+    const { collection, getDocsFromServer } = this.F;
+    const uid = this.user.uid;
+    const names = ['sales', 'books'];
+    const request = Promise.all(names.map(name =>
+      getDocsFromServer(collection(this.db, 'users', uid, name))
+    ));
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Не удалось получить данные с Firebase. Проверь интернет и попробуй снова.')), 15000);
+    });
+    let snapshots;
+    try { snapshots = await Promise.race([request, timeout]); }
+    finally { clearTimeout(timer); }
+    if (uid !== this.user?.uid) throw new Error('Аккаунт изменился во время загрузки');
+    // Не затираем локальные неподтвержденные изменения серверной копией.
+    if (this.pending?.sales || this.pending?.books)
+      throw new Error('Есть продажи или книги, которые еще сохраняются. Повтори импорт после сохранения.');
+    for (let i = 0; i < names.length; i++) {
+      this.data[names[i]] = snapshots[i].docs.map(d => ({ ...d.data(), id: d.id }));
+      (this.loaded ||= {})[names[i]] = true;
+    }
+    this.emit();
+  }
   async _write(coll, items, delIds) {
     const { writeBatch, doc } = this.F;
     const b = writeBatch(this.db);
