@@ -30,9 +30,9 @@ test('Редактор предоставляет форматирование, 
   const file=read('../writer/js/views/blog.js');
   assert.match(file,/contenteditable="true"/);
   assert.match(file,/editorToolbar\('blog'/);
-  assert.match(source('../writer/js/editor-ui.js'),/data-act="\$\{prefix\}\.fmt"/);
+  assert.match(read('../writer/js/editor-ui.js'),/data-act="\$\{prefix\}\.fmt"/);
   assert.match(file,/editorToolbar\('blog'/);
-  assert.match(source('../writer/js/editor-ui.js'),/data-act="\$\{prefix\}\.fmt"/);
+  assert.match(read('../writer/js/editor-ui.js'),/data-act="\$\{prefix\}\.fmt"/);
   assert.match(file,/store\.patch\('w_blog'/);
   assert.match(file,/localStorage\.setItem/);
   assert.match(file,/status:'published'/);
