@@ -55,6 +55,58 @@ function reqRow(c, r) {
 }
 changes['link.q'] = (v) => { app().ui.linkQ = v.trim(); app().rerender(); };
 
+// Одна рабочая область для таргетолога: дела с датой и записи переписки в единой ленте.
+function targetWorkPanel(c, x) {
+  const entries = [
+    ...(x.todos || []).map(t => ({ ...t, entryType:'task', stamp:t.date || '' })),
+    ...(x.log || []).map(l => ({ ...l, entryType:'log', stamp:l.date || '' })),
+  ].sort((a,b) => {
+    const af = a.entryType === 'task' && !a.done ? 0 : 1;
+    const bf = b.entryType === 'task' && !b.done ? 0 : 1;
+    return af - bf || (af ? (b.stamp || '').localeCompare(a.stamp || '') : (a.stamp || '').localeCompare(b.stamp || ''));
+  });
+  const requests = (c.data.w_waiting || []).filter(r => r.contactId === x.id && !r.done);
+  const linkedBooks = (x.bookIds || []).map(id => c.wbooksById[id]).filter(Boolean);
+  const option = (v, name) => `<option value="${esc(v)}">${esc(name)}</option>`;
+  return `<section class="target-work">
+    <div class="psec-h target-work-heading"><h2>Общение и дела</h2><span class="small muted">Задачи — в Планере и Todoist</span></div>
+    <div class="card target-work-card">
+      <form data-form="target.entry" data-id="${esc(x.id)}" class="target-quickform">
+        <div class="target-quick-grid">
+          <select name="entryType" aria-label="Что добавить" data-chg="target.entryType">
+            ${option('task','Дело')}${option('log','Запись')}
+          </select>
+          <input type="date" name="date" value="${c.today}" required aria-label="Дата дела или записи">
+          <select name="section" aria-label="Папка Todoist">
+            ${option('Деньги и реклама','Мастерская · Деньги и реклама')}
+            ${option('Связи','Мастерская · Связи')}
+            ${option('Дела','Мастерская · Дела')}
+            ${linkedBooks.map(b => option('book:' + b.id,'Книги · ' + b.title)).join('')}
+          </select>
+        </div>
+        <div class="target-quick-input">
+          <input type="text" name="text" required maxlength="500" placeholder="Написать таргетологу, запросить отчет…" aria-label="Дело или запись">
+          <button class="primary" type="submit">Добавить</button>
+        </div>
+        <details class="target-details-toggle"><summary>Текст сообщения или подробности</summary><textarea name="detail" rows="3" placeholder="Что именно отправить или о чем договорились"></textarea></details>
+      </form>
+      ${requests.length ? `<div class="target-requests"><span class="small muted">Жду ответа</span>${requests.map(r=>`<div class="target-request"><span>${esc(r.what || 'Запрос')}, с ${fmtDate(r.since)}</span><button class="link" data-act="wait.answer" data-id="${esc(r.id)}">Ответили</button></div>`).join('')}</div>` : ''}
+      ${entries.length ? `<div class="target-timeline">${entries.map(e => {
+        if(e.entryType === 'task') return `<div class="target-entry ${e.done ? 'target-entry-done' : ''}">
+          <div class="target-entry-main"><span class="target-entry-date">${fmtDate(e.date)}</span><span class="target-entry-type">Дело${e.done ? ' · сделано' : ''}</span>
+            <div class="target-entry-text">${esc(e.text)}${e.detail ? `<p class="target-entry-detail">${esc(e.detail)}</p>` : ''}</div></div>
+          <div class="target-entry-actions">${!e.done ? `<button class="link" data-act="link.todoDone" data-id="${esc(x.id)}" data-k="${esc(e.k)}">Готово</button>` : ''}
+          <button class="icon-btn" data-act="link.todoDel" data-id="${esc(x.id)}" data-k="${esc(e.k)}" title="Удалить дело" aria-label="Удалить дело">${ic('trash')}</button></div></div>`;
+        const promoted = (x.todos || []).some(t=>t.sourceLogK===e.k);
+        return `<div class="target-entry"><div class="target-entry-main"><span class="target-entry-date">${fmtDate(e.date)}</span><span class="target-entry-type">${esc({sent:'Написала',received:'Ответили',agreement:'Договорились',call:'Созвон',note:'Запись'}[e.kind]||'Запись')}</span>
+          <div class="target-entry-text">${esc(e.text)}</div></div><div class="target-entry-actions">
+          ${!promoted ? `<button class="link" data-act="target.logToTask" data-id="${esc(x.id)}" data-k="${esc(e.k)}" title="Создать дело на дату записи">В Планер</button>` : ''}
+          <button class="icon-btn" data-act="link.logDel" data-id="${esc(x.id)}" data-k="${esc(e.k)}" title="Удалить запись" aria-label="Удалить запись">${ic('trash')}</button></div></div>`;
+      }).join('')}</div>` : '<p class="small muted target-empty">Пока записей нет. Добавь дело с датой или заметку о разговоре.</p>'}
+    </div>
+  </section>`;
+}
+
 // ---------- страница связи ----------
 export function linkPage(a, id) {
   const c = a.ctx(), x = c.data.w_links.find((l) => l.id === id);
