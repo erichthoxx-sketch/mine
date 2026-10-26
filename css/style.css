@@ -2640,3 +2640,52 @@ main .rev-actions button.dl .ic { opacity: 1; }
   .app-writer .blog-editor-top > #blogSaveState { order: 3; flex-basis: 100%; text-align: left; }
   .app-writer .blog-row { gap: 7px; }
 }
+
+/* Единая шрифтовая система «Мастерской» (все разделы).
+   22 — заголовок страницы, 17 — раздел, 16 — карточка,
+   14 — название записи, 12 — метаданные. Не меняет книжный текст редакторов. */
+.app-writer {
+  --w-page-heading: 22px;
+  --w-section-heading: 17px;
+  --w-card-heading: 16px;
+  --w-item-heading: 14px;
+  --w-meta: 12px;
+}
+.app-writer main .psec-h > h2 {
+  font-family: var(--font-display);
+  font-size: var(--w-section-heading);
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -.012em;
+}
+.app-writer main .card > h2,
+.app-writer main .card > .row.between > h2,
+.app-writer main .card > .row > h2 {
+  font-family: var(--font-display);
+  font-size: var(--w-card-heading);
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -.01em;
+}
+.app-writer main .item > span > b,
+.app-writer main .item > b {
+  font-family: var(--font-body);
+  font-size: var(--w-item-heading);
+  font-weight: 750;
+  line-height: 1.5;
+}
+.app-writer main .item .sub,
+.app-writer main .item > .small {
+  font-family: var(--font-body);
+  font-size: var(--w-meta);
+  line-height: 1.5;
+}
+.app-writer .links-page .links-title > h2 {
+  font-family: var(--font-display);
+  font-size: var(--w-page-heading);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.app-writer .links-page .psec-h > h2 { font-size: var(--w-section-heading); }
+.app-writer .links-page .blog-row-main > b { font: 750 var(--w-item-heading)/1.5 var(--font-body); }
+.app-writer .links-page .blog-row-main > span { font: 500 var(--w-meta)/1.5 var(--font-body); }
