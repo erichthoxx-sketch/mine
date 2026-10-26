@@ -23,7 +23,7 @@ import { aiView } from './views/ai.js';
 import { logView } from './views/log.js';
 import { settingsView } from './views/settings.js';
 
-const store = createStore({ colls: ['d_snap', 'd_log', 'd_tests', 'd_keywords', 'd_kw_bindings', 'd_competitors', 'w_promolinks', 'w_books', 'campaigns', 'reports', 'books', 'days', 'sales'], localKey: 'authorDirect.v1' });
+const store = createStore({ colls: ['d_snap', 'd_log', 'd_tests', 'd_keywords', 'd_kw_bindings', 'd_competitors', 'w_promolinks', 'w_books', 'w_links', 'campaigns', 'reports', 'books', 'days', 'sales'], localKey: 'authorDirect.v1' });
 initAccent(store); // цвет акцентов — общий для всех приложений (выбирается в Мастерской)
 const ui = { route: '/', cTab: 'queries', lTab: '', lesson: '', demo: false, busy: '', kwBook: '', kwFilter: 'all' };
 keepPlace(ui, ['cTab', 'lTab', 'demo', 'kwBook', 'kwFilter']);
