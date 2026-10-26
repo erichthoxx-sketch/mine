@@ -261,7 +261,7 @@ acts['leg.delc'] = async (d) => {
 acts['leg.ai'] = (d) => {
   const b = bookOf(d.id), L = legendOf(b);
   const sections = [['all', 'Все'], ['idea', 'Идея'], ['plan', 'Каркас'], ['chars', 'Персонажи'], ['syn', 'Синопсис']];
-  const f = openSheet('Легенда для нейросети', `<p class="small muted" style="margin-top:0">Выбери раздел Легенды и скопируй готовый текст для нейросети.</p>
+  const f = openSheet('Легенда для нейросети', `<p class="small muted" style="margin-top:0">Выберите раздел Легенды, затем скопируйте готовый текст для нейросети.</p>
     <div class="idea-seg lg-mode"><button type="button" class="on" data-m="work">Рабочий</button><button type="button" data-m="full">Полный</button></div>
     <p class="small muted lg-mode-h">Только утвержденное: канон, персонажи, решения. Варианты и отвергнутое сюда не попадают.</p>
     <div class="lg-export-label">Что скопировать</div>
