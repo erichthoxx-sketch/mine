@@ -11,6 +11,7 @@ import { dailyChart, lineChart } from '../charts.js';
 import { chartInputs, chartLegend } from './home.js';
 import { totals as dTotals } from '../../direct/js/dcalc.js';
 import { ic } from '../icons.js';
+import { linkedTargetologists, targetReminders } from '../target-partners.js';
 
 const app = () => window.__app;
 export const CHANNELS = { litnet: 'Литнет платит', own: 'Мой таргет', other: 'Другое' };
@@ -118,6 +119,19 @@ function adMonths(c) {
   return monthsBetween(monthKey(starts[0]), cur).reverse();
 }
 
+function externalTargetSection(c) {
+  const partners = linkedTargetologists(c.data, 'income');
+  if (!partners.length) return '';
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Внешние таргетологи</h2><span class="small muted">Связь с «Мастерской»</span></div>
+    <div class="list">${partners.map(x=>{
+      const tasks=targetReminders(x,c.today);
+      const sub=[x.campaignNote, x.partnerStatus==='paused'?'На паузе':x.partnerStatus==='done'?'Сотрудничество завершено':'В работе',tasks.length?`дел: ${tasks.length}`:''].filter(Boolean).map(esc).join(' · ');
+      return `<a class="item target-linked-item" href="pisatel/#/link/${encodeURIComponent(x.id)}"><b>${esc(x.name)}</b>${sub?`<span class="sub">${sub}</span>`:''}${tasks.length?`<span class="small muted">${esc(tasks[0].text)}${tasks[0].date?' · '+fmtDate(tasks[0].date):''}</span>`:''}</a>`;
+    }).join('')}</div>
+    <p class="small muted" style="margin:8px 0 0">Контакты и договоренности — без добавления расходов. Бюджеты учитываются только через кампании и отчеты.</p>
+  </div>`;
+}
+
 export function ads(a) {
   const c = a.ctx();
   const ctx = actx(c);
@@ -150,6 +164,7 @@ export function ads(a) {
     ${open.map((x) => `<div class="alert" style="margin-top:10px">⚠︎ «${esc(x.name)}»: ${esc(alertText(x))}. Запросите отчёт у таргетологов.<div class="row" style="margin-top:8px"><button class="primary" data-act="note.new" data-id="${x.campaignId}">Добавить отчёт</button><button data-act="ai.prompt" data-id="${x.campaignId}">Скопировать отчёт</button></div></div>`).join('')}
     <div class="hint">Расход по дням — бюджет ÷ дни кампании (оценка). «Доход сверх обычного» — сколько книга зарабатывает больше, чем в дни без рекламы.</div>
   </div>
+  ${externalTargetSection(c)}
   <div class="card"><div class="row between"><h2 style="margin:0">Таргет «Литнет платит»</h2><button class="primary" data-act="ad.new" data-ch="litnet">+ Кампания</button></div>
     ${litnet.length ? summaryBody(c, sL, { past }) + campaignList(c, litnet, alerts) : '<p class="muted">Кампаний пока нет. Добавьте оплату таргетологам как кампанию: книга, даты, сумма.</p>'}
     ${discountTable(c)}
