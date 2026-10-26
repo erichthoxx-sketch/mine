@@ -7,14 +7,14 @@ import { addDays } from '../../../js/calc.js';
 import { promoChannel } from '../promolinks.js';
 
 const app = () => window.__app;
-export const LKINDS = { publisher: 'Издательства', social: 'Соцсети', platform: 'Площадки', people: 'Люди', other: 'Другое' };
-const KIND1 = { publisher: 'Издательство', social: 'Соцсеть', platform: 'Площадка', people: 'Человек', other: 'Другое' };
+export const LKINDS = { publisher: 'Издательства', target: 'Таргетологи', social: 'Соцсети', platform: 'Площадки', people: 'Люди', other: 'Другое' };
+const KIND1 = { publisher: 'Издательство', target: 'Таргетолог', social: 'Соцсеть', platform: 'Площадка', people: 'Человек', other: 'Другое' };
 const NETS = ['Telegram', 'ВКонтакте', 'Pinterest', 'Instagram', 'Дзен', 'TikTok', 'YouTube', 'Threads', 'Одноклассники'];
 const PLATS = ['Литнет', 'Литмаркет', 'Литгород', 'Литрес', 'Author.Today', 'Bookmate'];
 
 const lastLog = (x) => (x.log || []).map((l) => l.date).sort().pop() || '';
 const openReq = (c, x) => c.data.w_waiting.filter((r) => !r.done && r.contactId === x.id);
-const matches = (x, q) => !q || [x.name, x.net, x.handle, x.contact, x.note, ...(x.log || []).map((l) => l.text)].join(' ').toLowerCase().includes(q.toLowerCase());
+const matches = (x, q) => !q || [x.name, x.net, x.handle, x.contact, x.note, x.campaignNote, ...(x.bookIds || []), ...(x.log || []).map((l) => l.text)].join(' ').toLowerCase().includes(q.toLowerCase());
 const safeUrl = (u) => (/^https?:\/\//i.test(u || '') ? u : u ? 'https://' + u : '');
 
 // ---------- список ----------
@@ -30,7 +30,7 @@ export function linksView(a) {
   const socialCount = (c.data.w_promolinks || []).filter(x => x.status !== 'archived' && promoChannel(x) === 'social').length;
   const socialHub = showSocialHub ? `<a class="item row between" href="#" data-act="go" data-to="/social"><span><b>Мой Литнет</b><span class="sub">Персональные ссылки · ${socialCount} ${plural(socialCount, ['ссылка', 'ссылки', 'ссылок'])}</span></span></a>` : '';
   const groups = Object.keys(LKINDS).map((k) => [k, list.filter((x) => (x.kind || 'other') === k)])
-    .filter(([k, l]) => l.length || (k === 'social' && showSocialHub));
+    .filter(([k, l]) => l.length || k === 'target' || (k === 'social' && showSocialHub));
   const html = `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Связи</h2><button class="primary" data-act="link.new">+ Добавить</button></div>
   ${all.length > 5 ? `<input type="search" value="${esc(q)}" placeholder="Поиск: имя, ник, заметка…" data-chg="link.q" aria-label="Поиск по связям" style="margin-bottom:12px">` : ''}
   <div class="psec-h" style="margin-top:4px"><h2>Запросы без ответа <span class="muted">${reqs.length || ''}</span></h2><button class="small-btn" data-act="wait.new">+ Запрос</button></div>
@@ -44,7 +44,7 @@ export function linksView(a) {
 }
 function linkRow(c, x) {
   const n = openReq(c, x).length, last = lastLog(x);
-  const sub = [x.kind === 'social' || x.kind === 'platform' ? x.net : '', x.handle, x.contact, last ? `последний раз ${fmtDate(last)}` : ''].filter(Boolean).map(esc).join(' · ');
+  const sub = [x.kind === 'social' || x.kind === 'platform' ? x.net : '', x.kind === 'target' ? (x.partnerStatus === 'paused' ? 'на паузе' : x.partnerStatus === 'done' ? 'сотрудничество завершено' : 'сотрудничаем') : '', x.handle, x.contact, last ? `последний раз ${fmtDate(last)}` : ''].filter(Boolean).map(esc).join(' · ');
   return `<a class="item row between" href="#" data-act="go" data-to="/link/${x.id}"><span><b>${esc(x.name)}</b>${sub ? `<span class="sub">${sub}</span>` : ''}</span>${n ? `<span class="badge warn">${n} ${plural(n, ['запрос', 'запроса', 'запросов'])}</span>` : ''}</a>`;
 }
 function reqRow(c, r) {
@@ -63,36 +63,48 @@ export function linkPage(a, id) {
   const open = reqs.filter((r) => !r.done), log = [...(x.log || [])].sort((p, q) => q.date.localeCompare(p.date));
   const url = safeUrl(x.url);
   const todos = (x.todos || []).filter((td) => !td.done).sort((p2, q2) => p2.date.localeCompare(q2.date));
+  const associated = (x.bookIds || []).map(bid => c.wbooksById[bid]?.title).filter(Boolean);
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/links">← Связи</a></p>
   <div class="card"><div class="row between"><h2 style="margin:0">${esc(x.name)}</h2><button class="small-btn" data-act="link.edit" data-id="${x.id}">Изменить</button></div>
     <div class="tags" style="margin-top:6px"><span class="tag on">${KIND1[x.kind || 'other']}</span>${x.net ? `<span class="tag">${esc(x.net)}</span>` : ''}</div>
     <div class="kv">${x.handle ? `<div><span>Ник / аккаунт</span><b>${esc(x.handle)}</b></div>` : ''}${x.contact ? `<div><span>Контакт</span><b>${esc(x.contact)}</b></div>` : ''}${lastLog(x) ? `<div><span>Последний раз</span><b>${fmtDate(lastLog(x))}</b></div>` : ''}</div>
     <div class="row">${url ? `<a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener">Открыть ${x.kind === 'social' ? 'страницу' : 'сайт'}</a>` : ''}${x.handle ? `<button data-act="copy" data-text="${esc(x.handle)}">Скопировать ник</button>` : ''}${x.contact ? `<button data-act="copy" data-text="${esc(x.contact)}">Скопировать контакт</button>` : ''}</div>
+    ${x.kind === 'target' ? `<div class="target-details"><div class="small muted">${associated.length ? 'Книги: ' + associated.map(esc).join(' · ') : 'Книги пока не привязаны'}${x.campaignNote ? ' · Рекламные кампании: ' + esc(x.campaignNote) : ''}</div><div class="small muted">${x.showDirect ? 'Видно в «Директе»' : '«Директ» не подключен к контакту'} · ${x.showIncome ? 'Видно в «Доходах» (без учета сумм)' : 'В «Доходах» не показывать'}</div></div>` : ''}
     ${x.note ? `<p class="idea-text" style="margin-bottom:0">${esc(x.note)}</p>` : ''}</div>
   <div class="psec-h"><h2>Запросы <span class="muted">${open.length || ''}</span></h2><button class="small-btn" data-act="wait.new" data-contact="${x.id}">+ Запрос</button></div>
   ${open.length ? `<div class="card plist-card"><div class="plist">${open.map((r) => reqRow(c, r)).join('')}</div></div>` : '<div class="card"><p class="small muted" style="margin:0">Открытых запросов нет.</p></div>'}
   <div class="psec-h"><h2>Напоминания <span class="muted">${todos.length || ''}</span></h2><button class="small-btn" data-act="link.todo" data-id="${x.id}">+ Напомнить</button></div>
   ${todos.length ? `<div class="card plist-card"><div class="plist">${todos.map((td) => `<div class="pitem"><span class="dot k-waitans"${td.date > c.today ? ' style="opacity:.45"' : ''}></span><span class="pi-body"><span class="pi-t">${esc(td.text)}</span><span class="pi-s">${fmtDate(td.date)}${td.date < c.today ? ' · просрочено' : td.date === c.today ? ' · сегодня' : ''}</span></span><span class="pi-btns"><button data-act="link.todoDone" data-id="${x.id}" data-k="${esc(td.k)}">Сделано</button><button class="icon-btn" data-act="link.todoDel" data-id="${x.id}" data-k="${esc(td.k)}" aria-label="Удалить напоминание">${ic('trash')}</button></span></div>`).join('')}</div></div>` : '<div class="card"><p class="small muted" style="margin:0">Написать, позвонить, отправить — поставьте дату, и это появится в Планере в нужный день.</p></div>'}
-  <div class="psec-h"><h2>История общения</h2></div>
+  <div class="psec-h"><h2>${x.kind === 'target' ? 'Переписка и договоренности' : 'История общения'}</h2></div>
   <div class="card">
-    <form data-form="link.log" data-id="${x.id}" class="row" style="align-items:stretch"><input type="date" name="date" value="${c.today}" style="width:auto" aria-label="Дата"><input name="text" placeholder="Что было: письмо, звонок, пост, договорённость…" style="flex:1;min-width:160px" aria-label="Запись"><button class="primary" type="submit">Записать</button></form>
-    ${log.length ? `<div class="list" style="margin-top:8px">${log.map((l) => `<div class="item row between"><span><span class="sub">${fmtDate(l.date)}</span>${esc(l.text)}</span><button class="icon-btn" data-act="link.logDel" data-id="${x.id}" data-k="${esc(l.k)}" aria-label="Удалить запись">${ic('trash')}</button></div>`).join('')}</div>` : '<p class="small muted" style="margin:8px 0 0">Записей пока нет. Запросы и ответы попадают сюда сами.</p>'}
+    <form data-form="link.log" data-id="${x.id}" class="link-log-form"><input type="date" name="date" value="${c.today}" aria-label="Дата">${x.kind === 'target' ? `<select name="logKind" aria-label="Тип записи"><option value="sent">Написала</option><option value="received">Ответили</option><option value="agreement">Договорились</option><option value="call">Созвон</option><option value="note">Заметка</option></select>` : ''}<input name="text" placeholder="${x.kind === 'target' ? 'Что обсудили, решили или ждешь в ответ…' : 'Что было: письмо, звонок, договоренность…'}" aria-label="Запись" required><button class="primary" type="submit">Записать</button></form>
+    ${log.length ? `<div class="list" style="margin-top:8px">${log.map((l) => `<div class="item row between"><span><span class="sub">${fmtDate(l.date)}</span>${x.kind === 'target' && l.kind ? `<span class="target-log-kind">${esc({ sent: 'Написала', received: 'Ответили', agreement: 'Договорились', call: 'Созвон', note: 'Заметка' }[l.kind] || 'Запись')}</span>` : ''}${esc(l.text)}</span><button class="icon-btn" data-act="link.logDel" data-id="${x.id}" data-k="${esc(l.k)}" aria-label="Удалить запись">${ic('trash')}</button></div>`).join('')}</div>` : '<p class="small muted" style="margin:8px 0 0">Записей пока нет. Запросы и ответы попадают сюда сами.</p>'}
   </div>`;
   return { html };
 }
 
 // ---------- добавить / изменить ----------
 function linkForm(x = {}) {
+  const c = app().ctx();
   const k = x.kind || 'publisher';
-  return `<div class="f2"><div><label for="lk" style="margin-top:0">Что это</label><select id="lk" name="kind">${Object.keys(LKINDS).map((v) => opt(v, KIND1[v], k)).join('')}</select></div>
+  return `<div class="f2"><div><label for="lk" style="margin-top:0">Что это</label><select id="lk" name="kind" data-chg="link.kind">${Object.keys(LKINDS).map((v) => opt(v, KIND1[v], k)).join('')}</select></div>
     <div><label for="ln" style="margin-top:0">Название / имя</label><input id="ln" name="name" value="${esc(x.name || '')}" required></div></div>
     <label for="lnet">Сеть или площадка (для соцсетей и площадок)</label><input id="lnet" name="net" list="lnets" value="${esc(x.net || '')}"><datalist id="lnets">${[...NETS, ...PLATS].map((v) => `<option value="${v}">`).join('')}</datalist>
     <div class="f2"><div><label for="lh">Ник / аккаунт</label><input id="lh" name="handle" value="${esc(x.handle || '')}" placeholder="@lana_freytag"></div>
     <div><label for="lc">Контакт</label><input id="lc" name="contact" value="${esc(x.contact || '')}" placeholder="почта, телефон, телеграм"></div></div>
     <label for="lu">Ссылка</label><input id="lu" name="url" value="${esc(x.url || '')}" placeholder="сайт, страница, профиль">
+    <div class="target-config" ${k === 'target' ? '' : 'hidden'}><div class="target-config-title">Сотрудничество с таргетологом</div>
+      <label for="targetStatus">Статус</label><select id="targetStatus" name="partnerStatus">${[['active','Работаем'],['paused','На паузе'],['done','Завершено']].map(([id,title])=>opt(id,title,x.partnerStatus||'active')).join('')}</select>
+      <label>Книги, над которыми работает</label><div class="target-book-list">${c.wbooks.map(b => `<label class="check"><input type="checkbox" name="bookIds" value="${esc(b.id)}" ${(x.bookIds || []).includes(b.id) ? 'checked' : ''}>${esc(b.title)}</label>`).join('') || '<span class="small muted">Пока нет книг в Мастерской</span>'}</div>
+      <label for="campaignNote">Кампании / зона ответственности</label><input id="campaignNote" name="campaignNote" value="${esc(x.campaignNote || '')}" placeholder="Например: Альпийский развод, реклама Литнета">
+      <div class="target-sync-opts"><label class="check"><input type="checkbox" name="showDirect" ${x.showDirect ? 'checked' : ''}>Показывать контакт в «Директе»</label><label class="check"><input type="checkbox" name="showIncome" ${x.showIncome ? 'checked' : ''}>Показывать в «Доходах» → «Реклама»</label></div>
+      <p class="small muted">Задачи с датами автоматически видны в Планере. Контакт и переписка не создают расходов и не меняют статистику.</p>
+    </div>
     <label for="lnote">Заметки</label><textarea id="lnote" name="note" placeholder="условия, кто отвечает, что важно помнить">${esc(x.note || '')}</textarea>`;
 }
-const linkFrom = (fd) => ({ kind: fd.get('kind'), name: fd.get('name').trim(), net: (fd.get('net') || '').trim(), handle: (fd.get('handle') || '').trim(), contact: (fd.get('contact') || '').trim(), url: (fd.get('url') || '').trim(), note: fd.get('note') || '' });
+const linkFrom = (fd) => ({ kind: fd.get('kind'), name: (fd.get('name') || '').trim(), net: (fd.get('net') || '').trim(), handle: (fd.get('handle') || '').trim(), contact: (fd.get('contact') || '').trim(), url: (fd.get('url') || '').trim(), note: fd.get('note') || '', ...(fd.get('kind') === 'target' ? { partnerStatus: fd.get('partnerStatus') || 'active', bookIds: fd.getAll('bookIds'), campaignNote: (fd.get('campaignNote') || '').trim(), showDirect: fd.has('showDirect'), showIncome: fd.has('showIncome') } : {}) });
+// Тип контакта меняет дополнительные поля, не теряя набранный текст.
+changes['link.kind'] = (v, el) => { const extra = el.closest('form')?.querySelector('.target-config'); if(extra) extra.hidden = v !== 'target'; };
 acts['link.new'] = (d) => openSheet('Новая связь', linkForm({ kind: d?.kind }), async (fd) => {
   const id = 'l' + uid(), v = linkFrom(fd);
   await app().store.put('w_links', { id, ...v, log: [], createdAt: new Date().toISOString() });
@@ -102,7 +114,7 @@ acts['link.new'] = (d) => openSheet('Новая связь', linkForm({ kind: d?
 }, { submitText: 'Добавить' });
 acts['link.edit'] = (d) => {
   const x = app().ctx().data.w_links.find((l) => l.id === d.id);
-  openSheet('Связь', linkForm(x) + `<p><button type="button" class="link danger" data-act="link.del" data-id="${x.id}">Удалить связь</button></p>`, async (fd) => { await app().store.put('w_links', { ...x, ...linkFrom(fd) }); });
+  openSheet('Связь', linkForm(x) + `<p><button type="button" class="link danger" data-act="link.del" data-id="${x.id}">Удалить связь</button></p>`, async (fd) => { await app().store.patch('w_links', x.id, linkFrom(fd)); });
 };
 acts['link.del'] = async (d) => {
   if (!(await ask('Удалить связь вместе с историей общения? Запросы останутся.', 'Удалить'))) return;
@@ -113,12 +125,15 @@ acts['link.del'] = async (d) => {
 export async function addLog(contactId, date, text) {
   const x = app().ctx().data.w_links.find((l) => l.id === contactId);
   if (!x || !text) return;
-  await app().store.put('w_links', { ...x, log: [...(x.log || []), { k: uid(), date, text }] });
+  await app().store.patch('w_links', x.id, { log: [...(x.log || []), { k: uid(), date, text }] });
 }
 forms['link.log'] = async (fd, f) => {
   const text = (fd.get('text') || '').trim();
   if (!text) return;
-  await addLog(f.dataset.id, fd.get('date') || app().ctx().today, text);
+  const x = app().ctx().data.w_links.find(l => l.id === f.dataset.id);
+  if (!x) return false;
+  const kind = x.kind === 'target' ? String(fd.get('logKind') || 'note') : '';
+  await app().store.patch('w_links', x.id, { log: [...(x.log || []), { k: uid(), date: fd.get('date') || app().ctx().today, text, ...(kind ? { kind } : {}) }] });
 };
 acts['link.logDel'] = async (d) => {
   const x = app().ctx().data.w_links.find((l) => l.id === d.id);
