@@ -158,8 +158,11 @@ function wire(id) {
     if(state)state.textContent='Есть несохраненные изменения';
     updateCount();
   };
-  for(const el of [editor,...root.querySelectorAll('input,select')])el.addEventListener('input',changed);
-  for(const el of root.querySelectorAll('select,input[type="date"]'))el.addEventListener('change',changed);
+  // Поиск, замена и выбор стиля не изменяют содержание черновика.
+  for(const el of [editor,...root.querySelectorAll('#blogTitle,#blogBook,#blogDate,#blogUrl')])
+    el.addEventListener('input',changed);
+  for(const el of root.querySelectorAll('#blogBook,#blogDate'))
+    el.addEventListener('change',changed);
   root.querySelector('.ed-tools')?.addEventListener('mousedown',event=>{
     if(!event.target.closest('select')) event.preventDefault();
   });
@@ -168,6 +171,19 @@ function wire(id) {
     if(event.key==='Enter'){event.preventDefault();stepBlogMatch(event.shiftKey?-1:1);}
     if(event.key==='Escape') acts['blog.find']();
   });
+  // Те же типографские замены, что в редакторе главы.
+  editor.addEventListener('beforeinput',e=>{
+    if(e.inputType!=='insertText'||!e.data)return;
+    const sel=window.getSelection(),node=sel?.anchorNode,off=sel?.anchorOffset;
+    const preceding=node?.nodeType===3?node.nodeValue.slice(0,off):'';
+    if(e.data==='"'){
+      e.preventDefault();document.execCommand('insertText',false,/(^|[\\s(«—–-])$/.test(preceding)?'«':'»');
+    }else if(e.data==='-'&&preceding.endsWith('-')){
+      e.preventDefault();document.execCommand('delete');document.execCommand('insertText',false,'—');
+    }else if(e.data===' '&&/^\\s*-$/.test(preceding)){
+      e.preventDefault();document.execCommand('delete');document.execCommand('insertText',false,'— ');
+    }
+  });
   editor.addEventListener('paste',e=>{
     e.preventDefault();
     const cleaned=cleanText(e.clipboardData?.getData('text/plain')||'');
@@ -175,8 +191,15 @@ function wire(id) {
     if(cleaned.n) toast(cleanedMsg(cleaned.n));
   });
   root.addEventListener('keydown',e=>{
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){
+    const mod=e.ctrlKey||e.metaKey,key=e.key.toLowerCase();
+    if(mod&&key==='s'){
       e.preventDefault();acts['blog.save']({id});
+    }else if(mod&&key==='f'&&e.target.closest('#blogBody,.ed-tools,.ed-find')){
+      e.preventDefault();
+      if(document.getElementById('blogfind')?.hidden)acts['blog.find']();
+      else document.getElementById('blogq')?.focus();
+    }else if(mod&&e.shiftKey&&(key==='e'||key==='у')&&e.target.id==='blogBody'){
+      e.preventDefault();acts['blog.color']();
     }
   });
   updateCount();
