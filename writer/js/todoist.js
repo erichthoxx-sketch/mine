@@ -30,7 +30,7 @@ export function todoistTasks(items, booksById) {
     const key = `${x.kind}_` + hash(x.kind === 'pub' ? `${x.book}:${x.date}` : x.kind === 'utm' ? `${x.id}:${x.expires}` : x.todoK ? `${x.linkId}:${x.todoK}` : `${x.id || ''}:${title}`);
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ key, content: title, description: unesc(x.sub || ''), date: x.dueRaw || x.date, project: b ? 'Книги' : 'Мастерская', section: b ? shortTitle(b.title) : KIND_SHELF[x.kind] || 'Дела', item: x });
+    out.push({ key, content: title, description: unesc(x.description || x.sub || ''), date: x.dueRaw || x.date, project: b ? 'Книги' : 'Мастерская', section: b ? shortTitle(b.title) : x.section || KIND_SHELF[x.kind] || 'Дела', item: x });
   }
   return out;
 }
