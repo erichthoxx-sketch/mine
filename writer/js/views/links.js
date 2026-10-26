@@ -121,7 +121,7 @@ export function linkPage(a, id) {
     <div class="tags" style="margin-top:6px"><span class="tag on">${KIND1[x.kind || 'other']}</span>${x.net ? `<span class="tag">${esc(x.net)}</span>` : ''}</div>
     <div class="kv">${x.handle ? `<div><span>Ник / аккаунт</span><b>${esc(x.handle)}</b></div>` : ''}${x.contact ? `<div><span>Контакт</span><b>${esc(x.contact)}</b></div>` : ''}${lastLog(x) ? `<div><span>Последний раз</span><b>${fmtDate(lastLog(x))}</b></div>` : ''}</div>
     <div class="row">${url ? `<a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener">Открыть ${x.kind === 'social' ? 'страницу' : 'сайт'}</a>` : ''}${x.handle ? `<button data-act="copy" data-text="${esc(x.handle)}">Скопировать ник</button>` : ''}${x.contact ? `<button data-act="copy" data-text="${esc(x.contact)}">Скопировать контакт</button>` : ''}</div>
-    ${x.kind === 'target' ? `<div class="target-details"><div class="small muted">${associated.length ? 'Книги: ' + associated.map(esc).join(' · ') : 'Книги пока не привязаны'}${x.campaignNote ? ' · Рекламные кампании: ' + esc(x.campaignNote) : ''}</div><div class="small muted">${x.showDirect ? 'Видно в «Директе»' : '«Директ» не подключен к контакту'} · ${x.showIncome ? 'Видно в «Доходах» (без учета сумм)' : 'В «Доходах» не показывать'}</div></div>` : ''}
+    ${x.kind === 'target' ? `<div class="target-details">${associated.length || x.campaignNote ? `<div class="small muted">${associated.length ? 'Книги: ' + associated.map(esc).join(' · ') : ''}${x.campaignNote ? (associated.length ? ' · ' : '') + esc(x.campaignNote) : ''}</div>` : ''}</div>` : ''}
     ${x.note ? `<p class="idea-text" style="margin-bottom:0">${esc(x.note)}</p>` : ''}</div>
   ${x.kind === 'target' ? targetWorkPanel(c,x) : `
   <div class="psec-h"><h2>Запросы <span class="muted">${open.length || ''}</span></h2><button class="small-btn" data-act="wait.new" data-contact="${x.id}">+ Запрос</button></div>
@@ -303,12 +303,14 @@ acts['link.todo'] = (d) => {
 };
 acts['link.todoDone'] = async (d) => {
   const c = app().ctx(), x = c.data.w_links.find((l) => l.id === d.id), td = (x.todos || []).find((t) => t.k === d.k);
-  await app().store.put('w_links', { ...x, todos: (x.todos || []).map((t) => (t.k === d.k ? { ...t, done: true, doneAt: c.today } : t)), log: [...(x.log || []), { k: uid(), date: c.today, text: td ? td.text : 'Сделано' }] });
-  toast('Готово — записала в историю общения');
+  await app().store.patch('w_links', x.id, { todos: (x.todos || []).map(t => (t.k === d.k ? { ...t, done: true, doneAt: c.today } : t)), log: [...(x.log || []), { k: uid(), date: c.today, kind:'note', text: td ? 'Сделано: '+td.text : 'Сделано' }] });
+  app().scheduleTodoist?.();
+  toast('Сделано — отмечено в Планере');
 };
 acts['link.todoDel'] = async (d) => {
   const x = app().ctx().data.w_links.find((l) => l.id === d.id);
-  await app().store.put('w_links', { ...x, todos: (x.todos || []).filter((t) => t.k !== d.k) });
+  await app().store.patch('w_links', x.id, { todos: (x.todos || []).filter(t => t.k !== d.k) });
+  app().scheduleTodoist?.();
 };
 // все открытые напоминания по связям — для Планера и Главной
 export const linkTodos = (c) => (c.data.w_links || []).flatMap((x) => (x.todos || []).filter((t) => !t.done).map((t) => ({ ...t, linkId: x.id, name: x.name })));
