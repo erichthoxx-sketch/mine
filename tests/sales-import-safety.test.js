@@ -107,10 +107,15 @@ test('Финансовое приложение показывает доход�
   assert.doesNotMatch(app,/COLLECTIONS\.every\(name => store\.loaded/);
   assert.match(app,/store\.sync === 'error' \? 'ошибка синхронизации'/);
 });
-test('Импорт не зависит от загрузки рекламы и событий, но требует полной базы продаж',()=>{
+test('Импорт проверяет данные прямым запросом к Firebase, а не по кешированным флагам',()=>{
   const source=readFileSync(new URL('../js/views/data.js',import.meta.url),'utf8');
-  const guard=source.slice(source.indexOf('function salesReady()'),source.indexOf('// Журнал до любых правок'));
-  assert.match(guard,/!st\.loaded\?\.sales/);
-  assert.match(guard,/!st\.loaded\?\.books/);
-  assert.doesNotMatch(guard,/adnotes|campaigns|reports|settingsServerLoaded/);
+  const guard=source.slice(source.indexOf('async function salesReady()'),source.indexOf('// Журнал до любых правок'));
+  assert.match(guard,/await st\.prepareSalesImport\(\)/);
+  assert.doesNotMatch(guard,/!st\.loaded|st\.sync|st\.pending|navigator\.onLine/);
+  assert.match(source,/if \(!await salesReady\(\)\) return;/);
+  assert.match(source,/if \(!await salesReady\(\)\) return false;/);
+  const store=readFileSync(new URL('../js/store.js',import.meta.url),'utf8');
+  assert.match(store,/async prepareSalesImport\(\)/);
+  assert.match(store,/getDocsFromServer\(collection\(this\.db, 'users', uid, name\)\)/);
+  assert.match(store,/const names = \['sales', 'books'\]/);
 });
