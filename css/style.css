@@ -2695,3 +2695,58 @@ main .rev-actions button.dl .ic { opacity: 1; }
 @media (max-width:560px) {
   .app-writer { --w-top-heading: 23px; --w-page-heading: 22px; --w-section-heading: 17px; }
 }
+
+/* Блог использует настоящий интерфейс редактора глав: ed-bar, ed-tools,
+   ed-find, ed-paper, editor и ed-stats. Только метаданные отдельные. */
+.app-writer .blog-editor { max-width: 1120px; margin: 0 auto; }
+.app-writer .blog-meta-card {
+  display: grid; gap: 0; background: transparent;
+  border: 0; border-radius: 0; padding: 6px 0 14px;
+}
+.app-writer .blog-meta-card > label,
+.app-writer .blog-meta-card .blog-meta label,
+.app-writer .blog-posting label {
+  display:block; margin:0 0 7px; font: 650 12px/1.5 var(--font-body); color:var(--text-2);
+}
+.app-writer .blog-meta-card input,
+.app-writer .blog-meta-card select,
+.app-writer .blog-posting input {
+  width:100%; min-width:0; border-radius:10px; font:500 14px/1.5 var(--font-body);
+  background:var(--surface);
+}
+.app-writer .blog-meta-card #blogTitle {
+  font:650 18px/1.5 var(--font-body);
+  margin-bottom:14px;
+}
+.app-writer .blog-meta-card .blog-meta { margin:0; }
+.app-writer .blog-writer-surface .blog-ed-bar {
+  border-top:1px solid var(--line); padding-top:7px; margin:0 0 10px;
+  background:var(--bg);
+}
+.app-writer .blog-writer-surface .ed-tools { margin-top:0; }
+.app-writer .blog-writer-surface .ed-paper {
+  background:var(--paper); border:1px solid var(--paper-line);
+  border-radius:18px; padding:48px 56px 64px;
+}
+.app-writer .blog-writer-surface .editor {
+  min-height:55vh; max-width:760px; width:100%; margin:0 auto;
+  border:0; border-radius:0; background:transparent; padding:0;
+  color:var(--ink); font:400 calc(18px * var(--ed-zoom,1))/1.6 Georgia,'Times New Roman',serif;
+  white-space:pre-wrap; overflow-wrap:anywhere;
+}
+.app-writer .blog-writer-surface .editor:empty::before {
+  content:attr(data-placeholder); color:var(--muted);
+}
+.app-writer .blog-writer-surface .editor p { margin:0 0 .65em; text-indent:0; }
+.app-writer .blog-writer-surface .ed-stats { position:absolute; top:18px; right:20px; bottom:auto; left:auto;
+  opacity:.72; background:none; padding:0; gap:12px;
+}
+.app-writer .blog-bottom { justify-content:flex-end; margin:10px 0 0; }
+.app-writer .blog-posting { margin-top:24px; }
+@media (max-width:700px){
+  .app-writer .blog-writer-surface .ed-paper {padding:20px 16px 40px;border-radius:14px}
+  .app-writer .blog-writer-surface .ed-stats {
+    position:static;transform:none;flex-direction:row;justify-content:flex-end;
+    margin-bottom:14px;gap:12px;
+  }
+}
