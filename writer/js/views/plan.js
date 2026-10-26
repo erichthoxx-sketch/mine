@@ -375,38 +375,60 @@ acts['day.pick'] = (d) => { app().ui.planDay = d.v; window.scrollTo(0, 0); };
 // «+ Дело» в Планере: задача сразу в Todoist — к книге (проект «Книги», раздел книги) или в «Мастерскую»
 // («Деньги и реклама», если по тексту про деньги/рекламу, иначе «Дела»); книга подставляется сама, пока пишешь
 acts['td.addPlan'] = (d) => {
-  const c = app().ctx(), short = (t) => String(t).split(/[.!?:]/)[0].trim();
+  const c = app().ctx(), short = t => String(t).split(/[.!?:]/)[0].trim();
   const order = { progress: 0, idea: 1, done: 2 };
   const books = [...c.wbooks].sort((x, y) => (order[x.status || 'progress'] ?? 1) - (order[y.status || 'progress'] ?? 1));
-  openSheet('Новое дело', `<label for="pdc" style="margin-top:0">Что сделать</label><input id="pdc" name="t" required autocomplete="off" placeholder="например: ответить издательству">
-    <div class="f2"><div><label for="pdd">Когда</label><input id="pdd" type="date" name="d" value="${d.d || c.today}"></div>
-    <div><label for="pdb">Книга</label><select id="pdb" name="b"><option value="">Без книги</option>${books.map((b) => opt(b.id, short(b.title), '')).join('')}</select></div></div>
-    <label for="pcontact">Связать с контактом (необязательно)</label>
-    <select id="pcontact" name="contact"><option value="">Без контакта</option>${(c.data.w_links || []).filter(x=>x.kind==='target' || x.kind==='people').map(x=>opt(x.id,x.name,d.contact || '')).join('')}</select>
-    <p class="small muted" style="margin:8px 0 0">Контактное дело появится в его карточке и Планере, в Todoist — в папке рекламы или в разделе книги.</p>`, async (fd) => {
-    const content = String(fd.get('t') || '').trim(); if (!content) return false;
-    const b = c.wbooksById[fd.get('b')] || null;
-    const where = b ? { project: 'Книги', section: short(b.title) } : { project: 'Мастерская', section: MONEY_RE.test(content) ? 'Деньги и реклама' : 'Дела' };
-    const contact = c.data.w_links.find(x => x.id === fd.get('contact'));
+  const contacts = (c.data.w_links || []).filter(x => x.kind === 'target' || x.kind === 'people');
+  const one = contacts.length === 1 ? contacts[0] : null;
+  const selected = String(d.contact || '');
+  const folders = [['Дела', 'Мастерская · Дела'], ['Связи', 'Мастерская · Связи'], ['Деньги и реклама', 'Мастерская · Деньги и реклама']];
+  const contactControl = !contacts.length ? '' : one
+    ? `<label class="plan-contact-one"><input id="pcontact" type="checkbox" name="contact" value="${esc(one.id)}"${selected === one.id ? ' checked' : ''}> Связать с «${esc(one.name)}»</label>`
+    : `<label for="pcontact">Контакт <span class="small muted">необязательно</span></label><select id="pcontact" name="contact"><option value="">Без контакта</option>${contacts.map(x => opt(x.id, x.name, selected)).join('')}</select>`;
+  openSheet('Новое дело', `<label for="pdc" style="margin-top:0">Что сделать</label>
+    <input id="pdc" name="t" required autocomplete="off" placeholder="Например: написать таргетологу">
+    <div class="f2"><div><label for="pdd">Когда</label><input id="pdd" type="date" name="d" value="${d.d || c.today}" required></div>
+    <div><label for="pdwhere">Куда в Todoist</label><select id="pdwhere" name="folder">
+      ${folders.map(([value,label])=>opt(value,label, selected ? (contacts.find(x=>x.id===selected)?.kind==='target' ? 'Деньги и реклама':'Связи') : 'Дела')).join('')}
+      ${books.map(b=>opt('book:'+b.id,'Книги · '+short(b.title),'')).join('')}
+    </select></div></div>
+    ${contactControl}`, async (fd) => {
+    const content = String(fd.get('t') || '').trim(), date = String(fd.get('d') || '');
+    if (!content || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {toast('Укажи дело и дату');return false;}
+    const whereId = String(fd.get('folder') || 'Дела');
+    const bid = whereId.startsWith('book:') ? whereId.slice(5) : '';
+    const b = bid ? app().ctx().wbooksById[bid] : null;
+    if (bid && !b) {toast('Книга больше не найдена');return false;}
+    const section = b ? short(b.title) : folders.some(([key])=>key===whereId) ? whereId : 'Дела';
+    const contact = contacts.find(x=>x.id===fd.get('contact'));
     try {
       if (contact) {
-        await addLinkedTask(contact.id, { text: content, date: fd.get('d') || c.today,
-          section: b ? 'book:' + b.id : contact.kind === 'target' ? 'Деньги и реклама' : 'Связи' });
-        toast('Добавлено в Планер и карточку «' + contact.name + '»');
+        await addLinkedTask(contact.id, { text:content, date, section:b ? 'book:'+b.id : section });
+        toast('Добавлено в Планер и к контакту' + (c.settings.todoistToken ? ' · Todoist синхронизируется' : ''));
         return;
       }
-      const x = await addOwnTask(c.settings, { ...where, content, date: fd.get('d') || '' });
+      const project = b ? 'Книги' : 'Мастерская';
+      const task = await addOwnTask(app().ctx().settings, { project, section, content, date });
       const td = app().ctx().settings.todoist || {};
-      await app().store.saveSettings({ todoist: { ...td, own: [...(td.own || []), x] } });
-      toast(`Добавлено${b ? ` — к книге «${short(b.title)}»` : where.section === 'Деньги и реклама' ? ' — «Деньги и реклама»' : ''}`);
+      await app().store.saveSettings({ todoist: { ...td, own: [...(td.own || []), task] } });
+      toast('Добавлено в Todoist · '+project+' → '+section);
     } catch (e) { toast('Не получилось: ' + e.message); return false; }
   }, { submitText: 'Добавить' });
-  // упомянула книгу в тексте — она сама выбирается в списке (пока список не трогали руками)
-  const inp = document.getElementById('pdc'), sel = document.getElementById('pdb');
-  let touched = false;
-  sel?.addEventListener('change', (e) => { if (e.isTrusted) touched = true; });
-  inp?.addEventListener('input', () => { if (touched) return; const g = bookGuess(inp.value, c.wbooks); sel.value = g ? g.id : ''; });
-  setTimeout(() => inp?.focus(), 50);
+  const inp = document.getElementById('pdc'), folder = document.getElementById('pdwhere'), contact = document.getElementById('pcontact');
+  let folderTouched = false, contactTouched = false;
+  folder?.addEventListener('change', e => { if (e.isTrusted) folderTouched = true; });
+  contact?.addEventListener('change', e => { if (e.isTrusted) contactTouched = true; });
+  inp?.addEventListener('input', () => {
+    const text = inp.value.trim(), guessed = bookGuess(text,c.wbooks);
+    if (!folderTouched) folder.value = guessed ? 'book:'+guessed.id : MONEY_RE.test(text) ? 'Деньги и реклама' :
+      /написать|ответить|сообщени|позвонить|связаться|письмо/i.test(text) ? 'Связи' : 'Дела';
+    if (one && !contactTouched && contact?.type === 'checkbox') {
+      const name = String(one.name || '').toLocaleLowerCase('ru');
+      contact.checked = !!(name && text.toLocaleLowerCase('ru').includes(name)) ||
+        (one.kind==='target' && /(?:написать|позвонить|ответить|сообщени|спросить|запросить).{0,35}(?:таргетолог|агентств)/i.test(text));
+    }
+  });
+  inp?.focus();
   return false;
 };
 acts['plan.week'] = (d) => { const u = app().ui; u.planWeek = d.v === '0' ? 0 : (u.planWeek || 0) + Number(d.v); u.planDay = d.v === '0' ? null : addDays(app().ctx().today, 7 * u.planWeek); if (u.planWeek === 0) u.planDay = null; };
