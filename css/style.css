@@ -2458,3 +2458,45 @@ main .rev-actions button.dl .ic { opacity: 1; }
   .app-writer .link-log-form > select, .app-writer .link-log-form > input[type="date"] { flex: 1 1 130px; min-width: 0; }
   .app-writer .link-log-form > button { flex: 1 1 100%; }
 }
+
+/* Внешний таргетолог: одна рабочая карточка вместо запросов/напоминаний/переписки. */
+.app-writer .target-work-heading { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.app-writer .target-work-heading > h2 { margin:0; }
+.app-writer .target-work-card { padding:16px 18px; }
+.app-writer .target-quickform { display:grid; gap:10px; }
+.app-writer .target-quick-grid { display:grid; grid-template-columns: minmax(110px,.55fr) minmax(140px,.75fr) minmax(220px,1.8fr); gap:9px; }
+.app-writer .target-quick-grid > :is(input,select) { width:100%; min-width:0; margin:0; border-radius:11px; }
+.app-writer .target-quick-grid.target-log-mode > select[name="section"] { visibility:hidden; }
+.app-writer .target-quick-input { display:flex; align-items:stretch; gap:9px; min-width:0; }
+.app-writer .target-quick-input > input { flex:1 1 250px; min-width:0; border-radius:11px; margin:0; }
+.app-writer .target-quick-input > button { flex:0 0 auto; min-width:112px; margin:0; border-radius:11px; }
+.app-writer .target-details-toggle { padding:0; margin:0; }
+.app-writer .target-details-toggle summary { cursor:pointer; width:fit-content; color:var(--text-2); font:600 12px/1.5 var(--font-body); }
+.app-writer .target-details-toggle textarea { margin:8px 0 0; min-height:72px; width:100%; border-radius:11px; }
+.app-writer .target-timeline { border-top:1px solid var(--line); margin-top:16px; padding-top:5px; }
+.app-writer .target-entry { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; padding:13px 0; border-bottom:1px solid var(--line); }
+.app-writer .target-entry:last-child { border-bottom:0; padding-bottom:0; }
+.app-writer .target-entry-main { flex:1 1 auto; min-width:0; overflow-wrap:anywhere; }
+.app-writer .target-entry-date, .app-writer .target-entry-type { font:600 11px/1.5 var(--font-body); color:var(--text-2); }
+.app-writer .target-entry-type { margin-left:8px; }
+.app-writer .target-entry-text { white-space:pre-wrap; font:500 14px/1.55 var(--font-body); color:var(--text); margin-top:4px; }
+.app-writer .target-entry-detail { font:500 12px/1.55 var(--font-body); color:var(--text-2); margin:4px 0 0; }
+.app-writer .target-entry-actions { flex:0 0 auto; display:flex; gap:8px; align-items:center; }
+.app-writer .target-entry-actions > button { margin:0; }
+.app-writer .target-entry-done .target-entry-text { opacity:.55; }
+.app-writer .target-empty { margin:16px 0 0; }
+.app-writer .target-requests { display:grid; gap:4px; padding:11px 0 0; border-top:1px solid var(--line); margin-top:5px; }
+.app-writer .target-request { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; }
+.app-writer .target-request button { flex:0 0 auto; margin:0; }
+@media (max-width:650px) {
+  .app-writer .target-work-card { padding:13px; }
+  .app-writer .target-quick-grid { grid-template-columns:1fr 1fr; }
+  .app-writer .target-quick-grid > select[name="section"] { grid-column:1 / -1; }
+  .app-writer .target-quick-grid.target-log-mode > select[name="section"] { display:none; }
+}
+@media (max-width:420px) {
+  .app-writer .target-quick-input { flex-wrap:wrap; }
+  .app-writer .target-quick-input > button { flex:1 1 100%; }
+  .app-writer .target-entry { gap:6px; }
+  .app-writer .target-entry-actions { gap:4px; flex-direction:column; }
+}
