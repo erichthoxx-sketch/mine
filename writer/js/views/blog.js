@@ -2,6 +2,9 @@
 import { esc, acts, toast, uid, opt, ask } from '../../../js/ui.js';
 import { ic } from '../../../js/icons.js';
 import { fmtDate } from '../../../js/format.js';
+import { editorToolbar, editorFindBar } from '../editor-ui.js';
+import { changes } from '../../../js/ui.js';
+import { cleanText, cleanedMsg } from '../../../js/cleantext.js';
 
 const app = () => window.__app;
 const draftKey = id => 'writer.blog.draft.' + id;
@@ -96,7 +99,7 @@ export function blogEditor(a,id) {
       <button class="primary" data-act="blog.save" data-id="${esc(p.id)}">Сохранить</button>
     </div>
     ${hasDraft ? `<div class="blog-restore"><span>Есть несохраненный текст на этом устройстве.</span><button data-act="blog.restore" data-id="${esc(p.id)}">Восстановить</button><button class="link" data-act="blog.discard" data-id="${esc(p.id)}">Скрыть</button></div>` : ''}
-    <div class="blog-page">
+    <div class="blog-meta-card">
       <label for="blogTitle">Заголовок</label>
       <input id="blogTitle" value="${esc(p.title||'')}" placeholder="Название публикации" maxlength="200">
       <div class="blog-meta">
@@ -104,22 +107,20 @@ export function blogEditor(a,id) {
           <select id="blogBook"><option value="">Без книги</option>${bookOptions}</select></div>
         <div><label for="blogDate">Выложить вручную</label><input id="blogDate" type="date" value="${esc(p.planDate||'')}"></div>
       </div>
-      <div class="blog-toolbar" role="toolbar" aria-label="Форматирование записи">
-        <button type="button" data-act="blog.fmt" data-cmd="bold" title="Жирный (Ctrl+B)"><b>Ж</b></button>
-        <button type="button" data-act="blog.fmt" data-cmd="italic" title="Курсив (Ctrl+I)"><i>К</i></button>
-        <button type="button" data-act="blog.fmt" data-cmd="insertUnorderedList" title="Список">≡</button>
-        <button type="button" data-act="blog.fmt" data-cmd="formatBlock" data-tag="h2" title="Подзаголовок">H2</button>
-        <button type="button" data-act="blog.fmt" data-cmd="formatBlock" data-tag="p" title="Обычный абзац">¶</button>
-        <button type="button" data-act="blog.fmt" data-cmd="undo" title="Отменить">↶</button>
-        <button type="button" data-act="blog.fmt" data-cmd="redo" title="Повторить">↷</button>
-        <span class="blog-toolbar-spacer"></span>
-        <button type="button" data-act="blog.copy" data-id="${esc(p.id)}" title="Скопировать оформленный текст">${ic('copy')} Скопировать</button>
+    </div>
+    <div class="blog-writer-surface">
+      <div class="ed-bar blog-ed-bar">
+        ${editorToolbar('blog', 'Скопировать публикацию')}
+        ${editorFindBar('blog')}
       </div>
-      <div id="blogBody" class="blog-body editor" contenteditable="true" spellcheck="true" role="textbox" aria-label="Текст записи" aria-multiline="true" data-placeholder="Текст публикации…">${sanitized(p.html||'')}</div>
-      <div class="blog-bottom">
-        <span id="blogCount" class="small muted"></span>
-        <span class="small muted">Текст сохраняется в «Мастерской». На Литнет его нужно выложить вручную.</span>
+      <div class="ed-paper blog-ed-paper">
+        <div class="ed-stats" id="blogCount" aria-live="off"></div>
+        <div id="blogBody" class="editor" contenteditable="true" spellcheck="true" lang="ru" role="textbox" aria-label="Текст записи" aria-multiline="true" data-placeholder="Текст публикации…">${sanitized(p.html||'')}</div>
       </div>
+    </div>
+    <div class="blog-bottom">
+      <span class="small muted">Текст сохраняется в «Мастерской». На Литнет его необходимо выложить вручную.</span>
+    </div>
       <div class="blog-posting">
         <div>
           <label for="blogUrl">Ссылка на публикацию <span class="muted">после выкладки, необязательно</span></label>
@@ -131,7 +132,6 @@ export function blogEditor(a,id) {
         </div>
       </div>
       <div class="blog-danger"><button class="link danger" data-act="blog.delete" data-id="${esc(p.id)}">Удалить черновик</button></div>
-    </div>
   </div>`;
   return {html,after:()=>wire(p.id)};
 }
@@ -141,7 +141,10 @@ function wire(id) {
   if(!root || currentBlogId===id && root.dataset.wired==='yes')return;
   currentBlogId=id;root.dataset.wired='yes';
   const editor=root.querySelector('#blogBody'),count=root.querySelector('#blogCount');
-  const updateCount=()=>{count.textContent=(editor.innerText||'').trim().length.toLocaleString('ru')+' знаков';};
+  const updateCount=()=>{
+    const text=(editor.innerText||'').trim(),chars=text.length,words=text?text.split(/\s+/).length:0;
+    count.innerHTML=`<span><b>${words.toLocaleString('ru')}</b> <i>слов</i></span><span><b>${chars.toLocaleString('ru')}</b> <i>зн.</i></span>`;
+  };
   const changed=()=>{
     const p=fields();
     setDraft(id,p);
@@ -151,12 +154,19 @@ function wire(id) {
   };
   for(const el of [editor,...root.querySelectorAll('input,select')])el.addEventListener('input',changed);
   for(const el of root.querySelectorAll('select,input[type="date"]'))el.addEventListener('change',changed);
-  for(const btn of root.querySelectorAll('.blog-toolbar button[data-cmd]'))
-    btn.addEventListener('mousedown',event=>event.preventDefault());
+  root.querySelector('.ed-tools')?.addEventListener('mousedown',event=>{
+    if(!event.target.closest('select')) event.preventDefault();
+  });
+  root.querySelector('#blogq')?.addEventListener('input',()=>highlightBlogMatches(true));
+  root.querySelector('#blogq')?.addEventListener('keydown',event=>{
+    if(event.key==='Enter'){event.preventDefault();stepBlogMatch(event.shiftKey?-1:1);}
+    if(event.key==='Escape') acts['blog.find']();
+  });
   editor.addEventListener('paste',e=>{
     e.preventDefault();
-    const plain=e.clipboardData?.getData('text/plain')||'';
-    document.execCommand('insertText',false,plain);
+    const cleaned=cleanText(e.clipboardData?.getData('text/plain')||'');
+    document.execCommand('insertText',false,cleaned.text);
+    if(cleaned.n) toast(cleanedMsg(cleaned.n));
   });
   root.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){
@@ -239,7 +249,7 @@ acts['blog.restore']=d=>{
     const element=document.getElementById(id);if(element)element.value=val||'';
   }
   const body=document.getElementById('blogBody');if(body)body.innerHTML=sanitized(saved.html||'');
-  document.getElementById('blogCount').textContent=(body?.innerText||'').trim().length.toLocaleString('ru')+' знаков';
+  body?.dispatchEvent(new Event('input',{bubbles:true}));
   document.querySelector('.blog-restore')?.remove();
   toast('Черновик восстановлен. Нажмите «Сохранить»');
   return false;
