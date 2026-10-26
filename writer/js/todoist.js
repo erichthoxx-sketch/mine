@@ -11,7 +11,7 @@ export const MONEY_LABEL = 'доходы';
 // метки, которые приложение заводит в Todoist само — чтобы их можно было быстро выбрать
 export const LABELS = [['мастерская', 'lavender'], ['книги', 'salmon'], [IDEA_LABEL, 'mint_green'], [MONEY_LABEL, 'green']];
 export const TD_DAYS = 30; // на сколько дней вперёд отправляем
-const KIND_SHELF = { money: 'Деньги и реклама', waitans: 'Связи', mk: 'Маркетинг', contest: 'Конкурсы' };
+const KIND_SHELF = { money: 'Деньги и реклама', waitans: 'Связи', mk: 'Маркетинг', blog: 'Маркетинг', contest: 'Конкурсы' };
 const SKIP = new Set(['done', 'wait', 'td', 'utm-expiry', 'weekend', 'event']); // weekend — старые общие обзоры: никогда не создавать // выложено / выйдет само — делать ничего не нужно; td — задачи из самого Todoist
 
 // ключ — короткий и безопасный для базы (Firestore): вид + хеш
