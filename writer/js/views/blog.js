@@ -55,7 +55,7 @@ function sanitized(html) {
            ['center','right','justify'].includes(n.style.textAlign)) element.style.textAlign=n.style.textAlign;
         // Не переносим произвольный CSS и внешние ссылки: только цвет пометки,
         // который использует редактор главы.
-        if(n.tagName==='SPAN' && /^(rgb\\(11,\\s*107,\\s*79\\)|#0b6b4f)$/i.test(n.style.color.trim()))
+        if(n.tagName==='SPAN' && /^(rgb\(11,\s*107,\s*79\)|#0b6b4f)$/i.test(n.style.color.trim()))
           element.style.color='#0b6b4f';
         children(n,element);to.append(element);
       } else children(n,to);
@@ -177,10 +177,10 @@ function wire(id) {
     const sel=window.getSelection(),node=sel?.anchorNode,off=sel?.anchorOffset;
     const preceding=node?.nodeType===3?node.nodeValue.slice(0,off):'';
     if(e.data==='"'){
-      e.preventDefault();document.execCommand('insertText',false,/(^|[\\s(«—–-])$/.test(preceding)?'«':'»');
+      e.preventDefault();document.execCommand('insertText',false,/(^|[\s(«—–-])$/.test(preceding)?'«':'»');
     }else if(e.data==='-'&&preceding.endsWith('-')){
       e.preventDefault();document.execCommand('delete');document.execCommand('insertText',false,'—');
-    }else if(e.data===' '&&/^\\s*-$/.test(preceding)){
+    }else if(e.data===' '&&/^\s*-$/.test(preceding)){
       e.preventDefault();document.execCommand('delete');document.execCommand('insertText',false,'— ');
     }
   });
