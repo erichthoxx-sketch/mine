@@ -10,6 +10,7 @@ import './legend.js';
 import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats, nextChapterTab, isChapterTitle } from '../docedit.js';
 import { alNum, chapterList } from '../wcalc.js';
 import { cleanText, cleanedMsg } from '../../../js/cleantext.js';
+import { editorToolbar, editorFindBar } from '../editor-ui.js';
 
 const app = () => window.__app;
 let ed = null; // { key, bookId, title, tabId, status, html, baseText, dirty, savedAt, err, draft, named, startChars }
@@ -123,7 +124,6 @@ async function load(key, b, title) {
   if (app().ui.route.startsWith('/ed/')) app().rerender();
 }
 
-const STYLES = [['NORMAL_TEXT', 'Обычный текст'], ['TITLE', 'Название'], ['SUBTITLE', 'Подзаголовок'], ['HEADING_1', 'Заголовок 1'], ['HEADING_2', 'Заголовок 2'], ['HEADING_3', 'Заголовок 3']];
 export function editorView(a, bookId, title) {
   const c = a.ctx(), b = c.wbooksById[bookId];
   if (!b) return { html: '<div class="card"><p>Книга не найдена.</p></div>' };
@@ -147,40 +147,13 @@ export function editorView(a, bookId, title) {
       <label class="ed-auto" title="Сохранять в Google Документ само, через полминуты после правки"><input type="checkbox" data-chg="ed.auto"${auto ? ' checked' : ''}> автосохранение</label>
       <button class="primary" data-act="ed.save" title="Ctrl+S">Сохранить в Документ</button>
     </div>
-    <div class="ed-tools" role="toolbar" aria-label="Оформление">
-      <select data-chg="ed.style" class="ed-style" aria-label="Стиль абзаца">${STYLES.map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
-      <span class="ed-sep"></span>
-      <button class="ed-ic" data-act="ed.fmt" data-v="bold" title="Жирный (Ctrl+B)"><b>Ж</b></button>
-      <button class="ed-ic" data-act="ed.fmt" data-v="italic" title="Курсив (Ctrl+I)"><i>К</i></button>
-      <button class="ed-ic ed-color" data-act="ed.color" title="Выделить цветом — тёмно-изумрудный (Ctrl+Shift+E). Ещё раз — убрать" aria-label="Выделить цветом"><span>А</span></button>
-      <span class="ed-sep"></span>
-      <button class="ed-ic" data-act="ed.align" data-v="left" title="По левому краю">${alignIc('left')}</button>
-      <button class="ed-ic" data-act="ed.align" data-v="center" title="По центру">${alignIc('center')}</button>
-      <button class="ed-ic" data-act="ed.align" data-v="right" title="По правому краю">${alignIc('right')}</button>
-      <button class="ed-ic" data-act="ed.align" data-v="justify" title="По ширине">${alignIc('justify')}</button>
-      <span class="ed-sep"></span>
-      <button class="ed-ic" data-act="ed.dash" title="Тире для диалога">—</button>
-      <button class="ed-ic" data-act="ed.undo" title="Отменить (Ctrl+Z)">↶</button>
-      <button class="ed-ic" data-act="ed.redo" title="Повторить (Ctrl+Shift+Z)">↷</button>
-      <span class="ed-sep"></span>
-      <button class="ed-ic" data-act="ed.find" title="Найти и заменить (Ctrl+F)">${ic('search')}</button>
-      <button class="ed-ic" data-act="ed.copy" title="Скопировать главу (без названия)">${ic('copy')}</button>
-      <button class="ed-ic" data-act="ed.zoom" data-v="-1" title="Мельче">A−</button>
-      <button class="ed-ic" data-act="ed.zoom" data-v="1" title="Крупнее">A+</button>
-    </div>
-    <div class="ed-find" id="edfind" hidden><input id="edq" placeholder="Найти в главе" aria-label="Найти" autocomplete="off">
-      <button class="ed-ic" data-act="ed.findPrev" title="Предыдущее (Shift+Enter)">↑</button><button class="ed-ic" data-act="ed.findNext" title="Следующее (Enter)">↓</button><span class="small muted ed-found" id="edfound"></span>
-      <input id="edr" placeholder="Заменить на" aria-label="Заменить на" autocomplete="off"><button class="small-btn" data-act="ed.replaceOne">Заменить</button><button class="small-btn" data-act="ed.replaceAll">Заменить все</button>
-      <button class="ed-ic" data-act="ed.find" title="Закрыть (Esc)">✕</button></div>
+    ${editorToolbar('ed')}
+    ${editorFindBar('ed')}
   </div>
   ${ed.draft ? `<div class="alert alert-thin ed-draft">На этом устройстве есть несохранённый черновик от ${fmtDate(ed.draft.at.slice(0, 10))} ${ed.draft.at.slice(11, 16)}. <button class="link" data-act="ed.useDraft">Открыть черновик</button> <button class="link" data-act="ed.dropDraft">Отбросить</button></div>` : ''}
   <div class="ed-paper"><div class="ed-stats" id="edstats"></div><div class="editor" id="ed" contenteditable="true" spellcheck="true" lang="ru" style="--ed-zoom:${zoom};${ed.font ? `font-family:'${esc(ed.font)}',Georgia,'Times New Roman',serif` : ''}">${ed.html}</div></div>`;
   return { html, after: wire };
 }
-const alignIc = (v) => {
-  const L = { left: [[4, 18], [4, 14], [4, 18], [4, 12]], center: [[3, 21], [6, 18], [3, 21], [7, 17]], right: [[4, 20], [10, 20], [4, 20], [12, 20]], justify: [[4, 20], [4, 20], [4, 20], [4, 20]] }[v];
-  return `<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">${L.map(([a, b], k) => `<path d="M${a} ${6 + k * 4}h${b - a}"/>`).join('')}</svg>`;
-};
 function statusText() {
   if (!ed || ed.status !== 'ready') return '';
   if (ed.saving) return 'сохраняю…';
