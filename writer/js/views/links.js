@@ -242,7 +242,7 @@ acts['wait.answer'] = (d) => {
 export async function addLinkedTask(contactId, { date, text, section = '', detail = '', sourceLogK = '' }) {
   const c=app().ctx(), contact=c.data.w_links.find(l=>l.id===contactId);
   if(!contact) throw new Error('Контакт не найден');
-  const dateOK=/^\\d{4}-\\d{2}-\\d{2}$/.test(date || '');
+  const dateOK=/^\d{4}-\d{2}-\d{2}$/.test(date || '');
   if(!dateOK || !String(text || '').trim()) throw new Error('Укажи дело и дату');
   const bookId=String(section || '').startsWith('book:') ? section.slice(5) : '';
   if(bookId && !c.wbooksById[bookId]) throw new Error('Книга больше не найдена');
@@ -267,11 +267,11 @@ changes['target.entryType'] = (v, el) => {
 forms['target.entry']=async(fd,form)=>{
   const contactId=form.dataset.id, text=String(fd.get('text') || '').trim();
   const date=String(fd.get('date') || ''),detail=String(fd.get('detail') || '').trim();
-  if(!text || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {toast('Укажи текст и дату');return false;}
+  if(!text || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {toast('Укажи текст и дату');return false;}
   try {
     if(fd.get('entryType')==='log') {
       const x=app().ctx().data.w_links.find(l=>l.id===contactId);
-      await app().store.patch('w_links', contactId, { log:[...(x.log || []),{k:uid(),date,kind:'note',text:detail ? text+'\\n'+detail : text}] });
+      await app().store.patch('w_links', contactId, { log:[...(x.log || []),{k:uid(),date,kind:'note',text:detail ? text+'\n'+detail : text}] });
       toast('Сохранено в истории');
     } else {
       await addLinkedTask(contactId,{date,text,detail,section:String(fd.get('section') || 'Деньги и реклама')});
