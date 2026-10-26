@@ -2644,9 +2644,9 @@ main .rev-actions button.dl .ic { opacity: 1; }
 /* ТИПОГРАФИКА МАСТЕРСКОЙ: один размер для каждой роли, а не отдельные
    размеры в баннерах. Шапка > страница > секция > карточка > подпись. */
 .app-writer {
-  --w-top-heading: 24px;
-  --w-page-heading: 23px;
-  --w-section-heading: 19px;
+  --w-top-heading: 26px;
+  --w-page-heading: 24px;
+  --w-section-heading: 17px;
   --w-card-heading: 15px;
   --w-item-heading: 14px;
   --w-meta: 12px;
@@ -2693,5 +2693,5 @@ main .rev-actions button.dl .ic { opacity: 1; }
   font: 700 13px/1.4 var(--font-body);
 }
 @media (max-width:560px) {
-  .app-writer { --w-top-heading: 21px; --w-page-heading: 21px; --w-section-heading: 18px; }
+  .app-writer { --w-top-heading: 23px; --w-page-heading: 22px; --w-section-heading: 17px; }
 }
