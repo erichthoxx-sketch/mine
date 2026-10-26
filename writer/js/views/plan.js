@@ -402,7 +402,7 @@ acts['td.addPlan'] = (d) => {
     </select></div></div>
     ${contactControl}`, async (fd) => {
     const content = String(fd.get('t') || '').trim(), date = String(fd.get('d') || '');
-    if (!content || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {toast('Укажи дело и дату');return false;}
+    if (!content || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {toast('Укажите дело и дату');return false;}
     const whereId = String(fd.get('folder') || 'Дела');
     const bid = whereId.startsWith('book:') ? whereId.slice(5) : '';
     const b = bid ? app().ctx().wbooksById[bid] : null;
