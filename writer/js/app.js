@@ -32,6 +32,7 @@ try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* ок */ }
 
 const app = {
   store, ui, drive,
+  scheduleTodoist: () => scheduleTodoist(app, 500),
   get theme() { return theme; },
   setTheme(t) { theme = t; try { localStorage.setItem('theme', t); } catch { /* ок */ } applyTheme(); render(); },
   rerender: () => render(),
