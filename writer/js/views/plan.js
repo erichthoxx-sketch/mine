@@ -4,7 +4,7 @@ import { num, fmtDate, pct } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
 import { reminders } from './home.js';
 import { widgetReminder } from './widgets.js';
-import { linkTodos } from './links.js';
+import { linkTodos, addLinkedTask } from './links.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { fetchPageText } from '../pagetext.js';
@@ -84,7 +84,7 @@ export function planItems(c, from, to) {
   if (wr) { add(t, 'money', esc(wr.title), esc(wr.sub), { to: wr.to }); if (wr.date !== t) add(wr.date, 'money', `Срок заявки на показы`, '19:00 МСК', { to: wr.to }); }
   for (const x of incomeItems(c, from, to)) add(x.date, x.kind || 'money', x.title, x.sub, { href: '../' });
   // Связи: напоминания по контактам (просроченные — на сегодня)
-  for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', `${esc(x.text)}`, `${esc(x.name)}${x.date < t ? ' · просрочено' : ''}`, { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k });
+  for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', esc(x.text), esc(x.name) + (x.date < t ? ' · просрочено' : ''), { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k, section: x.section || 'Связи', ...(x.bookId ? { bookId: x.bookId } : {}), ...(x.detail ? { description: x.detail } : {}) });
   // свои задачи из Todoist (проекты «Книги» и «Мастерская»)
   for (const x of ownTasks(c.settings)) {
     if (!x.d) continue;
@@ -379,11 +379,20 @@ acts['td.addPlan'] = (d) => {
   openSheet('Новое дело', `<label for="pdc" style="margin-top:0">Что сделать</label><input id="pdc" name="t" required autocomplete="off" placeholder="например: ответить издательству">
     <div class="f2"><div><label for="pdd">Когда</label><input id="pdd" type="date" name="d" value="${d.d || c.today}"></div>
     <div><label for="pdb">Книга</label><select id="pdb" name="b"><option value="">Без книги</option>${books.map((b) => opt(b.id, short(b.title), '')).join('')}</select></div></div>
-    <p class="small muted" style="margin:8px 0 0">Дело появится и в Todoist. Про деньги и рекламу — видно и в «Доходах».</p>`, async (fd) => {
+    <label for="pcontact">Связать с контактом (необязательно)</label>
+    <select id="pcontact" name="contact"><option value="">Без контакта</option>${(c.data.w_links || []).filter(x=>x.kind==='target' || x.kind==='people').map(x=>opt(x.id,x.name,d.contact || '')).join('')}</select>
+    <p class="small muted" style="margin:8px 0 0">Контактное дело появится в его карточке и Планере, в Todoist — в папке рекламы или в разделе книги.</p>`, async (fd) => {
     const content = String(fd.get('t') || '').trim(); if (!content) return false;
     const b = c.wbooksById[fd.get('b')] || null;
     const where = b ? { project: 'Книги', section: short(b.title) } : { project: 'Мастерская', section: MONEY_RE.test(content) ? 'Деньги и реклама' : 'Дела' };
+    const contact = c.data.w_links.find(x => x.id === fd.get('contact'));
     try {
+      if (contact) {
+        await addLinkedTask(contact.id, { text: content, date: fd.get('d') || c.today,
+          section: b ? 'book:' + b.id : contact.kind === 'target' ? 'Деньги и реклама' : 'Связи' });
+        toast('Добавлено в Планер и карточку «' + contact.name + '»');
+        return;
+      }
       const x = await addOwnTask(c.settings, { ...where, content, date: fd.get('d') || '' });
       const td = app().ctx().settings.todoist || {};
       await app().store.saveSettings({ todoist: { ...td, own: [...(td.own || []), x] } });
