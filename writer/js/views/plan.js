@@ -397,7 +397,7 @@ acts['td.addPlan'] = (d) => {
     <input id="pdc" name="t" required autocomplete="off" placeholder="Например: написать таргетологу">
     <div class="f2"><div><label for="pdd">Когда</label><input id="pdd" type="date" name="d" value="${d.d || c.today}" required></div>
     <div><label for="pdbook">Книга</label><select id="pdbook" name="book"><option value="">Без книги</option>${books.map(b => opt(b.id, short(b.title), '')).join('')}</select></div></div>
-    ${contacts.length ? `<label for="pcontact">С кем связано <span class="small muted">необязательно</span></label><select id="pcontact" name="contact"><option value="">Ни с кем</option>${contacts.map(x => opt(x.id, x.name, selected)).join('')}</select>` : ''}
+    ${contacts.length ? `<div id="pdcwrap"><label for="pcontact">С кем связано <span class="small muted">необязательно</span></label><select id="pcontact" name="contact"><option value="">Ни с кем</option>${contacts.map(x => opt(x.id, x.name, selected)).join('')}</select></div>` : ''}
     <p class="pd-where">В Todoist: <span id="pdproj">Мастерская</span> → <select id="pdsec" name="sec" aria-label="Раздел в Todoist">${SECS.map(x => opt(x, x, autoSec('', sel0))).join('')}</select><span id="pdbsec" hidden></span></p>`, async (fd) => {
     const content = String(fd.get('t') || '').trim(), date = String(fd.get('d') || '');
     if (!content || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {toast('Укажите дело и дату');return false;}
@@ -431,6 +431,9 @@ acts['td.addPlan'] = (d) => {
     if (!touched.sec) sec.value = autoSec(text, ct);
     proj.textContent = b ? 'Книги' : 'Мастерская';
     sec.hidden = !!b; bsec.hidden = !b; bsec.textContent = b ? short(b.title) : '';
+    // «С кем связано» — только для дел в «Связи» или когда в тексте назван контакт (тогда он уже выбран)
+    const cw = document.getElementById('pdcwrap');
+    if (cw) cw.hidden = !(contact.value || (!b && sec.value === 'Связи'));
   }
   inp?.addEventListener('input', () => {
     const text = inp.value.trim(), low = text.toLocaleLowerCase('ru');

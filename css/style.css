@@ -2824,3 +2824,4 @@ main .rev-actions button.dl .ic { opacity: 1; }
 }
 /* «Книга» и «Выложить» — по ширине содержимого, без пустого хвоста */
 .app-writer main .blog-pick select { field-sizing: content; max-width: min(320px, 62vw); }
+#sheetForm #pdcwrap[hidden] { display: none; }
