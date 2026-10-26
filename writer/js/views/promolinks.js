@@ -72,17 +72,17 @@ function entry(fd, previous = {}) {
   const bookId=String(fd.get('bookId')||''), campaign=String(fd.get('campaign')||'').trim(),
     url=String(fd.get('url')||'').trim(), destination=String(fd.get('destination')||'').trim(),
     expires=String(fd.get('expires')||''), rawReaders=String(fd.get('readers')||'').trim();
-  if(!app().ctx().wbooksById[bookId]) throw new Error('Выбери существующую книгу');
+  if(!app().ctx().wbooksById[bookId]) throw new Error('Выберите существующую книгу');
   if(!campaign) throw new Error('Впиши название кампании');
   if(!isLitnetLink(url)) throw new Error('Нужна действительная ссылка вида https://litnet.com/ref/...');
   if(destination && !isLitnetLink(destination,'destination')) throw new Error('Ссылка на книгу должна вести на https://litnet.com/');
-  if(!promoReminderDate(expires)) throw new Error('Укажи настоящую дату окончания ссылки');
+  if(!promoReminderDate(expires)) throw new Error('Укажите действительную дату окончания ссылки');
   if(rawReaders && (!/^\d+$/.test(rawReaders) || Number(rawReaders)>100000000)) throw new Error('Число новых читателей должно быть неотрицательным');
   const changed = previous.url !== url || previous.expires !== expires;
   const history = [...(previous.history||[])];
   if (previous.url && changed) history.push({ url: previous.url, expires: previous.expires, savedAt: new Date().toISOString() });
   const channel=String(fd.get('channel')||promoChannel(previous));
-  if(channel!=='direct'&&channel!=='social') throw new Error('Выбери Директ или Соцсети');
+  if(channel!=='direct'&&channel!=='social') throw new Error('Выберите «Директ» или «Соцсети»');
   return { ...previous, bookId,campaign,channel,url,destination,expires,readers:rawReaders===''?'':Number(rawReaders),
     ...(channel==='social'?{directCampaignId:'',appliedTag:'',appliedAt:''}:{}),
     history:history.slice(-20), ...(changed ? {reminderDoneFor:''} : {}),
