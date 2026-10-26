@@ -73,6 +73,8 @@ js/                        — «Доходы» + общие модули
   ui.js         общие помощники: acts / forms / changes, openSheet, toast, download, ask, opt, esc, N, tidyNums, keepPlace;
                 выбор файла (input type=file с data-chg) слушается на самой кнопке с момента нажатия — иначе перерисовка экрана,
                 пока открыто окно выбора, «теряет» файл (выгрузка грузилась через раз)
+                openSheet: пока onSubmit работает, кнопка отправки выключена — второе нажатие ничего не делает (без дублей);
+                окна, которые шлют задачу в Todoist (td.addBook, td.addPlan), закрываются сразу, задача уходит в фоне
   calc.js       ВСЕ расчёты доходов: продажи, недели/месяцы, реклама, «Литнет платит», налог, НПД-лимит,
                 цели (buildPlan, planOverridesOf, monthGoalStatus), bigGoalPlan
   parse.js      разбор выгрузок Литнета (CSV/XLSX), COLLECTIONS доходов

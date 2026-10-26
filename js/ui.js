@@ -30,11 +30,18 @@ export function openSheet(title, bodyHtml, onSubmit, { submitText = 'Сохра�
   const dlg = document.getElementById('sheet');
   const f = document.getElementById('sheetForm');
   f.innerHTML = `<h2>${esc(title)}</h2>${tidyNums(bodyHtml)}<div class="row between sheet-actions"><button type="button" data-close>${onSubmit ? 'Отмена' : 'Закрыть'}</button>${onSubmit ? `<button class="primary" type="submit">${esc(submitText)}</button>` : ''}</div>`;
+  // пока сохраняется — второе нажатие ничего не делает (иначе запись или задача добавлялась дважды)
+  let busy = false;
   f.onsubmit = async (e) => {
     e.preventDefault();
-    if (!onSubmit) return;
-    const keep = await onSubmit(new FormData(f), f);
-    if (keep !== false) dlg.close();
+    if (!onSubmit || busy) return;
+    busy = true;
+    const btn = f.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+    try {
+      const keep = await onSubmit(new FormData(f), f);
+      if (keep !== false) dlg.close();
+    } finally { busy = false; if (btn) btn.disabled = false; }
   };
   f.querySelector('[data-close]').onclick = () => dlg.close();
   if (!dlg.open) dlg.showModal();

@@ -1,5 +1,5 @@
 import { ic, icx } from '../../../js/icons.js';
-import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
+import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, pct } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
 import { reminders } from './home.js';
@@ -409,6 +409,8 @@ acts['td.addPlan'] = (d) => {
     if (bid && !b) {toast('Книга больше не найдена');return false;}
     const section = b ? short(b.title) : folders.some(([key])=>key===whereId) ? whereId : 'Дела';
     const contact = contacts.find(x=>x.id===fd.get('contact'));
+    // окно закрывается сразу, задача уходит в Todoist в фоне — без ожидания и без повторного нажатия
+    closeSheet();
     try {
       if (contact) {
         await addLinkedTask(contact.id, { text:content, date, section:b ? 'book:'+b.id : section });
@@ -420,7 +422,7 @@ acts['td.addPlan'] = (d) => {
       const td = app().ctx().settings.todoist || {};
       await app().store.saveSettings({ todoist: { ...td, own: [...(td.own || []), task] } });
       toast('Добавлено в Todoist · '+project+' → '+section);
-    } catch (e) { toast('Не получилось: ' + e.message); return false; }
+    } catch (e) { toast(`Не получилось добавить «${content}»: ${e.message}`); }
   }, { submitText: 'Добавить' });
   const inp = document.getElementById('pdc'), folder = document.getElementById('pdwhere'), contact = document.getElementById('pcontact');
   let folderTouched = false, contactTouched = false;

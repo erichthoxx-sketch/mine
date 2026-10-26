@@ -634,12 +634,14 @@ acts['td.addBook'] = (d) => {
     <label for="tdd">Когда (необязательно)</label><input id="tdd" type="date" name="d">
     <p class="small muted" style="margin:8px 0 0">Появится и в Todoist — проект «Книги», раздел «${esc(sec)}».</p>`, async (fd) => {
     const content = String(fd.get('t') || '').trim(); if (!content) return false;
+    // окно закрывается сразу, задача уходит в Todoist в фоне — ждать ответа не нужно
+    closeSheet();
     try {
       const x = await addOwnTask(c.settings, { project: 'Книги', section: sec, content, date: fd.get('d') || '' });
       const td = app().ctx().settings.todoist || {};
       await app().store.saveSettings({ todoist: { ...td, own: [...(td.own || []), x] } });
       toast('Задача добавлена — и в Todoist');
-    } catch (e) { toast('Не получилось: ' + e.message); return false; }
+    } catch (e) { toast(`Не получилось добавить «${content}»: ${e.message}`); }
   }, { submitText: 'Добавить' });
 };
 
