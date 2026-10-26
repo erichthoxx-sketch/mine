@@ -53,7 +53,8 @@ test('Редактор сохраняет черновик отдельно, п�
   assert.match(blog,/data-act="blog\.fmt"/);
   assert.match(blog,/localStorage\.setItem\(draftKey/);
   assert.match(blog,/store\.patch\('w_blog'/);
-  assert.match(blog,/Ты уже опубликовала эту запись на Литнете/);
+  assert.match(blog,/Запись уже опубликована на Литнете/);
+  assert.doesNotMatch(blog, /Ты уже опубликовала эту запись на Литнете/);
   assert.doesNotMatch(blog,/setTimeout\([^)]*blog\.published/);
   assert.doesNotMatch(blog,/fetch\(['"]https:\/\/litnet\.com/);
 });
