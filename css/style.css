@@ -2814,3 +2814,13 @@ main .rev-actions button.dl .ic { opacity: 1; }
 #sheetForm .pd-where select:hover, #sheetForm .pd-where select:focus { background-color: var(--surface-2); outline: none; }
 #sheetForm .pd-where [hidden] { display: none !important; }
 #sheetForm .pd-where select { width: auto !important; max-width: max-content; field-sizing: content; }
+/* Блог: счётчик слов и знаков — всегда в правом верхнем углу листа одной строкой (у глав на широком экране он уходит на поля справа,
+   в блоге там нет места — столбик наезжал на панель) */
+@media (min-width: 1180px) {
+  .app-writer .blog-ed-paper .ed-stats { position: absolute !important; top: 14px; right: 20px; bottom: auto; left: auto; transform: none; flex-direction: row; flex-wrap: nowrap; align-items: baseline; gap: 14px; padding: 0; background: none; font-size: 12px; opacity: .7; text-align: left; }
+  .app-writer .blog-ed-paper .ed-stats span { display: inline; }
+  .app-writer .blog-ed-paper .ed-stats b { font-size: 12px; font-weight: 600; }
+  .app-writer .blog-ed-paper .ed-stats i { font-size: 12px; }
+}
+/* «Книга» и «Выложить» — по ширине содержимого, без пустого хвоста */
+.app-writer main .blog-pick select { field-sizing: content; max-width: min(320px, 62vw); }
