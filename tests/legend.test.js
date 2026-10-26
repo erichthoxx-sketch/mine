@@ -144,3 +144,17 @@ test('каркас: «от какого лица» попадает в текс�
   const L = { idea: {}, chars: [{ id: 'a', name: 'Вера', role: 'heroine' }], plan: [{ id: '1', title: 'Похороны', what: 'Вера хоронит мужа', pov: 'a', person: '1', st: 'ok' }], questions: [] };
   assert.match(legendContext(L, { title: 'Вдова' }), /глазами: Вера; от первого лица/);
 });
+
+test('акты: по порядку глав, в тексте для нейросети, во вкладке «Каркас» и обратно', async () => {
+  const { actsOf, actName, legendContext, legendBlocks, blocksPlain, parsePlan } = await import('../writer/js/legend.js');
+  const L = { idea: {}, chars: [], questions: [], plan: [{ id: 'a', title: 'Похороны', st: 'ok' }, { id: 'b', title: 'Сделка', st: 'ok' }, { id: 'c', title: 'Побег', st: 'ok' }],
+    acts: [{ id: 'x2', from: 'c', title: 'Развязка' }, { id: 'x1', from: 'a', title: 'Завязка' }, { id: 'x3', from: 'нет-такой', title: '' }] };
+  assert.deepEqual(actsOf(L).map((a) => [actName(a), a.i]), [['Акт 1. Завязка', 0], ['Акт 2. Развязка', 2]]);
+  assert.match(legendContext(L, { title: 'Вдова' }), /Акт 1\. Завязка:\n1\. Похороны\n2\. Сделка\nАкт 2\. Развязка:\n3\. Побег/);
+  const text = blocksPlain(legendBlocks(L, 'plan'));
+  assert.match(text, /Акт 1\. Завязка\n1\. Похороны/);
+  let k = 0; const items = parsePlan(text, () => 'n' + (++k));
+  assert.deepEqual(items.map((x) => x.title), ['Похороны', 'Сделка', 'Побег']); // акт не стал главой и не попал в текст главы
+  assert.deepEqual(items.acts, [{ title: 'Завязка', at: 0 }, { title: 'Развязка', at: 2 }]);
+  assert.equal(items[1].what, '');
+});

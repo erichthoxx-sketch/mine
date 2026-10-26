@@ -11,7 +11,7 @@ import { docxBlob, noYo } from '../publish.js';
 import { synText, synSource } from '../synopsis.js';
 import { cleanText } from '../../../js/cleantext.js';
 import './pubfiles.js'; // «Скопировать» и «Word» синопсиса
-import { IDEA_FIELDS, ROLES, PERSON, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, formatCharacterAge, legendContext, legendTemplate, applyTemplate, parsePlan, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
+import { IDEA_FIELDS, ROLES, PERSON, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, formatCharacterAge, legendContext, legendTemplate, applyTemplate, parsePlan, actsOf, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
 
 const app = () => window.__app;
 const bookOf = (id) => app().ctx().wbooksById[id];
@@ -65,7 +65,7 @@ function ideaHtml(b, L) {
 
 function planHtml(b, L, main) {
   const opts = (sel) => `<option value="">—</option>${L.chars.map((x) => opt(x.id, x.name || 'Без имени', sel || '')).join('')}`;
-  const nums = chapterNums(L.plan);
+  const nums = chapterNums(L.plan), actList = actsOf(L);
   const card = (p, i) => {
     const real = main[i];
     // глава с тем же номером в Документе: написана ли и сколько знаков
@@ -74,7 +74,9 @@ function planHtml(b, L, main) {
     const ps = planSt(p);
     const stSel = `<label class="lg-ps ps-${ps}" title="Статус решения"><span class="dot"></span><select data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="st" aria-label="Статус">${Object.entries(PLAN_ST).map(([k, v]) => opt(k, v, ps)).join('')}</select></label>`;
     const prol = isProl(p) && i === 0;
-    return `<div class="card lg-ch${ps === 'no' ? ' lg-no' : ''}${prol ? ' lg-prol' : ''}"><div class="lg-ch-h"><span class="lg-n">${nums[i] ?? (prol ? 'П' : 'Э')}</span>${prol ? '<b class="lg-t lg-tfix">Пролог</b>' : `<input class="lg-t" value="${esc(p.title || '')}" placeholder="Название главы" data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="title">`}${stSel}${st}
+    const act = actList.find((a) => a.i === i);
+    const actRow = act ? `<div class="lg-act"><span class="lg-act-n">Акт ${act.n}</span><input class="lg-act-t" value="${esc(act.title || '')}" placeholder="название" maxlength="80" data-chg="leg.actt" data-id="${b.id}" data-a="${act.id}" aria-label="Название акта"><span class="lg-act-line"></span><button class="lg-ib" data-act="leg.actdel" data-id="${b.id}" data-a="${act.id}" title="Убрать акт (главы останутся)" aria-label="Убрать акт">${ic('trash')}</button></div>` : '';
+    return `${actRow}<div class="card lg-ch${ps === 'no' ? ' lg-no' : ''}${prol ? ' lg-prol' : ''}"><div class="lg-ch-h"><span class="lg-n">${nums[i] ?? (prol ? 'П' : 'Э')}</span>${prol ? '<b class="lg-t lg-tfix">Пролог</b>' : `<input class="lg-t" value="${esc(p.title || '')}" placeholder="Название главы" data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="title">`}${stSel}${st}
       <span class="lg-mv"><button class="lg-ib" data-act="leg.move" data-id="${b.id}" data-i="${i}" data-d="-1" title="Выше" aria-label="Выше"${i ? '' : ' disabled'}>↑</button><button class="lg-ib" data-act="leg.move" data-id="${b.id}" data-i="${i}" data-d="1" title="Ниже" aria-label="Ниже"${i < L.plan.length - 1 ? '' : ' disabled'}>↓</button><button class="lg-ib" data-act="leg.ins" data-id="${b.id}" data-i="${i + 1}" title="Вставить главу после" aria-label="Вставить после">+</button><button class="lg-ib" data-act="leg.delp" data-id="${b.id}" data-i="${i}" title="Убрать из каркаса" aria-label="Убрать">${ic('trash')}</button></span></div>
       <span class="lg-sl">Что происходит</span>${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="what"`, p.what, '2–3 строки, главное событие главы', 2)}
       <span class="lg-sl">Зачем эта глава</span>${ta(`data-chg="leg.plan" data-id="${b.id}" data-i="${i}" data-k="why"`, p.why, 'что меняется для героев, какой крючок в конце', 1)}
@@ -86,7 +88,7 @@ function planHtml(b, L, main) {
     <span class="lg-sl">Что происходит</span>${ta(`data-chg="leg.prol" data-id="${b.id}" data-k="what"`, '', '2–3 строки', 2)}
     <span class="lg-sl">Зачем пролог</span>${ta(`data-chg="leg.prol" data-id="${b.id}" data-k="why"`, '', 'какой крючок или тайну он задаёт', 1)}</div>`;
   return `${questionsHtml(b, L)}${prolGhost}${L.plan.map(card).join('')}
-    <div class="lg-add"><button data-act="leg.ins" data-id="${b.id}" data-i="${L.plan.length}">+ Глава в каркас</button>${!L.plan.length && main.length ? `<button class="link" data-act="leg.fromCh" data-id="${b.id}">Создать по главам из Документа (${main.length})</button>` : ''}</div>`;
+    <div class="lg-add"><button data-act="leg.ins" data-id="${b.id}" data-i="${L.plan.length}">+ Глава в каркас</button>${L.plan.length > 1 ? `<button class="link" data-act="leg.actadd" data-id="${b.id}">${actList.length ? '+ Акт' : 'Разделить на акты'}</button>` : ''}${!L.plan.length && main.length ? `<button class="link" data-act="leg.fromCh" data-id="${b.id}">Создать по главам из Документа (${main.length})</button>` : ''}</div>`;
 }
 
 // «Открытые вопросы» — что ещё не решено в сюжете; у вопроса решение и отметка «утверждено»
@@ -150,8 +152,29 @@ acts['leg.move'] = (d) => saveL(d.id, (L) => { const i = Number(d.i), j = i + Nu
 acts['leg.delp'] = async (d) => {
   const L0 = legendOf(bookOf(d.id)), i = Number(d.i), item = L0.plan[i];
   if ((item.what || item.why) && !(await ask('Убрать эту главу из каркаса?', 'Убрать'))) return false;
-  await saveL(d.id, (L) => { L.plan = L.plan.filter((_, j) => j !== i); });
+  await saveL(d.id, (L) => { const next = L.plan[i + 1]?.id; L.acts = (L.acts || []).map((a) => (a.from === item.id && next ? { ...a, from: next } : a)); L.plan = L.plan.filter((_, j) => j !== i); });
   toast('Убрано из каркаса', { undo: () => saveL(d.id, (L) => { L.plan = [...L.plan.slice(0, i), item, ...L.plan.slice(i)]; }) });
+};
+const nm = (x) => String(x || '').trim();
+// акты — по желанию: акт начинается с выбранной главы; убрать акт — главы остаются на месте
+acts['leg.actadd'] = (d) => {
+  const L = legendOf(bookOf(d.id)), have = actsOf(L), nums = chapterNums(L.plan);
+  const free = L.plan.map((p, i) => ({ p, i })).filter(({ i }) => !have.some((a) => a.i === i));
+  if (!free.length) { toast('Акт уже начинается с каждой главы'); return false; }
+  const last = have.length ? have[have.length - 1].i : -1, def = (free.find(({ i }) => i > last) || free[0]).p.id;
+  const label = (p, i) => (isProl(p) && i === 0 ? 'Пролог' : `${nums[i] ?? ''}${nm(p.title) ? `. ${nm(p.title)}` : ''}`.replace(/^\. /, ''));
+  openSheet(`Акт ${have.length + 1}`, `<label for="lgactf">Начинается с главы</label><select id="lgactf" name="from">${free.map(({ p, i }) => opt(p.id, label(p, i), def)).join('')}</select>
+    <label for="lgactt">Название <span class="muted">необязательно</span></label><input id="lgactt" name="title" maxlength="80" placeholder="например, Завязка">`, async (fd) => {
+    const from = String(fd.get('from') || ''), title = String(fd.get('title') || '').trim();
+    await saveL(d.id, (L) => { L.acts = [...(L.acts || []).filter((a) => a.from !== from), { id: uid(), from, title }]; });
+  }, { submitText: 'Добавить' });
+  return false;
+};
+changes['leg.actt'] = (v, el) => saveL(el.dataset.id, (L) => { L.acts = (L.acts || []).map((a) => (a.id === el.dataset.a ? { ...a, title: String(v).trim() } : a)); });
+acts['leg.actdel'] = async (d) => {
+  const L0 = legendOf(bookOf(d.id)), a = (L0.acts || []).find((x) => x.id === d.a);
+  await saveL(d.id, (L) => { L.acts = (L.acts || []).filter((x) => x.id !== d.a); });
+  toast('Акт убран, главы остались', { undo: () => saveL(d.id, (L) => { L.acts = [...(L.acts || []), a]; }) });
 };
 acts['leg.fromCh'] = (d) => saveL(d.id, (L) => { L.plan = chapterList(bookOf(d.id)).filter((t) => !isAuthorTab(t.title)).map((t) => ({ id: uid(), title: t.title, what: t.lead || '', why: '', pov: '', chars: [] })); });
 
@@ -361,7 +384,7 @@ acts['leg.pull'] = async (d) => {
     const text = tab ? blocksText(contentToBlocks(tab.documentTab?.body?.content)) : '';
     if (!normText(text)) { toast('Вкладка пустая'); return; }
     await saveL(d.id, (L) => {
-      if (d.k === 'plan') { const items = parsePlan(text, uid); L.plan = [...L.plan, ...items]; if (items.intro) L.idea = { ...L.idea, notes: [L.idea?.notes, items.intro].filter(Boolean).join('\n\n') }; }
+      if (d.k === 'plan') { const items = parsePlan(text, uid); L.plan = [...L.plan, ...items]; L.acts = [...(L.acts || []), ...(items.acts || []).filter((a) => items[a.at]).map((a) => ({ id: uid(), from: items[a.at].id, title: a.title }))]; if (items.intro) L.idea = { ...L.idea, notes: [L.idea?.notes, items.intro].filter(Boolean).join('\n\n') }; }
       else L.idea = { ...L.idea, notes: [L.idea?.notes, `Из вкладки «${LEGEND_TABS[d.k]}»:\n${normText(text)}`].filter(Boolean).join('\n\n') };
       L.conflicts = { ...(L.conflicts || {}), [d.k]: false };
       L.sync = { ...(L.sync || {}), [d.k]: hashText(text) }; // теперь вкладку можно переписывать версией из Легенды

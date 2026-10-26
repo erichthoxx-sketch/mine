@@ -2785,3 +2785,25 @@ main .rev-actions button.dl .ic { opacity: 1; }
   .app-writer main .lg-ch-h .lg-ps { margin-left: 34px; }
   .app-writer main .lg-ch-h .lg-st { flex: 1 1 auto; padding-left: 0; }
 }
+/* Каркас: акт — тонкая строка-разделитель над его первой главой: «Акт 1  Завязка ———— 🗑» */
+.app-writer .lg-act { display: flex; align-items: center; gap: 10px; margin: 22px 4px 10px; }
+.app-writer .lg-act-n { font: 700 15px/1.4 var(--font-body); color: var(--text); white-space: nowrap; }
+.app-writer main input.lg-act-t { flex: 0 1 260px; min-width: 60px; min-height: 30px; padding: 2px 8px; border: 0 !important; border-radius: 8px; background: transparent !important; box-shadow: none !important; font: 400 15px/1.4 var(--font-body); color: var(--text-2); }
+.app-writer main input.lg-act-t:hover, .app-writer main input.lg-act-t:focus { background: var(--surface-2) !important; outline: none; }
+.app-writer .lg-act-line { flex: 1 1 auto; border-top: 1px solid var(--line); min-width: 20px; }
+.app-writer main .lg-act .lg-ib { opacity: .6; }
+.app-writer main .lg-act:hover .lg-ib { opacity: 1; }
+.app-writer .lg-add .link { font: 600 13px/1.4 var(--font-body); color: var(--text-2); }
+@media (max-width: 640px) { .app-writer main input.lg-act-t { flex: 1 1 auto; } .app-writer .lg-act-line { display: none; } }
+/* Редактор блога: заголовок — крупной строкой без рамки, как название документа; книга и дата — одной тихой строкой под ним,
+   поля по ширине содержимого (никаких длинных пустых полей) */
+.app-writer .blog-head { margin: 4px 0 14px; }
+.app-writer main .blog-title-in { display: block; resize: none; overflow: hidden; min-height: 0; padding: 6px 10px; margin: 0 -10px; width: calc(100% + 20px); border: 0 !important; border-radius: 10px; background: transparent !important; box-shadow: none !important; font: 700 22px/1.35 var(--font-body); color: var(--text); }
+.app-writer main .blog-title-in::placeholder { color: var(--muted); font-weight: 600; }
+.app-writer main .blog-title-in:hover, .app-writer main .blog-title-in:focus { background: var(--surface-2) !important; outline: none; }
+.app-writer .blog-meta-line { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-top: 6px; }
+.app-writer .blog-pick { display: inline-flex; align-items: center; gap: 6px; margin: 0; font: 400 13px/1.4 var(--font-body); color: var(--text-2); }
+.app-writer main .blog-pick :is(select, input) { width: auto; max-width: 62vw; min-height: 30px; padding: 2px 8px; border: 0 !important; border-radius: 8px; background-color: transparent !important; box-shadow: none !important; font: 600 13px/1.4 var(--font-body); color: var(--text); }
+.app-writer main .blog-pick select { padding-right: 22px; background-position: right 4px center; }
+.app-writer main .blog-pick :is(select, input):hover, .app-writer main .blog-pick :is(select, input):focus { background-color: var(--surface-2) !important; outline: none; }
+@media (max-width: 640px) { .app-writer main .blog-title-in { font-size: 19px; } }

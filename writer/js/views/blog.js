@@ -105,13 +105,11 @@ export function blogEditor(a,id) {
       <button class="primary" data-act="blog.save" data-id="${esc(p.id)}">Сохранить</button>
     </div>
     ${hasDraft ? `<div class="blog-restore"><span>Есть несохраненный текст на этом устройстве.</span><button data-act="blog.restore" data-id="${esc(p.id)}">Восстановить</button><button class="link" data-act="blog.discard" data-id="${esc(p.id)}">Скрыть</button></div>` : ''}
-    <div class="blog-meta-card">
-      <label for="blogTitle">Заголовок</label>
-      <input id="blogTitle" value="${esc(p.title||'')}" placeholder="Название публикации" maxlength="200">
-      <div class="blog-meta">
-        <div><label for="blogBook">Книга <span class="muted">необязательно</span></label>
-          <select id="blogBook"><option value="">Без книги</option>${bookOptions}</select></div>
-        <div><label for="blogDate">Выложить вручную</label><input id="blogDate" type="date" value="${esc(p.planDate||'')}"></div>
+    <div class="blog-head">
+      <textarea id="blogTitle" class="blog-title-in" rows="1" placeholder="Заголовок записи" maxlength="200" aria-label="Заголовок">${esc(p.title||'')}</textarea>
+      <div class="blog-meta-line">
+        <label class="blog-pick"><span>Книга</span><select id="blogBook"><option value="">без книги</option>${bookOptions}</select></label>
+        <label class="blog-pick"><span>Выложить</span><input id="blogDate" type="date" value="${esc(p.planDate||'')}" aria-label="Когда выложить (вручную)"></label>
       </div>
     </div>
     <div class="blog-writer-surface">
@@ -147,6 +145,12 @@ function wire(id) {
   if(!root || currentBlogId===id && root.dataset.wired==='yes')return;
   currentBlogId=id;root.dataset.wired='yes';
   const editor=root.querySelector('#blogBody'),count=root.querySelector('#blogCount');
+  // заголовок переносится на новую строку по ширине экрана; Enter не добавляет перенос
+  const title=root.querySelector('#blogTitle');
+  const growTitle=()=>{if(!title)return;title.style.height='auto';title.style.height=title.scrollHeight+'px';};
+  title?.addEventListener('input',growTitle);
+  title?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();editor.focus();}});
+  growTitle();
   const updateCount=()=>{
     const text=(editor.innerText||'').trim(),chars=text.length,words=text?text.split(/\s+/).length:0;
     count.innerHTML=`<span><b>${words.toLocaleString('ru')}</b> <i>слов</i></span><span><b>${chars.toLocaleString('ru')}</b> <i>зн.</i></span>`;

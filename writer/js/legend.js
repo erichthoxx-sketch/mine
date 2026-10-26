@@ -1,5 +1,5 @@
 // «Легенда» книги: идея, каркас по главам и персонажи. Чистые функции — без DOM и сети (их проверяют тесты).
-// Хранится в книге: b.legend = { idea: {…}, plan: [{ id, title, what, why, pov, person: 1|3, chars: [id], st }], chars: [{ id, name, role, … }],
+// Хранится в книге: b.legend = { idea: {…}, plan: [{ id, title, what, why, pov, person: 1|3, chars: [id], st }], acts: [{ id, from, title }] (по желанию), chars: [{ id, name, role, … }],
 //   questions: [{ id, q, a, st: open|ok }], sync: {…} }
 
 export const IDEA_FIELDS = [
@@ -85,8 +85,13 @@ export function legendContext(L, { title = '', upTo = 0, mode = 'work', sections
   const plan = upto.filter(keep);
   if (selected.has('plan') && plan.length) {
     out.push('', upTo > 0 ? (plan.length > 1 ? `## Каркас: главы 1–${plan.length}` : '## Каркас: глава 1') : '## Каркас по главам');
-    const nums = chapterNums(plan);
-    plan.forEach((p, i) => out.push(line(p, nums[i])));
+    const nums = chapterNums(plan), acts = actsOf(L);
+    let shown = null;
+    plan.forEach((p, i) => {
+      const a = actAt(acts, L.plan.indexOf(p));
+      if (a && a !== shown) { out.push(`${actName(a)}:`); shown = a; }
+      out.push(line(p, nums[i]));
+    });
     const next = upTo > 0 ? L.plan.slice(upTo).find(keep) : null;
     if (next) out.push('', `## Пишем дальше: ${nm(next.title) || `Глава ${plan.length + 1}`}${full && planSt(next) !== 'ok' ? ' [обсуждается]' : ''}`, nm(next.what) || '(план главы пока не заполнен)');
   }
@@ -101,16 +106,31 @@ export function legendContext(L, { title = '', upTo = 0, mode = 'work', sections
   return out.join('\n');
 }
 
+// ---------- акты: L.acts = [{ id, from: id главы, с которой акт начинается, title }] — по желанию ----------
+// номер акта — по порядку его первой главы в каркасе; акт без главы не показывается
+export function actsOf(L) {
+  const pos = new Map((L?.plan || []).map((p, i) => [p.id, i]));
+  return (L?.acts || []).filter((a) => pos.has(a.from)).map((a) => ({ ...a, i: pos.get(a.from) })).sort((a, b) => a.i - b.i).map((a, k) => ({ ...a, n: k + 1 }));
+}
+export const actName = (a) => `Акт ${a.n}${nm(a.title) ? `. ${nm(a.title)}` : ''}`;
+// какой акт идёт на главе с индексом i (последний начавшийся), или null
+export const actAt = (acts, i) => acts.reduce((cur, a) => (a.i <= i ? a : cur), null);
+const ACT = /^\s*акт(?![а-яё])\s*\d*\s*[.:—–-]?\s*(.*)$/i;
+
 // ---------- каркас из текста (вкладка «Каркас» в Документе) ----------
 // «Глава 3. Встреча» / «3. Встреча» / «Пролог» — новая глава, строки под ней — что происходит
 const HEAD = /^\s*((пролог|эпилог)(?![а-яё]).*|глава\s*\d+.*|\d{1,3}\s*[.)]\s*.+)$/i;
 export function parsePlan(text, newId = () => Math.random().toString(36).slice(2, 9)) {
   const lines = String(text || '').replace(/\r/g, '').split('\n').map((l) => l.trim());
-  const items = [], intro = [];
+  const items = [], intro = [], acts = [];
+  let act = null;
   if (lines.some((l) => HEAD.test(l))) {
     for (const l of lines) {
       if (!l) continue;
+      const am = ACT.exec(l);
+      if (am) { act = { title: am[1].replace(/[.:]\s*$/, '').trim() }; continue; }
       if (HEAD.test(l)) {
+        if (act) { acts.push({ ...act, at: items.length }); act = null; }
         // «Глава 3. Встреча» → «Встреча» (номер — по порядку); «Пролог», «Глава 5» — как есть
         const t = l.replace(/^\d{1,3}\s*[.)]\s*/, '').replace(/[.:]\s*$/, '');
         items.push({ id: newId(), title: t.replace(/^глава\s*\d+\s*[.:—–-]\s*(?=\S)/i, ''), what: '' });
@@ -124,6 +144,7 @@ export function parsePlan(text, newId = () => Math.random().toString(36).slice(2
   }
   const out = items.map((x) => ({ ...x, why: '', pov: '', chars: [] }));
   out.intro = intro.join('\n');
+  out.acts = acts; // [{ title, at: индекс главы }]
   return out;
 }
 
@@ -141,7 +162,10 @@ export function legendBlocks(L, part) {
       for (const q of qs) out.push(P(`${q.st === 'ok' ? '✓ ' : '— '}${nm(q.q)}${nm(q.a) ? ` → ${nm(q.a)}` : ''}${q.st === 'ok' ? ' (утверждено)' : ''}`));
     }
   }
+  const acts = part === 'plan' ? actsOf(L) : [];
   if (part === 'plan') L.plan.forEach((p, i) => {
+    const a = acts.find((x) => x.i === i);
+    if (a) out.push(H(actName(a), 'HEADING_2'));
     const mark = planSt(p) === 'ok' ? '' : ` (${PLAN_ST[planSt(p)].toLowerCase()})`;
     const n = chapterNums(L.plan)[i];
     out.push(H((!nm(p.title) ? `Глава ${n}` : /^(пролог|эпилог|глава)(?![а-яё])/i.test(nm(p.title)) ? nm(p.title) : `${n}. ${nm(p.title)}`) + mark, 'HEADING_3'));
