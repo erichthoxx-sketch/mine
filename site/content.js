@@ -24,7 +24,7 @@ export const BLOCKS = {
     { k: 'title', label: 'Заголовок', type: 'area', hint: '*Слово в звёздочках* — тонким курсивом' },
     { k: 'text', label: 'Текст', type: 'area' },
     { k: 'btn', label: 'Кнопка', hint: 'Ведёт к блоку «Книга крупно»' },
-    { k: 'book', label: 'Книга справа', type: 'book' },
+    { k: 'books', label: 'Обложки на первом экране', type: 'books', hint: 'Лучше три: средняя — крупнее' },
   ] },
   marquee: { name: 'Бегущая строка', fields: [
     { k: 'items', label: 'Фразы', type: 'area', hint: 'Каждая с новой строки; *в звёздочках* — курсивом' },
@@ -137,8 +137,8 @@ const V1_EXAMPLE = {
   ],
 };
 
-// Пример: так сайт выглядит, пока ничего не заполнено (книги и цикл — настоящие, тексты — заготовки)
-export const DEFAULT_CONTENT = {
+// Второй пример (v2) — тоже только для обновления нетронутых текстов
+const V2_EXAMPLE = {
   v: 2,
   name: 'Лана Фрейтаг',
   headBtn: 'Telegram',
@@ -170,13 +170,55 @@ export const DEFAULT_CONTENT = {
   ],
 };
 
+// Пример: тексты по книгам цикла «С кем я, черт возьми, связалась» (цитаты — настоящие, из книг; без раскрытия сюжета)
+export const DEFAULT_CONTENT = {
+  v: 3,
+  name: 'Лана Фрейтаг',
+  headBtn: 'Telegram',
+  headUrl: '',
+  foot: 'Telegram — \nЛитнет — ',
+  palette: 'fog',
+  a1: '', a2: '',
+  books: [
+    { id: 'b1', title: 'Развод *для черной вдовы*', mood: 'Ритуальный бизнес · Рига',
+      short: 'Владелица похоронного бюро инсценирует смерть мужа. А помочь ей может только самый опасный конкурент.',
+      ann: 'Марта руководит маленьким похоронным бюро под Петербургом и умеет хранить чужие тайны. Теперь у неё есть своя: муж, которого она похоронила, жив. И как раз в это время ей достаётся заказ на похороны знаменитого гипнотизёра в Риге — справиться с ним можно только вместе с Глебом Рокотовым, конкурентом, от которого стоило бы держаться подальше.',
+      status: 'writing', done: 1, total: '', al: '0,14', cover: '', litnet: '', litres: '', litmarket: '', litgorod: '' },
+    { id: 'b2', title: 'Альпийский *развод*', mood: 'Сванетия · горы',
+      short: 'Поход в горы должен был спасти брак. Надя очнулась одна, без сил, с мыслью: муж может вернуться, чтобы добить.',
+      ann: 'Надя была уверена, что замужем за лучшим мужчиной на свете. Поездка в горы Сванетии должна была вернуть им близость — а закончилась в ледяной траве над ущельем, где каждый свист может оказаться спасением или концом.',
+      status: 'done', done: 28, total: 28, al: '10,2', cover: '', litnet: '', litres: '', litmarket: '', litgorod: '' },
+    { id: 'b3', title: 'Звериная тропа *для двоих*', mood: 'Алтай · медведи',
+      short: 'Тринадцать лет вместе, со школы. Одна поездка на Алтай — и Софа больше не уверена, что знает собственного мужа.',
+      ann: 'Софа и Артём вместе со школы, и за тринадцать лет у неё не было ни одного повода в нём сомневаться. Отпуск на Алтае, тайга, медвежьи тропы — и одна ночь, после которой привычный мир начинает трескаться.',
+      status: 'done', done: 27, total: 27, al: '10,8', cover: '', litnet: '', litres: '', litmarket: '', litgorod: '' },
+  ],
+  blocks: [
+    { id: 'k1', type: 'hero', label: 'Остросюжетные любовные романы', title: 'С кем я, *черт возьми,* связалась',
+      text: 'Истории о женщинах, которые слишком поздно поняли, кто спит рядом, — и о мужчинах, от которых лучше держаться подальше.',
+      btn: 'Читать новинку', book: 'b1', books: ['b2', 'b1', 'b3'] },
+    { id: 'k2', type: 'marquee', items: 'Сванетия\n*Альпийский развод*\nАлтай\n*Звериная тропа для двоих*\nРига\n*Развод для черной вдовы*' },
+    { id: 'k8', type: 'series', label: 'Цикл «С кем я, черт возьми, связалась»', title: 'Три книги — *три женщины*',
+      text: 'Каждую можно читать отдельно. Общее у них одно: однажды героиня понимает, что не знает человека, которому доверяла больше всех.', books: ['b2', 'b3', 'b1'], menu: 'Книги' },
+    { id: 'k5', type: 'quote', label: 'Из книги', text: 'Он мог вернуться. Собственный муж мог вернуться, чтобы меня добить.', cite: '«Альпийский развод», пролог' },
+    { id: 'k3', type: 'book', label: 'Новинка · пишется сейчас', book: 'b1', menu: '' },
+    { id: 'k4', type: 'start', title: 'С чего начать', sub: 'если вы здесь впервые', books: ['b2', 'b3'], menu: '', hidden: true },
+    { id: 'k6', type: 'about', label: 'Об авторе', title: 'Пишу о любви *с риском для жизни*',
+      text: 'Меня зовут Лана Фрейтаг. Я пишу остросюжетные любовные романы: горы Сванетии, тайга Алтая, ритуальный бизнес под Петербургом. Мои героини узнают, что самый опасный человек может годами быть рядом, — и всё равно не перестают верить в любовь.\n\nКниги выходят по главам на Литнете — можно читать вместе со мной, пока история пишется.',
+      photo: '', facts: '3 — книги цикла\n2 — завершены\n1 — пишется сейчас', menu: 'Об авторе' },
+    { id: 'k7', type: 'tg', label: 'Telegram-канал', title: 'Читать *раньше всех*',
+      text: 'Новые главы в день выхода, обложки до премьеры и разговоры о героях — тех, с кем лучше не связываться.', btn: 'Подписаться', url: '', menu: 'Дневник' },
+  ],
+};
+
+// Тексты, которые владелица вписала сама, но попросила заменить текстами по книгам
+const ASKED_TO_REPLACE = { k1: { title: ['В жизни\n*все не так*\nкак на самом деле'] } };
+
 // Приводит сохранённое содержимое к нужному виду (старые и неполные данные не ломают сайт)
 const same = (a, b) => JSON.stringify(a ?? '') === JSON.stringify(b ?? '');
-// v1 → v2 (новое оформление): всё, что осталось как в первом примере, заменяется новым примером; правки владелицы не трогаем
-function upgrade(c) {
-  if ((c.v || 1) >= 2) return c;
-  const d = DEFAULT_CONTENT, old = V1_EXAMPLE;
-  const out = { ...c, v: 2 };
+// Обновление примера: всё, что осталось как в прежнем примере, меняется на новый; правки владелицы не трогаем
+function step(c, old, d, v) {
+  const out = { ...c, v };
   for (const k of ['palette', 'foot', 'headBtn']) if (same(c[k], old[k])) out[k] = d[k];
   const fix = (list, oldList, newList) => (list || []).flatMap((x) => {
     const o = oldList.find((y) => y.id === x.id);
@@ -184,7 +226,10 @@ function upgrade(c) {
     const n = newList.find((y) => y.id === x.id);
     if (!n) return Object.keys(o).every((k) => same(x[k], o[k])) ? [] : [x]; // пример без замены — убрать, если не меняли
     const r = { ...x };
-    for (const k of new Set([...Object.keys(o), ...Object.keys(n)])) if (k !== 'id' && same(x[k], o[k])) r[k] = structuredClone(n[k]);
+    const asked = v === 3 ? ASKED_TO_REPLACE[x.id] || {} : {};
+    for (const k of new Set([...Object.keys(o), ...Object.keys(n)])) {
+      if (k !== 'id' && (same(x[k], o[k]) || (asked[k] || []).some((t) => same(x[k], t)))) r[k] = structuredClone(n[k]);
+    }
     return [r];
   });
   out.books = fix(c.books, old.books, d.books);
@@ -196,6 +241,11 @@ function upgrade(c) {
     out.blocks.splice(at + 1, 0, structuredClone(d.blocks.find((b) => b.type === 'series')));
   }
   return out;
+}
+function upgrade(c) {
+  if ((c.v || 1) < 2) c = step(c, V1_EXAMPLE, V2_EXAMPLE, 2);
+  if (c.v < 3) c = step(c, V2_EXAMPLE, DEFAULT_CONTENT, 3);
+  return c;
 }
 
 export function normalize(c) {
@@ -259,22 +309,27 @@ export function renderSite(raw, imgs = {}) {
 
   const R = {
     hero: (k) => {
-      const b = books.get(k.book);
+      const ids = (k.books || []).length ? k.books : [k.book].filter(Boolean);
+      const covers = ids.map((id) => books.get(id)).filter((b) => b && !b.hidden).slice(0, 3);
       const to = bookBlock ? '#' + bookBlock.id : '';
-      return `<section class="hero" id="${k.id}"><div class="wrap hero-in${b ? '' : ' solo'}">
-        <div class="hero-txt">
+      const where = (b) => {
+        const u = safeUrl(b.litnet) || bookLinks(b)[0]?.[1];
+        return u ? `href="${esc(u)}"${ext(u)}` : `href="#${(shelf || bookBlock || k).id}"`;
+      };
+      const title = String(k.title || '').split('\n').filter((l) => l.trim());
+      return `<section class="hero" id="${k.id}">
+        <div class="wrap hero-in">
           ${lbl(k.label)}
-          <h1>${String(k.title || '').split('\n').filter((l) => l.trim()).map((l) => `<span class="ln${/^\s*\*/.test(l) ? ' ln-it' : ''}">${fmt(l.trim(), false)}</span>`).join('')}</h1>
+          <h1>${title.length > 1 ? title.map((l) => `<span class="ln">${fmt(l.trim(), false)}</span>`).join('') : fmt(title[0] || '', false)}</h1>
           ${k.text ? `<p class="lead">${fmt(k.text)}</p>` : ''}
           <div class="acts">
             ${k.btn && to ? `<a class="btn btn-dark" href="${to}">${esc(k.btn)}</a>` : ''}
             ${shelf ? `<a class="lnk" href="#${shelf.id}">Все книги <span class="arrow">→</span></a>` : ''}
           </div>
         </div>
-        ${b ? `<a class="stage mist" href="${to || '#' + k.id}" aria-label="${esc(plain(b.title))}">
-          <div class="stage-book">${cv(b)}</div>
-          <span class="stage-cap"><span>${esc(STATUS[b.status] || '')}</span>${b.done && b.status === 'writing' ? `<span>Глава ${esc(b.done)}</span>` : ''}</span></a>` : ''}
-      </div></section>`;
+        ${covers.length ? `<div class="shelf n${covers.length}"><div class="fogband mist" aria-hidden="true"></div>
+          <div class="wrap shelf-in">${covers.map((b) => `<a class="shelf-b" ${where(b)} aria-label="${esc(plain(b.title))}">${cv(b)}</a>`).join('')}</div></div>` : ''}
+      </section>`;
     },
     marquee: (k) => {
       const items = lines(k.items);

@@ -104,22 +104,33 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .cover-img::before{display:none}
 .cover-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 
-/* первый экран */
-.hero-in{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:clamp(40px,6vw,96px);align-items:center;padding-block:clamp(48px,7vw,104px)}
-.hero-in.solo{grid-template-columns:minmax(0,1fr)}
-.hero-txt{display:grid;gap:30px;justify-items:start}
-.hero h1{font-size:clamp(54px,8.6vw,136px);line-height:.88;letter-spacing:.005em}
+/* первый экран: название по центру, ниже — обложки стоят в тумане, средняя впереди */
+.hero{overflow:hidden;--cw:clamp(130px,min(17vw,27vh),270px)}
+.hero-in{display:grid;justify-items:center;text-align:center;gap:22px;padding-block:clamp(32px,5vh,80px) clamp(28px,3.5vh,48px)}
+.hero .lbl{justify-content:center}
+.hero .lbl::after{content:"";width:28px;height:1px;background:currentColor;opacity:.6;flex:none}
+.hero h1{font-size:clamp(44px,min(6.2vw,10.5vh),108px);line-height:.9;max-width:12.5em}
 .hero h1 .ln{display:block}
-.hero h1 .it{font-size:.84em;line-height:.88}
-.hero h1 .ln-it{padding-left:.7em}
-.lead{margin:0;max-width:31em;font-size:18px;line-height:1.65;color:var(--ink-2)}
-.hero .stage{width:100%}
+.hero h1 .it{font-size:.9em;white-space:nowrap}
+.lead{margin:0;max-width:34em;font-size:18px;line-height:1.6;color:var(--ink-2)}
+.hero .acts{justify-content:center;margin-top:4px}
+.shelf{position:relative;padding-bottom:clamp(28px,4vh,56px)}
+.fogband{position:absolute;left:0;right:0;bottom:0;height:78%;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--a2) 70%,var(--paper)) 0%,color-mix(in srgb,var(--a1) 80%,var(--paper)) 100%);
+  -webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 45%);mask-image:linear-gradient(180deg,transparent 0%,#000 45%)}
+.shelf-in{position:relative;display:flex;justify-content:center;align-items:flex-end}
+.shelf-b{position:relative;display:block;width:calc(var(--cw) * .8);transition:transform .7s cubic-bezier(.2,.7,.2,1)}
+.shelf-b::after{content:"";position:absolute;left:8%;right:8%;bottom:-5%;height:7%;border-radius:50%;background:rgba(18,21,24,.35);filter:blur(12px);z-index:-1}
+.shelf.n3 .shelf-b:nth-child(2){width:var(--cw);z-index:2;margin-inline:-1.6%}
+.shelf.n3 .shelf-b:nth-child(1),.shelf.n3 .shelf-b:nth-child(3){transform:translateY(-4%)}
+.shelf.n2 .shelf-b{margin-inline:1%}
+.shelf-b:hover{transform:translateY(-12px)!important}
 @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
-.hero-txt>*{animation:rise .9s cubic-bezier(.2,.7,.2,1) both}
-.hero-txt>*:nth-child(2){animation-delay:.08s}
-.hero-txt>*:nth-child(3){animation-delay:.16s}
-.hero-txt>*:nth-child(4){animation-delay:.24s}
-.hero .stage{animation:rise 1.1s .12s cubic-bezier(.2,.7,.2,1) both}
+.hero-in>*{animation:rise .9s cubic-bezier(.2,.7,.2,1) both}
+.hero-in>*:nth-child(2){animation-delay:.08s}
+.hero-in>*:nth-child(3){animation-delay:.16s}
+.hero-in>*:nth-child(4){animation-delay:.24s}
+.shelf-in{animation:rise 1.1s .2s cubic-bezier(.2,.7,.2,1) both}
 
 /* бегущая строка */
 .run{border-block:1px solid var(--line);overflow:hidden;white-space:nowrap;padding-block:20px}
@@ -230,8 +241,6 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .logo{font-size:20px;letter-spacing:.22em}
   .top-r .btn-line{display:none}
   .menu-btn{display:inline-grid;grid-template-columns:auto auto;align-items:center;column-gap:12px;row-gap:5px}
-  .hero-in{grid-template-columns:minmax(0,1fr);gap:48px;padding-block:44px 64px}
-  .hero .stage{aspect-ratio:1/1;padding:12% 26% 14%}
   .feat,.about,.series-h{grid-template-columns:minmax(0,1fr)}
   .feat .stage{aspect-ratio:1/1;padding:12% 26% 14%}
   .grid,.start.n4{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -239,7 +248,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .arch-w{max-width:340px;margin-left:14px}
 }
 @media (max-width:640px){
-  .hero h1{font-size:clamp(48px,14vw,72px)}
+  .hero h1{font-size:clamp(42px,12.4vw,64px)}
+  .hero-in{gap:20px}
+  .hero{--cw:34vw}
   .lead{font-size:17px}
   .start,.start.n2,.start.n4{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:16px;margin-right:calc(-1 * var(--gut-r));padding-right:var(--gut-r);scrollbar-width:none}
   .start::-webkit-scrollbar{display:none}

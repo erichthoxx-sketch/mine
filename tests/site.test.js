@@ -47,7 +47,7 @@ test('сайт: кнопка книги ведёт на первую площа�
 });
 
 test('сайт: старые и неполные данные не ломают страницу', () => {
-  const c = normalize({ v: 2, name: 'Лана', blocks: [{ id: 'x', type: 'нет такого' }, { id: 'y', type: 'text', title: 'Привет' }] });
+  const c = normalize({ v: 3, name: 'Лана', blocks: [{ id: 'x', type: 'нет такого' }, { id: 'y', type: 'text', title: 'Привет' }] });
   assert.equal(c.blocks.length, 1);
   assert.equal(c.books.length, DEFAULT_CONTENT.books.length);
   assert.match(renderSite(c).main, /Привет/);
@@ -78,7 +78,18 @@ test('сайт: первый пример обновляется на новый
   assert.equal(c.books.find((b) => b.id === 'b4').title, 'Моя книга'); // свою книгу не трогаем
   assert.equal(c.blocks[0].title, 'Мой заголовок');
   assert.equal(c.blocks[0].label, 'Остросюжетные любовные романы');
-  assert.equal(c.blocks.find((b) => b.id === 'k5').hidden, true); // выдуманная цитата спрятана
+  assert.match(c.blocks.find((b) => b.id === 'k5').text, /Собственный муж/); // выдуманная цитата заменена настоящей
+  assert.ok(!c.blocks.find((b) => b.id === 'k5').hidden);
   assert.ok(c.blocks.some((b) => b.type === 'series'));
   assert.equal(normalize(c).blocks.length, c.blocks.length); // второй раз ничего не меняется
+});
+
+test('сайт: свой заголовок «В жизни все не так…» владелица попросила заменить — меняется на текст по книгам', () => {
+  const her = { v: 1, palette: 'fog', blocks: [{ id: 'k1', type: 'hero', title: 'В жизни\n*все не так*\nкак на самом деле', book: 'b1' }] };
+  const c = normalize(her);
+  assert.equal(c.blocks[0].title, 'С кем я, *черт возьми,* связалась');
+  assert.deepEqual(c.blocks[0].books, ['b2', 'b1', 'b3']);
+  assert.equal(c.palette, 'fog'); // выбранные цвета не трогаем
+  const r = renderSite(c);
+  assert.equal((r.main.match(/class="shelf-b"/g) || []).length, 3);
 });
