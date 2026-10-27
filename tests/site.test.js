@@ -15,13 +15,18 @@ test('сайт: пример собирается из всех видимых �
   assert.equal(r.colors.a1, '#8a9aa6');
 });
 
-test('сайт: карточки ведут на страницы книг, первый экран сам берёт три новые книги', () => {
+test('сайт: первый экран без обложек — справа оглавление (новинка, цикл, подписка) или фото; карточки ведут на страницы книг', () => {
   const c = ex();
-  c.books.unshift({ ...newBook(), id: 'n1', title: 'Новая *книга*' });
   const r = renderSite(c);
   const hero = r.main.slice(0, r.main.indexOf('id="k3"'));
-  assert.equal((hero.match(/class="fan-b"/g) || []).length, 3);
-  assert.match(hero, /href="\.\/\?kniga=novaya-kniga"/);
+  assert.ok(!hero.includes('class="cover'), 'обложек на первом экране нет');
+  assert.deepEqual([...hero.matchAll(/<span class="hi-k">([^<]+)</g)].map((m) => m[1]), ['Новинка', 'Цикл', 'Telegram']);
+  assert.match(hero, /href="\.\/\?kniga=razvod-dlya-chernoy-vdovy"/);
+  assert.match(hero, /3 книги/);
+  c.blocks[0].photo = 'p1';
+  const withPh = renderSite(c, { p1: 'data:image/jpeg;base64,AA' }).main;
+  assert.match(withPh, /class="hero-ph"/);
+  assert.ok(!withPh.includes('hero-idx'));
   assert.match(r.main, /class="card[^"]*" href="\.\/\?kniga=alpiyskiy-razvod"/);
 });
 

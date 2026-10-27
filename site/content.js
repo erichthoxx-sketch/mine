@@ -25,8 +25,8 @@ export const BLOCKS = {
     { k: 'title', label: 'Заголовок', type: 'area', hint: '*Слово в звёздочках* — тонким курсивом' },
     { k: 'text', label: 'Текст', type: 'area' },
     { k: 'btn', label: 'Кнопка' },
-    { k: 'book', label: 'Кнопка ведёт на страницу книги', type: 'book' },
-    { k: 'books', label: 'Обложки на первом экране', type: 'books', hint: 'Не выбраны — три самые новые книги из списка «Книги»' },
+    { k: 'book', label: 'Кнопка ведёт на страницу книги', type: 'book', hint: 'Эта книга — и в строке «Новинка» справа' },
+    { k: 'photo', label: 'Фото справа', type: 'img', hint: 'По желанию: ваш портрет или атмосферное фото. Без фото справа — короткое оглавление сайта' },
   ] },
   marquee: { name: 'Бегущая строка', fields: [
     { k: 'items', label: 'Фразы', type: 'area', hint: 'Каждая с новой строки; *в звёздочках* — курсивом' },
@@ -604,11 +604,19 @@ export function renderSite(raw, imgs = {}) {
 
   const R = {
     hero: (k) => {
-      const chosen = (k.books || []).map((id) => books.get(id)).filter(Boolean);
-      const covers = (chosen.length ? chosen : visible).slice(0, 3);
-      const main = books.get(k.book) || covers[0];
-      if (covers.length === 3 && main && covers.includes(main)) { covers.splice(covers.indexOf(main), 1); covers.splice(1, 0, main); }
-      return `<section class="hero" id="${k.id}"><div class="wrap hero-in">
+      const main = books.get(k.book) || visible.find((b) => b.status === 'writing') || visible[0];
+      const ph = k.photo && imgs[k.photo];
+      // оглавление справа: новинка, циклы, подписка — каждая строка ведёт куда нужно
+      const idx = [];
+      if (main) idx.push(['Новинка', fmt(main.title, false), [STATUS[main.status], main.status === 'writing' && main.done ? `глава ${main.done}` : ''].filter(Boolean).join(' · '), bookHref(main)]);
+      for (const name2 of seriesList(c).slice(0, 2)) {
+        const n = seriesBooks(c, name2).length;
+        const blk = blocks.find((x) => x.type === 'series' && String(x.series || '').trim() === name2);
+        idx.push(['Цикл', esc(name2), `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'книга' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'книги' : 'книг'}`, blk ? '#' + blk.id : bookHref(seriesBooks(c, name2)[0])]);
+      }
+      const tgb = blocks.find((x) => x.type === 'tg');
+      if (tgb && idx.length < 4) idx.push([esc(plain(tgb.label || 'Подписка').replace(/[-‑ ]канал$/i, '')), fmt(tgb.title, false), '', '#' + tgb.id]);
+      return `<section class="hero" id="${k.id}"><div class="wrap hero-in${ph ? ' has-ph' : ''}">
         <div class="hero-txt">
           ${lbl(k.label)}
           <h1>${h1lines(k.title)}</h1>
@@ -618,7 +626,8 @@ export function renderSite(raw, imgs = {}) {
             ${shelf ? `<a class="lnk" href="#${shelf.id}">Все книги <span class="arrow">→</span></a>` : ''}
           </div>
         </div>
-        ${covers.length ? `<div class="fan n${covers.length}">${covers.map((b) => `<a class="fan-b" href="${bookHref(b)}" aria-label="${esc(plain(b.title))}">${cv(b)}</a>`).join('')}</div>` : ''}
+        ${ph ? `<figure class="hero-ph"><img src="${esc(ph)}" alt=""></figure>`
+          : idx.length ? `<nav class="hero-idx" aria-label="Коротко о главном">${idx.map(([t, h, sub, u]) => `<a href="${u}"><span class="hi-k">${t}</span><span class="hi-t"><span>${h}</span>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="arrow">→</span></a>`).join('')}</nav>` : ''}
       </div></section>`;
     },
     marquee: (k) => {
