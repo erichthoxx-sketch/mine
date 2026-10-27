@@ -108,9 +108,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hero h1 .ln{display:block}
 .hero h1 .it{white-space:nowrap}
 .lead{margin:0;max-width:30em;font-size:17px;line-height:1.6;color:var(--ink-2)}
-.hero.has-art .hero-in{grid-template-columns:minmax(0,560px) minmax(0,460px);justify-content:center;align-items:center;column-gap:0}
+.hero.has-art .hero-in{grid-template-columns:minmax(0,600px) minmax(0,480px);justify-content:start;align-items:center;column-gap:0}
 .hero-mist{position:relative;width:100%;aspect-ratio:5/6;margin:0;pointer-events:none;mix-blend-mode:var(--mist-blend);opacity:var(--mist-o)}
 .hero-mist img{width:100%;height:100%;object-fit:cover;object-position:80% 42%;display:block}
+.hero-mist img.sm{display:none}
 
 /* бегущая строка */
 .run{border-block:1px solid var(--line);overflow:hidden;white-space:nowrap;padding-block:14px}
@@ -301,9 +302,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 /* телефон */
 @media (max-width:640px){
   .hero h1{font-size:clamp(30px,9vw,40px)}
-  .hero.has-art .hero-in{grid-template-columns:minmax(0,1fr);padding-bottom:0}
-  .hero-mist{width:100%;aspect-ratio:1/1;margin-top:-8px}
-  .hero-mist img{object-position:72% 45%}
+  .hero.has-art .hero-in{grid-template-columns:minmax(0,1fr);padding-bottom:28px}
+  /* на телефоне — маленький дымчатый кружок с мордой медведя над заголовком */
+  .hero-mist{order:-1;width:132px;aspect-ratio:1/1;margin:0 0 4px;border-radius:50%;
+    -webkit-mask-image:radial-gradient(circle,#000 52%,rgba(0,0,0,.5) 63%,transparent 71%);mask-image:radial-gradient(circle,#000 52%,rgba(0,0,0,.5) 63%,transparent 71%)}
+  .hero-mist img{display:none}
+  .hero-mist img.sm{display:block;width:100%;height:100%;object-fit:cover}
   .lead{font-size:16px}
   .sub-row{flex-direction:column}
   .feat{grid-template-columns:minmax(0,1fr)}
