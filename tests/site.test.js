@@ -6,21 +6,23 @@ import { RULES } from '../site/admin/rules.js';
 
 test('сайт: пример собирается из всех блоков, меню — из блоков с пунктом меню', () => {
   const r = renderSite(null);
-  for (const b of DEFAULT_CONTENT.blocks) assert.ok(r.main.includes(`id="${b.id}"`), b.type);
-  assert.match(r.head, /href="#k4">Книги</);
-  assert.match(r.main, /<span class="it">о которой<\/span>/);
-  assert.equal(r.colors.a1, '#f5c6d3');
+  for (const b of DEFAULT_CONTENT.blocks) assert.equal(r.main.includes(`id="${b.id}"`), !b.hidden, b.type);
+  assert.match(r.head, /href="#k8">Книги</);
+  assert.match(r.main, /<span class="it">черт возьми,<\/span>/);
+  assert.equal(r.colors.a1, '#8a9aa6');
 });
 
 test('сайт: скрытый блок и скрытая книга не показываются', () => {
   const c = structuredClone(DEFAULT_CONTENT);
-  c.blocks.find((b) => b.type === 'quote').hidden = true;
-  c.books.find((b) => b.id === 'b4').hidden = true;
+  c.blocks.find((b) => b.type === 'quote').hidden = false;
+  c.blocks.find((b) => b.type === 'about').hidden = true;
+  c.books.find((b) => b.id === 'b3').hidden = true;
   c.blocks.push({ ...newBlock('books'), id: 'all', title: 'Все книги' });
   const r = renderSite(c);
-  assert.ok(!r.main.includes('class="quote'));
+  assert.ok(r.main.includes('class="quote'));
+  assert.ok(!r.main.includes('id="k6"'));
   const all = r.main.slice(r.main.indexOf('id="all"'));
-  assert.ok(!all.includes('Север'));
+  assert.ok(!all.includes('Звериная'));
 });
 
 test('сайт: текст владелицы экранируется, опасные ссылки не проходят', () => {
@@ -45,11 +47,11 @@ test('сайт: кнопка книги ведёт на первую площа�
 });
 
 test('сайт: старые и неполные данные не ломают страницу', () => {
-  const c = normalize({ name: 'Лана', blocks: [{ id: 'x', type: 'нет такого' }, { id: 'y', type: 'text', title: 'Привет' }] });
+  const c = normalize({ v: 2, name: 'Лана', blocks: [{ id: 'x', type: 'нет такого' }, { id: 'y', type: 'text', title: 'Привет' }] });
   assert.equal(c.blocks.length, 1);
   assert.equal(c.books.length, DEFAULT_CONTENT.books.length);
   assert.match(renderSite(c).main, /Привет/);
-  assert.deepEqual(colors({ palette: 'custom', a1: '#000000', a2: 'плохой' }), { a1: '#000000', a2: '#b9dbf3' });
+  assert.deepEqual(colors({ palette: 'custom', a1: '#000000', a2: 'плохой' }), { a1: '#000000', a2: '#d3dbe0' });
   for (const t of Object.keys(BLOCKS)) assert.equal(typeof renderSite({ blocks: [newBlock(t)] }).main, 'string');
 });
 
@@ -57,8 +59,26 @@ test('сайт: правила Firebase в админке совпадают с 
   assert.equal(readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8'), RULES);
 });
 
-test('сайт: в подборке у каждой книги — настроение и пара строк', () => {
+test('сайт: цикл — книги с номерами по порядку, у пишущейся — пометка', () => {
   const r = renderSite(null);
-  const start = r.main.slice(r.main.indexOf('id="k4"'), r.main.indexOf('id="k5"'));
-  assert.equal((start.match(/class="mood"/g) || []).length, 3);
+  const ser = r.main.slice(r.main.indexOf('id="k8"'), r.main.indexOf('id="k3"'));
+  assert.deepEqual([...ser.matchAll(/<span class="num"><b>(\d+)<\/b>([^<]+)</g)].map((m) => m[1] + ' ' + m[2]),
+    ['01 Книга 1', '02 Книга 2', '03 Книга 3 · пишется']);
+});
+
+test('сайт: первый пример обновляется на новый, а правки владелицы остаются', () => {
+  const her = { v: 1, name: 'Лана Фрейтаг', palette: 'summer', foot: 'Telegram — \nЛитнет — ', headBtn: 'Telegram',
+    books: [{ id: 'b1', title: 'Соль *на губах*', mood: 'Если хочется моря', status: 'writing', done: 14, total: 24, al: '7,8' },
+      { id: 'b4', title: 'Моя книга', mood: 'Чтобы поплакать', status: 'done' }],
+    blocks: [{ id: 'k1', type: 'hero', label: 'Любовные романы · новые главы на Литнете', title: 'Мой заголовок', book: 'b1' },
+      { id: 'k5', type: 'quote', label: 'Из книги', text: '«Я не просила тебя остаться. Я просто оставила дверь открытой — на всякий случай, на всю жизнь».', cite: '«Север и август», глава 9' }] };
+  const c = normalize(her);
+  assert.equal(c.palette, 'fog');
+  assert.equal(c.books[0].title, 'Развод *для черной вдовы*');
+  assert.equal(c.books.find((b) => b.id === 'b4').title, 'Моя книга'); // свою книгу не трогаем
+  assert.equal(c.blocks[0].title, 'Мой заголовок');
+  assert.equal(c.blocks[0].label, 'Остросюжетные любовные романы');
+  assert.equal(c.blocks.find((b) => b.id === 'k5').hidden, true); // выдуманная цитата спрятана
+  assert.ok(c.blocks.some((b) => b.type === 'series'));
+  assert.equal(normalize(c).blocks.length, c.blocks.length); // второй раз ничего не меняется
 });

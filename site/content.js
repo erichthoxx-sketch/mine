@@ -1,13 +1,14 @@
 // Сайт автора: что на нём бывает (блоки, книги, цвета) и сборка страницы из содержимого.
 // Чистые функции — их используют и сам сайт, и админка (предпросмотр), и тесты.
 
+// Акценты: a1 — глубокий тон (низ туманного фона, линии), a2 — светлый (верх фона)
 export const PALETTES = [
-  { id: 'summer', name: 'Лето', a1: '#f5c6d3', a2: '#b9dbf3' },
-  { id: 'peony', name: 'Пион', a1: '#f3c1cc', a2: '#f6dcc4' },
-  { id: 'lavender', name: 'Лаванда', a1: '#dccdf1', a2: '#bfd8f2' },
-  { id: 'mint', name: 'Мята', a1: '#c9e8dc', a2: '#bcdcf2' },
-  { id: 'peach', name: 'Персик', a1: '#f8d3bd', a2: '#f3c6d6' },
-  { id: 'pearl', name: 'Жемчуг', a1: '#e3e0e6', a2: '#d6dde6' },
+  { id: 'fog', name: 'Туман', a1: '#8a9aa6', a2: '#d3dbe0' },
+  { id: 'graphite', name: 'Графит', a1: '#5d646c', a2: '#d5d8db' },
+  { id: 'taiga', name: 'Тайга', a1: '#6f8577', a2: '#d3dcd5' },
+  { id: 'ice', name: 'Лёд', a1: '#7fa2b6', a2: '#dce8ef' },
+  { id: 'ash', name: 'Пепел', a1: '#958d86', a2: '#e0dcd8' },
+  { id: 'summer', name: 'Пудра', a1: '#f5c6d3', a2: '#b9dbf3' },
 ];
 
 export const PLATFORMS = [
@@ -31,6 +32,13 @@ export const BLOCKS = {
   book: { name: 'Книга крупно', fields: [
     { k: 'label', label: 'Подпись сверху', hint: 'Например: Новинка · пишется сейчас' },
     { k: 'book', label: 'Книга', type: 'book' },
+    MENU,
+  ] },
+  series: { name: 'Цикл', fields: [
+    { k: 'label', label: 'Подпись сверху', hint: 'Например: Цикл' },
+    { k: 'title', label: 'Название цикла', type: 'area', hint: '*Слово в звёздочках* — курсивом' },
+    { k: 'text', label: 'Пара строк о цикле', type: 'area' },
+    { k: 'books', label: 'Книги по порядку', type: 'books', hint: 'Порядок — как в списке «Книги»' },
     MENU,
   ] },
   start: { name: 'Подборка книг', fields: [
@@ -94,8 +102,8 @@ export const newId = (p = 'b') => p + Date.now().toString(36) + (seq++).toString
 export const newBlock = (type) => ({ id: newId('k'), type, ...Object.fromEntries(BLOCKS[type].fields.map((f) => [f.k, f.type === 'books' ? [] : ''])) });
 export const newBook = () => ({ id: newId('b'), ...Object.fromEntries(BOOK_FIELDS.map((f) => [f.k, ''])), status: 'writing' });
 
-// Пример: так сайт выглядит, пока ничего не заполнено
-export const DEFAULT_CONTENT = {
+// Первый пример (v1). Нужен только чтобы понять, какие тексты владелица ещё не меняла, и обновить их на новые
+const V1_EXAMPLE = {
   v: 1,
   name: 'Лана Фрейтаг',
   headBtn: 'Telegram',
@@ -129,10 +137,71 @@ export const DEFAULT_CONTENT = {
   ],
 };
 
+// Пример: так сайт выглядит, пока ничего не заполнено (книги и цикл — настоящие, тексты — заготовки)
+export const DEFAULT_CONTENT = {
+  v: 2,
+  name: 'Лана Фрейтаг',
+  headBtn: 'Telegram',
+  headUrl: '',
+  foot: 'Telegram — \nЛитнет — ',
+  palette: 'fog',
+  a1: '', a2: '',
+  books: [
+    { id: 'b1', title: 'Развод *для черной вдовы*', mood: 'Похоронный бизнес', short: 'Новая история цикла — пишется прямо сейчас.',
+      ann: '', status: 'writing', done: 1, total: '', al: '0,14', cover: '', litnet: '', litres: '', litmarket: '', litgorod: '' },
+    { id: 'b2', title: 'Альпийский *развод*', mood: 'Горы и криминал', short: 'Горы, криминал и развод, который пошёл совсем не по плану.',
+      ann: '', status: 'done', done: 28, total: 28, al: '10,2', cover: '', litnet: '', litres: '', litmarket: '', litgorod: '' },
+    { id: 'b3', title: 'Звериная тропа *для двоих*', mood: 'Тайга и медведи', short: 'Лес, медведи и мужчина, с которым лучше не связываться.',
+      ann: '', status: 'done', done: 27, total: 27, al: '10,8', cover: '', litnet: '', litres: '', litmarket: '', litgorod: '' },
+  ],
+  blocks: [
+    { id: 'k1', type: 'hero', label: 'Остросюжетные любовные романы', title: 'С кем я,\n*черт возьми,*\nсвязалась',
+      text: 'Криминал, медведи и похоронный бизнес. Героини, которые влипли по-крупному, и мужчины, от которых лучше держаться подальше.', btn: 'Читать новинку', book: 'b1' },
+    { id: 'k2', type: 'marquee', items: 'Лана Фрейтаг\n*остросюжетные любовные романы*\nКриминал · горы · тайга\n*с кем я, черт возьми, связалась*\nЛитнет · Литгород' },
+    { id: 'k8', type: 'series', label: 'Цикл', title: 'С кем я, *черт возьми,* связалась', text: 'Каждую книгу можно читать отдельно. Общее у них одно: героиня связалась не с тем мужчиной — и это лучшее, что с ней случилось.', books: ['b2', 'b3', 'b1'], menu: 'Книги' },
+    { id: 'k3', type: 'book', label: 'Новинка · пишется сейчас', book: 'b1', menu: '' },
+    { id: 'k4', type: 'start', title: 'С чего начать', sub: 'если вы здесь впервые', books: ['b2', 'b3'], menu: '', hidden: true },
+    { id: 'k5', type: 'quote', label: 'Из книги', text: 'Сюда — короткая цитата из книги', cite: '«Название книги», глава 1', hidden: true },
+    { id: 'k6', type: 'about', label: 'Об авторе', title: 'Пишу о любви *с риском для жизни*',
+      text: 'Меня зовут Лана Фрейтаг. Я пишу остросюжетные любовные романы: с криминалом, тайнами и героями, от которых лучше держаться подальше — но не получается.\n\nКниги выходят по главам на Литнете — можно читать вместе со мной, пока история пишется.',
+      photo: '', facts: '3 — книги цикла\n2 — завершены', menu: 'Об авторе' },
+    { id: 'k7', type: 'tg', label: 'Telegram-канал', title: 'Читать *раньше всех*',
+      text: 'Новые главы в день выхода, обложки до премьеры и разговоры о героях — тех, с кем лучше не связываться.', btn: 'Подписаться', url: '', menu: 'Дневник' },
+  ],
+};
+
 // Приводит сохранённое содержимое к нужному виду (старые и неполные данные не ломают сайт)
+const same = (a, b) => JSON.stringify(a ?? '') === JSON.stringify(b ?? '');
+// v1 → v2 (новое оформление): всё, что осталось как в первом примере, заменяется новым примером; правки владелицы не трогаем
+function upgrade(c) {
+  if ((c.v || 1) >= 2) return c;
+  const d = DEFAULT_CONTENT, old = V1_EXAMPLE;
+  const out = { ...c, v: 2 };
+  for (const k of ['palette', 'foot', 'headBtn']) if (same(c[k], old[k])) out[k] = d[k];
+  const fix = (list, oldList, newList) => (list || []).flatMap((x) => {
+    const o = oldList.find((y) => y.id === x.id);
+    if (!o) return [x];
+    const n = newList.find((y) => y.id === x.id);
+    if (!n) return Object.keys(o).every((k) => same(x[k], o[k])) ? [] : [x]; // пример без замены — убрать, если не меняли
+    const r = { ...x };
+    for (const k of new Set([...Object.keys(o), ...Object.keys(n)])) if (k !== 'id' && same(x[k], o[k])) r[k] = structuredClone(n[k]);
+    return [r];
+  });
+  out.books = fix(c.books, old.books, d.books);
+  for (const b of d.books) if (!out.books.some((x) => x.id === b.id)) out.books.push(structuredClone(b));
+  out.blocks = fix(c.blocks, old.blocks, d.blocks);
+  if (!out.blocks.some((b) => b.type === 'series')) {
+    const mq = out.blocks.findIndex((b) => b.type === 'marquee');
+    const at = mq >= 0 ? mq : out.blocks.findIndex((b) => b.type === 'hero');
+    out.blocks.splice(at + 1, 0, structuredClone(d.blocks.find((b) => b.type === 'series')));
+  }
+  return out;
+}
+
 export function normalize(c) {
   const d = DEFAULT_CONTENT;
   if (!c || typeof c !== 'object') return structuredClone(d);
+  c = upgrade(c);
   const out = { ...structuredClone(d), ...c };
   out.books = Array.isArray(c.books) ? c.books.filter((b) => b && b.id).map((b) => ({ ...newBook(), ...b })) : structuredClone(d.books);
   out.blocks = Array.isArray(c.blocks) ? c.blocks.filter((b) => b && b.id && BLOCKS[b.type]).map((b) => ({ ...newBlock(b.type), ...b })) : structuredClone(d.blocks);
@@ -183,7 +252,7 @@ export function renderSite(raw, imgs = {}) {
   const books = new Map(c.books.map((b, i) => [b.id, { ...b, i }]));
   const blocks = c.blocks.filter((b) => !b.hidden);
   const bookBlock = blocks.find((b) => b.type === 'book');
-  const shelf = blocks.find((b) => b.type === 'books' || b.type === 'start');
+  const shelf = blocks.find((b) => b.type === 'series' || b.type === 'books' || b.type === 'start');
   const name = c.name || 'Автор';
   const cv = (b) => cover(b, b.i, imgs, name);
   const lbl = (s) => (s ? `<div class="lbl">${fmt(s, false)}</div>` : '');
@@ -238,6 +307,16 @@ export function renderSite(raw, imgs = {}) {
           </div>
         </div></div></section>`;
     },
+    series: (k) => {
+      const list = (k.books || []).map((id) => books.get(id)).filter((b) => b && !b.hidden);
+      if (!list.length) return '';
+      return `<section class="sec series" id="${k.id}"><div class="wrap">
+        <div class="series-h">
+          <div>${lbl(k.label)}<h2>${fmt(k.title)}</h2></div>
+          ${k.text ? `<p>${fmt(k.text)}</p>` : ''}
+        </div>
+        <div class="start n${Math.min(list.length, 4)}">${list.map((b, i) => card(b, false, i + 1)).join('')}</div></div></section>`;
+    },
     start: (k) => {
       const list = (k.books || []).map((id) => books.get(id)).filter(Boolean);
       if (!list.length) return '';
@@ -284,10 +363,11 @@ export function renderSite(raw, imgs = {}) {
         <div class="prose">${paras(k.text)}</div></div></section>`,
   };
 
-  function card(b, small) {
+  function card(b, small, num) {
     const u = safeUrl(b.litnet) || bookLinks(b)[0]?.[1] || '';
     const tag = u ? `a href="${esc(u)}"${ext(u)}` : 'div';
     return `<${tag} class="card${small ? ' sm' : ''}">
+      ${num ? `<span class="num"><b>${String(num).padStart(2, '0')}</b>Книга ${num}${b.status === 'writing' ? ' · пишется' : ''}</span>` : ''}
       <div class="plinth">${cv(b)}</div>
       <div class="card-txt">
         ${b.mood && !small ? `<span class="mood">${esc(b.mood)}</span>` : ''}

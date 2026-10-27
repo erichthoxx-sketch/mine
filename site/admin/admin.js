@@ -18,7 +18,7 @@ const ic = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`
 const plain = (s) => String(s ?? '').replace(/\*/g, '').replace(/\s+/g, ' ').trim();
 const TYPE_NOTE = {
   hero: 'Большая фраза и книга справа', marquee: 'Строка, которая плывёт', book: 'Одна книга с аннотацией и кнопкой',
-  start: 'Несколько книг на выбор', books: 'Все книги сеткой', quote: 'Цитата из книги на тумане',
+  series: 'Название цикла и его книги по порядку', start: 'Несколько книг на выбор', books: 'Все книги сеткой', quote: 'Цитата из книги на тумане',
   about: 'Фото, текст и цифры', tg: 'Тёмная полоса с кнопкой', text: 'Заголовок и абзацы',
 };
 
@@ -180,7 +180,7 @@ function lookTab() {
   const c = S.content;
   const cur = colors(c);
   return `<h3 class="sub">Акценты</h3>
-    <p class="note">Два нежных цвета смешиваются в «туман» за заголовком, в подчёркиваниях и полоске прогресса. Всё остальное на сайте — чёрное и белое.</p>
+    <p class="note">Два цвета туманного фона, на котором стоят обложки: светлый сверху, глубокий снизу. Всё остальное на сайте — графит и белое, цвет дают ваши обложки.</p>
     <div class="pal">${PALETTES.map((p) => `<button data-act="pal" data-p="${p.id}" aria-pressed="${c.palette === p.id}"><span class="sw" style="background:linear-gradient(135deg,${p.a1} 50%,${p.a2} 50%)"></span>${p.name}</button>`).join('')}</div>
     <div class="custom">
       <span class="muted">Свои цвета</span>

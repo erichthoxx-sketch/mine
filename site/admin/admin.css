@@ -1,7 +1,7 @@
 /* Админка сайта: слева правка, справа живой сайт. Тот же язык, что у сайта: чёрно-белое, туман — только в акцентах */
 :root{
   --paper:#fbfbfd; --paper-2:#f2f2f6; --ink:#131318; --ink-2:#64636f; --line:rgba(19,19,24,.12); --hover:rgba(19,19,24,.045);
-  --a1:#f5c6d3; --a2:#b9dbf3; --bad:#b4343f;
+  --a1:#8a9aa6; --a2:#d3dbe0; --bad:#b4343f;
   --f-display:"Oranienbaum","Times New Roman",serif;
   --f-italic:"Cormorant","Georgia",serif;
   --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;

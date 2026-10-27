@@ -1,11 +1,12 @@
-/* Сайт автора. Раскладка: журнальная, много воздуха, чёрно-белая типографика.
-   Цвет — только в «студийном фоне» (stage), на котором стоят книги, как на фотосъёмке: два акцента, смешанные в тихий градиент */
+/* Сайт автора. «Холодный туман»: журнальная раскладка, графитовая типографика, много воздуха.
+   Цвет — только в туманном фоне (stage), на котором стоят обложки, как горы в дымке: светлый верх (a2) → глубокий низ (a1).
+   Характер дают сами обложки и резкая крупная типографика */
 :root{
-  --paper:#fbfbfc; --paper-2:#f2f1f4; --ink:#141317; --ink-2:#67656f; --ink-3:#9a98a2; --line:rgba(20,19,23,.12);
-  --a1:#f5c6d3; --a2:#b9dbf3;           /* акценты: меняются в админке → «Цвета» */
-  --stage-mix:72%;                     /* насколько фон светлее чистых акцентов */
+  --paper:#f5f6f7; --paper-2:#e9ecee; --ink:#121518; --ink-2:#5b636b; --ink-3:#939aa1; --line:rgba(18,21,24,.13);
+  --a1:#8a9aa6; --a2:#d3dbe0;           /* акценты: меняются в админке → «Цвета» */
+  --stage-mix:85%;                     /* насколько фон близок к чистым акцентам */
   --grain-o:.16;
-  --hl:rgba(255,255,255,.55);          /* «свет» сверху на студийном фоне */
+  --hl:rgba(255,255,255,.5);          /* «свет» сверху на студийном фоне */
   --f-display:"Oranienbaum","Times New Roman",serif;
   --f-italic:"Cormorant","Georgia",serif;
   --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -15,16 +16,16 @@
   --head:72px;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --paper:#0e0e11; --paper-2:#17161b; --ink:#f1eff3; --ink-2:#a8a6b1; --ink-3:#77757f; --line:rgba(241,239,243,.13);
+  --paper:#0f1113; --paper-2:#181b1e; --ink:#eef0f2; --ink-2:#a2a9b0; --ink-3:#6f767d; --line:rgba(238,240,242,.13);
   --stage-mix:32%; --grain-o:.1; --hl:rgba(255,255,255,.05); color-scheme:dark}}
 :root[data-theme="dark"]{
-  --paper:#0e0e11; --paper-2:#17161b; --ink:#f1eff3; --ink-2:#a8a6b1; --ink-3:#77757f; --line:rgba(241,239,243,.13);
+  --paper:#0f1113; --paper-2:#181b1e; --ink:#eef0f2; --ink-2:#a2a9b0; --ink-3:#6f767d; --line:rgba(238,240,242,.13);
   --stage-mix:32%; --grain-o:.1; --hl:rgba(255,255,255,.05); color-scheme:dark}
 
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.7 var(--f-body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
-::selection{background:var(--a1);color:#141317}
+::selection{background:var(--a2);color:#121518}
 a{color:inherit;text-decoration:none}
 img{max-width:100%}
 :focus-visible{outline:1.5px solid var(--ink);outline-offset:4px}
@@ -75,15 +76,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 /* студийный фон: книга стоит на мягком цветном фоне, сверху — свет, снизу — тень */
 .mist{position:relative;isolation:isolate;overflow:hidden;
   background:
-    radial-gradient(120% 80% at 18% 0%,var(--hl),transparent 60%),
-    linear-gradient(160deg,color-mix(in srgb,var(--a1) var(--stage-mix),var(--paper)) 0%,color-mix(in srgb,color-mix(in oklab,var(--a1),var(--a2)) var(--stage-mix),var(--paper)) 55%,color-mix(in srgb,var(--a2) var(--stage-mix),var(--paper)) 100%)}
+    radial-gradient(90% 60% at 30% 0%,var(--hl),transparent 70%),
+    linear-gradient(180deg,color-mix(in srgb,var(--a2) var(--stage-mix),var(--paper)) 0%,color-mix(in srgb,color-mix(in oklab,var(--a1) 35%,var(--a2)) var(--stage-mix),var(--paper)) 55%,color-mix(in srgb,var(--a1) var(--stage-mix),var(--paper)) 100%)}
 .mist::after{content:"";position:absolute;inset:0;z-index:-1;opacity:var(--grain-o);mix-blend-mode:multiply;pointer-events:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 .stage{display:grid;place-items:center;aspect-ratio:4/5;max-width:100%;padding:14% 20% 18%}
 .stage-book{position:relative;width:100%;max-width:300px;transition:transform .8s cubic-bezier(.2,.7,.2,1)}
 .stage-book::after{content:"";position:absolute;left:6%;right:6%;bottom:-7%;height:9%;border-radius:50%;background:rgba(20,19,23,.32);filter:blur(14px);z-index:-1}
 .stage:hover .stage-book{transform:translateY(-8px)}
-.stage-cap{position:absolute;left:24px;right:24px;bottom:20px;display:flex;justify-content:space-between;font:500 10px/1 var(--f-body);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-2)}
+.stage-cap{position:absolute;left:24px;right:24px;bottom:20px;display:flex;justify-content:space-between;font:500 10px/1 var(--f-body);letter-spacing:.22em;text-transform:uppercase;color:color-mix(in srgb,var(--ink) 75%,transparent)}
 
 /* обложки: настоящие или строгие типографские, с корешком и рамкой */
 .cover{position:relative;aspect-ratio:2/3;width:100%;max-width:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;padding:12% 10% 10%;overflow:hidden;
@@ -144,7 +145,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .meta dt{font:500 10px/2 var(--f-body);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3)}
 .meta dd{margin:0;font-variant-numeric:tabular-nums}
 .bar{display:block;height:2px;margin-top:9px;background:var(--line)}
-.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--a1),var(--a2))}
+.bar i{display:block;height:100%;background:var(--ink)}
+
+/* цикл: название крупно, книги с номерами по порядку */
+.series-h{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,.6fr);gap:24px clamp(32px,6vw,96px);align-items:end;padding-bottom:28px;margin-bottom:clamp(36px,5vw,64px);border-bottom:1px solid var(--line)}
+.series-h>div{display:grid;gap:22px;justify-items:start}
+.series-h h2{font-size:clamp(46px,6.8vw,108px);line-height:.9}
+.series-h p{margin:0;color:var(--ink-2);max-width:26em}
+.num{display:flex;align-items:baseline;gap:14px;font:500 10px/1 var(--f-body);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-2);padding-bottom:14px;border-bottom:1px solid var(--line)}
+.num b{font:400 44px/.8 var(--f-display);letter-spacing:0;color:var(--ink)}
 
 /* подборка и все книги */
 .start{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(20px,3vw,48px)}
@@ -154,7 +163,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .card{display:grid;gap:22px;align-content:start}
 .plinth{background:var(--paper-2);padding:14% 20% 16%;transition:background .5s}
 .plinth .cover{transition:transform .7s cubic-bezier(.2,.7,.2,1)}
-.card:hover .plinth{background:color-mix(in srgb,color-mix(in oklab,var(--a1),var(--a2)) 30%,var(--paper-2))}
+.card:hover .plinth{background:color-mix(in srgb,var(--a2) 70%,var(--paper-2))}
 .card:hover .plinth .cover{transform:translateY(-8px)}
 .card-txt{display:grid;gap:10px;justify-items:start}
 .mood{font:italic 400 22px/1.2 var(--f-italic);color:var(--ink-2)}
@@ -168,7 +177,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 /* цитата */
 .quote{border-block:1px solid var(--line)}
 .q-in{display:grid;justify-items:center;text-align:center;padding-block:clamp(80px,11vw,150px);gap:8px}
-.q-mark{display:block;font:400 clamp(110px,13vw,170px)/1 var(--f-display);color:transparent;background:linear-gradient(135deg,var(--a1),var(--a2));-webkit-background-clip:text;background-clip:text;margin-bottom:-.42em;padding:0 .05em}
+.q-mark{display:block;font:400 clamp(110px,13vw,170px)/1 var(--f-display);color:var(--a1);margin-bottom:-.42em}
 .quote blockquote{margin:0;max-width:22em;font:italic 400 clamp(30px,4.2vw,56px)/1.15 var(--f-italic);text-wrap:balance}
 .q-foot{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px 24px;margin-top:28px}
 .q-foot cite{font:500 11px/1.4 var(--f-body);letter-spacing:.2em;text-transform:uppercase;font-style:normal;color:var(--ink-2)}
@@ -197,7 +206,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .tg-in{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:40px;align-items:end;padding-block:clamp(80px,9vw,128px)}
 .tg-in>div{display:grid;gap:24px;justify-items:start}
 .tg h2{font-size:clamp(46px,6.6vw,104px)}
-.tg h2 .it{color:transparent;background:linear-gradient(90deg,var(--a1),var(--a2));-webkit-background-clip:text;background-clip:text;padding-right:.08em}
+.tg h2 .it{color:var(--a2)}
 .tg .lbl{color:color-mix(in srgb,var(--paper) 62%,transparent)}
 .tg p{margin:0;max-width:32em;color:color-mix(in srgb,var(--paper) 70%,transparent)}
 .btn-light{border-color:var(--paper);color:var(--paper)}
@@ -223,7 +232,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .menu-btn{display:inline-grid;grid-template-columns:auto auto;align-items:center;column-gap:12px;row-gap:5px}
   .hero-in{grid-template-columns:minmax(0,1fr);gap:48px;padding-block:44px 64px}
   .hero .stage{aspect-ratio:1/1;padding:12% 26% 14%}
-  .feat,.about{grid-template-columns:minmax(0,1fr)}
+  .feat,.about,.series-h{grid-template-columns:minmax(0,1fr)}
   .feat .stage{aspect-ratio:1/1;padding:12% 26% 14%}
   .grid,.start.n4{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tg-in{grid-template-columns:minmax(0,1fr)}
