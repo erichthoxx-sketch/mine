@@ -564,16 +564,17 @@ function chrome(c, blocks) {
   const headU = safeUrl(c.headUrl);
   // пункт меню блока «Подписка» — сразу ссылка на канал: значок-самолётик (в меню телефона — со словом Telegram)
   const tgB = blocks.find((b) => b.type === 'tg' && b.menu);
-  const tgU = tgB ? safeUrl(tgB.url) || headU : '';
+  const tgU = (tgB && safeUrl(tgB.url)) || headU;
+  const showTg = !!(tgB || tgU);
   const menu = blocks.filter((b) => b.menu && b !== tgB).map((b) => [b.menu, './#' + b.id]);
-  const tgLink = (word) => (tgB ? `<a class="tg-ico" href="${esc(tgU || './#' + tgB.id)}"${tgU ? ext(tgU) : ''} aria-label="Telegram" title="Telegram">${PLANE}${word ? '<span>Telegram</span>' : ''}</a>` : '');
+  const tgLink = (word) => (showTg ? `<a class="tg-ico" href="${esc(tgU || './#' + tgB.id)}"${tgU ? ext(tgU) : ''} aria-label="Telegram" title="Telegram">${PLANE}${word ? '<span>Telegram</span>' : ''}</a>` : '');
   const nav = menu.map(([n, u]) => `<a href="${u}">${esc(n)}</a>`).join('');
-  const headBtn = !tgB && c.headBtn && headU ? `<a class="btn btn-line" href="${esc(headU)}"${ext(headU)}>${esc(c.headBtn)}</a>` : '';
+  const headBtn = ''; // кнопку в рамке владелица не хочет: ссылка на канал — всегда самолётиком в меню
   const footLinks = lines(c.foot).map(pair).map(([n, u]) => [n, safeUrl(u)]).filter(([n, u]) => n && u);
   return {
     head: `<div class="wrap head-in"><nav class="nav" aria-label="Разделы">${nav}${tgLink(false)}</nav>
       <a class="logo" href="./">${esc(name)}</a>
-      <div class="top-r">${headBtn}${menu.length || headBtn ? '<button class="menu-btn" type="button" aria-expanded="false" aria-controls="mnav"><span></span><span></span><em>Меню</em></button>' : ''}</div></div>
+      <div class="top-r">${menu.length || showTg ? '<button class="menu-btn" type="button" aria-expanded="false" aria-controls="mnav"><span></span><span></span><em>Меню</em></button>' : ''}</div></div>
       <nav class="mnav" id="mnav" aria-label="Меню" hidden><div class="wrap">${nav}${tgLink(true)}${headBtn}</div></nav>`,
     foot: `${subscribeBox(c)}<div class="wrap foot-row">
       <span>© ${new Date().getFullYear()} ${esc(name)}</span>

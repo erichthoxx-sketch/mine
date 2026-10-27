@@ -160,6 +160,12 @@ test('меню: вместо «Дневник» — значок Telegram сра
   const r = renderSite(c);
   assert.match(r.head, /class="tg-ico" href="https:\/\/t.me\/lana" target="_blank"[^>]*aria-label="Telegram"/);
   assert.ok(!r.head.includes('Дневник'));
+  // блок «Подписка» удалён, ссылка — только в «Общем»: всё равно самолётик, без кнопки в рамке
+  c.blocks = c.blocks.filter((b) => b.type !== 'tg');
+  c.headUrl = 'https://t.me/lanafreitag';
+  const h = renderSite(c).head;
+  assert.match(h, /class="tg-ico" href="https:\/\/t.me\/lanafreitag"/);
+  assert.ok(!h.includes('btn-line'));
 });
 
 test('сайт: правила Firebase в админке совпадают с firestore.rules', () => {
