@@ -20,7 +20,7 @@ test('сайт: карточки ведут на страницы книг, пе
   c.books.unshift({ ...newBook(), id: 'n1', title: 'Новая *книга*' });
   const r = renderSite(c);
   const hero = r.main.slice(0, r.main.indexOf('id="k3"'));
-  assert.equal((hero.match(/class="shelf-b"/g) || []).length, 3);
+  assert.equal((hero.match(/class="fan-b"/g) || []).length, 3);
   assert.match(hero, /href="\.\/\?kniga=novaya-kniga"/);
   assert.match(r.main, /class="card[^"]*" href="\.\/\?kniga=alpiyskiy-razvod"/);
 });
@@ -60,8 +60,8 @@ test('страница книги: главная кнопка — первая 
   assert.deepEqual(bookLinks(c.books[1]).map(([n]) => n), ['Литнет', 'Литрес', 'Author.Today']);
   const r = renderBook(c, {}, 'alpiyskiy-razvod');
   assert.match(r.main, /class="btn btn-dark" href="https:\/\/litnet.com\/a"[^>]*>Читать на Литнете/);
-  assert.match(r.main, /<a class="lnk" href="https:\/\/author.today\/c"/);
-  assert.match(r.main, /Цикл «С кем я, черт возьми, связалась» · Книга 1/);
+  assert.match(r.main, /<a class="btn btn-line" href="https:\/\/author.today\/c"/);
+  assert.match(r.main, /Цикл «С кем я, черт возьми, связалась» · книга 1/);
   assert.match(r.main, /class="excerpt"/);
   assert.ok(!r.main.includes('Читатели'), 'отзывов нет — раздела нет');
   assert.ok(!r.main.includes('class="collage'), 'фото нет — коллажа нет');
@@ -74,7 +74,7 @@ test('страница книги: коллаж — только с фото и 
   const c = ex();
   c.books[1].collage = ['i1', 'i2', 'i3'];
   const imgs = { i1: 'data:image/jpeg;base64,AA', i2: 'data:image/jpeg;base64,BB', i3: 'data:image/jpeg;base64,CC' };
-  assert.match(renderBook(c, imgs, 'alpiyskiy-razvod').main, /class="collage n3"/);
+  assert.match(renderBook(c, imgs, 'alpiyskiy-razvod').main, /class="bk-sec collage n3"/);
   c.books[1].collageOn = false;
   assert.ok(!renderBook(c, imgs, 'alpiyskiy-razvod').main.includes('class="collage'));
 });

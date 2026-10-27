@@ -29,7 +29,7 @@ let ctaObs = null;
 function watchCta() {
   ctaObs?.disconnect();
   document.body.classList.remove('cta-off');
-  const main = document.querySelector('.bk-hero .btn-dark');
+  const main = document.querySelector('.bk-top .btn-dark');
   if (!main || !('IntersectionObserver' in window)) return;
   ctaObs = new IntersectionObserver(([e]) => document.body.classList.toggle('cta-off', !e.isIntersecting && e.boundingClientRect.top < 0));
   ctaObs.observe(main);

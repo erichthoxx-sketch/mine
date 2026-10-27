@@ -63,7 +63,7 @@ export const BLOCKS = {
     { k: 'label', label: 'Подпись сверху' },
     { k: 'title', label: 'Заголовок', hint: '*Слово в звёздочках* — курсивом' },
     { k: 'text', label: 'Текст', type: 'area', hint: 'Пустая строка — новый абзац' },
-    { k: 'photo', label: 'Фото', type: 'img', hint: 'Без фото — туманная арка с инициалами' },
+    { k: 'photo', label: 'Фото', type: 'img', hint: 'Небольшое круглое фото. Без фото — инициалы' },
     { k: 'facts', label: 'Цифры', type: 'area', hint: 'Каждая с новой строки: 12 — книг' },
     MENU,
   ] },
@@ -107,7 +107,6 @@ export const BOOK_GROUPS = [
     { k: 'ann', label: 'Аннотация', type: 'area', hint: 'Пустая строка — новый абзац' },
     { k: 'quotes', label: 'Цитаты из книги', type: 'area', hint: 'Между цитатами — пустая строка' },
     { k: 'excerpt', label: 'Отрывок', type: 'area', hint: 'Начало книги или сильная сцена. Обрывается на самом интересном — дальше кнопка «Читать»' },
-    { k: 'heroes', label: 'Герои', type: 'area', hint: 'Каждый с новой строки: Надя — кто она и чего хочет' },
     { k: 'reviews', label: 'Отзывы читателей', type: 'area', hint: 'Между отзывами — пустая строка; последняя строка «— Имя»' },
     { k: 'slug', label: 'Адрес страницы', hint: 'Латиницей, например alpiyskiy-razvod. Пусто — сделается из названия' },
   ] },
@@ -607,11 +606,10 @@ export function renderSite(raw, imgs = {}) {
     hero: (k) => {
       const chosen = (k.books || []).map((id) => books.get(id)).filter(Boolean);
       const covers = (chosen.length ? chosen : visible).slice(0, 3);
-      // средняя — главная: если выбрана книга кнопки, она встаёт в центр
       const main = books.get(k.book) || covers[0];
       if (covers.length === 3 && main && covers.includes(main)) { covers.splice(covers.indexOf(main), 1); covers.splice(1, 0, main); }
-      return `<section class="hero" id="${k.id}">
-        <div class="wrap hero-in">
+      return `<section class="hero" id="${k.id}"><div class="wrap hero-in">
+        <div class="hero-txt">
           ${lbl(k.label)}
           <h1>${h1lines(k.title)}</h1>
           ${k.text ? `<p class="lead">${fmt(k.text)}</p>` : ''}
@@ -620,9 +618,8 @@ export function renderSite(raw, imgs = {}) {
             ${shelf ? `<a class="lnk" href="#${shelf.id}">Все книги <span class="arrow">→</span></a>` : ''}
           </div>
         </div>
-        ${covers.length ? `<div class="shelf n${covers.length}"><div class="fogband mist" aria-hidden="true"></div>
-          <div class="wrap shelf-in">${covers.map((b) => `<a class="shelf-b" href="${bookHref(b)}" aria-label="${esc(plain(b.title))}">${cv(b)}</a>`).join('')}</div></div>` : ''}
-      </section>`;
+        ${covers.length ? `<div class="fan n${covers.length}">${covers.map((b) => `<a class="fan-b" href="${bookHref(b)}" aria-label="${esc(plain(b.title))}">${cv(b)}</a>`).join('')}</div>` : ''}
+      </div></section>`;
     },
     marquee: (k) => {
       const items = lines(k.items);
@@ -635,7 +632,7 @@ export function renderSite(raw, imgs = {}) {
       if (!b) return '';
       const links = bookLinks(b);
       return `<section class="sec" id="${k.id}"><div class="wrap feat">
-        <a class="stage mist" href="${bookHref(b)}" aria-label="${esc(plain(b.title))}"><div class="stage-book">${cv(b)}</div></a>
+        <a class="feat-cover" href="${bookHref(b)}" aria-label="${esc(plain(b.title))}">${cv(b)}</a>
         <div class="feat-txt">
           ${lbl(k.label)}
           <h2 class="feat-t">${fmt(b.title, false)}</h2>
@@ -653,7 +650,7 @@ export function renderSite(raw, imgs = {}) {
       if (!list.length) return '';
       return `<section class="sec series" id="${k.id}"><div class="wrap">
         <div class="series-h">
-          <div>${lbl(k.label)}<h2>${k.title ? fmt(k.title) : `<span class="it">«</span>${esc(name2)}<span class="it">»</span>`}</h2></div>
+          <div>${lbl(k.label)}<h2>${k.title ? fmt(k.title) : esc(name2)}</h2></div>
           ${k.text ? `<p>${fmt(k.text)}</p>` : ''}
         </div>
         <div class="start n${Math.min(list.length, 4)}">${list.map((b, i) => card(b, imgs, name, { num: Number(b.seriesNo) || i + 1 })).join('')}</div></div></section>`;
@@ -685,8 +682,8 @@ export function renderSite(raw, imgs = {}) {
     about: (k) => {
       const facts = lines(k.facts).map(pair).filter((p) => p[0]);
       const ph = k.photo && imgs[k.photo];
-      return `<section class="sec" id="${k.id}"><div class="wrap about">
-        <div class="arch-w"><div class="arch${ph ? '' : ' mist'}">${ph ? `<img src="${esc(ph)}" alt="${esc(name)}" loading="lazy">` : `<span>${esc(initials(name))}</span>`}</div></div>
+      return `<section class="sec about-s" id="${k.id}"><div class="wrap about">
+        <div class="ava">${ph ? `<img src="${esc(ph)}" alt="${esc(name)}" loading="lazy">` : `<span>${esc(initials(name))}</span>`}</div>
         <div class="about-txt">
           ${lbl(k.label)}
           ${k.title ? `<h2>${fmt(k.title)}</h2>` : ''}
@@ -713,8 +710,9 @@ export function renderSite(raw, imgs = {}) {
   return { title: name, ...chrome(c, parts.map(([k]) => k)), main: parts.map(([, html]) => html).join('\n'), colors: colors(c), shown: parts.map(([k]) => k.id) };
 }
 
-// Страница книги — продающий лендинг: крючок и кнопка сразу, потом аннотация, коллаж, цитаты, отрывок,
-// герои, отзывы, другие книги цикла и последний призыв. Пустые разделы не показываются
+// Страница книги — как карточка книги у издательства: обложка и всё для решения «читать» на первом экране
+// (цикл, название, автор, крючок, характеристики, кнопки магазинов, тропы), ниже — аннотация, отрывок, цитаты,
+// отзывы, коллаж, книги цикла и короткий последний призыв. Пустые разделы не показываются
 export function renderBook(raw, imgs = {}, key = '') {
   const c = normalize(raw);
   const b = findBook(c, key);
@@ -730,74 +728,64 @@ export function renderBook(raw, imgs = {}, key = '') {
   const mates = ser ? seriesBooks(c, ser) : [];
   const no = ser ? (Number(b.seriesNo) || mates.indexOf(b) + 1) : 0;
   const next = ser ? mates[mates.indexOf(b) + 1] : null;
-  const others = ser ? mates.filter((x) => x !== b) : c.books.filter((x) => !x.hidden && x !== b).slice(0, 4);
+  const others = ser ? mates : c.books.filter((x) => !x.hidden && x !== b).slice(0, 4);
   const tags = String(b.tags || '').split(/[,;]/).map((t) => t.trim()).filter(Boolean);
   const pct = b.status === 'writing' && b.total > 0 && b.done > 0 ? Math.min(100, Math.round(b.done / b.total * 100)) : 0;
-  const buttons = (dark) => `<div class="acts">
+  const shops = (dark) => `<div class="buy">
       ${links[0] ? `<a class="btn ${dark ? 'btn-dark' : 'btn-light'}" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(cta)}</a>` : ''}
-      ${links.slice(1).map(([n, u]) => `<a class="lnk" href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}
+      ${links.slice(1).map(([n, u]) => `<a class="btn btn-line" href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}
     </div>`;
   const quotes = chunks(b.quotes).map((q) => {
-    const ls = q.split('\n'); const cite = /^[—–-]\s*/.test(ls[ls.length - 1]) && ls.length > 1 ? ls.pop().replace(/^[—–-]\s*/, '') : '';
+    const ls = q.split('\n'); const cite = ls.length > 1 && /^[—–-]\s*/.test(ls[ls.length - 1]) ? ls.pop().replace(/^[—–-]\s*/, '') : '';
     return { t: ls.join(' ').replace(/^[«"“„]\s*/, '').replace(/\s*[»"”](\.?)$/, '$1'), cite };
   });
   const reviews = chunks(b.reviews).map((r) => {
     const ls = r.split('\n'); const who = ls.length > 1 && /^[—–-]\s*/.test(ls[ls.length - 1]) ? ls.pop().replace(/^[—–-]\s*/, '') : '';
     return { t: ls.join(' '), who };
   });
-  const heroes = lines(b.heroes).map(pair);
   const photos = (b.collage || []).map((id) => imgs[id]).filter(Boolean).slice(0, 6);
   const excerpt = lines(b.excerpt);
+  const specs = [
+    ['Статус', STATUS[b.status]],
+    b.status === 'writing' && b.done ? ['Написано', `${b.done}${b.total ? ` из ${b.total}` : ''} гл.`] : b.done ? ['Глав', String(b.done)] : null,
+    b.al ? ['Объём', `${b.al}&nbsp;а.л.`] : null,
+    b.age ? ['Возраст', esc(b.age)] : null,
+  ].filter((x) => x && x[1]);
+  const sec = (label, body, cls = '') => `<section class="bk-sec${cls ? ' ' + cls : ''}"><div class="wrap bk-two"><h2 class="bk-h">${label}</h2><div>${body}</div></div></section>`;
 
   const S = [];
-  S.push(`<section class="bk-hero"><div class="wrap">
-      <a class="back lnk" href="${back}"><span class="arrow">←</span> Все книги</a>
+  S.push(`<section class="bk-top"><div class="wrap">
+      <nav class="crumbs" aria-label="Где вы"><a href="./">Главная</a><span>/</span><a href="${back}">Книги</a>${ser ? `<span>/</span><span>${esc(ser)}</span>` : ''}</nav>
       <div class="bk-in">
-        <div class="stage mist bk-stage"><div class="stage-book">${cover(b, imgs, name)}</div></div>
+        <div class="bk-cover">${cover(b, imgs, name)}</div>
         <div class="bk-txt">
-          ${ser ? `<div class="lbl">Цикл «${esc(ser)}»${no ? ` · Книга ${no}` : ''}</div>` : `<div class="lbl">${esc(name)}</div>`}
+          ${ser ? `<div class="lbl">Цикл «${esc(ser)}»${no ? ` · книга ${no}` : ''}</div>` : ''}
           <h1 class="bk-t">${fmt(b.title, false)}</h1>
+          <div class="bk-author">${esc(name)}</div>
           ${b.tagline ? `<p class="bk-hook">${fmt(b.tagline)}</p>` : ''}
-          ${tags.length ? `<ul class="tags">${tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
-          <div class="meta-line">${statusLine(b).join('<i>·</i>')}</div>
+          ${specs.length ? `<dl class="specs">${specs.map(([t, d]) => `<div><dt>${t}</dt><dd>${d}</dd></div>`).join('')}</dl>` : ''}
           ${pct ? `<div class="bar" aria-label="Написано ${pct}%"><i style="width:${pct}%"></i></div>` : ''}
-          ${buttons(true)}
+          ${shops(true)}
+          ${tags.length ? `<ul class="tags">${tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+          ${b.ann ? `<div class="bk-ann"><h2 class="bk-h">Аннотация</h2>${paras(b.ann)}</div>` : ''}
         </div>
       </div></div></section>`);
-  if (b.ann) S.push(`<section class="sec bk-sec"><div class="wrap bk-two">
-      <div class="lbl">О книге</div>
-      <div class="bk-ann">${paras(b.ann)}</div></div></section>`);
-  if (b.collageOn !== false && photos.length) S.push(`<section class="collage n${photos.length}" aria-label="Атмосфера книги"><div class="wrap col-in">
+  if (excerpt.length) S.push(sec('Отрывок', `<div class="excerpt">${excerpt.map((p) => `<p>${fmt(p, false)}</p>`).join('')}</div>
+      ${links[0] ? `<a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>Читать дальше</a>` : ''}`));
+  if (quotes.length) S.push(sec('Цитаты', `<div class="qs">${quotes.map((q) => `<figure class="qc"><blockquote>${fmt(q.t)}</blockquote>${q.cite ? `<figcaption>${esc(q.cite)}</figcaption>` : ''}</figure>`).join('')}</div>`));
+  if (reviews.length) S.push(sec('Отзывы', `<div class="qs">${reviews.map((r) => `<figure class="qc rv"><blockquote>${fmt(r.t)}</blockquote>${r.who ? `<figcaption>${esc(r.who)}</figcaption>` : ''}</figure>`).join('')}</div>`));
+  if (b.collageOn !== false && photos.length) S.push(`<section class="bk-sec collage n${photos.length}" aria-label="Атмосфера книги"><div class="wrap col-in">
       ${photos.map((src) => `<figure><img src="${esc(src)}" alt="" loading="lazy"></figure>`).join('')}</div></section>`);
-  if (quotes.length) S.push(`<section class="quote bk-quotes"><div class="wrap q-in">
-      <span class="q-mark" aria-hidden="true">“</span>
-      ${quotes.map((q) => `<figure><blockquote>${fmt(q.t)}</blockquote>${q.cite ? `<figcaption>${esc(q.cite)}</figcaption>` : ''}</figure>`).join('')}
-    </div></section>`);
-  if (excerpt.length) S.push(`<section class="sec bk-sec"><div class="wrap bk-two">
-      <div class="lbl">Отрывок</div>
-      <div><div class="excerpt">${excerpt.map((p) => `<p>${fmt(p, false)}</p>`).join('')}</div>
-      ${links[0] ? `<div class="acts"><a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>Читать дальше</a></div>` : ''}</div>
-    </div></section>`);
-  if (heroes.length) S.push(`<section class="sec bk-sec"><div class="wrap">
-      <div class="sec-h"><h2>Герои</h2></div>
-      <div class="heroes n${Math.min(heroes.length, 3)}">${heroes.map(([n, t]) => `<div class="hero-c"><h3>${esc(n)}</h3>${t ? `<p>${fmt(t)}</p>` : ''}</div>`).join('')}</div>
-    </div></section>`);
-  if (reviews.length) S.push(`<section class="sec bk-sec"><div class="wrap">
-      <div class="sec-h"><h2>Читатели <span class="it">о книге</span></h2></div>
-      <div class="reviews">${reviews.map((r) => `<figure class="review"><blockquote>${fmt(r.t)}</blockquote>${r.who ? `<figcaption>${esc(r.who)}</figcaption>` : ''}</figure>`).join('')}</div>
-    </div></section>`);
-  if (others.length) S.push(`<section class="sec bk-sec series"><div class="wrap">
-      <div class="series-h"><div>${ser ? '<div class="lbl">Цикл</div>' : ''}<h2>${ser ? `<span class="it">«</span>${esc(ser)}<span class="it">»</span>` : 'Другие <span class="it">книги</span>'}</h2></div>
-        ${next ? `<a class="lnk" href="${bookHref(next)}">Следующая книга: ${esc(plain(next.title))} <span class="arrow">→</span></a>` : ''}</div>
-      <div class="start n${Math.min(ser ? mates.length : others.length, 4)}">${(ser ? mates : others).map((x, i) => (x === b
-        ? `<div class="card here"><span class="num"><b>${String(Number(x.seriesNo) || i + 1).padStart(2, '0')}</b>Вы здесь</span><div class="plinth">${cover(x, imgs, name)}</div><div class="card-txt"><h3>${fmt(x.title, false)}</h3></div></div>`
-        : card(x, imgs, name, ser ? { num: Number(x.seriesNo) || i + 1 } : {}))).join('')}</div>
-    </div></section>`);
-  if (links[0]) S.push(`<section class="tg bk-final"><div class="wrap tg-in"><div>
-      <div class="lbl">${b.status === 'writing' ? 'Книга пишется — читайте вместе с автором' : 'Книга завершена'}</div>
-      <h2>${fmt(b.title, false)}</h2>
-      ${b.tagline ? `<p>${fmt(b.tagline)}</p>` : ''}</div>
-      ${buttons(false)}
+  if (others.length > (ser ? 1 : 0)) S.push(sec(ser ? 'Все книги цикла' : 'Другие книги', `
+      <div class="mini">${others.map((x, i) => `<a class="mini-b${x === b ? ' here' : ''}" href="${bookHref(x)}">
+        <div class="mini-c">${cover(x, imgs, name)}</div>
+        <span class="mini-n">${ser ? `Книга ${Number(x.seriesNo) || i + 1}${x === b ? ' · вы здесь' : ''}` : esc(STATUS[x.status] || '')}</span>
+        <span class="mini-t">${fmt(x.title, false)}</span></a>`).join('')}</div>
+      ${next ? `<a class="lnk next" href="${bookHref(next)}">Следующая книга: ${esc(plain(next.title))} <span class="arrow">→</span></a>` : ''}`));
+  if (links[0]) S.push(`<section class="bk-final"><div class="wrap bk-final-in">
+      <div><div class="lbl">${b.status === 'writing' ? 'Книга пишется — читайте вместе с автором' : 'Книга завершена'}</div>
+      <h2>${fmt(b.title, false)}</h2></div>
+      ${shops(true)}
     </div></section>`);
   const sticky = links[0] ? `<div class="bk-sticky"><span>${fmt(b.title, false)}</span><a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(cta)}</a></div>` : '';
 
