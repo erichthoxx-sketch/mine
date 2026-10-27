@@ -41,7 +41,7 @@ test('сайт: кнопка книги ведёт на первую площа�
   Object.assign(c.books[0], { litnet: 'https://litnet.com/a', litres: 'https://litres.ru/b' });
   const r = renderSite(c);
   assert.match(r.main, /href="https:\/\/litnet.com\/a" target="_blank" rel="noopener">Читать на Литнете/);
-  assert.match(r.main, /<a class="ul" href="https:\/\/litres.ru\/b"[^>]*>Литрес/);
+  assert.match(r.main, /<a class="lnk" href="https:\/\/litres.ru\/b"[^>]*>Литрес/);
 });
 
 test('сайт: старые и неполные данные не ломают страницу', () => {
