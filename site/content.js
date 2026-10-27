@@ -15,16 +15,18 @@ export const PLATFORMS = [
   ['litnet', 'Литнет'], ['litres', 'Литрес'], ['litmarket', 'Литмаркет'], ['litgorod', 'Литгород'],
 ];
 
-// Поля блоков: по ним админка сама строит форму.
-// type: text | area | book | books | img | url; hint — подсказка серым под полем
+
+// Поля блоков главной: по ним админка сама строит форму.
+// type: text | area | book | books | img | url | series; hint — подсказка серым под полем
 const MENU = { k: 'menu', label: 'Пункт в меню сверху', hint: 'Пусто — блока нет в меню' };
 export const BLOCKS = {
   hero: { name: 'Первый экран', fields: [
     { k: 'label', label: 'Строка над заголовком' },
     { k: 'title', label: 'Заголовок', type: 'area', hint: '*Слово в звёздочках* — тонким курсивом' },
     { k: 'text', label: 'Текст', type: 'area' },
-    { k: 'btn', label: 'Кнопка', hint: 'Ведёт к блоку «Книга крупно»' },
-    { k: 'books', label: 'Обложки на первом экране', type: 'books', hint: 'Лучше три: средняя — крупнее' },
+    { k: 'btn', label: 'Кнопка' },
+    { k: 'book', label: 'Кнопка ведёт на страницу книги', type: 'book' },
+    { k: 'books', label: 'Обложки на первом экране', type: 'books', hint: 'Не выбраны — три самые новые книги из списка «Книги»' },
   ] },
   marquee: { name: 'Бегущая строка', fields: [
     { k: 'items', label: 'Фразы', type: 'area', hint: 'Каждая с новой строки; *в звёздочках* — курсивом' },
@@ -35,10 +37,15 @@ export const BLOCKS = {
     MENU,
   ] },
   series: { name: 'Цикл', fields: [
+    { k: 'series', label: 'Цикл', type: 'series', hint: 'Книги цикла встают сами, по номеру в цикле' },
     { k: 'label', label: 'Подпись сверху', hint: 'Например: Цикл' },
-    { k: 'title', label: 'Название цикла', type: 'area', hint: '*Слово в звёздочках* — курсивом' },
+    { k: 'title', label: 'Заголовок', type: 'area', hint: 'Пусто — название цикла; *слово в звёздочках* — курсивом' },
     { k: 'text', label: 'Пара строк о цикле', type: 'area' },
-    { k: 'books', label: 'Книги по порядку', type: 'books', hint: 'Порядок — как в списке «Книги»' },
+    MENU,
+  ] },
+  books: { name: 'Все книги', fields: [
+    { k: 'title', label: 'Заголовок' },
+    { k: 'sub', label: 'Подзаголовок курсивом' },
     MENU,
   ] },
   start: { name: 'Подборка книг', fields: [
@@ -47,21 +54,16 @@ export const BLOCKS = {
     { k: 'books', label: 'Книги', type: 'books' },
     MENU,
   ] },
-  books: { name: 'Все книги', fields: [
-    { k: 'title', label: 'Заголовок' },
-    { k: 'sub', label: 'Подзаголовок курсивом' },
-    MENU,
-  ] },
   quote: { name: 'Цитата', fields: [
     { k: 'label', label: 'Подпись слева' },
     { k: 'text', label: 'Цитата', type: 'area' },
-    { k: 'cite', label: 'Откуда', hint: 'Например: «Север и август», глава 9' },
+    { k: 'cite', label: 'Откуда', hint: 'Например: «Альпийский развод», пролог' },
   ] },
   about: { name: 'Об авторе', fields: [
     { k: 'label', label: 'Подпись сверху' },
     { k: 'title', label: 'Заголовок', hint: '*Слово в звёздочках* — курсивом' },
     { k: 'text', label: 'Текст', type: 'area', hint: 'Пустая строка — новый абзац' },
-    { k: 'photo', label: 'Фото', type: 'img', hint: 'Без фото — розово-голубой туман' },
+    { k: 'photo', label: 'Фото', type: 'img', hint: 'Без фото — туманная арка с инициалами' },
     { k: 'facts', label: 'Цифры', type: 'area', hint: 'Каждая с новой строки: 12 — книг' },
     MENU,
   ] },
@@ -81,26 +83,53 @@ export const BLOCKS = {
   ] },
 };
 
-export const BOOK_FIELDS = [
-  { k: 'title', label: 'Название', hint: '*Часть в звёздочках* — курсивом: Соль *на губах*' },
-  { k: 'cover', label: 'Обложка', type: 'img', hint: 'Без обложки — строгая обложка из названия' },
-  { k: 'mood', label: 'Настроение', hint: 'Для подборки: Для первого знакомства' },
-  { k: 'short', label: 'Коротко', type: 'area', hint: 'Пара строк для подборки' },
-  { k: 'ann', label: 'Аннотация', type: 'area' },
-  { k: 'status', label: 'Статус', type: 'status' },
-  { k: 'done', label: 'Глав написано', type: 'num' },
-  { k: 'total', label: 'Глав всего (примерно)', type: 'num' },
-  { k: 'al', label: 'Объём, а.л.', hint: 'Например: 7,8' },
-  ...PLATFORMS.map(([k, n]) => ({ k, label: n, type: 'url', hint: 'Ссылка на книгу' })),
+// Книга = своя продающая страница. Поля по группам — так их видит админка
+export const BOOK_GROUPS = [
+  { name: 'Главное', fields: [
+    { k: 'title', label: 'Название', hint: '*Часть в звёздочках* — курсивом: Альпийский *развод*' },
+    { k: 'cover', label: 'Обложка', type: 'img', hint: 'Без обложки — строгая обложка из названия' },
+    { k: 'series', label: 'Цикл', type: 'series', hint: 'Пусто — отдельная книга' },
+    { k: 'seriesNo', label: 'Номер в цикле', type: 'num' },
+    { k: 'status', label: 'Статус', type: 'status' },
+    { k: 'done', label: 'Глав написано', type: 'num' },
+    { k: 'total', label: 'Глав всего', type: 'num' },
+    { k: 'al', label: 'Объём, а.л.', hint: 'Например: 10,2' },
+    { k: 'age', label: 'Возраст', hint: 'Например: 18+' },
+  ] },
+  { name: 'Где читать', fields: [
+    ...PLATFORMS.map(([k, n]) => ({ k, label: n, type: 'url' })),
+    { k: 'links', label: 'Другие сайты', type: 'area', hint: 'Каждый с новой строки: Author.Today — https://…' },
+    { k: 'cta', label: 'Текст главной кнопки', hint: 'Пусто — «Читать на Литнете» (по первой ссылке)' },
+  ] },
+  { name: 'Страница книги', fields: [
+    { k: 'tagline', label: 'Крючок — одна фраза', type: 'area', hint: 'Первое, что видит читатель. Коротко и с интригой' },
+    { k: 'tags', label: 'Тропы и метки', hint: 'Через запятую: Развод, Опасный герой, Горы' },
+    { k: 'ann', label: 'Аннотация', type: 'area', hint: 'Пустая строка — новый абзац' },
+    { k: 'quotes', label: 'Цитаты из книги', type: 'area', hint: 'Между цитатами — пустая строка' },
+    { k: 'excerpt', label: 'Отрывок', type: 'area', hint: 'Начало книги или сильная сцена. Обрывается на самом интересном — дальше кнопка «Читать»' },
+    { k: 'heroes', label: 'Герои', type: 'area', hint: 'Каждый с новой строки: Надя — кто она и чего хочет' },
+    { k: 'reviews', label: 'Отзывы читателей', type: 'area', hint: 'Между отзывами — пустая строка; последняя строка «— Имя»' },
+    { k: 'slug', label: 'Адрес страницы', hint: 'Латиницей, например alpiyskiy-razvod. Пусто — сделается из названия' },
+  ] },
+  { name: 'Для подборок на главной', fields: [
+    { k: 'mood', label: 'Настроение', hint: 'Коротко: Сванетия · горы' },
+    { k: 'short', label: 'Коротко о книге', type: 'area', hint: 'Пара строк под обложкой' },
+  ] },
+  { name: 'Фотоколлаж', fields: [
+    { k: 'collageOn', label: 'Показывать коллаж на странице книги', type: 'toggle' },
+    { k: 'collage', label: 'Фото', type: 'imgs', hint: 'До 6 фото: места, атмосфера, образы героев' },
+  ] },
 ];
+export const BOOK_FIELDS = BOOK_GROUPS.flatMap((g) => g.fields);
 
 export const STATUS = { writing: 'Пишется', done: 'Завершена' };
 
 let seq = 0;
 export const newId = (p = 'b') => p + Date.now().toString(36) + (seq++).toString(36) + Math.random().toString(36).slice(2, 5);
 
-export const newBlock = (type) => ({ id: newId('k'), type, ...Object.fromEntries(BLOCKS[type].fields.map((f) => [f.k, f.type === 'books' ? [] : ''])) });
-export const newBook = () => ({ id: newId('b'), ...Object.fromEntries(BOOK_FIELDS.map((f) => [f.k, ''])), status: 'writing' });
+const emptyOf = (f) => (f.type === 'books' || f.type === 'imgs' ? [] : f.type === 'toggle' ? true : '');
+export const newBlock = (type) => ({ id: newId('k'), type, ...Object.fromEntries(BLOCKS[type].fields.map((f) => [f.k, emptyOf(f)])) });
+export const newBook = () => ({ id: newId('b'), ...Object.fromEntries(BOOK_FIELDS.map((f) => [f.k, emptyOf(f)])), status: 'writing' });
 
 // Первый пример (v1). Нужен только чтобы понять, какие тексты владелица ещё не меняла, и обновить их на новые
 const V1_EXAMPLE = {
@@ -170,8 +199,8 @@ const V2_EXAMPLE = {
   ],
 };
 
-// Пример: тексты по книгам цикла «С кем я, черт возьми, связалась» (цитаты — настоящие, из книг; без раскрытия сюжета)
-export const DEFAULT_CONTENT = {
+// Третий пример (v3): тексты по книгам цикла «С кем я, черт возьми, связалась» (цитаты — настоящие, из книг; без раскрытия сюжета)
+const V3_EXAMPLE = {
   v: 3,
   name: 'Лана Фрейтаг',
   headBtn: 'Telegram',
@@ -214,6 +243,190 @@ export const DEFAULT_CONTENT = {
 // Тексты, которые владелица вписала сама, но попросила заменить текстами по книгам
 const ASKED_TO_REPLACE = { k1: { title: ['В жизни\n*все не так*\nкак на самом деле'] } };
 
+// Пример: книги, циклы и тексты по романам Ланы Фрейтаг (цитаты и отрывки — настоящие, из книг; без раскрытия сюжета)
+export const DEFAULT_CONTENT = {
+ "v": 4,
+ "name": "Лана Фрейтаг",
+ "headBtn": "Telegram",
+ "headUrl": "",
+ "foot": "Telegram — \nЛитнет — ",
+ "palette": "fog",
+ "a1": "",
+ "a2": "",
+ "books": [
+  {
+   "id": "b1",
+   "title": "Развод *для черной вдовы*",
+   "slug": "razvod-dlya-chernoy-vdovy",
+   "series": "С кем я, черт возьми, связалась",
+   "seriesNo": 3,
+   "cover": "",
+   "status": "writing",
+   "done": 1,
+   "total": "",
+   "al": "0,14",
+   "age": "",
+   "tagline": "Она похоронила мужа, который жив. А помочь ей может только самый опасный конкурент.",
+   "tags": "Опасный герой, Одержимость, Вынужденное сотрудничество, Фиктивное вдовство, Черный юмор",
+   "mood": "Ритуальный бизнес · Рига",
+   "short": "Владелица похоронного бюро инсценирует смерть мужа. А помочь ей может только самый опасный конкурент.",
+   "ann": "Марта руководит маленьким похоронным бюро под Петербургом и умеет хранить чужие тайны. Теперь у неё есть своя: муж, которого она похоронила, жив.\n\nИ как раз в это время ей достаётся заказ на похороны знаменитого гипнотизёра в Риге. Справиться с ним можно только вместе с Глебом Рокотовым — конкурентом, у которого есть связи, деньги и частный самолёт. И от которого стоило бы держаться подальше.",
+   "quotes": "",
+   "excerpt": "",
+   "heroes": "Марта Руднева — 32 года, владелица похоронного бюро. Знает всех в городе и не боится покойников — в отличие от живых.\nГлеб Рокотов — 36 лет, унаследовал крупную ритуальную группу. Помогает, не отбирая клиента. Пока.\nИлья — муж Марты. Официально — мёртв.",
+   "reviews": "",
+   "litnet": "",
+   "litres": "",
+   "litmarket": "",
+   "litgorod": "",
+   "links": "",
+   "cta": "",
+   "collageOn": true,
+   "collage": []
+  },
+  {
+   "id": "b2",
+   "title": "Альпийский *развод*",
+   "slug": "alpiyskiy-razvod",
+   "series": "С кем я, черт возьми, связалась",
+   "seriesNo": 1,
+   "cover": "",
+   "status": "done",
+   "done": 28,
+   "total": 28,
+   "al": "10,2",
+   "age": "",
+   "tagline": "Поход в горы должен был спасти брак. Он чуть не стоил ей жизни.",
+   "tags": "Развод, Предательство, Горы Сванетии, Сильная героиня, Новая любовь",
+   "mood": "Сванетия · горы",
+   "short": "Поход в горы должен был спасти брак. Надя очнулась одна, без сил, с мыслью: муж может вернуться, чтобы добить.",
+   "ann": "Надя была уверена, что замужем за лучшим мужчиной на свете. Квартира с видом на Москву-реку, подруги, которые завидуют по-доброму, муж, который помнит, сколько сахара она кладёт в кофе.\n\nПоездка в горы Сванетии должна была вернуть им близость. А закончилась в ледяной траве над ущельем — где каждый свист может оказаться спасением или концом.",
+   "quotes": "Он мог вернуться. Собственный муж мог вернуться, чтобы меня добить.\n\nНебу было все равно. Горам — тоже. Только я почему-то все еще цеплялась.",
+   "excerpt": "Руки меня не слушались. Большие пальцы на руках замерзли так, что я их совсем не чувствовала.\nЛучше бы я не чувствовала ног. Правую ногу — ту, что стреляла болью так, что когда я закрывала глаза, темнота в глазницах окрашивалась оранжевым и красным.\nКазалось, я уже вечность сидела в этом полуболоте, не в силах сопротивляться. Могла бы идти дальше — если бы была сильнее. Если бы отчаяние и паника не сдавливали горло, если бы во мне оставалось хоть что-то, с чем стоит бороться. Плохо, что сейчас не зима. Умирать я буду долго.\nНеожиданно для себя я засмеялась.\nСначала тихо — почти беззвучно, только плечи тряслись. Потом громче. Потом захлебнулась, закашлялась, и все равно продолжала — в надежде, что этот безумный смех разорвет мои легкие и покончит с этим быстрее.\nМне было смешно.\nСмешно, что я считала себя счастливо замужем за лучшим в мире мужчиной. Что доверяла ему. Что нас обоих считала одним целым — будто мы не два отдельных человека, а что-то неделимое, что невозможно разрубить.\nКогда в интернете попадались истории о мужской жестокости, подлости, о женщинах, которых бросали в самый страшный момент, — я втайне радовалась. Мой Никита не такой. Он бы так никогда.\nОн сильный. Верный. Защитит ценой собственной жизни, если потребуется.\nЯ снова залилась смехом. Слезы текли в уши, трава под щекой была ледяной и мокрой, небо надо мной — серым, почти белым, таким равнодушным, что от этого становилось даже легче. Небу было все равно. Горам — тоже. Только я почему-то все еще цеплялась.\nГосподи, какая же я дура.",
+   "heroes": "Надя — уверена, что вытянула счастливый билет: хорошая работа, квартира с видом и муж мечты.\nНикита — финансовый директор, ироничный и внимательный. Любит горы больше всего на свете.\nДато — хозяин гостевого дома в Местии. Говорит мало и держит паузу перед каждым словом.",
+   "reviews": "",
+   "litnet": "",
+   "litres": "",
+   "litmarket": "",
+   "litgorod": "",
+   "links": "",
+   "cta": "",
+   "collageOn": true,
+   "collage": []
+  },
+  {
+   "id": "b3",
+   "title": "Звериная тропа *для двоих*",
+   "slug": "zverinaya-tropa-dlya-dvoih",
+   "series": "С кем я, черт возьми, связалась",
+   "seriesNo": 2,
+   "cover": "",
+   "status": "done",
+   "done": 27,
+   "total": 27,
+   "al": "10,8",
+   "age": "",
+   "tagline": "Тринадцать лет она знала мужа наизусть. До одной ночи на Алтае.",
+   "tags": "Брак под вопросом, Алтай, Медведи, Тайна мужа, Психологическое напряжение",
+   "mood": "Алтай · медведи",
+   "short": "Тринадцать лет вместе, со школы. Одна поездка на Алтай — и Софа больше не уверена, что знает собственного мужа.",
+   "ann": "Софа и Артём вместе со школы. Сын, работа, отпуск раз в год — и за тринадцать лет ни одного повода усомниться.\n\nТурбаза в долине Кучерлы, тайга, разговоры про медведей у костра. И одна ночь, после которой мелочи вдруг начинают складываться в картину, на которую страшно смотреть.",
+   "quotes": "Тело помнит дольше головы. Тело до сих пор считает его своим.\n\nМне и правда с ним никогда не было страшно.",
+   "excerpt": "— А если звоночков совсем бы не было? — сказала я. — За тринадцать лет ни одного зонта.\nНадя выпрямилась. Она смотрела на меня уже совсем иначе, всю свадебную веселость будто смыли с ее лица.\n— Софа, подожди, давай сейчас серьезно. Что он сделал?\nВо дворе Артем поднялся с бокалом, и мужчины застучали по столу, требуя тишины. Он стоял в свете лампочек, в белой рубашке с закатанными рукавами, красивый, теплый, живой, мой.\nЯ смотрела на Артема и только через несколько секунд поняла, что Надя что-то говорит. Ее голос будто пробился ко мне сквозь шум двора:\n— Софа! Софа, не молчи. Тебе с ним страшно?",
+   "heroes": "Софа — ведёт бухгалтерию четырёх компаний и знает мужа наизусть. Так ей кажется.\nАртём — за полчаса становится своим в любой компании. С ним ей никогда не было страшно.",
+   "reviews": "",
+   "litnet": "",
+   "litres": "",
+   "litmarket": "",
+   "litgorod": "",
+   "links": "",
+   "cta": "",
+   "collageOn": true,
+   "collage": []
+  }
+ ],
+ "blocks": [
+  {
+   "id": "k1",
+   "type": "hero",
+   "label": "Остросюжетные любовные романы",
+   "title": "Любовь *с риском* для жизни",
+   "text": "Криминал, тайны и мужчины, от которых лучше держаться подальше. Героини, которые однажды понимают, что не знают человека рядом.",
+   "btn": "Читать новинку",
+   "book": "b1",
+   "books": []
+  },
+  {
+   "id": "k2",
+   "type": "marquee",
+   "items": "Лана Фрейтаг\n*остросюжетные любовные романы*",
+   "hidden": true
+  },
+  {
+   "id": "k3",
+   "type": "book",
+   "label": "Новинка · пишется сейчас",
+   "book": "b1",
+   "menu": ""
+  },
+  {
+   "id": "k8",
+   "type": "series",
+   "series": "С кем я, черт возьми, связалась",
+   "label": "Цикл",
+   "title": "",
+   "text": "Каждую книгу можно читать отдельно. Общее у них одно: однажды героиня понимает, что не знает человека, которому доверяла больше всех.",
+   "menu": "Книги"
+  },
+  {
+   "id": "k9",
+   "type": "books",
+   "title": "Все книги",
+   "sub": "",
+   "menu": "Все книги"
+  },
+  {
+   "id": "k4",
+   "type": "start",
+   "title": "С чего начать",
+   "sub": "если вы здесь впервые",
+   "books": [
+    "b2",
+    "b3"
+   ],
+   "menu": "",
+   "hidden": true
+  },
+  {
+   "id": "k5",
+   "type": "quote",
+   "label": "Из книги",
+   "text": "Он мог вернуться. Собственный муж мог вернуться, чтобы меня добить.",
+   "cite": "«Альпийский развод», пролог"
+  },
+  {
+   "id": "k6",
+   "type": "about",
+   "label": "Об авторе",
+   "title": "Пишу о любви *с риском для жизни*",
+   "text": "Меня зовут Лана Фрейтаг. Я пишу остросюжетные любовные романы: горы Сванетии, тайга Алтая, ритуальный бизнес под Петербургом. Мои героини узнают, что самый опасный человек может годами быть рядом, — и всё равно не перестают верить в любовь.\n\nКниги выходят по главам на Литнете — можно читать вместе со мной, пока история пишется.",
+   "photo": "",
+   "facts": "",
+   "menu": "Об авторе"
+  },
+  {
+   "id": "k7",
+   "type": "tg",
+   "label": "Telegram-канал",
+   "title": "Читать *раньше всех*",
+   "text": "Новые главы в день выхода, обложки до премьеры и разговоры о героях — тех, с кем лучше не связываться.",
+   "btn": "Подписаться",
+   "url": "",
+   "menu": "Дневник"
+  }
+ ]
+};
+
 // Приводит сохранённое содержимое к нужному виду (старые и неполные данные не ломают сайт)
 const same = (a, b) => JSON.stringify(a ?? '') === JSON.stringify(b ?? '');
 // Обновление примера: всё, что осталось как в прежнем примере, меняется на новый; правки владелицы не трогаем
@@ -235,16 +448,20 @@ function step(c, old, d, v) {
   out.books = fix(c.books, old.books, d.books);
   for (const b of d.books) if (!out.books.some((x) => x.id === b.id)) out.books.push(structuredClone(b));
   out.blocks = fix(c.blocks, old.blocks, d.blocks);
-  if (!out.blocks.some((b) => b.type === 'series')) {
-    const mq = out.blocks.findIndex((b) => b.type === 'marquee');
-    const at = mq >= 0 ? mq : out.blocks.findIndex((b) => b.type === 'hero');
-    out.blocks.splice(at + 1, 0, structuredClone(d.blocks.find((b) => b.type === 'series')));
+  // новые виды блоков из примера — если их ещё нет, встают на своё место
+  for (const type of ['series', 'books']) {
+    if (out.blocks.some((b) => b.type === type) || !d.blocks.some((b) => b.type === type)) continue;
+    const after = { series: ['book', 'marquee', 'hero'], books: ['series', 'book', 'hero'] }[type];
+    let at = -1;
+    for (const t of after) { at = out.blocks.findIndex((b) => b.type === t); if (at >= 0) break; }
+    out.blocks.splice(at + 1, 0, structuredClone(d.blocks.find((b) => b.type === type)));
   }
   return out;
 }
 function upgrade(c) {
   if ((c.v || 1) < 2) c = step(c, V1_EXAMPLE, V2_EXAMPLE, 2);
-  if (c.v < 3) c = step(c, V2_EXAMPLE, DEFAULT_CONTENT, 3);
+  if (c.v < 3) c = step(c, V2_EXAMPLE, V3_EXAMPLE, 3);
+  if (c.v < 4) c = step(c, V3_EXAMPLE, DEFAULT_CONTENT, 4);
   return c;
 }
 
@@ -255,6 +472,14 @@ export function normalize(c) {
   const out = { ...structuredClone(d), ...c };
   out.books = Array.isArray(c.books) ? c.books.filter((b) => b && b.id).map((b) => ({ ...newBook(), ...b })) : structuredClone(d.books);
   out.blocks = Array.isArray(c.blocks) ? c.blocks.filter((b) => b && b.id && BLOCKS[b.type]).map((b) => ({ ...newBlock(b.type), ...b })) : structuredClone(d.blocks);
+  // у каждой книги — свой адрес страницы, без повторов
+  const taken = new Set();
+  for (const b of out.books) {
+    let s = slugify(b.slug) || slugify(plain(b.title)) || b.id;
+    if (taken.has(s)) s += '-' + b.id.slice(-4);
+    taken.add(s);
+    b.url = s;
+  }
   return out;
 }
 
@@ -263,6 +488,20 @@ export function colors(c) {
   const hex = (v) => (/^#[0-9a-f]{6}$/i.test(v || '') ? v : '');
   return c.palette === 'custom' ? { a1: hex(c.a1) || p.a1, a2: hex(c.a2) || p.a2 } : { a1: p.a1, a2: p.a2 };
 }
+
+// Адрес страницы книги латиницей: «Альпийский развод» → alpiyskiy-razvod
+const TR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+export const slugify = (s) => String(s ?? '').toLowerCase().replace(/[а-яё]/g, (ch) => TR[ch] ?? '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+
+// Циклы — в порядке, как книги стоят в списке; книги цикла — по номеру
+export const seriesList = (c) => [...new Set(c.books.filter((b) => !b.hidden && String(b.series || '').trim()).map((b) => b.series.trim()))];
+export const seriesBooks = (c, name) => c.books
+  .filter((b) => !b.hidden && String(b.series || '').trim() === String(name || '').trim())
+  .map((b, i) => ({ b, i, n: Number(b.seriesNo) || 0 }))
+  .sort((x, y) => (x.n || 999) - (y.n || 999) || x.i - y.i)
+  .map((x) => x.b);
+export const bookHref = (b) => `./?kniga=${encodeURIComponent(b.url || b.id)}`;
+export const findBook = (c, key) => c.books.find((b) => !b.hidden && (b.url === key || b.id === key));
 
 // ---------- сборка страницы ----------
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
@@ -281,54 +520,108 @@ export const safeUrl = (u) => {
 };
 const paras = (s) => String(s ?? '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${fmt(p)}</p>`).join('');
 const lines = (s) => String(s ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
-const ext = (u) => (u.startsWith('#') ? '' : ' target="_blank" rel="noopener"');
+const chunks = (s) => String(s ?? '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+const ext = (u) => (/^https?:/.test(u) ? ' target="_blank" rel="noopener"' : '');
+const pair = (l) => { const m = l.match(/^(.+?)\s+[—–-]\s+(.+)$/); return m ? [m[1].trim(), m[2].trim()] : [l.trim(), '']; };
 
 // Обложка: загруженная картинка или строгая типографская обложка из названия (как у издательской серии)
-function cover(b, i, imgs, name) {
+function cover(b, imgs, name) {
   if (b.cover && imgs[b.cover]) return `<div class="cover cover-img"><img src="${esc(imgs[b.cover])}" alt="${esc(plain(b.title))}" loading="lazy"></div>`;
   const [t1, t2] = String(b.title || 'Без названия').split(/\*([^*]+)\*/);
-  return `<div class="cover c${(i % 4) + 1}" role="img" aria-label="${esc(plain(b.title))}">`
+  const v = (String(b.id).split('').reduce((a, ch) => a + ch.charCodeAt(0), 0) % 4) + 1;
+  return `<div class="cover c${v}" role="img" aria-label="${esc(plain(b.title))}">`
     + `<span class="cv-a">${esc(name)}</span>`
     + `<span class="cv-t">${esc(t1.trim())}${t2 ? `<i>${esc(t2)}</i>` : ''}</span>`
     + '<span class="cv-s">роман</span></div>';
 }
 
-function bookLinks(b) {
-  return PLATFORMS.map(([k, n]) => [n, safeUrl(b[k])]).filter(([, u]) => u);
+// Где читать: четыре площадки + любые другие сайты; первая — главная кнопка
+const ON = { Литнет: 'Литнете', Литрес: 'Литресе', Литмаркет: 'Литмаркете', Литгород: 'Литгороде' };
+export function bookLinks(b) {
+  const list = PLATFORMS.map(([k, n]) => [n, safeUrl(b[k])]);
+  for (const l of lines(b.links)) { const [n, u] = pair(l); list.push([n, safeUrl(u)]); }
+  return list.filter(([n, u]) => n && u);
+}
+const ctaText = (b, links) => (b.cta ? b.cta : links[0] ? (ON[links[0][0]] ? `Читать на ${ON[links[0][0]]}` : `Читать: ${links[0][0]}`) : '');
+
+const statusLine = (b) => [
+  STATUS[b.status],
+  b.status === 'writing' && b.done ? `${b.done}${b.total ? ` из ${b.total}` : ''} гл.` : b.done ? `${b.done} глав` : '',
+  b.al ? `${b.al}&nbsp;а.л.` : '',
+  b.age ? esc(b.age) : '',
+].filter(Boolean);
+
+// Шапка и подвал — общие для главной и страниц книг
+function chrome(c, blocks) {
+  const name = c.name || 'Автор';
+  const menu = blocks.filter((b) => b.menu).map((b) => [b.menu, './#' + b.id]);
+  const nav = menu.map(([n, u]) => `<a href="${u}">${esc(n)}</a>`).join('');
+  const headU = safeUrl(c.headUrl);
+  const headBtn = c.headBtn && headU ? `<a class="btn btn-line" href="${esc(headU)}"${ext(headU)}>${esc(c.headBtn)}</a>` : '';
+  const footLinks = lines(c.foot).map(pair).map(([n, u]) => [n, safeUrl(u)]).filter(([n, u]) => n && u);
+  return {
+    head: `<div class="wrap head-in"><nav class="nav" aria-label="Разделы">${nav}</nav>
+      <a class="logo" href="./">${esc(name)}</a>
+      <div class="top-r">${headBtn}${menu.length || headBtn ? '<button class="menu-btn" type="button" aria-expanded="false" aria-controls="mnav"><span></span><span></span><em>Меню</em></button>' : ''}</div></div>
+      <nav class="mnav" id="mnav" aria-label="Меню" hidden><div class="wrap">${nav}${headBtn}</div></nav>`,
+    foot: `<div class="wrap">
+      <div class="foot-top"><nav aria-label="Разделы">${nav}</nav><a class="lnk" href="#top">Наверх <span class="arrow">↑</span></a></div>
+      <div class="foot-big" aria-hidden="true">${esc(name)}</div>
+      <div class="foot-row"><span>© ${new Date().getFullYear()} ${esc(name)}</span>
+      <nav aria-label="Ссылки">${footLinks.map(([n, u]) => `<a href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}</nav></div></div>`,
+  };
+}
+
+const lbl = (s) => (s ? `<div class="lbl">${fmt(s, false)}</div>` : '');
+const h1lines = (s) => {
+  const t = String(s || '').split('\n').filter((l) => l.trim());
+  return t.length > 1 ? t.map((l) => `<span class="ln">${fmt(l.trim(), false)}</span>`).join('') : fmt(t[0] || '', false);
+};
+
+// Карточка книги на главной: ведёт на страницу книги
+function card(b, imgs, name, opt = {}) {
+  const num = opt.num ? `<span class="num"><b>${String(opt.num).padStart(2, '0')}</b>Книга ${opt.num}${b.status === 'writing' ? ' · пишется' : ''}</span>` : '';
+  return `<a class="card${opt.small ? ' sm' : ''}" href="${bookHref(b)}"${opt.group != null ? ` data-g="${esc(opt.group)}"` : ''}>
+      ${num}
+      <div class="plinth">${cover(b, imgs, name)}</div>
+      <div class="card-txt">
+        ${b.mood && !opt.small ? `<span class="mood">${esc(b.mood)}</span>` : ''}
+        <h3>${fmt(b.title, false)}</h3>
+        ${opt.small ? `<span class="lbl">${esc(b.series ? `${b.series}${b.seriesNo ? ` · ${b.seriesNo}` : ''}` : STATUS[b.status] || '')}</span>` : ''}
+        ${(b.short || b.tagline) && !opt.small ? `<p>${fmt(b.short || b.tagline)}</p>` : ''}
+        ${opt.small ? '' : '<span class="lnk">О книге <span class="arrow">→</span></span>'}
+      </div>
+    </a>`;
 }
 
 export function renderSite(raw, imgs = {}) {
   const c = normalize(raw);
-  const books = new Map(c.books.map((b, i) => [b.id, { ...b, i }]));
+  const visible = c.books.filter((b) => !b.hidden);
+  const books = new Map(visible.map((b) => [b.id, b]));
   const blocks = c.blocks.filter((b) => !b.hidden);
-  const bookBlock = blocks.find((b) => b.type === 'book');
-  const shelf = blocks.find((b) => b.type === 'series' || b.type === 'books' || b.type === 'start');
+  const shelf = blocks.find((b) => b.type === 'books' || b.type === 'series' || b.type === 'start');
   const name = c.name || 'Автор';
-  const cv = (b) => cover(b, b.i, imgs, name);
-  const lbl = (s) => (s ? `<div class="lbl">${fmt(s, false)}</div>` : '');
+  const cv = (b) => cover(b, imgs, name);
 
   const R = {
     hero: (k) => {
-      const ids = (k.books || []).length ? k.books : [k.book].filter(Boolean);
-      const covers = ids.map((id) => books.get(id)).filter((b) => b && !b.hidden).slice(0, 3);
-      const to = bookBlock ? '#' + bookBlock.id : '';
-      const where = (b) => {
-        const u = safeUrl(b.litnet) || bookLinks(b)[0]?.[1];
-        return u ? `href="${esc(u)}"${ext(u)}` : `href="#${(shelf || bookBlock || k).id}"`;
-      };
-      const title = String(k.title || '').split('\n').filter((l) => l.trim());
+      const chosen = (k.books || []).map((id) => books.get(id)).filter(Boolean);
+      const covers = (chosen.length ? chosen : visible).slice(0, 3);
+      // средняя — главная: если выбрана книга кнопки, она встаёт в центр
+      const main = books.get(k.book) || covers[0];
+      if (covers.length === 3 && main && covers.includes(main)) { covers.splice(covers.indexOf(main), 1); covers.splice(1, 0, main); }
       return `<section class="hero" id="${k.id}">
         <div class="wrap hero-in">
           ${lbl(k.label)}
-          <h1>${title.length > 1 ? title.map((l) => `<span class="ln">${fmt(l.trim(), false)}</span>`).join('') : fmt(title[0] || '', false)}</h1>
+          <h1>${h1lines(k.title)}</h1>
           ${k.text ? `<p class="lead">${fmt(k.text)}</p>` : ''}
           <div class="acts">
-            ${k.btn && to ? `<a class="btn btn-dark" href="${to}">${esc(k.btn)}</a>` : ''}
+            ${k.btn && main ? `<a class="btn btn-dark" href="${bookHref(main)}">${esc(k.btn)}</a>` : ''}
             ${shelf ? `<a class="lnk" href="#${shelf.id}">Все книги <span class="arrow">→</span></a>` : ''}
           </div>
         </div>
         ${covers.length ? `<div class="shelf n${covers.length}"><div class="fogband mist" aria-hidden="true"></div>
-          <div class="wrap shelf-in">${covers.map((b) => `<a class="shelf-b" ${where(b)} aria-label="${esc(plain(b.title))}">${cv(b)}</a>`).join('')}</div></div>` : ''}
+          <div class="wrap shelf-in">${covers.map((b) => `<a class="shelf-b" href="${bookHref(b)}" aria-label="${esc(plain(b.title))}">${cv(b)}</a>`).join('')}</div></div>` : ''}
       </section>`;
     },
     marquee: (k) => {
@@ -341,50 +634,48 @@ export function renderSite(raw, imgs = {}) {
       const b = books.get(k.book);
       if (!b) return '';
       const links = bookLinks(b);
-      const [first, ...rest] = links;
-      const pct = b.total > 0 && b.done > 0 ? Math.min(100, Math.round(b.done / b.total * 100)) : 0;
-      const meta = [
-        ['Статус', esc(STATUS[b.status] || '')],
-        pct && b.status === 'writing' ? ['Написано', `${esc(b.done)} из ~${esc(b.total)} глав<span class="bar"><i style="width:${pct}%"></i></span>`] : null,
-        b.al ? ['Объём', `${esc(b.al)}&nbsp;а.л.`] : null,
-        links.length ? ['Где читать', links.map(([n]) => esc(n)).join(' · ')] : null,
-      ].filter(Boolean);
       return `<section class="sec" id="${k.id}"><div class="wrap feat">
-        <div class="stage mist"><div class="stage-book">${cv(b)}</div></div>
+        <a class="stage mist" href="${bookHref(b)}" aria-label="${esc(plain(b.title))}"><div class="stage-book">${cv(b)}</div></a>
         <div class="feat-txt">
           ${lbl(k.label)}
           <h2 class="feat-t">${fmt(b.title, false)}</h2>
-          ${b.ann || b.short ? `<p class="ann">${fmt(b.ann || b.short)}</p>` : ''}
-          <dl class="meta">${meta.map(([t, d]) => `<div><dt>${t}</dt><dd>${d}</dd></div>`).join('')}</dl>
+          ${b.tagline || b.short ? `<p class="ann">${fmt(b.tagline || b.short)}</p>` : ''}
+          <div class="meta-line">${statusLine(b).join('<i>·</i>')}</div>
           <div class="acts">
-            ${first ? `<a class="btn btn-dark" href="${esc(first[1])}"${ext(first[1])}>Читать на ${esc(first[0])}е</a>` : ''}
-            ${rest.map(([n, u]) => `<a class="lnk" href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}
+            ${links[0] ? `<a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(ctaText(b, links))}</a>` : ''}
+            <a class="lnk" href="${bookHref(b)}">О книге <span class="arrow">→</span></a>
           </div>
         </div></div></section>`;
     },
     series: (k) => {
-      const list = (k.books || []).map((id) => books.get(id)).filter((b) => b && !b.hidden);
+      const name2 = k.series || '';
+      const list = name2 ? seriesBooks(c, name2) : (k.books || []).map((id) => books.get(id)).filter(Boolean);
       if (!list.length) return '';
       return `<section class="sec series" id="${k.id}"><div class="wrap">
         <div class="series-h">
-          <div>${lbl(k.label)}<h2>${fmt(k.title)}</h2></div>
+          <div>${lbl(k.label)}<h2>${k.title ? fmt(k.title) : `<span class="it">«</span>${esc(name2)}<span class="it">»</span>`}</h2></div>
           ${k.text ? `<p>${fmt(k.text)}</p>` : ''}
         </div>
-        <div class="start n${Math.min(list.length, 4)}">${list.map((b, i) => card(b, false, i + 1)).join('')}</div></div></section>`;
+        <div class="start n${Math.min(list.length, 4)}">${list.map((b, i) => card(b, imgs, name, { num: Number(b.seriesNo) || i + 1 })).join('')}</div></div></section>`;
     },
     start: (k) => {
       const list = (k.books || []).map((id) => books.get(id)).filter(Boolean);
       if (!list.length) return '';
       return `<section class="sec" id="${k.id}"><div class="wrap">
         <div class="sec-h"><h2>${fmt(k.title, false)}</h2>${k.sub ? `<span class="it">${esc(k.sub)}</span>` : ''}</div>
-        <div class="start n${Math.min(list.length, 4)}">${list.map((b) => card(b)).join('')}</div></div></section>`;
+        <div class="start n${Math.min(list.length, 4)}">${list.map((b) => card(b, imgs, name)).join('')}</div></div></section>`;
     },
     books: (k) => {
-      const list = [...books.values()].filter((b) => !b.hidden);
-      if (!list.length) return '';
+      const inSeries = new Set(blocks.filter((x) => x.type === 'series' && x.series).map((x) => x.series.trim()));
+      if (!visible.length || visible.every((b) => inSeries.has(String(b.series || '').trim()))) return '';
+      const sers = seriesList(c);
+      const solo = visible.some((b) => !String(b.series || '').trim());
+      const groups = [...sers, ...(solo ? ['Отдельные книги'] : [])];
+      const ordered = [...sers.flatMap((s) => seriesBooks(c, s)), ...visible.filter((b) => !String(b.series || '').trim())];
       return `<section class="sec" id="${k.id}"><div class="wrap">
         <div class="sec-h"><h2>${fmt(k.title || 'Книги', false)}</h2>${k.sub ? `<span class="it">${esc(k.sub)}</span>` : ''}</div>
-        <div class="grid">${list.map((b) => card(b, true)).join('')}</div></div></section>`;
+        ${groups.length > 1 ? `<div class="chips" role="group" aria-label="Циклы"><button type="button" class="chip" aria-pressed="true" data-g="">Все</button>${groups.map((g) => `<button type="button" class="chip" aria-pressed="false" data-g="${esc(g)}">${esc(g)}</button>`).join('')}</div>` : ''}
+        <div class="grid">${ordered.map((b) => card(b, imgs, name, { small: true, group: String(b.series || '').trim() || 'Отдельные книги' })).join('')}</div></div></section>`;
     },
     quote: (k) => k.text ? `<section class="quote" id="${k.id}"><div class="wrap q-in">
         <span class="q-mark" aria-hidden="true">“</span>
@@ -392,7 +683,7 @@ export function renderSite(raw, imgs = {}) {
         <div class="q-foot">${k.label ? `<span class="lbl">${esc(k.label)}</span>` : ''}${k.cite ? `<cite>${esc(k.cite)}</cite>` : ''}</div>
       </div></section>` : '',
     about: (k) => {
-      const facts = lines(k.facts).map((l) => l.split(/\s+[—–-]\s+/)).filter((p) => p[0]);
+      const facts = lines(k.facts).map(pair).filter((p) => p[0]);
       const ph = k.photo && imgs[k.photo];
       return `<section class="sec" id="${k.id}"><div class="wrap about">
         <div class="arch-w"><div class="arch${ph ? '' : ' mist'}">${ph ? `<img src="${esc(ph)}" alt="${esc(name)}" loading="lazy">` : `<span>${esc(initials(name))}</span>`}</div></div>
@@ -418,39 +709,103 @@ export function renderSite(raw, imgs = {}) {
         <div class="prose">${paras(k.text)}</div></div></section>`,
   };
 
-  function card(b, small, num) {
-    const u = safeUrl(b.litnet) || bookLinks(b)[0]?.[1] || '';
-    const tag = u ? `a href="${esc(u)}"${ext(u)}` : 'div';
-    return `<${tag} class="card${small ? ' sm' : ''}">
-      ${num ? `<span class="num"><b>${String(num).padStart(2, '0')}</b>Книга ${num}${b.status === 'writing' ? ' · пишется' : ''}</span>` : ''}
-      <div class="plinth">${cv(b)}</div>
-      <div class="card-txt">
-        ${b.mood && !small ? `<span class="mood">${esc(b.mood)}</span>` : ''}
-        <h3>${fmt(b.title, false)}</h3>
-        ${small ? `<span class="lbl">${esc(STATUS[b.status] || '')}</span>` : ''}
-        ${b.short && !small ? `<p>${fmt(b.short)}</p>` : ''}
-        ${u && !small ? '<span class="lnk">Читать <span class="arrow">→</span></span>' : ''}
-      </div>
-    </${tag.split(' ')[0]}>`;
-  }
+  const parts = blocks.map((k) => [k, R[k.type](k)]).filter(([, html]) => html);
+  return { title: name, ...chrome(c, parts.map(([k]) => k)), main: parts.map(([, html]) => html).join('\n'), colors: colors(c), shown: parts.map(([k]) => k.id) };
+}
 
-  const menu = blocks.filter((b) => b.menu).map((b) => [b.menu, '#' + b.id]);
-  const nav = menu.map(([n, u]) => `<a href="${u}">${esc(n)}</a>`).join('');
-  const headU = safeUrl(c.headUrl);
-  const headBtn = c.headBtn && headU ? `<a class="btn btn-line" href="${esc(headU)}"${ext(headU)}>${esc(c.headBtn)}</a>` : '';
-  const footLinks = lines(c.foot).map((l) => l.split(/\s+[—–-]\s*/)).map(([n, u]) => [n, safeUrl(u)]).filter(([n, u]) => n && u);
+// Страница книги — продающий лендинг: крючок и кнопка сразу, потом аннотация, коллаж, цитаты, отрывок,
+// герои, отзывы, другие книги цикла и последний призыв. Пустые разделы не показываются
+export function renderBook(raw, imgs = {}, key = '') {
+  const c = normalize(raw);
+  const b = findBook(c, key);
+  if (!b) return null;
+  const name = c.name || 'Автор';
+  const shown = new Set(renderSite(c, imgs).shown);
+  const blocks = c.blocks.filter((x) => shown.has(x.id));
+  const links = bookLinks(b);
+  const cta = ctaText(b, links);
+  const shelfBlock = blocks.find((x) => x.type === 'books') || blocks.find((x) => x.type === 'series' && x.series === b.series) || blocks.find((x) => x.type === 'series');
+  const back = shelfBlock ? `./#${shelfBlock.id}` : './';
+  const ser = String(b.series || '').trim();
+  const mates = ser ? seriesBooks(c, ser) : [];
+  const no = ser ? (Number(b.seriesNo) || mates.indexOf(b) + 1) : 0;
+  const next = ser ? mates[mates.indexOf(b) + 1] : null;
+  const others = ser ? mates.filter((x) => x !== b) : c.books.filter((x) => !x.hidden && x !== b).slice(0, 4);
+  const tags = String(b.tags || '').split(/[,;]/).map((t) => t.trim()).filter(Boolean);
+  const pct = b.status === 'writing' && b.total > 0 && b.done > 0 ? Math.min(100, Math.round(b.done / b.total * 100)) : 0;
+  const buttons = (dark) => `<div class="acts">
+      ${links[0] ? `<a class="btn ${dark ? 'btn-dark' : 'btn-light'}" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(cta)}</a>` : ''}
+      ${links.slice(1).map(([n, u]) => `<a class="lnk" href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}
+    </div>`;
+  const quotes = chunks(b.quotes).map((q) => {
+    const ls = q.split('\n'); const cite = /^[—–-]\s*/.test(ls[ls.length - 1]) && ls.length > 1 ? ls.pop().replace(/^[—–-]\s*/, '') : '';
+    return { t: ls.join(' ').replace(/^[«"“„]\s*/, '').replace(/\s*[»"”](\.?)$/, '$1'), cite };
+  });
+  const reviews = chunks(b.reviews).map((r) => {
+    const ls = r.split('\n'); const who = ls.length > 1 && /^[—–-]\s*/.test(ls[ls.length - 1]) ? ls.pop().replace(/^[—–-]\s*/, '') : '';
+    return { t: ls.join(' '), who };
+  });
+  const heroes = lines(b.heroes).map(pair);
+  const photos = (b.collage || []).map((id) => imgs[id]).filter(Boolean).slice(0, 6);
+  const excerpt = lines(b.excerpt);
+
+  const S = [];
+  S.push(`<section class="bk-hero"><div class="wrap">
+      <a class="back lnk" href="${back}"><span class="arrow">←</span> Все книги</a>
+      <div class="bk-in">
+        <div class="stage mist bk-stage"><div class="stage-book">${cover(b, imgs, name)}</div></div>
+        <div class="bk-txt">
+          ${ser ? `<div class="lbl">Цикл «${esc(ser)}»${no ? ` · Книга ${no}` : ''}</div>` : `<div class="lbl">${esc(name)}</div>`}
+          <h1 class="bk-t">${fmt(b.title, false)}</h1>
+          ${b.tagline ? `<p class="bk-hook">${fmt(b.tagline)}</p>` : ''}
+          ${tags.length ? `<ul class="tags">${tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+          <div class="meta-line">${statusLine(b).join('<i>·</i>')}</div>
+          ${pct ? `<div class="bar" aria-label="Написано ${pct}%"><i style="width:${pct}%"></i></div>` : ''}
+          ${buttons(true)}
+        </div>
+      </div></div></section>`);
+  if (b.ann) S.push(`<section class="sec bk-sec"><div class="wrap bk-two">
+      <div class="lbl">О книге</div>
+      <div class="bk-ann">${paras(b.ann)}</div></div></section>`);
+  if (b.collageOn !== false && photos.length) S.push(`<section class="collage n${photos.length}" aria-label="Атмосфера книги"><div class="wrap col-in">
+      ${photos.map((src) => `<figure><img src="${esc(src)}" alt="" loading="lazy"></figure>`).join('')}</div></section>`);
+  if (quotes.length) S.push(`<section class="quote bk-quotes"><div class="wrap q-in">
+      <span class="q-mark" aria-hidden="true">“</span>
+      ${quotes.map((q) => `<figure><blockquote>${fmt(q.t)}</blockquote>${q.cite ? `<figcaption>${esc(q.cite)}</figcaption>` : ''}</figure>`).join('')}
+    </div></section>`);
+  if (excerpt.length) S.push(`<section class="sec bk-sec"><div class="wrap bk-two">
+      <div class="lbl">Отрывок</div>
+      <div><div class="excerpt">${excerpt.map((p) => `<p>${fmt(p, false)}</p>`).join('')}</div>
+      ${links[0] ? `<div class="acts"><a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>Читать дальше</a></div>` : ''}</div>
+    </div></section>`);
+  if (heroes.length) S.push(`<section class="sec bk-sec"><div class="wrap">
+      <div class="sec-h"><h2>Герои</h2></div>
+      <div class="heroes n${Math.min(heroes.length, 3)}">${heroes.map(([n, t]) => `<div class="hero-c"><h3>${esc(n)}</h3>${t ? `<p>${fmt(t)}</p>` : ''}</div>`).join('')}</div>
+    </div></section>`);
+  if (reviews.length) S.push(`<section class="sec bk-sec"><div class="wrap">
+      <div class="sec-h"><h2>Читатели <span class="it">о книге</span></h2></div>
+      <div class="reviews">${reviews.map((r) => `<figure class="review"><blockquote>${fmt(r.t)}</blockquote>${r.who ? `<figcaption>${esc(r.who)}</figcaption>` : ''}</figure>`).join('')}</div>
+    </div></section>`);
+  if (others.length) S.push(`<section class="sec bk-sec series"><div class="wrap">
+      <div class="series-h"><div>${ser ? '<div class="lbl">Цикл</div>' : ''}<h2>${ser ? `<span class="it">«</span>${esc(ser)}<span class="it">»</span>` : 'Другие <span class="it">книги</span>'}</h2></div>
+        ${next ? `<a class="lnk" href="${bookHref(next)}">Следующая книга: ${esc(plain(next.title))} <span class="arrow">→</span></a>` : ''}</div>
+      <div class="start n${Math.min(ser ? mates.length : others.length, 4)}">${(ser ? mates : others).map((x, i) => (x === b
+        ? `<div class="card here"><span class="num"><b>${String(Number(x.seriesNo) || i + 1).padStart(2, '0')}</b>Вы здесь</span><div class="plinth">${cover(x, imgs, name)}</div><div class="card-txt"><h3>${fmt(x.title, false)}</h3></div></div>`
+        : card(x, imgs, name, ser ? { num: Number(x.seriesNo) || i + 1 } : {}))).join('')}</div>
+    </div></section>`);
+  if (links[0]) S.push(`<section class="tg bk-final"><div class="wrap tg-in"><div>
+      <div class="lbl">${b.status === 'writing' ? 'Книга пишется — читайте вместе с автором' : 'Книга завершена'}</div>
+      <h2>${fmt(b.title, false)}</h2>
+      ${b.tagline ? `<p>${fmt(b.tagline)}</p>` : ''}</div>
+      ${buttons(false)}
+    </div></section>`);
+  const sticky = links[0] ? `<div class="bk-sticky"><span>${fmt(b.title, false)}</span><a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(cta)}</a></div>` : '';
+
   return {
-    title: name,
-    head: `<div class="wrap head-in"><nav class="nav" aria-label="Разделы">${nav}</nav>
-      <a class="logo" href="#top">${esc(name)}</a>
-      <div class="top-r">${headBtn}${menu.length || headBtn ? '<button class="menu-btn" type="button" aria-expanded="false" aria-controls="mnav"><span></span><span></span><em>Меню</em></button>' : ''}</div></div>
-      <nav class="mnav" id="mnav" aria-label="Меню" hidden><div class="wrap">${nav}${headBtn}</div></nav>`,
-    main: blocks.map((k) => R[k.type](k)).join('\n'),
-    foot: `<div class="wrap">
-      <div class="foot-top"><nav aria-label="Разделы">${nav}</nav><a class="lnk" href="#top">Наверх <span class="arrow">↑</span></a></div>
-      <div class="foot-big" aria-hidden="true">${esc(name)}</div>
-      <div class="foot-row"><span>© ${new Date().getFullYear()} ${esc(name)}</span>
-      <nav aria-label="Ссылки">${footLinks.map(([n, u]) => `<a href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}</nav></div></div>`,
+    title: `${plain(b.title)} — ${name}`,
+    description: plain(b.tagline || b.short || ''),
+    ...chrome(c, blocks),
+    main: `<article class="bk">${S.join('\n')}</article>${sticky}`,
     colors: colors(c),
   };
 }

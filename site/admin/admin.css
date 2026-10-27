@@ -97,6 +97,19 @@ a{color:inherit}
 .file{position:relative;overflow:hidden}
 .file input{position:absolute;inset:0;opacity:0;cursor:pointer}
 
+/* форма книги: группы, переключатель, коллаж */
+h4.grp{margin:14px 0 -4px;font:500 11px/1.4 var(--f-body);letter-spacing:.16em;text-transform:uppercase;color:var(--ink);padding-top:16px;border-top:1px solid var(--line)}
+.open-page{justify-self:start;margin-top:8px}
+.four{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.tgl{display:flex;align-items:center;gap:10px;font-size:15px}
+.tgl input{width:18px;height:18px;accent-color:var(--ink)}
+.imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+.imgs figure{position:relative;margin:0;aspect-ratio:1;background:var(--paper-2)}
+.imgs img{width:100%;height:100%;object-fit:cover;display:block}
+.imgs .ico{position:absolute;top:4px;right:4px;background:var(--paper);width:30px;height:30px}
+.add-img{display:grid;place-items:center;aspect-ratio:1;border:1px dashed var(--line);color:var(--ink-2);font-size:13px;cursor:pointer}
+.add-img:hover{color:var(--ink);border-color:var(--ink-2)}
+
 /* цвета */
 .pal{display:grid;grid-template-columns:repeat(3,1fr);gap:18px 8px}
 .pal button{display:grid;justify-items:center;gap:8px;background:none;border:0;padding:4px 0;font-size:13px}
@@ -133,4 +146,5 @@ h3.sub:first-child{margin-top:4px}
   .ed-body{padding-bottom:40px}
   .toast{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
   .types{grid-template-columns:1fr}
+  .four{grid-template-columns:repeat(2,minmax(0,1fr))}
 }

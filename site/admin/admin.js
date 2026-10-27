@@ -1,11 +1,11 @@
 // Админка сайта: блоки (порядок, скрыть, удалить, добавить), книги, цвета, общее.
 // Всё сохраняется само через секунду после правки; справа — живой сайт.
-import { BLOCKS, BOOK_FIELDS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc } from '../content.js';
+import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc, seriesList, slugify } from '../content.js';
 import { openStore, authError } from './store.js';
 import { RULES } from './rules.js';
 
 const app = document.getElementById('app');
-const S = { store: null, user: null, phase: 'boot', content: null, imgs: {}, tab: 'blocks', open: null, adding: false, pasting: false, pv: false, save: 'ok' };
+const S = { store: null, user: null, phase: 'boot', content: null, imgs: {}, tab: 'blocks', open: null, adding: false, pasting: false, pv: false, save: 'ok', pvBook: '' };
 
 const ICON = {
   up: '<path d="M6 15l6-6 6 6"/>',
@@ -18,7 +18,7 @@ const ic = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`
 const plain = (s) => String(s ?? '').replace(/\*/g, '').replace(/\s+/g, ' ').trim();
 const TYPE_NOTE = {
   hero: 'Большая фраза и книга справа', marquee: 'Строка, которая плывёт', book: 'Одна книга с аннотацией и кнопкой',
-  series: 'Название цикла и его книги по порядку', start: 'Несколько книг на выбор', books: 'Все книги сеткой', quote: 'Цитата из книги на тумане',
+  series: 'Цикл: книги встают сами по номеру', start: 'Несколько книг на выбор', books: 'Все книги с фильтром по циклам', quote: 'Цитата из книги на тумане',
   about: 'Фото, текст и цифры', tg: 'Тёмная полоса с кнопкой', text: 'Заголовок и абзацы',
 };
 
@@ -45,7 +45,7 @@ async function loadAll() {
 
 // Картинки, которые больше нигде не стоят (заменили обложку, удалили книгу), убираем при следующем входе
 function cleanImgs() {
-  const used = new Set([...S.content.books.map((b) => b.cover), ...S.content.blocks.map((b) => b.photo)].filter(Boolean));
+  const used = new Set([...S.content.books.flatMap((b) => [b.cover, ...(b.collage || [])]), ...S.content.blocks.map((b) => b.photo)].filter(Boolean));
   for (const id of Object.keys(S.imgs)) if (!used.has(id)) { delete S.imgs[id]; S.store.delImg(id).catch(() => {}); }
 }
 
@@ -160,20 +160,29 @@ function thumb(b) {
 
 function booksTab() {
   const bs = S.content.books;
-  return `<p class="note">Книги появляются в блоках «Книга крупно», «Подборка книг» и «Все книги». Скрытая книга не видна нигде.</p>
+  return `<p class="note">У каждой книги — своя страница с кнопками «Читать», цитатами, отрывком и коллажем. Справа видно, как она выглядит. Новые книги — сверху, на первом экране сами встают три самые новые.</p>
     <div class="list">${bs.map((b, i) => row({
-      id: b.id, scope: 'book', i, n: bs.length, title: plain(b.title) || 'Без названия', sum: STATUS[b.status] || '', off: b.hidden, thumb: thumb(b),
+      id: b.id, scope: 'book', i, n: bs.length, title: plain(b.title) || 'Без названия', sum: bookSum(b), off: b.hidden, thumb: thumb(b),
       body: () => bookForm(b),
     })).join('')}</div>
     <button class="add" data-act="addBook">+ Новая книга</button>`;
 }
 
+const bookSum = (b) => [b.series ? `${b.series}${b.seriesNo ? ` · ${b.seriesNo}` : ''}` : '', STATUS[b.status] || ''].filter(Boolean).join(' · ');
+
+// Форма книги — по группам; рядом стоящие короткие поля — в одну строку
 function bookForm(b) {
-  const F = Object.fromEntries(BOOK_FIELDS.map((f) => [f.k, f]));
-  const one = (k) => field('book', b, F[k]);
-  return [one('title'), one('cover'), one('mood'), one('short'), one('ann'), one('status'),
-    `<div class="three">${one('done')}${one('total')}${one('al')}</div>`,
-    '<span class="lbl">Где читать</span>', one('litnet'), one('litres'), one('litmarket'), one('litgorod')].join('');
+  const pageUrl = new URL(`../?kniga=${encodeURIComponent(normalize(S.content).books.find((x) => x.id === b.id)?.url || b.id)}`, location.href).href;
+  const rows = { seriesNo: 'series', total: 'done', al: 'done', age: 'done' };
+  return `<a class="quiet open-page" href="${esc(pageUrl)}" target="_blank" rel="noopener">Открыть страницу книги ↗</a>` + BOOK_GROUPS.map((g) => {
+    const out = [];
+    for (const f of g.fields) {
+      if (rows[f.k]) continue;
+      const mates = g.fields.filter((x) => rows[x.k] === f.k);
+      out.push(mates.length ? `<div class="${mates.length > 1 ? 'four' : 'two'}">${[f, ...mates].map((x) => field('book', b, x)).join('')}</div>` : field('book', b, f));
+    }
+    return `<h4 class="grp">${g.name}</h4>${out.join('')}`;
+  }).join('');
 }
 
 function lookTab() {
@@ -229,6 +238,16 @@ function field(scope, obj, f) {
         <div class="acts"><label class="btn line file">${src ? 'Заменить' : 'Загрузить'}<input type="file" accept="image/*" ${at}></label>
         ${src ? `<button class="quiet" data-act="noimg" data-s="${scope}" data-id="${obj.id || ''}" data-k="${f.k}">Убрать</button>` : ''}</div></div>${hint}</div>`;
     }
+    case 'series': {
+      const list = seriesList(S.content);
+      return `<label class="f"><span>${f.label}</span><input ${at} list="dl-series" value="${esc(v)}" autocomplete="off"><datalist id="dl-series">${list.map((x) => `<option value="${esc(x)}">`).join('')}</datalist>${hint}</label>`;
+    }
+    case 'toggle': return `<label class="tgl"><input type="checkbox" data-s="${scope}" data-id="${obj.id || ''}" data-k="${f.k}" data-toggle="1"${v !== false ? ' checked' : ''}><span>${f.label}</span></label>`;
+    case 'imgs': {
+      const ids = (v || []).filter((x) => S.imgs[x]);
+      return `<div class="f"><span>${f.label}</span><div class="imgs">${ids.map((x, i) => `<figure><img src="${esc(S.imgs[x])}" alt=""><button class="ico" type="button" data-act="rmimg" data-s="${scope}" data-id="${obj.id}" data-k="${f.k}" data-i="${i}" aria-label="Убрать фото" title="Убрать">${ic('trash')}</button></figure>`).join('')}
+        ${ids.length < 6 ? `<label class="add-img file">+ Фото<input type="file" accept="image/*" multiple ${at} data-multi="1"></label>` : ''}</div>${hint}</div>`;
+    }
     case 'num': return `<label class="f"><span>${f.label}</span><input ${at} inputmode="numeric" value="${esc(v)}"></label>`;
     case 'url': return `<label class="f"><span>${f.label}</span><input ${at} type="url" inputmode="url" placeholder="https://" value="${esc(v)}">${hint}</label>`;
     default: return `<label class="f"><span>${f.label}</span><input ${at} value="${esc(v)}">${hint}</label>`;
@@ -242,6 +261,7 @@ const grow = (el) => { el.style.height = 'auto'; el.style.height = el.scrollHeig
 app.addEventListener('input', (e) => {
   const el = e.target;
   if (!el.dataset.k || el.type === 'checkbox' || el.type === 'file') return;
+  if (el.dataset.k === 'slug') el.value = el.value.replace(/[^a-zA-Z0-9-]/g, '').toLowerCase();
   const o = target(el.dataset.s, el.dataset.id);
   if (!o) return;
   const num = el.getAttribute('inputmode') === 'numeric';
@@ -250,13 +270,17 @@ app.addEventListener('input', (e) => {
   if (el.tagName === 'TEXTAREA') grow(el);
   const lab = document.querySelector(`[data-lab="${el.dataset.id}"]`);
   if (lab && el.dataset.s === 'block') lab.textContent = blockSummary(o);
+  if (lab && el.dataset.s === 'book') lab.textContent = bookSum(o);
   if (el.dataset.k === 'name') document.querySelector('.ed-top .logo').textContent = el.value || 'Сайт';
   changed();
 });
 
 app.addEventListener('change', async (e) => {
   const el = e.target;
-  if (el.type === 'checkbox' && el.dataset.book) {
+  if (el.type === 'checkbox' && el.dataset.toggle) {
+    target(el.dataset.s, el.dataset.id)[el.dataset.k] = el.checked;
+    changed();
+  } else if (el.type === 'checkbox' && el.dataset.book) {
     const o = target(el.dataset.s, el.dataset.id);
     const box = el.closest('.checks');
     const on = new Set([...box.querySelectorAll('input:checked')].map((x) => x.dataset.book));
@@ -265,12 +289,12 @@ app.addEventListener('change', async (e) => {
     document.querySelector(`[data-lab="${o.id}"]`).textContent = blockSummary(o);
     changed();
   } else if (el.type === 'file' && el.dataset.k && el.files[0]) {
-    await uploadImg(el, el.files[0]);
+    await uploadImg(el, el.files);
   } else if (el.type === 'file' && el.dataset.actFile === 'restore' && el.files[0]) {
     await restore(el.files[0]);
   } else if (el.tagName === 'SELECT' || el.type === 'color') {
     if (S.tab === 'look') renderEditor();
-    else { const o = target(el.dataset.s, el.dataset.id); const lab = o && document.querySelector(`[data-lab="${o.id}"]`); if (lab) lab.textContent = el.dataset.s === 'block' ? blockSummary(o) : STATUS[o.status] || ''; }
+    else { const o = target(el.dataset.s, el.dataset.id); const lab = o && document.querySelector(`[data-lab="${o.id}"]`); if (lab) lab.textContent = el.dataset.s === 'block' ? blockSummary(o) : bookSum(o); }
   }
 });
 
@@ -284,12 +308,12 @@ app.addEventListener('submit', async (e) => {
 
 // ---------- действия ----------
 const acts = {
-  tab: (d) => { S.tab = d.t; S.open = null; S.adding = false; S.pasting = false; },
+  tab: (d) => { S.tab = d.t; S.open = null; S.adding = false; S.pasting = false; if (S.pvBook) { S.pvBook = ''; preview(); } },
   pv: (d) => { S.pv = d.v === '1'; },
   open: (d) => {
     S.open = S.open === d.id ? null : d.id;
     if (S.open && S.tab === 'blocks') preview(d.id);
-    if (S.open && S.tab === 'books') { const k = S.content.blocks.find((b) => !b.hidden && (b.book === d.id || (b.books || []).includes(d.id))); if (k) preview(k.id); }
+    if (S.tab === 'books') { S.pvBook = S.open || ''; preview(); }
   },
   move: (d) => {
     const L = listOf(d.s), i = L.findIndex((x) => x.id === d.id), j = i + Number(d.d);
@@ -323,9 +347,10 @@ const acts = {
   addBook: () => {
     const b = { ...newBook(), title: 'Новая книга' };
     S.content.books.unshift(b);
-    S.open = b.id;
+    S.open = b.id; S.pvBook = b.id;
     changed();
   },
+  rmimg: (d) => { const o = target(d.s, d.id); o[d.k] = (o[d.k] || []).filter((_, i) => i !== Number(d.i)); changed(); },
   pal: (d) => { S.content.palette = d.p; changed(); },
   noimg: (d) => { const o = target(d.s, d.id); o[d.k] = ''; changed(); },
   out: async () => { await S.store.signOut(); if (S.store.local) toast('В пробном режиме выходить некуда'); return false; },
@@ -397,7 +422,8 @@ function preview(goto) {
   pvT = setTimeout(() => {
     const f = document.getElementById('pv');
     if (!f || !pvReady) return;
-    f.contentWindow.postMessage({ kind: 'site', content: S.content, imgs: S.imgs, goto: pvGoto }, location.origin);
+    const book = S.pvBook && normalize(S.content).books.find((b) => b.id === S.pvBook);
+    f.contentWindow.postMessage({ kind: 'site', content: S.content, imgs: S.imgs, goto: pvGoto, book: book ? book.url : '' }, location.origin);
     pvGoto = null;
   }, 120);
 }
@@ -424,15 +450,17 @@ async function shrink(file) {
     max = Math.round(max * 0.8); q = Math.max(0.7, q - 0.05);
   }
 }
-async function uploadImg(el, file) {
+async function uploadImg(el, files) {
   const o = target(el.dataset.s, el.dataset.id);
   S.save = 'busy'; status();
   try {
-    const data = await shrink(file);
-    const id = newId('i');
-    await S.store.putImg(id, data);
-    S.imgs[id] = data;
-    o[el.dataset.k] = id;
+    for (const file of el.dataset.multi ? [...files].slice(0, 6 - (o[el.dataset.k] || []).length) : [files[0]]) {
+      const data = await shrink(file);
+      const id = newId('i');
+      await S.store.putImg(id, data);
+      S.imgs[id] = data;
+      if (el.dataset.multi) o[el.dataset.k] = [...(o[el.dataset.k] || []), id]; else o[el.dataset.k] = id;
+    }
     changed();
     renderEditor();
   } catch {
@@ -459,7 +487,7 @@ function aiText() {
 
 Правила ответа: верни ВЕСЬ JSON целиком одним блоком кода. Не меняй поля id, type, cover, photo. Можно менять тексты, порядок блоков (массив blocks), добавлять блоки и книги (новый id — любая уникальная строка).
 - blocks — блоки сайта сверху вниз; типы: ${types}
-- books — книги; status: writing (пишется) или done (завершена)
+- books — книги, у каждой своя страница: title, series (цикл) и seriesNo (номер), status: writing (пишется) или done (завершена), tagline (крючок — одна фраза), tags (тропы через запятую), ann (аннотация), quotes (цитаты через пустую строку), excerpt (отрывок), heroes (строки «Имя — описание»), reviews (отзывы), mood и short (для подборок). Не выдумывай цитаты, отрывки и отзывы — только из текста книги, который я дам
 - *слово в звёздочках* — тонкий курсив; hidden: true — скрыто с сайта; menu — пункт меню сверху
 
 \`\`\`json

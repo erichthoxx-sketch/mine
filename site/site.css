@@ -233,6 +233,83 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .foot-row nav a:hover,.foot-top nav a:hover{color:var(--ink-2)}
 #top:empty{min-height:70vh}
 
+/* книга крупно: строка статуса */
+.meta-line{display:flex;flex-wrap:wrap;gap:6px 10px;font:500 11px/1.4 var(--f-body);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2)}
+.meta-line i{font-style:normal;color:var(--ink-3)}
+
+/* все книги: фильтр по циклам */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:-24px 0 36px}
+.chip{border:1px solid var(--line);background:transparent;color:var(--ink-2);padding:9px 16px;font:500 11px/1 var(--f-body);letter-spacing:.14em;text-transform:uppercase;cursor:pointer;transition:all .25s}
+.chip:hover{color:var(--ink);border-color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.card[hidden]{display:none}
+
+/* ---------- страница книги: продающий лендинг ---------- */
+.bk-hero .wrap{padding-block:28px clamp(56px,7vw,104px)}
+.back{margin-bottom:clamp(20px,3vw,40px)}
+.bk-in{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(36px,6vw,104px);align-items:center}
+.bk-stage{aspect-ratio:4/5;padding:12% 20% 16%}
+.bk-txt{display:grid;gap:24px;justify-items:start}
+.bk-t{font-size:clamp(48px,6.6vw,108px);line-height:.9}
+.bk-hook{margin:0;max-width:24em;font:italic 400 clamp(22px,2.2vw,30px)/1.3 var(--f-italic);color:var(--ink)}
+.tags{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
+.tags li{border:1px solid var(--line);padding:7px 12px;font-size:13px;line-height:1.2;color:var(--ink-2)}
+.bk-txt .bar{width:100%;max-width:360px;margin-top:-10px}
+.bk-two{display:grid;grid-template-columns:minmax(0,.35fr) minmax(0,1fr);gap:24px clamp(32px,6vw,96px);align-items:start}
+.bk-ann p{margin:0 0 1em;font-size:clamp(18px,1.6vw,21px);line-height:1.65;max-width:34em}
+.bk-ann p:first-child{font:400 clamp(24px,2.4vw,32px)/1.35 var(--f-italic);font-style:italic}
+.bk-sec{border-top:1px solid var(--line)}
+.bk-sec+.bk-sec{border-top:0;padding-top:0}
+
+/* коллаж: разные размеры, как разворот журнала (сетка 12 колонок, раскладка — по числу фото) */
+.collage .col-in{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-rows:clamp(52px,6vw,88px);grid-auto-flow:dense;gap:clamp(8px,1vw,16px);padding-block:clamp(48px,6vw,88px)}
+.collage figure{margin:0;overflow:hidden;background:var(--paper-2);grid-column:span 3;grid-row:span 3}
+.collage img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(.85);transition:transform 1.2s cubic-bezier(.2,.7,.2,1)}
+.collage figure:hover img{transform:scale(1.04)}
+.collage.n1 figure{grid-column:span 12;grid-row:span 6}
+.collage.n2 figure{grid-column:span 6;grid-row:span 6}
+.collage.n3 figure:nth-child(1){grid-column:span 8;grid-row:span 6}
+.collage.n3 figure:nth-child(n+2){grid-column:span 4}
+.collage.n4 figure:nth-child(1){grid-column:span 6;grid-row:span 6}
+.collage.n4 figure:nth-child(2){grid-column:span 6}
+.collage.n5 figure:nth-child(1),.collage.n6 figure:nth-child(1){grid-column:span 6;grid-row:span 6}
+.collage.n6 figure:nth-child(6){grid-column:span 12;grid-row:span 4}
+
+/* цитаты книги */
+.bk-quotes figure{margin:0;display:grid;gap:14px;justify-items:center}
+.bk-quotes figure+figure{margin-top:clamp(40px,5vw,64px)}
+.bk-quotes blockquote{margin:0;max-width:22em;font:italic 400 clamp(28px,3.8vw,50px)/1.18 var(--f-italic);text-wrap:balance}
+.bk-quotes figcaption{font:500 11px/1.4 var(--f-body);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-2)}
+
+/* отрывок: обрывается на самом интересном */
+.excerpt{position:relative;max-height:30em;overflow:hidden;margin-bottom:28px}
+.excerpt::after{content:"";position:absolute;left:0;right:0;bottom:0;height:9em;background:linear-gradient(180deg,transparent,var(--paper))}
+.excerpt p{margin:0 0 .9em;font-size:18px;line-height:1.75;max-width:36em;text-indent:1.5em}
+.excerpt p:first-child{text-indent:0}
+
+/* герои */
+.heroes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(20px,3vw,48px)}
+.heroes.n1{grid-template-columns:minmax(0,560px)}
+.heroes.n2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.hero-c{display:grid;gap:12px;align-content:start;padding-top:22px;border-top:1px solid var(--ink)}
+.hero-c h3{font-size:clamp(28px,2.6vw,38px)}
+.hero-c p{margin:0;color:var(--ink-2);font-size:16px;line-height:1.6}
+
+/* отзывы */
+.reviews{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:clamp(16px,2vw,28px)}
+.review{margin:0;padding:clamp(24px,3vw,36px);background:var(--paper-2);display:grid;gap:18px;align-content:space-between}
+.review blockquote{margin:0;font:italic 400 21px/1.45 var(--f-italic)}
+.review figcaption{font:500 11px/1.4 var(--f-body);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-2)}
+
+/* «вы здесь» в цикле */
+.card.here{opacity:.55}
+.series-h .lnk{justify-self:start;align-self:end}
+
+/* последний призыв и кнопка, которая всегда под рукой на телефоне */
+.bk-final h2{font-size:clamp(40px,5.6vw,88px)}
+.bk-sticky{display:none}
+.tg .lnk::after{background:var(--paper)}
+
 /* планшет и телефон */
 @media (max-width:980px){
   .nav{display:none}
@@ -241,7 +318,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .logo{font-size:20px;letter-spacing:.22em}
   .top-r .btn-line{display:none}
   .menu-btn{display:inline-grid;grid-template-columns:auto auto;align-items:center;column-gap:12px;row-gap:5px}
-  .feat,.about,.series-h{grid-template-columns:minmax(0,1fr)}
+  .feat,.about,.series-h,.bk-in,.bk-two{grid-template-columns:minmax(0,1fr)}
+  .bk-stage{aspect-ratio:1/1;padding:10% 26% 12%}
+  .heroes{grid-template-columns:minmax(0,1fr)}
+  .collage .col-in{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:40vw}
+  .collage .col-in figure{grid-column:span 1!important;grid-row:span 1!important}
+  .collage .col-in figure:first-child,.collage.n3 .col-in figure:last-child,.collage.n5 .col-in figure:last-child{grid-column:span 2!important}
   .feat .stage{aspect-ratio:1/1;padding:12% 26% 14%}
   .grid,.start.n4{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tg-in{grid-template-columns:minmax(0,1fr)}
@@ -260,5 +342,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .meta div{grid-template-columns:100px 1fr}
   .stage-cap{left:16px;right:16px;bottom:14px}
   .btn{height:50px;padding:0 24px}
+}
+@media (max-width:640px){
+  .is-book.cta-off .bk-sticky{position:fixed;left:0;right:0;bottom:0;z-index:15;display:flex;align-items:center;justify-content:space-between;gap:12px;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:10px max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+  .bk-sticky span{font:400 18px/1.1 var(--f-display);text-transform:uppercase;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bk-sticky .it{text-transform:none}
+  .bk-sticky .btn{height:44px;padding:0 18px;flex:none}
+  .is-book .foot{padding-bottom:70px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
