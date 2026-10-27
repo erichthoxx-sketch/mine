@@ -15,16 +15,15 @@ test('сайт: пример собирается из всех видимых �
   assert.equal(r.colors.a1, '#8a9aa6');
 });
 
-test('сайт: первый экран — медведь-символ справа (или своё фото), без обложек; карточки ведут на страницы книг', () => {
+test('сайт: первый экран — медведь в тумане с обложки (или своё фото), без обложек книг; карточки ведут на страницы книг', () => {
   const c = ex();
   const r = renderSite(c);
   const hero = r.main.slice(0, r.main.indexOf('id="k3"'));
   assert.ok(!hero.includes('class="cover'), 'обложек на первом экране нет');
-  assert.match(hero, /class="hero-art"/);
-  assert.match(r.head, /class="mark"/, 'медведь рядом с именем');
+  assert.match(hero, /<img src="hero-bear.jpg"/);
   assert.match(hero, /href="\.\/\?kniga=razvod-dlya-chernoy-vdovy"/);
   c.blocks[0].photo = 'p1';
-  assert.match(renderSite(c, { p1: 'data:image/jpeg;base64,AA' }).main, /class="hero-ph"/);
+  assert.match(renderSite(c, { p1: 'data:image/jpeg;base64,AA' }).main, /<img src="data:image\/jpeg;base64,AA"/);
   c.blocks[0].photo = ''; c.blocks[0].art = false;
   assert.match(renderSite(c).main, /hero-in solo/);
   assert.match(r.main, /class="card[^"]*" href="\.\/\?kniga=alpiyskiy-razvod"/);

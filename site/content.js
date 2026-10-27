@@ -26,8 +26,8 @@ export const BLOCKS = {
     { k: 'text', label: 'Текст', type: 'area' },
     { k: 'btn', label: 'Кнопка' },
     { k: 'book', label: 'Кнопка ведёт на страницу книги', type: 'book', hint: 'Эта книга — и в строке «Новинка» справа' },
-    { k: 'art', label: 'Картинка с медведем справа', type: 'toggle' },
-    { k: 'photo', label: 'Своё фото вместо медведя', type: 'img', hint: 'По желанию: портрет или атмосферное фото' },
+    { k: 'art', label: 'Медведь с обложки справа', type: 'toggle', hint: '' },
+    { k: 'photo', label: 'Другая картинка вместо медведя', type: 'img', hint: 'По желанию' },
   ] },
   marquee: { name: 'Бегущая строка', fields: [
     { k: 'items', label: 'Фразы', type: 'area', hint: 'Каждая с новой строки; *в звёздочках* — курсивом' },
@@ -566,7 +566,7 @@ function chrome(c, blocks) {
   const footLinks = lines(c.foot).map(pair).map(([n, u]) => [n, safeUrl(u)]).filter(([n, u]) => n && u);
   return {
     head: `<div class="wrap head-in"><nav class="nav" aria-label="Разделы">${nav}</nav>
-      <a class="logo" href="./">${c.mark !== false ? bearArt('mark') : ''}<span>${esc(name)}</span></a>
+      <a class="logo" href="./">${esc(name)}</a>
       <div class="top-r">${headBtn}${menu.length || headBtn ? '<button class="menu-btn" type="button" aria-expanded="false" aria-controls="mnav"><span></span><span></span><em>Меню</em></button>' : ''}</div></div>
       <nav class="mnav" id="mnav" aria-label="Меню" hidden><div class="wrap">${nav}${headBtn}</div></nav>`,
     foot: `${subscribeBox(c)}<div class="wrap foot-row">
@@ -595,11 +595,6 @@ function subscribeBox(c) {
     </div></section>`;
 }
 
-// Медведь — символ Ланы: цельный силуэт (дальние лапы чуть светлее). Первый экран, знак в шапке, значок вкладки
-export const BEAR = { near: 'M175 190 C205 180 236 186 262 176 C290 162 314 148 340 148 C366 148 386 158 402 166 C410 170 418 171 425 170 C421 159 430 151 440 154 C448 157 449 166 445 172 C455 176 463 184 469 192 C481 196 494 198 505 201 C517 204 520 223 509 229 C497 235 483 237 470 240 C462 248 452 256 444 263 C436 271 432 280 431 292 C428 312 428 336 430 360 C440 364 450 370 450 376 C450 381 444 382 436 382 L400 382 C394 382 392 377 394 372 C392 348 390 326 386 308 C356 314 300 314 256 306 C246 322 240 344 242 364 C250 368 258 373 258 378 C258 382 252 382 246 382 L204 382 C198 382 196 377 198 372 C192 352 184 334 172 318 C158 300 150 282 150 262 C150 230 158 204 175 190 Z', far: 'M372 306 C374 330 374 352 374 368 C380 372 386 376 384 382 L352 382 C348 380 348 375 352 370 C352 350 352 328 350 308 Z M268 306 C272 330 276 352 278 368 C284 372 290 376 288 382 L256 382 C252 380 252 375 256 370 C256 350 254 328 250 308 Z', box: '138 140 390 250' };
-export function bearArt(cls = 'art') {
-  return `<svg class="${cls}" viewBox="${BEAR.box}" role="img" aria-label="Медведь — символ Ланы Фрейтаг"><path class="b-far" d="${BEAR.far}"/><path class="b-near" d="${BEAR.near}"/></svg>`;
-}
 const h1lines = (s) => {
   const t = String(s || '').split('\n').filter((l) => l.trim());
   return t.length > 1 ? t.map((l) => `<span class="ln">${fmt(l.trim(), false)}</span>`).join('') : fmt(t[0] || '', false);
@@ -634,7 +629,9 @@ export function renderSite(raw, imgs = {}) {
     hero: (k) => {
       const main = books.get(k.book) || visible.find((b) => b.status === 'writing') || visible[0];
       const ph = k.photo && imgs[k.photo];
-      const art = ph ? `<figure class="hero-ph"><img src="${esc(ph)}" alt=""></figure>` : k.art !== false ? `<figure class="hero-art">${bearArt()}</figure>` : '';
+      // справа — медведь с обложки «Звериной тропы» (лес, туман) или своё фото
+      const art = ph ? `<figure class="hero-ph"><img src="${esc(ph)}" alt=""></figure>`
+        : k.art !== false ? '<figure class="hero-ph"><img src="hero-bear.jpg" alt="Медведь в тумане над лесом"></figure>' : '';
       return `<section class="hero" id="${k.id}"><div class="wrap hero-in${art ? '' : ' solo'}">
         <div class="hero-txt">
           ${lbl(k.label)}

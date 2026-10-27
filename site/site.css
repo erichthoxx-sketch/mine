@@ -61,10 +61,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .nav a,.mnav a:not(.btn){position:relative;font:500 11px/1 var(--f-body);letter-spacing:.18em;text-transform:uppercase;padding:6px 0}
 .nav a::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--ink);transform:scaleX(0);transform-origin:left;transition:transform .35s}
 .nav a:hover::after{transform:scaleX(1)}
-.logo{display:inline-flex;align-items:center;gap:14px;font:400 22px/1 var(--f-display);letter-spacing:.26em;text-transform:uppercase;white-space:nowrap}
-.mark{height:20px;width:auto;flex:none}
-.mark .b-near{fill:var(--ink)}
-.mark .b-far{fill:var(--ink);opacity:.8}
+.logo{display:inline-flex;align-items:center;font:400 22px/1 var(--f-display);letter-spacing:.26em;text-transform:uppercase;white-space:nowrap}
 .top-r{justify-self:end;display:flex;align-items:center;gap:18px}
 .menu-btn{display:none;align-items:center;background:none;border:0;padding:8px 0;color:var(--ink);cursor:pointer;font:500 11px/1 var(--f-body);letter-spacing:.18em;text-transform:uppercase}
 .menu-btn span{grid-column:1;justify-self:end;display:block;width:20px;height:1px;background:currentColor;transition:transform .3s,width .3s}
@@ -93,7 +90,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .cover-img::before{display:none}
 .cover-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 
-/* первый экран: слева заголовок и кнопка, справа медведь — символ Ланы (или своё фото) */
+/* первый экран: слева заголовок и кнопка, справа медведь в тумане с обложки (или своё фото) */
 .hero-in{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(32px,5vw,80px);align-items:center;padding-block:clamp(40px,5vw,72px)}
 .hero-in.solo{grid-template-columns:minmax(0,1fr)}
 .hero-txt{display:grid;gap:22px;justify-items:start}
@@ -101,12 +98,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hero h1 .ln{display:block}
 .hero h1 .it{white-space:nowrap}
 .lead{margin:0;max-width:30em;font-size:17px;line-height:1.6;color:var(--ink-2)}
-.hero-art{margin:0;background:var(--tint);aspect-ratio:5/4;display:grid;place-items:center;padding:12% 10% 10%}
-.art{width:100%;height:auto;display:block;overflow:visible}
-.art .b-near{fill:var(--ink)}
-.art .b-far{fill:var(--ink);opacity:.8}
-.hero-ph{margin:0;aspect-ratio:5/4;overflow:hidden;background:var(--paper-2)}
-.hero-ph img{width:100%;height:100%;object-fit:cover;display:block}
+.hero-ph{margin:0;aspect-ratio:4/5;max-height:600px;overflow:hidden;background:var(--paper-2);justify-self:end;width:100%;max-width:480px}
+.hero-ph img{width:100%;height:100%;object-fit:cover;object-position:60% 30%;display:block}
 
 /* бегущая строка */
 .run{border-block:1px solid var(--line);overflow:hidden;white-space:nowrap;padding-block:14px}
@@ -282,9 +275,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   :root{--head:58px}
   .nav{display:none}
   .head-in{grid-template-columns:auto 1fr}
-  .logo{font-size:19px;letter-spacing:.2em;gap:10px}
-  .mark{height:16px}
-  .hero-art{aspect-ratio:16/10;max-width:520px;padding:8% 10% 7%}
+  .logo{font-size:19px;letter-spacing:.2em}
+  .hero-ph{justify-self:stretch;max-width:none;aspect-ratio:4/3;max-height:none}
   .top-r .btn-line{display:none}
   .menu-btn{display:inline-grid;grid-template-columns:auto auto;align-items:center;column-gap:12px;row-gap:5px}
   .hero-in{grid-template-columns:minmax(0,1fr);gap:24px}

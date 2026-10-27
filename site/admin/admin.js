@@ -211,7 +211,6 @@ function generalTab() {
   return `<h3 class="sub">Шапка и подвал</h3>
     <div class="list" style="gap:16px">
       ${field('site', c, { k: 'name', label: 'Имя автора', hint: 'В шапке и внизу сайта' })}
-      ${field('site', c, { k: 'mark', label: 'Медведь — знак рядом с именем', type: 'toggle' })}
       <div class="two">${field('site', c, { k: 'headBtn', label: 'Кнопка в шапке' })}${field('site', c, { k: 'headUrl', label: 'Её ссылка', type: 'url' })}</div>
       ${field('site', c, { k: 'foot', label: 'Ссылки внизу', type: 'area', hint: 'Каждая с новой строки: Telegram — https://t.me/…  Без ссылки строка не показывается.' })}
     </div>
