@@ -18,6 +18,7 @@ function show(content, imgs) {
   $('top').innerHTML = r.main;
   $('foot').innerHTML = r.foot;
   document.title = r.title;
+  try { sessionStorage.removeItem('siteReload'); } catch { /* без хранилища */ }
   watchCta();
   const d = document.querySelector('meta[name="description"]');
   if (d && r.description) d.setAttribute('content', r.description);

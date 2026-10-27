@@ -17,5 +17,13 @@
 <main id="top"></main>
 <footer class="foot" id="foot"></footer>
 <script type="module" src="site.js?v=__V__"></script>
+<script>
+// Страховка: если сайт не собрался за 8 секунд (браузер держал старые файлы) — один раз загружаем заново
+setTimeout(function () {
+  if (document.getElementById('top').innerHTML.trim()) return;
+  try { if (sessionStorage.getItem('siteReload')) return; sessionStorage.setItem('siteReload', '1'); } catch (e) { return; }
+  location.replace(location.pathname + '?r=' + Date.now() + location.search.replace(/^\?/, '&') + location.hash);
+}, 8000);
+</script>
 </body>
 </html>

@@ -44,6 +44,9 @@ jobs:
           cp js/firebase-config.js _site/js/
           cp site/*.js site/*.css _site/site/
           cp site/admin/*.js site/admin/*.css _site/site/admin/
+          # все части сайта — с номером версии, чтобы браузер не смешивал старые и новые файлы
+          sed -i "s#\(from '\.\{1,2\}/[^']*\.js\)'#\1?v=$V'#g" _site/site/*.js _site/site/admin/*.js
+          grep -q "content.js?v=$V" _site/site/site.js
           sed "s#__V__#$V#g" site/index.html > _site/site/index.html
           sed "s#__V__#$V#g" site/admin/index.html > _site/site/admin/index.html
           grep -q "$V" _site/site/admin/index.html
