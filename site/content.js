@@ -639,7 +639,7 @@ export function renderSite(raw, imgs = {}) {
       // справа — медведь с обложки «Звериной тропы» (лес, туман) или своё фото
       const art = ph ? `<figure class="hero-mist" aria-hidden="true"><img src="${esc(ph)}" alt=""></figure>`
         : k.art !== false ? '<figure class="hero-mist" aria-hidden="true"><img src="hero-bear.jpg" alt=""></figure>' : '';
-      return `<section class="hero${art ? ' has-art' : ''}" id="${k.id}">${art}<div class="wrap hero-in">
+      return `<section class="hero${art ? ' has-art' : ''}" id="${k.id}"><div class="wrap hero-in">
         <div class="hero-txt">
           ${lbl(k.label)}
           <h1>${h1lines(k.title)}</h1>
@@ -649,6 +649,7 @@ export function renderSite(raw, imgs = {}) {
             ${shelf ? `<a class="lnk" href="#${shelf.id}">Все книги <span class="arrow">→</span></a>` : ''}
           </div>
         </div>
+        ${art}
       </div></section>`;
     },
     marquee: (k) => {
