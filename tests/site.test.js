@@ -23,9 +23,9 @@ test('сайт: первый экран — медведь в тумане с о
   assert.match(hero, /<img src="hero-bear.jpg"/);
   assert.match(hero, /href="\.\/\?kniga=razvod-dlya-chernoy-vdovy"/);
   c.blocks[0].photo = 'p1';
-  assert.match(renderSite(c, { p1: 'data:image/jpeg;base64,AA' }).main, /<img src="data:image\/jpeg;base64,AA"/);
+  assert.match(renderSite(c, { p1: 'data:image/jpeg;base64,AA' }).main, /class="hero-mist"[^>]*><img src="data:image\/jpeg;base64,AA"/);
   c.blocks[0].photo = ''; c.blocks[0].art = false;
-  assert.match(renderSite(c).main, /hero-in solo/);
+  assert.ok(!renderSite(c).main.includes('hero-mist'));
   assert.match(r.main, /class="card[^"]*" href="\.\/\?kniga=alpiyskiy-razvod"/);
 });
 
