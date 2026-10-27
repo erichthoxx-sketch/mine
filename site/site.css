@@ -107,9 +107,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hero h1 .ln{display:block}
 .hero h1 .it{white-space:nowrap}
 .lead{margin:0;max-width:30em;font-size:17px;line-height:1.6;color:var(--ink-2)}
-.hero-mist{position:absolute;top:0;bottom:0;left:max(0px,calc((100% - var(--wrap)) / 2));right:max(0px,calc((100% - var(--wrap)) / 2));z-index:0;margin:0;pointer-events:none;mix-blend-mode:var(--mist-blend);opacity:var(--mist-o);
-  -webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 18%,#000 90%,transparent 100%);mask-image:linear-gradient(90deg,transparent 0%,#000 18%,#000 90%,transparent 100%)}
-.hero-mist img{width:100%;height:100%;object-fit:cover;object-position:right center;display:block}
+.hero-mist{position:absolute;top:0;bottom:0;right:max(var(--gut-r),calc((100% - var(--wrap)) / 2));width:min(56%,700px);z-index:0;margin:0;pointer-events:none;mix-blend-mode:var(--mist-blend);opacity:var(--mist-o)}
+.hero-mist img{width:100%;height:100%;object-fit:cover;object-position:78% 40%;display:block}
 
 /* бегущая строка */
 .run{border-block:1px solid var(--line);overflow:hidden;white-space:nowrap;padding-block:14px}
@@ -302,8 +301,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .hero h1{font-size:clamp(30px,9vw,40px)}
   .hero.has-art{display:flex;flex-direction:column}
   .hero.has-art .hero-in{order:1;min-height:0;padding-bottom:0}
-  .hero-mist{position:relative;inset:auto;left:auto;right:auto;order:2;width:100%;aspect-ratio:5/4;margin-top:-24px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
-  .hero-mist img{object-position:66% center}
+  .hero-mist{position:relative;inset:auto;left:auto;right:auto;order:2;width:100%;aspect-ratio:1/1;margin-top:-30px}
+  .hero-mist img{object-position:72% 45%}
   .lead{font-size:16px}
   .sub-row{flex-direction:column}
   .feat{grid-template-columns:minmax(0,1fr)}
