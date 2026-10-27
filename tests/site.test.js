@@ -15,19 +15,37 @@ test('сайт: пример собирается из всех видимых �
   assert.equal(r.colors.a1, '#8a9aa6');
 });
 
-test('сайт: первый экран без обложек — справа оглавление (новинка, цикл, подписка) или фото; карточки ведут на страницы книг', () => {
+test('сайт: первый экран — медведь-символ справа (или своё фото), без обложек; карточки ведут на страницы книг', () => {
   const c = ex();
   const r = renderSite(c);
   const hero = r.main.slice(0, r.main.indexOf('id="k3"'));
   assert.ok(!hero.includes('class="cover'), 'обложек на первом экране нет');
-  assert.deepEqual([...hero.matchAll(/<span class="hi-k">([^<]+)</g)].map((m) => m[1]), ['Новинка', 'Цикл', 'Telegram']);
+  assert.match(hero, /class="hero-art"/);
+  assert.match(r.head, /class="mark"/, 'медведь рядом с именем');
   assert.match(hero, /href="\.\/\?kniga=razvod-dlya-chernoy-vdovy"/);
-  assert.match(hero, /3 книги/);
   c.blocks[0].photo = 'p1';
-  const withPh = renderSite(c, { p1: 'data:image/jpeg;base64,AA' }).main;
-  assert.match(withPh, /class="hero-ph"/);
-  assert.ok(!withPh.includes('hero-idx'));
+  assert.match(renderSite(c, { p1: 'data:image/jpeg;base64,AA' }).main, /class="hero-ph"/);
+  c.blocks[0].photo = ''; c.blocks[0].art = false;
+  assert.match(renderSite(c).main, /hero-in solo/);
   assert.match(r.main, /class="card[^"]*" href="\.\/\?kniga=alpiyskiy-razvod"/);
+});
+
+test('сайт: подписка с подарком внизу каждой страницы, без повтора меню; выключается', () => {
+  const c = ex();
+  const r = renderSite(c);
+  assert.match(r.foot, /«Проданная ночь» <span class="it">в подарок<\/span>/);
+  assert.match(r.foot, /data-sub/);
+  assert.match(r.foot, /href="\.\/\?privacy"/);
+  assert.ok(!r.foot.includes('Об авторе'), 'меню в подвале не повторяется');
+  assert.match(renderBook(c, {}, 'alpiyskiy-razvod').foot, /data-sub/);
+  c.subOn = false;
+  assert.ok(!renderSite(c).foot.includes('data-sub'));
+});
+
+test('сайт: читателю — статус без глав и авторских листов', () => {
+  const r = renderBook(ex(), {}, 'alpiyskiy-razvod');
+  assert.match(r.main, /Завершена/);
+  assert.ok(!/а\.л\.|\d+\s*глав|\d+\s*гл\./i.test(r.main));
 });
 
 test('сайт: скрытый блок и скрытая книга не показываются', () => {
@@ -70,7 +88,7 @@ test('страница книги: главная кнопка — первая 
   assert.match(r.main, /class="excerpt"/);
   assert.ok(!r.main.includes('Читатели'), 'отзывов нет — раздела нет');
   assert.ok(!r.main.includes('class="collage'), 'фото нет — коллажа нет');
-  assert.match(r.main, /Следующая книга: Звериная тропа для двоих/);
+  assert.match(r.main, /href="\.\/\?kniga=zverinaya-tropa-dlya-dvoih">Следующая книга/);
   assert.match(r.main, /class="bk-sticky"/);
   assert.equal(r.title, 'Альпийский развод — Лана Фрейтаг');
 });

@@ -14,6 +14,8 @@ const local = {
   async putImg(id, data) { this._put((d) => { d.imgs = { ...d.imgs, [id]: data }; }); },
   async delImg(id) { this._put((d) => { delete d.imgs?.[id]; }); },
   async signOut() {},
+  async listSubs() { return JSON.parse(localStorage.getItem('lanaSite.subs') || '[]').map((x, i) => ({ id: 'l' + i, ...x })); },
+  async delSub(id) { const l = JSON.parse(localStorage.getItem('lanaSite.subs') || '[]'); l.splice(Number(id.slice(1)), 1); localStorage.setItem('lanaSite.subs', JSON.stringify(l)); },
 };
 
 // ---------- Firebase ----------
@@ -46,6 +48,13 @@ async function firebase() {
     saveContent: (c) => F.setDoc(ref('site', 'main'), { json: JSON.stringify(c), at: new Date().toISOString() }),
     putImg: (id, data) => F.setDoc(ref('site_img', id), { data }),
     delImg: (id) => F.deleteDoc(ref('site_img', id)),
+    // подписчики: при старых правилах Firebase — ошибка permission-denied (админка попросит обновить правила)
+    async listSubs() {
+      const out = [];
+      (await F.getDocs(F.collection(db, 'site_subs'))).forEach((d) => out.push({ id: d.id, ...d.data() }));
+      return out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    },
+    delSub: (id) => F.deleteDoc(ref('site_subs', id)),
   };
 }
 

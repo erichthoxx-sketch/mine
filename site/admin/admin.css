@@ -110,6 +110,12 @@ h4.grp{margin:14px 0 -4px;font:500 11px/1.4 var(--f-body);letter-spacing:.16em;t
 .add-img{display:grid;place-items:center;aspect-ratio:1;border:1px dashed var(--line);color:var(--ink-2);font-size:13px;cursor:pointer}
 .add-img:hover{color:var(--ink);border-color:var(--ink-2)}
 
+/* подписчики */
+.subs{display:grid;border-top:1px solid var(--line);max-height:420px;overflow:auto}
+.sub-r{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.sub-r span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub-r small{color:var(--ink-2);font-size:12px}
+
 /* цвета */
 .pal{display:grid;grid-template-columns:repeat(3,1fr);gap:18px 8px}
 .pal button{display:grid;justify-items:center;gap:8px;background:none;border:0;padding:4px 0;font-size:13px}

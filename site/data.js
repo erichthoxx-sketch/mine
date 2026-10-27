@@ -30,3 +30,20 @@ export async function loadPublic() {
   } while (token);
   return { content, imgs };
 }
+
+// Подписка: посетитель оставляет почту (на localhost — в этом браузере)
+export async function addSub(email, src) {
+  const at = new Date().toISOString();
+  if (LOCAL) {
+    const list = JSON.parse(localStorage.getItem('lanaSite.subs') || '[]');
+    list.push({ email, at, src, consent: true });
+    localStorage.setItem('lanaSite.subs', JSON.stringify(list));
+    return;
+  }
+  const r = await fetch(`${BASE}/site_subs?key=${firebaseConfig.apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { email: { stringValue: email }, at: { stringValue: at }, src: { stringValue: src }, consent: { booleanValue: true } } }),
+  });
+  if (!r.ok) throw new Error('sub ' + r.status);
+}

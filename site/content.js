@@ -26,7 +26,8 @@ export const BLOCKS = {
     { k: 'text', label: 'Текст', type: 'area' },
     { k: 'btn', label: 'Кнопка' },
     { k: 'book', label: 'Кнопка ведёт на страницу книги', type: 'book', hint: 'Эта книга — и в строке «Новинка» справа' },
-    { k: 'photo', label: 'Фото справа', type: 'img', hint: 'По желанию: ваш портрет или атмосферное фото. Без фото справа — короткое оглавление сайта' },
+    { k: 'art', label: 'Картинка с медведем справа', type: 'toggle' },
+    { k: 'photo', label: 'Своё фото вместо медведя', type: 'img', hint: 'По желанию: портрет или атмосферное фото' },
   ] },
   marquee: { name: 'Бегущая строка', fields: [
     { k: 'items', label: 'Фразы', type: 'area', hint: 'Каждая с новой строки; *в звёздочках* — курсивом' },
@@ -250,6 +251,15 @@ export const DEFAULT_CONTENT = {
  "headUrl": "",
  "foot": "Telegram — \nЛитнет — ",
  "palette": "fog",
+ "subOn": true,
+ "subTitle": "Подарок за подписку",
+ "giftName": "Проданная ночь",
+ "subText": "Оставьте почту — пришлю книгу в подарок. А потом буду писать только о важном: новые книги и главы, обложки до премьеры.",
+ "subBtn": "Получить книгу",
+ "giftUrl": "",
+ "subDone": "Готово, спасибо! Ваша книга — по кнопке ниже.",
+ "consent": "Соглашаюсь получать письма",
+ "privacy": "Я собираю только адрес электронной почты — чтобы прислать подарок и письма о новых книгах.\n\nАдрес не передаётся третьим лицам. Отписаться можно в любой момент: ответьте на любое письмо или напишите мне.",
  "a1": "",
  "a2": "",
  "books": [
@@ -543,12 +553,8 @@ export function bookLinks(b) {
 }
 const ctaText = (b, links) => (b.cta ? b.cta : links[0] ? (ON[links[0][0]] ? `Читать на ${ON[links[0][0]]}` : `Читать: ${links[0][0]}`) : '');
 
-const statusLine = (b) => [
-  STATUS[b.status],
-  b.status === 'writing' && b.done ? `${b.done}${b.total ? ` из ${b.total}` : ''} гл.` : b.done ? `${b.done} глав` : '',
-  b.al ? `${b.al}&nbsp;а.л.` : '',
-  b.age ? esc(b.age) : '',
-].filter(Boolean);
+// Читателю — только статус и возраст (главы и авторские листы ему ни к чему)
+const statusLine = (b) => [STATUS[b.status], b.age ? esc(b.age) : ''].filter(Boolean);
 
 // Шапка и подвал — общие для главной и страниц книг
 function chrome(c, blocks) {
@@ -560,18 +566,40 @@ function chrome(c, blocks) {
   const footLinks = lines(c.foot).map(pair).map(([n, u]) => [n, safeUrl(u)]).filter(([n, u]) => n && u);
   return {
     head: `<div class="wrap head-in"><nav class="nav" aria-label="Разделы">${nav}</nav>
-      <a class="logo" href="./">${esc(name)}</a>
+      <a class="logo" href="./">${c.mark !== false ? bearArt('mark') : ''}<span>${esc(name)}</span></a>
       <div class="top-r">${headBtn}${menu.length || headBtn ? '<button class="menu-btn" type="button" aria-expanded="false" aria-controls="mnav"><span></span><span></span><em>Меню</em></button>' : ''}</div></div>
       <nav class="mnav" id="mnav" aria-label="Меню" hidden><div class="wrap">${nav}${headBtn}</div></nav>`,
-    foot: `<div class="wrap">
-      <div class="foot-top"><nav aria-label="Разделы">${nav}</nav><a class="lnk" href="#top">Наверх <span class="arrow">↑</span></a></div>
-      <div class="foot-big" aria-hidden="true">${esc(name)}</div>
-      <div class="foot-row"><span>© ${new Date().getFullYear()} ${esc(name)}</span>
-      <nav aria-label="Ссылки">${footLinks.map(([n, u]) => `<a href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}</nav></div></div>`,
+    foot: `${subscribeBox(c)}<div class="wrap foot-row">
+      <span>© ${new Date().getFullYear()} ${esc(name)}</span>
+      <nav aria-label="Ссылки">${footLinks.map(([n, u]) => `<a href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}${c.privacy ? '<a href="./?privacy">Политика конфиденциальности</a>' : ''}</nav>
+      <a class="lnk" href="#top">Наверх <span class="arrow">↑</span></a></div>`,
   };
 }
 
 const lbl = (s) => (s ? `<div class="lbl">${fmt(s, false)}</div>` : '');
+
+// Подписка на письма с подарком — внизу каждой страницы; настраивается в админке → «Общее»
+function subscribeBox(c) {
+  if (c.subOn === false) return '';
+  return `<section class="sub" id="podpiska"><div class="wrap sub-in">
+      <div class="sub-txt">
+        ${lbl(c.subTitle || 'Подписка')}
+        <h2>${c.giftName ? `«${esc(c.giftName)}» <span class="it">в подарок</span>` : 'Новые книги <span class="it">первой</span>'}</h2>
+        ${c.subText ? `<p>${fmt(c.subText)}</p>` : ''}
+      </div>
+      <form class="sub-f" data-sub novalidate>
+        <div class="sub-row"><input type="email" name="email" id="sub-email" required autocomplete="email" placeholder="Ваша почта" aria-label="Ваша почта"><button class="btn btn-dark" type="submit">${esc(c.subBtn || 'Подписаться')}</button></div>
+        <label class="consent"><input type="checkbox" name="ok" id="sub-ok" required> <span>${esc(c.consent || 'Соглашаюсь получать письма')}${c.privacy ? ' — <a href="./?privacy">политика конфиденциальности</a>' : ''}</span></label>
+        <p class="sub-msg" role="status" hidden></p>
+      </form>
+    </div></section>`;
+}
+
+// Медведь — символ Ланы: цельный силуэт (дальние лапы чуть светлее). Первый экран, знак в шапке, значок вкладки
+export const BEAR = { near: 'M175 190 C205 180 236 186 262 176 C290 162 314 148 340 148 C366 148 386 158 402 166 C410 170 418 171 425 170 C421 159 430 151 440 154 C448 157 449 166 445 172 C455 176 463 184 469 192 C481 196 494 198 505 201 C517 204 520 223 509 229 C497 235 483 237 470 240 C462 248 452 256 444 263 C436 271 432 280 431 292 C428 312 428 336 430 360 C440 364 450 370 450 376 C450 381 444 382 436 382 L400 382 C394 382 392 377 394 372 C392 348 390 326 386 308 C356 314 300 314 256 306 C246 322 240 344 242 364 C250 368 258 373 258 378 C258 382 252 382 246 382 L204 382 C198 382 196 377 198 372 C192 352 184 334 172 318 C158 300 150 282 150 262 C150 230 158 204 175 190 Z', far: 'M372 306 C374 330 374 352 374 368 C380 372 386 376 384 382 L352 382 C348 380 348 375 352 370 C352 350 352 328 350 308 Z M268 306 C272 330 276 352 278 368 C284 372 290 376 288 382 L256 382 C252 380 252 375 256 370 C256 350 254 328 250 308 Z', box: '138 140 390 250' };
+export function bearArt(cls = 'art') {
+  return `<svg class="${cls}" viewBox="${BEAR.box}" role="img" aria-label="Медведь — символ Ланы Фрейтаг"><path class="b-far" d="${BEAR.far}"/><path class="b-near" d="${BEAR.near}"/></svg>`;
+}
 const h1lines = (s) => {
   const t = String(s || '').split('\n').filter((l) => l.trim());
   return t.length > 1 ? t.map((l) => `<span class="ln">${fmt(l.trim(), false)}</span>`).join('') : fmt(t[0] || '', false);
@@ -606,17 +634,8 @@ export function renderSite(raw, imgs = {}) {
     hero: (k) => {
       const main = books.get(k.book) || visible.find((b) => b.status === 'writing') || visible[0];
       const ph = k.photo && imgs[k.photo];
-      // оглавление справа: новинка, циклы, подписка — каждая строка ведёт куда нужно
-      const idx = [];
-      if (main) idx.push(['Новинка', fmt(main.title, false), [STATUS[main.status], main.status === 'writing' && main.done ? `глава ${main.done}` : ''].filter(Boolean).join(' · '), bookHref(main)]);
-      for (const name2 of seriesList(c).slice(0, 2)) {
-        const n = seriesBooks(c, name2).length;
-        const blk = blocks.find((x) => x.type === 'series' && String(x.series || '').trim() === name2);
-        idx.push(['Цикл', esc(name2), `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'книга' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'книги' : 'книг'}`, blk ? '#' + blk.id : bookHref(seriesBooks(c, name2)[0])]);
-      }
-      const tgb = blocks.find((x) => x.type === 'tg');
-      if (tgb && idx.length < 4) idx.push([esc(plain(tgb.label || 'Подписка').replace(/[-‑ ]канал$/i, '')), fmt(tgb.title, false), '', '#' + tgb.id]);
-      return `<section class="hero" id="${k.id}"><div class="wrap hero-in${ph ? ' has-ph' : ''}">
+      const art = ph ? `<figure class="hero-ph"><img src="${esc(ph)}" alt=""></figure>` : k.art !== false ? `<figure class="hero-art">${bearArt()}</figure>` : '';
+      return `<section class="hero" id="${k.id}"><div class="wrap hero-in${art ? '' : ' solo'}">
         <div class="hero-txt">
           ${lbl(k.label)}
           <h1>${h1lines(k.title)}</h1>
@@ -626,8 +645,7 @@ export function renderSite(raw, imgs = {}) {
             ${shelf ? `<a class="lnk" href="#${shelf.id}">Все книги <span class="arrow">→</span></a>` : ''}
           </div>
         </div>
-        ${ph ? `<figure class="hero-ph"><img src="${esc(ph)}" alt=""></figure>`
-          : idx.length ? `<nav class="hero-idx" aria-label="Коротко о главном">${idx.map(([t, h, sub, u]) => `<a href="${u}"><span class="hi-k">${t}</span><span class="hi-t"><span>${h}</span>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="arrow">→</span></a>`).join('')}</nav>` : ''}
+        ${art}
       </div></section>`;
     },
     marquee: (k) => {
@@ -739,7 +757,6 @@ export function renderBook(raw, imgs = {}, key = '') {
   const next = ser ? mates[mates.indexOf(b) + 1] : null;
   const others = ser ? mates : c.books.filter((x) => !x.hidden && x !== b).slice(0, 4);
   const tags = String(b.tags || '').split(/[,;]/).map((t) => t.trim()).filter(Boolean);
-  const pct = b.status === 'writing' && b.total > 0 && b.done > 0 ? Math.min(100, Math.round(b.done / b.total * 100)) : 0;
   const shops = (dark) => `<div class="buy">
       ${links[0] ? `<a class="btn ${dark ? 'btn-dark' : 'btn-light'}" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(cta)}</a>` : ''}
       ${links.slice(1).map(([n, u]) => `<a class="btn btn-line" href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}
@@ -754,12 +771,6 @@ export function renderBook(raw, imgs = {}, key = '') {
   });
   const photos = (b.collage || []).map((id) => imgs[id]).filter(Boolean).slice(0, 6);
   const excerpt = lines(b.excerpt);
-  const specs = [
-    ['Статус', STATUS[b.status]],
-    b.status === 'writing' && b.done ? ['Написано', `${b.done}${b.total ? ` из ${b.total}` : ''} гл.`] : b.done ? ['Глав', String(b.done)] : null,
-    b.al ? ['Объём', `${b.al}&nbsp;а.л.`] : null,
-    b.age ? ['Возраст', esc(b.age)] : null,
-  ].filter((x) => x && x[1]);
   const sec = (label, body, cls = '') => `<section class="bk-sec${cls ? ' ' + cls : ''}"><div class="wrap bk-two"><h2 class="bk-h">${label}</h2><div>${body}</div></div></section>`;
 
   const S = [];
@@ -770,10 +781,8 @@ export function renderBook(raw, imgs = {}, key = '') {
         <div class="bk-txt">
           ${ser ? `<div class="lbl">Цикл «${esc(ser)}»${no ? ` · книга ${no}` : ''}</div>` : ''}
           <h1 class="bk-t">${fmt(b.title, false)}</h1>
-          <div class="bk-author">${esc(name)}</div>
+          <div class="bk-author">${esc(name)}<i>·</i>${statusLine(b).join('<i>·</i>')}</div>
           ${b.tagline ? `<p class="bk-hook">${fmt(b.tagline)}</p>` : ''}
-          ${specs.length ? `<dl class="specs">${specs.map(([t, d]) => `<div><dt>${t}</dt><dd>${d}</dd></div>`).join('')}</dl>` : ''}
-          ${pct ? `<div class="bar" aria-label="Написано ${pct}%"><i style="width:${pct}%"></i></div>` : ''}
           ${shops(true)}
           ${tags.length ? `<ul class="tags">${tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
           ${b.ann ? `<div class="bk-ann"><h2 class="bk-h">Аннотация</h2>${paras(b.ann)}</div>` : ''}
@@ -785,12 +794,14 @@ export function renderBook(raw, imgs = {}, key = '') {
   if (reviews.length) S.push(sec('Отзывы', `<div class="qs">${reviews.map((r) => `<figure class="qc rv"><blockquote>${fmt(r.t)}</blockquote>${r.who ? `<figcaption>${esc(r.who)}</figcaption>` : ''}</figure>`).join('')}</div>`));
   if (b.collageOn !== false && photos.length) S.push(`<section class="bk-sec collage n${photos.length}" aria-label="Атмосфера книги"><div class="wrap col-in">
       ${photos.map((src) => `<figure><img src="${esc(src)}" alt="" loading="lazy"></figure>`).join('')}</div></section>`);
-  if (others.length > (ser ? 1 : 0)) S.push(sec(ser ? 'Все книги цикла' : 'Другие книги', `
+  if (others.length > (ser ? 1 : 0)) S.push(`<section class="bk-sec"><div class="wrap">
+      <div class="sec-h"><h2 class="bk-h">${ser ? `Цикл «${esc(ser)}»` : 'Другие книги'}</h2>
+        ${next ? `<a class="lnk" href="${bookHref(next)}">Следующая книга <span class="arrow">→</span></a>` : ''}</div>
       <div class="mini">${others.map((x, i) => `<a class="mini-b${x === b ? ' here' : ''}" href="${bookHref(x)}">
         <div class="mini-c">${cover(x, imgs, name)}</div>
-        <span class="mini-n">${ser ? `Книга ${Number(x.seriesNo) || i + 1}${x === b ? ' · вы здесь' : ''}` : esc(STATUS[x.status] || '')}</span>
+        <span class="mini-n">${ser ? `Книга ${Number(x.seriesNo) || i + 1}` : esc(STATUS[x.status] || '')}${x === b ? ' · вы здесь' : ''}</span>
         <span class="mini-t">${fmt(x.title, false)}</span></a>`).join('')}</div>
-      ${next ? `<a class="lnk next" href="${bookHref(next)}">Следующая книга: ${esc(plain(next.title))} <span class="arrow">→</span></a>` : ''}`));
+    </div></section>`);
   if (links[0]) S.push(`<section class="bk-final"><div class="wrap bk-final-in">
       <div><div class="lbl">${b.status === 'writing' ? 'Книга пишется — читайте вместе с автором' : 'Книга завершена'}</div>
       <h2>${fmt(b.title, false)}</h2></div>
@@ -803,6 +814,18 @@ export function renderBook(raw, imgs = {}, key = '') {
     description: plain(b.tagline || b.short || ''),
     ...chrome(c, blocks),
     main: `<article class="bk">${S.join('\n')}</article>${sticky}`,
+    colors: colors(c),
+  };
+}
+
+export function renderPrivacy(raw, imgs = {}) {
+  const c = normalize(raw);
+  if (!c.privacy) return null;
+  const shown = new Set(renderSite(c, imgs).shown);
+  return {
+    title: `Политика конфиденциальности — ${c.name || 'Автор'}`,
+    ...chrome(c, c.blocks.filter((x) => shown.has(x.id))),
+    main: `<section class="bk-sec text-b"><div class="wrap"><h1 class="bk-h">Политика конфиденциальности</h1><div class="prose">${paras(c.privacy)}</div></div></section>`,
     colors: colors(c),
   };
 }

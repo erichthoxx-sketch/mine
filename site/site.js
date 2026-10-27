@@ -1,15 +1,18 @@
 // Сайт автора: главная или страница книги (?kniga=адрес). Сначала — сохранённое в браузере (мгновенно), потом свежее.
-import { renderSite, renderBook, DEFAULT_CONTENT } from './content.js';
-import { loadPublic, LOCAL } from './data.js';
+import { renderSite, renderBook, renderPrivacy, DEFAULT_CONTENT, normalize, safeUrl, esc } from './content.js';
+import { loadPublic, addSub, LOCAL } from './data.js';
 
 const CACHE = 'lanaSite.cache';
 const $ = (id) => document.getElementById(id);
 const preview = new URLSearchParams(location.search).has('preview');
 let bookKey = new URLSearchParams(location.search).get('kniga') || '';
+const privacyPage = new URLSearchParams(location.search).has('privacy');
+let current = null; // что сейчас на экране — нужно форме подписки (подарок, текст «готово»)
 
 function show(content, imgs) {
-  let r = bookKey ? renderBook(content || DEFAULT_CONTENT, imgs || {}, bookKey) : null;
-  const isBook = !!r;
+  current = content || DEFAULT_CONTENT;
+  let r = bookKey ? renderBook(current, imgs || {}, bookKey) : privacyPage ? renderPrivacy(current, imgs || {}) : null;
+  const isBook = !!r && !!bookKey;
   if (!r) r = renderSite(content || DEFAULT_CONTENT, imgs || {}); // книги нет (скрыли, сменили адрес) — главная
   document.documentElement.style.setProperty('--a1', r.colors.a1);
   document.documentElement.style.setProperty('--a2', r.colors.a2);
@@ -20,6 +23,14 @@ function show(content, imgs) {
   document.title = r.title;
   try { sessionStorage.removeItem('siteReload'); } catch { /* без хранилища */ }
   watchCta();
+  let done = false;
+  try { done = localStorage.getItem('lanaSite.subscribed') === '1'; } catch { /* без памяти */ }
+  const f = document.querySelector('[data-sub]');
+  if (done && f && !preview) {
+    f.querySelector('.sub-row').hidden = true;
+    f.querySelector('.consent').hidden = true;
+    const m = f.querySelector('.sub-msg'); m.hidden = false; m.innerHTML = giftHtml(normalize(current));
+  }
   const d = document.querySelector('meta[name="description"]');
   if (d && r.description) d.setAttribute('content', r.description);
 }
@@ -63,6 +74,35 @@ document.addEventListener('click', (e) => {
     const h = a.getAttribute('href') || '';
     if (h.includes('#')) document.getElementById(h.split('#')[1])?.scrollIntoView({ behavior: 'smooth' });
   }
+});
+
+// Подписка: почта → база; сразу показываем подарок. Уже подписанным — тоже подарок, без повторной формы
+const SUBD = 'lanaSite.subscribed';
+function giftHtml(c) {
+  const u = safeUrl(c.giftUrl);
+  return `${esc(c.subDone || 'Готово, спасибо!')}${u ? ` <a class="btn btn-dark" href="${esc(u)}" target="_blank" rel="noopener">Скачать «${esc(c.giftName || 'книгу')}»</a>` : ''}`;
+}
+document.addEventListener('submit', async (e) => {
+  const f = e.target.closest('[data-sub]');
+  if (!f) return;
+  e.preventDefault();
+  const msg = f.querySelector('.sub-msg');
+  const email = f.email.value.trim();
+  const say = (html, bad) => { msg.hidden = false; msg.classList.toggle('bad', !!bad); msg.innerHTML = html; };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return say('Проверьте почту — в адресе ошибка.', true);
+  if (!f.ok.checked) return say('Поставьте галочку согласия — без неё не могу присылать письма.', true);
+  if (preview) return say(giftHtml(normalize(current)));
+  const btn = f.querySelector('button');
+  btn.disabled = true;
+  try {
+    await addSub(email, bookKey ? 'kniga:' + bookKey : 'glavnaya');
+    try { localStorage.setItem(SUBD, '1'); } catch { /* без памяти */ }
+    f.querySelector('.sub-row').hidden = true;
+    f.querySelector('.consent').hidden = true;
+    say(giftHtml(normalize(current)));
+  } catch {
+    say('Не получилось отправить — проверьте интернет и нажмите ещё раз.', true);
+  } finally { btn.disabled = false; }
 });
 
 if (preview) {

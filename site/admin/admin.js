@@ -5,7 +5,7 @@ import { openStore, authError } from './store.js';
 import { RULES } from './rules.js';
 
 const app = document.getElementById('app');
-const S = { store: null, user: null, phase: 'boot', content: null, imgs: {}, tab: 'blocks', open: null, adding: false, pasting: false, pv: false, save: 'ok', pvBook: '' };
+const S = { store: null, user: null, phase: 'boot', content: null, imgs: {}, tab: 'blocks', open: null, adding: false, pasting: false, pv: false, save: 'ok', pvBook: '', subs: null, subsErr: '' };
 
 const ICON = {
   up: '<path d="M6 15l6-6 6 6"/>',
@@ -37,10 +37,16 @@ async function loadAll() {
     S.imgs = d.imgs || {};
     S.phase = 'ready'; render();
     cleanImgs();
+    loadSubs();
   } catch (e) {
     S.phase = /permission/i.test(e?.code || e?.message || '') ? 'rules' : 'neterr';
     render();
   }
+}
+
+async function loadSubs() {
+  try { S.subs = await S.store.listSubs(); S.subsErr = ''; } catch (e) { S.subs = []; S.subsErr = /permission/i.test(e?.code || e?.message || '') ? 'rules' : 'net'; }
+  if (S.tab === 'general') renderEditor();
 }
 
 // Картинки, которые больше нигде не стоят (заменили обложку, удалили книгу), убираем при следующем входе
@@ -204,10 +210,25 @@ function generalTab() {
   const site = new URL('../', location.href).href;
   return `<h3 class="sub">Шапка и подвал</h3>
     <div class="list" style="gap:16px">
-      ${field('site', c, { k: 'name', label: 'Имя автора', hint: 'Крупно в шапке и внизу сайта' })}
+      ${field('site', c, { k: 'name', label: 'Имя автора', hint: 'В шапке и внизу сайта' })}
+      ${field('site', c, { k: 'mark', label: 'Медведь — знак рядом с именем', type: 'toggle' })}
       <div class="two">${field('site', c, { k: 'headBtn', label: 'Кнопка в шапке' })}${field('site', c, { k: 'headUrl', label: 'Её ссылка', type: 'url' })}</div>
       ${field('site', c, { k: 'foot', label: 'Ссылки внизу', type: 'area', hint: 'Каждая с новой строки: Telegram — https://t.me/…  Без ссылки строка не показывается.' })}
     </div>
+    <h3 class="sub">Подписка и подарок</h3>
+    <p class="note">Внизу каждой страницы сайта — форма: читатель оставляет почту и сразу получает подарок по ссылке. Адреса копятся здесь.</p>
+    <div class="list" style="gap:16px">
+      ${field('site', c, { k: 'subOn', label: 'Показывать форму подписки', type: 'toggle' })}
+      ${field('site', c, { k: 'giftName', label: 'Подарок — название книги', hint: 'Пусто — форма без подарка: «Новые книги первой»' })}
+      ${field('site', c, { k: 'giftUrl', label: 'Ссылка на подарок', type: 'url', hint: 'Где лежит файл книги: Google Диск, Яндекс Диск… Открывается сразу после подписки' })}
+      ${field('site', c, { k: 'subTitle', label: 'Подпись сверху' })}
+      ${field('site', c, { k: 'subText', label: 'Текст', type: 'area' })}
+      <div class="two">${field('site', c, { k: 'subBtn', label: 'Кнопка' })}${field('site', c, { k: 'consent', label: 'Галочка согласия' })}</div>
+      ${field('site', c, { k: 'subDone', label: 'Текст после подписки', type: 'area' })}
+      ${field('site', c, { k: 'privacy', label: 'Политика конфиденциальности', type: 'area', hint: 'Отдельная страница по ссылке внизу сайта. Здесь — простой черновик, проверьте его под себя' })}
+    </div>
+    <h3 class="sub">Подписчики${S.subs ? ` · ${S.subs.length}` : ''}</h3>
+    ${subsHtml()}
     <h3 class="sub">Нейросеть</h3>
     <p class="note">Скопируйте сайт для любой нейросети (Claude, ChatGPT…), попросите поправить тексты и вставьте её ответ сюда — сайт обновится. До вставки можно вернуть как было.</p>
     <div class="links"><button class="btn line" data-act="copyAI">Скопировать для нейросети</button><button class="quiet" data-act="pasting">Вставить ответ</button></div>
@@ -218,6 +239,16 @@ function generalTab() {
     <h3 class="sub">Вход</h3>
     <p class="note">${esc(S.user?.email || '')}</p>
     <div class="links"><a class="quiet" href="${esc(site)}" target="_blank" rel="noopener">Открыть сайт</a><button class="quiet" data-act="out">Выйти</button></div>`;
+}
+
+function subsHtml() {
+  if (S.subs === null) return '<p class="note">Загружаю…</p>';
+  if (S.subsErr === 'rules') return `<p class="note">Чтобы видеть адреса, Firebase нужно обновлённое правило (один раз, как в первый раз): «Скопировать правила» → Firebase → Firestore → «Правила» → вставить → «Опубликовать».</p>
+    <div class="links"><button class="btn line" data-act="copyRules">Скопировать правила</button><a class="quiet" href="https://console.firebase.google.com/project/dohody-6d6dd/firestore/rules" target="_blank" rel="noopener">Открыть Firebase</a><button class="quiet" data-act="reSubs">Готово, проверить</button></div><pre id="rules-text" hidden>${esc(RULES)}</pre>`;
+  if (S.subsErr) return '<p class="note">Не получилось загрузить адреса — проверьте интернет. <button class="quiet" data-act="reSubs">Ещё раз</button></p>';
+  if (!S.subs.length) return '<p class="note">Пока никого. Первые адреса появятся здесь сами.</p>';
+  return `<div class="links" style="margin-bottom:12px"><button class="btn line" data-act="copySubs">Скопировать все адреса</button><button class="quiet" data-act="csvSubs">Скачать таблицу</button></div>
+    <div class="subs">${S.subs.slice(0, 200).map((x) => `<div class="sub-r"><span>${esc(x.email)}</span><small>${esc(String(x.at || '').slice(0, 10).split('-').reverse().join('.'))}${x.src && x.src !== 'glavnaya' ? ' · со страницы книги' : ''}</small><button class="ico" data-act="delSub" data-id="${esc(x.id)}" aria-label="Удалить адрес" title="Удалить">${ic('trash')}</button></div>`).join('')}</div>`;
 }
 
 // ---------- поля ----------
@@ -363,6 +394,19 @@ const acts = {
     return false;
   },
   copyRules: async () => { await copy(RULES, 'rules-text'); return false; },
+  reSubs: () => { S.subs = null; loadSubs(); },
+  copySubs: async () => { await copy(S.subs.map((x) => x.email).join('\n')); return false; },
+  csvSubs: () => {
+    const rows = [['Почта', 'Дата', 'Откуда'], ...S.subs.map((x) => [x.email, String(x.at || '').slice(0, 10), x.src || ''])];
+    const blob = new Blob(['\ufeff' + rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'podpischiki.csv'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    return false;
+  },
+  delSub: async (d) => {
+    const x = S.subs.find((y) => y.id === d.id);
+    try { await S.store.delSub(d.id); S.subs = S.subs.filter((y) => y !== x); toast(`Адрес ${x.email} удалён`); } catch { toast('Не получилось удалить — попробуйте ещё раз'); }
+  },
   copyAI: async () => { await copy(aiText()); return false; },
   pasting: () => { S.pasting = !S.pasting; },
   applyAI: () => {

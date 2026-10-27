@@ -22,5 +22,14 @@ service cloud.firestore {
       allow read: if true;
       allow write: if siteOwner();
     }
+    // Подписчики сайта: оставить почту может любой посетитель, читать и удалять — только владелица
+    match /site_subs/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'at', 'src', 'consent'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() < 200
+        && request.resource.data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$')
+        && request.resource.data.consent == true;
+      allow read, update, delete: if siteOwner();
+    }
   }
 }
