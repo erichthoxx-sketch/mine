@@ -73,7 +73,7 @@ export const BLOCKS = {
     { k: 'title', label: 'Заголовок', hint: '*Слово в звёздочках* — курсивом' },
     { k: 'text', label: 'Текст', type: 'area' },
     { k: 'btn', label: 'Кнопка' },
-    { k: 'url', label: 'Ссылка кнопки', type: 'url', hint: 'Например: https://t.me/ваш_канал' },
+    { k: 'url', label: 'Ссылка на канал', type: 'url', hint: 'Например: https://t.me/ваш_канал — по ней же значок-самолётик в меню' },
     MENU,
   ] },
   text: { name: 'Текст', fields: [
@@ -431,7 +431,7 @@ export const DEFAULT_CONTENT = {
    "text": "Новые главы в день выхода, обложки до премьеры и разговоры о героях — тех, с кем лучше не связываться.",
    "btn": "Подписаться",
    "url": "",
-   "menu": "Дневник"
+   "menu": "Telegram"
   }
  ]
 };
@@ -557,18 +557,24 @@ const ctaText = (b, links) => (b.cta ? b.cta : links[0] ? (ON[links[0][0]] ? `Ч
 const statusLine = (b) => [STATUS[b.status], b.age ? esc(b.age) : ''].filter(Boolean);
 
 // Шапка и подвал — общие для главной и страниц книг
+const PLANE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.8 10.7c-.8.3-.8 1.4 0 1.7l4.6 1.6 1.8 5.6c.2.7 1.1.9 1.6.4l2.6-2.5 4.7 3.5c.6.4 1.4.1 1.6-.6l3.1-15.6c.2-.8-.6-1.4-1.3-1.1Z"/><path d="m7.4 14 10.9-7.6-8.3 9.2"/></svg>';
+
 function chrome(c, blocks) {
   const name = c.name || 'Автор';
-  const menu = blocks.filter((b) => b.menu).map((b) => [b.menu, './#' + b.id]);
-  const nav = menu.map(([n, u]) => `<a href="${u}">${esc(n)}</a>`).join('');
   const headU = safeUrl(c.headUrl);
-  const headBtn = c.headBtn && headU ? `<a class="btn btn-line" href="${esc(headU)}"${ext(headU)}>${esc(c.headBtn)}</a>` : '';
+  // пункт меню блока «Подписка» — сразу ссылка на канал: значок-самолётик (в меню телефона — со словом Telegram)
+  const tgB = blocks.find((b) => b.type === 'tg' && b.menu);
+  const tgU = tgB ? safeUrl(tgB.url) || headU : '';
+  const menu = blocks.filter((b) => b.menu && b !== tgB).map((b) => [b.menu, './#' + b.id]);
+  const tgLink = (word) => (tgB ? `<a class="tg-ico" href="${esc(tgU || './#' + tgB.id)}"${tgU ? ext(tgU) : ''} aria-label="Telegram" title="Telegram">${PLANE}${word ? '<span>Telegram</span>' : ''}</a>` : '');
+  const nav = menu.map(([n, u]) => `<a href="${u}">${esc(n)}</a>`).join('');
+  const headBtn = !tgB && c.headBtn && headU ? `<a class="btn btn-line" href="${esc(headU)}"${ext(headU)}>${esc(c.headBtn)}</a>` : '';
   const footLinks = lines(c.foot).map(pair).map(([n, u]) => [n, safeUrl(u)]).filter(([n, u]) => n && u);
   return {
-    head: `<div class="wrap head-in"><nav class="nav" aria-label="Разделы">${nav}</nav>
+    head: `<div class="wrap head-in"><nav class="nav" aria-label="Разделы">${nav}${tgLink(false)}</nav>
       <a class="logo" href="./">${esc(name)}</a>
       <div class="top-r">${headBtn}${menu.length || headBtn ? '<button class="menu-btn" type="button" aria-expanded="false" aria-controls="mnav"><span></span><span></span><em>Меню</em></button>' : ''}</div></div>
-      <nav class="mnav" id="mnav" aria-label="Меню" hidden><div class="wrap">${nav}${headBtn}</div></nav>`,
+      <nav class="mnav" id="mnav" aria-label="Меню" hidden><div class="wrap">${nav}${tgLink(true)}${headBtn}</div></nav>`,
     foot: `${subscribeBox(c)}<div class="wrap foot-row">
       <span>© ${new Date().getFullYear()} ${esc(name)}</span>
       <nav aria-label="Ссылки">${footLinks.map(([n, u]) => `<a href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}${c.privacy ? '<a href="./?privacy">Политика конфиденциальности</a>' : ''}</nav>

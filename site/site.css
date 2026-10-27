@@ -62,6 +62,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .nav a,.mnav a:not(.btn){position:relative;font:500 11px/1 var(--f-body);letter-spacing:.18em;text-transform:uppercase;padding:6px 0}
 .nav a::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--ink);transform:scaleX(0);transform-origin:left;transition:transform .35s}
 .nav a:hover::after{transform:scaleX(1)}
+.tg-ico{display:inline-flex;align-items:center;gap:10px}
+.nav .tg-ico{padding:4px 0}
+.nav .tg-ico::after{display:none}
+.tg-ico svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round;transition:transform .3s}
+.tg-ico:hover svg{transform:translate(2px,-2px)}
+.mnav .tg-ico svg{width:22px;height:22px}
 .logo{display:inline-flex;align-items:center;font:400 22px/1 var(--f-display);letter-spacing:.26em;text-transform:uppercase;white-space:nowrap}
 .top-r{justify-self:end;display:flex;align-items:center;gap:18px}
 .menu-btn{display:none;align-items:center;background:none;border:0;padding:8px 0;color:var(--ink);cursor:pointer;font:500 11px/1 var(--f-body);letter-spacing:.18em;text-transform:uppercase}

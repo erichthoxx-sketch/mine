@@ -154,6 +154,14 @@ test('сайт: «В жизни все не так…» владелица по�
   assert.equal(c.palette, 'fog');
 });
 
+test('меню: вместо «Дневник» — значок Telegram сразу на канал', () => {
+  const c = ex();
+  c.blocks.find((b) => b.type === 'tg').url = 't.me/lana';
+  const r = renderSite(c);
+  assert.match(r.head, /class="tg-ico" href="https:\/\/t.me\/lana" target="_blank"[^>]*aria-label="Telegram"/);
+  assert.ok(!r.head.includes('Дневник'));
+});
+
 test('сайт: правила Firebase в админке совпадают с firestore.rules', () => {
   assert.equal(readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8'), RULES);
 });
