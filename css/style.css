@@ -2826,3 +2826,4 @@ main .rev-actions button.dl .ic { opacity: 1; }
 .app-writer main .blog-pick select { field-sizing: content; max-width: min(320px, 62vw); }
 #sheetForm #pdcwrap[hidden] { display: none; }
 .app-writer .target-entry-text.tap { cursor: pointer; border-radius: 8px; } .app-writer .target-entry-text.tap:hover { background: var(--surface-2); box-shadow: 0 0 0 6px var(--surface-2); }
+.app-writer .td-warn { margin: 2px 0 10px; font: 400 13px/1.5 var(--font-body); color: var(--text-2); } .app-writer .td-warn::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-right: 7px; vertical-align: 1px; } .app-writer .td-warn .link { font-size: 13px; padding: 0; }

@@ -286,6 +286,7 @@ export function planView(a) {
     <div class="wstrip">${strip}</div>
   </div>
   <div class="card" data-day="${sel}"><div class="row between plan-dayh"><h2 style="margin:0">${dayName(sel, t)}</h2><button class="plus-btn" data-act="td.addPlan" data-d="${sel}" title="Добавить дело" aria-label="Добавить дело">${ic('plus')}</button></div>
+    ${c.settings.todoistToken && !c.settings.todoistOff && c.settings.todoist?.err ? `<p class="td-warn">Todoist не обновился: ${esc(String(c.settings.todoist.err).slice(0, 120))} · <button class="link" data-act="td.syncNow">Обновить</button></p>` : ''}
     ${dayList.length || goalHtml ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">Дел на этот день нет.</p>'}</div>
   <div class="psec-h"><h2>Цели <span class="muted">${activeGoals(c).length || ''}</span></h2><button class="small-btn" data-act="goal.new">+ Цель</button></div>
   ${goalsSection(c)}
@@ -448,6 +449,14 @@ acts['td.addPlan'] = (d) => {
   });
   sync();
   inp?.focus();
+  return false;
+};
+// «Обновить» в Планере: сначала свои дела, потом вся синхронизация (итог — уведомлением)
+acts['td.syncNow'] = async () => {
+  const { refreshOwn, runTodoist } = await import('../tdsync.js');
+  toast('Обновляю из Todoist…');
+  await refreshOwn(app(), { force: true });
+  await runTodoist(app(), { force: true });
   return false;
 };
 acts['plan.week'] = (d) => { const u = app().ui; u.planWeek = d.v === '0' ? 0 : (u.planWeek || 0) + Number(d.v); u.planDay = d.v === '0' ? null : addDays(app().ctx().today, 7 * u.planWeek); if (u.planWeek === 0) u.planDay = null; };

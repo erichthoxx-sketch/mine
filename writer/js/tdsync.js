@@ -6,10 +6,25 @@ import { addDays } from '../../js/calc.js';
 import { toast } from '../../js/ui.js';
 
 let busy = false, lastHash = '', lastAt = 0, timer = null, pullNext = false;
+// свои дела из Todoist — отдельно от общей синхронизации и первым делом: даже если общая синхронизация споткнётся
+// или ждёт своей очереди, Планер покажет свежие дела (раньше список мог застрять — «куда пропали дела на сегодня»)
+let ownAt = 0;
+export async function refreshOwn(a, { force = false } = {}) {
+  const s = a.ctx().settings, token = s.todoistToken;
+  if (!token || s.todoistOff || !navigator.onLine || (!force && Date.now() - ownAt < 20000)) return;
+  ownAt = Date.now();
+  try {
+    const own = await fetchOwnTasks(token, s.todoist?.made || {});
+    await a.store.saveSettings({ todoist: { ...(a.ctx().settings.todoist || {}), own, ownAt: new Date().toISOString() } });
+  } catch (e) {
+    console.error(e);
+    await a.store.saveSettings({ todoist: { ...(a.ctx().settings.todoist || {}), err: e.message || String(e), errAt: new Date().toISOString() } }).catch(() => {});
+  }
+}
 // pull — открыла приложение или вернулась в него: подтянуть изменения из самого Todoist сразу (не чаще раза в 30 секунд)
 export function scheduleTodoist(a, ms = 20000, { pull = false } = {}) {
   if (!a.ctx().settings.todoistToken || a.ctx().settings.todoistOff) return;
-  if (pull) pullNext = true;
+  if (pull) { pullNext = true; refreshOwn(a); }
   if (pullNext) ms = Math.min(ms, 2500); // ждём свежее из Todoist — не откладываем надолго
   clearTimeout(timer); timer = setTimeout(() => { const pl = pullNext; pullNext = false; runTodoist(a, { pull: pl }).catch(() => {}); }, ms);
 }
