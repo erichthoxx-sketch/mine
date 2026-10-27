@@ -39,6 +39,14 @@ jobs:
           sed "s#__APPV__#$V#; s#css/style.css#$V/css/style.css#; s#js/app.js#$V/js/app.js#" index.html > _site/index.html
           sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/writer/js/app.js#" writer/index.html > _site/pisatel/index.html
           sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/direct/js/app.js#" direct/index.html > _site/direct/index.html
+          # сайт автора (/site/) и его админка (/site/admin/)
+          mkdir -p _site/site/admin _site/js
+          cp js/firebase-config.js _site/js/
+          cp site/*.js site/*.css _site/site/
+          cp site/admin/*.js site/admin/*.css _site/site/admin/
+          sed "s#__V__#$V#g" site/index.html > _site/site/index.html
+          sed "s#__V__#$V#g" site/admin/index.html > _site/site/admin/index.html
+          grep -q "$V" _site/site/admin/index.html
           grep -q "$V/js/app.js" _site/index.html
           grep -q "$V/writer/js/app.js" _site/pisatel/index.html
           grep -q "$V/css/style.css" _site/pisatel/index.html

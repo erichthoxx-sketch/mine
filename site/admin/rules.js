@@ -1,0 +1,29 @@
+// Правила доступа Firebase — те же, что в firestore.rules (тест следит, чтобы совпадали).
+// Админка показывает их владелице, если сайт ещё не разрешён в Firebase.
+export const RULES = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Каждый пользователь видит и меняет только свои данные.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    // Сайт автора: читать может любой посетитель, менять — только владелица.
+    // Первый вход в админку записывает её в site/owner, потом владельца не поменять.
+    function siteOwner() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/site/owner)
+        && get(/databases/$(database)/documents/site/owner).data.uid == request.auth.uid;
+    }
+    match /site/{doc} {
+      allow read: if true;
+      allow create: if (doc == 'owner' && request.auth != null && request.resource.data.uid == request.auth.uid)
+        || (doc != 'owner' && siteOwner());
+      allow update, delete: if doc != 'owner' && siteOwner();
+    }
+    match /site_img/{id} {
+      allow read: if true;
+      allow write: if siteOwner();
+    }
+  }
+}
+`;
