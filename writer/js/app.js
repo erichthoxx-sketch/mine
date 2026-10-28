@@ -19,6 +19,7 @@ import { settingsView } from './views/settings.js';
 import { linksView, linkPage } from './views/links.js';
 import { blogEditor } from './views/blog.js';
 import { socialView } from './views/social.js';
+import { mySiteView } from './views/mysite.js';
 import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
 import { cleanText, cleanedMsg } from '../../js/cleantext.js';
@@ -75,8 +76,8 @@ function route() {
   if (a === 'link' && b) return { tab: '/links', view: (x) => linkPage(x, decodeURIComponent(b)) };
   if (a === 'blog' && b) return { tab: '/links', view: (x) => blogEditor(x, decodeURIComponent(b)) };
   if (a === 'mk' && b) return { tab: '/marketing', view: (x) => bookMarketing(x, decodeURIComponent(b)) };
-  const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, marketing: marketingView, links: linksView, social: socialView, settings: settingsView };
-  return { tab: a === 'social' ? '/links' : '/' + (a || ''), view: map[a || ''] || homeView };
+  const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, marketing: marketingView, links: linksView, social: socialView, mysite: mySiteView, settings: settingsView };
+  return { tab: a === 'social' || a === 'mysite' ? '/links' : '/' + (a || ''), view: map[a || ''] || homeView };
 }
 
 function authScreen() {

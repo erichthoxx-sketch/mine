@@ -249,7 +249,7 @@ export function analyticsView(a) {
   const c = a.ctx(), m = metrikaOf(c), mk = a.snap('mk');
   if (!m?.counterId) return { html: connectCard() };
   if (!mk) return { html: '<div class="card"><h2>Аналитика читателей</h2><p class="muted">Загружаю данные Метрики… Если долго — нажмите ↻ вверху.</p></div>' };
-  const M = model(a), tab = a.ui.anTab || 'sum';
+  const M = model(a), tab = a.ui.anTab || (/^\/an\/site/.test(a.ui.route || '') ? 'site' : 'sum'); // из «Мастерской» → Мой сайт → Статистика
   return {
     html: `${demo.on ? '<div class="alert">Это пример — так будет выглядеть аналитика вашего счётчика.</div>' : ''}
     <div class="chips l-tabs">${TABS.map(([k, t]) => `<button class="chip ${tab === k ? 'on' : ''}" data-act="an.tab" data-k="${k}">${t}</button>`).join('')}</div>
