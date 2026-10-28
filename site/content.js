@@ -638,7 +638,7 @@ export function renderSite(raw, imgs = {}) {
       const ph = k.photo && imgs[k.photo];
       // справа — медведь с обложки «Звериной тропы» (лес, туман) или своё фото
       const art = ph ? `<figure class="hero-mist" aria-hidden="true"><img src="${esc(ph)}" alt=""></figure>`
-        : k.art !== false ? '<figure class="hero-mist" aria-hidden="true"><img src="hero-bear.jpg" alt=""><img class="sm" src="hero-bear-round.jpg?4" alt=""></figure>' : '';
+        : k.art !== false ? '<figure class="hero-mist" aria-hidden="true"><img src="hero-bear.jpg" alt=""><img class="sm" src="hero-bear-round.jpg?5" alt=""></figure>' : '';
       return `<section class="hero${art ? ' has-art' : ''}" id="${k.id}"><div class="wrap hero-in">
         <div class="hero-txt">
           ${lbl(k.label)}
