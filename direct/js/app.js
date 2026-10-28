@@ -6,7 +6,7 @@ import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, t
 import { todayISO } from '../../js/calc.js';
 import { ic } from '../../js/icons.js';
 import { takeTokenFromUrl, OUTAGE_TEXT } from './api.js';
-import { refresh, refreshMetrika } from './sync.js';
+import { refresh, refreshMetrika, refreshSite } from './sync.js';
 import { demo, snap, demoLog } from './demo.js';
 import { homeView } from './views/home.js';
 import { launchView } from './views/launch.js';
@@ -68,6 +68,8 @@ export async function reload({ quiet = false } = {}) {
   }
   // Метрика — отдельно: работает, даже если Директ ещё не одобрил заявку или отказал
   try { ui.busy = 'Метрика…'; render(); await refreshMetrika(app); } catch (e) { console.warn(e); if (!quiet) toast(e.transient ? OUTAGE_TEXT : e.message || String(e)); }
+  // сайт автора — свой счётчик; ошибка здесь не мешает остальному
+  try { await refreshSite(app); } catch (e) { console.warn('Сайт:', e); }
   finally { try { await autoSyncKeywordLibrary(app); } catch(e){console.warn('Keyword library sync:',e);} ui.busy = ''; render(); }
 }
 app.reload = reload;

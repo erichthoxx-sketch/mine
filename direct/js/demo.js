@@ -114,3 +114,17 @@ export function demoMetrikaSnap(today) {
     .map(([key, visits, cr]) => ({ key, name: key, visits, users: visits, bounce: 0.2, depth: 3, dur: 240, goals: { 9001: Math.round(visits * cr), 9002: 0 } }));
   return { id: 'mk', at: new Date().toISOString(), demo: true, counterId: 555, goals: [9001, 9002, 9003, 9004], daily, sources: S, engines: [], devices: D, pages: P, utm: U, litref: L, errors: [] };
 }
+
+// Пример сайта автора: 30 дней, цель «Читать» заведена, «Подписались» — ещё нет
+export function demoSiteSnap(today) {
+  const r = rnd(11), daily = [];
+  for (let i = 29; i >= 0; i--) {
+    const key = addDays(today, -i), visits = Math.round(18 + r() * 14 + (i < 7 ? 6 : 0));
+    daily.push({ key, name: key, visits, users: Math.round(visits * 0.85), bounce: 0.3 + r() * 0.1, depth: 2.1, dur: 95, goals: { 501: Math.round(visits * 0.22) } });
+  }
+  const sources = [['social', 'Переходы из социальных сетей', 260], ['messenger', 'Переходы из мессенджеров', 180], ['organic', 'Переходы из поисковых систем', 90], ['direct', 'Прямые заходы', 70]]
+    .map(([key, name, visits]) => ({ key, name, visits, users: visits, bounce: 0.3, depth: 2, dur: 90, goals: { 501: Math.round(visits * 0.2) } }));
+  const pages = [['https://lanafreitag.ru/', 330], ['https://lanafreitag.ru/?kniga=razvod-dlya-chernoy-vdovy', 160], ['https://lanafreitag.ru/?kniga=alpiyskiy-razvod', 110]]
+    .map(([key, visits]) => ({ key, name: key, visits, users: visits, bounce: 0.3, depth: 2, dur: 90, goals: { 501: Math.round(visits * 0.25) } }));
+  return { id: 'site', at: new Date().toISOString(), counterId: '113843691', goalIds: { read: '501' }, daily, sources, refs: [{ key: 't.me', name: 't.me', visits: 150 }], pages, errors: [] };
+}

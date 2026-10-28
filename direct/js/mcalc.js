@@ -254,3 +254,34 @@ export function utmTable(rows = [], saved = [], main = [], perSale = null, refs 
     return { ...x, cr: x.visits ? x.conv / x.visits : null, cpa: x.cost && x.conv ? x.cost / x.conv : null, value, romi: x.cost && value != null ? (value - x.cost) / x.cost : null };
   }).sort((a, b) => b.visits - a.visits);
 }
+
+// ---------- Сайт автора (lanafreitag.ru) ----------
+// Счётчик сайта и цели, которые отправляет сам сайт (site/site.js → reachGoal)
+export const SITE_COUNTER = '113843691';
+export const SITE_GOALS = [['read', 'Нажали «Читать»'], ['subscribe', 'Подписались'], ['gift', 'Скачали подарок'], ['telegram', 'Перешли в Telegram']];
+// Цели Метрики «JavaScript-событие» → { read: номер цели, … }
+export function siteGoalIds(goals = []) {
+  const out = {};
+  for (const g of goals) for (const c of g.conditions || []) if (SITE_GOALS.some(([k]) => k === c.url)) out[c.url] = String(g.id);
+  return out;
+}
+// Страница входа → понятное название: главная, книга, политика
+export function sitePage(u, books = []) {
+  const s = String(u || '');
+  const k = (/[?&]kniga=([\w-]+)/.exec(s) || [])[1];
+  if (k) { const b = books.find((x) => x.url === k); return b ? `Книга «${b.title}»` : `Книга ${k}`; }
+  if (/[?&]privacy/.test(s)) return 'Политика конфиденциальности';
+  if (/\/admin/.test(s)) return 'Админка';
+  return 'Главная';
+}
+// Страницы входа, сложенные по названию (разные хвосты ссылок одной страницы — вместе)
+export function sitePages(pages = [], books = [], goalIds = []) {
+  const by = {};
+  for (const p of pages) {
+    const n = sitePage(p.key || p.name, books);
+    const x = (by[n] ||= { name: n, visits: 0, goals: {} });
+    x.visits += p.visits || 0;
+    for (const g of goalIds) x.goals[g] = (x.goals[g] || 0) + (p.goals?.[g] || 0);
+  }
+  return Object.values(by).sort((a, b) => b.visits - a.visits);
+}

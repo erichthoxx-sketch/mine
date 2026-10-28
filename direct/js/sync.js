@@ -3,9 +3,9 @@
 // Расход связанных кампаний уходит в «Доходы» недельными отчётами (там считается окупаемость).
 import { call, report, metrika } from './api.js';
 import { MICRO, dailyRows, mergeDaily, adRows, mergeAdDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows } from './dcalc.js';
-import { demoSnapshot, demoMetrikaSnap, isDemo, snap, putSnap, putLog } from './demo.js';
+import { demoSnapshot, demoMetrikaSnap, demoSiteSnap, isDemo, snap, putSnap, putLog } from './demo.js';
 import { todayISO, addDays, weekStart } from '../../js/calc.js';
-import { SESSION_METRICS, goalMetric, mkRows } from './mcalc.js';
+import { SESSION_METRICS, goalMetric, mkRows, SITE_COUNTER, siteGoalIds } from './mcalc.js';
 import { reportId } from '../../js/parse.js';
 import { uid } from '../../js/ui.js';
 
@@ -18,7 +18,7 @@ async function getSafe(s, service, full, basic) {
 
 export async function refresh(app, { onStep = () => {} } = {}) {
   const s = app.ctx().settings;
-  if (isDemo()) { await putSnap(app, [...demoSnapshot(todayISO()), demoMetrikaSnap(todayISO())]); return; }
+  if (isDemo()) { await putSnap(app, [...demoSnapshot(todayISO()), demoMetrikaSnap(todayISO()), demoSiteSnap(todayISO())]); return; }
   const today = todayISO();
   onStep('Кампании…');
   const BASE = ['Id', 'Name', 'State', 'Status', 'StartDate', 'DailyBudget', 'NegativeKeywords', 'Type'];
@@ -230,4 +230,27 @@ export async function refreshMetrika(app) {
   try { perm = (await metrika(s, `management/v1/counter/${m.counterId}`, {})).counter?.permission || null; } catch { /* не важно */ }
   const old = snap(app, 'mk') || {};
   await putSnap(app, [{ id: 'mk', at: new Date().toISOString(), counterId: m.counterId, goals, perm: perm ?? old.perm ?? null, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], engines: engines ?? old.engines ?? [], devices: devices ?? old.devices ?? [], pages: pages ?? old.pages ?? [], utm: utm ?? old.utm ?? [], litref: litref ?? old.litref ?? [], errors }]);
+}
+
+// Сайт автора: свой счётчик Метрики (тот же вход Яндекса). Цели сайта находятся по идентификаторам read, subscribe…
+export async function refreshSite(app) {
+  const s = app.ctx().settings;
+  if (isDemo()) { await putSnap(app, [demoSiteSnap(todayISO())]); return; }
+  if (!s.directToken || !s.direct?.proxy) return;
+  const id = String(s.direct?.siteCounter || SITE_COUNTER), today = todayISO(), errors = [];
+  let goalIds = {};
+  try { goalIds = siteGoalIds((await metrika(s, `management/v1/counter/${id}/goals`)).goals || []); } catch (e) { errors.push(e.message); if (e.transient) throw e; }
+  const goals = Object.values(goalIds);
+  const metrics = [...SESSION_METRICS, ...goals.map(goalMetric)].join(',');
+  const get = async (dimensions, from, limit = 50, sort = '-ym:s:visits') => {
+    try { return mkRows(await metrika(s, 'stat/v1/data', { ids: id, metrics, dimensions, date1: from, date2: today, limit, sort, lang: 'ru', accuracy: 'full' }), goals); }
+    catch (e) { errors.push(e.message); if (e.transient) throw e; return null; }
+  };
+  const d30 = addDays(today, -29);
+  const daily = await get('ym:s:date', d30, 100, 'ym:s:date');
+  const sources = await get('ym:s:lastTrafficSource', d30, 20);
+  const refs = await get('ym:s:lastSourceEngine', d30, 20);
+  const pages = await get('ym:s:startURL', d30, 100);
+  const old = snap(app, 'site') || {};
+  await putSnap(app, [{ id: 'site', at: new Date().toISOString(), counterId: id, goalIds, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], refs: refs ?? old.refs ?? [], pages: pages ?? old.pages ?? [], errors }]);
 }

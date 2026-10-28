@@ -412,3 +412,18 @@ test('Сколько тратить: урезать, вернуть прежни
   assert.equal(D.spendAdvice({ camp, ...mk(() => 500, () => 0), today, value: 300 }).kind, 'cut');
   assert.equal(D.spendAdvice({ camp, ...mk(() => 500, () => 1), today, value: null }), null);
 });
+
+test('сайт: цели Метрики по идентификаторам и страницы входа по книгам', async () => {
+  const { siteGoalIds, sitePages } = await import('../direct/js/mcalc.js');
+  assert.deepEqual(siteGoalIds([{ id: 5, type: 'action', conditions: [{ type: 'exactly', url: 'read' }] }, { id: 6, type: 'url', conditions: [{ type: 'contain', url: 'kniga' }] }]), { read: '5' });
+  const books = [{ url: 'alpiyskiy-razvod', title: 'Альпийский развод' }];
+  const p = sitePages([{ key: 'https://lanafreitag.ru/?kniga=alpiyskiy-razvod', visits: 3, goals: { 5: 1 } }, { key: 'https://lanafreitag.ru/?kniga=alpiyskiy-razvod&utm_source=vk', visits: 2, goals: { 5: 1 } }, { key: 'https://lanafreitag.ru/', visits: 4, goals: {} }], books, ['5']);
+  assert.deepEqual(p.map((x) => [x.name, x.visits, x.goals['5']]), [['Книга «Альпийский развод»', 5, 2], ['Главная', 4, 0]]);
+});
+
+test('сайт: адреса книг в приложениях совпадают с адресами на сайте', async () => {
+  const { siteInfo } = await import('../js/sitepub.js');
+  const { normalize } = await import('../site/content.js');
+  const raw = { v: 4, books: [{ id: 'a1', title: 'Тише *воды*' }, { id: 'a2', title: 'Тише воды' }, { id: 'a3', title: 'X', slug: 'Моя-книга' }], blocks: [] };
+  assert.deepEqual(siteInfo(raw).books.map((b) => b.url), normalize(raw).books.map((b) => b.url));
+});
