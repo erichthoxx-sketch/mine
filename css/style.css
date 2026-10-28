@@ -1213,6 +1213,7 @@ main a.pbook-t, main a.pbook-t b { color: var(--text) !important; }
 .d-banner .d-b-ic svg { width: 22px; height: 22px; stroke: var(--accent-ink); }
 .d-banner .d-b-t { flex: 1; min-width: 0; } .d-banner .d-b-t b { color: var(--text); } .d-banner .d-b-t .sub { display: block; }
 .l-tabs { margin: 0 0 12px; }
+.an-tabs { margin: 0 0 14px; }
 .l-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); vertical-align: middle; margin-left: 2px; }
 .l-stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
 .l-stage { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
