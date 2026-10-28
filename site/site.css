@@ -306,6 +306,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .hero h1{font-size:clamp(30px,9vw,40px)}
   .hero.has-art .hero-in{grid-template-columns:minmax(0,1fr);padding-top:20px;padding-bottom:28px}
   /* на телефоне — маленький дымчатый кружок с мордой медведя над заголовком */
+  .hero.has-art .hero-mist,.hero.has-art .hero-txt{margin-left:0}  /* сдвиги для компьютера на телефоне не нужны — кружок строго по центру */
   .hero-mist{order:-1;justify-self:center;width:min(50vw,190px);aspect-ratio:1/1;margin:0 0 8px;border-radius:50%;
     -webkit-mask-image:radial-gradient(circle,#000 52%,rgba(0,0,0,.5) 63%,transparent 71%);mask-image:radial-gradient(circle,#000 52%,rgba(0,0,0,.5) 63%,transparent 71%)}
   .hero-mist img{display:none}
