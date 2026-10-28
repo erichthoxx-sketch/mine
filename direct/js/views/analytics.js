@@ -196,15 +196,21 @@ function siteBooks() {
   return site.info?.books || [];
 }
 // статистика сайта загружается сама, когда открыли вкладку и её ещё нет
+// и сама обновляется, если данным больше получаса (раз за открытие приложения; «Обновить» — в любой момент)
 const siteLoad = { busy: false, tried: false, err: '' };
-function loadSiteStats() {
-  if (siteLoad.busy || siteLoad.tried) return;
-  siteLoad.busy = siteLoad.tried = true;
+function loadSiteStats(force) {
+  if (siteLoad.busy || (siteLoad.tried && !force)) return;
+  siteLoad.busy = siteLoad.tried = true; siteLoad.err = '';
+  app().rerender();
   refreshSite(app()).catch((e) => { siteLoad.err = e.message || String(e); }).finally(() => { siteLoad.busy = false; app().rerender(); });
 }
+acts['site.refresh'] = () => { loadSiteStats(true); return false; };
 function siteTab(a) {
   const st = a.snap('site'), t = a.ctx().today, books = siteBooks();
-  const head = `<div class="row between"><h2 style="margin:0">Сайт lanafreitag.ru</h2><a class="small" href="${SITE_URL}" target="_blank" rel="noopener">Открыть сайт</a></div>`;
+  const st0 = a.snap('site');
+  if (st0 && a.ctx().settings.directToken && Date.now() - new Date(st0.at || 0) > 30 * 60000) loadSiteStats();
+  const when = siteLoad.busy ? 'обновляю…' : st0?.at ? 'обновлено ' + new Date(st0.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+  const head = `<div class="row between"><h2 style="margin:0">Сайт lanafreitag.ru</h2><span class="row" style="gap:12px"><a class="small" href="${SITE_URL}" target="_blank" rel="noopener">Открыть сайт</a>${a.ctx().settings.directToken ? `<button class="link small" data-act="site.refresh"${siteLoad.busy ? ' disabled' : ''}>Обновить</button>` : ''}</span></div>`;
   if (!st) {
     if (!a.ctx().settings.directToken) return `<div class="card">${head}<p class="muted">Статистика сайта приходит через вход Яндекса — тот же, что для Метрики автора. Войдите в Яндекс в Настройках.</p></div>`;
     loadSiteStats();
@@ -217,7 +223,8 @@ function siteTab(a) {
   const missing = SITE_GOALS.filter(([k]) => !g[k]);
   const pages = sitePages(st.pages, books, ids), maxP = Math.max(1, ...pages.map((x) => x.visits));
   const readOf = (x) => (g.read ? ` · «Читать» ${num(x.goals?.[g.read] || 0)}` : '');
-  return `<div class="card">${head}<p class="small muted">за 7 дней</p>
+  const err = siteLoad.err || (st.errors || [])[0];
+  return `<div class="card">${head}<p class="small muted">за 7 дней${when ? ' · ' + when : ''}</p>${err ? `<p class="small warnc">Метрика ответила ошибкой: ${esc(err)}. Счётчик сайта должен быть в том же аккаунте Яндекса, что и вход здесь.</p>` : ''}
       <div class="tiles d-tiles">
         <div><div class="k">Посетители</div><div class="v">${num(w.users)}</div><div class="s">визитов ${num(w.visits)} · за 30 дней ${num(m30.users)}</div></div>
         ${tile('read', 'Нажали «Читать»')}${tile('subscribe', 'Подписались')}
@@ -232,7 +239,7 @@ function siteTab(a) {
         ${(st.refs || []).length ? `<p class="small muted" style="margin:10px 0 2px">Сайты и поисковики</p>${st.refs.slice(0, 8).map((x) => `<div class="row between small"><span>${esc(x.name)}</span><span>${num(x.visits)}</span></div>`).join('')}` : ''}</div>
       <div class="card"><h2>Первая страница визита</h2>${pages.slice(0, 10).map((x) => `<div class="bar-row"><div class="row between small"><span>${esc(x.name)}</span><span>${num(x.visits)}${readOf(x)}</span></div><div class="progress"><i style="width:${(x.visits / maxP * 100).toFixed(1)}%"></i></div></div>`).join('') || '<p class="muted">Пока нет посещений.</p>'}</div></div>
     <p class="small muted"><a href="${SITE_ADMIN}" target="_blank" rel="noopener">Админка сайта</a> · дела по сайту — в «Мастерской» → Связи → Мой сайт</p>
-    ${(st.errors || []).length ? `<p class="small muted">Часть отчётов Метрика не отдала: ${esc(st.errors[0])}</p>` : ''}`;
+`;
 }
 acts['site.copyGoal'] = async (d) => { try { await navigator.clipboard.writeText(d.k); toast('Скопировано: ' + d.k); } catch { toast(d.k); } return false; };
 

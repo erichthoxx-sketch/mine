@@ -262,7 +262,8 @@ export const SITE_GOALS = [['read', 'Нажали «Читать»'], ['subscrib
 // Цели Метрики «JavaScript-событие» → { read: номер цели, … }
 export function siteGoalIds(goals = []) {
   const out = {};
-  for (const g of goals) for (const c of g.conditions || []) if (SITE_GOALS.some(([k]) => k === c.url)) out[c.url] = String(g.id);
+  // идентификатор лежит в условиях цели (url / value — у разных видов целей по-разному)
+  for (const g of goals) for (const c of g.conditions || []) for (const v of [c.url, c.value, c.identifier]) if (SITE_GOALS.some(([k]) => k === String(v || '').trim())) out[String(v).trim()] = String(g.id);
   return out;
 }
 // Страница входа → понятное название: главная, книга, политика
