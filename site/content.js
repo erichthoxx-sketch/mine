@@ -535,7 +535,7 @@ const ext = (u) => (/^https?:/.test(u) ? ' target="_blank" rel="noopener"' : '')
 const pair = (l) => { const m = l.match(/^(.+?)\s+[—–-]\s+(.+)$/); return m ? [m[1].trim(), m[2].trim()] : [l.trim(), '']; };
 
 // Обложка: загруженная картинка или строгая типографская обложка из названия (как у издательской серии)
-function cover(b, imgs, name) {
+export function cover(b, imgs, name) {
   if (b.cover && imgs[b.cover]) return `<div class="cover cover-img"><img src="${esc(imgs[b.cover])}" alt="${esc(plain(b.title))}" loading="lazy"></div>`;
   const [t1, t2] = String(b.title || 'Без названия').split(/\*([^*]+)\*/);
   const v = (String(b.id).split('').reduce((a, ch) => a + ch.charCodeAt(0), 0) % 4) + 1;

@@ -8,6 +8,14 @@ const preview = new URLSearchParams(location.search).has('preview');
 let bookKey = new URLSearchParams(location.search).get('kniga') || '';
 const privacyPage = new URLSearchParams(location.search).has('privacy');
 let current = null; // что сейчас на экране — нужно форме подписки (подарок, текст «готово»)
+let shownImgs = {};
+// Прототип личного кабинета: только по ссылке ./?proto (дальше помнится в этой вкладке); читатели его не видят
+const qs = new URLSearchParams(location.search);
+let proto = false;
+try { if (qs.has('proto')) sessionStorage.setItem('lanaSite.proto', '1'); proto = sessionStorage.getItem('lanaSite.proto') === '1'; } catch { /* без памяти — без прототипа */ }
+let cab = null; // подгружается отдельно — основной сайт его не ждёт
+if (proto && !preview) import('./cabinet.js' + ((/\?v=[^&]+/.exec(import.meta.url) || [''])[0])).then((m) => { cab = m; if (current) show(current, shownImgs); }).catch(() => {});
+const cabPage = qs.has('kabinet') ? 'kabinet' : qs.get('chitat') ? 'chitat' : '';
 
 // Яндекс Метрика: счётчик из «Общее»; не в предпросмотре админки и не при проверке на своём компьютере
 let ymId = '';
@@ -31,6 +39,10 @@ function show(content, imgs) {
   let r = bookKey ? renderBook(current, imgs || {}, bookKey) : privacyPage ? renderPrivacy(current, imgs || {}) : null;
   const isBook = !!r && !!bookKey;
   if (!r) r = renderSite(content || DEFAULT_CONTENT, imgs || {}); // книги нет (скрыли, сменили адрес) — главная
+  shownImgs = imgs || {};
+  const cp = cab && cabPage ? cab.page(normalize(current), shownImgs, cabPage, qs.get('chitat')) : null;
+  if (cp) r = { ...r, main: cp.main, title: cp.title };
+  document.body.classList.toggle('is-reader', !!cp?.reader);
   document.documentElement.style.setProperty('--a1', r.colors.a1);
   document.documentElement.style.setProperty('--a2', r.colors.a2);
   document.body.classList.toggle('is-book', isBook);
@@ -40,6 +52,7 @@ function show(content, imgs) {
   document.title = r.title;
   try { sessionStorage.removeItem('siteReload'); } catch { /* без хранилища */ }
   watchCta();
+  cab?.after(normalize(current), shownImgs, bookKey, () => show(current, shownImgs));
   let done = false;
   try { done = localStorage.getItem('lanaSite.subscribed') === '1'; } catch { /* без памяти */ }
   const f = document.querySelector('[data-sub]');
