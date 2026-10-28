@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { renderSite, renderBook, normalize, safeUrl, fmt, colors, slugify, seriesBooks, bookLinks, DEFAULT_CONTENT, newBlock, newBook, BLOCKS } from '../site/content.js';
+import { renderSite, renderBook, renderPrivacy, withUtm, normalize, safeUrl, fmt, colors, slugify, seriesBooks, bookLinks, DEFAULT_CONTENT, newBlock, newBook, BLOCKS } from '../site/content.js';
 import { RULES } from '../site/admin/rules.js';
 
 const ex = () => structuredClone(DEFAULT_CONTENT);
@@ -81,8 +81,8 @@ test('страница книги: главная кнопка — первая 
   Object.assign(c.books[1], { litnet: 'https://litnet.com/a', litres: 'https://litres.ru/b', links: 'Author.Today — https://author.today/c' });
   assert.deepEqual(bookLinks(c.books[1]).map(([n]) => n), ['Литнет', 'Литрес', 'Author.Today']);
   const r = renderBook(c, {}, 'alpiyskiy-razvod');
-  assert.match(r.main, /class="btn btn-dark" href="https:\/\/litnet.com\/a"[^>]*>Читать на Литнете/);
-  assert.match(r.main, /<a class="btn btn-line" href="https:\/\/author.today\/c"/);
+  assert.match(r.main, /class="btn btn-dark" href="https:\/\/litnet.com\/a\?utm_source=lanafreitag.ru&amp;utm_medium=site&amp;utm_campaign=alpiyskiy-razvod"[^>]*>Читать на Литнете/);
+  assert.match(r.main, /<a class="btn btn-line" href="https:\/\/author.today\/c\?utm_source=lanafreitag.ru/);
   assert.match(r.main, /Цикл «С кем я, черт возьми, связалась» · книга 1/);
   assert.match(r.main, /class="excerpt"/);
   assert.ok(!r.main.includes('Читатели'), 'отзывов нет — раздела нет');
@@ -166,6 +166,15 @@ test('меню: вместо «Дневник» — значок Telegram сра
   const h = renderSite(c).head;
   assert.match(h, /class="tg-ico" href="https:\/\/t.me\/lanafreitag"/);
   assert.ok(!h.includes('btn-line'));
+});
+
+test('сайт: Метрика — счётчик по умолчанию, предупреждение в политике; своя метка ссылки не затирается', () => {
+  const c = ex();
+  assert.equal(normalize({ v: 4, blocks: [] }).metrika, '113843691');
+  assert.match(renderPrivacy(c).main, /Яндекс Метрику/);
+  c.metrika = '';
+  assert.ok(!renderPrivacy(c).main.includes('Метрику'));
+  assert.equal(withUtm('https://litnet.com/ref/abc?utm_source=tg', 'x'), 'https://litnet.com/ref/abc?utm_source=tg');
 });
 
 test('сайт: правила Firebase в админке совпадают с firestore.rules', () => {

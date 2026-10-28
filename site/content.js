@@ -260,6 +260,7 @@ export const DEFAULT_CONTENT = {
  "subDone": "Готово, спасибо! Ваша книга — по кнопке ниже.",
  "consent": "Соглашаюсь получать письма",
  "privacy": "Я собираю только адрес электронной почты — чтобы прислать подарок и письма о новых книгах.\n\nАдрес не передаётся третьим лицам. Отписаться можно в любой момент: ответьте на любое письмо или напишите мне.",
+ "metrika": "113843691",
  "a1": "",
  "a2": "",
  "books": [
@@ -549,7 +550,18 @@ const ON = { Литнет: 'Литнете', Литрес: 'Литресе', Л�
 export function bookLinks(b) {
   const list = PLATFORMS.map(([k, n]) => [n, safeUrl(b[k])]);
   for (const l of lines(b.links)) { const [n, u] = pair(l); list.push([n, safeUrl(u)]); }
-  return list.filter(([n, u]) => n && u);
+  return list.filter(([n, u]) => n && u).map(([n, u]) => [n, withUtm(u, b.url)]);
+}
+// Метка «пришли с сайта»: в Метрике автора на Литнете видно, сколько читателей привёл сайт и какая книга
+export function withUtm(u, book) {
+  try {
+    const x = new URL(u);
+    if (x.searchParams.has('utm_source')) return u;
+    x.searchParams.set('utm_source', 'lanafreitag.ru');
+    x.searchParams.set('utm_medium', 'site');
+    if (book) x.searchParams.set('utm_campaign', book);
+    return x.href;
+  } catch { return u; }
 }
 const ctaText = (b, links) => (b.cta ? b.cta : links[0] ? (ON[links[0][0]] ? `Читать на ${ON[links[0][0]]}` : `Читать: ${links[0][0]}`) : '');
 
@@ -822,6 +834,8 @@ export function renderBook(raw, imgs = {}, key = '') {
   };
 }
 
+// Закон требует предупредить о сборе статистики — абзац добавляется сам, пока на сайте стоит Метрика
+export const METRIKA_NOTE = 'Сайт использует Яндекс Метрику — сервис статистики Яндекса. Он собирает обезличенные данные о посещениях (файлы cookie, просмотренные страницы, переходы), чтобы я понимала, что интересно читателям. Отключить cookie можно в настройках браузера.';
 export function renderPrivacy(raw, imgs = {}) {
   const c = normalize(raw);
   if (!c.privacy) return null;
@@ -829,7 +843,7 @@ export function renderPrivacy(raw, imgs = {}) {
   return {
     title: `Политика конфиденциальности — ${c.name || 'Автор'}`,
     ...chrome(c, c.blocks.filter((x) => shown.has(x.id))),
-    main: `<section class="bk-sec text-b"><div class="wrap"><h1 class="bk-h">Политика конфиденциальности</h1><div class="prose">${paras(c.privacy)}</div></div></section>`,
+    main: `<section class="bk-sec text-b"><div class="wrap"><h1 class="bk-h">Политика конфиденциальности</h1><div class="prose">${paras(c.privacy)}${c.metrika ? paras(METRIKA_NOTE) : ''}</div></div></section>`,
     colors: colors(c),
   };
 }

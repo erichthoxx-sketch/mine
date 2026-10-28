@@ -9,8 +9,25 @@ let bookKey = new URLSearchParams(location.search).get('kniga') || '';
 const privacyPage = new URLSearchParams(location.search).has('privacy');
 let current = null; // что сейчас на экране — нужно форме подписки (подарок, текст «готово»)
 
+// Яндекс Метрика: счётчик из «Общее»; не в предпросмотре админки и не при проверке на своём компьютере
+let ymId = '';
+function metrika(c) {
+  const id = String(normalize(c).metrika || '').replace(/\D/g, '');
+  if (!id || ymId || preview || LOCAL) return;
+  ymId = id;
+  window.ym = window.ym || function () { (window.ym.a = window.ym.a || []).push(arguments); };
+  window.ym.l = 1 * new Date();
+  const s = document.createElement('script');
+  s.async = true; s.src = 'https://mc.yandex.ru/metrika/tag.js?id=' + id;
+  document.head.appendChild(s);
+  window.ym(Number(id), 'init', { ssr: true, webvisor: true, clickmap: true, trackLinks: true, accurateTrackBounce: true });
+}
+// Цели: «Читать» (переход на площадку), подписка, подарок, Telegram — видны в «Директе» → Аналитика → Сайт
+const goal = (name, params) => { if (ymId && window.ym) window.ym(Number(ymId), 'reachGoal', name, params); };
+
 function show(content, imgs) {
   current = content || DEFAULT_CONTENT;
+  metrika(current);
   let r = bookKey ? renderBook(current, imgs || {}, bookKey) : privacyPage ? renderPrivacy(current, imgs || {}) : null;
   const isBook = !!r && !!bookKey;
   if (!r) r = renderSite(content || DEFAULT_CONTENT, imgs || {}); // книги нет (скрыли, сменили адрес) — главная
@@ -52,7 +69,15 @@ function toHash() {
   document.getElementById(location.hash.slice(1))?.scrollIntoView();
 }
 
+const SHOPS = /litnet|litres|litmarket|litgorod|author\.today|bookmate|ozon|wildberries/i;
 document.addEventListener('click', (e) => {
+  const out = e.target.closest('a[href^="http"]');
+  if (out && !preview) {
+    const h = out.hostname || '';
+    if (out.closest('.sub-msg')) goal('gift');
+    else if (/t\.me|telegram/i.test(h)) goal('telegram');
+    else if (SHOPS.test(h)) goal('read', { book: bookKey || 'glavnaya', shop: h.replace(/^www\./, '') });
+  }
   // меню на телефоне: открыть/закрыть; нажали пункт — закрылось
   const btn = e.target.closest('.menu-btn');
   const nav = $('mnav');
@@ -97,6 +122,7 @@ document.addEventListener('submit', async (e) => {
   try {
     await addSub(email, bookKey ? 'kniga:' + bookKey : 'glavnaya');
     try { localStorage.setItem(SUBD, '1'); } catch { /* без памяти */ }
+    goal('subscribe', { from: bookKey || 'glavnaya' });
     f.querySelector('.sub-row').hidden = true;
     f.querySelector('.consent').hidden = true;
     say(giftHtml(normalize(current)));

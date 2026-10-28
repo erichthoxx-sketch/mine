@@ -226,6 +226,10 @@ function generalTab() {
       ${field('site', c, { k: 'subDone', label: 'Текст после подписки', type: 'area' })}
       ${field('site', c, { k: 'privacy', label: 'Политика конфиденциальности', type: 'area', hint: 'Отдельная страница по ссылке внизу сайта. Здесь — простой черновик, проверьте его под себя' })}
     </div>
+    <h3 class="sub">Статистика</h3>
+    <div class="list" style="gap:16px">
+      ${field('site', c, { k: 'metrika', label: 'Счётчик Яндекс Метрики', hint: 'Номер счётчика: посещения, нажатия «Читать», подписки. Смотреть — в «Директе» → Аналитика → Сайт. Пусто — без статистики' })}
+    </div>
     <h3 class="sub">Подписчики${S.subs ? ` · ${S.subs.length}` : ''}</h3>
     ${subsHtml()}
     <h3 class="sub">Нейросеть</h3>
