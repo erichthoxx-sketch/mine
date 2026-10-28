@@ -278,10 +278,10 @@ export const DEFAULT_CONTENT = {
  "cabLabel": "Личный кабинет",
  "cabOut": "Выйти",
  "cabLevelLabel": "Ваш статус",
- "cabLevels": "Новенькая\nЧитательница\nСвоя\nБлизкий круг",
+ "cabLevels": "Случайная свидетельница\nУже связалась\nСвоя в деле\nНе развяжешься",
  "cabSteps": "Создать кабинет\nОткрыть подарок\nДочитать подарок\nВключить напоминание о старте\nОтметить прочитанную книгу",
  "cabNextLabel": "Следующий шаг",
- "cabAllDone": "Все шаги пройдены — вы в близком круге",
+ "cabAllDone": "Все шаги пройдены — теперь не развяжешься",
  "cabStatSeries": "книг цикла прочитано",
  "cabStatGift": "подарка прочитано",
  "cabStatSoon": "дней до старта",
@@ -516,6 +516,8 @@ export function normalize(c) {
   const d = DEFAULT_CONTENT;
   if (!c || typeof c !== 'object') return structuredClone(d);
   c = upgrade(c);
+  // первые названия статусов кабинета (если их не меняли) — на статусы по мотивам цикла
+  if (c.cabLevels === 'Новенькая\nЧитательница\nСвоя\nБлизкий круг') c = { ...c, cabLevels: d.cabLevels, cabAllDone: c.cabAllDone === 'Все шаги пройдены — вы в близком круге' ? d.cabAllDone : c.cabAllDone };
   const out = { ...structuredClone(d), ...c };
   out.books = Array.isArray(c.books) ? c.books.filter((b) => b && b.id).map((b) => ({ ...newBook(), ...b })) : structuredClone(d.books);
   out.blocks = Array.isArray(c.blocks) ? c.blocks.filter((b) => b && b.id && BLOCKS[b.type]).map((b) => ({ ...newBlock(b.type), ...b })) : structuredClone(d.blocks);
