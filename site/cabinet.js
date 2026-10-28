@@ -1,43 +1,83 @@
-// Личный кабинет читателя — ПРОТОТИП. Виден только по ссылке ./?proto (дальше помнится в этой вкладке), читатели сайта его не видят.
-// Всё хранится в этом браузере, пароль не проверяется, письма не отправляются.
-// Тексты окна входа и кабинета — из админки → «Кабинет». Настоящий вход (почта + пароль), напоминания и цены — следующий шаг.
-import { esc, fmt, findBook, cover, STATUS } from './content.js';
+// Личный кабинет читателя: вход в шапке (дверца), окно входа по почте и паролю, страница ./?kabinet,
+// на странице книги — «Добавить старт в календарь» и «На полку». Тексты — из админки → «Кабинет».
+// Данные читателя — в его аккаунте (readers.js), копия — в браузере, чтобы всё показывалось сразу.
+import { esc, fmt, findBook, cover, STATUS, startInfo, readerPath } from './content.js';
+import { readers, readerError } from './readers.js';
+import { addSub } from './data.js';
 
-const K = 'lanaSite.reader', VK = 'lanaSite.protoIcon';
+const K = 'lanaSite.reader', IN = 'lanaSite.in';
 const get = () => { try { return JSON.parse(localStorage.getItem(K) || 'null') || {}; } catch { return {}; } };
-let S = get();
-const put = () => { try { localStorage.setItem(K, JSON.stringify(S)); } catch { /* без памяти */ } };
-const variant = () => { try { return sessionStorage.getItem(VK) || 'door'; } catch { return 'door'; } };
+let S = get();          // полка, старты в календаре, подарок, вкладка полки
+let user = null;        // { uid, email } — кто вошёл
 let redraw = () => {};
 let ctx = { c: null, imgs: {} };
+let saveT = 0;
+const SAVED = ['shelf', 'remind', 'gift'];
+function persist() {
+  try { localStorage.setItem(K, JSON.stringify(S)); } catch { /* без памяти */ }
+  if (!user) return;
+  clearTimeout(saveT);
+  saveT = setTimeout(() => readers.save(user.uid, Object.fromEntries(SAVED.map((k) => [k, S[k] || (k === 'gift' ? false : {})]))).catch(() => {}), 600);
+}
+// вошла раньше на этом устройстве — поднимаем вход сразу; иначе библиотеки грузятся только по нажатию на дверцу
+const known = () => { try { return localStorage.getItem(IN) === '1'; } catch { return false; } };
+let watching = false;
+function watch() {
+  if (watching) return;
+  watching = true;
+  readers.onUser(async (u) => {
+    user = u;
+    try { if (u) localStorage.setItem(IN, '1'); else localStorage.removeItem(IN); } catch { /* ок */ }
+    if (u) {
+      // что отмечено до входа + что уже лежит в аккаунте
+      const r = await readers.load(u.uid).catch(() => null);
+      if (r) S = { ...S, shelf: { ...(r.shelf || {}), ...(S.shelf || {}) }, remind: { ...(r.remind || {}), ...(S.remind || {}) }, gift: !!(r.gift || S.gift) };
+      persist();
+    }
+    redraw();
+  });
+}
+if (known()) watch();
 
 const DOOR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20.5V3.5h10v17"/><path d="M7 3.5l6.2 1.8v13.4L7 20.5"/><path d="M4.5 20.5h15"/><circle cx="11.4" cy="12.4" r=".75"/></svg>'; // приоткрытая дверь
 const SHELF = { want: 'Хочу прочитать', reading: 'Читаю', done: 'Прочла' };
 const plural = (n, f) => f[(n % 10 === 1 && n % 100 !== 11) ? 0 : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 1 : 2];
-const dm = (d) => d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-// Пример старта подписки для книги, которая пишется (в админке будут поля «Дата старта» и «Цена в день старта»)
-function startOf(b) {
-  if (b.status !== 'writing') return null;
-  const date = new Date(); date.setDate(date.getDate() + 18);
-  return { date, days: 18, price: 99, old: 149 };
-}
+const dm = (t) => new Date(t + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const books = () => (ctx.c?.books || []).filter((b) => !b.hidden);
+const plainT = (t) => String(t || '').replace(/\*/g, '');
+const priceLine = (st, T) => (st.price ? `${T('cabPriceLine', 'Для своих в день старта')} <b>${st.price} ₽</b>${st.old && st.old > st.price ? ` <s>${st.old} ₽</s>` : ''}` : '');
+
+// ---------- старт подписки → в календарь (Google или файл для iPhone и Outlook) ----------
+function calLinks(b, st) {
+  const d = st.date.replace(/-/g, ''), next = new Date(st.date + 'T12:00:00'); next.setDate(next.getDate() + 1);
+  const d2 = `${next.getFullYear()}${String(next.getMonth() + 1).padStart(2, '0')}${String(next.getDate()).padStart(2, '0')}`;
+  const title = `Старт подписки «${plainT(b.title)}» — ${ctx.c?.name || ''}`;
+  const page = new URL('./?kniga=' + b.url, location.href).href;
+  const details = `${st.price ? `Цена для своих в день старта — ${st.price} ₽. ` : ''}${page}`;
+  const g = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${d}/${d2}&details=${encodeURIComponent(details)}`;
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//lanafreitag.ru//RU', 'BEGIN:VEVENT', `UID:${b.id}-${d}@lanafreitag.ru`, `DTSTART;VALUE=DATE:${d}`, `DTEND;VALUE=DATE:${d2}`,
+    `SUMMARY:${title}`, `DESCRIPTION:${details}`, `URL:${page}`, 'BEGIN:VALARM', 'TRIGGER:PT10H', 'ACTION:DISPLAY', `DESCRIPTION:${title}`, 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  return `<span class="cab-cal"><a href="${g}" target="_blank" rel="noopener" data-cab="cal" data-id="${esc(b.id)}">Google Календарь</a><a href="data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}" download="start-${esc(b.url)}.ics" data-cab="cal" data-id="${esc(b.id)}">iPhone и другие</a></span>`;
+}
 
 // ---------- вход в шапке ----------
 export function headEntry() {
-  const on = !!S.email, txt = on ? 'Кабинет' : 'Войти', door = variant() === 'door';
-  return `<a class="acc${door ? ' acc-door' : ''}${on ? ' acc-on' : ''}" href="./?kabinet" data-cab="${on ? 'go' : 'login'}" aria-label="${txt}" title="${on ? 'Личный кабинет' : 'Войти в личный кабинет'}">${door ? DOOR : ''}<span>${txt}</span></a>`;
+  const txt = user ? 'Кабинет' : 'Войти';
+  return `<a class="acc acc-door${user ? ' acc-on' : ''}" href="./?kabinet" data-cab="${user ? 'go' : 'login'}" aria-label="${txt}" title="${user ? 'Личный кабинет' : 'Войти в личный кабинет'}">${DOOR}<span>${txt}</span></a>`;
 }
 
-// ---------- окно входа: почта и пароль (тексты — из админки → «Кабинет») ----------
+// ---------- окно входа: почта и пароль ----------
 // «что даёт кабинет»: строка «Жирное — остальное» → жирное начало
 const perks = (c, cls = '') => {
   const ls = String(c.cabPerks || '').split('\n').map((x) => x.trim()).filter(Boolean);
   return ls.length ? `<ul class="cab-gets${cls}">${ls.map((l) => { const [a, ...b] = l.split(' — '); return `<li>${b.length ? `<b>${esc(a)}</b> — ${esc(b.join(' — '))}` : esc(l)}</li>`; }).join('')}</ul>` : '';
 };
 let mode = 'new'; // new — создать кабинет, in — войти, reset — забыли пароль
+let pending = null; // что хотели сделать до входа (например, положить книгу на полку)
 function sheet(why = '') {
   close();
+  watch();
   const c = ctx.c || {};
   document.body.insertAdjacentHTML('beforeend', `<div class="cab-ov" data-cab="close"><div class="cab-sheet" role="dialog" aria-modal="true" aria-labelledby="cabT">
     <button class="cab-x" data-cab="close" aria-label="Закрыть">×</button>
@@ -49,7 +89,7 @@ function sheet(why = '') {
 function formHtml(c) {
   if (mode === 'reset') return `<p class="cab-p">Пришлю письмо со ссылкой — по ней задать новый пароль.</p>
     <form class="cab-form" data-cab-form="reset"><input type="email" name="email" placeholder="Почта" autocomplete="email" required>
-      <button class="btn btn-dark" type="submit">Прислать письмо</button></form>
+      <button class="btn btn-dark" type="submit">Прислать письмо</button><p class="cab-err" hidden></p></form>
     <div class="cab-alt"><button class="cab-link" data-cab="mode" data-v="in">← Вспомнила пароль</button></div>`;
   const neu = mode === 'new';
   return `<p class="cab-p">${esc(c.cabText || '')}</p>
@@ -58,6 +98,7 @@ function formHtml(c) {
       <input type="password" name="pw" placeholder="${neu ? 'Придумайте пароль — от 6 знаков' : 'Пароль'}" autocomplete="${neu ? 'new-password' : 'current-password'}" minlength="6" required>
       <button class="btn btn-dark" type="submit">${esc(neu ? c.cabBtnNew || 'Создать кабинет' : c.cabBtnIn || 'Войти')}</button>
       ${neu ? `<label class="consent"><input type="checkbox" name="ok" required> <span>${esc(c.consent || 'Соглашаюсь получать письма')}${c.privacy ? ' — <a href="./?privacy">политика конфиденциальности</a>' : ''}</span></label>` : ''}
+      <p class="cab-err" hidden></p>
     </form>
     <div class="cab-alt">${neu ? '<span>Уже есть кабинет?</span><button class="cab-link" data-cab="mode" data-v="in">Войти</button>'
       : '<button class="cab-link" data-cab="mode" data-v="reset">Забыли пароль?</button><button class="cab-link" data-cab="mode" data-v="new">Создать кабинет</button>'}</div>
@@ -65,183 +106,135 @@ function formHtml(c) {
 }
 function close() { document.querySelector('.cab-ov')?.remove(); }
 
-// ---------- страница книги: напомнить о старте и полка ----------
+// ---------- страница книги: старт в календарь и полка ----------
 function bookExtras(b) {
-  const st = startOf(b), mine = S.shelf?.[b.id], rem = S.remind?.[b.id];
+  const c = ctx.c || {}, T = (k, d) => esc(c[k] || d);
+  const st = startInfo(b, today()), mine = S.shelf?.[b.id];
   return `<div class="cab-book">
-    ${st ? `<div class="cab-start"><button class="btn ${rem ? 'btn-line cab-on' : 'btn-line'}" data-cab="remind" data-id="${esc(b.id)}">${rem ? `Напомню ${dm(st.date)}` : esc(ctx.c?.cabRemind || 'Напомнить о старте')}</button>
-      <span class="cab-note">Старт подписки ${dm(st.date)} · для своих ${st.price} ₽ <s>${st.old} ₽</s></span></div>` : ''}
+    ${st ? `<div class="cab-start"><span class="cab-note">${T('cabStartLine', 'Старт подписки')} ${dm(st.date)}${st.price ? ` · ${priceLine(st, T)}` : ''}</span>
+      <span class="cab-calw"><span class="cab-calk">${T('cabRemind', 'Добавить старт в календарь')}:</span>${calLinks(b, st)}</span></div>` : ''}
     <div class="cab-shelf"><span>На полку:</span>${Object.entries(SHELF).map(([k, n]) => `<button class="${mine === k ? 'on' : ''}" data-cab="shelf" data-id="${esc(b.id)}" data-v="${k}">${n}</button>`).join('')}</div>
   </div>`;
 }
 
 // ---------- кабинет ----------
-// Путь читателя: шаги и статусы (названия — из админки). Лёгкая игра: что уже сделано и что дальше.
 const lines = (t) => String(t || '').split('\n').map((x) => x.trim()).filter(Boolean);
-function path(c) {
-  const done = [
-    true,
-    (S.progress?.podarok || 0) > 0,
-    (S.progress?.podarok || 0) >= 0.95,
-    Object.values(S.remind || {}).some(Boolean),
-    Object.values(S.shelf || {}).includes('done'),
-  ];
-  const names = lines(c.cabSteps), levels = lines(c.cabLevels);
-  const n = done.filter(Boolean).length;
-  const lv = n >= 5 ? 3 : n >= 4 ? 2 : n >= 2 ? 1 : 0;
-  const next = done.findIndex((x) => !x);
-  const go = ['', './?chitat=podarok', './?chitat=podarok', '', ''][next] || '';
-  return { done, n, total: done.length, level: levels[lv] || '', nextName: next >= 0 ? names[next] || '' : '', go };
-}
 function cabinet(c, imgs) {
   const name = c.name || 'Автор';
-  if (!S.email) return `<section class="cab"><div class="wrap cab-narrow">
-      <div class="lbl">${esc(c.cabLabel || 'Личный кабинет')}</div><h1 class="cab-h">${fmt(c.cabIntro || 'Личный кабинет', false)}</h1>
+  const T = (k, d) => esc(c[k] || d);
+  if (!user) return `<section class="cab"><div class="wrap cab-narrow">
+      <div class="lbl">${T('cabLabel', 'Личный кабинет')}</div><h1 class="cab-h">${fmt(c.cabIntro || 'Личный кабинет', false)}</h1>
       ${perks(c, ' big')}
-      <div class="cab-acts"><button class="btn btn-dark" data-cab="login" data-v="new">${esc(c.cabBtnNew || 'Создать кабинет')}</button><button class="lnk" data-cab="login" data-v="in">${esc(c.cabBtnIn || 'Войти')}</button></div></div></section>`;
-  const tab = S.tab || 'reading';
-  const soon = books().map((b) => [b, startOf(b)]).filter(([, s]) => s);
-  const giftP = Math.round((S.progress?.podarok || 0) * 100);
-  const P = path(c);
-  // цикл: сколько книг отмечено «Прочла»
+      <div class="cab-acts"><button class="btn btn-dark" data-cab="login" data-v="new">${T('cabBtnNew', 'Создать кабинет')}</button><button class="lnk" data-cab="login" data-v="in">${T('cabBtnIn', 'Войти')}</button></div></div></section>`;
+  const tab = S.tab || 'reading', t = today();
+  const soon = books().map((b) => [b, startInfo(b, t)]).filter(([, s]) => s).sort((a, b) => a[1].days - b[1].days);
+  const P = readerPath(S), names = lines(c.cabSteps), levels = lines(c.cabLevels);
   const ser = [...new Set(books().map((b) => String(b.series || '').trim()).filter(Boolean))][0] || '';
   const serBooks = ser ? books().filter((b) => String(b.series || '').trim() === ser).sort((a, b) => (Number(a.seriesNo) || 99) - (Number(b.seriesNo) || 99)) : [];
   const serDone = serBooks.filter((b) => S.shelf?.[b.id] === 'done').length;
   const onShelf = books().filter((b) => S.shelf?.[b.id] === tab);
-  const nearest = soon.sort((a, b) => a[1].days - b[1].days)[0];
-  const T = (k, d) => esc(c[k] || d);
+  const shelfN = books().filter((b) => S.shelf?.[b.id]).length;
+  const gu = c.giftUrl;
   const head = (title, extra = '') => `<div class="cab-sh"><h2>${title}</h2>${extra}</div>`;
+  const nextGo = P.next === 1 && gu ? gu : '';
   return `<section class="cab"><div class="wrap">
     <div class="cab-hero">
       <div><div class="lbl">${T('cabLabel', 'Личный кабинет')}</div><h1 class="cab-h">${fmt(c.cabHello || 'Здравствуйте', false)}</h1>
-        <div class="cab-mail">${esc(S.email)} · <button class="cab-link" data-cab="logout">${T('cabOut', 'Выйти')}</button></div></div>
+        <div class="cab-mail">${esc(user.email)} · <button class="cab-link" data-cab="logout">${T('cabOut', 'Выйти')}</button></div></div>
       <div class="cab-lv">
         <div class="cab-lv-k">${T('cabLevelLabel', 'Ваш статус')}</div>
-        <div class="cab-lv-v">${esc(P.level)}</div>
-        <div class="cab-seg" aria-label="${P.n} из ${P.total}">${P.done.map((x) => `<i class="${x ? 'on' : ''}"></i>`).join('')}</div>
-        ${P.nextName ? `<div class="cab-next"><span>${T('cabNextLabel', 'Следующий шаг')}:</span> ${P.go ? `<a href="${P.go}">${esc(P.nextName)} →</a>` : esc(P.nextName)}</div>` : `<div class="cab-next">${T('cabAllDone', 'Все шаги пройдены — вы в близком круге')}</div>`}
+        <div class="cab-lv-v">${esc(levels[P.level] || '')}</div>
+        <div class="cab-seg" aria-label="${P.n} из 5">${P.done.map((x) => `<i class="${x ? 'on' : ''}"></i>`).join('')}</div>
+        ${P.next >= 0 ? `<div class="cab-next"><span>${T('cabNextLabel', 'Следующий шаг')}:</span> ${nextGo ? `<a href="${esc(nextGo)}" target="_blank" rel="noopener" data-cab="gift">${esc(names[P.next] || '')} →</a>` : esc(names[P.next] || '')}</div>` : `<div class="cab-next">${T('cabAllDone', 'Все шаги пройдены')}</div>`}
       </div>
     </div>
     <div class="cab-stats">
       ${ser ? `<div><b>${serDone}<small>/${serBooks.length}</small></b><span>${T('cabStatSeries', 'книг цикла прочитано')}</span></div>` : ''}
-      ${c.giftName ? `<div><b>${giftP}<small>%</small></b><span>${T('cabStatGift', 'подарка прочитано')}</span></div>` : ''}
-      ${nearest ? `<div><b>${nearest[1].days}</b><span>${T('cabStatSoon', 'дней до старта')} «${esc(String(nearest[0].title).replace(/\*/g, ''))}»</span></div>` : ''}
+      <div><b>${shelfN}</b><span>${T('cabStatShelf', 'книг на полке')}</span></div>
+      ${soon[0] ? `<div><b>${soon[0][1].days}</b><span>${T('cabStatSoon', 'дней до старта')} «${esc(plainT(soon[0][0].title))}»</span></div>` : ''}
     </div>
-    <div class="cab-two">
+    ${c.giftName || soon.length ? `<div class="cab-two">
       ${c.giftName ? `<section class="cab-card">${head(T('cabGift', 'Подарок'))}
         <div class="cab-gift"><div class="cab-gc">${cover({ id: 'gift', title: c.giftName }, imgs, name)}</div>
         <div><div class="cab-t">«${esc(c.giftName)}»</div>
-          <div class="cab-s">${giftP ? `прочитано ${giftP} %` : T('cabNotStarted', 'ещё не начинали')}</div>${giftP ? `<div class="cab-bar"><i style="width:${giftP}%"></i></div>` : ''}
-          <div class="cab-acts"><a class="btn btn-dark" href="./?chitat=podarok">${giftP ? T('cabGo', 'Продолжить') : T('cabRead', 'Читать')}</a>${c.giftUrl ? `<a class="lnk" href="${esc(c.giftUrl)}" target="_blank" rel="noopener">${T('cabDownload', 'Скачать')}</a>` : ''}</div></div></div></section>` : ''}
+          ${gu ? `<div class="cab-acts"><a class="btn btn-dark" href="${esc(gu)}" target="_blank" rel="noopener" data-cab="gift">${T('cabDownload', 'Скачать')}</a></div>` : `<div class="cab-s">${T('cabGiftSoon', 'Подарок появится здесь совсем скоро.')}</div>`}</div></div></section>` : ''}
       ${soon.length ? `<section class="cab-card">${head(T('cabSoon', 'Скоро старт'))}${soon.map(([b, st]) => `<div class="cab-soon">
         <div class="cab-days"><b>${st.days}</b><span>${plural(st.days, ['день', 'дня', 'дней'])}</span></div>
         <div class="cab-rt"><a class="cab-t" href="./?kniga=${esc(b.url)}">${fmt(b.title, false)}</a>
           <div class="cab-s">${T('cabStartLine', 'Старт подписки')} ${dm(st.date)}</div>
-          <div class="cab-price">${T('cabPriceLine', 'Для своих в день старта')} <b>${st.price} ₽</b> <s>${st.old} ₽</s></div>
-          <button class="cab-sw${S.remind?.[b.id] ? ' on' : ''}" data-cab="remind" data-id="${esc(b.id)}" role="switch" aria-checked="${!!S.remind?.[b.id]}"><i></i><span>${T('cabRemindSw', 'Напомнить в день старта')}</span></button></div></div>`).join('')}</section>` : ''}
-    </div>
+          ${st.price ? `<div class="cab-price">${priceLine(st, T)}</div>` : ''}
+          <div class="cab-calw"><span class="cab-calk">${S.remind?.[b.id] ? 'В календаре ✓ · ещё раз:' : T('cabCal', 'Добавить в календарь') + ':'}</span>${calLinks(b, st)}</div></div></div>`).join('')}</section>` : ''}
+    </div>` : ''}
     <section class="cab-sec">${head(T('cabShelf', 'Моя полка'), `<div class="cab-tabs">${Object.entries({ reading: 'Читаю', done: 'Прочла', want: 'Хочу' }).map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-cab="tab" data-v="${k}">${n} <span>${books().filter((b) => S.shelf?.[b.id] === k).length || ''}</span></button>`).join('')}</div>`)}
       ${ser ? `<div class="cab-series"><div class="cab-s">Цикл «${esc(ser)}» · ${serDone} из ${serBooks.length}</div>
-        <div class="cab-sline">${serBooks.map((b) => `<a class="cab-sdot${S.shelf?.[b.id] === 'done' ? ' on' : S.shelf?.[b.id] === 'reading' ? ' mid' : ''}" href="./?kniga=${esc(b.url)}" title="${esc(String(b.title).replace(/\*/g, ''))}"><i></i><span>${Number(b.seriesNo) || serBooks.indexOf(b) + 1}</span></a>`).join('<em></em>')}</div></div>` : ''}
+        <div class="cab-sline">${serBooks.map((b) => `<a class="cab-sdot${S.shelf?.[b.id] === 'done' ? ' on' : S.shelf?.[b.id] === 'reading' ? ' mid' : ''}" href="./?kniga=${esc(b.url)}" title="${esc(plainT(b.title))}"><i></i><span>${Number(b.seriesNo) || serBooks.indexOf(b) + 1}</span></a>`).join('<em></em>')}</div></div>` : ''}
       ${onShelf.length ? `<div class="cab-shelfg">${onShelf.map((b) => `<a class="cab-sb" href="./?kniga=${esc(b.url)}"><div class="cab-mc">${cover(b, imgs, name)}</div><div class="cab-t">${fmt(b.title, false)}</div><div class="cab-s">${esc(STATUS[b.status] || '')}</div></a>`).join('')}</div>`
-        : `<p class="cab-empty">${tab === 'reading' ? T('cabEmptyReading', 'Пока ничего. На странице любой книги — «На полку: Читаю».') : tab === 'done' ? T('cabEmptyDone', 'Отметьте прочитанные — увидите, сколько осталось до конца цикла.') : T('cabEmptyWant', 'Отложите книги на потом — не потеряются.')}</p>`}</section>
-    <div class="cab-two">
-      <section class="cab-card">${head(T('cabBonus', 'Только для своих'))}<p class="cab-empty">${T('cabBonusEmpty', '')}</p></section>
-      <section class="cab-card">${head(T('cabNotify', 'Куда напоминать'))}<div class="cab-ch">${[['email', T('cabByMail', 'На почту')], ['tg', T('cabByTg', 'В Telegram')]].map(([k, n]) => `<button class="${(S.ch || 'email') === k ? 'on' : ''}" data-cab="ch" data-v="${k}">${n}</button>`).join('')}</div>${(S.ch || 'email') === 'tg' ? `<p class="cab-empty" style="margin-top:10px">${T('cabTgHint', 'Нажмёте «Запустить» в боте — и напоминания придут в Telegram.')}</p>` : ''}</section>
-    </div>
+        : `<p class="cab-empty">${tab === 'reading' ? T('cabEmptyReading', 'Пока ничего.') : tab === 'done' ? T('cabEmptyDone', 'Пока ничего.') : T('cabEmptyWant', 'Пока ничего.')}</p>`}</section>
+    <section class="cab-sec">${head(T('cabBonus', 'Только для своих'))}<p class="cab-empty">${T('cabBonusEmpty', '')}</p></section>
   </div></section>`;
 }
 
-// ---------- читалка ----------
-function reader(c, key) {
-  const withText = books().find((b) => b.excerpt);
-  const b = key === 'podarok' ? withText : findBook(c, key);
-  const title = key === 'podarok' ? c.giftName : b?.title;
-  const text = String(b?.excerpt || '').split(/\n+/).filter((p) => p.trim());
-  const sz = S.size || 18;
-  return `<section class="rd${S.night ? ' rd-night' : ''}" style="--rd:${sz}px"><div class="rd-bar"><div class="wrap rd-bar-in">
-      <a class="lnk rd-back" href="./?kabinet" aria-label="В кабинет">← <span>Кабинет</span></a><span class="rd-t">${fmt(title || '', false)}</span>
-      <span class="rd-tools"><button data-cab="size" data-v="-1" aria-label="Мельче">A−</button><button data-cab="size" data-v="1" aria-label="Крупнее">A+</button><button data-cab="night" aria-label="Ночной режим">${S.night ? 'День' : 'Ночь'}</button></span></div><i class="rd-prog" style="width:0"></i></div>
-    <div class="rd-page"><div class="rd-in">
-      ${key === 'podarok' ? `<p class="rd-proto">Прототип: здесь будет текст «${esc(c.giftName || '')}». Для примера — отрывок из «${esc(String(b?.title || '').replace(/\*/g, ''))}».</p>` : ''}
-      <div class="lbl">Глава 1</div>
-      ${text.map((p) => `<p>${fmt(p, false)}</p>`).join('') || '<p>Текста пока нет.</p>'}
-      <div class="rd-end"><span>Конец главы</span><button class="btn btn-dark" disabled>Глава 2</button></div>
-    </div></div></section>`;
-}
-
 // ---------- для site.js ----------
-export function page(c, imgs, which, key) {
+export function page(c, imgs, which) {
   ctx = { c, imgs };
   if (which === 'kabinet') return { title: `Личный кабинет — ${c.name || ''}`, main: cabinet(c, imgs) };
-  if (which === 'chitat') return { title: `Читать — ${c.name || ''}`, main: reader(c, key), reader: true };
   return null;
 }
 export function after(c, imgs, bookKey, rerender) {
   ctx = { c, imgs }; redraw = rerender;
   const r = document.querySelector('.top-r');
   if (r && !r.querySelector('.acc')) r.insertAdjacentHTML('afterbegin', headEntry());
-  if (S.email) document.getElementById('podpiska')?.remove(); // уже свой — форма подписки внизу не нужна
+  if (user) document.getElementById('podpiska')?.remove(); // уже свой — форма подписки внизу не нужна
   const b = bookKey && findBook(c, bookKey);
   if (b) document.querySelector('.bk-top .buy')?.insertAdjacentHTML('afterend', bookExtras(b));
-  if (!document.querySelector('.cab-proto')) document.body.insertAdjacentHTML('beforeend', `<div class="cab-proto">Прототип · вход: <button data-cab="var" data-v="door">дверца</button><button data-cab="var" data-v="text">текст</button><button data-cab="reset">сначала</button></div>`);
-  document.querySelectorAll('.cab-proto [data-cab="var"]').forEach((x) => x.classList.toggle('on', x.dataset.v === variant()));
-  const prog = document.querySelector('.rd-prog');
-  if (prog) {
-    const key = new URLSearchParams(location.search).get('chitat');
-    const at = S.progress?.[key] || 0;
-    if (at) scrollTo(0, at * (document.documentElement.scrollHeight - innerHeight));
-    const upd = () => { const h = document.documentElement.scrollHeight - innerHeight; const p = h > 0 ? Math.min(1, scrollY / h) : 1; prog.style.width = (p * 100).toFixed(1) + '%'; S.progress = { ...(S.progress || {}), [key]: p }; put(); };
-    removeEventListener('scroll', window.__rdScroll || (() => {})); window.__rdScroll = upd; addEventListener('scroll', upd, { passive: true }); upd();
-  }
+  if (new URLSearchParams(location.search).has('kabinet') && known() && !user) watch();
 }
 
-function act(name, d) {
+async function act(name, d) {
   if (name === 'login') { mode = d.v || 'new'; sheet(); return; }
   if (name === 'close') { close(); return; }
   if (name === 'go') { location.href = './?kabinet'; return; }
-  if (name === 'remind' || name === 'shelf') {
-    if (!S.email) {
-      S.pending = { name, ...d }; put();
-      const b = findBook(ctx.c, d.id);
-      mode = 'new';
-      sheet(name === 'remind' ? `Чтобы напомнить о старте «${String(b?.title || '').replace(/\*/g, '')}», создайте кабинет — это минута.` : 'Полка хранится в кабинете — создайте кабинет, и она будет с вами на любом устройстве.');
-      return;
-    }
-    if (name === 'remind') S.remind = { ...(S.remind || {}), [d.id]: !S.remind?.[d.id] };
-    else S.shelf = { ...(S.shelf || {}), [d.id]: S.shelf?.[d.id] === d.v ? '' : d.v };
-  }
-  if (name === 'tab') S.tab = d.v;
-  if (name === 'ch') S.ch = d.v;
-  if (name === 'size') S.size = Math.max(15, Math.min(24, (S.size || 18) + Number(d.v)));
-  if (name === 'night') S.night = !S.night;
-  if (name === 'logout') { S = {}; put(); location.href = './'; return; }
-  if (name === 'var') { try { sessionStorage.setItem(VK, d.v); } catch { /* ок */ } document.querySelector('.acc')?.remove(); }
-  if (name === 'reset') { S = {}; put(); location.href = './'; return; }
   if (name === 'mode') { mode = d.v; const b = document.querySelector('.cab-body'); if (b) { b.innerHTML = formHtml(ctx.c || {}); b.querySelector('input')?.focus(); } return; }
-  if (name === 'enter') {
-    S.email = d.mail; const p = S.pending; delete S.pending; put(); close();
-    if (p) act(p.name, p); else location.href = './?kabinet';
-    return;
+  if (name === 'shelf') {
+    if (!user) { pending = { ...d }; mode = 'new'; sheet('Полка хранится в кабинете — создайте его, и она будет с вами на любом устройстве. Это минута.'); return; }
+    S.shelf = { ...(S.shelf || {}), [d.id]: S.shelf?.[d.id] === d.v ? '' : d.v };
   }
-  put(); redraw();
+  if (name === 'cal') { S.remind = { ...(S.remind || {}), [d.id]: true }; persist(); return; }
+  if (name === 'gift') { S.gift = true; persist(); return; }
+  if (name === 'tab') S.tab = d.v;
+  if (name === 'logout') { await readers.signOut().catch(() => {}); user = null; S = {}; try { localStorage.removeItem(K); localStorage.removeItem(IN); } catch { /* ок */ } location.href = './'; return; }
+  persist(); redraw();
 }
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-cab]');
   if (!el || (el.classList.contains('cab-ov') && e.target !== el)) return; // нажали внутри окна — не закрываем
+  // ссылки «скачать подарок» и «в календарь» открываются как обычно — только отмечаем шаг
+  if (['cal', 'gift'].includes(el.dataset.cab)) { act(el.dataset.cab, { ...el.dataset }); setTimeout(redraw, 300); return; }
   e.preventDefault();
   act(el.dataset.cab, { ...el.dataset });
 });
-document.addEventListener('submit', (e) => {
+document.addEventListener('submit', async (e) => {
   const f = e.target.closest('[data-cab-form]');
   if (!f) return;
   e.preventDefault();
-  const mail = f.email.value.trim();
-  if (f.dataset.cabForm === 'reset') {
-    f.closest('.cab-body').innerHTML = `<p class="cab-p">Письмо для смены пароля отправлено на <b>${esc(mail)}</b>. Нет письма — загляните в «Спам».</p>
-      <div class="cab-alt"><button class="cab-link" data-cab="mode" data-v="in">← Ко входу</button></div>`;
-    return;
-  }
-  act('enter', { mail }); // прототип: пароль не проверяется, вход сразу
+  const mail = f.email.value.trim(), how = f.dataset.cabForm, err = f.querySelector('.cab-err'), btn = f.querySelector('button[type=submit]');
+  const say = (t) => { err.hidden = !t; err.textContent = t || ''; };
+  say(''); btn.disabled = true;
+  try {
+    if (how === 'reset') {
+      await readers.reset(mail);
+      f.closest('.cab-body').innerHTML = `<p class="cab-p">Письмо для смены пароля отправлено на <b>${esc(mail)}</b>. Нет письма — загляните в «Спам».</p>
+        <div class="cab-alt"><button class="cab-link" data-cab="mode" data-v="in">← Ко входу</button></div>`;
+      return;
+    }
+    if (how === 'new') {
+      user = await readers.signUp(mail, f.pw.value);
+      addSub(mail, 'kabinet').catch(() => {}); // почта — в «Подписчики» админки (согласие дано)
+    } else user = await readers.signIn(mail, f.pw.value);
+    try { localStorage.setItem(IN, '1'); } catch { /* ок */ }
+    watch();
+    close();
+    if (pending) { const p = pending; pending = null; await act('shelf', p); } else redraw();
+  } catch (x) { say(readerError(x)); } finally { btn.disabled = false; }
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });

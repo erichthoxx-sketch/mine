@@ -205,11 +205,11 @@ function lookTab() {
     </div>`;
 }
 
-// Личный кабинет читателя: все тексты окна входа и кабинета (пока — прототип, виден по ссылке ?proto)
+// Личный кабинет читателя: все тексты окна входа и кабинета
 function cabTab() {
   const c = S.content;
-  const proto = new URL('../?proto', location.href).href;
-  return `<p class="note">Личный кабинет читателя пока в виде прототипа: его видите только вы — <a href="${proto}" target="_blank" rel="noopener">открыть прототип</a>. Здесь — все его тексты. *Звёздочки* — курсив.</p>
+  const proto = new URL('../?kabinet', location.href).href;
+  return `<p class="note">Личный кабинет читателя: вход — дверца в шапке сайта, <a href="${proto}" target="_blank" rel="noopener">открыть кабинет</a>. Здесь — все его тексты. *Звёздочки* — курсив. Почта каждой, кто создала кабинет, сама попадает в «Подписчики» («Общее»).</p>
     <h3 class="sub">Окно входа</h3>
     <div class="list" style="gap:16px">
       ${field('site', c, { k: 'cabTitle', label: 'Заголовок' })}
@@ -224,31 +224,27 @@ function cabTab() {
       ${field('site', c, { k: 'cabHello', label: 'Приветствие после входа' })}
       <div class="two">${field('site', c, { k: 'cabLevelLabel', label: 'Подпись статуса' })}${field('site', c, { k: 'cabNextLabel', label: 'Подпись следующего шага' })}</div>
       ${field('site', c, { k: 'cabLevels', label: 'Статусы — по порядку', type: 'area', hint: 'Четыре строки: от новенькой до самого близкого круга' })}
-      ${field('site', c, { k: 'cabSteps', label: 'Шаги пути читателя — по порядку', type: 'area', hint: 'Пять строк: кабинет создан · открыла подарок · дочитала подарок · включила напоминание · отметила прочитанную книгу. Меняется только название шага' })}
+      ${field('site', c, { k: 'cabSteps', label: 'Шаги пути читателя — по порядку', type: 'area', hint: 'Пять строк: создала кабинет · скачала подарок · добавила старт в календарь · отметила книгу «Читаю» · отметила прочитанную. Меняется только название шага' })}
       ${field('site', c, { k: 'cabAllDone', label: 'Когда все шаги пройдены' })}
-      <div class="two">${field('site', c, { k: 'cabStatSeries', label: 'Цифра: книги цикла' })}${field('site', c, { k: 'cabStatGift', label: 'Цифра: подарок' })}</div>
+      <div class="two">${field('site', c, { k: 'cabStatSeries', label: 'Цифра: книги цикла' })}${field('site', c, { k: 'cabStatShelf', label: 'Цифра: книги на полке' })}</div>
       ${field('site', c, { k: 'cabStatSoon', label: 'Цифра: дни до старта' })}
     </div>
     <h3 class="sub">Кабинет: разделы</h3>
     <div class="list" style="gap:16px">
-      <div class="two">${field('site', c, { k: 'cabGift', label: 'Раздел с подарком' })}${field('site', c, { k: 'cabNotStarted', label: 'Подарок ещё не открыт' })}</div>
-      <div class="two">${field('site', c, { k: 'cabRead', label: 'Кнопка «Читать»' })}${field('site', c, { k: 'cabGo', label: 'Кнопка, если уже читает' })}</div>
-      ${field('site', c, { k: 'cabDownload', label: 'Ссылка «Скачать»' })}
+      <div class="two">${field('site', c, { k: 'cabGift', label: 'Раздел с подарком' })}${field('site', c, { k: 'cabDownload', label: 'Кнопка «Скачать»' })}</div>
+      ${field('site', c, { k: 'cabGiftSoon', label: 'Пока нет ссылки на подарок', hint: 'Ссылка на подарок — во вкладке «Общее»' })}
       <div class="two">${field('site', c, { k: 'cabSoon', label: 'Раздел о старте подписки' })}${field('site', c, { k: 'cabStartLine', label: 'Строка с датой старта' })}</div>
-      <div class="two">${field('site', c, { k: 'cabPriceLine', label: 'Строка с ценой' })}${field('site', c, { k: 'cabRemindSw', label: 'Переключатель напоминания' })}</div>
+      <div class="two">${field('site', c, { k: 'cabPriceLine', label: 'Строка с ценой' })}${field('site', c, { k: 'cabCal', label: 'Подпись «в календарь»' })}</div>
       ${field('site', c, { k: 'cabShelf', label: 'Раздел полки' })}
       ${field('site', c, { k: 'cabEmptyReading', label: 'Полка «Читаю» пустая', type: 'area' })}
       ${field('site', c, { k: 'cabEmptyDone', label: 'Полка «Прочла» пустая', type: 'area' })}
       ${field('site', c, { k: 'cabEmptyWant', label: 'Полка «Хочу» пустая', type: 'area' })}
       ${field('site', c, { k: 'cabBonus', label: 'Раздел бонусов' })}
       ${field('site', c, { k: 'cabBonusEmpty', label: 'Текст, пока бонусов нет', type: 'area' })}
-      ${field('site', c, { k: 'cabNotify', label: 'Раздел уведомлений' })}
-      <div class="two">${field('site', c, { k: 'cabByMail', label: 'Вариант «почта»' })}${field('site', c, { k: 'cabByTg', label: 'Вариант «Telegram»' })}</div>
-      ${field('site', c, { k: 'cabTgHint', label: 'Подсказка про Telegram', type: 'area' })}
     </div>
     <h3 class="sub">Страница книги</h3>
     <div class="list" style="gap:16px">
-      ${field('site', c, { k: 'cabRemind', label: 'Кнопка у книги, которая пишется' })}
+      ${field('site', c, { k: 'cabRemind', label: 'Подпись у старта подписки', hint: 'Дата старта и цены — у самой книги: «Книги» → книга → «Старт подписки»' })}
     </div>`;
 }
 
@@ -330,6 +326,7 @@ function field(scope, obj, f) {
         ${ids.length < 6 ? `<label class="add-img file">+ Фото<input type="file" accept="image/*" multiple ${at} data-multi="1"></label>` : ''}</div>${hint}</div>`;
     }
     case 'num': return `<label class="f"><span>${f.label}</span><input ${at} inputmode="numeric" value="${esc(v)}"></label>`;
+    case 'date': return `<label class="f"><span>${f.label}</span><input ${at} type="date" value="${esc(v)}">${hint}</label>`;
     case 'url': return `<label class="f"><span>${f.label}</span><input ${at} type="url" inputmode="url" placeholder="https://" value="${esc(v)}">${hint}</label>`;
     default: return `<label class="f"><span>${f.label}</span><input ${at} value="${esc(v)}">${hint}</label>`;
   }

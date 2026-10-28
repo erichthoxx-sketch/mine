@@ -111,6 +111,11 @@ export const BOOK_GROUPS = [
     { k: 'reviews', label: 'Отзывы читателей', type: 'area', hint: 'Между отзывами — пустая строка; последняя строка «— Имя»' },
     { k: 'slug', label: 'Адрес страницы', hint: 'Латиницей, например alpiyskiy-razvod. Пусто — сделается из названия' },
   ] },
+  { name: 'Старт подписки', fields: [
+    { k: 'startDate', label: 'Дата старта подписки', type: 'date', hint: 'Читатели увидят отсчёт в кабинете и смогут добавить старт себе в календарь. Пусто — без старта' },
+    { k: 'startPrice', label: 'Цена для своих в день старта, ₽', type: 'num' },
+    { k: 'price', label: 'Обычная цена, ₽', type: 'num', hint: 'Рядом с ценой для своих — зачёркнутой' },
+  ] },
   { name: 'Для подборок на главной', fields: [
     { k: 'mood', label: 'Настроение', hint: 'Коротко: Сванетия · горы' },
     { k: 'short', label: 'Коротко о книге', type: 'area', hint: 'Пара строк под обложкой' },
@@ -263,7 +268,7 @@ export const DEFAULT_CONTENT = {
  "metrika": "113843691",
  "cabTitle": "Личный *кабинет*",
  "cabText": "Почта и пароль — и подарок, напоминания и ваша полка будут с вами на любом устройстве.",
- "cabPerks": "«Проданная ночь» в подарок — читать прямо на сайте\nНапомню о старте подписки — и о цене для своих в этот день\nСвоя полка — что читаю, что прочла, что хочу",
+ "cabPerks": "«Проданная ночь» в подарок — скачать сразу после входа\nСтарт подписки — дата, цена для своих и напоминание в вашем календаре\nСвоя полка — что читаю, что прочла, что хочу",
  "cabBtnNew": "Создать кабинет",
  "cabBtnIn": "Войти",
  "cabIntro": "Для своих *читателей*",
@@ -273,31 +278,25 @@ export const DEFAULT_CONTENT = {
  "cabShelf": "Моя полка",
  "cabBonus": "Только для своих",
  "cabBonusEmpty": "Здесь будут бонусные сцены, обложки до премьеры и отрывки до выхода.",
- "cabNotify": "Куда напоминать",
- "cabRemind": "Напомнить о старте",
+ "cabRemind": "Добавить старт в календарь",
  "cabLabel": "Личный кабинет",
  "cabOut": "Выйти",
  "cabLevelLabel": "Ваш статус",
- "cabLevels": "Случайная свидетельница\nУже связалась\nСвоя в деле\nНе развяжешься",
- "cabSteps": "Создать кабинет\nОткрыть подарок\nДочитать подарок\nВключить напоминание о старте\nОтметить прочитанную книгу",
+ "cabLevels": "Новенькая\nЧитательница\nСвоя\nБлизкий круг",
+ "cabSteps": "Создать кабинет\nСкачать подарок\nДобавить старт подписки в календарь\nОтметить книгу «Читаю»\nОтметить прочитанную книгу",
  "cabNextLabel": "Следующий шаг",
- "cabAllDone": "Все шаги пройдены — теперь не развяжешься",
+ "cabAllDone": "Все шаги пройдены — вы в близком круге",
  "cabStatSeries": "книг цикла прочитано",
- "cabStatGift": "подарка прочитано",
+ "cabStatShelf": "книг на полке",
  "cabStatSoon": "дней до старта",
- "cabNotStarted": "ещё не начинали",
- "cabRead": "Читать",
- "cabGo": "Продолжить",
+ "cabGiftSoon": "Подарок появится здесь совсем скоро.",
  "cabDownload": "Скачать",
  "cabStartLine": "Старт подписки",
  "cabPriceLine": "Для своих в день старта",
- "cabRemindSw": "Напомнить в день старта",
+ "cabCal": "Добавить в календарь",
  "cabEmptyReading": "Пока ничего. На странице любой книги — «На полку: Читаю».",
  "cabEmptyDone": "Отметьте прочитанные — увидите, сколько осталось до конца цикла.",
  "cabEmptyWant": "Отложите книги на потом — не потеряются.",
- "cabByMail": "На почту",
- "cabByTg": "В Telegram",
- "cabTgHint": "Нажмёте «Запустить» в боте — и напоминания придут в Telegram.",
  "a1": "",
  "a2": "",
  "books": [
@@ -512,12 +511,34 @@ function upgrade(c) {
   return c;
 }
 
+const CAB_OLD = {
+  cabPerks: '«Проданная ночь» в подарок — читать прямо на сайте\nНапомню о старте подписки — и о цене для своих в этот день\nСвоя полка — что читаю, что прочла, что хочу',
+  cabSteps: 'Создать кабинет\nОткрыть подарок\nДочитать подарок\nВключить напоминание о старте\nОтметить прочитанную книгу',
+  cabRemind: 'Напомнить о старте',
+};
+// Старт подписки книги для кабинета: дата и цены — из админки (книга → «Старт подписки»); прошедший старт не показываем
+export function startInfo(b, today) {
+  const t = /^\d{4}-\d{2}-\d{2}$/.test(b?.startDate || '') ? b.startDate : '';
+  if (!t || t < today) return null;
+  const days = Math.round((Date.parse(t) - Date.parse(today)) / 864e5);
+  const num = (v) => { const n = Number(String(v ?? '').replace(',', '.').replace(/[^\d.]/g, '')); return n > 0 ? n : null; };
+  return { date: t, days, price: num(b.startPrice), old: num(b.price) };
+}
+// Путь читателя: 5 шагов → статус (0–3) и следующий шаг
+export function readerPath(r = {}) {
+  const v = Object.values;
+  const done = [true, !!r.gift, v(r.remind || {}).some(Boolean), v(r.shelf || {}).includes('reading'), v(r.shelf || {}).includes('done')];
+  const n = done.filter(Boolean).length;
+  return { done, n, level: n >= 5 ? 3 : n >= 4 ? 2 : n >= 2 ? 1 : 0, next: done.findIndex((x) => !x) };
+}
 export function normalize(c) {
   const d = DEFAULT_CONTENT;
   if (!c || typeof c !== 'object') return structuredClone(d);
   c = upgrade(c);
-  // первые названия статусов кабинета (если их не меняли) — на статусы по мотивам цикла
-  if (c.cabLevels === 'Новенькая\nЧитательница\nСвоя\nБлизкий круг') c = { ...c, cabLevels: d.cabLevels, cabAllDone: c.cabAllDone === 'Все шаги пройдены — вы в близком круге' ? d.cabAllDone : c.cabAllDone };
+  // тексты прототипа кабинета, которые больше не подходят (читалки и рассылки пока нет), — на новые, если их не меняли
+  for (const [k, was] of Object.entries(CAB_OLD)) if (c[k] === was) c = { ...c, [k]: d[k] };
+  // статусы «по мотивам цикла» владелица попросила вернуть на прежние — если их успели сохранить, возвращаем
+  if (c.cabLevels === 'Случайная свидетельница\nУже связалась\nСвоя в деле\nНе развяжешься') c = { ...c, cabLevels: d.cabLevels, cabAllDone: c.cabAllDone === 'Все шаги пройдены — теперь не развяжешься' ? d.cabAllDone : c.cabAllDone };
   const out = { ...structuredClone(d), ...c };
   out.books = Array.isArray(c.books) ? c.books.filter((b) => b && b.id).map((b) => ({ ...newBook(), ...b })) : structuredClone(d.books);
   out.blocks = Array.isArray(c.blocks) ? c.blocks.filter((b) => b && b.id && BLOCKS[b.type]).map((b) => ({ ...newBlock(b.type), ...b })) : structuredClone(d.blocks);

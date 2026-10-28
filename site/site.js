@@ -9,13 +9,11 @@ let bookKey = new URLSearchParams(location.search).get('kniga') || '';
 const privacyPage = new URLSearchParams(location.search).has('privacy');
 let current = null; // что сейчас на экране — нужно форме подписки (подарок, текст «готово»)
 let shownImgs = {};
-// Прототип личного кабинета: только по ссылке ./?proto (дальше помнится в этой вкладке); читатели его не видят
+// Личный кабинет читателя (вход в шапке, ./?kabinet) — подгружается отдельно, основной сайт его не ждёт
 const qs = new URLSearchParams(location.search);
-let proto = false;
-try { if (qs.has('proto')) sessionStorage.setItem('lanaSite.proto', '1'); proto = sessionStorage.getItem('lanaSite.proto') === '1'; } catch { /* без памяти — без прототипа */ }
-let cab = null; // подгружается отдельно — основной сайт его не ждёт
-if (proto && !preview) import('./cabinet.js' + ((/\?v=[^&]+/.exec(import.meta.url) || [''])[0])).then((m) => { cab = m; if (current) show(current, shownImgs); }).catch(() => {});
-const cabPage = qs.has('kabinet') ? 'kabinet' : qs.get('chitat') ? 'chitat' : '';
+let cab = null;
+if (!preview) import('./cabinet.js' + ((/\?v=[^&]+/.exec(import.meta.url) || [''])[0])).then((m) => { cab = m; if (current) show(current, shownImgs); }).catch(() => {});
+const cabPage = qs.has('kabinet') ? 'kabinet' : '';
 
 // Яндекс Метрика: счётчик из «Общее»; не в предпросмотре админки и не при проверке на своём компьютере
 let ymId = '';
@@ -40,9 +38,9 @@ function show(content, imgs) {
   const isBook = !!r && !!bookKey;
   if (!r) r = renderSite(content || DEFAULT_CONTENT, imgs || {}); // книги нет (скрыли, сменили адрес) — главная
   shownImgs = imgs || {};
-  const cp = cab && cabPage ? cab.page(normalize(current), shownImgs, cabPage, qs.get('chitat')) : null;
+  const cp = cab && cabPage ? cab.page(normalize(current), shownImgs, cabPage) : null;
   if (cp) r = { ...r, main: cp.main, title: cp.title };
-  document.body.classList.toggle('is-reader', !!cp?.reader);
+  else if (cabPage) r = { ...r, main: '' }; // кабинет ещё грузится — не мелькаем главной
   document.documentElement.style.setProperty('--a1', r.colors.a1);
   document.documentElement.style.setProperty('--a2', r.colors.a2);
   document.body.classList.toggle('is-book', isBook);
