@@ -153,11 +153,25 @@ export async function fetchOwnTasks(token, made = {}) {
     // служебные задачи приложения и идеи — не «свои»; но если Лана сама поставила метку «мастерская» — это её задача,
     // где бы она ни лежала (например, во «Входящих», пока не переехала на полку)
     if (t.parent_id || labels.includes(IDEA_LABEL) || (mark && made[String(t.id)]) || (!shelf(p) && !mark)) continue;
-    out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: shelf(p) ? p : labels.includes('книги') && !money ? 'Книги' : 'Мастерская', s: sn[String(t.section_id)] || (shelf(p) ? '' : money || MONEY_RE.test(t.content) ? 'Деньги и реклама' : labels.includes('книги') ? '' : 'Дела'), pr: t.priority || 1, ds: t.description || '' });
+    out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: shelf(p) ? p : labels.includes('книги') && !money ? 'Книги' : 'Мастерская', s: sn[String(t.section_id)] || (shelf(p) ? '' : money || MONEY_RE.test(t.content) ? 'Деньги и реклама' : labels.includes('книги') ? '' : 'Дела'), pr: t.priority || 1, ds: t.description || '', ...(t.due?.is_recurring ? { r: true } : {}) });
   }
   return out.slice(0, 300);
 }
 export const closeTask = (token, id) => post(token, `/tasks/${id}/close`);
+// перенести дело на другую дату (несделанное — на сегодня)
+export const moveDue = (token, id, date) => post(token, `/tasks/${id}`, { due_date: date });
+// что отмечено сделанным за день (по времени отметки) — для истории прошедшего дня в Планере
+export async function fetchDone(token, day) {
+  const from = new Date(day + 'T00:00:00'), since = from.toISOString(), until = new Date(from.getTime() + 864e5).toISOString();
+  const out = []; let cursor = '';
+  for (let i = 0; i < 5; i++) {
+    const j = await tfetch(token, `/tasks/completed/by_completion_date?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&limit=200${cursor ? '&cursor=' + encodeURIComponent(cursor) : ''}`);
+    out.push(...(j?.items || []));
+    cursor = j?.next_cursor;
+    if (!cursor) break;
+  }
+  return out.filter((t) => !t.parent_id).map((t) => ({ id: String(t.id || t.task_id || ''), t: t.content || '', at: t.completed_at || '' }));
+}
 
 // ---------- идеи: задачи с меткой «идея» (где угодно) ⇄ идеи Мастерской ----------
 // книга — по разделу в проекте «Книги»; без раздела — «Без книги», книгу можно выбрать в приложении
