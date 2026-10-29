@@ -24,7 +24,8 @@ service cloud.firestore {
     }
     // Подписчики сайта: оставить почту может любой посетитель, читать и удалять — только владелица
     match /site_subs/{id} {
-      allow create: if request.resource.data.keys().hasOnly(['email', 'at', 'src', 'consent'])
+      allow create: if request.resource.data.keys().hasOnly(['email', 'at', 'src', 'consent', 'name'])
+        && (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() < 80))
         && request.resource.data.email is string
         && request.resource.data.email.size() < 200
         && request.resource.data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$')

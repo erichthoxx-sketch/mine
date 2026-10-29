@@ -352,8 +352,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .cab-p{margin:0;color:var(--ink-2);font-size:15px;line-height:1.55}
 .cab-p.small{font-size:13px}
 .cab-form{display:grid;gap:10px;margin-top:6px}
-.cab-form input[type=email]{height:48px;border:1px solid var(--line);background:transparent;padding:0 14px;font:400 16px var(--f-body);color:var(--ink)}
-.cab-form input[type=email]:focus{outline:0;border-color:var(--ink)}
+.cab-form input[type=email],.cab-form input[type=text]{height:48px;border:1px solid var(--line);background:transparent;padding:0 14px;font:400 16px var(--f-body);color:var(--ink)}
+.cab-form input[type=email]:focus,.cab-form input[type=text]:focus{outline:0;border-color:var(--ink)}
 .cab-form .consent{font-size:12px;color:var(--ink-2);line-height:1.45;display:flex;gap:8px;align-items:flex-start}
 .cab-gets{list-style:none;margin:10px 0 0;padding:16px 0 0;border-top:1px solid var(--line);display:grid;gap:10px;font-size:14px;color:var(--ink-2)}
 .cab-gets li{position:relative;padding-left:22px;line-height:1.5}
@@ -373,6 +373,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .cab-h{font-size:clamp(34px,4vw,48px);margin:10px 0 0}
 .cab-top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;padding-bottom:22px;border-bottom:1px solid var(--line)}
 .cab-mail{margin-top:8px;font-size:14px;color:var(--ink-2)}
+.cab-name{display:flex;gap:12px;align-items:center;margin-top:12px;max-width:340px}
+.cab-name input{flex:1;min-width:0;font:inherit;font-size:14px;padding:8px 0;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);outline:0}
+.cab-name input:focus{border-color:var(--ink)}
 .cab-sec{padding:28px 0;border-bottom:1px solid var(--line)}
 .cab-sh{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:16px}
 .cab-sh h2{font-size:22px}

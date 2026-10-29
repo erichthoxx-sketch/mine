@@ -12,12 +12,12 @@ let user = null;        // { uid, email } — кто вошёл
 let redraw = () => {};
 let ctx = { c: null, imgs: {} };
 let saveT = 0;
-const SAVED = ['shelf', 'remind', 'gift'];
+const SAVED = ['shelf', 'remind', 'gift', 'name'];
 function persist() {
   try { localStorage.setItem(K, JSON.stringify(S)); } catch { /* без памяти */ }
   if (!user) return;
   clearTimeout(saveT);
-  saveT = setTimeout(() => readers.save(user.uid, Object.fromEntries(SAVED.map((k) => [k, S[k] || (k === 'gift' ? false : {})]))).catch(() => {}), 600);
+  saveT = setTimeout(() => readers.save(user.uid, Object.fromEntries(SAVED.map((k) => [k, S[k] || (k === 'gift' ? false : k === 'name' ? '' : {})]))).catch(() => {}), 600);
 }
 // вошла раньше на этом устройстве — поднимаем вход сразу; иначе библиотеки грузятся только по нажатию на дверцу
 const known = () => { try { return localStorage.getItem(IN) === '1'; } catch { return false; } };
@@ -31,7 +31,7 @@ function watch() {
     if (u) {
       // что отмечено до входа + что уже лежит в аккаунте
       const r = await readers.load(u.uid).catch(() => null);
-      if (r) S = { ...S, shelf: { ...(r.shelf || {}), ...(S.shelf || {}) }, remind: { ...(r.remind || {}), ...(S.remind || {}) }, gift: !!(r.gift || S.gift) };
+      if (r) S = { ...S, shelf: { ...(r.shelf || {}), ...(S.shelf || {}) }, remind: { ...(r.remind || {}), ...(S.remind || {}) }, gift: !!(r.gift || S.gift), name: S.name || r.name || '' };
       persist();
     }
     redraw();
@@ -94,6 +94,7 @@ function formHtml(c) {
   const neu = mode === 'new';
   return `<p class="cab-p">${esc(c.cabText || '')}</p>
     <form class="cab-form" data-cab-form="${mode}">
+      ${neu ? '<input type="text" name="uname" placeholder="Как вас зовут" autocomplete="given-name" maxlength="60" required>' : ''}
       <input type="email" name="email" placeholder="Почта" autocomplete="email" required>
       <input type="password" name="pw" placeholder="${neu ? 'Придумайте пароль — от 6 знаков' : 'Пароль'}" autocomplete="${neu ? 'new-password' : 'current-password'}" minlength="6" required>
       <button class="btn btn-dark" type="submit">${esc(neu ? c.cabBtnNew || 'Создать кабинет' : c.cabBtnIn || 'Войти')}</button>
@@ -117,6 +118,12 @@ function bookExtras(b) {
   </div>`;
 }
 
+// «Здравствуйте, Анна!» — имя вставляется перед последним знаком (у «Здравствуйте*!*» — перед восклицанием)
+function hello(h, name) {
+  if (!name) return fmt(h, false);
+  const m = /^(.*?)(\*?[!.]\*?)?$/.exec(String(h).trim());
+  return fmt(`${m[1]}, ${name}${m[2] || '!'}`, false);
+}
 // ---------- кабинет ----------
 const lines = (t) => String(t || '').split('\n').map((x) => x.trim()).filter(Boolean);
 function cabinet(c, imgs) {
@@ -140,8 +147,9 @@ function cabinet(c, imgs) {
   const bonus = bonusItems(c.cabBonusItems);
   return `<section class="cab"><div class="wrap">
     <div class="cab-hero">
-      <div><div class="lbl">${T('cabLabel', 'Личный кабинет')}</div><h1 class="cab-h">${fmt(c.cabHello || 'Здравствуйте', false)}</h1>
-        <div class="cab-mail">${esc(user.email)} · <button class="cab-link" data-cab="logout">${T('cabOut', 'Выйти')}</button></div></div>
+      <div><div class="lbl">${T('cabLabel', 'Личный кабинет')}</div><h1 class="cab-h">${hello(c.cabHello || 'Здравствуйте', S.name)}</h1>
+        <div class="cab-mail">${esc(user.email)} · <button class="cab-link" data-cab="logout">${T('cabOut', 'Выйти')}</button></div>
+        ${S.name ? '' : `<form class="cab-name" data-cab-form="name"><input type="text" name="uname" placeholder="Как к вам обращаться?" autocomplete="given-name" maxlength="60" required><button class="cab-link" type="submit">Сохранить</button></form>`}</div>
       <div class="cab-lv">
         <div class="cab-lv-k">${T('cabLevelLabel', 'Ваш статус')}</div>
         <div class="cab-lv-v">${esc(levels[P.level] || '')}</div>
@@ -218,6 +226,7 @@ document.addEventListener('submit', async (e) => {
   const f = e.target.closest('[data-cab-form]');
   if (!f) return;
   e.preventDefault();
+  if (f.dataset.cabForm === 'name') { S.name = f.uname.value.trim(); persist(); redraw(); return; }
   const mail = f.email.value.trim(), how = f.dataset.cabForm, err = f.querySelector('.cab-err'), btn = f.querySelector('button[type=submit]');
   const say = (t) => { err.hidden = !t; err.textContent = t || ''; };
   say(''); btn.disabled = true;
@@ -229,8 +238,10 @@ document.addEventListener('submit', async (e) => {
       return;
     }
     if (how === 'new') {
+      const nm = f.uname.value.trim();
       user = await readers.signUp(mail, f.pw.value);
-      addSub(mail, 'kabinet').catch(() => {}); // почта — в «Подписчики» админки (согласие дано)
+      S.name = nm;
+      addSub(mail, 'kabinet', nm).catch(() => {}); // почта и имя — в «Подписчики» админки (согласие дано)
     } else user = await readers.signIn(mail, f.pw.value);
     try { localStorage.setItem(IN, '1'); } catch { /* ок */ }
     watch();

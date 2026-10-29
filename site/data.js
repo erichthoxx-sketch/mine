@@ -32,18 +32,21 @@ export async function loadPublic() {
 }
 
 // Подписка: посетитель оставляет почту (на localhost — в этом браузере)
-export async function addSub(email, src) {
+export async function addSub(email, src, name = '') {
   const at = new Date().toISOString();
   if (LOCAL) {
     const list = JSON.parse(localStorage.getItem('lanaSite.subs') || '[]');
-    list.push({ email, at, src, consent: true });
+    list.push({ email, at, src, consent: true, ...(name ? { name } : {}) });
     localStorage.setItem('lanaSite.subs', JSON.stringify(list));
     return;
   }
-  const r = await fetch(`${BASE}/site_subs?key=${firebaseConfig.apiKey}`, {
+  const send = (withName) => fetch(`${BASE}/site_subs?key=${firebaseConfig.apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: { email: { stringValue: email }, at: { stringValue: at }, src: { stringValue: src }, consent: { booleanValue: true } } }),
+    body: JSON.stringify({ fields: { email: { stringValue: email }, at: { stringValue: at }, src: { stringValue: src }, consent: { booleanValue: true }, ...(withName ? { name: { stringValue: name.slice(0, 79) } } : {}) } }),
   });
+  let r = await send(!!name);
+  // старые правила Firebase ещё не знают про имя — почту всё равно сохраняем
+  if (!r.ok && name) r = await send(false);
   if (!r.ok) throw new Error('sub ' + r.status);
 }
