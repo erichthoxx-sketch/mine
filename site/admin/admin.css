@@ -154,3 +154,4 @@ h3.sub:first-child{margin-top:4px}
   .types{grid-template-columns:1fr}
   .four{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+.raf-win{border:1px solid var(--line);padding:14px 16px;margin-top:14px;line-height:1.6}

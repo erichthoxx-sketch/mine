@@ -1,11 +1,11 @@
 // Админка сайта: блоки (порядок, скрыть, удалить, добавить), книги, цвета, общее.
 // Всё сохраняется само через секунду после правки; справа — живой сайт.
-import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc, seriesList, slugify } from '../content.js';
+import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc, seriesList, slugify, raffleFriday, drawRaffle } from '../content.js';
 import { openStore, authError } from './store.js';
 import { RULES } from './rules.js';
 
 const app = document.getElementById('app');
-const S = { store: null, user: null, phase: 'boot', content: null, imgs: {}, tab: 'blocks', open: null, adding: false, pasting: false, pv: false, save: 'ok', pvBook: '', subs: null, subsErr: '' };
+const S = { store: null, user: null, phase: 'boot', content: null, imgs: {}, tab: 'blocks', open: null, adding: false, pasting: false, pv: false, save: 'ok', pvBook: '', subs: null, subsErr: '', raf: null, drawn: null };
 
 const ICON = {
   up: '<path d="M6 15l6-6 6 6"/>',
@@ -38,6 +38,7 @@ async function loadAll() {
     S.phase = 'ready'; render();
     cleanImgs();
     loadSubs();
+    loadRaf();
   } catch (e) {
     S.phase = /permission/i.test(e?.code || e?.message || '') ? 'rules' : 'neterr';
     render();
@@ -48,6 +49,19 @@ async function loadSubs() {
   try { S.subs = await S.store.listSubs(); S.subsErr = ''; } catch (e) { S.subs = []; S.subsErr = /permission/i.test(e?.code || e?.message || '') ? 'rules' : 'net'; }
   if (S.tab === 'general') renderEditor();
 }
+
+// Розыгрыш: кто какую книгу хочет, промокоды, победы. До обновления правил Firebase — подсказка обновить
+async function loadRaf() {
+  try {
+    const [entries, wins, codes] = await Promise.all([S.store.listRaffle(), S.store.listWins(), S.store.getCodes()]);
+    S.raf = { entries, wins, codes };
+  } catch (e) { S.raf = { err: /permission/i.test(e?.code || e?.message || '') ? 'rules' : 'net', entries: [], wins: [], codes: {} }; }
+  if (S.tab === 'raf') renderEditor();
+}
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const dmy = (t) => String(t || '').slice(0, 10).split('-').reverse().join('.');
+// книги для розыгрыша — те, что есть на Литнете; ссылок нет ни у одной — все видимые
+const rafBooks = () => { const all = S.content.books.filter((b) => !b.hidden); const lit = all.filter((b) => b.litnet); return lit.length ? lit : all; };
 
 // Картинки, которые больше нигде не стоят (заменили обложку, удалили книгу), убираем при следующем входе
 function cleanImgs() {
@@ -84,13 +98,13 @@ function render() {
 }
 
 function renderEditor() {
-  const tabs = [['blocks', 'Блоки'], ['books', 'Книги'], ['look', 'Цвета'], ['cab', 'Кабинет'], ['general', 'Общее']];
+  const tabs = [['blocks', 'Блоки'], ['books', 'Книги'], ['look', 'Цвета'], ['cab', 'Кабинет'], ['raf', 'Розыгрыш'], ['general', 'Общее']];
   document.getElementById('tabs').innerHTML = tabs.map(([k, n]) => `<button role="tab" aria-selected="${S.tab === k}" data-act="tab" data-t="${k}">${n}</button>`).join('');
   document.getElementById('mtabs').innerHTML = `<button aria-selected="${!S.pv}" data-act="pv" data-v="0">Правка</button><button aria-selected="${S.pv}" data-act="pv" data-v="1">Сайт</button>`;
   document.querySelector('.adm').classList.toggle('show-pv', S.pv);
   document.querySelector('.ed-top .logo').textContent = S.content.name || 'Сайт';
   const body = document.getElementById('body');
-  body.innerHTML = { blocks: blocksTab, books: booksTab, look: lookTab, cab: cabTab, general: generalTab }[S.tab]();
+  body.innerHTML = { blocks: blocksTab, books: booksTab, look: lookTab, cab: cabTab, raf: rafTab, general: generalTab }[S.tab]();
   body.querySelectorAll('textarea').forEach(grow);
   applyColors();
   status();
@@ -201,6 +215,41 @@ function lookTab() {
       <label><input type="color" id="c-a1" data-s="site" data-k="a1" value="${cur.a1}" aria-label="Первый цвет"></label>
       <label><input type="color" id="c-a2" data-s="site" data-k="a2" value="${cur.a2}" aria-label="Второй цвет"></label>
       ${c.palette === 'custom' ? '<span class="muted">выбраны</span>' : ''}
+    </div>`;
+}
+
+// Розыгрыш по пятницам: включить, промокоды, провести одной кнопкой, участницы и история
+function rafTab() {
+  const c = S.content, R = S.raf, fri = raffleFriday(todayIso());
+  const top = `<p class="note">Каждую пятницу — промокод на книгу одной читательнице с кабинетом. Читательницы сами выбирают книгу (в кабинете и на странице книги). Победительницу выбирает кнопка «Провести розыгрыш» — случайно среди тех, на чью книгу есть промокод; кто выигрывал за последние 4 недели, пропускает. Промокод сразу появляется у неё в кабинете. Напоминание по пятницам — в Планере «Мастерской».</p>
+    ${field('site', c, { k: 'raffleOn', label: 'Розыгрыш на сайте включён', type: 'toggle' })}`;
+  if (!R) return top + '<p class="note">Загружаю…</p>';
+  if (R.err === 'rules') return top + `<p class="note">Чтобы розыгрыш заработал, один раз обновите правила Firebase: «Скопировать правила» → Firebase → «Правила» → вставить → «Опубликовать».</p>
+    <div class="links"><button class="btn line" data-act="copyRules">Скопировать правила</button><a class="quiet" href="https://console.firebase.google.com/project/dohody-6d6dd/firestore/rules" target="_blank" rel="noopener">Открыть Firebase</a><button class="quiet" data-act="reRaf">Готово, проверить</button></div><pre id="rules-text" hidden>${esc(RULES)}</pre>`;
+  if (R.err) return top + '<p class="note">Не получилось загрузить розыгрыш — проверьте интернет. <button class="quiet" data-act="reRaf">Ещё раз</button></p>';
+  const list = rafBooks(), title = (id) => plain(S.content.books.find((b) => b.id === id)?.title || '');
+  const want = R.entries.filter((e) => e.book), left = list.reduce((n, b) => n + (R.codes[b.id] || []).length, 0);
+  const done = c.raffleLast === fri, w = S.drawn;
+  return top + `
+    <h3 class="sub">Розыгрыш · пятница ${dmy(fri)}</h3>
+    <p class="note">Участниц: ${want.length} · промокодов в запасе: ${left}${done ? ' · на этой неделе уже проведён' : ''}</p>
+    <div class="links"><button class="btn${done ? ' line' : ''}" data-act="draw">${done ? 'Провести ещё раз' : 'Провести розыгрыш'}</button></div>
+    ${w ? `<div class="raf-win"><b>${esc(w.name || 'Без имени')}</b> · ${esc(w.email)}<br>«${esc(w.bookTitle)}» · промокод <b>${esc(w.code)}</b>
+      <p class="note" style="margin:6px 0 0">Промокод уже в её кабинете. Можно и написать ей: <button class="quiet" data-act="copyText" data-v="${esc(w.email)}">Скопировать почту</button></p></div>` : ''}
+    <h3 class="sub">Промокоды</h3>
+    <p class="note">Литнет → книга → «Промокоды» → «Сгенерировать», затем вставьте сюда, каждый с новой строки. Промокоды видите только вы. Следите за сроком «Действителен до».</p>
+    <div class="list" style="gap:16px">${list.map((b) => { const n = (R.codes[b.id] || []).length, k = want.filter((e) => e.book === b.id).length;
+      return `<label class="f"><span>«${esc(plain(b.title))}»</span><textarea data-codes="${esc(b.id)}" rows="1" placeholder="Промокоды — каждый с новой строки">${esc((R.codes[b.id] || []).join('\n'))}</textarea><small>в запасе: ${n} · хотят эту книгу: ${k}</small></label>`; }).join('')}</div>
+    <h3 class="sub">Участницы · ${want.length}</h3>
+    ${want.length ? `<div class="subs">${want.map((e) => `<div class="sub-r"><span>${esc(e.name ? e.name + ' · ' : '')}${esc(e.email)}</span><small>«${esc(title(e.book))}»</small></div>`).join('')}</div>` : '<p class="note">Пока никто не выбрал книгу.</p>'}
+    ${R.wins.length ? `<h3 class="sub">Победительницы</h3><div class="subs">${R.wins.slice(0, 100).map((x) => `<div class="sub-r"><span>${esc(x.name ? x.name + ' · ' : '')}${esc(x.email)}</span><small>${dmy(x.week || x.at)} · «${esc(x.bookTitle)}» · ${esc(x.code)}</small></div>`).join('')}</div>` : ''}
+    <h3 class="sub">Тексты</h3>
+    <div class="list" style="gap:16px">
+      ${field('site', c, { k: 'rafTitle', label: 'Заголовок в кабинете' })}
+      ${field('site', c, { k: 'rafText', label: 'Как это работает', type: 'area' })}
+      ${field('site', c, { k: 'rafPerk', label: 'Строка в «Что даёт кабинет»', hint: 'Видна в окне входа, пока розыгрыш включён' })}
+      ${field('site', c, { k: 'rafWin', label: 'Победительнице', hint: 'Дальше само: «на „Книга“» и промокод' })}
+      ${field('site', c, { k: 'rafHow', label: 'Как активировать', type: 'area' })}
     </div>`;
 }
 
@@ -353,6 +402,19 @@ app.addEventListener('input', (e) => {
   changed();
 });
 
+let codesT = 0;
+app.addEventListener('input', (e) => {
+  const el = e.target;
+  if (!el.dataset.codes || !S.raf) return;
+  grow(el);
+  const id = el.dataset.codes, list = [...new Set(el.value.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean))];
+  S.raf.codes[id] = list;
+  const sm = el.parentElement.querySelector('small'); if (sm) sm.textContent = sm.textContent.replace(/в запасе: \d+/, 'в запасе: ' + list.length);
+  S.save = 'busy'; status();
+  clearTimeout(codesT);
+  codesT = setTimeout(async () => { try { await S.store.setCodes(id, list); S.save = 'ok'; } catch { S.save = 'bad'; } status(); }, 800);
+});
+
 app.addEventListener('change', async (e) => {
   const el = e.target;
   if (el.type === 'checkbox' && el.dataset.toggle) {
@@ -442,6 +504,22 @@ const acts = {
   },
   copyRules: async () => { await copy(RULES, 'rules-text'); return false; },
   reSubs: () => { S.subs = null; loadSubs(); },
+  reRaf: () => { S.raf = null; loadRaf(); },
+  copyText: async (d) => { await copy(d.v); return false; },
+  draw: async () => {
+    const R = S.raf, t = todayIso(), fri = raffleFriday(t);
+    const res = drawRaffle(R.entries, R.codes, R.wins, t);
+    if (res.why) { toast({ empty: 'Пока никто не выбрал книгу для розыгрыша', nocodes: 'Нет промокодов на книги, которые выбрали читательницы — вставьте их ниже', recent: 'Все участницы уже выигрывали за последние 4 недели' }[res.why]); return false; }
+    const e = res.entry;
+    const win = { uid: e.uid, email: e.email || '', name: e.name || '', book: e.book, bookTitle: plain(S.content.books.find((b) => b.id === e.book)?.title || ''), code: res.code, week: fri, at: new Date().toISOString() };
+    try {
+      const rest = (R.codes[e.book] || []).slice(1);
+      await S.store.addWin(win);
+      await S.store.setCodes(e.book, rest);
+      R.codes[e.book] = rest; R.wins.unshift(win); S.drawn = win;
+      S.content.raffleLast = fri; changed();
+    } catch { toast('Не получилось — проверьте интернет и попробуйте ещё раз'); return false; }
+  },
   copySubs: async () => { await copy(S.subs.map((x) => x.email).join('\n')); return false; },
   csvSubs: () => {
     const rows = [['Имя', 'Почта', 'Дата', 'Откуда'], ...S.subs.map((x) => [x.name || '', x.email, String(x.at || '').slice(0, 10), x.src || ''])];

@@ -1,7 +1,7 @@
 // Личный кабинет читателя: вход в шапке (дверца), окно входа по почте и паролю, страница ./?kabinet,
 // на странице книги — «Добавить старт в календарь» и «На полку». Тексты — из админки → «Кабинет».
 // Данные читателя — в его аккаунте (readers.js), копия — в браузере, чтобы всё показывалось сразу.
-import { esc, fmt, findBook, cover, STATUS, startInfo, readerPath, bonusItems } from './content.js';
+import { esc, fmt, findBook, cover, STATUS, startInfo, readerPath, bonusItems, raffleFriday } from './content.js';
 import { readers, readerError } from './readers.js';
 import { addSub } from './data.js';
 
@@ -9,6 +9,7 @@ const K = 'lanaSite.reader', IN = 'lanaSite.in';
 const get = () => { try { return JSON.parse(localStorage.getItem(K) || 'null') || {}; } catch { return {}; } };
 let S = get();          // полка, старты в календаре, подарок, вкладка полки
 let user = null;        // { uid, email } — кто вошёл
+let wins = [];         // её выигрыши в розыгрыше (промокоды)
 let redraw = () => {};
 let ctx = { c: null, imgs: {} };
 let saveT = 0;
@@ -33,6 +34,11 @@ function watch() {
       const r = await readers.load(u.uid).catch(() => null);
       if (r) S = { ...S, shelf: { ...(r.shelf || {}), ...(S.shelf || {}) }, remind: { ...(r.remind || {}), ...(S.remind || {}) }, gift: !!(r.gift || S.gift), name: S.name || r.name || '' };
       persist();
+      // розыгрыш: какую книгу выбрала и что выиграла (до обновления правил Firebase — просто пусто)
+      const [e, w] = await Promise.all([readers.raffleGet(u.uid).catch(() => null), readers.wins(u.uid).catch(() => [])]);
+      if (e?.book) S.raf = e.book;
+      wins = (w || []).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+      if (S.raf && !e?.book) joinRaffle(S.raf); // выбрала до входа на этом устройстве
     }
     redraw();
   });
@@ -70,7 +76,7 @@ export function headEntry() {
 // ---------- окно входа: почта и пароль ----------
 // «что даёт кабинет»: строка «Жирное — остальное» → жирное начало
 const perks = (c, cls = '') => {
-  const ls = String(c.cabPerks || '').split('\n').map((x) => x.trim()).filter(Boolean);
+  const ls = [...String(c.cabPerks || '').split('\n'), c.raffleOn ? c.rafPerk || '' : ''].map((x) => x.trim()).filter(Boolean);
   return ls.length ? `<ul class="cab-gets${cls}">${ls.map((l) => { const [a, ...b] = l.split(' — '); return `<li>${b.length ? `<b>${esc(a)}</b> — ${esc(b.join(' — '))}` : esc(l)}</li>`; }).join('')}</ul>` : '';
 };
 let mode = 'new'; // new — создать кабинет, in — войти, reset — забыли пароль
@@ -115,7 +121,36 @@ function bookExtras(b) {
     ${st ? `<div class="cab-start"><span class="cab-note">${T('cabStartLine', 'Старт подписки')} ${dm(st.date)}${st.price ? ` · ${priceLine(st, T)}` : ''}</span>
       <span class="cab-calw"><span class="cab-calk">${T('cabRemind', 'Добавить старт в календарь')}:</span>${calLinks(b, st)}</span></div>` : ''}
     <div class="cab-shelf"><span>На полку:</span>${Object.entries(SHELF).map(([k, n]) => `<button class="${mine === k ? 'on' : ''}" data-cab="shelf" data-id="${esc(b.id)}" data-v="${k}">${n}</button>`).join('')}</div>
+    ${c.raffleOn && rafBooks().some((x) => x.id === b.id) ? `<div class="cab-shelf"><span>Розыгрыш по пятницам:</span>${S.raf === b.id && user ? '<span class="cab-on">вы разыгрываете эту книгу ✓</span>' : `<button data-cab="raf" data-id="${esc(b.id)}">Хочу промокод на эту книгу</button>`}</div>` : ''}
   </div>`;
+}
+
+// ---------- розыгрыш по пятницам ----------
+// книги для розыгрыша — те, что есть на Литнете (промокоды — литнетовские); ссылок нет ни у одной — все
+const rafBooks = () => { const all = books(); const lit = all.filter((b) => b.litnet); return lit.length ? lit : all; };
+function joinRaffle(id) {
+  S.raf = id;
+  persist();
+  if (user) readers.raffleSet(user.uid, { uid: user.uid, email: user.email || '', name: S.name || '', book: id, at: new Date().toISOString() }).catch(() => {});
+}
+function raffleSec(c, head, T) {
+  if (!c.raffleOn) return '';
+  const list = rafBooks(), pick = list.find((b) => b.id === S.raf);
+  const fresh = wins.filter((w) => Date.now() - new Date(w.at).getTime() < 60 * 864e5);
+  // ближайший розыгрыш, в котором она участвует: этот уже прошёл — следующая пятница; выиграла — через 4 недели
+  const plus = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return raffleFriday(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`); };
+  let fri = raffleFriday(today());
+  if (c.raffleLast === fri) fri = plus(fri, 7);
+  const lastWin = wins[0]?.week ? plus(wins[0].week, 28) : '';
+  if (lastWin > fri) fri = lastWin;
+  return `<section class="cab-sec">${head(fmt(c.rafTitle || 'Розыгрыш недели', false))}
+    ${fresh.map((w) => { const b = findBook(c, w.book) || {}; return `<div class="cab-win"><div class="cab-s">${T('rafWin', 'Вы выиграли промокод')} на «${esc(plainT(b.title || w.bookTitle))}»</div>
+      <div class="cab-code"><b>${esc(w.code)}</b><button class="cab-link" data-cab="copy" data-v="${esc(w.code)}">Скопировать</button>${b.litnet ? `<a class="cab-link" href="${esc(b.litnet)}" target="_blank" rel="noopener">Открыть на Литнете</a>` : ''}</div>
+      <div class="cab-s">${T('rafHow', '')}</div></div>`; }).join('')}
+    ${c.rafText ? `<p class="cab-p">${esc(c.rafText)}</p>` : ''}
+    <div class="cab-raf">${list.map((b) => `<button class="${pick?.id === b.id ? 'on' : ''}" data-cab="raf" data-id="${esc(b.id)}">${esc(plainT(b.title))}</button>`).join('')}</div>
+    <div class="cab-s">${pick ? `Вы участвуете: «${esc(plainT(pick.title))}». Итоги — в пятницу, ${dm(fri)}. Выиграете — промокод появится здесь.` : 'Выберите книгу — и вы в розыгрыше.'}</div>
+  </section>`;
 }
 
 // «Здравствуйте, Анна!» — имя вставляется перед последним знаком (у «Здравствуйте*!*» — перед восклицанием)
@@ -174,6 +209,7 @@ function cabinet(c, imgs) {
           ${st.price ? `<div class="cab-price">${priceLine(st, T)}</div>` : ''}
           <div class="cab-calw"><span class="cab-calk">${S.remind?.[b.id] ? 'В календаре ✓ · ещё раз:' : T('cabCal', 'Добавить в календарь') + ':'}</span>${calLinks(b, st)}</div></div></div>`).join('')}</section>` : ''}
     </div>` : ''}
+    ${raffleSec(c, head, T)}
     <section class="cab-sec">${head(T('cabShelf', 'Моя полка'), `<div class="cab-tabs">${Object.entries({ reading: 'Читаю', done: 'Прочла', want: 'Хочу' }).map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-cab="tab" data-v="${k}">${n} <span>${books().filter((b) => S.shelf?.[b.id] === k).length || ''}</span></button>`).join('')}</div>`)}
       ${ser ? `<div class="cab-series"><div class="cab-s">Цикл «${esc(ser)}» · ${serDone} из ${serBooks.length}</div>
         <div class="cab-sline">${serBooks.map((b) => `<a class="cab-sdot${S.shelf?.[b.id] === 'done' ? ' on' : S.shelf?.[b.id] === 'reading' ? ' mid' : ''}" href="./?kniga=${esc(b.url)}" title="${esc(plainT(b.title))}"><i></i><span>${Number(b.seriesNo) || serBooks.indexOf(b) + 1}</span></a>`).join('<em></em>')}</div></div>` : ''}
@@ -204,8 +240,13 @@ async function act(name, d) {
   if (name === 'close') { close(); return; }
   if (name === 'go') { location.href = './?kabinet'; return; }
   if (name === 'mode') { mode = d.v; const b = document.querySelector('.cab-body'); if (b) { b.innerHTML = formHtml(ctx.c || {}); b.querySelector('input')?.focus(); } return; }
+  if (name === 'copy') { navigator.clipboard?.writeText(d.v).then(() => { const b = document.querySelector(`[data-cab="copy"][data-v="${CSS.escape(d.v)}"]`); if (b) b.textContent = 'Скопировано'; }).catch(() => {}); return; }
+  if (name === 'raf') {
+    if (!user) { pending = { name, d: { ...d } }; mode = 'new'; sheet('Розыгрыш — для читательниц с кабинетом. Создайте его — и вы участвуете каждую пятницу.'); return; }
+    joinRaffle(d.id); redraw(); return;
+  }
   if (name === 'shelf') {
-    if (!user) { pending = { ...d }; mode = 'new'; sheet('Полка хранится в кабинете — создайте его, и она будет с вами на любом устройстве. Это минута.'); return; }
+    if (!user) { pending = { name, d: { ...d } }; mode = 'new'; sheet('Полка хранится в кабинете — создайте его, и она будет с вами на любом устройстве. Это минута.'); return; }
     S.shelf = { ...(S.shelf || {}), [d.id]: S.shelf?.[d.id] === d.v ? '' : d.v };
   }
   if (name === 'cal') { S.remind = { ...(S.remind || {}), [d.id]: true }; persist(); return; }
@@ -226,7 +267,7 @@ document.addEventListener('submit', async (e) => {
   const f = e.target.closest('[data-cab-form]');
   if (!f) return;
   e.preventDefault();
-  if (f.dataset.cabForm === 'name') { S.name = f.uname.value.trim(); persist(); redraw(); return; }
+  if (f.dataset.cabForm === 'name') { S.name = f.uname.value.trim(); persist(); if (S.raf) joinRaffle(S.raf); redraw(); return; }
   const mail = f.email.value.trim(), how = f.dataset.cabForm, err = f.querySelector('.cab-err'), btn = f.querySelector('button[type=submit]');
   const say = (t) => { err.hidden = !t; err.textContent = t || ''; };
   say(''); btn.disabled = true;
@@ -246,7 +287,7 @@ document.addEventListener('submit', async (e) => {
     try { localStorage.setItem(IN, '1'); } catch { /* ок */ }
     watch();
     close();
-    if (pending) { const p = pending; pending = null; await act('shelf', p); } else redraw();
+    if (pending) { const p = pending; pending = null; await act(p.name, p.d); } else redraw();
   } catch (x) { say(readerError(x)); } finally { btn.disabled = false; }
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });

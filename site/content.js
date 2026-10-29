@@ -278,6 +278,12 @@ export const DEFAULT_CONTENT = {
  "cabShelf": "Моя полка",
  "cabBonus": "Только для своих",
  "cabBonusItems": "",
+ "raffleOn": false,
+ "rafTitle": "Розыгрыш *недели*",
+ "rafText": "Каждую пятницу я разыгрываю промокод на одну из своих книг среди читательниц с кабинетом. Выберите книгу, которую хотите, — и вы участвуете каждую неделю, пока не выиграете.",
+ "rafPerk": "Розыгрыш по пятницам — промокод на книгу, которую выберете вы",
+ "rafWin": "Вы выиграли промокод",
+ "rafHow": "Промокод действует на Литнете — откройте книгу и введите его там.",
  "cabRemind": "Добавить старт в календарь",
  "cabLabel": "Личный кабинет",
  "cabOut": "Выйти",
@@ -531,6 +537,24 @@ export function readerPath(r = {}, has = {}) {
   // «Следующий шаг» — только тот, что можно сделать сейчас: без подарка и без даты старта эти шаги не предлагаем
   const can = [true, has.gift !== false, has.start !== false, true, true];
   return { done, n, level: n >= 5 ? 3 : n >= 4 ? 2 : n >= 2 ? 1 : 0, next: done.findIndex((x, i) => !x && can[i]) };
+}
+// Розыгрыш по пятницам: пятница этой недели (пн–вс) — ею помечается розыгрыш недели
+export function raffleFriday(today) {
+  const d = new Date(today + 'T12:00:00');
+  d.setDate(d.getDate() + (4 - ((d.getDay() + 6) % 7)));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+// Выбор победительницы: случайно среди тех, кто выбрал книгу, на которую есть промокод;
+// кто выигрывал за последние 4 недели — пропускает (чтобы доставалось разным)
+export function drawRaffle(entries = [], codes = {}, wins = [], today = '', rnd = Math.random) {
+  const ms = (d) => new Date(String(d).slice(0, 10) + 'T12:00:00').getTime();
+  const recent = new Set(wins.filter((w) => today && ms(today) - ms(w.week || w.at) < 28 * 864e5).map((w) => w.uid));
+  const want = entries.filter((e) => e && e.uid && e.book);
+  if (!want.length) return { why: 'empty' };
+  const pool = want.filter((e) => (codes[e.book] || []).length && !recent.has(e.uid));
+  if (!pool.length) return { why: want.some((e) => (codes[e.book] || []).length) ? 'recent' : 'nocodes' };
+  const e = pool[Math.min(pool.length - 1, Math.floor(rnd() * pool.length))];
+  return { entry: e, code: codes[e.book][0] };
 }
 // Материалы «Только для своих»: строка «Название — ссылка» (или «Название | ссылка»; без ссылки — просто текст)
 export function bonusItems(t) {
