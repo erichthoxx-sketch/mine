@@ -1,7 +1,16 @@
 // «Мой сайт» (Связи): что сделать на сайте — находится само, сверкой «Мастерской» с сайтом. Чистые функции.
 import { sameTitle } from '../../js/sitepub.js';
+import { addDays, diffDays } from '../../js/calc.js';
 
 export const SITE_LINK = 'mysite'; // запись в w_links: свои дела по сайту → Планер и Todoist (Мастерская → Сайт)
+
+// Домен сайта: куплен в Рег.ру 27.10.2026 на год. Дата «оплачен до» правится в «Мой сайт» (settings.site.domainTill).
+// Напоминание «Продлить домен» — за 2 месяца; не продлила — висит в Планере на сегодня до продления.
+export const DOMAIN = 'lanafreitag.ru', DOMAIN_TILL = '2027-10-27', DOMAIN_AHEAD = 60;
+export function domainInfo(settings = {}, today) {
+  const till = settings?.site?.domainTill || DOMAIN_TILL, days = diffDays(today, till);
+  return { name: DOMAIN, till, days, due: addDays(till, -DOMAIN_AHEAD), soon: days <= DOMAIN_AHEAD, late: days < 0 };
+}
 
 // wbooks — книги Мастерской; site — siteInfo (js/sitepub.js); subs — подписчики [{at}]; seenAt — когда смотрела подписчиков
 export function siteChecks({ wbooks = [], site = null, subs = null, seenAt = '' } = {}) {

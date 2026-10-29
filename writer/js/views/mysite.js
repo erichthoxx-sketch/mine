@@ -1,10 +1,11 @@
 // «Мой сайт» (Связи → Мой сайт): ссылки, цифры, что сделать на сайте (находится само) и свои дела по сайту.
 // Свои дела живут в записи w_links «mysite» — поэтому сами попадают в Планер, на Главную и в Todoist (Мастерская → Сайт).
 import { ic } from '../../../js/icons.js';
-import { esc, acts, forms, toast } from '../../../js/ui.js';
+import { esc, acts, forms, toast, openSheet } from '../../../js/ui.js';
 import { fmtDate, plural } from '../../../js/format.js';
 import { loadSite, loadSubs, SITE_URL, SITE_ADMIN } from '../../../js/sitepub.js';
-import { siteChecks, SITE_LINK } from '../sitecheck.js';
+import { siteChecks, SITE_LINK, domainInfo } from '../sitecheck.js';
+import { addDays } from '../../../js/calc.js';
 import { addLinkedTask } from './links.js';
 
 const app = () => window.__app;
@@ -38,6 +39,7 @@ export function mySiteView(a) {
   const checks = st.site ? siteChecks({ wbooks: c.wbooks, site: st.site, subs: st.subs, seenAt: c.settings.site?.seenSubs }) : [];
   const shown = st.site ? st.site.books.filter((b) => !b.hidden).length : null;
   const fresh = checks.find((x) => x.k === 'subs')?.subs || 0;
+  const dm = domainInfo(c.settings, c.today);
   const html = `<section class="links-page">
   <div class="row between links-title" style="margin-bottom:10px"><h2 style="margin:0">Мой сайт</h2>
     <button class="icon-btn" data-act="site.reload" title="Обновить" aria-label="Обновить">${ic('refresh')}</button></div>
@@ -48,6 +50,9 @@ export function mySiteView(a) {
       <div><div class="k">Подписчики</div><div class="v">${st.subs ? st.subs.length : '—'}</div><div class="s">${st.subs ? (fresh ? `новых ${fresh}` : 'новых нет') : 'видны после входа'}</div></div>
     </div>
     <p class="small muted" style="margin:6px 0 0">Посетители, нажатия «Читать» и откуда пришли — в «Директе» → Аналитика → Сайт.</p>
+    <div class="row between" style="gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+      <span><b>Домен ${esc(dm.name)}</b><span class="sub">${dm.late ? 'срок оплаты прошёл — продлите в Рег.ру' : `оплачен до ${fmtDate(dm.till)}`} · напомню за 2 месяца</span></span>
+      <span class="row" style="gap:10px;flex-shrink:0">${dm.soon ? `<button class="small-btn" data-act="site.renewed">Продлила на год</button>` : ''}<button class="link" data-act="site.domain">Изменить дату</button></span></div>
   </div>
 
   <div class="psec-h"><h2>Сделать на сайте${checks.length ? ` <span class="muted">${checks.length}</span>` : ''}</h2></div>
@@ -81,6 +86,19 @@ forms['site.todo'] = async (fd) => {
     await addLinkedTask(SITE_LINK, { date, text, section: 'Сайт' });
     toast('Дело добавлено в Планер' + (app().ctx().settings.todoistToken ? ' · Todoist синхронизируется' : ''));
   } catch (e) { toast('Не получилось сохранить: ' + e.message); return false; }
+};
+const saveTill = async (till) => { const s = app().ctx().settings; await app().store.saveSettings({ site: { ...(s.site || {}), domainTill: till } }); };
+acts['site.renewed'] = async () => {
+  const c = app().ctx(), was = domainInfo(c.settings, c.today).till;
+  await saveTill(addDays(was, 365) < c.today ? addDays(c.today, 365) : addDays(was, 365));
+  toast('Домен продлён — следующее напоминание за 2 месяца до конца оплаты', { undo: () => saveTill(was) });
+};
+acts['site.domain'] = () => {
+  const c = app().ctx(), dm = domainInfo(c.settings, c.today);
+  openSheet('Домен ' + dm.name, `<label for="dmtill" style="margin-top:0">Оплачен до</label><input id="dmtill" type="date" name="till" value="${dm.till}" required>
+    <p class="small muted">Дата есть в Рег.ру → «Домены и услуги». Напоминание «Продлить домен» появится в Планере и Todoist за 2 месяца.</p>`,
+  async (fd) => { const v = String(fd.get('till') || ''); if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { toast('Укажите дату'); return false; } await saveTill(v); });
+  return false;
 };
 acts['site.reload'] = () => { load(true); return false; };
 acts['site.seen'] = async () => { const s = app().ctx().settings; await app().store.saveSettings({ site: { ...(s.site || {}), seenSubs: new Date().toISOString() } }); };

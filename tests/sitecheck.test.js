@@ -26,3 +26,12 @@ test('мой сайт: новые подписчики — только посл
   assert.equal(s[0].subs, 1);
   assert.deepEqual(siteChecks({ site: null }), []);
 });
+
+test('домен сайта: напоминание за 2 месяца, дата правится', async () => {
+  const { domainInfo, DOMAIN_TILL } = await import('../writer/js/sitecheck.js');
+  const a = domainInfo({}, '2027-08-01');
+  assert.equal(a.till, DOMAIN_TILL); assert.equal(a.due, '2027-08-28'); assert.equal(a.soon, false);
+  assert.equal(domainInfo({}, '2027-08-28').soon, true);
+  assert.equal(domainInfo({}, '2027-10-28').late, true);
+  assert.equal(domainInfo({ site: { domainTill: '2028-10-27' } }, '2027-10-28').soon, false);
+});

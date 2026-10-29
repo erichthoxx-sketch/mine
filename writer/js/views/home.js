@@ -10,6 +10,7 @@ import { STATUS, progressBlock, daysTxt, driveChip, GAINS_V, refreshing } from '
 import { goalTitle, goalToday, activeGoals } from './goals.js';
 import { widgetReminder } from './widgets.js';
 import { linkTodos } from './links.js';
+import { domainInfo } from '../sitecheck.js';
 import { marketingNeeds, planItems } from './plan.js';
 import { writtenChart } from '../wcharts.js';
 import { archiveWarn, loadArchive } from './archive.js';
@@ -53,6 +54,7 @@ export function reminders(c) {
   const wr = widgetReminder(c); if (wr) add(wr.date, wr.title, wr.sub, wr.to, 15);
   // напоминания по связям и подготовка маркетинга
   for (const x of linkTodos(c)) add(x.date, x.text, x.name, '/link/' + x.linkId, 1);
+  const dm = domainInfo(c.settings, t); if (dm.soon) add(t, `Продлить домен ${dm.name}`, dm.late ? 'срок оплаты прошёл' : `оплачен до ${fmtDate(dm.till)}`, '/mysite', 0);
   for (const m of marketingNeeds(c)) add(m.date, m.title, esc(m.sub), m.to, 0);
   // Только конкретные UTM-обновления заранее. Общих обзоров выходных нет.
   for (const task of planItems(c, t, addDays(t, 14)).filter(x => x.kind === 'utm'))

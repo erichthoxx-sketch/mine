@@ -5,6 +5,7 @@ import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap }
 import { reminders } from './home.js';
 import { widgetReminder } from './widgets.js';
 import { linkTodos, addLinkedTask } from './links.js';
+import { domainInfo } from '../sitecheck.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { fetchPageText } from '../pagetext.js';
@@ -90,6 +91,9 @@ export function planItems(c, from, to) {
       p.bookId && c.wbooksById[p.bookId] ? esc(c.wbooksById[p.bookId].title) : 'Блог Литнет',
       { id:p.id, to:'/blog/' + p.id, bookId:p.bookId || '', dueRaw:p.planDate, section:'Маркетинг' });
   }
+  // Мой сайт: продлить домен — за 2 месяца до конца оплаты, до продления висит на сегодня (в Todoist — с той же датой)
+  const dm = domainInfo(c.settings, t);
+  add(dm.due < t ? t : dm.due, 'waitans', `Продлить домен ${dm.name} до ${fmtDate(dm.till)}`, dm.late ? 'срок оплаты прошёл · Рег.ру' : 'Рег.ру → Домены и услуги → Продлить', { to: '/mysite', section: 'Сайт', dueRaw: dm.due });
   // Связи: напоминания по контактам (просроченные — на сегодня)
   for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', esc(x.text), esc(x.name) + (x.date < t ? ' · просрочено' : ''), { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k, section: x.section || 'Связи', ...(x.bookId ? { bookId: x.bookId } : {}), ...(x.detail ? { description: x.detail } : {}) });
   // свои задачи из Todoist (проекты «Книги» и «Мастерская»)
