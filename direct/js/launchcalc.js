@@ -101,11 +101,11 @@ export function launchPlan(cfg, { today, wbooks = [], siteBooks = [], metrika = 
   const roy = Number(cfg.royalty) > 0 ? Number(cfg.royalty) : royalty > 0 ? royalty : null;
   const lv = libraryValue({ libN: mkTotals?.lib || 0, buyN: mkTotals?.buy || 0, royalty: roy });
   // деньги: на бесплатные главы — треть бюджета (не больше), остальное — на подписку (примерно 3 недели)
-  const budget = Number(cfg.budget) > 0 ? Number(cfg.budget) : 10000;
   const freeDays = pubDate && subDate ? Math.max(1, dayDiff(pubDate, subDate)) : 14;
-  const freeBudget = Math.round(budget * 0.33 / 100) * 100, paidBudget = budget - freeBudget;
-  const money = { budget, freeDays, freeBudget, paidBudget, freeWeek: Math.round(freeBudget / freeDays * 7 / 10) * 10, paidWeek: Math.round(paidBudget / 3 / 10) * 10 };
   const picked = campaigns.find((x) => String(x.id) === String(cfg.campaignId)) || null;
+  const bs = budgetFrom(picked, cfg, freeDays + 21), budget = bs.total;
+  const freeBudget = Math.round(budget * 0.33 / 100) * 100, paidBudget = budget - freeBudget;
+  const money = { budget, src: bs.src, srcText: bs.text, freeDays, freeBudget, paidBudget, freeWeek: Math.round(freeBudget / freeDays * 7 / 10) * 10, paidWeek: Math.round(paidBudget / 3 / 10) * 10 };
   const step = (id, ok, text, how = '') => ({ id, ok: !!ok, text, how });
   const steps = {
     prep: [
@@ -138,24 +138,18 @@ export function launchMilestones(p) {
   return out;
 }
 
-// Актуальная книга для запуска: самая новая из начатых или начинающихся в ближайшие 45 дней (по первой главе в Мастерской).
-// Новая книга подходит к старту — карточка сама переключается на неё; прошлый план уходит в архив (pastLaunches).
-export function pickLaunchBook(wbooks = [], today) {
-  const soon = addD(today, 45);
-  const list = wbooks.filter((b) => b?.title && b.publishStart && b.publishStart <= soon && (b.status || 'progress') !== 'idea')
-    .sort((x, y) => y.publishStart.localeCompare(x.publishStart));
-  return list[0]?.title || null;
+// Запуски — по каждой книге «в процессе» (Мастерская): свой план в direct.launches[id книги].
+// Старый единственный план (direct.firstLaunch) подхватывается для своей книги, пока не сохранён новый.
+export function launchesOf(settings = {}, wbooks = []) {
+  const d = settings.direct || {}, saved = d.launches || {}, legacy = d.firstLaunch || null;
+  return wbooks.filter((b) => b?.title && (b.status || 'progress') === 'progress').map((b) => ({ id: String(b.id),
+    cfg: { ...FIRST_LAUNCH, prepDate: '', publicationDate: '', ...(saved[b.id] || (legacy && sameBook(legacy.book, b.title) ? legacy : {})), book: b.title } }));
 }
-// Новый план для другой книги: бюджет и доход с покупки переносятся, остальное — с нуля
-export const freshLaunch = (prev, book) => ({ ...FIRST_LAUNCH, prepDate: '', publicationDate: '', budget: prev.budget || FIRST_LAUNCH.budget, book });
-export { sameBook };
-
-// План текущего запуска с учётом актуальной книги (для Директа и Планера Мастерской); switched — книга сменилась
-export function currentLaunch(settings, wbooks = [], today) {
-  const fl = firstLaunchOf(settings);
-  const auto = fl.bookManual ? null : pickLaunchBook(wbooks, today);
-  const pubOf = (t) => wbooks.find((b) => sameBook(b.title, t))?.publishStart || '';
-  const curPub = pubOf(fl.book) || fl.publicationDate || '';
-  if (auto && !sameBook(auto, fl.book) && pubOf(auto) > curPub) return { cfg: freshLaunch(fl, auto), switched: auto };
-  return { cfg: fl, switched: null };
+// Бюджет — из самой кампании в Директе (бюджет на период, недельный или дневной); нет кампании — план из приложения
+export function budgetFrom(picked, cfg, days = 35) {
+  const b = picked?.budget;
+  if (b?.kind === 'period' && b.amount > 0) return { total: b.amount, src: 'direct', text: `бюджет на период ${b.amount} ₽` };
+  if (b?.kind === 'week' && b.amount > 0) return { total: Math.round(b.amount * days / 7), src: 'direct', week: b.amount, text: `недельный бюджет ${b.amount} ₽` };
+  if (picked?.daily > 0) return { total: Math.round(picked.daily * days), src: 'direct', day: picked.daily, text: `дневной бюджет ${picked.daily} ₽` };
+  return { total: Number(cfg.budget) > 0 ? Number(cfg.budget) : 10000, src: 'plan', text: '' };
 }

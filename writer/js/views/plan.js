@@ -18,7 +18,7 @@ import { ownTasks, bookOfTask, moveOwnTask, tdText, addOwnTask } from '../../../
 import { bookGuess } from '../ideacalc.js';
 import { dayHistory, movedFrom } from '../dayhist.js';
 import { MONEY_RE } from '../todoist.js';
-import { currentLaunch, launchPlan, launchMilestones } from '../../../direct/js/launchcalc.js';
+import { launchesOf, launchPlan, launchMilestones } from '../../../direct/js/launchcalc.js';
 import { loadSite } from '../../../js/sitepub.js';
 import { promoLinkTasks, activePromoLinks, promoSection, promoChannelName } from '../promolinks.js';
 import { rub, fmtMonth } from '../../../js/format.js';
@@ -114,10 +114,11 @@ export function planItems(c, from, to) {
   // Маркетинг: подготовить материалы к старту выкладки и к рекламе
   for (const m of marketingNeeds(c)) add(m.date, 'mk', esc(m.title), esc(m.sub), { to: m.to });
   // запуск рекламы книги («Директ» → план): включить в день первой главы, сменить цель в старт подписки, итоги
-  if (c.settings.direct?.firstLaunch || c.settings.directToken) {
-    const lp = launchPlan(currentLaunch(c.settings, c.wbooks, t).cfg, { today: t, wbooks: c.wbooks, siteBooks: launchSite() });
-    const lb = c.wbooks.find((b) => b === lp.wb);
-    for (const x of launchMilestones(lp)) add(x.date, 'money', esc(x.title), esc(x.sub), { href: '../direct/', bookId: lb?.id });
+  if (c.settings.direct?.firstLaunch || c.settings.direct?.launches || c.settings.directToken) {
+    for (const L of launchesOf(c.settings, c.wbooks)) {
+      const lp = launchPlan(L.cfg, { today: t, wbooks: c.wbooks, siteBooks: launchSite() });
+      for (const x of launchMilestones(lp)) add(x.date, 'money', esc(x.title), esc(x.sub), { href: '../direct/', bookId: L.id });
+    }
   }
   // UTM: дата задачи опережает истечение. Дата истечения остается отдельным пассивным событием.
   const utms = (d.w_promolinks || []).map(x => ({ ...x, book: c.wbooksById[x.bookId]?.title || x.book || 'Книга' }));

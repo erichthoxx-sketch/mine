@@ -4,25 +4,26 @@ import { rub } from '../../../js/format.js';
 import { proxyVersion } from '../api.js';
 import { creatorOf, validateCreator, campaignPayload, groupPayload, adPayload, keywordsPayload,
   addedId, createCampaign, pauseCampaign, createGroup, createAd, createKeywords } from '../creator.js';
-import { resolvedLaunch, launchGoal } from './launchctx.js';
+import { resolvedLaunch, launchGoal, saveLaunch } from './launchctx.js';
 import { exactTag, bookMatches, readyForCampaign } from '../litnetcalc.js';
 import { promoChannel } from '../../../writer/js/promolinks.js';
 
 const app = () => window.__app;
 let busy = false;
+// черновик — того запуска, чей план открыт (ui.launchId)
 const current = () => {
-  const a = app(), s = a.ctx().settings, fl = s.direct?.firstLaunch || {};
-  return { a, s, fl, d: creatorOf(fl), m: s.direct?.metrika || null, today: a.ctx().today };
+  const a = app(), s = a.ctx().settings, L = resolvedLaunch(a), fl = L?.fl || {};
+  return { a, s, fl, id: L?.id, plan: L?.plan, d: creatorOf(fl), m: s.direct?.metrika || null, today: a.ctx().today };
 };
 const save = async patch => {
-  const { a, s, fl, d } = current();
-  await a.store.saveSettings({ direct: { ...s.direct, firstLaunch: { ...fl, ...(patch.campaignId ? { campaignId: String(patch.campaignId) } : {}), creator: { ...d, ...patch } } } });
+  const { a, id, d } = current();
+  await saveLaunch(a, id, { ...(patch.campaignId ? { campaignId: String(patch.campaignId) } : {}), creator: { ...d, ...patch } });
 };
 const done = (label, id) => `<p class="fl-made">✓ ${esc(label)} №${esc(String(id))}</p>`;
 const btn = (action, label, disabled) => `<button class="primary" data-act="${action}"${disabled || busy ? ' disabled' : ''}>${label}</button>`;
 export function creatorCard(a, fl, m) {
   const d = creatorOf(fl), id = d.campaignId, group = d.groupId, ad = d.adId;
-  const { plan } = resolvedLaunch(a), goal = launchGoal(plan), v = Number(a.ctx().settings.direct?.proxyV) || 0;
+  const { plan } = resolvedLaunch(a) || { plan: {} }, goal = launchGoal(plan), v = Number(a.ctx().settings.direct?.proxyV) || 0;
   fl = { ...fl, bookUrl: plan.bookUrl }; // ссылка — из плана: своя или с сайта
   const issues = validateCreator(d, { today: a.ctx().today, bookUrl: fl.bookUrl, goalId: goal?.id });
   const bookTitles = Object.fromEntries((a.ctx().data.w_books || []).map(b => [String(b.id), b.title]));
@@ -135,7 +136,7 @@ acts['fl.createCampaign'] = async () => {
   if (d.campaignId) { toast('Эта кампания уже создана'); return false; }
   if (s.direct?.sandbox) { toast('Выключи песочницу в Настройках'); return false; }
   if ((await proxyVersion(s)) < 4) { toast('Сначала обнови Cloudflare'); return false; }
-  const { plan } = resolvedLaunch(a), goal = launchGoal(plan), err = validateCreator(d, { today, bookUrl: plan.bookUrl, goalId: goal?.id });
+  const { plan } = current(), goal = launchGoal(plan), err = validateCreator(d, { today, bookUrl: plan.bookUrl, goalId: goal?.id });
   const titles = Object.fromEntries((a.ctx().data.w_books || []).map(b => [String(b.id), b.title]));
   const link = (a.ctx().data.w_promolinks || []).find(x => String(x.id) === String(d.litnetLinkId));
   const linkBook = link && (titles[String(link.bookId)] || link.book || '');
@@ -191,7 +192,7 @@ acts['fl.createAd'] = async () => {
   const { a,s,fl,d }=current();
   if (!d.suspended || !d.groupId || d.adId) return false;
   let payload;
-  try { payload=adPayload(d,d.groupId,resolvedLaunch(a).plan.bookUrl); }catch(e){toast(e.message);return false;}
+  try { payload=adPayload(d,d.groupId,current().plan.bookUrl); }catch(e){toast(e.message);return false;}
   if (!(await confirmWrite('Создать комбинаторное объявление-черновик? Модерация не запускается.', 'Создать объявление')))return false;
   busy=true;
   try {const id=addedId(await createAd(s,payload),'Объявление');await save({adId:String(id)});toast('Объявление создано');}

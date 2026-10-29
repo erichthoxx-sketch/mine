@@ -28,12 +28,22 @@ export async function refresh(app, { onStep = () => {} } = {}) {
     if (e.transient || [53, 58, 513].includes(e.code)) throw e;
     cr = await getSafe(s, 'campaigns', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy'], UnifiedCampaignFieldNames: ['BiddingStrategy'] }, { SelectionCriteria: {}, FieldNames: BASE.slice(0, 7) });
   }
+  // бюджет стратегии: недельный или на период (деньги в API — в миллионных долях рубля)
+  const budgetOf = (side) => {
+    for (const [k, v] of Object.entries(side || {})) {
+      if (!v || typeof v !== 'object' || k === 'PlacementTypes') continue;
+      if (v.WeeklySpendLimit) return { kind: 'week', amount: rub(v.WeeklySpendLimit) };
+      if (v.CustomPeriodBudget?.SpendLimit) return { kind: 'period', amount: rub(v.CustomPeriodBudget.SpendLimit), from: v.CustomPeriodBudget.StartDate || '', to: v.CustomPeriodBudget.EndDate || '' };
+    }
+    return null;
+  };
   const campaigns = (cr.Campaigns || []).map((c) => {
     const x = c.TextCampaign || c.UnifiedCampaign || {}, st = x.BiddingStrategy || {};
     return {
       id: c.Id, name: c.Name, state: c.State, status: c.Status, type: c.Type || '', start: c.StartDate || '',
       daily: rub(c.DailyBudget?.Amount), negatives: c.NegativeKeywords?.Items || [],
       strategy: { search: st.Search?.BiddingStrategyType || '', network: st.Network?.BiddingStrategyType || '' },
+      ...((budgetOf(st.Search) || budgetOf(st.Network)) ? { budget: budgetOf(st.Search) || budgetOf(st.Network) } : {}),
       ...(x.CounterIds !== undefined ? { counters: x.CounterIds?.Items || [] } : {}),
       ...(x.PriorityGoals !== undefined ? { priorityGoals: (x.PriorityGoals?.Items || []).map((g) => g.GoalId) } : {}),
     };

@@ -82,6 +82,7 @@ const TAB_OF = { launch: '/', quality: '/', ai: '/', log: '/', settings: '/', li
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'c' && b) return { tab: '/', view: (x) => campaignView(x, Number(decodeURIComponent(b))) };
+  if (a === 'launch' && b) return { tab: '/', view: (x) => launchView(x, decodeURIComponent(b)) };
   const map = { '': homeView, launch: launchView, quality: qualityView, experiments: experimentsView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
   return { tab: TAB_OF[a] || '/' + (a || ''), view: map[a || ''] || homeView };
 }

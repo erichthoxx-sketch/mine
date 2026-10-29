@@ -3,6 +3,7 @@ import { esc, acts, forms, openSheet, toast, ask, uid, opt } from '../../../js/u
 import { rub, num } from '../../../js/format.js';
 import { EXPERIMENT_TYPES, compareExperiment } from '../experimentcalc.js';
 import { purchaseGoal } from '../launchcalc.js';
+import { resolvedLaunch } from './launchctx.js';
 import { metrikaOf } from './metrika.js';
 const app=()=>window.__app;
 const money=x=>rub(x,0);
@@ -37,7 +38,7 @@ const renderResults=(x,a)=>{
   </div>`;
 };
 export function experimentsView(a){
-  const ctx=a.ctx(),fl=ctx.settings.direct?.firstLaunch||{},list=(ctx.data.d_tests||[]).slice().sort((x,y)=>(y.appliedAt||y.createdAt).localeCompare(x.appliedAt||x.createdAt));
+  const ctx=a.ctx(),fl=resolvedLaunch(a)?.fl||{},list=(ctx.data.d_tests||[]).slice().sort((x,y)=>(y.appliedAt||y.createdAt).localeCompare(x.appliedAt||x.createdAt));
   return {html:`
     <div class="card ex-panel"><div class="row between"><h2 style="margin:0">Журнал рекламных решений</h2><button data-act="go" data-to="/quality">Контроль трафика</button></div>
       <p>Записывай, что хочешь изменить и почему. После фактического изменения сравним две недели по расходам, покупкам и доходу книги.</p>

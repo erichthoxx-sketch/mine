@@ -100,16 +100,19 @@ test('План запуска: даты из Мастерской и сайта,
   assert.deepEqual(ms, ['2026-11-06', '2026-11-09', '2026-11-23', '2026-12-07']);
 });
 
-test('Актуальная книга запуска: новая книга подходит к старту — план переключается сам, назад — нет', async () => {
+test('Запуски по книгам «в процессе» и бюджет из Директа', async () => {
   const L = await import('../direct/js/launchcalc.js');
-  const wb = [{ title: 'Звериная тропа для двоих', publishStart: '2026-06-01', status: 'done' }, { title: 'Развод для черной вдовы', publishStart: '2026-11-09' }, { title: 'Пензенский дьявол', publishStart: '2027-03-01' }, { title: 'Идея', publishStart: '2026-12-01', status: 'idea' }];
-  assert.equal(L.pickLaunchBook(wb, '2026-11-01'), 'Развод для черной вдовы');
-  assert.equal(L.pickLaunchBook(wb, '2027-01-20'), 'Пензенский дьявол'); // за 45 дней до первой главы
-  const s = { direct: { firstLaunch: { book: 'Развод для черной вдовы', budget: 20000, campaignId: '5' } } };
-  assert.equal(L.currentLaunch(s, wb, '2026-12-01').switched, null);
-  const r = L.currentLaunch(s, wb, '2027-01-20');
-  assert.equal(r.switched, 'Пензенский дьявол'); assert.equal(r.cfg.budget, 20000); assert.equal(r.cfg.campaignId, '');
-  // старая книга без даты в Мастерской не отбирает запуск у новой; ручной выбор не трогаем
-  assert.equal(L.currentLaunch({ direct: { firstLaunch: { book: 'Пензенский дьявол' } } }, wb, '2027-01-20').switched, null);
-  assert.equal(L.currentLaunch({ direct: { firstLaunch: { ...s.direct.firstLaunch, bookManual: true } } }, wb, '2027-01-20').switched, null);
+  const wb = [{ id: 'a', title: 'Звериная тропа для двоих', status: 'done' }, { id: 'b', title: 'Развод для черной вдовы', status: 'progress', publishStart: '2026-11-09' }, { id: 'c', title: 'Пензенский дьявол' }, { id: 'd', title: 'Идея', status: 'idea' }];
+  const s = { direct: { firstLaunch: { book: 'Развод для черной вдовы', campaignId: '5', budget: 20000 }, launches: { c: { budget: 7000 } } } };
+  const ls = L.launchesOf(s, wb);
+  assert.deepEqual(ls.map((x) => x.id), ['b', 'c']); // две книги в процессе — два запуска
+  assert.equal(ls[0].cfg.campaignId, '5'); // старый единственный план подхвачен своей книгой
+  assert.equal(ls[1].cfg.budget, 7000); assert.equal(ls[1].cfg.campaignId, '');
+  // бюджет: на период / недельный / дневной из Директа, иначе — план
+  assert.equal(L.budgetFrom({ budget: { kind: 'period', amount: 12000 } }, {}).total, 12000);
+  assert.equal(L.budgetFrom({ budget: { kind: 'week', amount: 2100 } }, {}, 35).total, 10500);
+  assert.equal(L.budgetFrom({ daily: 300 }, {}, 35).total, 10500);
+  const b = L.budgetFrom(null, { budget: 8000 }); assert.equal(b.total, 8000); assert.equal(b.src, 'plan');
+  const p = L.launchPlan({ ...ls[0].cfg }, { today: '2026-11-01', wbooks: wb, campaigns: [{ id: 5, state: 'ON', budget: { kind: 'period', amount: 15000 } }] });
+  assert.equal(p.money.budget, 15000); assert.equal(p.money.src, 'direct'); assert.equal(p.money.freeBudget + p.money.paidBudget, 15000);
 });

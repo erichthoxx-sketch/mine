@@ -9,7 +9,7 @@ import { metrikaOf } from './metrika.js';
 import { stateDot, tiles, actBtn, q } from './common.js';
 import { demo } from '../demo.js';
 import { OUTAGE_TEXT } from '../api.js';
-import { resolvedLaunch } from './launchctx.js';
+import { resolvedLaunches } from './launchctx.js';
 import { launchStrip, phaseSteps } from './launch.js';
 import { ic } from '../../../js/icons.js';
 import { linkedTargetologists, targetReminders } from '../../../js/target-partners.js';
@@ -17,10 +17,11 @@ import { linkedTargetologists, targetReminders } from '../../../js/target-partne
 const app = () => window.__app;
 
 // Запуск книги: где мы сейчас и что сделать — видно сразу, даже пока Директ не подключён
-function launchCard(a) {
-  if (demo.on) return '';
-  const { plan: p } = resolvedLaunch(a), left = phaseSteps(p).filter((s) => !s.ok);
-  return `<div class="card fl-panel"><div class="row between"><h2 style="margin:0">Запуск «${esc(p.book)}»</h2><button class="primary" data-act="go" data-to="/launch">План</button></div>
+// по карточке на каждую книгу «в процессе»
+const launchCard = (a) => (demo.on ? '' : resolvedLaunches(a).map((L) => launchOne(L)).join(''));
+function launchOne({ id, plan: p }) {
+  const left = phaseSteps(p).filter((s) => !s.ok);
+  return `<div class="card fl-panel"><div class="row between"><h2 style="margin:0">Запуск «${esc(p.book)}»</h2><button class="primary" data-act="go" data-to="/launch/${esc(id)}">План</button></div>
     ${launchStrip(p)}
     ${left.length ? `<div class="fl-checklist">${left.slice(0, 3).map((s) => `<div class="fl-check-item"><span class="fl-check-icon" aria-hidden="true">○</span><span>${esc(s.text)}</span></div>`).join('')}</div>` : '<p class="small up">На этом этапе всё готово.</p>'}
     ${p.daysToNext != null && p.daysToNext >= 0 ? `<p class="small muted">${p.daysToNext === 0 ? 'Сегодня' : `Через ${num(p.daysToNext)} дн.`}: ${esc(p.next.text)}.</p>` : ''}</div>`;
