@@ -1,7 +1,7 @@
 // Личный кабинет читателя: вход в шапке (дверца), окно входа по почте и паролю, страница ./?kabinet,
 // на странице книги — «Добавить старт в календарь» и «На полку». Тексты — из админки → «Кабинет».
 // Данные читателя — в его аккаунте (readers.js), копия — в браузере, чтобы всё показывалось сразу.
-import { esc, fmt, findBook, cover, STATUS, startInfo, readerPath } from './content.js';
+import { esc, fmt, findBook, cover, STATUS, startInfo, readerPath, bonusItems } from './content.js';
 import { readers, readerError } from './readers.js';
 import { addSub } from './data.js';
 
@@ -128,7 +128,7 @@ function cabinet(c, imgs) {
       <div class="cab-acts"><button class="btn btn-dark" data-cab="login" data-v="new">${T('cabBtnNew', 'Создать кабинет')}</button><button class="lnk" data-cab="login" data-v="in">${T('cabBtnIn', 'Войти')}</button></div></div></section>`;
   const tab = S.tab || 'reading', t = today();
   const soon = books().map((b) => [b, startInfo(b, t)]).filter(([, s]) => s).sort((a, b) => a[1].days - b[1].days);
-  const P = readerPath(S), names = lines(c.cabSteps), levels = lines(c.cabLevels);
+  const P = readerPath(S, { gift: !!c.giftUrl, start: soon.length > 0 }), names = lines(c.cabSteps), levels = lines(c.cabLevels);
   const ser = [...new Set(books().map((b) => String(b.series || '').trim()).filter(Boolean))][0] || '';
   const serBooks = ser ? books().filter((b) => String(b.series || '').trim() === ser).sort((a, b) => (Number(a.seriesNo) || 99) - (Number(b.seriesNo) || 99)) : [];
   const serDone = serBooks.filter((b) => S.shelf?.[b.id] === 'done').length;
@@ -137,6 +137,7 @@ function cabinet(c, imgs) {
   const gu = c.giftUrl;
   const head = (title, extra = '') => `<div class="cab-sh"><h2>${title}</h2>${extra}</div>`;
   const nextGo = P.next === 1 && gu ? gu : '';
+  const bonus = bonusItems(c.cabBonusItems);
   return `<section class="cab"><div class="wrap">
     <div class="cab-hero">
       <div><div class="lbl">${T('cabLabel', 'Личный кабинет')}</div><h1 class="cab-h">${fmt(c.cabHello || 'Здравствуйте', false)}</h1>
@@ -153,11 +154,11 @@ function cabinet(c, imgs) {
       <div><b>${shelfN}</b><span>${T('cabStatShelf', 'книг на полке')}</span></div>
       ${soon[0] ? `<div><b>${soon[0][1].days}</b><span>${T('cabStatSoon', 'дней до старта')} «${esc(plainT(soon[0][0].title))}»</span></div>` : ''}
     </div>
-    ${c.giftName || soon.length ? `<div class="cab-two">
-      ${c.giftName ? `<section class="cab-card">${head(T('cabGift', 'Подарок'))}
-        <div class="cab-gift"><div class="cab-gc">${cover({ id: 'gift', title: c.giftName }, imgs, name)}</div>
-        <div><div class="cab-t">«${esc(c.giftName)}»</div>
-          ${gu ? `<div class="cab-acts"><a class="btn btn-dark" href="${esc(gu)}" target="_blank" rel="noopener" data-cab="gift">${T('cabDownload', 'Скачать')}</a></div>` : `<div class="cab-s">${T('cabGiftSoon', 'Подарок появится здесь совсем скоро.')}</div>`}</div></div></section>` : ''}
+    ${gu || soon.length ? `<div class="cab-two">
+      ${gu ? `<section class="cab-card">${head(T('cabGift', 'Подарок'))}
+        <div class="cab-gift"><div class="cab-gc">${cover({ id: 'gift', title: c.giftName || 'Подарок' }, imgs, name)}</div>
+        <div>${c.giftName ? `<div class="cab-t">«${esc(c.giftName)}»</div>` : ''}
+          <div class="cab-acts"><a class="btn btn-dark" href="${esc(gu)}" target="_blank" rel="noopener" data-cab="gift">${T('cabDownload', 'Скачать')}</a></div></div></div></section>` : ''}
       ${soon.length ? `<section class="cab-card">${head(T('cabSoon', 'Скоро старт'))}${soon.map(([b, st]) => `<div class="cab-soon">
         <div class="cab-days"><b>${st.days}</b><span>${plural(st.days, ['день', 'дня', 'дней'])}</span></div>
         <div class="cab-rt"><a class="cab-t" href="./?kniga=${esc(b.url)}">${fmt(b.title, false)}</a>
@@ -170,7 +171,7 @@ function cabinet(c, imgs) {
         <div class="cab-sline">${serBooks.map((b) => `<a class="cab-sdot${S.shelf?.[b.id] === 'done' ? ' on' : S.shelf?.[b.id] === 'reading' ? ' mid' : ''}" href="./?kniga=${esc(b.url)}" title="${esc(plainT(b.title))}"><i></i><span>${Number(b.seriesNo) || serBooks.indexOf(b) + 1}</span></a>`).join('<em></em>')}</div></div>` : ''}
       ${onShelf.length ? `<div class="cab-shelfg">${onShelf.map((b) => `<a class="cab-sb" href="./?kniga=${esc(b.url)}"><div class="cab-mc">${cover(b, imgs, name)}</div><div class="cab-t">${fmt(b.title, false)}</div><div class="cab-s">${esc(STATUS[b.status] || '')}</div></a>`).join('')}</div>`
         : `<p class="cab-empty">${tab === 'reading' ? T('cabEmptyReading', 'Пока ничего.') : tab === 'done' ? T('cabEmptyDone', 'Пока ничего.') : T('cabEmptyWant', 'Пока ничего.')}</p>`}</section>
-    <section class="cab-sec">${head(T('cabBonus', 'Только для своих'))}<p class="cab-empty">${T('cabBonusEmpty', '')}</p></section>
+    ${bonus.length ? `<section class="cab-sec">${head(T('cabBonus', 'Только для своих'))}<ul class="cab-bonus">${bonus.map((x) => `<li>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)} →</a>` : esc(x.title)}</li>`).join('')}</ul></section>` : ''}
   </div></section>`;
 }
 

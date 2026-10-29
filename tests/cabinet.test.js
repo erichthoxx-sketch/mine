@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { startInfo, readerPath, normalize } from '../site/content.js';
+import { startInfo, readerPath, normalize, bonusItems } from '../site/content.js';
 
 test('кабинет: старт подписки — только с датой из админки и пока не прошёл; цены числами', () => {
   assert.equal(startInfo({ startDate: '' }, '2026-10-28'), null);
@@ -22,4 +22,13 @@ test('кабинет: тексты прототипа, которые не ме�
   assert.match(normalize({ v: 4, blocks: [], cabSteps: old }).cabSteps, /Скачать подарок/);
   assert.equal(normalize({ v: 4, blocks: [], cabSteps: 'Мои шаги' }).cabSteps, 'Мои шаги');
   assert.equal(normalize({ v: 4, blocks: [] }).cabLevels.split('\n')[0], 'Новенькая');
+});
+
+test('кабинет: пустые разделы не предлагаются', () => {
+  // без подарка и без даты старта следующий шаг — «Читаю»
+  assert.equal(readerPath({}, { gift: false, start: false }).next, 3);
+  assert.equal(readerPath({}, { gift: true }).next, 1);
+  assert.deepEqual(bonusItems('Бонусная сцена — https://a.ru/x\n\nОбложка | https://b.ru\nСкоро отрывок'), [
+    { title: 'Бонусная сцена', url: 'https://a.ru/x' }, { title: 'Обложка', url: 'https://b.ru' }, { title: 'Скоро отрывок', url: '' }]);
+  assert.deepEqual(bonusItems(''), []);
 });

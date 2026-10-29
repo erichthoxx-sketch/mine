@@ -231,8 +231,7 @@ function cabTab() {
     </div>
     <h3 class="sub">Кабинет: разделы</h3>
     <div class="list" style="gap:16px">
-      <div class="two">${field('site', c, { k: 'cabGift', label: 'Раздел с подарком' })}${field('site', c, { k: 'cabDownload', label: 'Кнопка «Скачать»' })}</div>
-      ${field('site', c, { k: 'cabGiftSoon', label: 'Пока нет ссылки на подарок', hint: 'Ссылка на подарок — во вкладке «Общее»' })}
+      <div class="two">${field('site', c, { k: 'cabGift', label: 'Раздел с подарком', hint: 'Появляется, когда во вкладке «Общее» есть ссылка на подарок' })}${field('site', c, { k: 'cabDownload', label: 'Кнопка «Скачать»' })}</div>
       <div class="two">${field('site', c, { k: 'cabSoon', label: 'Раздел о старте подписки' })}${field('site', c, { k: 'cabStartLine', label: 'Строка с датой старта' })}</div>
       <div class="two">${field('site', c, { k: 'cabPriceLine', label: 'Строка с ценой' })}${field('site', c, { k: 'cabCal', label: 'Подпись «в календарь»' })}</div>
       ${field('site', c, { k: 'cabShelf', label: 'Раздел полки' })}
@@ -240,7 +239,7 @@ function cabTab() {
       ${field('site', c, { k: 'cabEmptyDone', label: 'Полка «Прочла» пустая', type: 'area' })}
       ${field('site', c, { k: 'cabEmptyWant', label: 'Полка «Хочу» пустая', type: 'area' })}
       ${field('site', c, { k: 'cabBonus', label: 'Раздел бонусов' })}
-      ${field('site', c, { k: 'cabBonusEmpty', label: 'Текст, пока бонусов нет', type: 'area' })}
+      ${field('site', c, { k: 'cabBonusItems', label: 'Материалы для своих', type: 'area', hint: 'Каждый с новой строки: название — ссылка (бонусная сцена, обложка до премьеры, отрывок). Пусто — раздела в кабинете нет' })}
     </div>
     <h3 class="sub">Страница книги</h3>
     <div class="list" style="gap:16px">

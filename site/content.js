@@ -277,7 +277,7 @@ export const DEFAULT_CONTENT = {
  "cabSoon": "Скоро старт",
  "cabShelf": "Моя полка",
  "cabBonus": "Только для своих",
- "cabBonusEmpty": "Здесь будут бонусные сцены, обложки до премьеры и отрывки до выхода.",
+ "cabBonusItems": "",
  "cabRemind": "Добавить старт в календарь",
  "cabLabel": "Личный кабинет",
  "cabOut": "Выйти",
@@ -289,7 +289,6 @@ export const DEFAULT_CONTENT = {
  "cabStatSeries": "книг цикла прочитано",
  "cabStatShelf": "книг на полке",
  "cabStatSoon": "дней до старта",
- "cabGiftSoon": "Подарок появится здесь совсем скоро.",
  "cabDownload": "Скачать",
  "cabStartLine": "Старт подписки",
  "cabPriceLine": "Для своих в день старта",
@@ -525,11 +524,20 @@ export function startInfo(b, today) {
   return { date: t, days, price: num(b.startPrice), old: num(b.price) };
 }
 // Путь читателя: 5 шагов → статус (0–3) и следующий шаг
-export function readerPath(r = {}) {
+export function readerPath(r = {}, has = {}) {
   const v = Object.values;
   const done = [true, !!r.gift, v(r.remind || {}).some(Boolean), v(r.shelf || {}).includes('reading'), v(r.shelf || {}).includes('done')];
   const n = done.filter(Boolean).length;
-  return { done, n, level: n >= 5 ? 3 : n >= 4 ? 2 : n >= 2 ? 1 : 0, next: done.findIndex((x) => !x) };
+  // «Следующий шаг» — только тот, что можно сделать сейчас: без подарка и без даты старта эти шаги не предлагаем
+  const can = [true, has.gift !== false, has.start !== false, true, true];
+  return { done, n, level: n >= 5 ? 3 : n >= 4 ? 2 : n >= 2 ? 1 : 0, next: done.findIndex((x, i) => !x && can[i]) };
+}
+// Материалы «Только для своих»: строка «Название — ссылка» (или «Название | ссылка»; без ссылки — просто текст)
+export function bonusItems(t) {
+  return String(t || '').split('\n').map((x) => x.trim()).filter(Boolean).map((x) => {
+    const m = /^(.*?)\s*(?:[—–|-]\s*)?(https?:\/\/\S+)\s*$/.exec(x);
+    return m ? { title: m[1].replace(/\s*[—–|-]\s*$/, '').trim() || m[2], url: m[2] } : { title: x, url: '' };
+  });
 }
 export function normalize(c) {
   const d = DEFAULT_CONTENT;
