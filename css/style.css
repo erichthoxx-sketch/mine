@@ -2840,3 +2840,9 @@ main .rev-actions button.dl .ic { opacity: 1; }
 .fl-check-item input[type=checkbox] { margin: 3px 0 0; flex: none; }
 .fl-check-item .sub { display: block; color: var(--muted); font-size: 13px; }
 .fl-how .item b { display: block; margin-bottom: 2px; }
+/* Планер, прошедший день: сделанное — зелёная галочка и серый текст; несделанное — «→ перенесено на …» */
+.app-writer .pitem.pi-hist { align-items: flex-start; }
+.app-writer .pi-hist .ph-mark { flex: none; width: 18px; display: inline-flex; justify-content: center; margin-top: 2px; color: var(--good); font-size: 14px; line-height: 1.3; }
+.app-writer .pi-hist .ph-mark .ic { width: 15px; height: 15px; }
+.app-writer .pi-hist .pi-t { color: var(--text-2); }
+.app-writer .pi-hist.moved .ph-mark { color: var(--muted); }

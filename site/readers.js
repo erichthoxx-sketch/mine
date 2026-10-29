@@ -27,6 +27,10 @@ const local = {
   async signOut() { localStorage.removeItem(LK); },
   async load() { return null; },
   async save() {},
+  // розыгрыш на своём компьютере — в этом же браузере (админка в пробном режиме видит те же записи)
+  async raffleGet(uid) { return JSON.parse(localStorage.getItem('lanaSite.raffle') || '{}')[uid] || null; },
+  async raffleSet(uid, data) { const all = JSON.parse(localStorage.getItem('lanaSite.raffle') || '{}'); all[uid] = data; localStorage.setItem('lanaSite.raffle', JSON.stringify(all)); },
+  async wins(uid) { return JSON.parse(localStorage.getItem('lanaSite.wins') || '[]').filter((w) => w.uid === uid); },
 };
 
 const remote = {
@@ -37,6 +41,14 @@ const remote = {
   async signOut() { const f = await boot(); await f.A.signOut(f.auth); },
   async load(uid) { const f = await boot(); const d = await f.F.getDoc(docOf(f, uid)); return d.exists() ? d.data() : null; },
   async save(uid, data) { const f = await boot(); await f.F.setDoc(docOf(f, uid), { ...data, at: new Date().toISOString() }, { merge: true }); },
+  // розыгрыш: своя запись (какую книгу хочет) и свои победы — по правилам Firebase другим не видны
+  async raffleGet(uid) { const f = await boot(); const d = await f.F.getDoc(f.F.doc(f.db, 'site_raffle', uid)); return d.exists() ? d.data() : null; },
+  async raffleSet(uid, data) { const f = await boot(); await f.F.setDoc(f.F.doc(f.db, 'site_raffle', uid), data); },
+  async wins(uid) {
+    const f = await boot(), out = [];
+    (await f.F.getDocs(f.F.query(f.F.collection(f.db, 'site_wins'), f.F.where('uid', '==', uid)))).forEach((d) => out.push(d.data()));
+    return out;
+  },
 };
 export const readers = LOCAL ? local : remote;
 

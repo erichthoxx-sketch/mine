@@ -16,6 +16,11 @@ const local = {
   async signOut() {},
   async listSubs() { return JSON.parse(localStorage.getItem('lanaSite.subs') || '[]').map((x, i) => ({ id: 'l' + i, ...x })); },
   async delSub(id) { const l = JSON.parse(localStorage.getItem('lanaSite.subs') || '[]'); l.splice(Number(id.slice(1)), 1); localStorage.setItem('lanaSite.subs', JSON.stringify(l)); },
+  async listRaffle() { return Object.values(JSON.parse(localStorage.getItem('lanaSite.raffle') || '{}')); },
+  async listWins() { return JSON.parse(localStorage.getItem('lanaSite.wins') || '[]').sort((a, b) => String(b.at).localeCompare(String(a.at))); },
+  async addWin(w) { const l = JSON.parse(localStorage.getItem('lanaSite.wins') || '[]'); l.push(w); localStorage.setItem('lanaSite.wins', JSON.stringify(l)); },
+  async getCodes() { return JSON.parse(localStorage.getItem('lanaSite.codes') || '{}'); },
+  async setCodes(book, list) { const all = JSON.parse(localStorage.getItem('lanaSite.codes') || '{}'); all[book] = list; localStorage.setItem('lanaSite.codes', JSON.stringify(all)); },
 };
 
 // ---------- Firebase ----------
@@ -55,6 +60,12 @@ async function firebase() {
       return out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
     },
     delSub: (id) => F.deleteDoc(ref('site_subs', id)),
+    // розыгрыш: кто какую книгу хочет, победы, промокоды (промокоды видит только владелица)
+    async listRaffle() { const out = []; (await F.getDocs(F.collection(db, 'site_raffle'))).forEach((d) => out.push(d.data())); return out; },
+    async listWins() { const out = []; (await F.getDocs(F.collection(db, 'site_wins'))).forEach((d) => out.push(d.data())); return out.sort((a, b) => String(b.at).localeCompare(String(a.at))); },
+    addWin: (w) => F.addDoc(F.collection(db, 'site_wins'), w),
+    async getCodes() { const out = {}; (await F.getDocs(F.collection(db, 'site_codes'))).forEach((d) => { out[d.id] = d.data().codes || []; }); return out; },
+    setCodes: (book, list) => F.setDoc(ref('site_codes', book), { codes: list, at: new Date().toISOString() }),
   };
 }
 

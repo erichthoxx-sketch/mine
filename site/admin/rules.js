@@ -34,6 +34,23 @@ service cloud.firestore {
         && request.resource.data.consent == true;
       allow read, update, delete: if siteOwner();
     }
+    // Розыгрыш по пятницам: читательница с кабинетом записывает только себя (какую книгу хочет);
+    // все записи, промокоды и победы видит владелица; победительница видит только свою победу
+    match /site_raffle/{uid} {
+      allow read, delete: if (request.auth != null && request.auth.uid == uid) || siteOwner();
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'name', 'book', 'at'])
+        && request.resource.data.uid == uid
+        && request.resource.data.book is string && request.resource.data.book.size() < 100
+        && request.resource.data.name is string && request.resource.data.name.size() < 80;
+    }
+    match /site_wins/{id} {
+      allow read: if siteOwner() || (request.auth != null && resource.data.uid == request.auth.uid);
+      allow write: if siteOwner();
+    }
+    match /site_codes/{id} {
+      allow read, write: if siteOwner();
+    }
   }
 }
 `;

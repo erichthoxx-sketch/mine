@@ -35,3 +35,11 @@ test('домен сайта: напоминание за 2 месяца, дат�
   assert.equal(domainInfo({}, '2027-10-28').late, true);
   assert.equal(domainInfo({ site: { domainTill: '2028-10-27' } }, '2027-10-28').soon, false);
 });
+
+test('розыгрыш на сайте: дело на пятницу, пока не проведён', async () => {
+  const { raffleTodo } = await import('../writer/js/sitecheck.js');
+  assert.equal(raffleTodo(null, '2026-10-29'), null);
+  assert.equal(raffleTodo({ raffleOn: false }, '2026-10-29'), null);
+  assert.deepEqual(raffleTodo({ raffleOn: true }, '2026-10-29'), { date: '2026-10-30' });
+  assert.equal(raffleTodo({ raffleOn: true, raffleLast: '2026-10-30' }, '2026-10-31'), null);
+});

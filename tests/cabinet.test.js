@@ -32,3 +32,18 @@ test('кабинет: пустые разделы не предлагаются'
     { title: 'Бонусная сцена', url: 'https://a.ru/x' }, { title: 'Обложка', url: 'https://b.ru' }, { title: 'Скоро отрывок', url: '' }]);
   assert.deepEqual(bonusItems(''), []);
 });
+
+test('розыгрыш: пятница недели и выбор победительницы', async () => {
+  const { raffleFriday, drawRaffle } = await import('../site/content.js');
+  assert.equal(raffleFriday('2026-10-29'), '2026-10-30'); // чт → эта пятница
+  assert.equal(raffleFriday('2026-11-01'), '2026-10-30'); // вс → прошедшая пятница той же недели
+  assert.equal(raffleFriday('2026-11-02'), '2026-11-06'); // пн → новая неделя
+  const entries = [{ uid: 'a', book: 'b1' }, { uid: 'b', book: 'b2' }, { uid: 'c', book: '' }];
+  assert.equal(drawRaffle([], {}, [], '2026-10-30').why, 'empty');
+  assert.equal(drawRaffle(entries, {}, [], '2026-10-30').why, 'nocodes');
+  const r = drawRaffle(entries, { b2: ['X1', 'X2'] }, [], '2026-10-30', () => 0.99);
+  assert.equal(r.entry.uid, 'b'); assert.equal(r.code, 'X1');
+  // выигрывала 2 недели назад — пропускает
+  assert.equal(drawRaffle(entries, { b2: ['X1'] }, [{ uid: 'b', week: '2026-10-16' }], '2026-10-30').why, 'recent');
+  assert.equal(drawRaffle(entries, { b2: ['X1'] }, [{ uid: 'b', week: '2026-09-25' }], '2026-10-30').entry.uid, 'b');
+});

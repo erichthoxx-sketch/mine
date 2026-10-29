@@ -4,6 +4,16 @@ import { addDays, diffDays } from '../../js/calc.js';
 
 export const SITE_LINK = 'mysite'; // запись в w_links: свои дела по сайту → Планер и Todoist (Мастерская → Сайт)
 
+// Розыгрыш на сайте по пятницам: пока включён и на этой неделе не проведён — дело «Провести розыгрыш» на пятницу
+// (пропустила — висит на сегодня до конца недели). Пятница — как на сайте (site/content.js → raffleFriday).
+export function raffleTodo(site, today) {
+  if (!site?.raffleOn) return null;
+  const d = new Date(today + 'T12:00:00');
+  d.setDate(d.getDate() + (4 - ((d.getDay() + 6) % 7)));
+  const fri = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return site.raffleLast === fri ? null : { date: fri };
+}
+
 // Домен сайта: куплен в Рег.ру 27.10.2026 на год. Дата «оплачен до» правится в «Мой сайт» (settings.site.domainTill).
 // Напоминание «Продлить домен» — за 2 месяца; не продлила — висит в Планере на сегодня до продления.
 export const DOMAIN = 'lanafreitag.ru', DOMAIN_TILL = '2027-10-27', DOMAIN_AHEAD = 60;

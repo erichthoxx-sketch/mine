@@ -5,7 +5,9 @@ import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap }
 import { reminders } from './home.js';
 import { widgetReminder } from './widgets.js';
 import { linkTodos, addLinkedTask } from './links.js';
-import { domainInfo } from '../sitecheck.js';
+import { domainInfo, raffleTodo } from '../sitecheck.js';
+import { siteNow } from './mysite.js';
+import { SITE_ADMIN } from '../../../js/sitepub.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { fetchPageText } from '../pagetext.js';
@@ -14,6 +16,7 @@ import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } fr
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask, moveOwnTask, tdText, addOwnTask } from '../../../js/tdtasks.js';
 import { bookGuess } from '../ideacalc.js';
+import { dayHistory, movedFrom } from '../dayhist.js';
 import { MONEY_RE } from '../todoist.js';
 import { currentLaunch, launchPlan, launchMilestones } from '../../../direct/js/launchcalc.js';
 import { loadSite } from '../../../js/sitepub.js';
@@ -96,13 +99,17 @@ export function planItems(c, from, to) {
   // Мой сайт: продлить домен — за 2 месяца до конца оплаты, до продления висит на сегодня (в Todoist — с той же датой)
   const dm = domainInfo(c.settings, t);
   add(dm.due < t ? t : dm.due, 'waitans', `Продлить домен ${dm.name} до ${fmtDate(dm.till)}`, dm.late ? 'срок оплаты прошёл · Рег.ру' : 'Рег.ру → Домены и услуги → Продлить', { to: '/mysite', section: 'Сайт', dueRaw: dm.due });
+  // Мой сайт: розыгрыш по пятницам (в админке сайта → «Розыгрыш»)
+  const rf = typeof window !== 'undefined' ? raffleTodo(siteNow(), t) : null;
+  if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Провести розыгрыш на сайте', 'Админка сайта → Розыгрыш', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
   // Связи: напоминания по контактам (просроченные — на сегодня)
-  for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', esc(x.text), esc(x.name) + (x.date < t ? ' · просрочено' : ''), { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k, section: x.section || 'Связи', ...(x.bookId ? { bookId: x.bookId } : {}), ...(x.detail ? { description: x.detail } : {}) });
+  for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', esc(x.text), esc(x.name) + ((mf) => (mf ? ` · перенесено с ${mf.slice(8, 10)}.${mf.slice(5, 7)}` : ''))(movedFrom(c.settings.todoist?.moved, x.k, x.date)) + (x.date < t ? ' · просрочено' : ''), { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k, section: x.section || 'Связи', ...(x.bookId ? { bookId: x.bookId } : {}), ...(x.detail ? { description: x.detail } : {}) });
   // свои задачи из Todoist (проекты «Книги» и «Мастерская»)
   for (const x of ownTasks(c.settings)) {
     if (!x.d) continue;
     const b = bookOfTask(x, c.wbooks);
-    add(x.d < t ? t : x.d, 'td', esc(tdText(x.t)), [b ? esc(b.title) : esc(x.s || x.p), x.d < t ? 'просрочено' : ''].filter(Boolean).join(' · '), { tdId: x.id });
+    const mf = movedFrom(c.settings.todoist?.moved, x.id, x.d);
+    add(x.d < t ? t : x.d, 'td', esc(tdText(x.t)), [b ? esc(b.title) : esc(x.s || x.p), mf ? `перенесено с ${mf.slice(8, 10)}.${mf.slice(5, 7)}` : '', x.d < t ? 'просрочено' : ''].filter(Boolean).join(' · '), { tdId: x.id });
   }
   // Маркетинг: подготовить материалы к старту выкладки и к рекламе
   for (const m of marketingNeeds(c)) add(m.date, 'mk', esc(m.title), esc(m.sub), { to: m.to });
@@ -201,6 +208,20 @@ function shortItem(c, x, multi) {
   const attrs = x.kind === 'pub' ? `data-act="day.pick" data-v="${x.date}"` : x.href ? '' : x.to ? `data-act="go" data-to="${x.to}"` : `data-act="${x.act}" data-id="${x.id}"`;
   return `<a class="aitem tap" href="${x.href || '#'}" ${attrs}><i class="k-${x.kind}"></i>${t}${book}</a>`;
 }
+// история прошедшего дня: сделанное — галочкой серым, несделанное — «→ перенесено на 30.10»
+const doneCache = {};
+async function loadDone(a, day) {
+  if (doneCache[day]) return;
+  doneCache[day] = { loading: true, items: [] };
+  try { const { fetchDone } = await import('../todoist.js'); doneCache[day] = { items: await fetchDone(a.ctx().settings.todoistToken, day) }; }
+  catch (e) { console.error(e); doneCache[day] = { items: [], err: e.message }; }
+  if (a.ui.route === '/plan') a.rerender();
+}
+function histHtml(x) {
+  return x.kind === 'done'
+    ? `<div class="pitem pi-hist"><span class="ph-mark">${icx('check')}</span><span class="pi-body"><span class="pi-t">${esc(x.t)}</span></span></div>`
+    : `<div class="pitem pi-hist moved"><span class="ph-mark">→</span><span class="pi-body"><span class="pi-t">${esc(x.t)}</span><span class="pi-s">перенесено на ${x.to.slice(8, 10)}.${x.to.slice(5, 7)}</span></span></div>`;
+}
 function itemHtml(c, x) {
   const body = `<span class="dot k-${x.kind}"></span><span class="pi-body"><span class="pi-t">${x.title}</span>${x.sub ? `<span class="pi-s">${x.sub}</span>` : ''}</span>`;
   if (x.kind === 'pub') {
@@ -285,6 +306,12 @@ export function planView(a) {
     return `<button class="wday${day === t ? ' today' : ''}${day === sel ? ' on' : ''}" data-act="plan.day" data-v="${day}"><span class="wk-d">${DOW[dowI(day)]}</span><span class="wk-n">${Number(day.slice(8, 10))}</span><span class="wk-dots">${kinds.map((k) => `<i class="k-${k}"></i>`).join('')}</span></button>`;
   }).join('');
   const dayList = by[sel] || [];
+  // прошедший день: что сделано (из Todoist и по связям) и что перенесено дальше
+  const past = sel < t, dc = past ? doneCache[sel] : null, tdOn = !!c.settings.todoistToken && !c.settings.todoistOff;
+  const linksDone = past ? (d.w_links || []).flatMap((l) => (l.todos || []).filter((x) => x.done && x.doneAt === sel).map((x) => ({ t: x.text }))) : [];
+  const hist = past ? dayHistory({ done: (dc?.items || []).map((x) => ({ t: tdText(x.t) })), moved: (c.settings.todoist?.moved || []).map((m) => ({ ...m, t: tdText(m.t) })), linksDone }, sel) : [];
+  const histWait = past && tdOn && !dc;
+  if (histWait) loadDone(a, sel);
   // цели — только на сегодня: что осталось по норме, своя цель — с кнопкой «Сделала»
   const goalHtml = sel === t ? goalRowsHtml(c) : sel > t ? goalRowsFuture(c, sel) : '';
   // дальше: следующие 14 дней после выбранного
@@ -305,7 +332,7 @@ export function planView(a) {
   </div>
   <div class="card" data-day="${sel}"><div class="row between plan-dayh"><h2 style="margin:0">${dayName(sel, t)}</h2><button class="plus-btn" data-act="td.addPlan" data-d="${sel}" title="Добавить дело" aria-label="Добавить дело">${ic('plus')}</button></div>
     ${c.settings.todoistToken && !c.settings.todoistOff && c.settings.todoist?.err ? `<p class="td-warn">Todoist не обновился: ${esc(String(c.settings.todoist.err).slice(0, 120))} · <button class="link" data-act="td.syncNow">Обновить</button></p>` : ''}
-    ${dayList.length || goalHtml ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}</div>` : '<p class="small muted" style="margin:0">Дел на этот день нет.</p>'}</div>
+    ${dayList.length || goalHtml || hist.length ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}${hist.map(histHtml).join('')}</div>` : `<p class="small muted" style="margin:0">${histWait ? 'Смотрю, что было сделано…' : 'Дел на этот день нет.'}</p>`}</div>
   <div class="psec-h"><h2>Цели <span class="muted">${activeGoals(c).length || ''}</span></h2><button class="small-btn" data-act="goal.new">+ Цель</button></div>
   ${goalsSection(c)}
   <div class="psec-h"><h2>Книги в работе <span class="muted">${inWork.length || ''}</span></h2></div>

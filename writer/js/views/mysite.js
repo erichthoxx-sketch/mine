@@ -23,6 +23,8 @@ async function load(force) {
   st.busy = false;
   app().rerender();
 }
+// Сайт для Планера (розыгрыш по пятницам): загружается сам при первом обращении
+export function siteNow() { load(); return st.site || null; }
 export function siteHubRow(c) {
   const n = st.site ? siteChecks({ wbooks: c.wbooks, site: st.site, subs: st.subs, seenAt: c.settings?.site?.seenSubs }).filter((x) => !x.soft).length : 0;
   const open = (c.data.w_links.find((l) => l.id === SITE_LINK)?.todos || []).filter((t) => !t.done).length;
