@@ -2,8 +2,8 @@
 import { esc } from '../../../js/ui.js';
 import { logOf } from '../demo.js';
 
-export function logView(a) {
-  const list = logOf(a).slice().sort((x, y) => y.at.localeCompare(x.at));
+export function logView(a, cid = null) {
+  const list = logOf(a).filter((x) => cid == null || x.cid === cid).slice().sort((x, y) => y.at.localeCompare(x.at));
   const when = (iso) => new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   return {
     html: `<div class="card"><h2>История изменений</h2>${list.length ? `<div class="list">${list.map((x) => `<div class="item"><div class="row between"><b>${esc(x.text)}</b><span class="small ${x.ok ? 'muted' : 'down'}">${x.ok ? (x.by === 'ai' ? 'по плану ИИ' : 'вы') : 'не применилось'}</span></div>

@@ -22,7 +22,7 @@ export function siteInfo(content) {
     let url = slugify(b.slug) || slugify(plainTitle(b.title)) || b.id;
     if (taken.has(url)) url += '-' + b.id.slice(-4);
     taken.add(url);
-    return { id: b.id, title: plainTitle(b.title), status: b.status || '', hidden: !!b.hidden, series: b.series || '', url, page: SITE_URL + '?kniga=' + url };
+    return { id: b.id, title: plainTitle(b.title), status: b.status || '', hidden: !!b.hidden, series: b.series || '', url, page: SITE_URL + '?kniga=' + url, litnet: b.litnet || '', startDate: b.startDate || '', startPrice: b.startPrice || '', price: b.price || '' };
   });
   return { books, subOn: content.subOn !== false, giftName: content.giftName || '', giftUrl: content.giftUrl || '', metrika: content.metrika ?? '113843691', raffleOn: !!content.raffleOn, raffleLast: content.raffleLast || '' };
 }

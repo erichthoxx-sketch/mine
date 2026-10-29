@@ -8,6 +8,7 @@ import { ic } from '../../../js/icons.js';
 import { SITE_COUNTER, SITE_GOALS, sitePages, sumDays, weekPair, byWeekday, mkInsights, reach, MIN_VISITS, byBook, funnel, goalTotals30, twoProp, royaltyPerSale, UTM_PRESETS, buildUtm, utmTable, litnetPage, litrefOf, litrefRows } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { packageText, sendToChat } from './ai.js';
+import { litnetView } from './litnet.js';
 import { demo } from '../demo.js';
 import { loadSite, SITE_URL, SITE_ADMIN } from '../../../js/sitepub.js';
 import { refreshSite } from '../sync.js';
@@ -18,7 +19,7 @@ const LEVEL = { step: ['Сделать', 'l-step'], warn: ['Внимание', '
 const WD = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const mmss = (s) => (s == null ? '—' : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
 const delta = (a, b) => (a != null && b ? `<span class="small ${a >= b ? 'up' : 'down'}">${a >= b ? '▲' : '▼'} ${pct(Math.abs(a - b) / b, 0)}</span>` : '');
-const TABS = [['sum', 'Сводка'], ['books', 'Книги'], ['src', 'Источники'], ['site', 'Сайт']];
+const TABS = [['sum', 'Сводка'], ['books', 'Книги'], ['src', 'Источники'], ['site', 'Сайт'], ['links', 'Ссылки Литнета']];
 
 function connectCard() {
   return `<div class="card"><h2>Аналитика читателей</h2>
@@ -245,12 +246,15 @@ acts['site.copyGoal'] = async (d) => { try { await navigator.clipboard.writeText
 
 export function analyticsView(a) {
   const c = a.ctx(), m = metrikaOf(c), mk = a.snap('mk');
+  const tabsHtml = (tab) => `<div class="lg-tabs an-tabs">${TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-act="an.tab" data-k="${k}">${t}</button>`).join('')}</div>`;
+  // ссылки Литнета (персональные и для продвижения) — свои, работают и без Метрики
+  if (a.ui.anTab === 'links' || /^\/litnet/.test(a.ui.route || '')) return { html: (m?.counterId ? tabsHtml('links') : '') + litnetView(a).html };
   if (!m?.counterId) return { html: connectCard() };
   if (!mk) return { html: '<div class="card"><h2>Аналитика читателей</h2><p class="muted">Загружаю данные Метрики… Если долго — нажмите ↻ вверху.</p></div>' };
   const M = model(a), tab = TABS.some(([k]) => k === a.ui.anTab) ? a.ui.anTab : (/^\/an\/site/.test(a.ui.route || '') ? 'site' : 'sum'); // из «Мастерской» → Мой сайт → Статистика
   return {
     html: `${demo.on ? '<div class="alert">Это пример — так будет выглядеть аналитика вашего счётчика.</div>' : ''}
-    <div class="lg-tabs an-tabs">${TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-act="an.tab" data-k="${k}">${t}</button>`).join('')}</div>
+    ${tabsHtml(tab)}
     ${tab === 'books' ? booksTab(a, M) : tab === 'src' ? srcTab(a, M) : tab === 'site' ? siteTab(a) : summaryTab(a, M)}
     ${(mk.errors || []).length ? `<p class="small muted">Часть отчётов Метрика не отдала: ${esc(mk.errors[0])}</p>` : ''}`,
     after() {
@@ -261,5 +265,5 @@ export function analyticsView(a) {
     },
   };
 }
-acts['an.tab'] = (d) => { app().ui.anTab = d.k; };
+acts['an.tab'] = (d) => { app().ui.anTab = d.k; if (/^\/litnet/.test(app().ui.route || '')) app().ui.route = '/an'; };
 acts['an.ai'] = () => { sendToChat(packageText(app(), 'Разбери аналитику читателей по Метрике (metrikaSite): воронка, книги (страница книги и читалка отдельно), источники и метки UTM, что усилить, что исправить, что подождать. Конкретные шаги с цифрами и с учётом статистической значимости.'), 'claude'); return false; };

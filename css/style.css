@@ -2828,3 +2828,15 @@ main .rev-actions button.dl .ic { opacity: 1; }
 #sheetForm #pdcwrap[hidden] { display: none; }
 .app-writer .target-entry-text.tap { cursor: pointer; border-radius: 8px; } .app-writer .target-entry-text.tap:hover { background: var(--surface-2); box-shadow: 0 0 0 6px var(--surface-2); }
 .app-writer .td-warn { margin: 2px 0 10px; font: 400 13px/1.5 var(--font-body); color: var(--text-2); } .app-writer .td-warn::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-right: 7px; vertical-align: 1px; } .app-writer .td-warn .link { font-size: 13px; padding: 0; }
+/* Директ: шкала фаз запуска — три шага тонкой линией, текущий — точкой акцента */
+.fl-phases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 14px 0 6px; border-top: 1px solid var(--line); }
+.fl-ph { position: relative; padding: 12px 8px 0 0; display: flex; flex-direction: column; gap: 2px; color: var(--muted); }
+.fl-ph b { font-weight: 600; font-size: 14px; color: var(--text-2); }
+.fl-ph .fl-dot { position: absolute; top: -5px; left: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.fl-ph.past .fl-dot { background: var(--good); }
+.fl-ph.on .fl-dot { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.fl-ph.on b { color: var(--text); }
+.fl-now { font: 700 16px/1.4 var(--font-body); margin: 18px 0 6px; }
+.fl-check-item input[type=checkbox] { margin: 3px 0 0; flex: none; }
+.fl-check-item .sub { display: block; color: var(--muted); font-size: 13px; }
+.fl-how .item b { display: block; margin-bottom: 2px; }

@@ -74,3 +74,28 @@ test('Без подтвержденной цели или роялти нет л
   assert.equal(goal.estimate, null);
   assert.equal(goal.estimatedProfit, null);
 });
+
+test('План запуска: даты из Мастерской и сайта, фазы, цели, ценность библиотеки, напоминания', async () => {
+  const L = await import('../direct/js/launchcalc.js');
+  const m = { goals: [{ id: 1, name: 'Добавление в библиотеку' }, { id: 2, name: 'Начало покупки книги' }, { id: 3, name: 'Покупка книги' }], main: [3] };
+  const cfg = L.firstLaunchOf({});
+  const wbooks = [{ title: 'Развод для чёрной вдовы', publishStart: '2026-11-09' }];
+  const siteBooks = [{ title: 'Развод для черной вдовы', startDate: '2026-11-23', litnet: 'https://litnet.com/ru/book/razvod-b1' }];
+  const p0 = L.launchPlan(cfg, { today: '2026-11-01', wbooks, siteBooks, metrika: m, royalty: 120, mkTotals: { lib: 400, buy: 60 } });
+  assert.equal(p0.phase, 'prep'); assert.equal(p0.pubDate, '2026-11-09'); assert.equal(p0.subDate, '2026-11-23'); assert.equal(p0.src.sub, 'site');
+  assert.equal(p0.bookUrl, 'https://litnet.com/ru/book/razvod-b1');
+  assert.equal(p0.lib.id, 1); assert.equal(p0.buy.id, 3); // «Начало покупки» — не покупка
+  assert.equal(p0.libValue.value, 18); assert.ok(p0.libValue.measured); // 60/400 = 15 % × 120 ₽
+  assert.equal(p0.money.freeBudget + p0.money.paidBudget, 10000); assert.equal(p0.money.freeDays, 14);
+  assert.ok(p0.steps.prep.find((s) => s.id === 'goals').ok); assert.ok(p0.steps.prep.find((s) => s.id === 'url').ok);
+  assert.equal(L.launchPlan(cfg, { today: '2026-11-10', wbooks, siteBooks, metrika: m }).phase, 'free');
+  assert.equal(L.launchPlan(cfg, { today: '2026-11-23', wbooks, siteBooks, metrika: m }).phase, 'paid');
+  // своё в плане главнее; без даты подписки — бесплатные главы идут дальше
+  const own = L.launchPlan({ ...cfg, subscriptionDate: '2026-11-30', publicationDate: '2026-11-10', pubManual: true }, { today: '2026-11-25', wbooks, siteBooks, metrika: m });
+  assert.equal(own.subDate, '2026-11-30'); assert.equal(own.pubDate, '2026-11-10'); assert.equal(own.phase, 'free');
+  assert.equal(L.launchPlan(cfg, { today: '2026-12-20', wbooks, siteBooks: [], metrika: m }).phase, 'free');
+  // мало данных в Метрике — осторожные 15 %
+  assert.equal(L.libraryValue({ libN: 5, buyN: 1, royalty: 100 }).measured, false);
+  const ms = L.launchMilestones(p0).map((x) => x.date);
+  assert.deepEqual(ms, ['2026-11-06', '2026-11-09', '2026-11-23', '2026-12-07']);
+});

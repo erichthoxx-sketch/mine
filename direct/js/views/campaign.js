@@ -7,11 +7,14 @@ import { totals, spendSeries, JUNK, hasNegative, goalTotals, metrikaFor, sumGoal
 import { metrikaOf } from './metrika.js';
 import { pushToIncome } from '../sync.js';
 import { demo } from '../demo.js';
+import { auditItemsHtml } from './learn.js';
+import { logView } from './log.js';
+import { ic } from '../../../js/icons.js';
 import { stateDot, strategyText, manualBids, tiles, statLine, actBtn, runAction, q } from './common.js';
 
 const app = () => window.__app;
 const maxBid = () => Number(app().ctx().settings.direct?.maxBid) || DEFAULT_MAX_BID;
-const TABS = [['queries', 'Запросы'], ['keywords', 'Фразы'], ['ads', 'Объявления'], ['minus', 'Минус-фразы']];
+const TABS = [['audit', 'Разбор'], ['queries', 'Запросы'], ['keywords', 'Фразы'], ['ads', 'Объявления'], ['minus', 'Минус-фразы'], ['log', 'Что меняли']];
 
 function queriesTab(camp, stats) {
   const rows = (stats?.queries || []).filter((x) => x.cid === camp.id);
@@ -121,8 +124,8 @@ function goalLine(camp, c, daily, stats) {
 export function campaignView(a, id) {
   const c = a.ctx(), main = a.snap('main'), stats = a.snap('stats');
   const camp = main?.campaigns?.find((x) => x.id === id);
-  if (!camp) return { html: '<div class="card"><p>Кампания не найдена.</p><button data-act="go" data-to="/">На обзор</button></div>' };
-  const t = c.today, daily = stats?.daily || [], tab = a.ui.cTab || 'queries';
+  if (!camp) return { html: '<div class="card"><p>Кампания не найдена.</p><button data-act="go" data-to="/">К рекламе</button></div>' };
+  const t = c.today, daily = stats?.daily || [], tab = TABS.some(([k]) => k === a.ui.cTab) ? a.ui.cTab : 'audit';
   const w = totals(daily, addDays(t, -6), t, id), m = totals(daily, addDays(t, -29), t, id);
   return {
     html: `<p><button class="link" data-act="go" data-to="/">← Все кампании</button></p>
@@ -134,8 +137,9 @@ export function campaignView(a, id) {
       <div class="chart" id="dCamp"></div>
       ${incomeLink(camp, c)}
       <div class="row">${camp.state === 'SUSPENDED' ? actBtn({ do: 'resume', target: 'campaign', ids: [camp.id] }, 'Запустить кампанию', '') : camp.state === 'ON' ? actBtn({ do: 'pause', target: 'campaign', ids: [camp.id] }, 'Остановить кампанию', '') : ''}</div></div>
-    <div class="card"><div class="chips">${TABS.map(([k, l]) => `<button class="chip ${tab === k ? 'on' : ''}" data-act="d.tab" data-k="${k}">${l}</button>`).join('')}</div>
-      ${tab === 'keywords' ? keywordsTab(camp, main, stats) : tab === 'ads' ? adsTab(camp, main) : tab === 'minus' ? minusTab(camp) : queriesTab(camp, stats)}</div>`,
+    <div class="card"><div class="lg-tabs an-tabs">${TABS.map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="d.tab" data-k="${k}">${l}</button>`).join('')}</div>
+      ${tab === 'audit' ? auditItemsHtml(a, camp).html : tab === 'keywords' ? keywordsTab(camp, main, stats) : tab === 'ads' ? adsTab(camp, main) : tab === 'minus' ? minusTab(camp) : tab === 'log' ? logView(a, camp.id).html.replace(/^<div class="card">|<\/div>$/g, '') : queriesTab(camp, stats)}
+      <div class="row dl-row"><button class="dl" data-act="ai.dl" data-cid="${camp.id}">${ic('download')} Скачать для нейросети</button><button class="dl" data-act="go" data-to="/quality">Качество трафика</button></div></div>`,
     after() {
       const el = document.getElementById('dCamp');
       if (el) lineChart(el, { points: spendSeries(daily, t, 30, id).map((x) => ({ label: fmtShort(x.date), value: x.value })), fmtVal: (v) => rub(v, 0), height: 130 });
