@@ -100,7 +100,6 @@ function loginHtml() {
   return `<form class="login" data-form="login"><div class="login-box">
     <div class="mist-line"></div>
     <h1>Сайт <i>· админка</i></h1>
-    <p class="muted">Та же почта и пароль, что в «Доходах» и «Мастерской».</p>
     <label class="f"><span>Почта</span><input id="l-email" type="email" autocomplete="email" required></label>
     <label class="f"><span>Пароль</span><input id="l-pw" type="password" autocomplete="current-password" required></label>
     <div class="err" id="l-err"></div>
