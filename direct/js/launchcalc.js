@@ -137,3 +137,25 @@ export function launchMilestones(p) {
   if (p.subDate) { add(p.subDate, `Реклама ${b}: цель — покупка`, 'старт подписки: сменить главную цель в Директе'); add(addD(p.subDate, 14), `Итоги рекламы ${b}`, 'Директ → Реклама: окупаемость и что дальше'); }
   return out;
 }
+
+// Актуальная книга для запуска: самая новая из начатых или начинающихся в ближайшие 45 дней (по первой главе в Мастерской).
+// Новая книга подходит к старту — карточка сама переключается на неё; прошлый план уходит в архив (pastLaunches).
+export function pickLaunchBook(wbooks = [], today) {
+  const soon = addD(today, 45);
+  const list = wbooks.filter((b) => b?.title && b.publishStart && b.publishStart <= soon && (b.status || 'progress') !== 'idea')
+    .sort((x, y) => y.publishStart.localeCompare(x.publishStart));
+  return list[0]?.title || null;
+}
+// Новый план для другой книги: бюджет и доход с покупки переносятся, остальное — с нуля
+export const freshLaunch = (prev, book) => ({ ...FIRST_LAUNCH, prepDate: '', publicationDate: '', budget: prev.budget || FIRST_LAUNCH.budget, book });
+export { sameBook };
+
+// План текущего запуска с учётом актуальной книги (для Директа и Планера Мастерской); switched — книга сменилась
+export function currentLaunch(settings, wbooks = [], today) {
+  const fl = firstLaunchOf(settings);
+  const auto = fl.bookManual ? null : pickLaunchBook(wbooks, today);
+  const pubOf = (t) => wbooks.find((b) => sameBook(b.title, t))?.publishStart || '';
+  const curPub = pubOf(fl.book) || fl.publicationDate || '';
+  if (auto && !sameBook(auto, fl.book) && pubOf(auto) > curPub) return { cfg: freshLaunch(fl, auto), switched: auto };
+  return { cfg: fl, switched: null };
+}

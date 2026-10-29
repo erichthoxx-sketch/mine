@@ -15,7 +15,7 @@ import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask, moveOwnTask, tdText, addOwnTask } from '../../../js/tdtasks.js';
 import { bookGuess } from '../ideacalc.js';
 import { MONEY_RE } from '../todoist.js';
-import { firstLaunchOf, launchPlan, launchMilestones } from '../../../direct/js/launchcalc.js';
+import { currentLaunch, launchPlan, launchMilestones } from '../../../direct/js/launchcalc.js';
 import { loadSite } from '../../../js/sitepub.js';
 import { promoLinkTasks, activePromoLinks, promoSection, promoChannelName } from '../promolinks.js';
 import { rub, fmtMonth } from '../../../js/format.js';
@@ -108,7 +108,7 @@ export function planItems(c, from, to) {
   for (const m of marketingNeeds(c)) add(m.date, 'mk', esc(m.title), esc(m.sub), { to: m.to });
   // запуск рекламы книги («Директ» → план): включить в день первой главы, сменить цель в старт подписки, итоги
   if (c.settings.direct?.firstLaunch || c.settings.directToken) {
-    const lp = launchPlan(firstLaunchOf(c.settings), { today: t, wbooks: c.wbooks, siteBooks: launchSite() });
+    const lp = launchPlan(currentLaunch(c.settings, c.wbooks, t).cfg, { today: t, wbooks: c.wbooks, siteBooks: launchSite() });
     const lb = c.wbooks.find((b) => b === lp.wb);
     for (const x of launchMilestones(lp)) add(x.date, 'money', esc(x.title), esc(x.sub), { href: '../direct/', bookId: lb?.id });
   }

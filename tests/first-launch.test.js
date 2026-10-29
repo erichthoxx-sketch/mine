@@ -99,3 +99,17 @@ test('План запуска: даты из Мастерской и сайта,
   const ms = L.launchMilestones(p0).map((x) => x.date);
   assert.deepEqual(ms, ['2026-11-06', '2026-11-09', '2026-11-23', '2026-12-07']);
 });
+
+test('Актуальная книга запуска: новая книга подходит к старту — план переключается сам, назад — нет', async () => {
+  const L = await import('../direct/js/launchcalc.js');
+  const wb = [{ title: 'Звериная тропа для двоих', publishStart: '2026-06-01', status: 'done' }, { title: 'Развод для черной вдовы', publishStart: '2026-11-09' }, { title: 'Пензенский дьявол', publishStart: '2027-03-01' }, { title: 'Идея', publishStart: '2026-12-01', status: 'idea' }];
+  assert.equal(L.pickLaunchBook(wb, '2026-11-01'), 'Развод для черной вдовы');
+  assert.equal(L.pickLaunchBook(wb, '2027-01-20'), 'Пензенский дьявол'); // за 45 дней до первой главы
+  const s = { direct: { firstLaunch: { book: 'Развод для черной вдовы', budget: 20000, campaignId: '5' } } };
+  assert.equal(L.currentLaunch(s, wb, '2026-12-01').switched, null);
+  const r = L.currentLaunch(s, wb, '2027-01-20');
+  assert.equal(r.switched, 'Пензенский дьявол'); assert.equal(r.cfg.budget, 20000); assert.equal(r.cfg.campaignId, '');
+  // старая книга без даты в Мастерской не отбирает запуск у новой; ручной выбор не трогаем
+  assert.equal(L.currentLaunch({ direct: { firstLaunch: { book: 'Пензенский дьявол' } } }, wb, '2027-01-20').switched, null);
+  assert.equal(L.currentLaunch({ direct: { firstLaunch: { ...s.direct.firstLaunch, bookManual: true } } }, wb, '2027-01-20').switched, null);
+});

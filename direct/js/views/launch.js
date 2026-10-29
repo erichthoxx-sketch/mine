@@ -3,8 +3,8 @@
 // кампанию запускает владелица в кабинете, здесь — что и когда сделать, конструктор черновика и цифры теста.
 import { esc, forms, changes, toast, ask, N, opt } from '../../../js/ui.js';
 import { rub, num, fmtShort } from '../../../js/format.js';
-import { firstLaunchOf, launchMetrics, PHASES } from '../launchcalc.js';
-import { resolvedLaunch } from './launchctx.js';
+import { firstLaunchOf, launchMetrics, PHASES, pickLaunchBook } from '../launchcalc.js';
+import { resolvedLaunch, switchLaunch } from './launchctx.js';
 import { demo } from '../demo.js';
 import { creatorCard } from './creator.js';
 
@@ -59,6 +59,9 @@ export function launchView(a) {
     <div class="card fl-panel"><details class="d-more"${p.phase === 'prep' ? ' open' : ''}><summary>Как настроить кампанию под книгу</summary>${setupHtml(p)}</details></div>
     <div class="card fl-panel"><details class="d-more"${!p.subDate || !p.bookUrl ? ' open' : ''}><summary>Даты, ссылка и деньги</summary>
       <p class="small muted">Первая глава — ${p.pubDate ? `${fmtShort(p.pubDate)} (${SRC[p.src.pub]})` : 'не задана'} · старт подписки — ${p.subDate ? `${fmtShort(p.subDate)} (${SRC[p.src.sub]})` : 'пока не известен: поставьте на сайте в книге «Дата старта подписки» или здесь'} · ссылка — ${p.bookUrl ? SRC[p.src.url] : 'нет'}${p.royalty ? ` · доход с покупки ≈ ${money(p.royalty)}` : ''}</p>
+      <label for="flBook">Книга</label>
+      <select id="flBook" data-chg="fl.book"><option value="">Актуальная — выбирается сама${fl.bookManual ? '' : `: ${esc(p.book)}`}</option>${(c.data.w_books || []).filter((b) => b.title && (b.status || 'progress') !== 'idea').map((b) => opt(b.title, b.title, fl.bookManual ? fl.book : '')).join('')}</select>
+      <p class="small muted">Сама — самая новая книга, у которой первая глава уже вышла или выйдет в ближайшие 45 дней (по Мастерской). Прошлые планы сохраняются.</p>
       <form data-form="fl.plan" class="settings-form fl-form">
         <div class="f2"><div><label>Первая глава</label><input name="publicationDate" type="date" value="${esc(p.pubDate)}"></div>
           <div><label>Старт подписки</label><input name="subscriptionDate" type="date" value="${esc(p.subDate)}"></div></div>
@@ -104,6 +107,11 @@ forms['fl.plan'] = async (fd) => {
   toast('Сохранено');
 };
 changes['fl.check'] = async (value, el, on) => { if (MANUAL.includes(el.dataset.k)) await saveLaunch({ [el.dataset.k]: !!on }); };
+changes['fl.book'] = async (value) => {
+  const a = app(), c = a.ctx();
+  await switchLaunch(a, value || pickLaunchBook(c.data.w_books || [], c.today) || firstLaunchOf(c.settings).book, { manual: !!value });
+  toast(value ? `План запуска — «${value}»` : 'Книга запуска выбирается сама');
+};
 changes['fl.campaign'] = async (value) => { await saveLaunch({ campaignId: String(value || '') }); };
 forms['fl.launch'] = async (fd) => {
   const fl = firstLaunchOf(app().ctx().settings), date = String(fd.get('actualStart') || '');

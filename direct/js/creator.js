@@ -23,7 +23,11 @@ export const CREATOR_DEFAULT = {
 };
 const micros = v => Math.round(Number(v) * 1000000);
 const dateValid = v => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v + 'T00:00:00Z'));
-export const creatorOf = (fl = {}) => ({ ...CREATOR_DEFAULT, ...(fl.creator || {}) });
+// черновик — под книгу запуска: название и заголовок из книги; жанровые тексты и фразы-пример — только у первой книги
+const FIRST_BOOK = 'Развод для черной вдовы';
+export const creatorOf = (fl = {}) => ({ ...CREATOR_DEFAULT,
+  ...(fl.book && fl.book !== FIRST_BOOK ? { name: `${fl.book} — запуск`, groupName: fl.book.slice(0, 255), titles: `${fl.book}. Новый роман`.slice(0, 56), texts: '', keywords: '' } : {}),
+  ...(fl.creator || {}) });
 
 export function validateCreator(c, { today, bookUrl = '', goalId = null } = {}) {
   const issues = [];
