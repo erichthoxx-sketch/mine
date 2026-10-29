@@ -293,7 +293,9 @@ function subsHtml() {
   if (S.subsErr) return '<p class="note">Не получилось загрузить адреса — проверьте интернет. <button class="quiet" data-act="reSubs">Ещё раз</button></p>';
   if (!S.subs.length) return '<p class="note">Пока никого. Первые адреса появятся здесь сами.</p>';
   return `<div class="links" style="margin-bottom:12px"><button class="btn line" data-act="copySubs">Скопировать все адреса</button><button class="quiet" data-act="csvSubs">Скачать таблицу</button></div>
-    <div class="subs">${S.subs.slice(0, 200).map((x) => `<div class="sub-r"><span>${x.name ? `${esc(x.name)} · ` : ''}${esc(x.email)}</span><small>${esc(String(x.at || '').slice(0, 10).split('-').reverse().join('.'))}${x.src === 'kabinet' ? ' · кабинет' : x.src && x.src !== 'glavnaya' ? ' · со страницы книги' : ''}</small><button class="ico" data-act="delSub" data-id="${esc(x.id)}" aria-label="Удалить адрес" title="Удалить">${ic('trash')}</button></div>`).join('')}</div>`;
+    <div class="subs">${S.subs.slice(0, 200).map((x) => `<div class="sub-r"><span>${x.name ? `${esc(x.name)} · ` : ''}${esc(x.email)}</span><small>${esc(String(x.at || '').slice(0, 10).split('-').reverse().join('.'))}${x.src === 'kabinet' ? ' · кабинет' : x.src && x.src !== 'glavnaya' ? ' · со страницы книги' : ''}</small><button class="ico" data-act="delSub" data-id="${esc(x.id)}" aria-label="Удалить адрес" title="Удалить">${ic('trash')}</button></div>`).join('')}</div>
+    ${S.subs.some((x) => x.name) ? '' : `<p class="note" style="margin-top:12px">Чтобы рядом с почтой было видно имя читательницы, один раз обновите правила Firebase: «Скопировать правила» → Firebase → «Правила» → вставить → «Опубликовать». Дальше всё само.</p>
+    <div class="links"><button class="quiet" data-act="copyRules">Скопировать правила</button><a class="quiet" href="https://console.firebase.google.com/project/dohody-6d6dd/firestore/rules" target="_blank" rel="noopener">Открыть Firebase</a></div><pre id="rules-text" hidden>${esc(RULES)}</pre>`}`;
 }
 
 // ---------- поля ----------
