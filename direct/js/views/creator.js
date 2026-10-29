@@ -4,7 +4,7 @@ import { rub } from '../../../js/format.js';
 import { proxyVersion } from '../api.js';
 import { creatorOf, validateCreator, campaignPayload, groupPayload, adPayload, keywordsPayload,
   addedId, createCampaign, pauseCampaign, createGroup, createAd, createKeywords } from '../creator.js';
-import { purchaseGoal } from '../launchcalc.js';
+import { resolvedLaunch, launchGoal } from './launchctx.js';
 import { exactTag, bookMatches, readyForCampaign } from '../litnetcalc.js';
 import { promoChannel } from '../../../writer/js/promolinks.js';
 
@@ -22,7 +22,8 @@ const done = (label, id) => `<p class="fl-made">✓ ${esc(label)} №${esc(Strin
 const btn = (action, label, disabled) => `<button class="primary" data-act="${action}"${disabled || busy ? ' disabled' : ''}>${label}</button>`;
 export function creatorCard(a, fl, m) {
   const d = creatorOf(fl), id = d.campaignId, group = d.groupId, ad = d.adId;
-  const goal = purchaseGoal(m), v = Number(a.ctx().settings.direct?.proxyV) || 0;
+  const { plan } = resolvedLaunch(a), goal = launchGoal(plan), v = Number(a.ctx().settings.direct?.proxyV) || 0;
+  fl = { ...fl, bookUrl: plan.bookUrl }; // ссылка — из плана: своя или с сайта
   const issues = validateCreator(d, { today: a.ctx().today, bookUrl: fl.bookUrl, goalId: goal?.id });
   const bookTitles = Object.fromEntries((a.ctx().data.w_books || []).map(b => [String(b.id), b.title]));
   const candidates = (a.ctx().data.w_promolinks || []).filter(x => x.status !== 'archived')
@@ -50,11 +51,11 @@ export function creatorCard(a, fl, m) {
           </select></div>
           <div><label>Стратегия</label><select name="strategy">
             ${opt('clicks','Максимум кликов',d.strategy)}
-            ${goal ? opt('conversions','Максимум конверсий (покупка)',d.strategy) : ''}
+            ${goal ? opt('conversions',`Максимум конверсий (${goal.name})`,d.strategy) : ''}
           </select></div>
         </div>
         <div class="f2">
-          <div><label>Начало показов (не раньше открытия подписки)</label><input name="start" type="date" min="${a.ctx().today}" value="${esc(d.start)}" required></div>
+          <div><label>Начало показов (день первой главы)</label><input name="start" type="date" min="${a.ctx().today}" value="${esc(d.start)}" required></div>
           <div><label>Конец рекламного теста</label><input name="end" type="date" min="${a.ctx().today}" value="${esc(d.end)}" required></div>
         </div>
         <div class="f2">
@@ -134,7 +135,7 @@ acts['fl.createCampaign'] = async () => {
   if (d.campaignId) { toast('Эта кампания уже создана'); return false; }
   if (s.direct?.sandbox) { toast('Выключи песочницу в Настройках'); return false; }
   if ((await proxyVersion(s)) < 4) { toast('Сначала обнови Cloudflare'); return false; }
-  const goal = purchaseGoal(m), err = validateCreator(d, { today, bookUrl: fl.bookUrl, goalId: goal?.id });
+  const { plan } = resolvedLaunch(a), goal = launchGoal(plan), err = validateCreator(d, { today, bookUrl: plan.bookUrl, goalId: goal?.id });
   const titles = Object.fromEntries((a.ctx().data.w_books || []).map(b => [String(b.id), b.title]));
   const link = (a.ctx().data.w_promolinks || []).find(x => String(x.id) === String(d.litnetLinkId));
   const linkBook = link && (titles[String(link.bookId)] || link.book || '');
@@ -190,7 +191,7 @@ acts['fl.createAd'] = async () => {
   const { a,s,fl,d }=current();
   if (!d.suspended || !d.groupId || d.adId) return false;
   let payload;
-  try { payload=adPayload(d,d.groupId,fl.bookUrl); }catch(e){toast(e.message);return false;}
+  try { payload=adPayload(d,d.groupId,resolvedLaunch(a).plan.bookUrl); }catch(e){toast(e.message);return false;}
   if (!(await confirmWrite('Создать комбинаторное объявление-черновик? Модерация не запускается.', 'Создать объявление')))return false;
   busy=true;
   try {const id=addedId(await createAd(s,payload),'Объявление');await save({adId:String(id)});toast('Объявление создано');}

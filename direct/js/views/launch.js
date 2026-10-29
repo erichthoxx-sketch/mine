@@ -1,9 +1,10 @@
-// Первый самостоятельный запуск рекламы: план под новую книгу, подготовка, проверка и отдельные цифры.
-// Ничего в Яндекс Директе не меняет: создание и запуск кампании — только в кабинете владелицы.
-import { esc, acts, forms, changes, toast, ask, N, opt } from '../../../js/ui.js';
+// План запуска рекламы книги по фазам: подготовка → бесплатные главы (копим библиотеку) → подписка (продаём).
+// Даты и ссылка берутся сами (Мастерская, сайт), цели — из Метрики. В Директе приложение само ничего не включает:
+// кампанию запускает владелица в кабинете, здесь — что и когда сделать, конструктор черновика и цифры теста.
+import { esc, forms, changes, toast, ask, N, opt } from '../../../js/ui.js';
 import { rub, num, fmtShort } from '../../../js/format.js';
-import { firstLaunchOf, launchReadiness, launchMetrics } from '../launchcalc.js';
-import { metrikaOf } from './metrika.js';
+import { firstLaunchOf, launchMetrics, PHASES } from '../launchcalc.js';
+import { resolvedLaunch } from './launchctx.js';
 import { demo } from '../demo.js';
 import { creatorCard } from './creator.js';
 
@@ -12,151 +13,108 @@ const saveLaunch = async (patch) => {
   const a = app(), d = a.ctx().settings.direct || {};
   await a.store.saveSettings({ direct: { ...d, firstLaunch: { ...firstLaunchOf(a.ctx().settings), ...patch } } });
 };
-const stateTag = (text, good) => `<span class="d-st ${good ? 'good' : ''}">● ${esc(text)}</span>`;
 const money = (v) => rub(v, 0);
-const checked = (value) => value ? ' checked' : '';
-const verifiedItem = (ok, text) => `<div class="fl-check-item ${ok ? 'fl-check-done' : ''}"><span class="fl-check-icon" aria-hidden="true">${ok ? '✓' : '○'}</span><span>${esc(text)}</span></div>`;
+const SRC = { workshop: 'из Мастерской', site: 'с сайта', plan: 'вписано здесь' };
+const MANUAL = ['creativeReady', 'limitVerified', 'goalVerified', 'buySwitched', 'limit2Verified'];
+const phaseRange = (p, id) => (id === 'prep' ? (p.pubDate ? `до ${fmtShort(p.pubDate)}` : '') : id === 'free' ? (p.pubDate ? `${fmtShort(p.pubDate)}${p.subDate ? ' – ' + fmtShort(p.subDate) : ''}` : '') : p.subDate ? `с ${fmtShort(p.subDate)}` : 'дата не известна');
+
+// Шкала фаз и «что сейчас» — общая для Обзора и плана
+export function launchStrip(p) {
+  const i = PHASES.findIndex((x) => x.id === p.phase);
+  return `<div class="fl-phases">${PHASES.map((x, k) => `<div class="fl-ph ${k < i ? 'past' : k === i ? 'on' : ''}"><span class="fl-dot"></span><b>${x.name}</b><span class="small muted">${esc(phaseRange(p, x.id))}</span></div>`).join('')}</div>`;
+}
+const stepRow = (s) => `<div class="fl-check-item ${s.ok ? 'fl-check-done' : ''}">${MANUAL.includes(s.flag) ? `<input type="checkbox" data-chg="fl.check" data-k="${s.flag}"${s.ok ? ' checked' : ''}>` : `<span class="fl-check-icon" aria-hidden="true">${s.ok ? '✓' : '○'}</span>`}<span>${esc(s.text)}${!s.ok && s.how ? `<span class="sub">${esc(s.how)}</span>` : ''}</span></div>`;
+const FLAG = { creative: 'creativeReady', limit: 'limitVerified', goal: 'goalVerified', switch: 'buySwitched', limit2: 'limit2Verified' };
+export const phaseSteps = (p) => (p.steps[p.phase] || []).map((s) => ({ ...s, flag: FLAG[s.id] }));
+
+// Настройка кампании под книгу — конкретно, на цифрах плана
+function setupHtml(p) {
+  const lib = p.lib?.name || 'Добавление в библиотеку', buy = p.buy?.name || 'Покупка книги', lv = p.libValue;
+  return `<div class="list fl-how">
+    <div class="item"><b>Тип и места</b><div class="small">Единая перфоманс-кампания: поиск и рекламная сеть вместе. На поиске — те, кто ищет такие книги; в сетях — обложка, которая цепляет глаз.</div></div>
+    <div class="item"><b>Куда ведёт</b><div class="small">Страница книги на Литнете${p.bookUrl ? `: <span class="muted">${esc(p.bookUrl)}</span>` : ' (ссылка появится после создания книги)'}. Не на сайт: каждый лишний шаг теряет часть читателей.</div></div>
+    <div class="item"><b>Стратегия и цели</b><div class="small">«Максимум конверсий», оплата за клики. Целевые действия: «${esc(lib)}» и «${esc(buy)}»${lv ? ` с ценностью: библиотека ≈ ${money(lv.value)}, покупка ≈ ${money(p.royalty)}` : ''}. До подписки купить нельзя — Директ учится на библиотеке; со старта подписки покупка становится главной, и учиться заново почти не приходится.${lv ? `<span class="sub">Ценность библиотеки = доход с покупки × доля добавивших, кто покупает (${lv.measured ? 'по вашей Метрике' : 'пока данных мало — осторожно 15 %'}: ${Math.round(lv.share * 100)} %).</span>` : '<span class="sub">Ценность посчитается сама, когда появится доход с покупки (из «Доходов» или впишите ниже).</span>'}</div></div>
+    <div class="item"><b>Бюджет</b><div class="small">Всего ${money(p.money.budget)}: на бесплатные главы ${money(p.money.freeBudget)} (≈ ${money(p.money.freeWeek)} в неделю), на подписку ${money(p.money.paidBudget)} (≈ ${money(p.money.paidWeek)} в неделю, три недели). Ставьте недельный бюджет, а не дневной — Директу нужна свобода распределять.</div></div>
+    <div class="item"><b>Объявления</b><div class="small">2–3 заголовка про главный конфликт и троп, а не про жанр вообще; обложка — для сетей. Обещание должно совпадать с книгой.</div></div>
+    <div class="item"><b>Минус-слова сразу</b><div class="small">бесплатно, скачать, fb2, epub, txt, торрент, аудиокнига, фильм, сериал, краткое содержание — приложение потом само подскажет новые по запросам.</div></div>
+    <div class="item"><b>Чего не делать</b><div class="small">Первые 7 дней не менять настройки (Директ учится), не поднимать ставки ради скорости, не судить по 2–3 дням.</div></div>
+  </div>`;
+}
 
 export function launchView(a) {
-  const c = a.ctx(), fl = firstLaunchOf(c.settings), m = metrikaOf(c);
-  const main = a.snap('main') || { campaigns: [] }, stats = a.snap('stats') || {};
-  const all = main.campaigns || [];
-  const available = all.filter((x) => x.state !== 'ARCHIVED').sort((x, y) => (x.state === 'ON' ? -1 : 0) - (y.state === 'ON' ? -1 : 0));
-  const r = launchReadiness(fl, { today: c.today, campaigns: demo.on ? [] : all, metrika: demo.on ? null : m });
-  const x = launchMetrics(fl, { daily: stats.daily || [], conv: stats.conv || [], today: c.today, goalId: r.goal?.id });
-  const running = !!fl.actualStart, complete = r.checks.filter((ch) => ch.ok).length;
-  const goals = (m?.main || []).map(String);
-  const goalNames = (m?.goals || []).filter((g) => goals.includes(String(g.id))).map((g) => g.name);
+  const c = a.ctx(), { fl, plan: p } = resolvedLaunch(a), stats = a.snap('stats') || {};
+  const main = a.snap('main') || { campaigns: [] };
+  const available = (main.campaigns || []).filter((x) => x.state !== 'ARCHIVED');
+  const running = !!fl.actualStart, steps = phaseSteps(p), done = steps.filter((s) => s.ok).length;
+  const xl = launchMetrics(fl, { daily: stats.daily || [], conv: stats.conv || [], today: c.today, goalId: p.lib?.id });
+  const xb = launchMetrics(fl, { daily: stats.daily || [], conv: stats.conv || [], today: c.today, goalId: p.buy?.id });
   return { html: `
-    <div class="card fl-panel fl-hero">
-      <div class="row between fl-heading"><h2 style="margin:0">Мой первый запуск</h2>${stateTag(running ? 'идет тест' : 'подготовка', running)}</div>
-      <p>Первый самостоятельный рекламный тест для книги <b>«${esc(fl.book)}»</b>. Твоя цель — разобраться, как получать покупателей из своего Директа, а не просто тратить рекламный бюджет.</p>
-      <div class="tiles d-tiles fl-tiles">
-        <div><div class="k">Бюджет теста</div><div class="v">${money(fl.budget)}</div></div>
-        <div><div class="k">Расход именно теста</div><div class="v">${running ? money(x.spent) : '—'}</div></div>
-        <div><div class="k">Старт рекламы</div><div class="v">${running ? fmtShort(fl.actualStart) : 'не начат'}</div></div>
-      </div>
-      <p class="small muted">1 ноября — начало подготовки, 9 ноября — первая публикация. День 1 рекламного теста наступит только после открытия подписки и твоего фактического запуска кампании в Яндексе.</p>
-      ${demo.on ? '<p class="small warnc">Сейчас открыт демонстрационный режим. Первый запуск можно настраивать, но примерные кампании нельзя привязать к настоящему тесту.</p>' : ''}
-    </div>
+    ${demo.on ? '<div class="alert">Открыт пример данных: план можно заполнять, но кампании примера к нему не привязываются.</div>' : ''}
     <div class="card fl-panel">
-      <div class="row between fl-heading"><h2 style="margin:0">1. Книга и экономика</h2>${stateTag(fl.subscriptionOpen && fl.subscriptionDate && fl.subscriptionDate <= c.today ? 'подписка открыта' : 'готовим книгу', !!fl.subscriptionOpen && !!fl.subscriptionDate && fl.subscriptionDate <= c.today)}</div>
-      <p class="small">Начало публикации — <b>9 ноября</b>. Подписку планируем открыть после 4–5 глав; дата пока не утверждена. Реклама с оплатой начинается уже после этого.</p>
+      <div class="row between"><h2 style="margin:0">Запуск «${esc(p.book)}»</h2>${p.daysToNext != null && p.daysToNext >= 0 ? `<span class="small muted">${p.daysToNext === 0 ? 'сегодня' : `через ${num(p.daysToNext)} дн.`}: ${esc(p.next.text)}</span>` : ''}</div>
+      ${launchStrip(p)}
+      <h3 class="fl-now">Сейчас: ${p.phase === 'prep' ? 'готовим кампанию' : p.phase === 'free' ? 'копим добавления в библиотеку' : 'продаём подписку'} <span class="small muted">${done} из ${steps.length}</span></h3>
+      <div class="fl-checklist">${steps.map(stepRow).join('')}</div>
+    </div>
+    <div class="card fl-panel"><details class="d-more"${p.phase === 'prep' ? ' open' : ''}><summary>Как настроить кампанию под книгу</summary>${setupHtml(p)}</details></div>
+    <div class="card fl-panel"><details class="d-more"${!p.subDate || !p.bookUrl ? ' open' : ''}><summary>Даты, ссылка и деньги</summary>
+      <p class="small muted">Первая глава — ${p.pubDate ? `${fmtShort(p.pubDate)} (${SRC[p.src.pub]})` : 'не задана'} · старт подписки — ${p.subDate ? `${fmtShort(p.subDate)} (${SRC[p.src.sub]})` : 'пока не известен: поставьте на сайте в книге «Дата старта подписки» или здесь'} · ссылка — ${p.bookUrl ? SRC[p.src.url] : 'нет'}${p.royalty ? ` · доход с покупки ≈ ${money(p.royalty)}` : ''}</p>
       <form data-form="fl.plan" class="settings-form fl-form">
-        <div class="f2">
-          <div><label>Дата открытия подписки (когда будет известна)</label><input name="subscriptionDate" type="date" value="${esc(fl.subscriptionDate)}"></div>
-          <div><label>Бюджет первого теста, ₽</label><input name="budget" inputmode="decimal" value="${esc(fl.budget)}" required></div>
+        <div class="f2"><div><label>Первая глава</label><input name="publicationDate" type="date" value="${esc(p.pubDate)}"></div>
+          <div><label>Старт подписки</label><input name="subscriptionDate" type="date" value="${esc(p.subDate)}"></div></div>
+        <div class="f2"><div><label>Бюджет теста, ₽</label><input name="budget" inputmode="decimal" value="${esc(fl.budget)}" required></div>
+          <div><label>Доход с одной покупки, ₽</label><input name="royalty" inputmode="decimal" value="${esc(fl.royalty)}" placeholder="${p.royalty && !fl.royalty ? Math.round(p.royalty) + ' — из «Доходов»' : 'после выбора цены'}"></div></div>
+        <label>Ссылка на книгу на Литнете</label><input name="bookUrl" type="url" value="${esc(fl.bookUrl)}" placeholder="${esc(p.bookUrl || 'https://litnet.com/ru/book/...')}">
+        <div class="row d-save"><button type="submit" class="primary">Сохранить</button></div>
+      </form></details></div>
+    <div class="card fl-panel"><details class="d-more"${p.phase === 'prep' && !p.picked ? ' open' : ''}><summary>Черновик кампании${p.picked ? `: «${esc(p.picked.name)}»` : ''}</summary>
+      ${creatorCard(a, fl, null)}
+      <label for="flCampaign">Кампания этого запуска</label>
+      <select id="flCampaign" data-chg="fl.campaign"><option value="">Не выбрана</option>${available.map((x) => opt(x.id, x.name + (x.state === 'ON' ? ' · включена' : ' · не запущена'), fl.campaignId)).join('')}</select>
+      <p class="small"><a href="https://direct.yandex.ru/" target="_blank" rel="noopener">Открыть Яндекс Директ ↗</a> · <button class="link" data-act="d.reload">Обновить кампании</button></p>
+    </details></div>
+    <div class="card fl-panel"><h2>Цифры запуска</h2>
+      ${!running ? `<p class="small">Когда включите кампанию в кабинете, отметьте день — с него считаются расход, библиотека и покупки именно этого запуска.</p>
+        <form data-form="fl.launch" class="settings-form fl-form"><label>День начала показов</label><input type="date" name="actualStart" value="${c.today}" max="${c.today}" required>
+        <div class="row d-save"><button class="primary" type="submit"${p.picked ? '' : ' disabled'}>Я включила рекламу</button></div></form>${p.picked ? '' : '<p class="small muted">Сначала выберите кампанию выше.</p>'}`
+      : `<div class="tiles d-tiles fl-tiles">
+          <div><div class="k">Расход</div><div class="v">${money(xl.spent)}</div><div class="s">из ${money(xl.budget)}</div></div>
+          <div><div class="k">Клики</div><div class="v">${num(xl.clicks)}</div></div>
+          <div><div class="k">В библиотеку</div><div class="v">${xl.conversions == null ? '—' : num(xl.conversions)}</div><div class="s">${xl.cpa != null ? `по ${money(xl.cpa)}` : ''}</div></div>
+          <div><div class="k">Покупки</div><div class="v">${xb.conversions == null ? '—' : num(xb.conversions)}</div><div class="s">${xb.cpa != null ? `по ${money(xb.cpa)}` : ''}</div></div>
         </div>
-        <label>Ссылка на книгу в Литнете (появится после публикации)</label>
-        <input name="bookUrl" type="url" value="${esc(fl.bookUrl)}" placeholder="https://litnet.com/ru/book/...">
-        <label>Роялти с одной покупки именно этой книги, ₽ (необязательно)</label>
-        <input name="royalty" inputmode="decimal" value="${esc(fl.royalty)}" placeholder="После выбора цены подписки">
-        <div class="row d-save"><button type="submit" class="primary">Сохранить план</button></div>
-      </form>
-      <p class="small"><button class="link" data-act="go" data-to="/litnet">Мой Литнет: ссылки, срок новых привязок и метка для рекламы →</button></p>
-      <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="subscriptionOpen"${checked(fl.subscriptionOpen)}> Платная подписка уже открыта и книгу можно купить</label>
-      <p class="small muted">Роялти нужно для предварительной оценки экономики. Это не автоматическое подтверждение фактических продаж.</p>
-    </div>
-    <div class="card fl-panel">
-      <div class="row between fl-heading"><h2 style="margin:0">2. Проверка Метрики</h2>${stateTag(r.goal && fl.goalVerified ? 'проверено' : 'нужна проверка', !!r.goal && fl.goalVerified)}</div>
-      <p class="small">Подключенный счетчик — еще не доказательство того, что реальная оплата отслеживается правильно. При старте будем анализировать покупки, отнесенные Директом к твоей кампании, а не все покупки по Литнету.</p>
-      <p class="small">Сейчас выбрана главная цель: <b>${esc(goalNames.join(', ') || 'не выбрана')}</b>.</p>
-      ${r.goal ? verifiedItem(true, 'Одна главная цель с названием оплаты или покупки')
-        : '<p class="small warnc">Выбери в Настройках одну главную цель именно успешной покупки. «Начало покупки» и «Покупка» вместе для этого не подходят.</p>'}
-      <div class="row"><button data-act="go" data-to="/settings">Настройки целей</button></div>
-      <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="goalVerified"${checked(fl.goalVerified)}${r.goal ? '' : ' disabled'}> Я проверила в Метрике, что эта цель соответствует оплаченной покупке</label>
-      <p class="small muted">До запуска рекламы у твоей будущей кампании не будет рекламных конверсий. Срабатывания той же цели от других источников не означают, что новый алгоритм уже обучился.</p>
-    </div>
-    <div class="card fl-panel">
-      <div class="row between fl-heading"><h2 style="margin:0">3. Рекламная гипотеза</h2>${stateTag(fl.creativeReady && fl.hypothesis ? 'объявления готовы' : 'подготовить', !!fl.creativeReady && !!fl.hypothesis)}</div>
-      <p class="small">Рекламное обещание должно совпадать с самой книгой. Пока жанр и центральный конфликт уточняются, не называем роман дарк-романом и не обещаем сюжетные повороты, которых в тексте нет.</p>
-      <form data-form="fl.creative" class="settings-form fl-form">
-        <label>Что проверяем: аудитория, крючок и ожидаемый результат</label>
-        <textarea name="hypothesis" rows="3" placeholder="Гипотеза для первой кампании">${esc(fl.hypothesis)}</textarea>
-        <div class="row d-save"><button type="submit" class="primary">Сохранить гипотезу</button></div>
-      </form>
-      <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="creativeReady"${checked(fl.creativeReady)}> Я подготовила и проверила объявление в Яндекс Директе</label>
-      <p class="small muted">Ниже есть конструктор: ты сможешь создать новую кампанию, группу и объявление самостоятельно, без автоматического запуска.</p>
-    </div>
-    <div class="card fl-panel">
-      <div class="row between fl-heading"><h2 style="margin:0">4. Моя кампания и лимит</h2>${stateTag(r.picked?.state === 'ON' && fl.limitVerified ? 'готово' : 'пока не готово', r.picked?.state === 'ON' && !!fl.limitVerified)}</div>
-      <p class="small">Создадим отдельную кампанию под «Черную вдову» прямо здесь, через твой API. Старый кабинет и реклама таргетологов сюда не попадут.</p>
-      ${creatorCard(a, fl, m)}
-      <p class="small"><button class="link" data-act="go" data-to="/quality">Контроль качества трафика →</button> · <button class="link" data-act="go" data-to="/experiments">Журнал рекламных решений →</button></p>
-      <p class="small"><a href="https://direct.yandex.ru/" target="_blank" rel="noopener">Открыть Яндекс Директ ↗</a> · <button class="link" data-act="d.reload">Обновить кампании из Яндекса</button></p>
-      <label for="flCampaign">Кампания для первого теста</label>
-      <select id="flCampaign" data-chg="fl.campaign">
-        <option value="">Не выбрана</option>
-        ${available.map((camp) => opt(camp.id, camp.name + (camp.state === 'ON' ? ' · включена' : ' · не запущена'), fl.campaignId)).join('')}
-      </select>
-      ${!available.length ? '<p class="small muted">Пока в аккаунте нет кампаний. Когда сохранишь черновик через конструктор выше, обнови список.</p>' : ''}
-      ${fl.campaignId && !r.picked ? '<p class="small warnc">Ранее выбранной кампании больше нет среди загруженных. Выбери ее заново.</p>' : ''}
-      <label class="d-check small"><input type="checkbox" data-chg="fl.check" data-k="limitVerified"${checked(fl.limitVerified)}> Я проверила ограничения расходов в Яндекс Директе</label>
-      <p class="small muted">10 000 ₽ — бюджет нашего эксперимента, а не автоматический лимит Яндекса. Приложение не меняет бюджеты и не включает кампании самостоятельно.</p>
-    </div>
-    <div class="card fl-panel">
-      <div class="row between fl-heading"><h2 style="margin:0">5. Старт и контроль результатов</h2><span class="small muted">${complete} из ${r.checks.length} проверок</span></div>
-      <div class="fl-checklist">${r.checks.map((ch) => verifiedItem(ch.ok, ch.label)).join('')}</div>
-      ${!running ? `<p class="small">Когда все условия выполнены и ты включила кампанию в Яндексе, укажи фактическую дату запуска. До этого расходы и продажи в наш тест не попадут.</p>
-        <form data-form="fl.launch" class="settings-form fl-form">
-          <label>Фактическая дата начала показов</label><input type="date" name="actualStart" value="${c.today}" max="${c.today}" min="${esc(fl.subscriptionDate || fl.publicationDate)}" required>
-          <div class="row d-save"><button class="primary" type="submit"${r.ready ? '' : ' disabled'}>Я запустила рекламу в Яндексе</button></div>
-        </form>` : `
-        <p class="small">Тест идет с <b>${fmtShort(fl.actualStart)}</b>. Данные ниже относятся только к кампании «${esc(r.picked?.name || fl.campaignId)}» и периоду после ее старта.</p>
-        <div class="tiles d-tiles fl-tiles">
-          <div><div class="k">Расход</div><div class="v">${money(x.spent)}</div></div>
-          <div><div class="k">Остаток бюджета</div><div class="v">${money(x.balance)}</div></div>
-          <div><div class="k">Клики</div><div class="v">${num(x.clicks)}</div></div>
-          <div><div class="k">Конверсии по цели оплаты</div><div class="v">${x.conversions == null ? '—' : num(x.conversions)}</div></div>
-        </div>
-        <p class="small">Цена целевого действия: <b>${x.cpa == null ? '—' : money(x.cpa)}</b>${x.estimate == null ? '' : ` · Предполагаемое роялти: <b>${money(x.estimate)}</b> · Разница с расходом: <b>${money(x.estimatedProfit)}</b>`}</p>
-        <p class="small muted">Это предварительная оценка по цели Метрики и введенному роялти. Цель оплаты может относиться к разным книгам, а атрибуция не доказывает дополнительные продажи. Фактическую прибыль сверяем с выгрузкой Литнета и данными в «Доходах». Пока подтверждений нет, масштабировать рекламу не рекомендуем.</p>
-        <form data-form="fl.fixDate" class="settings-form"><label>Исправить дату запуска, если записала неверно</label><div class="row"><input type="date" name="actualStart" value="${esc(fl.actualStart)}" max="${c.today}" required><button type="submit">Исправить</button></div></form>
-        `}
-    </div>
-  ` };
+        <p class="small muted">С ${fmtShort(fl.actualStart)}, только кампания «${esc(p.picked?.name || fl.campaignId)}». Покупки — те, что Директ отнёс к рекламе; настоящий доход сверяется в «Доходах».</p>
+        <form data-form="fl.fixDate" class="settings-form"><div class="row"><input type="date" name="actualStart" value="${esc(fl.actualStart)}" max="${c.today}" required><button type="submit">Исправить дату</button></div></form>`}
+    </div>` };
 }
 
 forms['fl.plan'] = async (fd) => {
   const budget = N(fd.get('budget'));
   if (!(budget > 0)) { toast('Бюджет должен быть больше нуля'); return false; }
-  const subscriptionDate = fd.get('subscriptionDate') || '';
-  if (subscriptionDate && subscriptionDate < '2026-11-09') { toast('Подписка не может открыться раньше первой публикации 9 ноября'); return false; }
-  const royalty = N(fd.get('royalty'));
+  const pub = fd.get('publicationDate') || '', sub = fd.get('subscriptionDate') || '';
+  if (pub && sub && sub < pub) { toast('Подписка не может начаться раньше первой главы'); return false; }
+  const { plan } = resolvedLaunch(app()), royalty = N(fd.get('royalty'));
+  // своё вписывается только если отличается от того, что пришло из Мастерской и с сайта — иначе источник остаётся главным
   await saveLaunch({
-    budget, subscriptionDate,
+    budget, royalty: royalty > 0 ? royalty : '',
+    ...(pub && pub !== (plan.wb?.publishStart || '') ? { publicationDate: pub, pubManual: true } : { pubManual: false }),
+    subscriptionDate: sub && sub !== (plan.sb?.startDate || '') ? sub : '',
     bookUrl: String(fd.get('bookUrl') || '').trim(),
-    royalty: royalty > 0 ? royalty : '',
   });
-  toast('План сохранен');
+  toast('Сохранено');
 };
-forms['fl.creative'] = async (fd) => {
-  const hypothesis = String(fd.get('hypothesis') || '').trim();
-  const before = firstLaunchOf(app().ctx().settings);
-  await saveLaunch({ hypothesis, creativeReady: before.hypothesis === hypothesis && before.creativeReady });
-  toast('Гипотеза сохранена');
-};
-changes['fl.check'] = async (value, el, on) => {
-  const keys = ['subscriptionOpen', 'goalVerified', 'creativeReady', 'limitVerified'];
-  if (!keys.includes(el.dataset.k)) return;
-  await saveLaunch({ [el.dataset.k]: !!on });
-};
+changes['fl.check'] = async (value, el, on) => { if (MANUAL.includes(el.dataset.k)) await saveLaunch({ [el.dataset.k]: !!on }); };
 changes['fl.campaign'] = async (value) => { await saveLaunch({ campaignId: String(value || '') }); };
 forms['fl.launch'] = async (fd) => {
-  const a = app(), c = a.ctx(), fl = firstLaunchOf(c.settings);
-  if (fl.actualStart) { toast('Тест уже начат'); return false; }
-  const check = launchReadiness(fl, { today: c.today, campaigns: a.snap('main')?.campaigns || [], metrika: metrikaOf(c) });
-  if (!check.ready) { toast('Сначала выполни все пять проверок'); return false; }
-  const date = String(fd.get('actualStart') || '');
-  if (!date || date > c.today || date < fl.subscriptionDate) { toast('Проверь фактическую дату начала показов'); return false; }
-  if (!(await ask('Записать ' + date + ' как фактический старт теста? Это не включает рекламу в Яндексе.', 'Записать старт'))) return false;
+  const fl = firstLaunchOf(app().ctx().settings), date = String(fd.get('actualStart') || '');
+  if (fl.actualStart) { toast('Старт уже отмечен'); return false; }
+  if (!date || date > app().ctx().today) { toast('Проверьте дату'); return false; }
+  if (!(await ask(`Отметить ${fmtShort(date)} как день начала показов? В Директе это ничего не включает.`, 'Отметить'))) return false;
   await saveLaunch({ actualStart: date });
-  toast('Начало теста записано. Теперь статистика учитывается только по выбранной кампании.');
+  toast('Отмечено — цифры запуска считаются с этого дня');
 };
 forms['fl.fixDate'] = async (fd) => {
-  const a = app(), fl = firstLaunchOf(a.ctx().settings);
-  if (!fl.actualStart) return false;
   const date = String(fd.get('actualStart') || '');
-  if (!date || date > a.ctx().today || (fl.subscriptionDate && date < fl.subscriptionDate)) { toast('Проверь дату'); return false; }
+  if (!date || date > app().ctx().today) { toast('Проверьте дату'); return false; }
   await saveLaunch({ actualStart: date }); toast('Дата исправлена');
 };

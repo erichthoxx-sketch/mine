@@ -15,6 +15,8 @@ import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask, moveOwnTask, tdText, addOwnTask } from '../../../js/tdtasks.js';
 import { bookGuess } from '../ideacalc.js';
 import { MONEY_RE } from '../todoist.js';
+import { firstLaunchOf, launchPlan, launchMilestones } from '../../../direct/js/launchcalc.js';
+import { loadSite } from '../../../js/sitepub.js';
 import { promoLinkTasks, activePromoLinks, promoSection, promoChannelName } from '../promolinks.js';
 import { rub, fmtMonth } from '../../../js/format.js';
 import { EVENT_TYPES } from '../../../js/charts.js';
@@ -104,6 +106,12 @@ export function planItems(c, from, to) {
   }
   // Маркетинг: подготовить материалы к старту выкладки и к рекламе
   for (const m of marketingNeeds(c)) add(m.date, 'mk', esc(m.title), esc(m.sub), { to: m.to });
+  // запуск рекламы книги («Директ» → план): включить в день первой главы, сменить цель в старт подписки, итоги
+  if (c.settings.direct?.firstLaunch || c.settings.directToken) {
+    const lp = launchPlan(firstLaunchOf(c.settings), { today: t, wbooks: c.wbooks, siteBooks: launchSite() });
+    const lb = c.wbooks.find((b) => b === lp.wb);
+    for (const x of launchMilestones(lp)) add(x.date, 'money', esc(x.title), esc(x.sub), { href: '../direct/', bookId: lb?.id });
+  }
   // UTM: дата задачи опережает истечение. Дата истечения остается отдельным пассивным событием.
   const utms = (d.w_promolinks || []).map(x => ({ ...x, book: c.wbooksById[x.bookId]?.title || x.book || 'Книга' }));
   for (const x of promoLinkTasks(utms, t)) add(x.date, 'utm', esc(x.title), esc(x.sub), { to: x.to, id: x.id, book: x.bookId, dueRaw: x.due, expires: x.expires, channel: x.channel });
@@ -112,6 +120,12 @@ export function planItems(c, from, to) {
   // Отдельная подготовка заранее только там, где действительно нужна: UTM и осмысленные дедлайны.
   const ord = { goal: -1, mk: 5.5, pub: 0, blog: 0.5, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5, utm: 5.4, 'utm-expiry': 5.6, event: 8 };
   return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
+}
+// Книги сайта (старт подписки) — для дат запуска рекламы; грузятся один раз в фоне
+const lsite = { books: null, busy: false };
+function launchSite() {
+  if (!lsite.books && !lsite.busy) { lsite.busy = true; loadSite().then((x) => { lsite.books = x?.books || []; window.__app?.rerender?.(); }).catch(() => { lsite.books = []; }).finally(() => { lsite.busy = false; }); }
+  return lsite.books || [];
 }
 // Важное из «Доходов» по датам: налог (до 28-го), цифры Rocket (с 20-го), старт и конец рекламы, события дней
 function incomeItems(c, from, to) {

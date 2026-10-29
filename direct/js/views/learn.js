@@ -12,6 +12,7 @@ import { metrikaOf } from './metrika.js';
 import { royaltyPerSale } from '../mcalc.js';
 import { logOf, demo } from '../demo.js';
 import { setupCard, setupSteps } from './setup.js';
+import { experimentsView } from './experiments.js';
 import { strategyText, actBtn } from './common.js';
 
 const app = () => window.__app;
@@ -193,20 +194,23 @@ document.addEventListener('toggle', (e) => { const k = e.target?.dataset?.keep; 
 
 // Разбор каждой кампании: что исправить, где подождать, что уже хорошо — со ссылкой на тему практикума
 const ST = { fix: ['Улучшить', 'warnc'], wait: ['Подождать', 'muted'], info: ['На заметку', ''], ok: ['Хорошо', 'up'] };
+// Разбор одной кампании — пункты «улучшить / подождать / на заметку / хорошо» с кнопками; показывается в самой кампании
+export function auditItemsHtml(a, camp) {
+  const L = live(a);
+  const goalHs = L.m?.counterId ? goalHints({ campaigns: L.main.campaigns, keywords: L.main.keywords, kw: L.stats.kw, kwConv: L.stats.kwConv, daily: L.daily, conv: L.stats.conv, mrows: L.stats.mrows, m: L.m, today: L.t, skip: L.skip }) : [];
+  const r = auditCampaign({ camp, main: L.main, stats: L.stats, log: logOf(a), today: L.t, econ: { ...(L.d.econ || {}), perSale: royaltyPerSale(a.ctx().data.sales || [], L.t)?.perSale }, m: L.m, goalHs, skip: L.skip });
+  return { r, html: `<div class="list">${r.items.map((x) => `<div class="item"><div class="row between"><span><span class="small ${ST[x.status][1]}">● ${ST[x.status][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b></span>${x.act ? actBtn(x.act, x.actLabel || 'Применить', 'small-btn') : ''}</div>
+      ${x.why ? `<div class="small">${esc(x.why)}</div>` : ''}${x.how ? `<div class="small muted">Как: ${esc(x.how)}</div>` : ''}
+      ${x.lesson && MODULES.some((mm) => mm.id === x.lesson) ? `<div class="small"><button class="link l-why" data-act="l.lesson" data-k="${x.lesson}" title="${esc(MODULES.find((mm) => mm.id === x.lesson).t)}">Почему так →</button></div>` : ''}</div>`).join('')}</div>` };
+}
+// В Практикуме — коротко: где сколько улучшить, сам разбор — во вкладке кампании
 function auditCard(a, L) {
   const camps = (L.main.campaigns || []).filter((x) => x.state !== 'ARCHIVED');
-  if (!camps.length) return '<div class="card"><h2>Разбор ваших кампаний</h2><p class="muted">Появится, когда приложение загрузит кампании из Директа.</p></div>';
-  const goalHs = L.m?.counterId ? goalHints({ campaigns: L.main.campaigns, keywords: L.main.keywords, kw: L.stats.kw, kwConv: L.stats.kwConv, daily: L.daily, conv: L.stats.conv, mrows: L.stats.mrows, m: L.m, today: L.t, skip: L.skip }) : [];
-  return `<div class="card"><h2>Разбор ваших кампаний</h2><p class="small muted">По каждой кампании: что улучшить и почему, где подождать данных и что уже работает. Обновляется вместе с данными.</p>
-    ${camps.map((camp) => {
-      const r = auditCampaign({ camp, main: L.main, stats: L.stats, log: logOf(a), today: L.t, econ: { ...(L.d.econ || {}), perSale: royaltyPerSale(a.ctx().data.sales || [], L.t)?.perSale }, m: L.m, goalHs, skip: L.skip });
-      const n = r.items.filter((x) => x.status === 'fix').length;
-      return `<details class="l-camp" data-keep="c${camp.id}"${keepOpen('c' + camp.id, camps.length === 1) ? ' open' : ''}><summary><b>${esc(camp.name)}</b><span class="small muted"> · за 7 дней ${rub(r.w.cost, 0)}, кликов ${num(r.w.clicks)}${n ? ` · <span class="warnc">улучшить: ${n}</span>` : ''}</span></summary>
-        <div class="list">${r.items.map((x) => `<div class="item"><div class="row between"><span><span class="small ${ST[x.status][1]}">● ${ST[x.status][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b></span>${x.act ? actBtn(x.act, x.actLabel || 'Применить', 'small-btn') : ''}</div>
-          ${x.why ? `<div class="small">${esc(x.why)}</div>` : ''}${x.how ? `<div class="small muted">Как: ${esc(x.how)}</div>` : ''}
-          ${x.lesson && MODULES.some((mm) => mm.id === x.lesson) ? `<div class="small"><button class="link l-why" data-act="l.lesson" data-k="${x.lesson}" title="${esc(MODULES.find((mm) => mm.id === x.lesson).t)}">Почему так →</button></div>` : ''}</div>`).join('')}</div>
-        <div class="row dl-row"><button class="dl" data-act="l.aicamp" data-name="${esc(camp.name)}">${ic('copy')} Глубокий разбор кампании с Claude</button></div></details>`;
-    }).join('')}</div>`;
+  if (!camps.length) return '';
+  return `<div class="card"><h2>Разбор ваших кампаний</h2><div class="list">${camps.map((camp) => {
+    const n = auditItemsHtml(a, camp).r.items.filter((x) => x.status === 'fix').length;
+    return `<a class="item" href="#" data-act="l.task" data-to="/c/${camp.id}" data-tab="audit"><div class="row between"><b>${esc(camp.name)}</b><span class="small ${n ? 'warnc' : 'up'}">${n ? `улучшить: ${n}` : 'всё ровно'}</span></div></a>`;
+  }).join('')}</div></div>`;
 }
 acts['l.aicamp'] = async (d) => { await copyAi(`Проведи глубокий разбор кампании «${d.name}»: структура, семантика, минус-слова, объявления, стратегия, покупки по целям, экономика. Что улучшить сейчас, что подождать и почему. Действия — в формате direct-plan.`); return false; };
 
@@ -242,13 +246,13 @@ acts['l.aitask'] = async (d) => { await copyAi(AI_TASKS[Number(d.i)][1]); return
 acts['l.task'] = (d) => { if (d.tab) app().ui.cTab = d.tab; if (d.ltab) app().ui.lTab = d.ltab; app().ui.route = d.to; window.scrollTo(0, 0); };
 
 // ---------- экран ----------
-const TABS = [['now', 'Сейчас'], ['setup', 'Настройка'], ['course', 'Практикум']];
+const TABS = [['now', 'Сейчас'], ['course', 'Практикум'], ['journal', 'Журнал решений'], ['setup', 'Подключение']];
 export function learnView(a) {
   const c = a.ctx(), setupLeft = setupSteps(c).some((x) => !x.done);
   const tab = a.ui.lTab || (!c.settings.directToken && !demo.on ? 'setup' : 'now');
   return {
-    html: `<div class="chips l-tabs">${TABS.map(([k, t]) => `<button class="chip ${tab === k ? 'on' : ''}" data-act="l.tab" data-k="${k}">${t}${k === 'setup' && setupLeft ? ' <span class="l-dot"></span>' : ''}</button>`).join('')}</div>
-    ${tab === 'setup' ? setupCard(c) : tab === 'course' ? courseTab(a) : nowTab(a)}`,
+    html: `<div class="lg-tabs an-tabs">${TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-act="l.tab" data-k="${k}">${t}${k === 'setup' && setupLeft ? ' <span class="l-dot"></span>' : ''}</button>`).join('')}</div>
+    ${tab === 'setup' ? setupCard(c) : tab === 'course' ? courseTab(a) : tab === 'journal' ? experimentsView(a).html : nowTab(a)}`,
   };
 }
 acts['l.tab'] = (d) => { app().ui.lTab = d.k; };

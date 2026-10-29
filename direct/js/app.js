@@ -75,12 +75,15 @@ export async function reload({ quiet = false } = {}) {
 app.reload = reload;
 acts['d.reload'] = () => { reload(); return false; };
 
-const TABS = [['/', 'ads', 'Обзор'], ['/keywords', 'search', 'Ключи'], ['/an', 'data', 'Аналитика'], ['/learn', 'books', 'Учёба'], ['/ai', 'sparkle', 'ИИ'], ['/log', 'receipt', 'История']];
+// Четыре раздела: Реклама (запуск, кампании, что сделать), Читатели (Литнет, сайт, ссылки), Слова (фразы, конкуренты), Учёба.
+// Остальные экраны открываются изнутри и подсвечивают свой раздел.
+const TABS = [['/', 'ads', 'Реклама'], ['/an', 'data', 'Читатели'], ['/keywords', 'search', 'Слова'], ['/learn', 'books', 'Учёба']];
+const TAB_OF = { launch: '/', quality: '/', ai: '/', log: '/', settings: '/', litnet: '/an', competitors: '/keywords', experiments: '/learn' };
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'c' && b) return { tab: '/', view: (x) => campaignView(x, Number(decodeURIComponent(b))) };
   const map = { '': homeView, launch: launchView, quality: qualityView, experiments: experimentsView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
-  return { tab: ['launch', 'quality', 'experiments', 'litnet'].includes(a) ? '/' : a==='competitors'?'/keywords':'/' + (a || ''), view: map[a || ''] || homeView };
+  return { tab: TAB_OF[a] || '/' + (a || ''), view: map[a || ''] || homeView };
 }
 
 function authScreen() {
