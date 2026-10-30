@@ -84,16 +84,18 @@ async function saveImportHistory(changes, previous, source) {
   if (!changes.length) return;
   const id = 'import_' + new Date().toISOString().replace(/[:.]/g, '-') + '_' + uid();
   const oldById = new Map(previous.map(s => [s.id, s]));
-  const now = new Date().toISOString();
+  const now = new Date().toISOString(), parts = [];
   for (let i = 0; i < changes.length; i += 100) {
     const part = changes.slice(i, i + 100);
-    await app().store.put('sales_history', {
+    parts.push({
       id: id + '_' + String(i / 100).padStart(3, '0'),
       batch: id, createdAt: now, source,
       before: part.map(s => oldById.get(s.id) || null),
       after: part,
     });
   }
+  // одной записью, а не по куску: раньше каждый кусок пересчитывал всё приложение — выгрузка «тормозила»
+  await app().store.putMany('sales_history', parts);
 }
 
 // ---------- импорт продаж ----------
@@ -101,6 +103,7 @@ changes['imp.any'] = async (v, el) => {
   const file = el.files[0];
   el.value = '';
   if (!file) return;
+  toast('Читаю выгрузку…');
   const text = decodeBuffer(await readFile(file));
   const stat = parseStatistic(text);
   if (stat.rows.length || stat.invalidRows.length || /Статистика продаж|Подписка\/продажа|Дата\/месяц\s*\t/i.test(text.slice(0,1500))) return importStatistic(text);
@@ -108,6 +111,7 @@ changes['imp.any'] = async (v, el) => {
   toast('Не узнала формат файла. Подходят выгрузка Литнета (Statistic.csv) и таблица dohody.csv (дата, доход, события, заметка).');
 };
 async function importStatistic(text) {
+  if (app().store.mode === 'firebase') toast('Сверяю с сохранёнными продажами…');
   if (!await salesReady()) return;
   const r = parseStatistic(text);
   if (r.invalidRows.length) { toast('CSV содержит некорректные строки продаж: ' + r.invalidRows.slice(0, 5).join(', ') + '. Импорт заблокирован.'); return; }
@@ -138,6 +142,7 @@ async function importStatistic(text) {
     <table><tr><th>Месяц</th><th>Гонорар по файлу</th></tr>${Object.keys(monthly).sort().map(k => `<tr><td>${fmtMonth(k)}</td><td>${rub(monthly[k])}</td></tr>`).join('')}</table>
     <p class="small">Добавятся <b>${initial.added}</b>, обновятся без уменьшения <b>${initial.increased}</b>, совпадают <b>${initial.same}</b>.</p>
     ${warn.length ? `<div class="alert"><strong>Нужна сверка отдельных строк</strong><p class="small">${warn.map(esc).join('<br>')}</p></div>` : ''}`, async () => {
+    toast('Сохраняю продажи…');
     if (!await salesReady()) return false;
     // Пока окно было открыто, данные могли измениться на другом устройстве.
     const old = app().store.data.sales;

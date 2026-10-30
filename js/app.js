@@ -194,7 +194,9 @@ document.addEventListener('pointerdown', (e) => {
 // меню слева на компьютере: свёрнутое (только иконки) или полное — запоминаем
 try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem('navMini') === '1'); } catch { /* ок */ }
 acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
-store.subscribe(() => safeRender());
+// изменения базы — одной перерисовкой за кадр: при импорте продажи пишутся кусками, и раньше экран пересчитывался после каждого
+let renderQueued = false;
+store.subscribe(() => { if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; safeRender(); }); });
 store.init().then(() => {
   render();
   // Разовое исправление: раньше по умолчанию стояло 6 %, для самозанятой при агентском договоре с Литнетом — 4 % с полной цены
