@@ -21,6 +21,8 @@ const bookOf = (x) => x.book || x.bookId || /^\/(?:book|mk)\/(.+)$/.exec(x.to ||
 // короткое имя книги для раздела: до точки («Альпийский развод. Он оставил…» → «Альпийский развод»)
 export const shortTitle = (t) => String(t || '').split(/[.!?:]/)[0].trim() || String(t || '');
 
+// Todoist сам превращает адрес в описании в ссылку «[название](адрес)» — для сравнения это то же описание (иначе правим туда-обратно)
+const sameDesc = (d) => String(d || '').replace(/\[[^\]]*\]\((https?:[^)\s]+)\)/g, '$1').trim();
 // пункты планера → задачи Todoist {key, content, description, date, project, section, item}
 export function todoistTasks(items, booksById) {
   const out = [], seen = new Set();
@@ -50,11 +52,11 @@ export function todoistPlan(want, map = {}, closed = {}, active = [], made = nul
     if (m) {
       const t = byId.get(String(m.id));
       if (!t) { ops.verify.push({ id: m.id, w }); continue; } // нет в списке — проверим отдельно: закрыта ли на самом деле
-      if (t.content !== w.content || (t.due?.date || '').slice(0, 10) !== w.date || (t.description || '') !== w.description) ops.update.push({ id: m.id, w });
+      if (t.content !== w.content || (t.due?.date || '').slice(0, 10) !== w.date || sameDesc(t.description) !== sameDesc(w.description)) ops.update.push({ id: m.id, w });
       continue;
     }
     // такая задача уже есть в Todoist (создало другое устройство или потерялась связь) — берём её, а не дублируем
-    const twin = active.find((t) => !taken.has(String(t.id)) && same(t, w) && (!made || made[String(t.id)] || (t.description || '') === (w.description || '')));
+    const twin = active.find((t) => !taken.has(String(t.id)) && same(t, w) && (!made || made[String(t.id)] || sameDesc(t.description) === sameDesc(w.description)));
     if (twin) { taken.add(String(twin.id)); ops.update.push({ id: twin.id, w, adopt: true }); if (closed[w.key]) ops.unclose.push(w.key); continue; }
     if (closed[w.key]) continue; // закрыла в Todoist — заново не создаём
     ops.create.push(w);
@@ -144,6 +146,8 @@ async function shelves(token, want) {
 export async function fetchOwnTasks(token, made = {}) {
   const projects = await all(token, '/projects'), pn = Object.fromEntries(projects.map((p) => [String(p.id), String(p.name).trim()]));
   const shelf = (name) => /^(книги|мастерская)$/i.test(name || '');
+  // «Входящие» — туда быстро пишет с телефона: такие дела тоже в Планере (без метки они остаются во «Входящих»)
+  const inbox = new Set(projects.filter((x) => x.inbox_project || /^(inbox|входящие)$/i.test(String(x.name).trim())).map((x) => String(x.id)));
   // разделы всех проектов разом; не вышло — по нашим двум проектам
   let secs;
   try { secs = await all(token, '/sections'); } catch { secs = []; for (const p of projects.filter((x) => shelf(x.name))) secs.push(...await all(token, `/sections?project_id=${p.id}`)); }
@@ -152,7 +156,8 @@ export async function fetchOwnTasks(token, made = {}) {
     const labels = t.labels || [], p = pn[String(t.project_id)] || '', money = labels.includes(MONEY_LABEL), mark = labels.includes(TD_LABEL) || money || labels.includes('книги');
     // служебные задачи приложения и идеи — не «свои»; но если Лана сама поставила метку «мастерская» — это её задача,
     // где бы она ни лежала (например, во «Входящих», пока не переехала на полку)
-    if (t.parent_id || labels.includes(IDEA_LABEL) || (mark && made[String(t.id)]) || (!shelf(p) && !mark)) continue;
+    if (t.parent_id || labels.includes(IDEA_LABEL) || (mark && made[String(t.id)])) continue;
+    if (!shelf(p) && !mark) { if (inbox.has(String(t.project_id)) && !made[String(t.id)]) out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: 'Входящие', s: '', pr: t.priority || 1, ds: t.description || '', ...(t.due?.is_recurring ? { r: true } : {}) }); continue; }
     out.push({ id: String(t.id), t: t.content, d: (t.due?.date || '').slice(0, 10), p: shelf(p) ? p : labels.includes('книги') && !money ? 'Книги' : 'Мастерская', s: sn[String(t.section_id)] || (shelf(p) ? '' : money || MONEY_RE.test(t.content) ? 'Деньги и реклама' : labels.includes('книги') ? '' : 'Дела'), pr: t.priority || 1, ds: t.description || '', ...(t.due?.is_recurring ? { r: true } : {}) });
   }
   return out.slice(0, 300);
