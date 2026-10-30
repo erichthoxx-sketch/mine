@@ -127,7 +127,7 @@ export const BOOK_GROUPS = [
 ];
 export const BOOK_FIELDS = BOOK_GROUPS.flatMap((g) => g.fields);
 
-export const STATUS = { writing: 'Пишу', done: 'Завершена' };
+export const STATUS = { writing: 'Пишу сейчас', done: 'Завершена' };
 
 let seq = 0;
 export const newId = (p = 'b') => p + Date.now().toString(36) + (seq++).toString(36) + Math.random().toString(36).slice(2, 5);
@@ -284,6 +284,7 @@ export const DEFAULT_CONTENT = {
  "rafPerk": "Пятничный подарок — каждую неделю дарю одну из своих книг",
  "rafWin": "Подарок для вас",
  "rafHow": "Это код доступа к книге на Литнете: откройте книгу и введите его там.",
+ "rafRules": "Как это работает: каждую пятницу я случайно выбираю одну из читательниц, отметивших желание, и дарю ей выбранную книгу. Код появится здесь, в кабинете. Получившая подарок снова участвует через месяц.",
  "cabRemind": "Добавить старт в календарь",
  "cabLabel": "Личный кабинет",
  "cabOut": "Выйти",
@@ -726,7 +727,7 @@ const h1lines = (s) => {
 
 // Карточка книги на главной: ведёт на страницу книги
 function card(b, imgs, name, opt = {}) {
-  const num = opt.num ? `<span class="num"><b>${String(opt.num).padStart(2, '0')}</b>Книга ${opt.num}${b.status === 'writing' ? ' · пишу' : ''}</span>` : '';
+  const num = opt.num ? `<span class="num"><b>${String(opt.num).padStart(2, '0')}</b>Книга ${opt.num}${b.status === 'writing' ? ' · пишу сейчас' : ''}</span>` : '';
   return `<a class="card${opt.small ? ' sm' : ''}" href="${bookHref(b)}"${opt.group != null ? ` data-g="${esc(opt.group)}"` : ''}>
       ${num}
       <div class="plinth">${cover(b, imgs, name)}</div>

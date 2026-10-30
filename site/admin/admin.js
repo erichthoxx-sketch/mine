@@ -250,6 +250,7 @@ function rafTab() {
       ${field('site', c, { k: 'rafPerk', label: 'Строка в «Что даёт кабинет»', hint: 'Видна в окне входа, пока пятничный подарок включён' })}
       ${field('site', c, { k: 'rafWin', label: 'Надпись на подарочной карточке', hint: 'Дальше само: название книги и промокод' })}
       ${field('site', c, { k: 'rafHow', label: 'Как активировать', type: 'area' })}
+      ${field('site', c, { k: 'rafRules', label: 'Как выбирается подарок', type: 'area', hint: 'Мелким текстом под обложками' })}
     </div>`;
 }
 

@@ -375,6 +375,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .cab-wb .cab-mc{display:block;transition:transform .25s ease,box-shadow .25s ease;outline:1px solid transparent;outline-offset:5px}
 .cab-wb:hover .cab-mc{transform:translateY(-3px)}
 .cab-wb.on .cab-mc{outline-color:var(--ink)}
+.cab-wb.sel .cab-mc{outline:1px dashed var(--ink-2)}
+.cab-confirm{display:flex;align-items:center;flex-wrap:wrap;gap:12px 22px;margin:6px 0 4px}
+.cab-rules{max-width:640px;margin:16px 0 0;font-size:13px;line-height:1.55;color:var(--ink-3)}
 .cab-wb .cab-t{font-size:16px;margin-top:12px}
 .cab-wl{display:block;min-height:1.4em;margin-top:2px;font:italic 400 16px/1.3 var(--f-italic);color:var(--ink-2)}
 .cab-present{position:relative;max-width:520px;margin:0 0 30px;padding:34px 30px 28px;text-align:center;border:1px solid var(--line);outline:1px solid var(--line);outline-offset:-8px;background:var(--paper)}
