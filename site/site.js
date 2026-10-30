@@ -13,7 +13,9 @@ let shownImgs = {};
 // Личный кабинет читателя (вход в шапке, ./?kabinet) — подгружается отдельно, основной сайт его не ждёт
 const qs = new URLSearchParams(location.search);
 let cab = null;
-if (!preview) import('./cabinet.js' + ((/\?v=[^&]+/.exec(import.meta.url) || [''])[0])).then((m) => { cab = m; if (current) show(current, shownImgs); }).catch(() => {});
+// кабинет грузится, только если он включён в админке («Кабинет» → «Показывать личный кабинет на сайте»)
+let cabLoading = false;
+const loadCab = () => { if (cab || cabLoading || preview) return; cabLoading = true; import('./cabinet.js' + ((/\?v=[^&]+/.exec(import.meta.url) || [''])[0])).then((m) => { cab = m; if (current) show(current, shownImgs); }).catch(() => {}); };
 const cabPage = qs.has('kabinet') ? 'kabinet' : '';
 
 // Яндекс Метрика: счётчик из «Общее»; не в предпросмотре админки и не при проверке на своём компьютере
@@ -40,9 +42,11 @@ function show(content, imgs) {
   const isBook = !!r && !!bookKey;
   if (!r) r = renderSite(content || DEFAULT_CONTENT, imgs || {}); // книги нет (скрыли, сменили адрес) — главная
   shownImgs = imgs || {};
-  const cp = cab && cabPage ? cab.page(normalize(current), shownImgs, cabPage) : null;
+  const cabOn = normalize(current).cabOn !== false;
+  if (cabOn) loadCab();
+  const cp = cabOn && cab && cabPage ? cab.page(normalize(current), shownImgs, cabPage) : null;
   if (cp) r = { ...r, main: cp.main, title: cp.title };
-  else if (cabPage) r = { ...r, main: '' }; // кабинет ещё грузится — не мелькаем главной
+  else if (cabPage && cabOn) r = { ...r, main: '' }; // кабинет ещё грузится — не мелькаем главной
   document.documentElement.style.setProperty('--a1', r.colors.a1);
   document.documentElement.style.setProperty('--a2', r.colors.a2);
   document.body.classList.toggle('is-book', isBook);
@@ -52,7 +56,7 @@ function show(content, imgs) {
   document.title = r.title;
   try { sessionStorage.removeItem('siteReload'); } catch { /* без хранилища */ }
   watchCta();
-  cab?.after(normalize(current), shownImgs, bookKey, () => show(current, shownImgs));
+  if (cabOn) cab?.after(normalize(current), shownImgs, bookKey, () => show(current, shownImgs));
   let done = false;
   try { done = localStorage.getItem('lanaSite.subscribed') === '1'; } catch { /* без памяти */ }
   const f = document.querySelector('[data-sub]');
