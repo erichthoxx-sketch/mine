@@ -101,7 +101,7 @@ export function planItems(c, from, to) {
   add(dm.due < t ? t : dm.due, 'waitans', `Продлить домен ${dm.name} до ${fmtDate(dm.till)}`, dm.late ? 'срок оплаты прошёл · Рег.ру' : 'Рег.ру → Домены и услуги → Продлить', { to: '/mysite', section: 'Сайт', dueRaw: dm.due });
   // Мой сайт: розыгрыш по пятницам (в админке сайта → «Розыгрыш»)
   const rf = typeof window !== 'undefined' ? raffleTodo(siteNow(), t) : null;
-  if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Провести розыгрыш на сайте', 'Админка сайта → Розыгрыш', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
+  if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Пятничный подарок: выбрать, кому', 'Админка сайта → Подарок', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
   // Связи: напоминания по контактам (просроченные — на сегодня)
   for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', esc(x.text), esc(x.name) + ((mf) => (mf ? ` · перенесено с ${mf.slice(8, 10)}.${mf.slice(5, 7)}` : ''))(movedFrom(c.settings.todoist?.moved, x.k, x.date)) + (x.date < t ? ' · просрочено' : ''), { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k, section: x.section || 'Связи', ...(x.bookId ? { bookId: x.bookId } : {}), ...(x.detail ? { description: x.detail } : {}) });
   // свои задачи из Todoist (проекты «Книги» и «Мастерская»)

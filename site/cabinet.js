@@ -121,11 +121,11 @@ function bookExtras(b) {
     ${st ? `<div class="cab-start"><span class="cab-note">${T('cabStartLine', 'Старт подписки')} ${dm(st.date)}${st.price ? ` · ${priceLine(st, T)}` : ''}</span>
       <span class="cab-calw"><span class="cab-calk">${T('cabRemind', 'Добавить старт в календарь')}:</span>${calLinks(b, st)}</span></div>` : ''}
     <div class="cab-shelf"><span>На полку:</span>${Object.entries(SHELF).map(([k, n]) => `<button class="${mine === k ? 'on' : ''}" data-cab="shelf" data-id="${esc(b.id)}" data-v="${k}">${n}</button>`).join('')}</div>
-    ${c.raffleOn && rafBooks().some((x) => x.id === b.id) ? `<div class="cab-shelf"><span>Розыгрыш по пятницам:</span>${S.raf === b.id && user ? '<span class="cab-on">вы разыгрываете эту книгу ✓</span>' : `<button data-cab="raf" data-id="${esc(b.id)}">Хочу промокод на эту книгу</button>`}</div>` : ''}
+    ${c.raffleOn && rafBooks().some((x) => x.id === b.id) ? `<div class="cab-shelf"><span>${esc(plainT(c.rafTitle || 'Пятничный подарок'))}:</span>${S.raf === b.id && user ? '<span class="cab-on">ваше желание ✓</span>' : `<button data-cab="raf" data-id="${esc(b.id)}">Хочу эту книгу в подарок</button>`}</div>` : ''}
   </div>`;
 }
 
-// ---------- розыгрыш по пятницам ----------
+// ---------- пятничный подарок (розыгрыш промокода на книгу) ----------
 // книги для розыгрыша — те, что есть на Литнете (промокоды — литнетовские); ссылок нет ни у одной — все
 const rafBooks = () => { const all = books(); const lit = all.filter((b) => b.litnet); return lit.length ? lit : all; };
 function joinRaffle(id) {
@@ -133,23 +133,27 @@ function joinRaffle(id) {
   persist();
   if (user) readers.raffleSet(user.uid, { uid: user.uid, email: user.email || '', name: S.name || '', book: id, at: new Date().toISOString() }).catch(() => {});
 }
-function raffleSec(c, head, T) {
+function raffleSec(c, head, T, imgs) {
   if (!c.raffleOn) return '';
-  const list = rafBooks(), pick = list.find((b) => b.id === S.raf);
+  const list = rafBooks(), pick = list.find((b) => b.id === S.raf), name = c.name || 'Автор';
   const fresh = wins.filter((w) => Date.now() - new Date(w.at).getTime() < 60 * 864e5);
-  // ближайший розыгрыш, в котором она участвует: этот уже прошёл — следующая пятница; выиграла — через 4 недели
+  // ближайшая «её» пятница: эта уже прошла — следующая; получила подарок — через 4 недели
   const plus = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return raffleFriday(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`); };
   let fri = raffleFriday(today());
   if (c.raffleLast === fri) fri = plus(fri, 7);
   const lastWin = wins[0]?.week ? plus(wins[0].week, 28) : '';
   if (lastWin > fri) fri = lastWin;
-  return `<section class="cab-sec">${head(fmt(c.rafTitle || 'Розыгрыш недели', false))}
-    ${fresh.map((w) => { const b = findBook(c, w.book) || {}; return `<div class="cab-win"><div class="cab-s">${T('rafWin', 'Вы выиграли промокод')} на «${esc(plainT(b.title || w.bookTitle))}»</div>
-      <div class="cab-code"><b>${esc(w.code)}</b><button class="cab-link" data-cab="copy" data-v="${esc(w.code)}">Скопировать</button>${b.litnet ? `<a class="cab-link" href="${esc(b.litnet)}" target="_blank" rel="noopener">Открыть на Литнете</a>` : ''}</div>
-      <div class="cab-s">${T('rafHow', '')}</div></div>`; }).join('')}
-    ${c.rafText ? `<p class="cab-p">${esc(c.rafText)}</p>` : ''}
-    <div class="cab-raf">${list.map((b) => `<button class="${pick?.id === b.id ? 'on' : ''}" data-cab="raf" data-id="${esc(b.id)}">${esc(plainT(b.title))}</button>`).join('')}</div>
-    <div class="cab-s">${pick ? `Вы участвуете: «${esc(plainT(pick.title))}». Итоги — в пятницу, ${dm(fri)}. Выиграете — промокод появится здесь.` : 'Выберите книгу — и вы в розыгрыше.'}</div>
+  return `<section class="cab-sec">${head(fmt(c.rafTitle || 'Пятничный подарок', false))}
+    ${fresh.map((w) => { const b = findBook(c, w.book) || {}; return `<div class="cab-present">
+      <div class="lbl">${T('rafWin', 'Подарок для вас')}</div>
+      <div class="cab-pt">«${esc(plainT(b.title || w.bookTitle))}»</div>
+      <div class="cab-pcode">${esc(w.code)}</div>
+      <div class="cab-pacts"><button class="cab-link" data-cab="copy" data-v="${esc(w.code)}">Скопировать код</button>${b.litnet ? `<a class="cab-link" href="${esc(b.litnet)}" target="_blank" rel="noopener">Открыть книгу на Литнете</a>` : ''}</div>
+      ${c.rafHow ? `<div class="cab-s">${esc(c.rafHow)}</div>` : ''}</div>`; }).join('')}
+    ${c.rafText ? `<p class="cab-p cab-wtext">${esc(c.rafText)}</p>` : ''}
+    <div class="cab-wish">${list.map((b) => `<button class="cab-wb${pick?.id === b.id ? ' on' : ''}" data-cab="raf" data-id="${esc(b.id)}" aria-pressed="${pick?.id === b.id}">
+      <span class="cab-mc">${cover(b, imgs, name)}</span><span class="cab-t">${fmt(b.title, false)}</span><span class="cab-wl">${pick?.id === b.id ? 'ваше желание' : ''}</span></button>`).join('')}</div>
+    <div class="cab-s">${pick ? `Ваше желание — «${esc(plainT(pick.title))}». Ближайшая пятница — ${dm(fri)}.` : 'Отметьте историю, которую хотели бы получить.'}</div>
   </section>`;
 }
 
@@ -209,7 +213,7 @@ function cabinet(c, imgs) {
           ${st.price ? `<div class="cab-price">${priceLine(st, T)}</div>` : ''}
           <div class="cab-calw"><span class="cab-calk">${S.remind?.[b.id] ? 'В календаре ✓ · ещё раз:' : T('cabCal', 'Добавить в календарь') + ':'}</span>${calLinks(b, st)}</div></div></div>`).join('')}</section>` : ''}
     </div>` : ''}
-    ${raffleSec(c, head, T)}
+    ${raffleSec(c, head, T, imgs)}
     <section class="cab-sec">${head(T('cabShelf', 'Моя полка'), `<div class="cab-tabs">${Object.entries({ reading: 'Читаю', done: 'Прочла', want: 'Хочу' }).map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-cab="tab" data-v="${k}">${n} <span>${books().filter((b) => S.shelf?.[b.id] === k).length || ''}</span></button>`).join('')}</div>`)}
       ${ser ? `<div class="cab-series"><div class="cab-s">Цикл «${esc(ser)}» · ${serDone} из ${serBooks.length}</div>
         <div class="cab-sline">${serBooks.map((b) => `<a class="cab-sdot${S.shelf?.[b.id] === 'done' ? ' on' : S.shelf?.[b.id] === 'reading' ? ' mid' : ''}" href="./?kniga=${esc(b.url)}" title="${esc(plainT(b.title))}"><i></i><span>${Number(b.seriesNo) || serBooks.indexOf(b) + 1}</span></a>`).join('<em></em>')}</div></div>` : ''}
@@ -242,7 +246,7 @@ async function act(name, d) {
   if (name === 'mode') { mode = d.v; const b = document.querySelector('.cab-body'); if (b) { b.innerHTML = formHtml(ctx.c || {}); b.querySelector('input')?.focus(); } return; }
   if (name === 'copy') { navigator.clipboard?.writeText(d.v).then(() => { const b = document.querySelector(`[data-cab="copy"][data-v="${CSS.escape(d.v)}"]`); if (b) b.textContent = 'Скопировано'; }).catch(() => {}); return; }
   if (name === 'raf') {
-    if (!user) { pending = { name, d: { ...d } }; mode = 'new'; sheet('Розыгрыш — для читательниц с кабинетом. Создайте его — и вы участвуете каждую пятницу.'); return; }
+    if (!user) { pending = { name, d: { ...d } }; mode = 'new'; sheet('Пятничный подарок — для своих. Создайте кабинет, и каждую пятницу одна из моих книг может достаться вам.'); return; }
     joinRaffle(d.id); redraw(); return;
   }
   if (name === 'shelf') {

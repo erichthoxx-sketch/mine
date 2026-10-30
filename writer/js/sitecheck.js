@@ -34,7 +34,7 @@ export function siteChecks({ wbooks = [], site = null, subs = null, seenAt = '' 
       continue;
     }
     if (s.hidden) out.push({ k: 'hidden:' + b.id, title: `Книга «${b.title}» скрыта на сайте`, why: 'Читатели её не видят. Если скрыли нарочно — всё в порядке.', admin: true, soft: true });
-    else if (b.status === 'done' && s.status !== 'done') out.push({ k: 'done:' + b.id, title: `Отметить на сайте: «${b.title}» завершена`, why: 'В Мастерской книга завершена, а на сайте всё ещё «Пишется». Завершённую книгу охотнее покупают.', admin: true });
+    else if (b.status === 'done' && s.status !== 'done') out.push({ k: 'done:' + b.id, title: `Отметить на сайте: «${b.title}» завершена`, why: 'В Мастерской книга завершена, а на сайте всё ещё «Пишу». Завершённую книгу охотнее покупают.', admin: true });
   }
   if (site.subOn && site.giftName && !site.giftUrl) out.push({ k: 'gift', title: 'Добавить ссылку на подарок', why: `Читатели подписываются ради «${site.giftName}», но скачать пока нечего.`, admin: true });
   if (subs) {

@@ -98,7 +98,7 @@ function render() {
 }
 
 function renderEditor() {
-  const tabs = [['blocks', 'Блоки'], ['books', 'Книги'], ['look', 'Цвета'], ['cab', 'Кабинет'], ['raf', 'Розыгрыш'], ['general', 'Общее']];
+  const tabs = [['blocks', 'Блоки'], ['books', 'Книги'], ['look', 'Цвета'], ['cab', 'Кабинет'], ['raf', 'Подарок'], ['general', 'Общее']];
   document.getElementById('tabs').innerHTML = tabs.map(([k, n]) => `<button role="tab" aria-selected="${S.tab === k}" data-act="tab" data-t="${k}">${n}</button>`).join('');
   document.getElementById('mtabs').innerHTML = `<button aria-selected="${!S.pv}" data-act="pv" data-v="0">Правка</button><button aria-selected="${S.pv}" data-act="pv" data-v="1">Сайт</button>`;
   document.querySelector('.adm').classList.toggle('show-pv', S.pv);
@@ -221,34 +221,34 @@ function lookTab() {
 // Розыгрыш по пятницам: включить, промокоды, провести одной кнопкой, участницы и история
 function rafTab() {
   const c = S.content, R = S.raf, fri = raffleFriday(todayIso());
-  const top = `<p class="note">Каждую пятницу — промокод на книгу одной читательнице с кабинетом. Читательницы сами выбирают книгу (в кабинете и на странице книги). Победительницу выбирает кнопка «Провести розыгрыш» — случайно среди тех, на чью книгу есть промокод; кто выигрывал за последние 4 недели, пропускает. Промокод сразу появляется у неё в кабинете. Напоминание по пятницам — в Планере «Мастерской».</p>
-    ${field('site', c, { k: 'raffleOn', label: 'Розыгрыш на сайте включён', type: 'toggle' })}`;
+  const top = `<p class="note">Пятничный подарок: каждую пятницу одна читательница с кабинетом получает книгу — промокод Литнета. Читательницы сами отмечают желанную книгу (в кабинете и на странице книги). Кнопка «Выбрать, кому подарок» выбирает случайно среди тех, на чью книгу есть промокод; кто получал подарок за последние 4 недели, пропускает. Промокод сразу появляется у неё в кабинете — подарочной карточкой. Напоминание по пятницам — в Планере «Мастерской».</p>
+    ${field('site', c, { k: 'raffleOn', label: 'Пятничный подарок на сайте включён', type: 'toggle' })}`;
   if (!R) return top + '<p class="note">Загружаю…</p>';
-  if (R.err === 'rules') return top + `<p class="note">Чтобы розыгрыш заработал, один раз обновите правила Firebase: «Скопировать правила» → Firebase → «Правила» → вставить → «Опубликовать».</p>
+  if (R.err === 'rules') return top + `<p class="note">Чтобы пятничный подарок заработал, один раз обновите правила Firebase: «Скопировать правила» → Firebase → «Правила» → вставить → «Опубликовать».</p>
     <div class="links"><button class="btn line" data-act="copyRules">Скопировать правила</button><a class="quiet" href="https://console.firebase.google.com/project/dohody-6d6dd/firestore/rules" target="_blank" rel="noopener">Открыть Firebase</a><button class="quiet" data-act="reRaf">Готово, проверить</button></div><pre id="rules-text" hidden>${esc(RULES)}</pre>`;
-  if (R.err) return top + '<p class="note">Не получилось загрузить розыгрыш — проверьте интернет. <button class="quiet" data-act="reRaf">Ещё раз</button></p>';
+  if (R.err) return top + '<p class="note">Не получилось загрузить пятничный подарок — проверьте интернет. <button class="quiet" data-act="reRaf">Ещё раз</button></p>';
   const list = rafBooks(), title = (id) => plain(S.content.books.find((b) => b.id === id)?.title || '');
   const want = R.entries.filter((e) => e.book), left = list.reduce((n, b) => n + (R.codes[b.id] || []).length, 0);
   const done = c.raffleLast === fri, w = S.drawn;
   return top + `
-    <h3 class="sub">Розыгрыш · пятница ${dmy(fri)}</h3>
-    <p class="note">Участниц: ${want.length} · промокодов в запасе: ${left}${done ? ' · на этой неделе уже проведён' : ''}</p>
-    <div class="links"><button class="btn${done ? ' line' : ''}" data-act="draw">${done ? 'Провести ещё раз' : 'Провести розыгрыш'}</button></div>
+    <h3 class="sub">Пятница ${dmy(fri)}</h3>
+    <p class="note">Ждут подарка: ${want.length} · промокодов в запасе: ${left}${done ? ' · на этой неделе подарок уже вручён' : ''}</p>
+    <div class="links"><button class="btn${done ? ' line' : ''}" data-act="draw">${done ? 'Выбрать ещё раз' : 'Выбрать, кому подарок'}</button></div>
     ${w ? `<div class="raf-win"><b>${esc(w.name || 'Без имени')}</b> · ${esc(w.email)}<br>«${esc(w.bookTitle)}» · промокод <b>${esc(w.code)}</b>
       <p class="note" style="margin:6px 0 0">Промокод уже в её кабинете. Можно и написать ей: <button class="quiet" data-act="copyText" data-v="${esc(w.email)}">Скопировать почту</button></p></div>` : ''}
     <h3 class="sub">Промокоды</h3>
     <p class="note">Литнет → книга → «Промокоды» → «Сгенерировать», затем вставьте сюда, каждый с новой строки. Промокоды видите только вы. Следите за сроком «Действителен до».</p>
     <div class="list" style="gap:16px">${list.map((b) => { const n = (R.codes[b.id] || []).length, k = want.filter((e) => e.book === b.id).length;
-      return `<label class="f"><span>«${esc(plain(b.title))}»</span><textarea data-codes="${esc(b.id)}" rows="1" placeholder="Промокоды — каждый с новой строки">${esc((R.codes[b.id] || []).join('\n'))}</textarea><small>в запасе: ${n} · хотят эту книгу: ${k}</small></label>`; }).join('')}</div>
-    <h3 class="sub">Участницы · ${want.length}</h3>
-    ${want.length ? `<div class="subs">${want.map((e) => `<div class="sub-r"><span>${esc(e.name ? e.name + ' · ' : '')}${esc(e.email)}</span><small>«${esc(title(e.book))}»</small></div>`).join('')}</div>` : '<p class="note">Пока никто не выбрал книгу.</p>'}
-    ${R.wins.length ? `<h3 class="sub">Победительницы</h3><div class="subs">${R.wins.slice(0, 100).map((x) => `<div class="sub-r"><span>${esc(x.name ? x.name + ' · ' : '')}${esc(x.email)}</span><small>${dmy(x.week || x.at)} · «${esc(x.bookTitle)}» · ${esc(x.code)}</small></div>`).join('')}</div>` : ''}
+      return `<label class="f"><span>«${esc(plain(b.title))}»</span><textarea data-codes="${esc(b.id)}" rows="1" placeholder="Промокоды — каждый с новой строки">${esc((R.codes[b.id] || []).join('\n'))}</textarea><small>в запасе: ${n} · мечтают о ней: ${k}</small></label>`; }).join('')}</div>
+    <h3 class="sub">Чего хотят · ${want.length}</h3>
+    ${want.length ? `<div class="subs">${want.map((e) => `<div class="sub-r"><span>${esc(e.name ? e.name + ' · ' : '')}${esc(e.email)}</span><small>«${esc(title(e.book))}»</small></div>`).join('')}</div>` : '<p class="note">Пока никто не отметил книгу.</p>'}
+    ${R.wins.length ? `<h3 class="sub">Кому подарено</h3><div class="subs">${R.wins.slice(0, 100).map((x) => `<div class="sub-r"><span>${esc(x.name ? x.name + ' · ' : '')}${esc(x.email)}</span><small>${dmy(x.week || x.at)} · «${esc(x.bookTitle)}» · ${esc(x.code)}</small></div>`).join('')}</div>` : ''}
     <h3 class="sub">Тексты</h3>
     <div class="list" style="gap:16px">
       ${field('site', c, { k: 'rafTitle', label: 'Заголовок в кабинете' })}
       ${field('site', c, { k: 'rafText', label: 'Как это работает', type: 'area' })}
-      ${field('site', c, { k: 'rafPerk', label: 'Строка в «Что даёт кабинет»', hint: 'Видна в окне входа, пока розыгрыш включён' })}
-      ${field('site', c, { k: 'rafWin', label: 'Победительнице', hint: 'Дальше само: «на „Книга“» и промокод' })}
+      ${field('site', c, { k: 'rafPerk', label: 'Строка в «Что даёт кабинет»', hint: 'Видна в окне входа, пока пятничный подарок включён' })}
+      ${field('site', c, { k: 'rafWin', label: 'Надпись на подарочной карточке', hint: 'Дальше само: название книги и промокод' })}
       ${field('site', c, { k: 'rafHow', label: 'Как активировать', type: 'area' })}
     </div>`;
 }
@@ -509,7 +509,7 @@ const acts = {
   draw: async () => {
     const R = S.raf, t = todayIso(), fri = raffleFriday(t);
     const res = drawRaffle(R.entries, R.codes, R.wins, t);
-    if (res.why) { toast({ empty: 'Пока никто не выбрал книгу для розыгрыша', nocodes: 'Нет промокодов на книги, которые выбрали читательницы — вставьте их ниже', recent: 'Все участницы уже выигрывали за последние 4 недели' }[res.why]); return false; }
+    if (res.why) { toast({ empty: 'Пока никто не отметил книгу', nocodes: 'Нет промокодов на книги, которые выбрали читательницы — вставьте их ниже', recent: 'Все, кто ждёт, уже получали подарок за последние 4 недели' }[res.why]); return false; }
     const e = res.entry;
     const win = { uid: e.uid, email: e.email || '', name: e.name || '', book: e.book, bookTitle: plain(S.content.books.find((b) => b.id === e.book)?.title || ''), code: res.code, week: fri, at: new Date().toISOString() };
     try {

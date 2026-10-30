@@ -369,13 +369,19 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .cab-shelf button,.cab-tabs button{background:none;border:0;padding:4px 0;font:400 13px var(--f-body);color:var(--ink-2);cursor:pointer;border-bottom:1px solid transparent}
 .cab-shelf button.on,.cab-tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
 .cab-on{color:var(--ink-2)}
-.cab-raf{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 10px}
-.cab-raf button{background:none;border:1px solid var(--line);padding:9px 14px;font:400 14px var(--f-body);color:var(--ink-2);cursor:pointer}
-.cab-raf button:hover{border-color:var(--ink-3)}
-.cab-raf button.on{border-color:var(--ink);color:var(--ink)}
-.cab-win{border:1px solid var(--ink);padding:16px 18px;margin:0 0 18px}
-.cab-code{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px;margin:8px 0}
-.cab-code b{font:500 22px var(--f-body);letter-spacing:.06em}
+.cab-wtext{max-width:640px;margin-bottom:22px}
+.cab-wish{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,128px));gap:22px;margin-bottom:16px}
+.cab-wb{display:block;background:none;border:0;padding:0;text-align:left;cursor:pointer;color:var(--ink);font:inherit}
+.cab-wb .cab-mc{display:block;transition:transform .25s ease,box-shadow .25s ease;outline:1px solid transparent;outline-offset:5px}
+.cab-wb:hover .cab-mc{transform:translateY(-3px)}
+.cab-wb.on .cab-mc{outline-color:var(--ink)}
+.cab-wb .cab-t{font-size:16px;margin-top:12px}
+.cab-wl{display:block;min-height:1.4em;margin-top:2px;font:italic 400 16px/1.3 var(--f-italic);color:var(--ink-2)}
+.cab-present{position:relative;max-width:520px;margin:0 0 30px;padding:34px 30px 28px;text-align:center;border:1px solid var(--line);outline:1px solid var(--line);outline-offset:-8px;background:var(--paper)}
+.cab-present .lbl{justify-content:center}
+.cab-pt{font:400 26px/1.15 var(--f-display);text-transform:uppercase;letter-spacing:.02em;margin:12px 0 18px}
+.cab-pcode{display:inline-block;font:400 22px/1 var(--f-body);letter-spacing:.22em;padding:14px 0 12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:16px}
+.cab-pacts{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 22px;margin-bottom:10px}
 .cab{padding:clamp(28px,4vw,56px) 0 var(--sec)}
 .cab-narrow{max-width:560px}
 .cab-h{font-size:clamp(34px,4vw,48px);margin:10px 0 0}
@@ -428,6 +434,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .cab-gift{grid-template-columns:80px 1fr}
   .cab-shelfg{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 12px}
   .cab-sb .cab-t{font-size:13px}
+  .cab-wish{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 12px}
+  .cab-wb .cab-t{font-size:13px}
+  .cab-wl{font-size:14px}
+  .cab-present{padding:28px 20px 22px}
+  .cab-pt{font-size:21px}
 }
 button.lnk{background:none;border:0;cursor:pointer;color:inherit}
 .cab-p .lnk{font-size:10px;padding:2px 0}
