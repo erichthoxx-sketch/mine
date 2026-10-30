@@ -330,6 +330,10 @@ test('Литнет: страница книги и читалка, книги п
   assert.equal(M.litnetPage('https://litnet.com/ru/lana-freitag-u12345').type, 'author');
   assert.equal(M.matchBook('zverinaya-tropa-dlya-dvoih', ['Истинная пара', 'Звериная тропа для двоих']), 'Звериная тропа для двоих');
   assert.equal(M.matchBook('drugaya-kniga', ['Звериная тропа для двоих']), null);
+  // Литнет: своя латиница и подзаголовок в адресе; другая книга с тем же словом — не она
+  assert.equal(M.matchBook('alpiiskii-razvod-on-ostavil-menya-umirat', ['Развод для черной вдовы', 'Альпийский развод']), 'Альпийский развод');
+  assert.equal(M.matchBook('razvod-dlya-chernoi-vdovy', ['Альпийский развод', 'Развод для чёрной вдовы']), 'Развод для чёрной вдовы');
+  assert.equal(M.matchBook('alpiiskii-razvod-on-ostavil-menya-umirat', ['Альпийский развод', 'Альпийский развод. Он оставил меня умирать']), 'Альпийский развод. Он оставил меня умирать');
   const pages = [
     { key: 'https://litnet.com/ru/book/zverinaya-tropa-dlya-dvoih-b627091', visits: 300, bounce: 0.2, goals: { 1: 30 } },
     { key: 'https://litnet.com/ru/reader/zverinaya-tropa-dlya-dvoih-b627091', visits: 443, bounce: 0.1, goals: { 1: 5 } },

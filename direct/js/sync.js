@@ -230,7 +230,7 @@ export async function refreshMetrika(app) {
   const sources = await get('ym:s:lastTrafficSource', d30, 20);
   const engines = await get('ym:s:lastSourceEngine', d30, 30);
   const devices = await get('ym:s:deviceCategory', d30, 10);
-  const pages = await get('ym:s:startURL', d30, 100);
+  const pages = await get('ym:s:startURL', d30, 500); // все книги, не только самые посещаемые (адреса с метками — отдельные строки)
   const d90 = addDays(today, -89); // метки и ссылки — за 90 дней: размещение часто идёт дольше месяца
   const utm = await get('ym:s:lastUTMSource,ym:s:lastUTMMedium,ym:s:lastUTMCampaign,ym:s:lastUTMContent', d90, 100);
   // ссылки для продвижения Литнета: страница входа с ?utm_litref=…

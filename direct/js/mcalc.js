@@ -136,15 +136,21 @@ export function litnetPage(url) {
 const TR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
 export const translit = (t) => String(t || '').toLowerCase().split('').map((c) => (c in TR ? TR[c] : /[a-z0-9]/.test(c) ? c : ' ')).join('').trim().split(/\s+/).filter(Boolean);
 // Книга из «Доходов» по адресу Литнета: совпадение слов названия (Литнет пишет название латиницей)
+// Литнет пишет латиницу по-своему («alpiiskii» вместо «alpiyskiy», «ts»/«c») — сравниваем сглаженные слова
+const lat = (w) => String(w).replace(/kh/g, 'h').replace(/ts/g, 'c').replace(/[yj]/g, 'i').replace(/i+/g, 'i');
+// адрес часто длиннее названия (подзаголовок): нужны все слова названия, и первое — в начале адреса
 export function matchBook(slug, titles = []) {
-  const sw = String(slug || '').split('-').filter(Boolean);
+  const sw = String(slug || '').split('-').filter(Boolean).map(lat);
   let best = null, score = 0;
   for (const t of titles) {
-    const tw = translit(t); if (!tw.length) continue;
-    const hit = tw.filter((w) => sw.some((x) => x === w || (w.length > 4 && x.startsWith(w.slice(0, w.length - 1))))).length / Math.max(tw.length, sw.length);
-    if (hit > score) { score = hit; best = t; }
+    const tw = translit(t).map(lat); if (!tw.length || !sw.length) continue;
+    const same = (w, x) => x === w || (w.length > 4 && x.startsWith(w.slice(0, w.length - 1)));
+    if (!same(tw[0], sw[0])) continue;
+    const hit = tw.filter((w) => sw.some((x) => same(w, x))).length / tw.length;
+    const sc = hit + tw.length / 1000; // при равенстве — более полное название
+    if (hit >= (tw.length >= 4 ? 0.75 : 1) && sc > score) { score = sc; best = t; }
   }
-  return score >= 0.6 ? best : null;
+  return best;
 }
 // Страницы входа → по книгам: {bookId, slug, title, book: {visits, conv…}, reader: {…}}
 export function byBook(pages = [], main = [], titles = []) {
