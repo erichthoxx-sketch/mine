@@ -56,7 +56,7 @@ export function byWeekday(daily = [], main = [], skip = null, today = null) {
 }
 
 // Главное: шаги с объяснением. {level: step|warn|good|wait|info, area, title, why, step, lesson}
-export function mkInsights({ daily = [], sources = [], devices = [], pages = [], main = [], hasGoals = false, today, skip = null }) {
+export function mkInsights({ daily = [], sources = [], devices = [], pages = [], main = [], hasGoals = false, today, skip = null, cx = null }) { // cx — факты недели {down, up} (adcontext.visitReasons)
   const out = [], add = (level, area, title, why, step = '', lesson = '') => out.push({ level, area, title, why, step, lesson });
   // сравниваем полные дни (сегодняшний ещё не закончился) и в среднем за день — дни сбоя не считаются
   const w = weekPair(daily, today, main, skip).w, pw = weekPair(daily, today, main, skip).pw;
@@ -68,8 +68,8 @@ export function mkInsights({ daily = [], sources = [], devices = [], pages = [],
   // неделя к неделе
   if (w.visits >= MIN_VISITS && pw.visits >= MIN_VISITS && w.days >= 4 && pw.days >= 4) {
     const dv = (w.avg - pw.avg) / pw.avg;
-    if (dv <= -0.25) add('warn', 'Посещаемость', `Визитов меньше на ${Math.round(-dv * 100)} %: в среднем ${Math.round(w.avg)} в день против ${Math.round(pw.avg)}`, 'Обычно так бывает, когда реже выходят главы, закончилась реклама или книга ушла из подборок.', 'Проверьте график выкладки и анонсы этой недели; если была реклама — не остановилась ли она.', 'rhythm');
-    else if (dv >= 0.25) add('good', 'Посещаемость', `Визитов больше на ${Math.round(dv * 100)} %: в среднем ${Math.round(w.avg)} в день против ${Math.round(pw.avg)}`, 'Что-то сработало — важно понять что, чтобы повторить.', 'Посмотрите ниже, какой источник вырос, и запишите, что вы делали на этой неделе.', 'rhythm');
+    if (dv <= -0.25) add('warn', 'Посещаемость', `Визитов меньше на ${Math.round(-dv * 100)} %: в среднем ${Math.round(w.avg)} в день против ${Math.round(pw.avg)}`, ((cx?.down || []).length ? `По фактам недели: ${(cx?.down || []).join('; ')}.` : 'Обычно так бывает, когда реже выходят главы, закончилась реклама или книга ушла из подборок.'), 'Проверьте график выкладки и анонсы этой недели; если была реклама — не остановилась ли она.', 'rhythm');
+    else if (dv >= 0.25) add('good', 'Посещаемость', `Визитов больше на ${Math.round(dv * 100)} %: в среднем ${Math.round(w.avg)} в день против ${Math.round(pw.avg)}`, ((cx?.up || []).length ? `По фактам недели: ${(cx?.up || []).join('; ')}. Что-то сработало — важно понять что, чтобы повторить.` : 'Что-то сработало — важно понять что, чтобы повторить.'), 'Посмотрите ниже, какой источник вырос, и запишите, что вы делали на этой неделе.', 'rhythm');
     if (hasGoals && w.conv >= MIN_CONV && pw.conv >= MIN_CONV) {
       const dc = (w.cr - pw.cr) / pw.cr;
       if (Math.abs(dc) >= 0.2) add(dc > 0 ? 'good' : 'warn', 'Покупки', `Доля покупок ${dc > 0 ? 'выросла' : 'упала'}: ${pc(pw.cr)} → ${pc(w.cr)}`, dc > 0 ? 'Сейчас приходят более «свои» читатели или страница книги убеждает лучше.' : 'Приходят менее целевые люди (новый источник?) или страница книги перестала убеждать.', dc > 0 ? 'Найдите ниже источник, который это дал, — его стоит усилить.' : 'Сравните источники ниже: где упала доля, там и причина.', 'goals');

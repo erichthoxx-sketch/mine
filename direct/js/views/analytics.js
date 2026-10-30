@@ -9,6 +9,7 @@ import { SITE_COUNTER, SITE_GOALS, sitePages, sumDays, weekPair, byWeekday, mkIn
 import { metrikaOf } from './metrika.js';
 import { packageText, sendToChat } from './ai.js';
 import { litnetView } from './litnet.js';
+import { adEvents, weekContext, visitReasons } from '../adcontext.js';
 import { demo } from '../demo.js';
 import { loadSite, SITE_URL, SITE_ADMIN } from '../../../js/sitepub.js';
 import { refreshSite } from '../sync.js';
@@ -54,7 +55,9 @@ function vsAvg(k, n, K, N2) {
 // ---------- Сводка ----------
 function summaryTab(a, M) {
   const { mk, t, main, skip, hasGoals, w, wc, pw } = M;
-  const ins = mkInsights({ daily: mk.daily, sources: mk.sources, devices: mk.devices, pages: mk.pages, main, hasGoals, today: t, skip });
+  // контекст недели из всех приложений: главы (Мастерская), сбои и реклама («Доходы»)
+  const ev = adEvents({ days: M.c.data.days || [], wbooks: M.c.data.w_books || [], campaigns: M.c.data.campaigns || [], from: addDays(t, -14), to: t }), cx = weekContext(ev, t);
+  const ins = mkInsights({ daily: mk.daily, sources: mk.sources, devices: mk.devices, pages: mk.pages, main, hasGoals, today: t, skip, cx: { down: visitReasons(cx, -1), up: visitReasons(cx, 1) } });
   const steps = ins.filter((x) => x.level === 'step' || x.level === 'warn').length;
   const wd = byWeekday(mk.daily, main, skip, t), maxWd = Math.max(...wd.map((x) => x.avg), 1);
   return `<div class="card"><div class="row between"><h2 style="margin:0">Читатели за 7 дней</h2><span class="small muted">по вчера · ${esc(M.m.counterName || '')}</span></div>
@@ -65,7 +68,7 @@ function summaryTab(a, M) {
         <div><div class="k">Время на сайте</div><div class="v">${mmss(w.dur)}</div><div class="s">${w.depth ? `${String(Math.round(w.depth * 10) / 10).replace('.', ',')} стр. за визит` : ''}</div></div>
       </div>
       ${M.perSale && hasGoals ? `<p class="small">Одна покупка приносит в среднем <b>${rub(M.perSale, 0)}</b>${M.allSale ? ' (по «Доходам» за 60 дней)' : ' (из «Экономики книги»)'} → один визит стоит <b>${rub((w.cr || 0) * M.perSale, 1)}</b>.</p>` : ''}
-      <div class="chart" id="mkChart"></div><div class="chart-cap small muted">Визиты по дням за 8 недель</div></div>
+      <p class="small muted">Неделя: глав вышло ${cx.w.chapters} (неделей раньше — ${cx.pw.chapters})${cx.w.outage + cx.pw.outage ? ` · дней сбоя ${cx.w.outage + cx.pw.outage} — в расчёты не входят` : ''}${cx.w.adStart.length ? ' · ' + esc(cx.w.adStart.join(', ')) : ''}${cx.w.adEnd.length ? ' · ' + esc(cx.w.adEnd.join(', ')) : ''}</p><div class="chart" id="mkChart"></div><div class="chart-cap small muted">Визиты по дням за 8 недель</div></div>
     <div class="card"><div class="row between"><h2 style="margin:0">Главное сейчас</h2>${steps ? `<span class="small warnc">шагов: ${steps}</span>` : ''}</div>
       <div class="list">${ins.map((x) => `<div class="item ${x.level === 'step' ? 'l-hl' : ''}"><span class="small ${LEVEL[x.level][1]}">● ${LEVEL[x.level][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b>
         ${x.why ? `<div class="small">${esc(x.why)}</div>` : ''}${x.step ? `<div class="small"><b>Что сделать:</b> ${esc(x.step)}</div>` : ''}

@@ -116,3 +116,26 @@ test('Запуски по книгам «в процессе» и бюджет �
   const p = L.launchPlan({ ...ls[0].cfg }, { today: '2026-11-01', wbooks: wb, campaigns: [{ id: 5, state: 'ON', budget: { kind: 'period', amount: 15000 } }] });
   assert.equal(p.money.budget, 15000); assert.equal(p.money.src, 'direct'); assert.equal(p.money.freeBudget + p.money.paidBudget, 15000);
 });
+
+test('Контекст недели: главы, сбои, реклама; проверка бюджета по обучению, цене читателя и целям месяцев', async () => {
+  const X = await import('../direct/js/adcontext.js'), L = await import('../direct/js/launchcalc.js');
+  const today = '2026-11-20';
+  const wbooks = [{ title: 'Книга', pub: { 'Глава 1': { 'Литнет': { date: '2026-11-08' }, 'Литгород': { date: '2026-11-09' } }, 'Глава 2': { 'Литнет': { date: '2026-11-10' } }, 'Глава 3': { 'Литнет': { date: '2026-11-15' } } } }];
+  const days = [{ date: '2026-11-17', events: [{ type: 'outage' }] }];
+  const ev = X.adEvents({ days, wbooks, campaigns: [{ name: 'Таргет', start: '2026-11-01', end: '2026-11-12' }], from: '2026-11-01', to: today });
+  assert.equal(ev.filter((x) => x.kind === 'chapter').length, 3); // глава на двух площадках — один раз
+  const cx = X.weekContext(ev, today); // неделя 13–19.11 и 06–12.11
+  assert.equal(cx.w.chapters, 1); assert.equal(cx.pw.chapters, 2); assert.equal(cx.w.outage, 1);
+  const down = X.visitReasons(cx, -1);
+  assert.ok(down.some((x) => /глав вышло 1 против 2/.test(x))); assert.ok(down.some((x) => /конец рекламы «Таргет»/.test(x))); assert.ok(down.some((x) => /сбоя/.test(x)));
+  assert.equal(X.outageNotice(days, today).until, '2026-11-22'); assert.equal(X.outageNotice(days, today, false), null);
+  // бюджет: клик 10 ₽, в библиотеку 20 % визитов → для рекламы 10 % → добавление ≈ 100 ₽, обучение ≈ 1000 ₽ в неделю
+  const p = L.launchPlan({ ...L.firstLaunchOf({}), budget: 9000, royalty: 150 }, { today: '2026-11-01', wbooks: [{ title: 'Развод для черной вдовы', status: 'progress', publishStart: '2026-11-09' }] });
+  const b = L.budgetCheck(p, { cpc: 10, cpcSrc: 'Директ', crLib: 0.2, goals: { '2026-11': 60000 } });
+  assert.equal(b.libCost, 100); assert.equal(b.needWeek, 1000);
+  assert.equal(b.ok, p.money.freeWeek >= 1000);
+  assert.ok(b.lines.some((l) => l.k === 'buy' && /60 покупках/.test(l.text))); // 9000 / 150
+  const nov = b.lines.find((l) => l.month === '2026-11'); assert.equal(nov.goal, 60000); assert.ok(nov.spend > 0);
+  // без данных — осторожные допущения и честная подпись
+  assert.equal(L.budgetCheck(p, {}).cpcSrc, 'предположение');
+});

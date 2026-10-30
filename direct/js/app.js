@@ -9,6 +9,7 @@ import { takeTokenFromUrl, OUTAGE_TEXT } from './api.js';
 import { refresh, refreshMetrika, refreshSite } from './sync.js';
 import { demo, snap, demoLog } from './demo.js';
 import { homeView } from './views/home.js';
+import { navSide } from './views/navside.js';
 import { launchView } from './views/launch.js';
 import { qualityView } from './views/quality.js';
 import { experimentsView } from './views/experiments.js';
@@ -112,7 +113,7 @@ function render() {
   <div class="top"><div><h1>Директ</h1><small>${esc(c.settings.pseudonym)} · ${esc(sub)}${c.settings.direct?.sandbox && !demo.on ? ' · песочница' : ''}</small></div>
   <div class="row">${!demo.on && c.settings.directToken ? `<button data-act="d.reload" aria-label="Обновить" title="Обновить данные"${ui.busy ? ' disabled' : ''}>${ic('refresh')}</button>` : ''}<button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">${ic('settings')}</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
   <main>${tidyNums(r.html)}</main>
-  <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
+  <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}${navSide(app)}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
   afterFn = r.after || null;
   afterFn?.();
 }

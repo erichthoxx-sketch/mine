@@ -10,6 +10,7 @@ import { stateDot, tiles, actBtn, q } from './common.js';
 import { demo } from '../demo.js';
 import { OUTAGE_TEXT } from '../api.js';
 import { resolvedLaunches } from './launchctx.js';
+import { outageNotice } from '../adcontext.js';
 import { launchStrip, phaseSteps } from './launch.js';
 import { ic } from '../../../js/icons.js';
 import { linkedTargetologists, targetReminders } from '../../../js/target-partners.js';
@@ -66,7 +67,11 @@ function goalTodo(main, stats, ctx) {
 
 // Подсказки «что сделать сейчас»: до 6 самых важных
 export function todo(main, stats, ctx = null) {
-  const out = ctx ? goalTodo(main, stats, ctx) : [];
+  const out = [];
+  // был сбой «не от меня» (отмечен в «Доходах»): Директ мог перестраиваться — выводы и правки подождут
+  const on = ctx && outageNotice(ctx.data.days || [], ctx.today, (main.campaigns || []).some((x) => x.state === 'ON'));
+  if (on) out.push(`<div class="item"><b>Был сбой ${fmtShort(on.last)}${on.n > 1 ? ` (дней: ${on.n})` : ''} — до ${fmtShort(on.until)} не меняйте настройки</b><div class="small muted">Показы и покупки в дни сбоя проседают не из-за рекламы; Директ мог перестраиваться. Приложение не берёт эти дни в выводы и средние.</div></div>`);
+  if (ctx) out.push(...goalTodo(main, stats, ctx));
   // расход: урезать или вернуть прежний — по окупаемости за 14 дней
   const mm = ctx && metrikaOf(ctx);
   if (mm?.counterId) {

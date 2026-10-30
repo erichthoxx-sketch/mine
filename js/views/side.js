@@ -2,6 +2,7 @@
 import { esc } from '../ui.js';
 import { npdStatusOf, npdAlert } from '../npd.js';
 import { ownTasks, isMoneyTask } from '../tdtasks.js';
+import { launchesOf, launchPlan, launchMilestones } from '../../direct/js/launchcalc.js';
 import { rub, fmtDate, fmtMonth, fmtMonthIn, pct } from '../format.js';
 import { dayStats, buildPlan, planOverridesOf, monthKey, daysInMonth, incomeSeries, sumSeries, addDays, addMonths, npdDeadline, widgetProgram } from '../calc.js';
 
@@ -25,6 +26,8 @@ export function incomeDates(c) {
     if (k.start && k.start > t) add(k.start, `Старт рекламы «${k.name}»`, '', '/ads');
     if (k.end && k.end >= t) add(k.end, `Конец рекламы «${k.name}»`, 'продлевать ли?', '/ads');
   }
+  // запуск рекламы книг («Директ» → план): включить рекламу, сменить цель на покупку, итоги
+  for (const L of launchesOf(c.settings, d.w_books || [])) for (const m of launchMilestones(launchPlan(L.cfg, { today: t, wbooks: d.w_books || [] }))) if (m.date >= t) add(m.date, m.title, m.sub, '/ads');
   for (const x of ownTasks(c.settings)) if (isMoneyTask(x) && x.d) add(x.d < t ? t : x.d, x.t, x.d < t ? 'просрочено · из Todoist' : 'из Todoist', '/money');
   const na = npdAlert(npdStatusOf(c.sales, c.legacyDays, c.settings, t), t);
   if (na) add(t, na.title, na.sub, '/money');

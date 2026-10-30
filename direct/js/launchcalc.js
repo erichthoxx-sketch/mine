@@ -153,3 +153,33 @@ export function budgetFrom(picked, cfg, days = 35) {
   if (picked?.daily > 0) return { total: Math.round(picked.daily * days), src: 'direct', day: picked.daily, text: `дневной бюджет ${picked.daily} ₽` };
   return { total: Number(cfg.budget) > 0 ? Number(cfg.budget) : 10000, src: 'plan', text: '' };
 }
+
+// ---------- проверка бюджета: хватит ли, чтобы Директ обучился, сколько стоит читатель, что с целями месяцев ----------
+// cpc — цена клика (свой Директ за 30 дней → прошлая реклама в «Доходах» → осторожное предположение);
+// crLib — доля визитов с добавлением в библиотеку по Метрике автора; для рекламы берём половину (приходят «холодные»).
+// goals — цели «Доходов» по месяцам {месяц: роялти}. Ориентир обучения стратегии на конверсии — около 10 целей в неделю.
+export const LEARN_WEEK = 10;
+export function budgetCheck(p, { cpc = null, cpcSrc = '', crLib = null, goals = {} } = {}) {
+  const lines = [], c = cpc > 0 ? cpc : 9, cr = crLib > 0 ? crLib * 0.5 : 0.08;
+  const libCost = c / cr; // ожидаемая цена одного добавления в библиотеку
+  const needWeek = Math.round(LEARN_WEEK * libCost / 10) * 10;
+  const gotWeek = Math.round(p.money.freeWeek / libCost);
+  const ok = p.money.freeWeek >= needWeek;
+  lines.push({ k: 'learn', ok, text: `Чтобы Директ обучился на библиотеке, нужно около ${LEARN_WEEK} добавлений в неделю ≈ ${needWeek} ₽ в неделю. Сейчас на бесплатные главы — ${p.money.freeWeek} ₽ в неделю: это ≈ ${gotWeek} добавлений.${ok ? '' : ' Мало для обучения: либо добавьте бюджет на этот этап, либо ставьте стратегию на клики, а на конверсии переходите, когда наберутся добавления.'}` });
+  if (p.libValue) {
+    const fine = libCost <= p.libValue.value;
+    lines.push({ k: 'lib', ok: fine, text: `Ожидаемая цена добавления ≈ ${Math.round(libCost)} ₽, а одно добавление приносит ≈ ${p.libValue.value} ₽ будущих покупок.${fine ? ' Окупается.' : ' Пока дороже, чем приносит: этап бесплатных глав — вложение в старт подписки, его смысл — читатели в библиотеке к старту.'}` });
+  }
+  if (p.royalty) lines.push({ k: 'buy', ok: true, text: `Покупатель окупается, если обходится не дороже ${Math.round(p.royalty)} ₽ (доход с покупки по «Доходам»). Весь бюджет ${p.money.budget} ₽ окупится при ≈ ${Math.ceil(p.money.budget / p.royalty)} покупках из рекламы.` });
+  // по месяцам: сколько рекламы этого запуска придётся на месяц и сколько покупок нужно, чтобы цель месяца не пострадала
+  if (p.pubDate) {
+    const byMonth = {}, put = (from, days, perDay) => { for (let i = 0; i < days; i++) { const m = addD(from, i).slice(0, 7); byMonth[m] = (byMonth[m] || 0) + perDay; } };
+    put(p.pubDate, p.money.freeDays, p.money.freeBudget / p.money.freeDays);
+    put(p.subDate || addD(p.pubDate, p.money.freeDays), 21, p.money.paidBudget / 21);
+    for (const [m, spend] of Object.entries(byMonth).sort()) {
+      const g = goals[m], need = p.royalty ? Math.ceil(spend / p.royalty) : null;
+      lines.push({ k: 'month', month: m, ok: true, spend: Math.round(spend), goal: g || null, text: `реклама запуска ≈ ${Math.round(spend)} ₽${g ? ` при цели месяца ${g} ₽` : ''}${need ? ` — чтобы реклама не съела цель, ей нужно вернуть ≈ ${need} покупок` : ''}.` });
+    }
+  }
+  return { cpc: c, cpcSrc: cpc > 0 ? cpcSrc : 'предположение', cr, libCost: Math.round(libCost), needWeek, ok, lines };
+}

@@ -2,8 +2,9 @@
 // сайт (старт подписки, ссылка на Литнет), Директ (кампания и её бюджет), Метрика автора (цели и доля «библиотека → покупка»),
 // «Доходы» (доход с покупки). Общий для Рекламы, плана, конструктора и файла для нейросети.
 import { loadSite } from '../../../js/sitepub.js';
-import { addDays } from '../../../js/calc.js';
-import { launchPlan, libraryGoal, buyGoal, launchesOf } from '../launchcalc.js';
+import { addDays, buildPlan, planOverridesOf } from '../../../js/calc.js';
+import { totals } from '../dcalc.js';
+import { launchPlan, libraryGoal, buyGoal, launchesOf, budgetCheck } from '../launchcalc.js';
 import { goalTotals30, royaltyPerSale } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { demo } from '../demo.js';
@@ -26,7 +27,12 @@ export function resolvedLaunches(a) {
     royalty: royaltyPerSale(c.data.sales || [], t)?.perSale || null,
     mkTotals: tot ? { lib: lib ? tot.goals[lib.id] || 0 : 0, buy: buy ? tot.goals[buy.id] || 0 : 0 } : null,
   };
-  return launchesOf(c.settings, c.data.w_books || []).map(({ id, cfg }) => ({ id, fl: cfg, m, plan: launchPlan(cfg, common) }));
+  // для проверки бюджета: цена клика — свой Директ за 30 дней (если кликов достаточно), доля «в библиотеку» — Метрика автора,
+  // цели месяцев — «Доходы» (Финансы → цели, вместе с путём большой цели)
+  const st = demo.on ? null : a.snap('stats'), d30 = st?.daily ? totals(st.daily, addDays(t, -29), t) : null;
+  const s = c.settings, goals = Object.fromEntries(buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount) || undefined, growth: s.goalGrowth != null ? Number(s.goalGrowth) / 100 : undefined, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) }).map((x) => [x.month, x.plan]));
+  const bx = { cpc: d30 && d30.clicks >= 50 ? d30.cpc : null, cpcSrc: 'ваш Директ за 30 дней', crLib: tot?.visits && lib ? (tot.goals[lib.id] || 0) / tot.visits : null, goals };
+  return launchesOf(c.settings, c.data.w_books || []).map(({ id, cfg }) => { const plan = launchPlan(cfg, common); return { id, fl: cfg, m, plan, budget: budgetCheck(plan, bx) }; });
 }
 // Один запуск: по id книги, по открытому плану (ui.launchId) или первый
 export function resolvedLaunch(a, id = null) {

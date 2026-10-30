@@ -2,7 +2,7 @@
 // Даты и ссылка берутся сами (Мастерская, сайт), цели — из Метрики. В Директе приложение само ничего не включает:
 // кампанию запускает владелица в кабинете, здесь — что и когда сделать, конструктор черновика и цифры теста.
 import { esc, forms, changes, toast, ask, N, opt } from '../../../js/ui.js';
-import { rub, num, fmtShort } from '../../../js/format.js';
+import { rub, num, fmtShort, fmtMonth } from '../../../js/format.js';
 import { launchMetrics, PHASES } from '../launchcalc.js';
 import { resolvedLaunch, saveLaunch as saveL } from './launchctx.js';
 import { demo } from '../demo.js';
@@ -42,7 +42,7 @@ export function launchView(a, id = null) {
   const L = resolvedLaunch(a, id);
   if (!L) return { html: '<div class="card"><h2>Запуск книги</h2><p class="muted">Здесь появится план, когда в Мастерской будет книга в статусе «В процессе».</p></div>' };
   a.ui.launchId = L.id;
-  const c = a.ctx(), { fl, plan: p } = L, stats = a.snap('stats') || {};
+  const c = a.ctx(), { fl, plan: p, budget: bc } = L, stats = a.snap('stats') || {};
   const main = a.snap('main') || { campaigns: [] };
   const available = (main.campaigns || []).filter((x) => x.state !== 'ARCHIVED');
   const running = !!fl.actualStart, steps = phaseSteps(p), done = steps.filter((s) => s.ok).length;
@@ -56,6 +56,9 @@ export function launchView(a, id = null) {
       <h3 class="fl-now">Сейчас: ${p.phase === 'prep' ? 'готовим кампанию' : p.phase === 'free' ? 'копим добавления в библиотеку' : 'продаём подписку'} <span class="small muted">${done} из ${steps.length}</span></h3>
       <div class="fl-checklist">${steps.map(stepRow).join('')}</div>
     </div>
+    <div class="card fl-panel"><div class="row between"><h2 style="margin:0">Деньги</h2><span class="small muted">${money(p.money.budget)} ${p.money.src === 'direct' ? '· из Директа' : '· план'}</span></div>
+      <div class="fl-checklist">${bc.lines.map((l) => `<div class="fl-check-item ${l.ok ? 'fl-check-done' : ''}"><span class="fl-check-icon" aria-hidden="true">${l.ok ? '✓' : '!'}</span><span>${l.k === 'month' ? `${esc(fmtMonth(l.month))}: ` : ''}${esc(l.text)}</span></div>`).join('')}</div>
+      <p class="small muted">Цена клика — ${esc(bc.cpcSrc)} (${String(Math.round(bc.cpc * 10) / 10).replace('.', ',')} ₽), доля «в библиотеку» для рекламы — ${String(Math.round(bc.cr * 1000) / 10).replace('.', ',')} % (половина от вашей по Метрике). Цели месяцев — из «Доходов». Пересчитывается само, когда появятся данные кампании.</p></div>
     <div class="card fl-panel"><details class="d-more"${p.phase === 'prep' ? ' open' : ''}><summary>Как настроить кампанию под книгу</summary>${setupHtml(p)}</details></div>
     <div class="card fl-panel"><details class="d-more"${!p.subDate || !p.bookUrl ? ' open' : ''}><summary>Даты, ссылка и деньги</summary>
       <p class="small muted">Первая глава — ${p.pubDate ? `${fmtShort(p.pubDate)} (${SRC[p.src.pub]})` : 'не задана'} · старт подписки — ${p.subDate ? `${fmtShort(p.subDate)} (${SRC[p.src.sub]})` : 'пока не известен: поставьте на сайте в книге «Дата старта подписки» или здесь'} · ссылка — ${p.bookUrl ? SRC[p.src.url] : 'нет'}${p.royalty ? ` · доход с покупки ≈ ${money(p.royalty)}` : ''}</p>

@@ -8,6 +8,7 @@ import { logOf } from '../demo.js';
 import { runAction } from './common.js';
 import { metrikaOf } from './metrika.js';
 import { resolvedLaunches } from './launchctx.js';
+import { adEvents } from '../adcontext.js';
 import { royaltyPerSale } from '../mcalc.js';
 
 const app = () => window.__app;
@@ -23,7 +24,7 @@ export function packageText(a, question = '', { cid = null } = {}) {
   const kwIds = new Set((main.keywords || []).map((k) => String(k.id)));
   const stats = cid == null ? s0 : { ...s0, daily: one(s0.daily), adDaily: one(s0.adDaily), queries: one(s0.queries), conv: one(s0.conv), mrows: one(s0.mrows), kwConv: Object.fromEntries(Object.entries(s0.kwConv || {}).filter(([k]) => kwIds.has(k))) };
   const daily = (stats.daily || []).filter((x) => x.date >= addDays(t, -29));
-  const launches = resolvedLaunches(a).map((x) => x.plan), skip = outageSet(c.data.days || []), m = metrikaOf(c);
+  const LL = resolvedLaunches(a), launches = LL.map((x) => x.plan), skip = outageSet(c.data.days || []), m = metrikaOf(c);
   const value = Number(d.econ?.rev) || launches[0]?.royalty || royaltyPerSale(c.data.sales || [], t)?.perSale || null;
   const state = {
     ...(main.campaigns ? {} : { note: 'Директ ещё не подключён: данных кампаний нет. Помоги по вопросу владелицы и объясни, как настроить кампанию с нуля для книги.' }),
@@ -44,10 +45,12 @@ export function packageText(a, question = '', { cid = null } = {}) {
     // выгорание: CTR и цена клика в дни 3–16 показов против последних 7 дней, отдельно поиск (s) и сети (n)
     adFatigue: adFatigue(stats.adDaily || [], t, { skip: outageSet(c.data.days || []) }).map((f) => ({ ad: f.aid, cid: f.cid, net: f.net, days: f.age, state: f.state, ctrFirst: f.base.ctr, ctrLast7: f.rec.ctr, cpcFirst: f.base.cpc, cpcLast7: f.rec.cpc, imprLast7: f.rec.impr })),
     // план запуска книги: фаза, даты, цели и деньги — чтобы советы были про текущий этап
-    launches: launches.map((lp) => ({ book: lp.book, phase: lp.phase, campaign: lp.picked?.id || null, firstChapter: lp.pubDate || null, subscriptionStart: lp.subDate || null, bookUrl: lp.bookUrl || null, goals: { library: lp.lib?.name || null, purchase: lp.buy?.name || null }, royaltyPerSale: lp.royalty, libraryValue: lp.libValue, money: lp.money, todo: (lp.steps[lp.phase] || []).filter((x) => !x.ok).map((x) => x.text) })),
+    launches: launches.map((lp) => ({ book: lp.book, phase: lp.phase, campaign: lp.picked?.id || null, firstChapter: lp.pubDate || null, subscriptionStart: lp.subDate || null, bookUrl: lp.bookUrl || null, goals: { library: lp.lib?.name || null, purchase: lp.buy?.name || null }, royaltyPerSale: lp.royalty, libraryValue: lp.libValue, money: lp.money, budgetCheck: LL.find((x) => x.plan === lp)?.budget?.lines.map((l) => (l.month ? l.month + ': ' : '') + l.text), todo: (lp.steps[lp.phase] || []).filter((x) => !x.ok).map((x) => x.text) })),
     ...(main.campaigns?.length ? { appAudit: (main.campaigns || []).filter((x) => x.state !== 'ARCHIVED').map((camp) => ({ campaign: camp.id, name: camp.name,
       items: auditCampaign({ camp, main, stats, log: logOf(a), today: t, econ: { ...(d.econ || {}), perSale: value }, m, goalHs: [], skip }).items.map((x) => ({ status: x.status, area: x.area, title: x.title, why: x.why })),
       spend: spendAdvice({ camp, daily: stats.daily || [], conv: stats.conv || [], today: t, goals: m?.main || null, skip, value }) })) } : {}),
+    // что происходило: главы (Мастерская), сбои, старт и конец рекламы («Доходы») — чтобы не путать причины
+    context30: adEvents({ days: c.data.days || [], wbooks: c.data.w_books || [], campaigns: c.data.campaigns || [], from: addDays(t, -29), to: addDays(t, 30) }),
     outageDays: [...outageSet(c.data.days || [])].filter((x) => x >= addDays(t, -29)).sort(),
     recentChanges: logOf(a).slice().sort((x, y) => y.at.localeCompare(x.at)).slice(0, 20).map((x) => ({ at: x.at.slice(0, 10), what: x.text, why: x.why, ok: x.ok })),
   };
