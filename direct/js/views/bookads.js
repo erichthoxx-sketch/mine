@@ -15,9 +15,11 @@ import { keywordsView } from './keywords.js';
 import { demo } from '../demo.js';
 import { ic } from '../../../js/icons.js';
 
+const CH = { litnet: 'Литнет платит', own: 'Мой таргет', other: 'Другое' };
 const STATUS = { progress: 'В процессе', done: 'Завершена' };
 const norm = (t) => String(t || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 // название кампании говорит о книге: полное название или первые два слова (кампании часто называют коротко)
+const sameTitle = (x, y) => { const a2 = norm(x), b2 = norm(y); return !!a2 && !!b2 && (a2 === b2 || (Math.min(a2.length, b2.length) >= 8 && (a2.startsWith(b2) || b2.startsWith(a2)))); };
 const nameHas = (name, title) => { const n = norm(name), t = norm(title), two = t.split(' ').slice(0, 2).join(' '); return !!t && (n.includes(t) || (two.length >= 8 && n.includes(two))); };
 
 // Всё о книге из всех приложений
@@ -29,15 +31,20 @@ export function bookAds(a, b) {
   const ids = new Set([L?.fl.campaignId, bind?.campaignId].filter(Boolean).map(String));
   const camps = (main.campaigns || []).filter((x) => x.state !== 'ARCHIVED' && (ids.has(String(x.id)) || nameHas(x.name, b.title))).map((x) => ({
     ...x, w: totals(daily, addDays(t, -6), t, x.id), g: m?.counterId ? goalTotals(daily, stats.conv || [], addDays(t, -29), t, { cid: x.id, goals: m.main, skip }) : null }));
-  const incomeBook = (c.data.books || []).find((x) => sameBook(x.title, b.title));
-  const bid = new Set([incomeBook?.id, bookIdFor(b.title)].filter(Boolean));
-  const others = (c.data.campaigns || []).filter((k) => !k.oneOff && bid.has(k.bookId)).sort((x, y) => (y.start || '').localeCompare(x.start || ''));
+  // книга в «Доходах» названа по выгрузке Литнета — часто длиннее («Альпийский развод. Он оставил меня умирать»): сравниваем по началу
+  const bid = new Set([bookIdFor(b.title), ...(c.data.books || []).filter((x) => sameTitle(x.title, b.title)).map((x) => x.id)]);
+  const others = (c.data.campaigns || []).filter((k) => !k.oneOff && (bid.has(k.bookId) || k.scope === 'all' || !k.bookId)).map((k) => ({ ...k, all: !bid.has(k.bookId) }))
+    .sort((x, y) => (x.all - y.all) || (y.start || '').localeCompare(x.start || ''));
+  // таргетологи из «Связей» Мастерской, которые ведут эту книгу
+  const people = (c.data.w_links || []).filter((x) => x.kind === 'target' && (x.bookIds || []).map(String).includes(String(b.id)));
   const mk = a.snap('mk'), rd = mk?.pages ? byBook(mk.pages, (m?.main || []).map(String), [b.title]).find((x) => x.title === b.title) : null;
   const url = L?.plan.bookUrl || '', litId = (/-b(\d+)/.exec(url) || [])[1];
   const utms = (c.settings.direct?.utms || []).filter((u) => (litId && new RegExp(`-b${litId}(\\b|\\?|$)`).test(u.url || '')) || nameHas(u.label, b.title) || nameHas(u.campaign, b.title));
   const promos = (c.data.w_promolinks || []).filter((x) => x.status !== 'archived' && String(x.bookId) === String(b.id));
-  const active = camps.some((x) => x.state === 'ON') || others.some((k) => k.start <= t && (!k.end || k.end >= t));
-  return { b, L, camps, others, rd, utms, promos, active, w7: camps.reduce((s, x) => s + x.w.cost, 0) };
+  const live = (k) => k.start && k.start <= t && (!k.end || k.end >= t);
+  const active = camps.some((x) => x.state === 'ON') || others.some((k) => !k.all && live(k)) || people.some((x) => (x.partnerStatus || 'active') === 'active');
+  const allLive = others.some((k) => k.all && live(k)); // реклама «на все книги» — отдельная пометка
+  return { b, L, camps, others, people, rd, utms, promos, active, allLive, w7: camps.reduce((s, x) => s + x.w.cost, 0) };
 }
 
 const order = (x) => ({ progress: 0, done: 1 }[x.status || 'progress'] ?? 2);
@@ -46,8 +53,8 @@ export function booksAdsView(a) {
   if (!list.length) return { html: '<div class="card"><h2>Книги</h2><p class="muted">Книги появятся здесь из Мастерской.</p></div>' };
   return { html: `<div class="card"><h2>Книги</h2><p class="small muted">Где рекламируется каждая книга и что с рекламой — всё из Директа, «Доходов», Метрики и Мастерской.</p>
     <div class="list">${list.map((b) => {
-      const x = bookAds(a, b), where = [x.camps.length ? `Директ: ${x.camps.length}` : '', x.others.length ? `другая реклама: ${x.others.length}` : '', x.utms.length + x.promos.length ? `меток: ${x.utms.length + x.promos.length}` : ''].filter(Boolean).join(' · ');
-      return `<a class="item" href="#" data-act="go" data-to="/book/${esc(b.id)}"><div class="row between"><b>${esc(b.title)}</b><span class="small ${x.active ? 'up' : 'muted'}">● ${x.active ? 'реклама идёт' : x.L ? ({ prep: 'готовим запуск', free: 'запуск: бесплатные главы', paid: 'запуск: подписка' }[x.L.plan.phase]) : 'рекламы нет'}</span></div>
+      const x = bookAds(a, b), where = [x.camps.length ? `Директ: ${x.camps.length}` : '', x.others.filter((k) => !k.all).length ? `реклама в «Доходах»: ${x.others.filter((k) => !k.all).length}` : '', x.people.length ? `таргетолог: ${x.people.map((p) => p.name).join(', ')}` : '', x.utms.length + x.promos.length ? `меток: ${x.utms.length + x.promos.length}` : ''].filter(Boolean).join(' · ');
+      return `<a class="item" href="#" data-act="go" data-to="/book/${esc(b.id)}"><div class="row between"><b>${esc(b.title)}</b><span class="small ${x.active ? 'up' : 'muted'}">● ${x.active ? 'реклама идёт' : x.allLive ? 'реклама на все книги' : x.L ? ({ prep: 'готовим запуск', free: 'запуск: бесплатные главы', paid: 'запуск: подписка' }[x.L.plan.phase]) : 'рекламы нет'}</span></div>
         <div class="small muted">${STATUS[b.status || 'progress'] || ''}${where ? ' · ' + where : ''}${x.w7 ? ` · за 7 дней ${rub(x.w7, 0)}` : ''}${x.rd ? ` · визитов за 30 дней ${num(x.rd.visits)}` : ''}</div></a>`;
     }).join('')}</div></div>` };
 }
@@ -62,8 +69,8 @@ export function bookAdView(a, id) {
     <div class="card"><h2>Яндекс Директ</h2>${x.camps.length ? `<div class="list">${x.camps.map((k) => `<a class="item" href="#" data-act="go" data-to="/c/${k.id}"><div class="row between"><b>${esc(k.name)}</b>${stateDot(k)}</div>
       <div class="small muted">за 7 дней ${rub(k.w.cost, 0)} · кликов ${num(k.w.clicks)}${k.g ? ` · за 30 дней покупок ${num(k.g.conv)}${k.g.cpa != null ? ` по ${rub(k.g.cpa, 0)}` : ''}` : ''}${k.budget?.amount ? ` · бюджет ${rub(k.budget.amount, 0)}${k.budget.kind === 'week' ? ' в неделю' : ''}` : k.daily ? ` · ${rub(k.daily, 0)} в день` : ''}</div></a>`).join('')}</div>`
       : `<p class="small muted">${demo.on ? 'В примере кампании не привязаны к книгам.' : 'Кампаний этой книги пока нет. Кампания привязывается сама: из плана запуска или по названию книги в имени кампании.'}</p>`}</div>
-    ${x.others.length ? `<div class="card"><h2>Другая реклама</h2><p class="small muted">Из «Доходов»: таргетологи, Литнет, соцсети — окупаемость считается там.</p><div class="list">${x.others.map((k) => `<a class="item" href="../#/ad/${esc(k.id)}"><div class="row between"><b>${esc(k.name)}</b><span class="small ${k.start <= t && (!k.end || k.end >= t) ? 'up' : 'muted'}">● ${k.start > t ? 'скоро' : !k.end || k.end >= t ? 'идёт' : 'закончилась'}</span></div>
-      <div class="small muted">${fmtShort(k.start)}${k.end ? '–' + fmtShort(k.end) : ''}${k.budget ? ` · ${rub(k.budget, 0)}` : ''}</div></a>`).join('')}</div></div>` : ''}`;
+    ${x.others.length || x.people.length ? `<div class="card"><h2>Другая реклама</h2><p class="small muted">Из «Доходов» (Литнет платит, таргет, соцсети — окупаемость считается там) и таргетологи из «Связей» Мастерской.</p><div class="list">${x.people.map((p) => `<a class="item" href="../pisatel/#/link/${esc(p.id)}"><div class="row between"><b>Таргетолог: ${esc(p.name || '')}</b><span class="small ${(p.partnerStatus || 'active') === 'active' ? 'up' : 'muted'}">● ${({ active: 'работаем', paused: 'на паузе', done: 'завершено' })[p.partnerStatus || 'active'] || ''}</span></div>${p.campaignNote ? `<div class="small muted">${esc(p.campaignNote)}</div>` : ''}</a>`).join('')}${x.others.map((k) => `<a class="item" href="../#/ad/${esc(k.id)}"><div class="row between"><b>${esc(k.name)}${k.all ? ' <span class="small muted">· на все книги</span>' : ''}</b><span class="small ${k.start <= t && (!k.end || k.end >= t) ? 'up' : 'muted'}">● ${k.start > t ? 'скоро' : !k.end || k.end >= t ? 'идёт' : 'закончилась'}</span></div>
+      <div class="small muted">${esc(CH[k.channel] || '')}${k.start ? ' · ' + fmtShort(k.start) : ''}${k.end ? '–' + fmtShort(k.end) : ''}${k.budget ? ` · ${rub(k.budget, 0)}` : ''}</div></a>`).join('')}</div></div>` : ''}`;
   const readers = x.rd ? `<div class="card"><h2>Читатели за 30 дней</h2><div class="list">
       <div class="item"><b>Страница книги</b><div class="small">входов ${num(x.rd.book.visits)}${x.rd.book.cr != null ? ` · покупают ${pct(x.rd.book.cr, 1)}` : ''}${x.rd.book.bounce != null ? ` · отказы ${pct(x.rd.book.bounce, 0)}` : ''}</div></div>
       <div class="item"><b>Читалка</b><div class="small">входов ${num(x.rd.reader.visits)}${x.rd.reader.cr != null ? ` · ${pct(x.rd.reader.cr, 1)}` : ''} <span class="muted">— здесь продолжают читать, покупок меньше всегда</span></div></div></div>
