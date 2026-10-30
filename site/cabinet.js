@@ -239,7 +239,7 @@ export function after(c, imgs, bookKey, rerender) {
   if (r && !r.querySelector('.acc')) r.insertAdjacentHTML('afterbegin', headEntry());
   if (user) document.getElementById('podpiska')?.remove(); // уже свой — форма подписки внизу не нужна
   const b = bookKey && findBook(c, bookKey);
-  if (b) document.querySelector('.bk-top .buy')?.insertAdjacentHTML('afterend', bookExtras(b));
+  if (b) (document.querySelector('.bk-top .bk-frag') || document.querySelector('.bk-top .buy'))?.insertAdjacentHTML('afterend', bookExtras(b));
   if (new URLSearchParams(location.search).has('kabinet') && known() && !user) watch();
 }
 

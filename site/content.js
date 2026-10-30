@@ -108,6 +108,7 @@ export const BOOK_GROUPS = [
     { k: 'ann', label: 'Аннотация', type: 'area', hint: 'Пустая строка — новый абзац' },
     { k: 'quotes', label: 'Цитаты из книги', type: 'area', hint: 'Между цитатами — пустая строка' },
     { k: 'excerpt', label: 'Отрывок', type: 'area', hint: 'Начало книги или сильная сцена. Обрывается на самом интересном — дальше кнопка «Читать»' },
+    { k: 'frag', label: 'Ознакомительный фрагмент', type: 'area', hint: 'Первые главы — читаются прямо на сайте, в отдельной читалке. Строка «Глава 1» или «Пролог» — заголовок главы, «***» — пауза. По правилам Литнета — не больше, чем бесплатно открыто там' },
     { k: 'reviews', label: 'Отзывы читателей', type: 'area', hint: 'Между отзывами — пустая строка; последняя строка «— Имя»' },
     { k: 'slug', label: 'Адрес страницы', hint: 'Латиницей, например alpiyskiy-razvod. Пусто — сделается из названия' },
   ] },
@@ -257,18 +258,19 @@ export const DEFAULT_CONTENT = {
  "foot": "Telegram — \nЛитнет — ",
  "palette": "fog",
  "subOn": true,
- "subTitle": "Подарок за подписку",
- "giftName": "Проданная ночь",
- "subText": "Оставьте почту — пришлю книгу в подарок. А потом буду писать только о важном: новые книги и главы, обложки до премьеры.",
- "subBtn": "Получить книгу",
+ "subTitle": "Одно письмо",
+ "subHead": "Торжественно *клянусь*",
+ "giftName": "",
+ "subText": "Я пишу только в день, когда выходит мой новый роман. Одно письмо — и ничего больше: ни рассылок, ни акций, ни напоминаний.",
+ "subBtn": "Жду письма",
  "giftUrl": "",
- "subDone": "Готово, спасибо! Ваша книга — по кнопке ниже.",
- "consent": "Соглашаюсь получать письма",
- "privacy": "Я собираю только адрес электронной почты — чтобы прислать подарок и письма о новых книгах.\n\nАдрес не передаётся третьим лицам. Отписаться можно в любой момент: ответьте на любое письмо или напишите мне.",
+ "subDone": "Спасибо. Клятва в силе: следующее письмо — в день выхода нового романа.",
+ "consent": "Соглашаюсь получать письма о выходе новых романов",
+ "privacy": "Я собираю только адрес электронной почты — чтобы написать вам в день выхода нового романа.\n\nАдрес не передаётся третьим лицам. Отписаться можно в любой момент: ответьте на любое письмо или напишите мне.",
  "metrika": "113843691",
  "cabTitle": "Личный *кабинет*",
- "cabText": "Почта и пароль — и подарок, напоминания и ваша полка будут с вами на любом устройстве.",
- "cabPerks": "«Проданная ночь» в подарок — скачать сразу после входа\nСтарт подписки — дата, цена для своих и напоминание в вашем календаре\nСвоя полка — что читаю, что прочла, что хочу",
+ "cabText": "Почта и пароль — и ваша полка, желания и даты стартов будут с вами на любом устройстве.",
+ "cabPerks": "Одно письмо — только в день выхода нового романа, торжественно клянусь\nСвоя полка — что читаю, что прочла, что хочу\nСтарт подписки — дата, цена для своих и напоминание в вашем календаре",
  "cabBtnNew": "Создать кабинет",
  "cabBtnIn": "Войти",
  "cabIntro": "Для своих *читателей*",
@@ -518,15 +520,17 @@ function upgrade(c) {
 }
 
 const CAB_OLD = {
-  cabPerks: '«Проданная ночь» в подарок — читать прямо на сайте\nНапомню о старте подписки — и о цене для своих в этот день\nСвоя полка — что читаю, что прочла, что хочу',
+  cabPerks: ['«Проданная ночь» в подарок — скачать сразу после входа\nСтарт подписки — дата, цена для своих и напоминание в вашем календаре\nСвоя полка — что читаю, что прочла, что хочу', '«Проданная ночь» в подарок — читать прямо на сайте\nНапомню о старте подписки — и о цене для своих в этот день\nСвоя полка — что читаю, что прочла, что хочу'],
   cabSteps: 'Создать кабинет\nОткрыть подарок\nДочитать подарок\nВключить напоминание о старте\nОтметить прочитанную книгу',
   cabRemind: 'Напомнить о старте',
+  cabText: 'Почта и пароль — и подарок, напоминания и ваша полка будут с вами на любом устройстве.',
   rafTitle: 'Розыгрыш *недели*',
   rafText: 'Каждую пятницу я разыгрываю промокод на одну из своих книг среди читательниц с кабинетом. Выберите книгу, которую хотите, — и вы участвуете каждую неделю, пока не выиграете.',
   rafPerk: 'Розыгрыш по пятницам — промокод на книгу, которую выберете вы',
   rafWin: 'Вы выиграли промокод',
   rafHow: 'Промокод действует на Литнете — откройте книгу и введите его там.',
 };
+const SUB_OLD = { subTitle: 'Подарок за подписку', subText: 'Оставьте почту — пришлю книгу в подарок. А потом буду писать только о важном: новые книги и главы, обложки до премьеры.', subBtn: 'Получить книгу', subDone: 'Готово, спасибо! Ваша книга — по кнопке ниже.', consent: 'Соглашаюсь получать письма', privacy: 'Я собираю только адрес электронной почты — чтобы прислать подарок и письма о новых книгах.\n\nАдрес не передаётся третьим лицам. Отписаться можно в любой момент: ответьте на любое письмо или напишите мне.' };
 // Старт подписки книги для кабинета: дата и цены — из админки (книга → «Старт подписки»); прошедший старт не показываем
 export function startInfo(b, today) {
   const t = /^\d{4}-\d{2}-\d{2}$/.test(b?.startDate || '') ? b.startDate : '';
@@ -581,7 +585,9 @@ export function normalize(c) {
   if (!c || typeof c !== 'object') return structuredClone(d);
   c = upgrade(c);
   // тексты прототипа кабинета, которые больше не подходят (читалки и рассылки пока нет), — на новые, если их не меняли
-  for (const [k, was] of Object.entries(CAB_OLD)) if (c[k] === was) c = { ...c, [k]: d[k] };
+  for (const [k, was] of Object.entries(CAB_OLD)) if ([].concat(was).includes(c[k])) c = { ...c, [k]: d[k] };
+  // подписка «одно письмо» вместо подарка (владелица: пока подарка нет) — только нетронутые прежние тексты
+  if (c.subText === SUB_OLD.subText) { c = { ...c, giftName: c.giftUrl ? c.giftName : '' }; for (const k of Object.keys(SUB_OLD)) if (c[k] === SUB_OLD[k]) c = { ...c, [k]: d[k] }; }
   // статусы «по мотивам цикла» владелица попросила вернуть на прежние — если их успели сохранить, возвращаем
   if (c.cabLevels === 'Случайная свидетельница\nУже связалась\nСвоя в деле\nНе развяжешься') c = { ...c, cabLevels: d.cabLevels, cabAllDone: c.cabAllDone === 'Все шаги пройдены — теперь не развяжешься' ? d.cabAllDone : c.cabAllDone };
   c = personal(c);
@@ -709,7 +715,7 @@ function subscribeBox(c) {
   return `<section class="sub" id="podpiska"><div class="wrap sub-in">
       <div class="sub-txt">
         ${lbl(c.subTitle || 'Подписка')}
-        <h2>${c.giftName ? `«${esc(c.giftName)}» <span class="it">в подарок</span>` : 'Новые книги <span class="it">первой</span>'}</h2>
+        <h2>${c.giftName ? `«${esc(c.giftName)}» <span class="it">в подарок</span>` : fmt(c.subHead || 'Новые книги *первой*', false)}</h2>
         ${c.subText ? `<p>${fmt(c.subText)}</p>` : ''}
       </div>
       <form class="sub-f" data-sub novalidate>
@@ -892,7 +898,8 @@ export function renderBook(raw, imgs = {}, key = '') {
     return { t: ls.join(' '), who };
   });
   const photos = (b.collage || []).map((id) => imgs[id]).filter(Boolean).slice(0, 6);
-  const excerpt = lines(b.excerpt);
+  const frag = fragBlocks(b.frag);
+  const excerpt = lines(b.excerpt).length ? lines(b.excerpt) : frag.filter((x) => x.p).slice(0, 4).map((x) => x.p);
   const sec = (label, body, cls = '') => `<section class="bk-sec${cls ? ' ' + cls : ''}"><div class="wrap bk-two"><h2 class="bk-h">${label}</h2><div>${body}</div></div></section>`;
 
   const S = [];
@@ -906,12 +913,13 @@ export function renderBook(raw, imgs = {}, key = '') {
           <div class="bk-author">${esc(name)}<i>·</i>${statusLine(b).join('<i>·</i>')}</div>
           ${b.tagline ? `<p class="bk-hook">${fmt(b.tagline)}</p>` : ''}
           ${shops(true)}
+          ${frag.length ? `<a class="lnk bk-frag" href="./?chitat=${esc(b.url)}">Читать фрагмент здесь <span class="arrow">→</span></a>` : ''}
           ${tags.length ? `<ul class="tags">${tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
           ${b.ann ? `<div class="bk-ann"><h2 class="bk-h">Аннотация</h2>${paras(b.ann)}</div>` : ''}
         </div>
       </div></div></section>`);
   if (excerpt.length) S.push(sec('Отрывок', `<div class="excerpt">${excerpt.map((p) => `<p>${fmt(p, false)}</p>`).join('')}</div>
-      ${links[0] ? `<a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>Читать дальше</a>` : ''}`));
+      ${frag.length ? `<a class="btn btn-dark" href="./?chitat=${esc(b.url)}">Читать фрагмент</a>` : links[0] ? `<a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>Читать дальше</a>` : ''}`));
   if (quotes.length) S.push(sec('Цитаты', `<div class="qs">${quotes.map((q) => `<figure class="qc"><blockquote>${fmt(q.t)}</blockquote>${q.cite ? `<figcaption>${esc(q.cite)}</figcaption>` : ''}</figure>`).join('')}</div>`));
   if (reviews.length) S.push(sec('Отзывы', `<div class="qs">${reviews.map((r) => `<figure class="qc rv"><blockquote>${fmt(r.t)}</blockquote>${r.who ? `<figcaption>${esc(r.who)}</figcaption>` : ''}</figure>`).join('')}</div>`));
   if (b.collageOn !== false && photos.length) S.push(`<section class="bk-sec collage n${photos.length}" aria-label="Атмосфера книги"><div class="wrap col-in">
@@ -942,6 +950,37 @@ export function renderBook(raw, imgs = {}, key = '') {
 
 // Закон требует предупредить о сборе статистики — абзац добавляется сам, пока на сайте стоит Метрика
 export const METRIKA_NOTE = 'Сайт использует Яндекс Метрику — сервис статистики Яндекса. Он собирает обезличенные данные о посещениях (файлы cookie, просмотренные страницы, переходы), чтобы я понимала, что интересно читателям. Отключить cookie можно в настройках браузера.';
+// Ознакомительный фрагмент: абзацы, заголовки глав («Пролог», «Глава 3 …», «Эпилог») и паузы «***»
+export function fragBlocks(t) {
+  return String(t || '').split('\n').map((x) => x.trim()).filter(Boolean).map((x) =>
+    /^(\*\s*){3}$|^[*⁂]{1,3}$/.test(x) ? { br: true } : /^(пролог|эпилог|глава\s+\d+)([.:\s—–-].{0,80})?$/i.test(x) ? { h: x } : { p: x });
+}
+// Читалка фрагмента ./?chitat=<адрес книги>: спокойная колонка текста, в конце — продолжение на площадке
+export function renderReader(raw, imgs = {}, key = '') {
+  const c = normalize(raw);
+  const b = findBook(c, key);
+  const blocks = b ? fragBlocks(b.frag) : [];
+  if (!blocks.length) return null;
+  const shown = new Set(renderSite(c, imgs).shown);
+  const links = bookLinks(b);
+  const body = blocks.map((x) => (x.br ? '<p class="rd-br" aria-hidden="true">* * *</p>' : x.h ? `<h2>${esc(x.h)}</h2>` : `<p>${fmt(x.p, false)}</p>`)).join('');
+  return {
+    title: `${plain(b.title)} — фрагмент · ${c.name || 'Автор'}`,
+    ...chrome(c, c.blocks.filter((x) => shown.has(x.id))),
+    main: `<section class="rd"><div class="wrap rd-in">
+      <div class="rd-top"><a class="lnk rd-back" href="${bookHref(b)}"><span class="arrow">←</span> К книге</a>
+        <div class="rd-tools" role="group" aria-label="Чтение"><button data-rd="minus" aria-label="Мельче">A−</button><button data-rd="plus" aria-label="Крупнее">A+</button><button data-rd="night" aria-label="Ночной режим">Ночь</button></div></div>
+      <header class="rd-h"><div class="lbl">Ознакомительный фрагмент</div><h1>${fmt(b.title, false)}</h1><div class="rd-a">${esc(c.name || '')}</div></header>
+      <article class="rd-txt">${body}</article>
+      <div class="rd-end"><p class="rd-br" aria-hidden="true">* * *</p><div class="lbl">Конец фрагмента</div>
+        <h2>${fmt(links.length ? 'Что будет *дальше*' : 'Продолжение *следует*', false)}</h2>
+        ${links.length ? `<p>${b.status === 'writing' ? `Продолжение — на площадке «${esc(links[0][0])}»: я выкладываю новые главы, пока пишу.` : `Книга целиком — на площадке «${esc(links[0][0])}».`}</p><div class="buy">${links.map(([n, u], i) => `<a class="btn ${i ? 'btn-line' : 'btn-dark'}" href="${esc(u)}"${ext(u)}>${i ? esc(n) : esc(ctaText(b, links))}</a>`).join('')}</div>` : ''}
+      </div>
+    </div></section><div class="rd-prog" aria-hidden="true"><i></i></div>`,
+    colors: colors(c),
+  };
+}
+
 export function renderPrivacy(raw, imgs = {}) {
   const c = normalize(raw);
   if (!c.privacy) return null;

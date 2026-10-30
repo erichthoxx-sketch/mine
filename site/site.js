@@ -1,5 +1,5 @@
 // Сайт автора: главная или страница книги (?kniga=адрес). Сначала — сохранённое в браузере (мгновенно), потом свежее.
-import { renderSite, renderBook, renderPrivacy, DEFAULT_CONTENT, normalize, safeUrl, esc } from './content.js';
+import { renderSite, renderBook, renderPrivacy, renderReader, DEFAULT_CONTENT, normalize, safeUrl, esc } from './content.js';
 import { loadPublic, addSub, LOCAL } from './data.js';
 
 const CACHE = 'lanaSite.cache';
@@ -7,6 +7,7 @@ const $ = (id) => document.getElementById(id);
 const preview = new URLSearchParams(location.search).has('preview');
 let bookKey = new URLSearchParams(location.search).get('kniga') || '';
 const privacyPage = new URLSearchParams(location.search).has('privacy');
+const readKey = new URLSearchParams(location.search).get('chitat') || '';
 let current = null; // что сейчас на экране — нужно форме подписки (подарок, текст «готово»)
 let shownImgs = {};
 // Личный кабинет читателя (вход в шапке, ./?kabinet) — подгружается отдельно, основной сайт его не ждёт
@@ -34,7 +35,8 @@ const goal = (name, params) => { if (ymId && window.ym) window.ym(Number(ymId), 
 function show(content, imgs) {
   current = content || DEFAULT_CONTENT;
   metrika(current);
-  let r = bookKey ? renderBook(current, imgs || {}, bookKey) : privacyPage ? renderPrivacy(current, imgs || {}) : null;
+  let r = readKey ? renderReader(current, imgs || {}, readKey) : bookKey ? renderBook(current, imgs || {}, bookKey) : privacyPage ? renderPrivacy(current, imgs || {}) : null;
+  if (!r && readKey) r = renderBook(current, imgs || {}, readKey); // фрагмента нет — страница книги
   const isBook = !!r && !!bookKey;
   if (!r) r = renderSite(content || DEFAULT_CONTENT, imgs || {}); // книги нет (скрыли, сменили адрес) — главная
   shownImgs = imgs || {};
@@ -59,8 +61,43 @@ function show(content, imgs) {
     f.querySelector('.consent').hidden = true;
     const m = f.querySelector('.sub-msg'); m.hidden = false; m.innerHTML = giftHtml(normalize(current));
   }
+  reader();
   const d = document.querySelector('meta[name="description"]');
   if (d && r.description) d.setAttribute('content', r.description);
+}
+
+// Читалка фрагмента: размер шрифта, ночь, полоска прогресса, место чтения — запоминаются в этом браузере
+const RD = 'lanaSite.rd';
+const rdGet = () => { try { return JSON.parse(localStorage.getItem(RD) || '{}'); } catch { return {}; } };
+const rdSet = (p) => { try { localStorage.setItem(RD, JSON.stringify({ ...rdGet(), ...p })); } catch { /* без памяти */ } };
+let rdScroll = null;
+function reader() {
+  const art = document.querySelector('.rd-txt');
+  document.body.classList.toggle('is-reader', !!art);
+  if (rdScroll) { removeEventListener('scroll', rdScroll); rdScroll = null; }
+  if (!art) { document.body.classList.remove('rd-night'); return; }
+  const st = rdGet();
+  const apply = () => { const s = rdGet(); if (s.fs) art.style.setProperty('--rd-fs', s.fs + 'px'); else art.style.removeProperty('--rd-fs'); document.body.classList.toggle('rd-night', !!s.night); };
+  apply();
+  const bar = document.querySelector('.rd-prog i');
+  let saveT = 0;
+  rdScroll = () => {
+    const r = art.getBoundingClientRect(), total = r.height - innerHeight * 0.6;
+    const k = Math.max(0, Math.min(1, -r.top / Math.max(1, total)));
+    if (bar) bar.style.width = (k * 100).toFixed(1) + '%';
+    clearTimeout(saveT); saveT = setTimeout(() => rdSet({ pos: { ...(rdGet().pos || {}), [readKey]: k } }), 400);
+  };
+  addEventListener('scroll', rdScroll, { passive: true });
+  const k = st.pos?.[readKey] || 0;
+  if (k > 0.02 && k < 0.98) requestAnimationFrame(() => { const r = art.getBoundingClientRect(); scrollTo(0, scrollY + r.top + k * (r.height - innerHeight * 0.6)); });
+  rdScroll();
+  document.querySelector('.rd-tools').onclick = (e) => {
+    const b = e.target.closest('[data-rd]'); if (!b) return;
+    const s = rdGet();
+    if (b.dataset.rd === 'night') rdSet({ night: !s.night });
+    else rdSet({ fs: Math.max(15, Math.min(26, (s.fs || parseFloat(getComputedStyle(art).fontSize) || 19) + (b.dataset.rd === 'plus' ? 1 : -1))) });
+    apply();
+  };
 }
 
 // Кнопка «Читать» внизу экрана на телефоне — только когда главная кнопка книги ушла из виду

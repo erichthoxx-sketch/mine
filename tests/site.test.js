@@ -29,10 +29,11 @@ test('сайт: первый экран — медведь в тумане с о
   assert.match(r.main, /class="card[^"]*" href="\.\/\?kniga=alpiyskiy-razvod"/);
 });
 
-test('сайт: подписка с подарком внизу каждой страницы, без повтора меню; выключается', () => {
+test('сайт: подписка внизу каждой страницы, без повтора меню; выключается', () => {
   const c = ex();
   const r = renderSite(c);
-  assert.match(r.foot, /«Проданная ночь» <span class="it">в подарок<\/span>/);
+  assert.match(r.foot, /Торжественно <span class="it">клянусь<\/span>/); // пока подарка нет — «одно письмо»
+  assert.match(renderSite({ ...c, giftName: 'Проданная ночь' }).foot, /«Проданная ночь» <span class="it">в подарок<\/span>/);
   assert.match(r.foot, /data-sub/);
   assert.match(r.foot, /href="\.\/\?privacy"/);
   assert.ok(!r.foot.includes('Об авторе'), 'меню в подвале не повторяется');
@@ -179,4 +180,24 @@ test('сайт: Метрика — счётчик по умолчанию, пр�
 
 test('сайт: правила Firebase в админке совпадают с firestore.rules', () => {
   assert.equal(readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8'), RULES);
+});
+
+test('сайт: прежние тексты подписки с подарком сами сменились на «одно письмо», свои — не трогаются', () => {
+  const old = { subText: 'Оставьте почту — пришлю книгу в подарок. А потом буду писать только о важном: новые книги и главы, обложки до премьеры.', subBtn: 'Получить книгу', giftName: 'Проданная ночь', giftUrl: '' };
+  const n = normalize(old);
+  assert.equal(n.giftName, ''); assert.equal(n.subBtn, 'Жду письма');
+  const mine = normalize({ ...old, subText: 'Мой текст' });
+  assert.equal(mine.giftName, 'Проданная ночь'); assert.equal(mine.subText, 'Мой текст');
+});
+
+test('сайт: ознакомительный фрагмент — главы, паузы, читалка и ссылка со страницы книги', async () => {
+  const { fragBlocks, renderReader } = await import('../site/content.js');
+  assert.deepEqual(fragBlocks('Пролог\nПервый абзац.\n***\nВторой.\nГлава 1. Чужой\nТретий.'),
+    [{ h: 'Пролог' }, { p: 'Первый абзац.' }, { br: true }, { p: 'Второй.' }, { h: 'Глава 1. Чужой' }, { p: 'Третий.' }]);
+  const c = ex();
+  assert.equal(renderReader(c, {}, 'alpiyskiy-razvod'), null); // фрагмента нет — читалки нет
+  const b = c.books.find((x) => /Альпийский/.test(x.title)); b.frag = 'Глава 1\nОна посмотрела на горы.';
+  const r = renderReader(c, {}, 'alpiyskiy-razvod');
+  assert.match(r.main, /Ознакомительный фрагмент/); assert.match(r.main, /<h2>Глава 1<\/h2>/);
+  assert.match(renderBook(c, {}, 'alpiyskiy-razvod').main, /\?chitat=alpiyskiy-razvod/);
 });
