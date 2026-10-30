@@ -394,6 +394,10 @@ body.rd-night{--paper:#16171a;--paper-2:#1e2024;--ink:#d9d7d1;--ink-2:#9a9da2;--
 .cab-gets li::before{content:"";position:absolute;left:0;top:.72em;width:12px;height:1px;background:var(--a1)}
 .cab-gets b{font-weight:500;color:var(--ink)}
 .cab-gets.big{font-size:16px;margin:22px 0 26px;padding-top:20px}
+.cab-sheet .cab-gets{gap:6px;font-size:13px;padding-top:14px}
+.cab-sheet .cab-gets b{font-weight:400;color:var(--ink-2)}
+.cab-sheet .cab-gets li{padding-left:18px}
+.cab-sheet .cab-gets li::before{width:9px;background:var(--line)}
 @keyframes cabIn{from{opacity:0}to{opacity:1}}
 .cab-book{display:grid;gap:14px;margin:6px 0 2px}
 .cab-start{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}

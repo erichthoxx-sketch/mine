@@ -77,7 +77,10 @@ export function headEntry() {
 // ---------- окно входа: почта и пароль ----------
 // «что даёт кабинет»: строка «Жирное — остальное» → жирное начало
 const perks = (c, cls = '') => {
-  const ls = [...String(c.cabPerks || '').split('\n'), c.raffleOn ? c.rafPerk || '' : ''].map((x) => x.trim()).filter(Boolean);
+  // без лишних обещаний: старт подписки — только если он правда назначен, подарок — только со ссылкой на файл
+  const hasStart = books().some((b) => startInfo(b, today()));
+  const ls = [...String(c.cabPerks || '').split('\n'), c.raffleOn ? c.rafPerk || '' : ''].map((x) => x.trim()).filter(Boolean)
+    .filter((l) => (hasStart || !/^старт подписки/i.test(l)) && (c.giftUrl || !/в подарок/i.test(l.split(' — ')[0])));
   return ls.length ? `<ul class="cab-gets${cls}">${ls.map((l) => { const [a, ...b] = l.split(' — '); return `<li>${b.length ? `<b>${esc(a)}</b> — ${esc(b.join(' — '))}` : esc(l)}</li>`; }).join('')}</ul>` : '';
 };
 let mode = 'new'; // new — создать кабинет, in — войти, reset — забыли пароль
@@ -99,7 +102,7 @@ function formHtml(c) {
       <button class="btn btn-dark" type="submit">Прислать письмо</button><p class="cab-err" hidden></p></form>
     <div class="cab-alt"><button class="cab-link" data-cab="mode" data-v="in">← Вспомнила пароль</button></div>`;
   const neu = mode === 'new';
-  return `<p class="cab-p">${esc(c.cabText || '')}</p>
+  return `${c.cabText ? `<p class="cab-p">${esc(c.cabText)}</p>` : ''}
     <form class="cab-form" data-cab-form="${mode}">
       ${neu ? '<input type="text" name="uname" placeholder="Как вас зовут" autocomplete="given-name" maxlength="60" required>' : ''}
       <input type="email" name="email" placeholder="Почта" autocomplete="email" required>
@@ -156,7 +159,7 @@ function raffleSec(c, head, T, imgs) {
       return `<button class="cab-wb${on ? ' on' : ''}${sel ? ' sel' : ''}" data-cab="rafpick" data-id="${esc(b.id)}" aria-pressed="${on || sel}">
       <span class="cab-mc">${cover(b, imgs, name)}</span><span class="cab-t">${fmt(b.title, false)}</span><span class="cab-wl">${on ? 'ваше желание' : sel ? 'выбрано' : ''}</span></button>`; }).join('')}</div>
     ${rafPick ? `<div class="cab-confirm"><button class="btn btn-dark" data-cab="raf" data-id="${esc(rafPick)}">${pick ? 'Заменить желание' : 'Хочу эту книгу в подарок'}</button><button class="cab-link" data-cab="rafpick" data-id="">Отмена</button></div>`
-      : `<div class="cab-s">${pick ? `Ваше желание — «${esc(plainT(pick.title))}». Ближайшая пятница — ${dm(fri)}. Передумали — нажмите на другую обложку.` : 'Нажмите на обложку истории, которую хотели бы получить.'}</div>`}
+      : pick ? `<div class="cab-s">Ваше желание — «${esc(plainT(pick.title))}» · ближайшая пятница — ${dm(fri)}</div>` : ''}
     ${c.rafRules ? `<p class="cab-rules">${esc(c.rafRules)}</p>` : ''}
   </section>`;
 }
