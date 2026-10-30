@@ -18,6 +18,17 @@ import { linkedTargetologists, targetReminders } from '../../../js/target-partne
 const app = () => window.__app;
 
 // Запуск книги: где мы сейчас и что сделать — видно сразу, даже пока Директ не подключён
+// Почему не обновилось — честно, по настоящей причине: Яндекс, переходник на Cloudflare или связь
+const when = (iso) => new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+function outageAlert(err, main) {
+  const txt = String(err.text || ''), old = main?.at && Date.now() - Date.parse(main.at) > 24 * 3600000;
+  const why = err.code === 56 ? 'Яндекс ограничил частоту запросов — приложение повторит загрузку само.'
+    : /переходник/i.test(txt) ? 'Нет связи с вашим переходником на Cloudflare — это не Яндекс. Проверьте интернет и переходник: ⚙ Настройки.'
+    : [52, 1000, 1001, 1002].includes(err.code) ? `Директ отвечает «временно недоступен» (код ${err.code}) — это перебои у Яндекса. Приложение попробует снова само.`
+    : `${txt || 'Ошибка при загрузке'} — это может быть и переходник, и Яндекс.`;
+  return `<div class="alert d-outage">${esc(why)} Данные от ${when(main.at)}.${old ? ' <b>Не обновляется больше суток — это уже не короткий сбой.</b> Нажмите ↻ вверху; если не помогло — пришлите скриншот этой строки.' : ''}
+    <div class="small muted">Последняя попытка: ${err.at ? when(err.at) : '—'}${txt ? ' · ' + esc(txt) : ''}${err.code ? ` · код ${err.code}` : ''}</div></div>`;
+}
 // по карточке на каждую книгу «в процессе»
 const launchCard = (a) => (demo.on ? '' : resolvedLaunches(a).map((L) => launchOne(L)).join(''));
 function launchOne({ id, plan: p }) {
@@ -126,7 +137,7 @@ export function homeView(a) {
     html: `${demo.on ? `<div class="alert">Это пример — так будет выглядеть ваш Директ. Можно нажимать кнопки: в примере ничего не тратится. ${c.settings.directToken ? '' : '<button class="link" data-act="go" data-to="/settings">Подключить свой</button>'}${a.store.mode !== 'local' ? ' <button class="link" data-act="d.demoOff">Закрыть пример</button>' : ''}</div>` : ''}
     ${launchCard(a)}
     <div class="card"><div class="row between"><h2 style="margin:0">За 7 дней</h2><span class="small muted">${fmtShort(addDays(t, -6))}–${fmtShort(t)}${delta != null ? ` · <span class="${delta > 0 ? 'warnc' : ''}">${delta > 0 ? '▲' : '▼'} ${pct(Math.abs(delta), 0)} к прошлой неделе</span>` : ''}</span></div>
-    ${!demo.on && err?.transient ? `<div class="alert d-outage">${esc(err.code === 56 ? 'Яндекс ограничил частоту запросов — приложение повторит загрузку автоматически.' : OUTAGE_TEXT)} Данные от ${new Date(main.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.</div>` : ''}
+    ${!demo.on && err?.transient ? outageAlert(err, main) : ''}
     ${stats?.mErr ? `<p class="small muted">${esc(stats.mErr)}</p>` : ''}
       ${tiles(w)}
       ${gw ? `<div class="d-goalrow small"><span>Покупки ${q('conv')} <b>${num(gw.conv)}</b></span><span>Цена покупки ${q('cpa')} <b>${gw.cpa != null ? rub(gw.cpa, 0) : '—'}</b></span><span>Из 100 кликов ${q('cr')} <b>${gw.cr != null ? String(Math.round(gw.cr * 1000) / 10).replace('.', ',') : '—'}</b></span></div>` : ''}
