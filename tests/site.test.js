@@ -185,7 +185,8 @@ test('сайт: правила Firebase в админке совпадают с 
 test('сайт: прежние тексты подписки с подарком сами сменились на «одно письмо», свои — не трогаются', () => {
   const old = { subText: 'Оставьте почту — пришлю книгу в подарок. А потом буду писать только о важном: новые книги и главы, обложки до премьеры.', subBtn: 'Получить книгу', giftName: 'Проданная ночь', giftUrl: '' };
   const n = normalize(old);
-  assert.equal(n.giftName, ''); assert.equal(n.subBtn, 'Жду письма');
+  assert.equal(n.giftName, ''); assert.equal(n.subBtn, 'Хочу узнать первой');
+  assert.equal(normalize({ subText: 'Я пишу только в день, когда выходит мой новый роман. Одно письмо — и ничего больше: ни рассылок, ни акций, ни напоминаний.', subBtn: 'Жду письма' }).subBtn, 'Хочу узнать первой');
   const mine = normalize({ ...old, subText: 'Мой текст' });
   assert.equal(mine.giftName, 'Проданная ночь'); assert.equal(mine.subText, 'Мой текст');
 });

@@ -50,8 +50,8 @@ a{color:inherit}
 .saved.busy i{background:var(--line)}
 .saved.bad{color:var(--bad)}
 .saved.bad i{background:var(--bad)}
-.tabs{display:flex;gap:22px;padding:0 20px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
-.tabs button{background:none;border:0;padding:12px 0 11px;border-bottom:1.5px solid transparent;font:500 11px/1 var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);white-space:nowrap}
+.tabs{display:flex;gap:14px;padding:0 18px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tabs button{background:none;border:0;padding:12px 0 11px;border-bottom:1.5px solid transparent;font:500 11px/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);white-space:nowrap}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
 .ed-body{flex:1;overflow-y:auto;padding:18px 20px 120px}
 .pv{position:relative;background:var(--paper-2);min-width:0}

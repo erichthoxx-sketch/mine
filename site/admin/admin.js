@@ -22,6 +22,18 @@ const TYPE_NOTE = {
   about: 'Фото, текст и цифры', tg: 'Тёмная полоса с кнопкой', text: 'Заголовок и абзацы',
 };
 
+// Вышла новая версия админки — открытая вкладка обновится сама, когда всё сохранено и ничего не печатается
+const MY_V = (/[?&]v=([^&]+)/.exec(import.meta.url) || [])[1] || '';
+async function checkVersion() {
+  if (S.save !== 'ok' || document.activeElement?.matches?.('input,textarea')) return;
+  try {
+    const t = await (await fetch(location.pathname + '?vc=' + Date.now(), { cache: 'no-store' })).text();
+    const v = (/admin\.js\?v=([^"'&]+)/.exec(t) || [])[1];
+    if (v && v !== MY_V) location.reload();
+  } catch { /* нет сети — проверим позже */ }
+}
+if (MY_V && MY_V !== '__V__') { setInterval(checkVersion, 120000); addEventListener('focus', checkVersion); }
+
 // ---------- запуск ----------
 (async () => {
   try { S.store = await openStore(); } catch { app.innerHTML = '<div class="boot">Нет интернета — обновите страницу.</div>'; return; }
@@ -47,7 +59,7 @@ async function loadAll() {
 
 async function loadSubs() {
   try { S.subs = await S.store.listSubs(); S.subsErr = ''; } catch (e) { S.subs = []; S.subsErr = /permission/i.test(e?.code || e?.message || '') ? 'rules' : 'net'; }
-  if (S.tab === 'general') renderEditor();
+  if (S.tab === 'sub') renderEditor();
 }
 
 // Розыгрыш: кто какую книгу хочет, промокоды, победы. До обновления правил Firebase — подсказка обновить
@@ -98,13 +110,13 @@ function render() {
 }
 
 function renderEditor() {
-  const tabs = [['blocks', 'Блоки'], ['books', 'Книги'], ['look', 'Цвета'], ['cab', 'Кабинет'], ['raf', 'Подарок'], ['general', 'Общее']];
+  const tabs = [['blocks', 'Блоки'], ['books', 'Книги'], ['sub', 'Подписка'], ['cab', 'Кабинет'], ['raf', 'Подарок'], ['look', 'Вид'], ['more', 'Ещё']];
   document.getElementById('tabs').innerHTML = tabs.map(([k, n]) => `<button role="tab" aria-selected="${S.tab === k}" data-act="tab" data-t="${k}">${n}</button>`).join('');
   document.getElementById('mtabs').innerHTML = `<button aria-selected="${!S.pv}" data-act="pv" data-v="0">Правка</button><button aria-selected="${S.pv}" data-act="pv" data-v="1">Сайт</button>`;
   document.querySelector('.adm').classList.toggle('show-pv', S.pv);
   document.querySelector('.ed-top .logo').textContent = S.content.name || 'Сайт';
   const body = document.getElementById('body');
-  body.innerHTML = { blocks: blocksTab, books: booksTab, look: lookTab, cab: cabTab, raf: rafTab, general: generalTab }[S.tab]();
+  body.innerHTML = ({ blocks: blocksTab, books: booksTab, sub: subTab, look: lookTab, cab: cabTab, raf: rafTab, more: moreTab }[S.tab] || blocksTab)();
   body.querySelectorAll('textarea').forEach(grow);
   applyColors();
   status();
@@ -215,6 +227,12 @@ function lookTab() {
       <label><input type="color" id="c-a1" data-s="site" data-k="a1" value="${cur.a1}" aria-label="Первый цвет"></label>
       <label><input type="color" id="c-a2" data-s="site" data-k="a2" value="${cur.a2}" aria-label="Второй цвет"></label>
       ${c.palette === 'custom' ? '<span class="muted">выбраны</span>' : ''}
+    </div>
+    <h3 class="sub">Шапка и подвал</h3>
+    <div class="list" style="gap:16px">
+      ${field('site', c, { k: 'name', label: 'Имя автора', hint: 'В шапке и внизу сайта' })}
+      ${field('site', c, { k: 'headUrl', label: 'Ссылка на Telegram-канал', type: 'url', hint: 'В меню — значок-самолётик' })}
+      ${field('site', c, { k: 'foot', label: 'Ссылки внизу', type: 'area', hint: 'Каждая с новой строки: Telegram — https://t.me/…  Без ссылки строка не показывается.' })}
     </div>`;
 }
 
@@ -296,34 +314,40 @@ function cabTab() {
     </div>`;
 }
 
-function generalTab() {
+// Подписка: форма внизу сайта (в том порядке, как её видит читательница), подарок по желанию, подписчицы, политика
+function subTab() {
+  const c = S.content;
+  return `<p class="note">Форма внизу каждой страницы сайта — так её видит читательница в окне сайта.</p>
+    ${field('site', c, { k: 'subOn', label: 'Показывать форму подписки', type: 'toggle' })}
+    <h3 class="sub">Что написано</h3>
+    <div class="list" style="gap:16px">
+      ${field('site', c, { k: 'subTitle', label: 'Строка над заголовком' })}
+      ${c.giftName ? '' : field('site', c, { k: 'subHead', label: 'Заголовок', hint: '*Звёздочки* — курсив' })}
+      ${field('site', c, { k: 'subText', label: 'Текст', type: 'area' })}
+      ${field('site', c, { k: 'subBtn', label: 'Кнопка' })}
+      ${field('site', c, { k: 'consent', label: 'Галочка согласия', type: 'area' })}
+      ${field('site', c, { k: 'subDone', label: 'После подписки', type: 'area' })}
+    </div>
+    <h3 class="sub">Подарок за подписку</h3>
+    <p class="note">По желанию. Пока названия нет — форма с вашим заголовком. Появится книга (например, мини-роман) — впишите название и ссылку на файл: заголовок станет «„Название“ в подарок», а кнопка «Скачать» откроется сразу после подписки.</p>
+    <div class="list" style="gap:16px">
+      ${field('site', c, { k: 'giftName', label: 'Название книги-подарка' })}
+      ${field('site', c, { k: 'giftUrl', label: 'Ссылка на файл', type: 'url', hint: 'Google Диск, Яндекс Диск…' })}
+    </div>
+    <h3 class="sub">Подписчицы${S.subs ? ` · ${S.subs.length}` : ''}</h3>
+    ${subsHtml()}
+    <h3 class="sub">Политика конфиденциальности</h3>
+    ${field('site', c, { k: 'privacy', label: 'Текст страницы', type: 'area', hint: 'Отдельная страница по ссылке внизу сайта. Проверьте его под себя' })}`;
+}
+
+// Ещё: статистика, нейросеть, копия сайта, вход
+function moreTab() {
   const c = S.content;
   const site = new URL('../', location.href).href;
-  return `<h3 class="sub">Шапка и подвал</h3>
+  return `<h3 class="sub">Статистика</h3>
     <div class="list" style="gap:16px">
-      ${field('site', c, { k: 'name', label: 'Имя автора', hint: 'В шапке и внизу сайта' })}
-      ${field('site', c, { k: 'headUrl', label: 'Ссылка на Telegram-канал', type: 'url', hint: 'В меню — значок-самолётик' })}
-      ${field('site', c, { k: 'foot', label: 'Ссылки внизу', type: 'area', hint: 'Каждая с новой строки: Telegram — https://t.me/…  Без ссылки строка не показывается.' })}
+      ${field('site', c, { k: 'metrika', label: 'Счётчик Яндекс Метрики', hint: 'Посещения, нажатия «Читать», подписки — в «Директе» → Читатели → Сайт. Пусто — без статистики' })}
     </div>
-    <h3 class="sub">Подписка и подарок</h3>
-    <p class="note">Внизу каждой страницы сайта — форма: читатель оставляет почту; если указан подарок — сразу получает его по ссылке. Адреса копятся здесь.</p>
-    <div class="list" style="gap:16px">
-      ${field('site', c, { k: 'subOn', label: 'Показывать форму подписки', type: 'toggle' })}
-      ${field('site', c, { k: 'giftName', label: 'Подарок — название книги', hint: 'Пусто — без подарка: заголовок ниже («Торжественно клянусь»)' })}
-      ${field('site', c, { k: 'subHead', label: 'Заголовок, пока подарка нет', hint: '*Звёздочки* — курсив' })}
-      ${field('site', c, { k: 'giftUrl', label: 'Ссылка на подарок', type: 'url', hint: 'Где лежит файл книги: Google Диск, Яндекс Диск… Открывается сразу после подписки' })}
-      ${field('site', c, { k: 'subTitle', label: 'Подпись сверху' })}
-      ${field('site', c, { k: 'subText', label: 'Текст', type: 'area' })}
-      <div class="two">${field('site', c, { k: 'subBtn', label: 'Кнопка' })}${field('site', c, { k: 'consent', label: 'Галочка согласия' })}</div>
-      ${field('site', c, { k: 'subDone', label: 'Текст после подписки', type: 'area' })}
-      ${field('site', c, { k: 'privacy', label: 'Политика конфиденциальности', type: 'area', hint: 'Отдельная страница по ссылке внизу сайта. Здесь — простой черновик, проверьте его под себя' })}
-    </div>
-    <h3 class="sub">Статистика</h3>
-    <div class="list" style="gap:16px">
-      ${field('site', c, { k: 'metrika', label: 'Счётчик Яндекс Метрики', hint: 'Номер счётчика: посещения, нажатия «Читать», подписки. Смотреть — в «Директе» → Аналитика → Сайт. Пусто — без статистики' })}
-    </div>
-    <h3 class="sub">Подписчики${S.subs ? ` · ${S.subs.length}` : ''}</h3>
-    ${subsHtml()}
     <h3 class="sub">Нейросеть</h3>
     <p class="note">Скопируйте сайт для любой нейросети (Claude, ChatGPT…), попросите поправить тексты и вставьте её ответ сюда — сайт обновится. До вставки можно вернуть как было.</p>
     <div class="links"><button class="btn line" data-act="copyAI">Скопировать для нейросети</button><button class="quiet" data-act="pasting">Вставить ответ</button></div>
@@ -450,7 +474,7 @@ app.addEventListener('submit', async (e) => {
 
 // ---------- действия ----------
 const acts = {
-  tab: (d) => { S.tab = d.t; S.open = null; S.adding = false; S.pasting = false; if (S.pvBook) { S.pvBook = ''; preview(); } },
+  tab: (d) => { S.tab = d.t; S.open = null; S.adding = false; S.pasting = false; if (S.pvBook) S.pvBook = ''; preview(d.t === 'sub' ? 'podpiska' : null); },
   pv: (d) => { S.pv = d.v === '1'; },
   open: (d) => {
     S.open = S.open === d.id ? null : d.id;
