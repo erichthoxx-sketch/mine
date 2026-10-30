@@ -237,9 +237,7 @@ export function after(c, imgs, bookKey, rerender) {
   ctx = { c, imgs }; redraw = rerender;
   const r = document.querySelector('.top-r');
   if (r && !r.querySelector('.acc')) r.insertAdjacentHTML('afterbegin', headEntry());
-  // уже своя (почта в списке с регистрации) — вместо формы спокойная строка-подтверждение, блок остаётся на месте
-  const sf = user && document.querySelector('#podpiska .sub-f');
-  if (sf) sf.outerHTML = `<div class="sub-f"><p class="sub-msg sub-mine">${esc(c.subMine || 'Вы уже со мной. Письмо о новом романе придёт на')} <b>${esc(user.email || '')}</b></p></div>`;
+  if (user) document.getElementById('podpiska')?.remove(); // уже своя — почта в списке с регистрации, форма подписки внизу не нужна
   const b = bookKey && findBook(c, bookKey);
   if (b) (document.querySelector('.bk-top .bk-frag') || document.querySelector('.bk-top .buy'))?.insertAdjacentHTML('afterend', bookExtras(b));
   if (new URLSearchParams(location.search).has('kabinet') && known() && !user) watch();
