@@ -150,6 +150,8 @@ css/style.css              — общий стиль ОБОИХ приложен
 js/                        — «Доходы» + общие модули
   app.js        роутинг (#/, #/day, #/books, #/book/ID, #/ads, #/ad/ID, #/money, #/data), меню, рендер
   store.js      хранилище: Firebase (users/{uid}/{коллекция}/{id}, настройки users/{uid}/meta/settings)
+                putMany — куски по 400 уходят одновременно; перерисовка после записи — одна за кадр (app.js), импорт выгрузки
+                показывает шаги («Читаю выгрузку…», «Сверяю…», «Сохраняю…»), журнал sales_history пишется одной записью
                 или пробный режим в localStorage (на localhost — всегда пробный)
   ui.js         общие помощники: acts / forms / changes, openSheet, toast, download, ask, opt, esc, N, tidyNums, keepPlace;
                 выбор файла (input type=file с data-chg) слушается на самой кнопке с момента нажатия — иначе перерисовка экрана,

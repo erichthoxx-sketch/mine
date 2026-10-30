@@ -31,7 +31,8 @@ class Base {
   constructor(colls = COLLECTIONS) { this.colls = colls; this.data = emptyData(colls); this.listeners = new Set(); this.user = null; this.mode = 'local'; this.sync = 'ok'; }
   subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   emit() { this.version = (this.version || 0) + 1; this.listeners.forEach((f) => f(this.data)); }
-  async putMany(coll, items) { for (let i = 0; i < items.length; i += 400) await this._write(coll, items.slice(i, i + 400), []); }
+  // куски по 400 (предел одной записи Firestore) уходят одновременно, а не по очереди — большая выгрузка сохраняется быстрее
+  async putMany(coll, items) { const parts = []; for (let i = 0; i < items.length; i += 400) parts.push(items.slice(i, i + 400)); await Promise.all(parts.map((p) => this._write(coll, p, []))); }
   async removeMany(coll, ids) { for (let i = 0; i < ids.length; i += 400) await this._write(coll, [], ids.slice(i, i + 400)); }
   put(coll, item) { return this.putMany(coll, [item]); }
   // Обновляет только указанные поля, чтобы фоновая синхронизация
