@@ -183,3 +183,4 @@ export function budgetCheck(p, { cpc = null, cpcSrc = '', crLib = null, goals = 
   }
   return { cpc: c, cpcSrc: cpc > 0 ? cpcSrc : 'предположение', cr, libCost: Math.round(libCost), needWeek, ok, lines };
 }
+export { sameBook };

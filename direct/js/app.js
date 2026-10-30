@@ -10,6 +10,7 @@ import { refresh, refreshMetrika, refreshSite } from './sync.js';
 import { demo, snap, demoLog } from './demo.js';
 import { homeView } from './views/home.js';
 import { navSide } from './views/navside.js';
+import { booksAdsView, bookAdView } from './views/bookads.js';
 import { launchView } from './views/launch.js';
 import { qualityView } from './views/quality.js';
 import { experimentsView } from './views/experiments.js';
@@ -27,7 +28,7 @@ import { settingsView } from './views/settings.js';
 const store = createStore({ colls: ['d_snap', 'd_log', 'd_tests', 'd_keywords', 'd_kw_bindings', 'd_competitors', 'w_promolinks', 'w_books', 'w_links', 'campaigns', 'reports', 'books', 'days', 'sales'], localKey: 'authorDirect.v1' });
 initAccent(store); // цвет акцентов — общий для всех приложений (выбирается в Мастерской)
 const ui = { route: '/', cTab: 'queries', lTab: '', lesson: '', demo: false, busy: '', kwBook: '', kwFilter: 'all' };
-keepPlace(ui, ['cTab', 'lTab', 'demo', 'kwBook', 'kwFilter']);
+keepPlace(ui, ['cTab', 'lTab', 'bTab', 'demo', 'kwBook', 'kwFilter']);
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* ок */ }
 
@@ -76,15 +77,16 @@ export async function reload({ quiet = false } = {}) {
 app.reload = reload;
 acts['d.reload'] = () => { reload(); return false; };
 
-// Четыре раздела: Реклама (запуск, кампании, что сделать), Читатели (Литнет, сайт, ссылки), Слова (фразы, конкуренты), Учёба.
+// Четыре раздела: Реклама (запуск, кампании, что сделать), Книги (у каждой — её реклама, читатели, метки, слова), Читатели, Учёба.
 // Остальные экраны открываются изнутри и подсвечивают свой раздел.
-const TABS = [['/', 'ads', 'Реклама'], ['/an', 'data', 'Читатели'], ['/keywords', 'search', 'Слова'], ['/learn', 'books', 'Учёба']];
-const TAB_OF = { launch: '/', quality: '/', ai: '/', log: '/', settings: '/', litnet: '/an', competitors: '/keywords', experiments: '/learn' };
+const TABS = [['/', 'ads', 'Реклама'], ['/books', 'books', 'Книги'], ['/an', 'data', 'Читатели'], ['/learn', 'ideas', 'Учёба']];
+const TAB_OF = { launch: '/', quality: '/', ai: '/', log: '/', settings: '/', litnet: '/an', book: '/books', keywords: '/books', competitors: '/books', experiments: '/learn' };
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'c' && b) return { tab: '/', view: (x) => campaignView(x, Number(decodeURIComponent(b))) };
+  if (a === 'book' && b) return { tab: '/books', view: (x) => bookAdView(x, decodeURIComponent(b)) };
   if (a === 'launch' && b) return { tab: '/', view: (x) => launchView(x, decodeURIComponent(b)) };
-  const map = { '': homeView, launch: launchView, quality: qualityView, experiments: experimentsView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
+  const map = { books: booksAdsView, '': homeView, launch: launchView, quality: qualityView, experiments: experimentsView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
   return { tab: TAB_OF[a] || '/' + (a || ''), view: map[a || ''] || homeView };
 }
 

@@ -12,7 +12,8 @@ const chosen=a=>a.ui.kwBook||books(a).find(x=>x.title==='Развод для ч�
 const allFor=a=>(a.ctx().data.d_keywords||[]).filter(x=>String(x.bookId||'')===String(chosen(a)));
 const campaigns=a=>(a.snap?.('main')?.campaigns||[]).filter(x=>x.state!=='ARCHIVED');
 const activeBinding=a=>(a.ctx().data.d_kw_bindings||[]).find(x=>String(x.bookId)===String(chosen(a)));
-const campaignId=a=>Number(activeBinding(a)?.campaignId)||null;
+// кампания книги: своя привязка слов, иначе — кампания из плана запуска этой книги (связывается само)
+const campaignId=a=>Number(activeBinding(a)?.campaignId)||Number(a.ctx().settings.direct?.launches?.[chosen(a)]?.campaignId)||null;
 const campaignWords=a=>(a.snap?.('main')?.keywords||[]).filter(x=>Number(x.cid)===campaignId(a));
 const campaignQueries=a=>(a.snap?.('stats')?.queries||[]).filter(x=>Number(x.cid)===campaignId(a)).sort((a,b)=>b.clicks-a.clicks||b.impr-a.impr);
 const modeLabel = {all:'Все',review:'На проверку',keep:'В подборе',negative:'Минус-кандидаты',reject:'Исключены'};
@@ -24,7 +25,7 @@ const statusButtons=x=>`<span class="kw-buttons">
   <button class="link ${x.status==='reject'?'kw-selected':''}" data-act="kw.status" data-id="${esc(x.id)}" data-state="reject">Исключить</button>
   ${x.status!=='review'?`<button class="link" data-act="kw.status" data-id="${esc(x.id)}" data-state="review">Вернуть</button>`:''}
 </span>`;
-export function keywordsView(a){
+export function keywordsView(a, { embedded = false } = {}){
   const b=books(a),selected=chosen(a),all=allFor(a);
   const filter=a.ui.kwFilter||'all',filtered=all.filter(x=>filter==='all'||x.status===filter)
     .sort((x,y)=> (x.status===y.status?0:(x.status==='keep'?-1:1)) || ((y.count??-1)-(x.count??-1)) || x.phrase.localeCompare(y.phrase,'ru'));
@@ -35,10 +36,10 @@ export function keywordsView(a){
   return {html:`
     <div class="card kw-head">
       <div class="row between"><h2 style="margin:0">Подбор ключевых слов</h2><a href="${wordstatUrl}" target="_blank" rel="noopener noreferrer">Открыть Вордстат</a></div>
-      <label for="kwBook">Книга</label>
+      ${embedded ? '' : `<label for="kwBook">Книга</label>
       <select id="kwBook" data-chg="kw.book">
         ${!b.length?'<option value="">Без книги</option>':b.map(x=>opt(x.id,x.title,selected)).join('')}
-      </select>
+      </select>`}
       <div class="kw-stat-row"><span><b>${all.length}</b> фраз</span><span><b>${picked.length}</b> в подборе</span><span><b>${candidates.length}</b> на проверку в минус</span></div>
     </div>
     <div class="card kw-input">
@@ -48,8 +49,8 @@ export function keywordsView(a){
         <option value="">Пока не привязана</option>
         ${campaigns(a).map(x=>opt(String(x.id),x.name,String(campaignId(a)||''))).join('')}
       </select>
-      ${!campaigns(a).length?'<p class="small muted">В твоем кабинете пока нет кампаний. Кампании таргетологов из другого кабинета недоступны — их данные здесь не появятся.</p>':
-         !campaignId(a)?'<p class="small muted">Выбери собственную кампанию. Ее фразы и запросы будут подтягиваться из данных Директа при обновлении статистики.</p>':`
+      ${!campaigns(a).length?'<p class="small muted">В вашем кабинете Директа пока нет кампаний. Кампании таргетологов из их кабинетов сюда не попадают.</p>':
+         !campaignId(a)?'<p class="small muted">Выберите кампанию этой книги — её фразы и запросы будут подтягиваться сами при обновлении данных Директа.</p>':`
         <div class="kw-stat-row">
           <span><b>${campaignWords(a).length}</b> ключей в кампании</span>
           <span><b>${campaignQueries(a).length}</b> поисковых запросов</span>

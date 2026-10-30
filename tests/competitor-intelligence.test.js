@@ -36,5 +36,5 @@ test('Keywords UI links read-only campaign and competitor research without addin
   assert.match(h,/Связь с моей кампанией/);
   assert.match(h,/data-chg="kw.campaign"/);
   assert.match(h,/data-to="\/competitors"/);
-  assert.match(h,/Кампании таргетологов из другого кабинета недоступны/);
+  assert.match(h,/Кампании таргетологов из их кабинетов сюда не попадают/);
 });
