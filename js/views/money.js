@@ -1,4 +1,4 @@
-import { esc, acts, forms, openSheet, opt, toast, N, changes } from '../ui.js';
+import { esc, acts, forms, openSheet, opt, toast, N, changes, copyRich } from '../ui.js';
 import { npdStatusOf, npdBlock } from '../npd.js';
 import { rub, fmtMonth, fmtMonthCap, fmtMonthShort, fmtMonthIn, pct, num } from '../format.js';
 import { monthOutages, paceForecast, monthFinance, monthKey, monthsBetween, byMonth, buildPlan, planOverridesOf, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline, rocketRows, monthCash, addMonths, DISCOUNT_NOTE } from '../calc.js';
@@ -178,7 +178,7 @@ acts['tax.check'] = (d) => {
   (c.monthsMap[d.m] || {}).taxPaid ? null : async () => { await acts['tax.pay'](d); }, { submitText: 'Оплачен' });
 };
 acts.copy = async (d) => {
-  try { await navigator.clipboard.writeText(d.text); toast('Скопировано'); } catch { toast('Не получилось скопировать — выделите текст вручную'); }
+  toast((await copyRich(d.text).catch(() => false)) ? 'Скопировано' : 'Не получилось скопировать — выделите текст вручную');
 };
 
 // ---------- Rocket ----------

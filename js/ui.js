@@ -92,6 +92,28 @@ export function installHandlers(afterChange) {
 }
 
 // Скачивание: в Claude через разрешение «downloads» (обычные ссылки там заблокированы), в обычном браузере — через ссылку
+// Скопировать текст (и по желанию оформленный HTML). Можно передать обещание — например, текст ещё грузится из Документа:
+// запись в буфер начинается сразу, в момент нажатия (иначе Safari на iPhone считает, что нажатия уже не было, и не копирует).
+// Не вышло — запасные пути: writeText, затем выделение текста и «Копировать».
+export async function copyRich(text, html = null) {
+  const blob = (v, type) => Promise.resolve(v).then((x) => new Blob([String(x ?? '')], { type }));
+  if (window.ClipboardItem && navigator.clipboard?.write) {
+    try {
+      const item = { 'text/plain': blob(text, 'text/plain') };
+      if (html != null) item['text/html'] = blob(html, 'text/html');
+      await navigator.clipboard.write([new ClipboardItem(item)]);
+      return true;
+    } catch { /* ниже — запасные пути */ }
+  }
+  const t = String((await text) ?? '');
+  try { await navigator.clipboard.writeText(t); return true; } catch { /* дальше */ }
+  const ta = document.createElement('textarea');
+  ta.value = t; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+  document.body.append(ta); ta.select(); ta.setSelectionRange(0, t.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch { ok = false; }
+  ta.remove();
+  return ok;
+}
 export async function download(filename, text, mime = 'text/plain') {
   // в именах файлов — нижнее подчёркивание вместо дефисов и пробелов: «zveriniaya_tropa_sinopsis.docx»
   // и без буквы «ё» — ни в имени, ни в тексте файла

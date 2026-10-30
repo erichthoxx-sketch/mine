@@ -1,6 +1,7 @@
 // Аннотация, синопсис и рукопись прямо из Google Документа книги: посмотреть, скопировать, скачать Word / PDF.
 // Рукопись — одним файлом в оформлении для издательства; пакет для издательства — рукопись + синопсис.
-import { esc, acts, toast, openSheet, download } from '../../../js/ui.js';
+import { esc, acts, toast, openSheet, download, copyRich } from '../../../js/ui.js';
+import { cleanText } from '../../../js/cleantext.js';
 import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
 import { manuscriptParas, serviceParas, docxBlob, printHtml, parasHtml, isServiceTab, SERVICE } from '../publish.js';
@@ -67,22 +68,27 @@ export function publisherCard(b) {
 // ---------- действия ----------
 const bookOf = (d) => app().ctx().wbooksById[d.id];
 const htmlOf = (paras) => parasHtml(paras);
-async function copyText(text, html) {
-  try {
-    if (html && window.ClipboardItem && navigator.clipboard?.write) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
-    else await navigator.clipboard.writeText(text);
-    return true;
-  } catch { return false; }
-}
+// для вставки (Литнет, письмо, чат): абзацы и жирный/курсив, без отступов, размеров и интервалов из Документа
+const hx = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const copyHtml = (paras) => paras.map((p) => `<p>${(p.runs || []).map((r) => { let h = hx(r.t).replace(/\n/g, '<br>'); if (r.s) h = `<s>${h}</s>`; if (r.u) h = `<u>${h}</u>`; if (r.i) h = `<i>${h}</i>`; if (r.b) h = `<b>${h}</b>`; return h; }).join('') || '<br>'}</p>`).join('');
+// текст для копирования: без невидимых символов, лишних пробелов в концах строк и пустых строк по краям
+const copyPlain = (text) => cleanText(text).text.split('\n').map((x) => x.replace(/[ \t]+$/, '')).join('\n').replace(/^\n+|\n+$/g, '');
 acts['svc.view'] = async (d) => run(async () => {
   const b = bookOf(d), r = await service(b, d.k);
   openSheet(`${NAME[d.k]} — ${b.title}`, `<div class="svc-text">${htmlOf(r.body)}</div>
     <div class="dl-row"><button class="dl" data-act="svc.copy" data-id="${b.id}" data-k="${d.k}">${ic('copy')}Скопировать</button><button class="dl" data-act="svc.docx" data-id="${b.id}" data-k="${d.k}">${ic('download')}Word</button><button class="dl" data-act="svc.pdf" data-id="${b.id}" data-k="${d.k}">${ic('download')}PDF</button></div>`, null);
 });
-acts['svc.copy'] = async (d) => run(async () => {
-  const b = bookOf(d), r = await service(b, d.k);
-  toast((await copyText(r.text, htmlOf(r.body))) ? `${NAME[d.k]} скопирован${d.k === 'synopsis' ? '' : 'а'}` : 'Не получилось скопировать');
-});
+// копирование начинается сразу в момент нажатия, текст подставляется, когда загрузится из Документа
+acts['svc.copy'] = async (d) => {
+  const b = bookOf(d), r = service(b, d.k);
+  r.catch(() => {});
+  let ok = false;
+  try { ok = await copyRich(r.then((x) => copyPlain(x.text)), r.then((x) => copyHtml(x.body))); } catch { ok = false; }
+  try { await r; } catch (e) { toast(e.message || String(e)); return false; }
+  if (ok) toast(`${NAME[d.k]} скопирован${d.k === 'synopsis' ? '' : 'а'}`);
+  else { toast('Телефон не дал скопировать — текст открыт, выделите его и скопируйте'); acts['svc.view'](d); }
+  return false;
+};
 acts['svc.docx'] = async (d) => run(async () => {
   const b = bookOf(d), r = await service(b, d.k);
   const blob = await docxBlob(await drive.loadJsZip(), r.paras, meta(b));
@@ -130,7 +136,7 @@ acts['mk.pubZip'] = async (d) => run(async () => {
 // после скачивания для конкурса — имя файла в буфер: если браузер назвал файл по-своему, останется вставить при переименовании
 async function saved(nm, msg) {
   if (!nm) { toast(msg); return; }
-  const ok = await copyText(nm + '.docx');
+  const ok = await copyRich(nm + '.docx').catch(() => false);
   toast(`${msg}. Нужное имя: ${nm}.docx${ok ? ' — скопировано' : ''}`);
 }
 // для конкурса: текст (или первые N глав) и синопсис — с именем файла, как просят в условиях
