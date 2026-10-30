@@ -786,7 +786,7 @@ export function renderSite(raw, imgs = {}) {
           ${lbl(k.label)}
           <h2 class="feat-t">${fmt(b.title, false)}</h2>
           ${b.tagline || b.short ? `<p class="ann">${fmt(b.tagline || b.short)}</p>` : ''}
-          <div class="meta-line">${statusLine(b).join('<i>·</i>')}</div>
+          ${(() => { const st = statusLine(b).filter((x) => !String(k.label || '').toLowerCase().includes(plain(x).toLowerCase())); return st.length ? `<div class="meta-line">${st.join('<i>·</i>')}</div>` : ''; })()}
           <div class="acts">
             ${links[0] ? `<a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(ctaText(b, links))}</a>` : ''}
             <a class="lnk" href="${bookHref(b)}">О книге <span class="arrow">→</span></a>
