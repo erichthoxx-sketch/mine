@@ -555,6 +555,8 @@ export function raffleFriday(today) {
   d.setDate(d.getDate() + (4 - ((d.getDay() + 6) % 7)));
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+// Подарок виден читательницам, только когда он включён И в запасе есть промокоды (число без самих кодов пишет админка — rafStock)
+export const raffleLive = (c) => !!c?.raffleOn && Number(c?.rafStock) > 0;
 // Выбор победительницы: случайно среди тех, кто выбрал книгу, на которую есть промокод;
 // кто выигрывал за последние 4 недели — пропускает (чтобы доставалось разным)
 export function drawRaffle(entries = [], codes = {}, wins = [], today = '', rnd = Math.random) {

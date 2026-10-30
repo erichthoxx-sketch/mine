@@ -47,3 +47,12 @@ test('розыгрыш: пятница недели и выбор победит
   assert.equal(drawRaffle(entries, { b2: ['X1'] }, [{ uid: 'b', week: '2026-10-16' }], '2026-10-30').why, 'recent');
   assert.equal(drawRaffle(entries, { b2: ['X1'] }, [{ uid: 'b', week: '2026-09-25' }], '2026-10-30').entry.uid, 'b');
 });
+
+test('пятничный подарок виден, только когда включён и есть промокоды', async () => {
+  const { raffleLive } = await import('../site/content.js');
+  const { siteInfo } = await import('../js/sitepub.js');
+  assert.equal(raffleLive({ raffleOn: true }), false);
+  assert.equal(raffleLive({ raffleOn: true, rafStock: 3 }), true);
+  assert.equal(raffleLive({ raffleOn: false, rafStock: 3 }), false);
+  assert.equal(siteInfo({ raffleOn: true, books: [] }).raffleOn, false); // в Планере — без напоминания, пока нет промокодов
+});

@@ -1,7 +1,7 @@
 // Личный кабинет читателя: вход в шапке (дверца), окно входа по почте и паролю, страница ./?kabinet,
 // на странице книги — «Добавить старт в календарь» и «На полку». Тексты — из админки → «Кабинет».
 // Данные читателя — в его аккаунте (readers.js), копия — в браузере, чтобы всё показывалось сразу.
-import { esc, fmt, findBook, cover, STATUS, startInfo, readerPath, bonusItems, raffleFriday } from './content.js';
+import { esc, fmt, findBook, cover, STATUS, startInfo, readerPath, bonusItems, raffleFriday, raffleLive } from './content.js';
 import { readers, readerError } from './readers.js';
 import { addSub } from './data.js';
 
@@ -79,7 +79,7 @@ export function headEntry() {
 const perks = (c, cls = '') => {
   // без лишних обещаний: старт подписки — только если он правда назначен, подарок — только со ссылкой на файл
   const hasStart = books().some((b) => startInfo(b, today()));
-  const ls = [...String(c.cabPerks || '').split('\n'), c.raffleOn ? c.rafPerk || '' : ''].map((x) => x.trim()).filter(Boolean)
+  const ls = [...String(c.cabPerks || '').split('\n'), raffleLive(c) ? c.rafPerk || '' : ''].map((x) => x.trim()).filter(Boolean)
     .filter((l) => (hasStart || !/^старт подписки/i.test(l)) && (c.giftUrl || !/в подарок/i.test(l.split(' — ')[0])));
   return ls.length ? `<ul class="cab-gets${cls}">${ls.map((l) => { const [a, ...b] = l.split(' — '); return `<li>${b.length ? `<b>${esc(a)}</b> — ${esc(b.join(' — '))}` : esc(l)}</li>`; }).join('')}</ul>` : '';
 };
@@ -125,7 +125,7 @@ function bookExtras(b) {
     ${st ? `<div class="cab-start"><span class="cab-note">${T('cabStartLine', 'Старт подписки')} ${dm(st.date)}${st.price ? ` · ${priceLine(st, T)}` : ''}</span>
       <span class="cab-calw"><span class="cab-calk">${T('cabRemind', 'Добавить старт в календарь')}:</span>${calLinks(b, st)}</span></div>` : ''}
     <div class="cab-shelf"><span>На полку:</span>${Object.entries(SHELF).map(([k, n]) => `<button class="${mine === k ? 'on' : ''}" data-cab="shelf" data-id="${esc(b.id)}" data-v="${k}">${n}</button>`).join('')}</div>
-    ${c.raffleOn && rafBooks().some((x) => x.id === b.id) ? `<div class="cab-shelf"><span>${esc(plainT(c.rafTitle || 'Пятничный подарок'))}:</span>${S.raf === b.id && user ? '<span class="cab-on">ваше желание ✓</span>' : `<button data-cab="raf" data-id="${esc(b.id)}">${S.raf && user ? 'Хочу в подарок эту книгу вместо прежней' : 'Хочу эту книгу в подарок'}</button>`}</div>` : ''}
+    ${raffleLive(c) && rafBooks().some((x) => x.id === b.id) ? `<div class="cab-shelf"><span>${esc(plainT(c.rafTitle || 'Пятничный подарок'))}:</span>${S.raf === b.id && user ? '<span class="cab-on">ваше желание ✓</span>' : `<button data-cab="raf" data-id="${esc(b.id)}">${S.raf && user ? 'Хочу в подарок эту книгу вместо прежней' : 'Хочу эту книгу в подарок'}</button>`}</div>` : ''}
   </div>`;
 }
 
@@ -138,7 +138,7 @@ function joinRaffle(id) {
   if (user) readers.raffleSet(user.uid, { uid: user.uid, email: user.email || '', name: S.name || '', book: id, at: new Date().toISOString() }).catch(() => {});
 }
 function raffleSec(c, head, T, imgs) {
-  if (!c.raffleOn) return '';
+  if (!raffleLive(c)) return '';
   const list = rafBooks(), pick = list.find((b) => b.id === S.raf), name = c.name || 'Автор';
   const fresh = wins.filter((w) => Date.now() - new Date(w.at).getTime() < 60 * 864e5);
   // ближайшая «её» пятница: эта уже прошла — следующая; получила подарок — через 4 недели

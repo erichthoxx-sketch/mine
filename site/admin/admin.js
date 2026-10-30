@@ -62,11 +62,18 @@ async function loadSubs() {
   if (S.tab === 'sub') renderEditor();
 }
 
+// Сколько промокодов в запасе — числом в содержимое сайта (сами коды видит только владелица): без них подарок читательницам не показывается
+function syncStock() {
+  if (!S.raf || S.raf.err) return;
+  const n = Object.values(S.raf.codes || {}).reduce((k, l) => k + (l || []).length, 0);
+  if (Number(S.content.rafStock || 0) !== n) { S.content.rafStock = n; changed(); }
+}
 // Розыгрыш: кто какую книгу хочет, промокоды, победы. До обновления правил Firebase — подсказка обновить
 async function loadRaf() {
   try {
     const [entries, wins, codes] = await Promise.all([S.store.listRaffle(), S.store.listWins(), S.store.getCodes()]);
     S.raf = { entries, wins, codes };
+    syncStock();
   } catch (e) { S.raf = { err: /permission/i.test(e?.code || e?.message || '') ? 'rules' : 'net', entries: [], wins: [], codes: {} }; }
   if (S.tab === 'raf') renderEditor();
 }
@@ -240,7 +247,8 @@ function lookTab() {
 function rafTab() {
   const c = S.content, R = S.raf, fri = raffleFriday(todayIso());
   const top = `<p class="note">Пятничный подарок: каждую пятницу одна читательница с кабинетом получает книгу — промокод Литнета. Читательницы сами отмечают желанную книгу (в кабинете и на странице книги). Кнопка «Выбрать, кому подарок» выбирает случайно среди тех, на чью книгу есть промокод; кто получал подарок за последние 4 недели, пропускает. Промокод сразу появляется у неё в кабинете — подарочной карточкой. Напоминание по пятницам — в Планере «Мастерской».</p>
-    ${field('site', c, { k: 'raffleOn', label: 'Пятничный подарок на сайте включён', type: 'toggle' })}`;
+    ${field('site', c, { k: 'raffleOn', label: 'Пятничный подарок на сайте включён', type: 'toggle' })}
+    <p class="note">Читательницы увидят подарок, только когда он включён и ниже вставлены промокоды. Кончились промокоды — подарок сам прячется.</p>`;
   if (!R) return top + '<p class="note">Загружаю…</p>';
   if (R.err === 'rules') return top + `<p class="note">Чтобы пятничный подарок заработал, один раз обновите правила Firebase: «Скопировать правила» → Firebase → «Правила» → вставить → «Опубликовать».</p>
     <div class="links"><button class="btn line" data-act="copyRules">Скопировать правила</button><a class="quiet" href="https://console.firebase.google.com/project/dohody-6d6dd/firestore/rules" target="_blank" rel="noopener">Открыть Firebase</a><button class="quiet" data-act="reRaf">Готово, проверить</button></div><pre id="rules-text" hidden>${esc(RULES)}</pre>`;
@@ -438,7 +446,7 @@ app.addEventListener('input', (e) => {
   const sm = el.parentElement.querySelector('small'); if (sm) sm.textContent = sm.textContent.replace(/в запасе: \d+/, 'в запасе: ' + list.length);
   S.save = 'busy'; status();
   clearTimeout(codesT);
-  codesT = setTimeout(async () => { try { await S.store.setCodes(id, list); S.save = 'ok'; } catch { S.save = 'bad'; } status(); }, 800);
+  codesT = setTimeout(async () => { try { await S.store.setCodes(id, list); S.save = 'ok'; syncStock(); } catch { S.save = 'bad'; } status(); }, 800);
 });
 
 app.addEventListener('change', async (e) => {
@@ -543,7 +551,7 @@ const acts = {
       await S.store.addWin(win);
       await S.store.setCodes(e.book, rest);
       R.codes[e.book] = rest; R.wins.unshift(win); S.drawn = win;
-      S.content.raffleLast = fri; changed();
+      S.content.raffleLast = fri; changed(); syncStock();
     } catch { toast('Не получилось — проверьте интернет и попробуйте ещё раз'); return false; }
   },
   copySubs: async () => { await copy(S.subs.map((x) => x.email).join('\n')); return false; },
