@@ -158,10 +158,10 @@ acts['tax.unpay'] = async (d) => {
 acts['tax.check'] = (d) => {
   const c = app().ctx(), f = fin(c, d.m), s = c.settings;
   const num = (v) => v.toFixed(2).replace('.', ',');
-  // по площадкам: у каждой — своя позиция чека («Добавить ещё» в «Мой налог»); агентский договор — у Литнета
+  // один чек на всё; в названии — все площадки месяца (агентский договор — у Литнета, у других условий не знаем)
   const parts = taxByPlatform(c.sales, d.m, f.taxBase, s.taxBase === 'royalty' ? 'royalty' : 'gross');
-  const nameOf = (pl) => `Продажа электронных книг читателям через ${pl}${pl === 'Литнет' ? ' (агентский договор)' : ''}, ${fmtMonth(d.m)}`;
-  const many = parts.length > 1, others = parts.filter((x) => x.name !== 'Литнет').map((x) => x.name);
+  const pls = parts.length ? parts.map((x) => x.name) : ['Литнет'], others = pls.filter((x) => x !== 'Литнет');
+  const name = `Продажа электронных книг читателям через ${pls.join(', ')}${others.length ? '' : ' (агентский договор)'}, ${fmtMonth(d.m)}`;
   const going = monthEnd(d.m) > c.dataEnd;
   if (going) { toast('Чек пробивают после окончания месяца, когда сумма станет окончательной'); return; }
   const field = (label, value, copy) => `<div class="item"><div class="small muted">${label}</div><div class="row between"><b style="overflow-wrap:anywhere">${esc(value)}</b>${copy ? `<button type="button" class="link" data-act="copy" data-text="${esc(copy)}">копировать</button>` : ''}</div></div>`;
@@ -169,8 +169,8 @@ acts['tax.check'] = (d) => {
     ${going ? '<div class="alert">Месяц ещё идёт — сумма вырастет. Чек лучше пробить после конца месяца, когда загрузите полную выгрузку Литнета.</div>' : ''}
     <p class="small">Приложение «Мой налог» → <b>«Новая продажа»</b> (+ внизу), заполните так:</p>
     <div class="list">
-      ${(parts.length ? parts : [{ name: 'Литнет', sum: f.taxBase }]).map((x, i) => `${many ? `<div class="small sub-h" style="margin-top:${i ? 12 : 0}px">${i ? `Позиция ${i + 1} — в том же чеке` : 'Позиция 1'}</div>` : ''}${field('Наименование', nameOf(x.name), nameOf(x.name))}${field('Сумма', rub(x.sum), num(x.sum))}`).join('')}
-      ${many ? field('Итого в чеке', rub(f.taxBase)) : ''}
+      ${field('Наименование', name, name)}
+      ${field('Сумма', rub(f.taxBase), num(f.taxBase))}
       ${field('Покупатель', 'Физическое лицо')}
       ${field('Дата продажи', fmtDate(going ? c.dataEnd : monthEnd(d.m)) + (going ? ' (пока)' : ' — последний день месяца'))}
     </div>
