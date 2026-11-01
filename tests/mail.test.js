@@ -143,5 +143,10 @@ test('почта: цифры, рост по дням, таблица, поиск
   const slots = sendSlots([{ title: 'Книга', p: [{ ch: 'Глава 1', pf: 'Литнет', date: '2026-11-05' }] }], { books: [{ title: 'Книга', startDate: '2026-11-20' }] }, '2026-11-01', planned);
   assert.deepEqual(slots.map((x) => x.date), ['2026-11-05', '2026-11-20']);
   assert.match(slots[0].label, /Выход «Глава 1»/);
+  // старт выкладки по плану (глава ещё не на таймере) и книга письма — первой
+  const wb = [{ title: 'Звериная тропа', p: [{ ch: 'Глава 23', pf: 'Литнет', date: '2026-11-02' }] }, { title: 'Развод для черной вдовы', publishStart: '2026-11-09', p: [] }];
+  const s2 = sendSlots(wb, null, '2026-11-01', planned, { focus: 'Развод для чёрной вдовы' });
+  assert.deepEqual(s2.map((x) => [x.date, x.label]), [['2026-11-09', 'Первая глава · Развод для черной вдовы'], ['2026-11-02', 'Выход «Глава 23» · Звериная тропа']]);
+  assert.deepEqual(sendSlots(wb, null, '2026-11-01', planned).map((x) => x.date), ['2026-11-02', '2026-11-09']);
   assert.deepEqual(localParts(localIso('2026-11-05', '10:30')), { date: '2026-11-05', time: '10:30' });
 });

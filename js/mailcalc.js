@@ -56,18 +56,23 @@ export function filterSubs(list, { q = '', status = 'ok' } = {}) {
     .sort((a, b) => String(b.okAt || b.at || '').localeCompare(String(a.okAt || a.at || '')));
 }
 
-// когда отправить письмо — подсказки из таймеров выкладки (первая глава книги на таймере) и стартов подписки с сайта
+// когда отправить письмо — подсказки: первая глава на таймере, старт выкладки по плану книги (даже если глава ещё не на таймере)
+// и старты подписки с сайта. focus — название книги письма: её события идут первыми (их и подсвечиваем по умолчанию).
 // wbooks — книги Мастерской; site — siteInfo сайта; plannedPubs — функция из wcalc
-export function sendSlots(wbooks, site, today, plannedPubs) {
+const titleKey = (t) => String(t || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim();
+const sameBook = (a, b) => { const x = titleKey(a), y = titleKey(b); return !!x && !!y && (x === y || x.startsWith(y) || y.startsWith(x)); };
+export function sendSlots(wbooks, site, today, plannedPubs, { focus = '' } = {}) {
   const out = [];
   for (const b of wbooks || []) {
     if (b.archived) continue;
     const p = plannedPubs(b, today).filter((x) => x.date >= today)[0];
     if (p) out.push({ date: p.date, label: `Выход «${p.ch}» · ${b.title}`, book: b.title });
+    const pubbed = Object.values(b.pub || {}).some((x) => Object.values(x || {}).some((y) => y?.date && !y.planned && y.date <= today));
+    if (b.publishStart && b.publishStart >= today && !pubbed && (!p || p.date !== b.publishStart)) out.push({ date: b.publishStart, label: `Первая глава · ${b.title}`, book: b.title });
   }
   for (const s of site?.books || []) if (s.startDate && s.startDate >= today) out.push({ date: s.startDate, label: `Старт подписки · ${s.title}`, book: s.title });
-  const seen = new Set();
-  return out.sort((a, b) => a.date.localeCompare(b.date)).filter((x) => { const k = x.date + x.label; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);
+  const seen = new Set(), mine = (x) => (focus && sameBook(x.book, focus) ? 0 : 1);
+  return out.sort((a, b) => mine(a) - mine(b) || a.date.localeCompare(b.date)).filter((x) => { const k = x.date + x.label; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);
 }
 
 // местные дата и время → ISO для сервиса; и обратно — для показа

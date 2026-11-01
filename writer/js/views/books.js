@@ -2,7 +2,7 @@ import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
 import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter, writtenMonth } from '../wcalc.js';
-import { goalTitle, goalToday } from './goals.js';
+import { goalTitle, goalToday, goalOver } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
 import { mkSummary } from './marketing.js';
@@ -209,7 +209,7 @@ export function bookPage(a, id) {
   // главы можно открыть в редакторе — для Google Документов
   const canEdit = !!b.fileId && b.mimeType === drive.MIME.doc;
   // цели по книге и данные для графиков
-  const bookGoals = c.data.w_goals.filter((g) => !g.done && g.bookId === b.id).map((g) => ({ g, st: goalStatus(g, b, c.today) }));
+  const bookGoals = c.data.w_goals.filter((g) => !goalOver(c, g) && g.bookId === b.id).map((g) => ({ g, st: goalStatus(g, b, c.today) }));
   const fin = bookGoals.find((x) => x.g.type === 'finish' && x.st.active);
   const daily = bookGoals.find((x) => x.g.type === 'daily' && x.st.active);
   const target = (daily && daily.st.perDay) || null;

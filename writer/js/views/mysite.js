@@ -48,9 +48,9 @@ export function mySiteView(a) {
   const html = `<section class="links-page">
   ${siteTabs('site')}
   <div class="site-go">
-    <a href="${SITE_URL}" target="_blank" rel="noopener">${ic('bear')}<span><b>lanafreitag.ru</b><small>открыть сайт</small></span></a>
-    <a href="${SITE_ADMIN}" target="_blank" rel="noopener">${ic('pen')}<span><b>Админка</b><small>тексты, книги, вид</small></span></a>
-    <a href="../direct/#/an/site" target="_blank" rel="noopener">${ic('ads')}<span><b>Статистика</b><small>посетители и «Читать»</small></span></a>
+    <a href="${SITE_URL}" target="_blank" rel="noopener">${ic('bear')}<span><b>lanafreitag.ru</b></span></a>
+    <a href="${SITE_ADMIN}" target="_blank" rel="noopener">${ic('pen')}<span><b>Админка</b></span></a>
+    <a href="../direct/#/an/site" target="_blank" rel="noopener">${ic('ads')}<span><b>Статистика</b></span></a>
   </div>
   <div class="card">
     <div class="tiles">

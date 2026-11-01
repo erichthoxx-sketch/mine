@@ -31,12 +31,15 @@ export function goalToday(c, g, s) {
   const per = g.type === 'finish' ? `${chTxt(s.perDayCh)} (≈ ${zn(s.perDay)} в день)` : `${zn(s.perDay)} в день`;
   return s.doneToday ? `норма на сегодня выполнена · ${per}` : s.todayDay ? `сегодня ещё ${zn(s.needToday)} · ${per}` : `сегодня выходной · ${per}`;
 }
-export const activeGoals = (c) => c.data.w_goals.filter((g) => !g.done);
+// цель окончена: отмечена готовой, все главы цели отмечены, или срок прошёл (у «глав к сроку» — только если главы отмечены:
+// недоделанная цель с прошедшим сроком остаётся на виду). Оконченные — в «Завершённых», без напоминаний.
+export const goalOver = (c, g) => !!(g.done || (g.type === 'finish' ? goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, c.today).finished : g.deadline && g.deadline < c.today));
+export const activeGoals = (c) => c.data.w_goals.filter((g) => !goalOver(c, g));
 
 // раздел «Цели» в Планере
 export function goalsSection(c) {
   const t = c.today, list = [...c.data.w_goals].sort((x, y) => (x.done - y.done) || (x.deadline || '9999').localeCompare(y.deadline || '9999'));
-  const open = list.filter((g) => !g.done), done = list.filter((g) => g.done);
+  const open = list.filter((g) => !goalOver(c, g)), done = list.filter((g) => goalOver(c, g));
   const card = (g) => {
     const b = g.bookId ? c.wbooksById[g.bookId] : null, s = goalStatus(g, b, t);
     const late = g.deadline && g.deadline < t;
