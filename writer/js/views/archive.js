@@ -27,7 +27,9 @@ export async function loadArchive(force = false, soft = false) {
     arch.index = await drive.archiveIndex(INDEX_NAME);
     try { localStorage.setItem('arch.at', String(Date.now())); } catch { /* ок */ }
     const s = app().ctx().settings.archive || {}, ix = arch.index;
-    if (ix && (s.lastRun !== ix.lastRun || s.ok !== !archiveStatus(ix).warn)) await app().store.saveSettings({ archive: { lastRun: ix.lastRun, ok: !(ix.errors || []).length && ix.github?.ok !== false } });
+    // когда проверяли — чтобы на Главной отличать «копия не делалась» от «давно не заглядывали на Диск»
+    const day = new Date().toISOString().slice(0, 10);
+    if (ix && (s.lastRun !== ix.lastRun || s.ok !== !archiveStatus(ix).warn || (s.checkedAt || '').slice(0, 10) !== day)) await app().store.saveSettings({ archive: { lastRun: ix.lastRun, ok: !(ix.errors || []).length && ix.github?.ok !== false, checkedAt: new Date().toISOString() } });
   } catch (e) { arch.err = 'Не получилось прочитать архив: ' + (e.message || String(e)); }
   arch.loading = false;
   app().rerender();
@@ -65,13 +67,25 @@ export function archiveCard(c) {
 }
 
 // предупреждение на Главной: архив давно не обновлялся
+// Ночная программа работает сама; чтобы узнать, сделана ли копия, приложению нужен доступ к Диску (у Google он живёт час).
+// Не проверяли больше суток — не пугаем «не обновлялся», а предлагаем проверить одним нажатием.
 export function archiveWarn(c) {
   const a = c.settings.archive;
   if (!a?.lastRun) return '';
   const st = archiveStatus({ lastRun: a.lastRun });
   if (st.days < 2 && a.ok !== false) return '';
-  return `<a class="card arc-warn" href="#" data-act="go" data-to="/settings">${ic('alert')}<span>${st.days >= 2 ? `Архив книг не обновлялся ${st.days} ${plural(st.days, ['день', 'дня', 'дней'])}` : 'В архиве книг ошибка'} — посмотрите в Настройках</span></a>`;
+  const checked = a.checkedAt ? Math.floor((Date.now() - Date.parse(a.checkedAt)) / 864e5) : Infinity;
+  if (st.days >= 2 && checked >= 1) return `<a class="card arc-warn" href="#" data-act="arc.check">${ic('refresh')}<span>Архив книг давно не проверялся — нажмите, чтобы проверить</span></a>`;
+  return `<a class="card arc-warn" href="#" data-act="go" data-to="/settings">${ic('alert')}<span>${st.days >= 2 ? `Ночная копия книг не делалась ${st.days} ${plural(st.days, ['день', 'дня', 'дней'])}` : 'В архиве книг ошибка'} — посмотрите в Настройках</span></a>`;
 }
+// Проверить архив с Главной: доступ к Диску по нажатию (без него Google окно не откроет) и свежее оглавление
+acts['arc.check'] = async () => {
+  try { await drive.ensureToken(); } catch (e) { toast(e.message); return false; }
+  arch.err = ''; await loadArchive(true);
+  const a = app().ctx().settings.archive || {}, st = archiveStatus({ lastRun: a.lastRun });
+  toast(arch.err || (st.days < 2 ? 'Архив в порядке — ночная копия сделана' : `Ночная копия не делалась ${st.days} ${plural(st.days, ['день', 'дня', 'дней'])} — подробности в Настройках`));
+  return false;
+};
 
 acts['arc.reload'] = () => { arch.index = undefined; loadArchive(true); };
 // по нажатию можно открыть окно Google (без нажатия браузер его заблокирует)

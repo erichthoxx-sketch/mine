@@ -19,6 +19,7 @@ import { bookSeg } from './legend.js';
 import { BOOK_GENRES, bookGenres, bookTags, uniqueWords } from '../bookmeta.js';
 import { synText, synTab } from '../synopsis.js';
 import * as drive from '../drive.js';
+import { loadArchive } from './archive.js';
 import { addDays } from '../../../js/calc.js';
 import { finishEvent, removeEvent, chapterEvent, chapterUnset, syncFinish } from '../sync.js';
 
@@ -381,7 +382,7 @@ acts['wbook.how'] = (d) => {
     <p class="small muted">«За месяц» = сколько знаков рукописи (Пролог, Главы, Эпилог) сейчас минус сколько было в последней версии Документа до 1-го числа. Версии берутся из истории Google Документа.</p>`, null);
   return false;
 };
-acts['wbook.refresh'] = async () => { try { await drive.ensureToken(); } catch (e) { toast(e.message); return; } if (!refreshing.on) toast('Пересчитываю по истории Документа — это может занять минуту'); await refreshAll(app()); app().rerender(); };
+acts['wbook.refresh'] = async () => { try { await drive.ensureToken(); } catch (e) { toast(e.message); return; } if (!refreshing.on) toast('Пересчитываю по истории Документа — это может занять минуту'); await refreshAll(app()); loadArchive(true); app().rerender(); }; // заодно проверить архив — доступ к Диску уже свежий
 acts['wbook.refreshOne'] = async (d) => { try { await drive.ensureToken(); toast('Обновляю…'); await refreshOne(app(), app().ctx().wbooksById[d.id], true); toast(lastTitles ? `Обновлено · названия глав в Документе выровнены: ${lastTitles}` : 'Обновлено'); } catch (e) { toast('Не получилось: ' + e.message); } };
 acts['drive.connect'] = async () => {
   try { await drive.connect(); toast('Google Диск подключён'); refreshAll(app(), { quiet: true }); } catch (e) { toast(e.message); }
