@@ -1,5 +1,5 @@
 // Главная Мастерской: всё актуальное за текущий месяц по книгам и напоминания обо всём, у чего есть дата
-import { esc } from '../../../js/ui.js';
+import { esc, acts, openSheet } from '../../../js/ui.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, isImportant, tdText } from '../../../js/tdtasks.js';
 import { num, rub, fmtDate, fmtMonth, fmtMonthIn, fmtMonthCap, plural } from '../../../js/format.js';
@@ -100,13 +100,14 @@ export function homeView(a) {
     const out = chapterOutDates(b, t);
     const chapters = Object.values(out).filter((dt) => dt >= from && dt <= t).length;
     // на таймере с датой в этом месяце (главы, которые ещё не вышли нигде)
-    const timers = new Set(plannedPubs(b, t).filter((x) => x.date.slice(0, 7) === mk && !out[x.ch]).map((x) => x.ch)).size;
+    const tlist = plannedPubs(b, t).filter((x) => x.date.slice(0, 7) === mk && !out[x.ch]);
+    const timers = new Set(tlist.map((x) => x.ch)).size;
     // ещё не на таймере, но по графику выкладки в этом месяце (книга в процессе, свободные дни графика с сегодня)
     const sched = (b.status || 'progress') === 'progress' && b.publishStart && (b.pubDays || []).length ? bookSchedule(b, t).free.filter((d) => d.slice(0, 7) === mk).length : 0;
     const incomeId = c.incomeIdOf(b);
     const income = incomeId ? sumSeries(incomeSeries(c.data.sales, [], from, t, incomeId)) : null;
     const contests = c.data.w_contests.filter((x) => contestBookIds(x).includes(b.id) && x.status !== 'done' && !(x.end && x.end < t));
-    return { b, wrote, today: writtenToday(b, t), chapters, timers, sched, income, contests };
+    return { b, wrote, today: writtenToday(b, t), chapters, timers, tlist, sched, income, contests };
   }).filter((r) => (r.b.status || 'progress') === 'progress' || r.wrote || r.chapters || r.income);
   const sum = (k) => rows.reduce((s, r) => s + (r[k] || 0), 0);
   // подсчёт поменялся, а пересчитать ещё не вышло (Диск не открыт) — не показываем старую неверную цифру
@@ -124,7 +125,7 @@ export function homeView(a) {
   <div class="grid4">
     ${stale ? `<button class="stat stat-btn" data-act="wbook.refresh" title="Пересчитать по Google Диску"><div class="k">Написано за месяц</div><div class="v">—</div><div class="s">${refreshing.on ? 'считаю…' : 'пересчитать'}</div></button>`
       : `<div class="stat"><div class="k">Написано за месяц</div><div class="v">${alNum(sum('wrote'))}</div><div class="s">а.л. · сегодня +${alNum(sum('today'))}</div></div>`}
-    <div class="stat"><div class="k">Глав в ${fmtMonthIn(mk).split(' ')[0]}</div><div class="v">${sum('chapters') + sum('timers') + sum('sched')}</div><div class="s">${[`${sum('chapters')} ${plural(sum('chapters'), ['вышла', 'вышли', 'вышло'])}`, sum('timers') ? `${sum('timers')} на таймере` : '', sum('sched') ? `${sum('sched')} по графику` : ''].filter(Boolean).join(' · ')}</div></div>
+    <button class="stat stat-btn" data-act="home.chapters" title="Какие главы и откуда"><div class="k">Глав в ${fmtMonthIn(mk).split(' ')[0]}</div><div class="v">${sum('chapters') + sum('timers') + sum('sched')}</div><div class="s">${[`${sum('chapters')} ${plural(sum('chapters'), ['вышла', 'вышли', 'вышло'])}`, sum('timers') ? `${sum('timers')} на таймере` : '', sum('sched') ? `${sum('sched')} по графику` : ''].filter(Boolean).join(' · ')}</div></button>
     <div class="stat"><div class="k">Доход за ${fmtMonth(mk).split(' ')[0]}</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div></div>
     <div class="stat"><div class="k">В работе</div><div class="v">${inWork.length}</div><div class="s">${plural(inWork.length, ['книга', 'книги', 'книг'])}</div></div>
   </div>
@@ -136,3 +137,21 @@ export function homeView(a) {
   return { html, after: () => { writtenChart(document.getElementById('wchart'), { days: series, target }); loadArchive(false, true); } };
 }
 export { ic };
+
+// «Глав в месяце» — откуда каждая цифра: что вышло, что стоит на таймере (отмечено «Запланировала» в выкладке), что по графику
+acts['home.chapters'] = () => {
+  const c = window.__app.ctx(), t = c.today, mk = monthKey(t), from = mk + '-01';
+  const rows = [];
+  for (const b of c.wbooks) {
+    const out = chapterOutDates(b, t);
+    for (const [ch, dt] of Object.entries(out)) if (dt >= from && dt <= t) rows.push({ b, kind: 'вышла', ch, date: dt });
+    for (const x of plannedPubs(b, t)) if (x.date.slice(0, 7) === mk && !out[x.ch]) rows.push({ b, kind: 'на таймере', ch: x.ch, date: x.date, pf: x.pf });
+    if ((b.status || 'progress') === 'progress' && b.publishStart && (b.pubDays || []).length) for (const d of bookSchedule(b, t).free.filter((d2) => d2.slice(0, 7) === mk)) rows.push({ b, kind: 'по графику', ch: 'следующая глава', date: d });
+  }
+  rows.sort((x, y) => x.date.localeCompare(y.date));
+  openSheet(`Главы в ${fmtMonthIn(mk).split(' ')[0]}`, rows.length ? `<p class="small muted">«На таймере» — глава отмечена в выкладке как «Запланировала» на эту дату. Неверно — откройте книгу → «Выкладка» и снимите отметку.</p>
+    <div class="list">${rows.map((r) => `<a class="item" href="#" data-act="home.chGo" data-to="/book/${esc(r.b.id)}"><div class="row between"><b>${esc(r.ch)}</b><span class="small muted">${fmtDate(r.date).slice(0, 5)} · ${r.kind}</span></div><div class="small muted">${esc(r.b.title)}${r.pf ? ' · ' + esc(r.pf) : ''}</div></a>`).join('')}</div>`
+    : '<p class="muted">В этом месяце глав пока нет.</p>', null);
+  return false;
+};
+acts['home.chGo'] = (d) => { document.getElementById('sheet')?.close(); window.__app.go(d.to); return false; };
