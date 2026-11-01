@@ -3246,3 +3246,12 @@ main .rev-actions button.dl .ic { opacity: 1; }
 input.own-range::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 2px solid var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
 input.own-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 2px solid var(--text); }
 .acc-own i { position: relative; }
+/* шапка на телефоне — с воздухом (владелица: «разлепи тексты, чтобы гармонично читалось»): название, под ним имя
+   (вровень с названием, не под медведем), ниже — кнопки; во всех трёх приложениях */
+@media (max-width: 760px) {
+  :root .top { row-gap: 14px; align-items: flex-start; padding-bottom: 8px; }
+  :root .top h1 { margin: 0; line-height: 1.15; }
+  :root .top small { display: block; margin-top: 6px; line-height: 1.35; padding-left: 50px; }
+  :root .top .row { gap: 8px; }
+  :root .top + main, :root .top ~ main { padding-top: 10px; }
+}
