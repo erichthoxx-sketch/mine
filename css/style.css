@@ -3145,3 +3145,19 @@ main .rev-actions button.dl .ic { opacity: 1; }
   :root nav.tabs a::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: transparent; }
   :root nav.tabs a.on::after { background: var(--text); }
 }
+/* заголовки и кнопки — Jost, «спорт-шик» (владелица выбрала вариант «А», 01.11.2026); цифры остаются Golos Text — её выбор */
+:root { --font-display: "Jost", "Golos Text", system-ui, sans-serif; }
+:root :is(h1, h2, .tb-date, .side-date) { font-weight: 500 !important; letter-spacing: .005em !important; }
+:root .top h1 { font-weight: 500 !important; font-size: 27px; }
+:root :is(main, dialog, .top, aside, .side) :is(button, .btn):not(.link):not(.dl):not(.icon-btn):not(.stat):not(.lg-tabs button),
+:root .side-actions :is(button, .btn), :root .chip { font-family: var(--font-display) !important; font-weight: 500 !important; letter-spacing: .015em; }
+/* медведь со значка сайта вместо иконки «Сайт»: в светлой теме как есть, в тёмной — светлее, серебристый */
+:root .ic-bear { display: inline-block; flex: none; width: 24px; height: 24px; background: url("bear-head.png") center / contain no-repeat; vertical-align: middle; }
+:root nav.tabs a:not(.on) .ic-bear { opacity: .7; }
+@media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) .ic-bear { filter: brightness(2.3) contrast(.85); } }
+:root[data-theme="dark"] .ic-bear { filter: brightness(2.3) contrast(.85); }
+:root .ic-bear { width: 28px; height: 28px; margin: -2px; filter: contrast(1.15); }
+:root nav.tabs a:not(.on) .ic-bear { opacity: .8; }
+@media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) .ic-bear { filter: brightness(2.7) contrast(.9); } :root:where(:not([data-theme="light"])) nav.tabs a:not(.on) .ic-bear { opacity: .85; } }
+:root[data-theme="dark"] .ic-bear { filter: brightness(2.7) contrast(.9); }
+:root[data-theme="dark"] nav.tabs a:not(.on) .ic-bear { opacity: .85; }
