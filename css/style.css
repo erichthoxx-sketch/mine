@@ -3009,3 +3009,92 @@ main .rev-actions button.dl .ic { opacity: 1; }
 :root .side-actions button, :root .side-actions .btn { font: 500 11px/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; min-height: 40px; padding: 0 14px;
   background: transparent; color: var(--text); border: 1px solid var(--line-2); border-radius: 0; }
 :root .side-actions button:hover, :root .side-actions .btn:hover { border-color: var(--text); }
+
+/* =====================================================================================================
+   Сочетание прежнего и нового (владелица, 01.11.2026: «уродливые прямоугольные рамки», «скомбинируй старый стиль с новым — во всём»).
+   От сайта остаются шрифты, бумага и графит; от прежнего вида — мягкие скруглённые формы, кнопки-«таблетки» с мягкой заливкой
+   вместо рамок, мягкие карточки. Жёстких прямоугольных рамок нет нигде.
+   ===================================================================================================== */
+:root { --soft: #ececE8; --soft-2: #e3e3de; --card: #fcfcfa; --r-card: 20px; --r-tile: 16px; }
+@media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) { --soft: #222326; --soft-2: #2b2c30; --card: #18191c; } }
+:root[data-theme="dark"] { --soft: #222326; --soft-2: #2b2c30; --card: #18191c; }
+
+/* карточки — мягкие, чуть светлее бумаги, без рамки и тени */
+:root .card { background: var(--card); border: 0; border-radius: var(--r-card); padding: 18px 20px 20px; margin: 0 0 14px; }
+:root .card .card { background: transparent; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 14px 0 4px; margin: 0; }
+:root .item { border-radius: 14px !important; }
+
+/* плитки цифр — мягкие скруглённые, цифра шрифтом обложки */
+:root .stat, :root .tiles > div { background: var(--soft); border: 0; border-radius: var(--r-tile); padding: 12px 14px; }
+:root .card .stat, :root .card .tiles > div { background: var(--soft); }
+:root .stat .v, :root .tiles .v, :root .big, :root .day-sum, :root .tax-sum { font-size: 28px; }
+:root .stat .k, :root .tiles .k { font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: none; }
+:root .stat.stat-btn, :root button.stat,
+:root :is(main, dialog) button.stat.stat-btn.stat-btn { background: var(--soft) !important; border: 0 !important; border-radius: var(--r-tile) !important; padding: 12px 14px !important; }
+:root :is(main, dialog) button.stat.stat-btn.stat-btn:hover { background: var(--soft-2) !important; }
+
+/* кнопки — «таблетки» с мягкой заливкой, обычными буквами; главная — графитовая таблетка */
+:root :is(main, dialog, .top, aside, .side) :is(button, .btn):not(.link):not(.chip):not(.dl):not(.wide):not([aria-label]):not(.icon-btn):not(.wday):not(.stat):not(.nav-arr):not(.plus-btn):not(.lg-tabs button):not(.nt-btn),
+:root .side-actions :is(button, .btn) {
+  font: 500 14px/1.2 var(--font-body); letter-spacing: 0; text-transform: none; min-height: 42px; padding: 0 18px;
+  background: var(--soft); color: var(--text); border: 1px solid transparent; border-radius: 999px;
+}
+:root :is(main, dialog, .top, aside, .side) :is(button, .btn):not(.primary):not(.link):not(.chip):not(.dl):not([aria-label]):not(.icon-btn):not(.wday):not(.stat):not(.nav-arr):not(.plus-btn):not(.lg-tabs button):hover,
+:root .side-actions :is(button, .btn):hover { background: var(--soft-2); border-color: transparent; }
+:root button.primary, :root .btn.primary, :root :is(main, dialog, .top) button.primary { background: var(--text) !important; color: var(--bg) !important; border-color: var(--text) !important; border-radius: 999px; }
+:root button.primary:hover, :root .btn.primary:hover { background: color-mix(in srgb, var(--text) 85%, var(--bg)) !important; color: var(--bg) !important; }
+:root .small-btn { font-size: 13px !important; min-height: 34px !important; padding: 0 14px !important; }
+:root button.danger, :root button.danger:not(.primary) { color: var(--bad); border-color: transparent; background: color-mix(in srgb, var(--bad) 8%, var(--soft)); }
+:root .top button[aria-label], :root button[aria-label].tb { border: 0; background: var(--soft); border-radius: 50%; }
+:root .top button[aria-label]:hover { background: var(--soft-2); }
+:root .nav-toggle { border: 0 !important; background: var(--soft); }
+:root button.nt-btn { border-radius: 999px; border: 0; background: var(--soft); font: 500 13px/1.2 var(--font-body); }
+:root .nt-btns button.nt-btn:first-child { background: var(--text); color: var(--bg); border: 0; }
+
+/* «пилюли»-переключатели — мягкая заливка у выбранного; вкладки Легенды и Аналитики остаются тонкой линией (её выбор) */
+:root .chip { border: 0; border-radius: 999px; padding: 6px 14px; margin-right: 6px; min-height: 34px; font: 500 14px/1.2 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--text-2); background: transparent; }
+:root .chip:hover { background: var(--soft); }
+:root .chip.on { background: var(--soft); color: var(--text); border: 0; }
+
+/* поля — мягко скруглённые */
+:root input:not([type=checkbox]):not([type=radio]), :root select, :root textarea { border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
+:root input:not([type=checkbox]):not([type=radio]):focus, :root select:focus, :root textarea:focus { border-color: var(--line-2); }
+
+/* полоски и плашки */
+:root .progress { height: 4px; border-radius: 999px; background: var(--soft-2); }
+:root .progress i { border-radius: 999px; }
+:root .alert { border-radius: var(--r-tile); }
+:root .badge, :root .chip-stat { border-radius: 999px; font-size: 12px; letter-spacing: 0; text-transform: none; background: var(--soft); border: 0; }
+:root dialog { border-radius: 22px; border: 0; }
+
+/* неделя Планера: выбранный день — мягкой подложкой, сегодня — число графитом с точкой */
+:root .wstrip button.wday, :root .week .wstrip button.wday { border: 0 !important; border-radius: 14px !important; background: transparent !important; }
+:root .wstrip button.wday.on, :root .week .wstrip button.wday.on { background: var(--soft) !important; border: 0 !important; }
+:root .wstrip button.wday:hover { background: var(--soft) !important; }
+:root .wday.today .wk-n { text-decoration: none; color: var(--text); font-weight: 400; }
+:root .wday.today .wk-d { color: var(--text); }
+
+/* меню слева: выбранное — мягкой подложкой, без черты */
+@media (min-width: 1180px) {
+  :root nav.tabs a { border-radius: 12px; }
+  :root nav.tabs a:hover { background: var(--soft); }
+  :root nav.tabs a.on { background: var(--soft); }
+  :root nav.tabs a.on::before { display: none; }
+}
+
+/* боковые колонки: «Сегодня» Мастерской, «Сегодня» Доходов, «Ближайшее» Директа — спокойные строки */
+:root .nav-today, :root .nav-soon { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+:root .nt-date { font: 500 11px/1.3 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); }
+:root .nt-t { font-weight: 400; font-size: 14px; line-height: 1.4; }
+:root .nt-item > i { width: 6px; height: 6px; margin-top: 8px; opacity: .8; }
+:root .nt-more, :root .nt-more * { font-weight: 500; text-decoration: none; }
+:root .side-card { background: var(--card); border: 0; border-radius: var(--r-tile); padding: 14px 16px; }
+:root a.side-card:hover { background: var(--soft); }
+:root .today-banner { border-radius: var(--r-card); background: var(--card); }
+:root .tb-item { border-radius: 14px; background: var(--soft); border: 0; }
+
+/* то, что раньше выпрямили, — снова мягкое */
+:root :is(.lg-f, .fl-check-item, .fl-builder, .arc-warn, .l-hl, .kw-item, .cover-ph, .pick-list, .l-live, .d-st) { border-radius: 14px !important; }
+:root .fl-panel { background: var(--card) !important; border: 0 !important; border-radius: var(--r-card) !important; padding-left: 18px !important; padding-right: 18px !important; }
+:root button.nav-arr, :root button.plus-btn { background: transparent !important; border: 0 !important; border-radius: 50% !important; box-shadow: none !important; }
+:root button.nav-arr:hover, :root button.plus-btn:hover { background: var(--soft) !important; }
