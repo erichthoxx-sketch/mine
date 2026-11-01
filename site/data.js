@@ -50,3 +50,17 @@ export async function addSub(email, src, name = '') {
   if (!r.ok && name) r = await send(false);
   if (!r.ok) throw new Error('sub ' + r.status);
 }
+
+// Подписка через свой сервис писем (адрес в админке → «Письма»): сервис шлёт письмо «Подтвердите подписку».
+// Пока сервиса нет — почта, как раньше, в Firebase. Ответ: { confirm: true } — ждём подтверждения из письма.
+export async function subscribe(c, email, src, name = '') {
+  const url = String(c?.mailUrl || '').trim();
+  if (!url) { await addSub(email, src, name); return { confirm: false }; }
+  const r = await fetch(`${url}${url.includes('?') ? '&' : '?'}a=sub`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, ok: true, src, name: String(name || '').slice(0, 79) }),
+  });
+  if (!r.ok) throw new Error('mail ' + r.status);
+  const j = await r.json().catch(() => ({}));
+  return { confirm: !j.already };
+}

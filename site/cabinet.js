@@ -3,7 +3,7 @@
 // Данные читателя — в его аккаунте (readers.js), копия — в браузере, чтобы всё показывалось сразу.
 import { esc, fmt, findBook, cover, STATUS, startInfo, readerPath, bonusItems, raffleFriday, raffleLive } from './content.js';
 import { readers, readerError } from './readers.js';
-import { addSub } from './data.js';
+import { subscribe } from './data.js';
 
 const K = 'lanaSite.reader', IN = 'lanaSite.in';
 const get = () => { try { return JSON.parse(localStorage.getItem(K) || 'null') || {}; } catch { return {}; } };
@@ -294,7 +294,7 @@ document.addEventListener('submit', async (e) => {
       const nm = f.uname.value.trim();
       user = await readers.signUp(mail, f.pw.value);
       S.name = nm;
-      addSub(mail, 'kabinet', nm).catch(() => {}); // почта и имя — в «Подписчики» админки (согласие дано)
+      subscribe(ctx.c || {}, mail, 'kabinet', nm).catch(() => {}); // почта и имя — в «Подписчики» админки (согласие дано)
     } else user = await readers.signIn(mail, f.pw.value);
     try { localStorage.setItem(IN, '1'); } catch { /* ок */ }
     watch();

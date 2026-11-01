@@ -536,3 +536,8 @@ button.lnk{background:none;border:0;cursor:pointer;color:inherit}
   .cab-stats span{font-size:12px}
   .cab-gift{grid-template-columns:84px 1fr}
 }
+/* пришли по ссылке из письма: строка внизу экрана, сама исчезает */
+.pismo{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;max-width:calc(100% - 32px);width:max-content;
+  background:var(--ink);color:var(--paper);padding:14px 22px;font-size:15px;line-height:1.45;text-align:center;
+  box-shadow:0 14px 34px -16px rgba(0,0,0,.5);transition:opacity .9s}
+.pismo.out{opacity:0}
