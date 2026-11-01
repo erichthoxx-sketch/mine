@@ -2,6 +2,7 @@
 // учебник и ИИ-помощник. Вход и база — общие с «Доходами» и «Мастерской».
 import { createStore, authErrorText } from '../../js/store.js';
 import { initAccent } from '../../js/accent.js';
+import { keepNavDown } from '../../js/vvfix.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from '../../js/ui.js';
 import { todayISO } from '../../js/calc.js';
 import { ic } from '../../js/icons.js';
@@ -26,7 +27,8 @@ import { logView } from './views/log.js';
 import { settingsView } from './views/settings.js';
 
 const store = createStore({ colls: ['d_snap', 'd_log', 'd_tests', 'd_keywords', 'd_kw_bindings', 'd_competitors', 'w_promolinks', 'w_books', 'w_links', 'campaigns', 'reports', 'books', 'days', 'sales'], localKey: 'authorDirect.v1' });
-initAccent(store); // цвет акцентов — общий для всех приложений (выбирается в Мастерской)
+initAccent(store);
+keepNavDown(); // iPhone: нижнее меню не «повисает» посреди экрана // цвет акцентов — общий для всех приложений (выбирается в Мастерской)
 const ui = { route: '/', cTab: 'queries', lTab: '', lesson: '', demo: false, busy: '', kwBook: '', kwFilter: 'all' };
 keepPlace(ui, ['cTab', 'lTab', 'bTab', 'demo', 'kwBook', 'kwFilter']);
 let theme = 'auto';

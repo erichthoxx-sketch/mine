@@ -1,5 +1,6 @@
 // Писательское приложение: книги (Google Диск), идеи, планер, маркетинг. Вход и база — общие с приложением доходов.
 import { initAccent } from '../../js/accent.js';
+import { keepNavDown } from '../../js/vvfix.js';
 import { createStore, authErrorText } from '../../js/store.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from '../../js/ui.js';
 import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
@@ -27,6 +28,7 @@ import { cleanText, cleanedMsg } from '../../js/cleantext.js';
 export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews', 'w_promolinks', 'w_blog'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 initAccent(store);
+keepNavDown(); // iPhone: нижнее меню не «повисает» посреди экрана
 const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'open', ideaKind: '', ideaN: 50, openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
 keepPlace(ui, ['planTab', 'ideaBook', 'ideaSt', 'ideaKind', 'mSt', 'mTab', 'legTab']);
 let theme = 'auto';

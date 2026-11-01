@@ -3166,3 +3166,5 @@ main .rev-actions button.dl .ic { opacity: 1; }
 :root :is(.stat, .tiles > div) .v { font-size: min(24px, 13cqi) !important; }
 /* «Доходы» на компьютере с правой колонкой: плитки по две в ряд, пока места мало для четырёх, — цифры остаются крупными */
 @media (min-width: 1180px) and (max-width: 1640px) { html:not(.app-writer) main .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+/* iPhone: нижнее меню всегда у настоящего низа экрана (сдвиг считает js/vvfix.js) */
+@media (max-width: 1179px) { nav.tabs { transform: translate3d(0, var(--nav-shift, 0px), 0); } }
