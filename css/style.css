@@ -2855,3 +2855,246 @@ main .rev-actions button.dl .ic { opacity: 1; }
   nav.tabs a.nav-side-i:hover { background: var(--surface-2); }
   .nav-side-i span { display: block; font-size: 12px; }
 }
+
+/* =====================================================================================================
+   «Бумага и графит» — новый вид всех трёх приложений, в стиле сайта lanafreitag.ru (владелица утвердила 01.11.2026).
+   Только внешний вид: переменные, шрифты, кнопки, вкладки, меню. Блок стоит в конце и перекрывает прежние правила;
+   убрать его — вернётся прежний розовый вид. Шрифты сайта: Oranienbaum (заголовки, крупные цифры, заглавными),
+   Cormorant курсив (акцент), Golos Text (текст). Углы прямые, теней нет, разделы — тонкими линиями.
+   ===================================================================================================== */
+:root {
+  --font-display: "Oranienbaum", "Times New Roman", serif;
+  --font-italic: "Cormorant", Georgia, serif;
+  --font-body: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bg: #f6f6f4; --surface: #f6f6f4; --paper-2: #ecece8; --line: rgba(20, 21, 23, .12); --line-2: rgba(20, 21, 23, .28);
+  --ivory: #fbfbf9;
+  --text: #141517; --text-2: #5c6167; --muted: #6b7076;
+  --link: #141517; --good: #2f6b53; --bad: #a3343f; --warn: #9a5b23;
+  --shadow: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    --bg: #111214; --surface: #111214; --paper-2: #1a1b1e; --line: rgba(238, 238, 236, .13); --line-2: rgba(238, 238, 236, .3);
+    --ivory: #16171a; --text: #eeeeec; --text-2: #a3a7ac; --muted: #8e9297;
+    --link: #eeeeec; --good: #6fc39b; --bad: #ff8f9a; --warn: #e3a866;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111214; --surface: #111214; --paper-2: #1a1b1e; --line: rgba(238, 238, 236, .13); --line-2: rgba(238, 238, 236, .3);
+  --ivory: #16171a; --text: #eeeeec; --text-2: #a3a7ac; --muted: #8e9297;
+  --link: #eeeeec; --good: #6fc39b; --bad: #ff8f9a; --warn: #e3a866;
+}
+:root body { font: 400 16px/1.6 var(--font-body); -webkit-font-smoothing: antialiased; }
+
+/* заголовки — как на обложке */
+:root h1, :root h2 { font-family: var(--font-display); font-weight: 400; text-transform: uppercase; letter-spacing: .02em; line-height: 1.05; }
+:root h1 { font-size: 26px; }
+:root h2 { font-size: 21px; margin-bottom: 14px; }
+:root h3 { font-weight: 600; }
+:root .top { padding-top: 18px; }
+:root .top h1 { display: flex; align-items: center; gap: 12px; font-size: 28px; }
+:root .top h1::before { content: ""; flex: none; width: 38px; height: 38px; border-radius: 50%; background: url("bear.jpg") center / cover; mix-blend-mode: multiply; }
+@media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) .top h1::before { mix-blend-mode: normal; opacity: .85; } }
+:root[data-theme="dark"] .top h1::before { mix-blend-mode: normal; opacity: .85; }
+:root .top small { font-size: 13px; color: var(--text-2); }
+
+/* разделы вместо карточек: на бумаге, тонкая линия сверху */
+:root .card { background: transparent; border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; padding: 22px 0 26px; margin: 0; }
+:root .card .card { border-top: 1px solid var(--line); padding: 16px 0; }
+:root .item { border-radius: 0 !important; }
+
+/* цифры-плитки — подпись разрядкой, цифра шрифтом обложки, графитовая линия сверху */
+:root .stat, :root .tiles > div { background: transparent; border: 0; border-top: 1px solid var(--text); border-radius: 0; box-shadow: none; padding: 12px 0 4px; }
+:root .stat .k, :root .tiles .k { font-size: 11px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--text-2); }
+:root .stat .v, :root .tiles .v, :root .big, :root .day-sum, :root .tax-sum { font-family: var(--font-display); font-weight: 400; font-size: 32px; line-height: 1.1; letter-spacing: .01em; }
+:root .stat .s, :root .tiles .s { font-size: 13px; color: var(--text-2); }
+:root .grid4, :root .tiles { gap: 22px; }
+
+/* кнопки: прямые, подпись заглавными с разрядкой; главная — графит */
+:root button, :root .btn { border-radius: 0; box-shadow: none; }
+:root :is(main, dialog, .top) :is(button, .btn):not(.link):not(.chip):not(.dl):not(.wide):not([aria-label]),
+:root button.primary, :root .btn.primary {
+  font: 500 11px/1 var(--font-body); letter-spacing: .16em; text-transform: uppercase; min-height: 44px; padding: 0 20px;
+  background: transparent; color: var(--text); border: 1px solid var(--line-2);
+}
+:root button.primary, :root .btn.primary, :root :is(main, dialog) button.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+:root button.primary:hover, :root .btn.primary:hover { background: transparent; color: var(--text); }
+:root :is(main, dialog) :is(button, .btn):not(.primary):not(.link):not(.chip):not(.dl):hover { border-color: var(--text); }
+:root button:not(.primary):not(.link):not(.chip) { border-color: var(--line-2); }
+:root .small-btn { font-size: 10px !important; min-height: 34px !important; padding: 0 12px !important; }
+:root button.link, :root a.link { color: var(--text); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+:root button.dl, :root .dl { border-radius: 0; color: var(--text-2); }
+:root button.danger, :root button.danger:not(.primary) { color: var(--bad); border-color: var(--bad); }
+:root .top button[aria-label] { border-radius: 50%; border: 1px solid var(--line); background: transparent; }
+:root button:focus-visible, :root a:focus-visible, :root input:focus-visible, :root select:focus-visible, :root textarea:focus-visible { outline: 1.5px solid var(--text); outline-offset: 3px; }
+
+/* «пилюли» → тихие вкладки с тонкой линией */
+:root .chip { border: 0; border-bottom: 1px solid transparent; border-radius: 0; background: transparent; padding: 6px 2px; margin-right: 12px; min-height: 34px;
+  font: 500 11px/1.2 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); }
+:root .chip.on { background: transparent; color: var(--text); border-bottom-color: var(--text); }
+:root .lg-tabs button { font: 500 11px/1.2 var(--font-body) !important; letter-spacing: .14em !important; text-transform: uppercase !important; }
+
+/* поля */
+:root input, :root select, :root textarea { border-radius: 0; border: 1px solid var(--line-2); background: transparent; }
+:root input[type=checkbox], :root input[type=radio] { accent-color: var(--text); }
+:root label { color: var(--text-2); }
+
+/* полоски, плашки, метки */
+:root .progress { height: 3px; border-radius: 0; background: var(--line); }
+:root .progress i { background: var(--text); border-radius: 0; }
+:root .progress.ok i { background: var(--good); }
+:root .alert { border: 0; border-radius: 0; background: var(--paper-2); }
+:root .alert.ok { background: color-mix(in srgb, var(--good) 8%, var(--paper-2)); }
+:root .alert.bad { background: color-mix(in srgb, var(--bad) 8%, var(--paper-2)); }
+:root .badge, :root .chip-stat { border-radius: 0; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; background: transparent; }
+
+/* окна */
+:root dialog { border-radius: 0; border: 1px solid var(--line); background: var(--bg); box-shadow: 0 24px 60px rgba(20, 21, 23, .18); }
+:root dialog::backdrop { background: rgba(20, 21, 23, .35); }
+
+/* меню: снизу на телефоне — подписи разрядкой; слева на компьютере — словами, выбранное с тонкой чертой */
+:root nav.tabs { background: var(--bg); border-top: 1px solid var(--line); }
+:root nav.tabs::after { background: var(--bg); }
+:root nav.tabs a { font-size: 10px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--text-2); }
+:root nav.tabs a .ic { color: var(--text-2); stroke-width: 1.5; }
+:root nav.tabs a.on, :root nav.tabs a.on .ic { color: var(--text); font-weight: 600; }
+@media (min-width: 1180px) {
+  :root nav.tabs { border-top: 0; border-right: 1px solid var(--line); }
+  :root nav.tabs::before { content: ""; display: block; width: 52px; height: 52px; border-radius: 50%; margin: 4px 0 26px 14px; background: url("bear.jpg") center / cover; mix-blend-mode: multiply; flex: none; }
+  :root html.nav-mini nav.tabs::before, html.nav-mini nav.tabs::before { width: 40px; height: 40px; margin: 4px auto 20px; }
+  :root nav.tabs a { border-radius: 0; font-size: 11px; letter-spacing: .16em; padding: 12px 14px; position: relative; }
+  :root nav.tabs a:hover { background: transparent; color: var(--text); }
+  :root nav.tabs a.on { background: transparent; font-weight: 600; }
+  :root nav.tabs a.on::before { content: ""; position: absolute; left: -6px; top: 50%; width: 14px; height: 1px; background: var(--text); }
+  :root .top h1::before { display: none; }
+  :root .nav-toggle { border-radius: 50%; }
+}
+@media (min-width: 1180px) and (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) nav.tabs::before { mix-blend-mode: normal; opacity: .85; } }
+@media (min-width: 1180px) { :root[data-theme="dark"] nav.tabs::before { mix-blend-mode: normal; opacity: .85; } }
+
+/* «Сегодня важно», боковые блоки Мастерской, «Ближайшее» Директа — без розовых подложек */
+:root .today-banner { border-radius: 0; background: var(--paper-2); border: 0; }
+:root .tb-k, :root .nt-k { color: var(--text-2); letter-spacing: .16em; font-weight: 500; font-size: 11px; }
+:root .tb-date { font-family: var(--font-display); font-weight: 400; text-transform: uppercase; letter-spacing: .02em; font-size: 24px; }
+:root .tb-item { border-radius: 0; background: var(--bg); border: 0; border-top: 1px solid var(--text); }
+:root .tb-item:hover { transform: none; }
+:root .nav-today, :root .nav-soon { border-radius: 0; background: transparent; border: 0; border-top: 1px solid var(--line); }
+:root .nav-side { border-top-color: var(--line); }
+
+/* общие мелочи: прямые углы у всего «карточного», цвет — только в линиях и точках */
+:root :is(.lg-f, .fl-check-item, .fl-builder, .arc-warn, .l-hl, .kw-item, .cover-ph, .pick-list, .l-live, .d-st) { border-radius: 0 !important; }
+:root .fl-check-item { background: transparent !important; border-bottom: 1px solid var(--line); }
+:root .l-hl { background: var(--paper-2) !important; }
+:root .fl-panel { background: transparent !important; border: 0 !important; border-top: 1px solid var(--line) !important; border-radius: 0 !important; box-shadow: none !important; padding-left: 0 !important; padding-right: 0 !important; }
+:root .up { color: var(--good); } :root .down { color: var(--bad); } :root .warnc { color: var(--warn); }
+/* правки к «Бумаге и графиту»: плитка-кнопка, неделя Планера, заголовки разделов одного размера */
+:root .stat.stat-btn, :root button.stat { font: inherit !important; letter-spacing: normal !important; text-transform: none !important; text-align: left; min-height: 0 !important; padding: 12px 0 4px !important;
+  background: transparent !important; border: 0 !important; border-top: 1px solid var(--text) !important; border-radius: 0 !important; color: var(--text) !important; cursor: pointer; }
+:root .stat.stat-btn .s { text-transform: none; letter-spacing: normal; }
+:root .wday { border-radius: 0 !important; border-color: transparent !important; background: transparent !important; }
+:root .wday.on { border-color: var(--text) !important; }
+:root .wday.today .wk-n { text-decoration: underline; text-underline-offset: 4px; }
+:root .wday .wk-n { font-family: var(--font-display); font-weight: 400; font-size: 22px; }
+:root main h2 { font-size: 22px !important; font-weight: 400 !important; }
+:root .psec-h h2, :root .home-h h2 { font-size: 24px !important; }
+:root :is(main, dialog) button.stat.stat-btn.stat-btn { border: 0 !important; border-top: 1px solid var(--text) !important; background: transparent !important; box-shadow: none !important; padding: 12px 0 4px !important; border-radius: 0 !important; }
+:root :is(main, dialog) button.stat.stat-btn .s { color: var(--text-2); }
+/* боковая колонка «Доходов» (Сегодня, цель, Ближайшее) — так же плоско, как разделы */
+:root .side-k { font-size: 11px; font-weight: 500; letter-spacing: .16em; color: var(--text-2); }
+:root .side-date { font-family: var(--font-display); font-weight: 400; font-size: 22px; text-transform: uppercase; letter-spacing: .02em; }
+:root .side-card { background: transparent; border: 0; border-top: 1px solid var(--text); border-radius: 0; padding: 12px 0 6px; }
+:root a.side-card:hover { border-color: var(--text); background: transparent; }
+:root .side-big { font-family: var(--font-display); font-weight: 400; font-size: 30px; letter-spacing: .01em; }
+:root .side-big .small { font-family: var(--font-body); font-weight: 400; }
+:root .side-actions button, :root .side-actions .btn { font: 500 11px/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; min-height: 40px; padding: 0 14px;
+  background: transparent; color: var(--text); border: 1px solid var(--line-2); border-radius: 0; }
+:root .side-actions button:hover, :root .side-actions .btn:hover { border-color: var(--text); }
+
+/* =====================================================================================================
+   Сочетание прежнего и нового (владелица, 01.11.2026: «уродливые прямоугольные рамки», «скомбинируй старый стиль с новым — во всём»).
+   От сайта остаются шрифты, бумага и графит; от прежнего вида — мягкие скруглённые формы, кнопки-«таблетки» с мягкой заливкой
+   вместо рамок, мягкие карточки. Жёстких прямоугольных рамок нет нигде.
+   ===================================================================================================== */
+:root { --soft: #ececE8; --soft-2: #e3e3de; --card: #fcfcfa; --r-card: 20px; --r-tile: 16px; }
+@media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) { --soft: #222326; --soft-2: #2b2c30; --card: #18191c; } }
+:root[data-theme="dark"] { --soft: #222326; --soft-2: #2b2c30; --card: #18191c; }
+
+/* карточки — мягкие, чуть светлее бумаги, без рамки и тени */
+:root .card { background: var(--card); border: 0; border-radius: var(--r-card); padding: 18px 20px 20px; margin: 0 0 14px; }
+:root .card .card { background: transparent; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 14px 0 4px; margin: 0; }
+:root .item { border-radius: 14px !important; }
+
+/* плитки цифр — мягкие скруглённые, цифра шрифтом обложки */
+:root .stat, :root .tiles > div { background: var(--soft); border: 0; border-radius: var(--r-tile); padding: 12px 14px; }
+:root .card .stat, :root .card .tiles > div { background: var(--soft); }
+:root .stat .v, :root .tiles .v, :root .big, :root .day-sum, :root .tax-sum { font-size: 28px; }
+:root .stat .k, :root .tiles .k { font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: none; }
+:root .stat.stat-btn, :root button.stat,
+:root :is(main, dialog) button.stat.stat-btn.stat-btn { background: var(--soft) !important; border: 0 !important; border-radius: var(--r-tile) !important; padding: 12px 14px !important; }
+:root :is(main, dialog) button.stat.stat-btn.stat-btn:hover { background: var(--soft-2) !important; }
+
+/* кнопки — «таблетки» с мягкой заливкой, обычными буквами; главная — графитовая таблетка */
+:root :is(main, dialog, .top, aside, .side) :is(button, .btn):not(.link):not(.chip):not(.dl):not(.wide):not([aria-label]):not(.icon-btn):not(.wday):not(.stat):not(.nav-arr):not(.plus-btn):not(.lg-tabs button):not(.nt-btn),
+:root .side-actions :is(button, .btn) {
+  font: 500 14px/1.2 var(--font-body); letter-spacing: 0; text-transform: none; min-height: 42px; padding: 0 18px;
+  background: var(--soft); color: var(--text); border: 1px solid transparent; border-radius: 999px;
+}
+:root :is(main, dialog, .top, aside, .side) :is(button, .btn):not(.primary):not(.link):not(.chip):not(.dl):not([aria-label]):not(.icon-btn):not(.wday):not(.stat):not(.nav-arr):not(.plus-btn):not(.lg-tabs button):hover,
+:root .side-actions :is(button, .btn):hover { background: var(--soft-2); border-color: transparent; }
+:root button.primary, :root .btn.primary, :root :is(main, dialog, .top) button.primary { background: var(--text) !important; color: var(--bg) !important; border-color: var(--text) !important; border-radius: 999px; }
+:root button.primary:hover, :root .btn.primary:hover { background: color-mix(in srgb, var(--text) 85%, var(--bg)) !important; color: var(--bg) !important; }
+:root .small-btn { font-size: 13px !important; min-height: 34px !important; padding: 0 14px !important; }
+:root button.danger, :root button.danger:not(.primary) { color: var(--bad); border-color: transparent; background: color-mix(in srgb, var(--bad) 8%, var(--soft)); }
+:root .top button[aria-label], :root button[aria-label].tb { border: 0; background: var(--soft); border-radius: 50%; }
+:root .top button[aria-label]:hover { background: var(--soft-2); }
+:root .nav-toggle { border: 0 !important; background: var(--soft); }
+:root button.nt-btn { border-radius: 999px; border: 0; background: var(--soft); font: 500 13px/1.2 var(--font-body); }
+:root .nt-btns button.nt-btn:first-child { background: var(--text); color: var(--bg); border: 0; }
+
+/* «пилюли»-переключатели — мягкая заливка у выбранного; вкладки Легенды и Аналитики остаются тонкой линией (её выбор) */
+:root .chip { border: 0; border-radius: 999px; padding: 6px 14px; margin-right: 6px; min-height: 34px; font: 500 14px/1.2 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--text-2); background: transparent; }
+:root .chip:hover { background: var(--soft); }
+:root .chip.on { background: var(--soft); color: var(--text); border: 0; }
+
+/* поля — мягко скруглённые */
+:root input:not([type=checkbox]):not([type=radio]), :root select, :root textarea { border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
+:root input:not([type=checkbox]):not([type=radio]):focus, :root select:focus, :root textarea:focus { border-color: var(--line-2); }
+
+/* полоски и плашки */
+:root .progress { height: 4px; border-radius: 999px; background: var(--soft-2); }
+:root .progress i { border-radius: 999px; }
+:root .alert { border-radius: var(--r-tile); }
+:root .badge, :root .chip-stat { border-radius: 999px; font-size: 12px; letter-spacing: 0; text-transform: none; background: var(--soft); border: 0; }
+:root dialog { border-radius: 22px; border: 0; }
+
+/* неделя Планера: выбранный день — мягкой подложкой, сегодня — число графитом с точкой */
+:root .wstrip button.wday, :root .week .wstrip button.wday { border: 0 !important; border-radius: 14px !important; background: transparent !important; }
+:root .wstrip button.wday.on, :root .week .wstrip button.wday.on { background: var(--soft) !important; border: 0 !important; }
+:root .wstrip button.wday:hover { background: var(--soft) !important; }
+:root .wday.today .wk-n { text-decoration: none; color: var(--text); font-weight: 400; }
+:root .wday.today .wk-d { color: var(--text); }
+
+/* меню слева: выбранное — мягкой подложкой, без черты */
+@media (min-width: 1180px) {
+  :root nav.tabs a { border-radius: 12px; }
+  :root nav.tabs a:hover { background: var(--soft); }
+  :root nav.tabs a.on { background: var(--soft); }
+  :root nav.tabs a.on::before { display: none; }
+}
+
+/* боковые колонки: «Сегодня» Мастерской, «Сегодня» Доходов, «Ближайшее» Директа — спокойные строки */
+:root .nav-today, :root .nav-soon { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+:root .nt-date { font: 500 11px/1.3 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); }
+:root .nt-t { font-weight: 400; font-size: 14px; line-height: 1.4; }
+:root .nt-item > i { width: 6px; height: 6px; margin-top: 8px; opacity: .8; }
+:root .nt-more, :root .nt-more * { font-weight: 500; text-decoration: none; }
+:root .side-card { background: var(--card); border: 0; border-radius: var(--r-tile); padding: 14px 16px; }
+:root a.side-card:hover { background: var(--soft); }
+:root .today-banner { border-radius: var(--r-card); background: var(--card); }
+:root .tb-item { border-radius: 14px; background: var(--soft); border: 0; }
+
+/* то, что раньше выпрямили, — снова мягкое */
+:root :is(.lg-f, .fl-check-item, .fl-builder, .arc-warn, .l-hl, .kw-item, .cover-ph, .pick-list, .l-live, .d-st) { border-radius: 14px !important; }
+:root .fl-panel { background: var(--card) !important; border: 0 !important; border-radius: var(--r-card) !important; padding-left: 18px !important; padding-right: 18px !important; }
+:root button.nav-arr, :root button.plus-btn { background: transparent !important; border: 0 !important; border-radius: 50% !important; box-shadow: none !important; }
+:root button.nav-arr:hover, :root button.plus-btn:hover { background: var(--soft) !important; }

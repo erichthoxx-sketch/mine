@@ -11,9 +11,9 @@ const block = selector => {
   const end = css.indexOf('}', index);
   return css.slice(index + needle.length, end);
 };
-test('Marketing uses the actual typography (Nunito / Unbounded)', () => {
-  assert.match(html, /family=Nunito/);
-  assert.match(html, /family=Unbounded/);
+test('Marketing uses the actual typography (шрифты сайта: Golos Text / Oranienbaum)', () => {
+  assert.match(html, /family=Golos\+Text/);
+  assert.match(html, /family=Oranienbaum/);
   assert.match(block('.app-writer .mk-book-card .mk-info > b'), /font-family:\s*var\(--font-body\)/);
   assert.match(block('.app-writer .mk-book-card .mk-info > b'), /font-size:\s*15px/);
   assert.match(block('.app-writer .mk-book-card .mk-info > b'), /font-weight:\s*700/);
