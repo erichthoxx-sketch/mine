@@ -151,3 +151,31 @@ test('синхронизация: задача «мастерская» из «�
     assert.deepEqual(db.labels.map((l) => l.name).sort(), ['доходы', 'идея', 'книги', 'мастерская']); // недостающие метки заведены
   } finally { globalThis.fetch = orig; }
 });
+
+test('дела из «Входящих» без метки — тоже в Планере; ссылка в описании от Todoist — не повод править задачу', async () => {
+  const { fetchOwnTasks, todoistPlan } = await import('../writer/js/todoist.js');
+  const db = {
+    projects: [{ id: 'p0', name: 'Inbox', inbox_project: true }, { id: 'p2', name: 'Мастерская' }, { id: 'p3', name: 'Спорт' }],
+    tasks: [
+      { id: 'a', project_id: 'p0', content: 'Податься в подборки на литнете', labels: [], priority: 4, due: { date: '2026-10-30' } },
+      { id: 'b', project_id: 'p3', content: 'Тренировка', labels: [], priority: 1, due: { date: '2026-10-30' } },
+    ],
+  };
+  const orig = globalThis.fetch;
+  const res = (x) => new Response(JSON.stringify(x), { status: 200, headers: { 'content-type': 'application/json' } });
+  globalThis.fetch = async (url) => {
+    const path = new URL(url).pathname.replace('/api/v1', '');
+    if (path === '/projects') return res({ results: db.projects });
+    if (path === '/sections') return res({ results: [] });
+    if (path === '/tasks') return res({ results: db.tasks });
+    return res({});
+  };
+  try {
+    const own = await fetchOwnTasks('T', {});
+    assert.deepEqual(own.map((x) => [x.id, x.p, x.d, x.pr]), [['a', 'Входящие', '2026-10-30', 4]]); // спорт — не наше
+  } finally { globalThis.fetch = orig; }
+  const w = { key: 'k', content: 'Провести розыгрыш на сайте', description: 'https://lanafreitag.ru/admin/', date: '2026-10-30' };
+  const t = { id: '1', content: w.content, description: '[Сайт · админка](https://lanafreitag.ru/admin/)', due: { date: '2026-10-30' }, labels: ['мастерская'] };
+  const ops = todoistPlan([w], { k: { id: '1', date: '2026-10-30' } }, {}, [t], { 1: '2026-10-30' });
+  assert.equal(ops.update.length, 0);
+});

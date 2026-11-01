@@ -796,6 +796,20 @@ export function taxRows(keys, finOf, monthsMap, dataEnd) {
   return { rows, unpaid: r2(rows.filter((x) => x.closed && !x.paid).reduce((a, x) => a + x.tax, 0)), unpaidMonths: rows.filter((x) => x.closed && !x.paid && x.tax > 0).map((x) => x.month) };
 }
 
+// Сумма для чека по площадкам за месяц (в «Мой налог» в одном чеке можно несколько позиций). total — taxBase месяца:
+// всё, что не разложилось по площадкам (старые дни без продаж по книгам, округления), — Литнет. Литнет — первым, дальше по сумме.
+export function taxByPlatform(sales, key, total, base = 'gross') {
+  const by = {};
+  for (const s of sales || []) {
+    if (monthKey(s.date) !== key) continue;
+    const pl = String(s.platform || '').trim() || 'Литнет', name = pl.toLowerCase() === 'литнет' ? 'Литнет' : pl;
+    by[name] = (by[name] || 0) + (base === 'royalty' ? Number(s.royalty) || 0 : (Number(s.price) || 0) * (Number(s.qty) || 0));
+  }
+  const others = Object.entries(by).filter(([n]) => n !== 'Литнет').map(([name, sum]) => ({ name, sum: r2(sum) })).filter((x) => x.sum > 0);
+  const lit = r2(total - others.reduce((a, x) => a + x.sum, 0));
+  return [...(lit > 0 ? [{ name: 'Литнет', sum: lit }] : []), ...others.sort((a, b) => b.sum - a.sum)];
+}
+
 // НПД (самозанятые): налог за месяц надо оплатить до 28-го числа следующего месяца
 export const npdDeadline = (key) => `${addMonths(key, 1)}-28`;
 

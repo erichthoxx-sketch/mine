@@ -1,5 +1,5 @@
 import { contestCalendar } from './ccal.js';
-import { esc, acts, changes, openSheet, closeSheet, opt, toast, uid, ask, download } from '../../../js/ui.js';
+import { esc, acts, changes, openSheet, closeSheet, opt, toast, uid, ask, download, copyRich } from '../../../js/ui.js';
 import { fmtDate } from '../../../js/format.js';
 import { resizeImage } from '../../../js/img.js';
 import { ic } from '../../../js/icons.js';
@@ -298,7 +298,7 @@ async function zipDownload(name, files) {
 }
 acts['mk.targetCopy'] = async (d) => {
   const c = app().ctx(), b = c.wbooksById[d.id];
-  try { await navigator.clipboard.writeText(targetText(c, b)); toast('Тексты скопированы — вставьте в сообщение таргетологу'); } catch { toast('Не получилось скопировать'); }
+  toast((await copyRich(targetText(c, b)).catch(() => false)) ? 'Тексты скопированы — вставьте в сообщение таргетологу' : 'Не получилось скопировать');
 };
 acts['mk.targetZip'] = async (d) => {
   const c = app().ctx(), b = c.wbooksById[d.id];
@@ -310,5 +310,5 @@ acts['mk.targetZip'] = async (d) => {
 };
 
 acts.copy ||= async (d) => {
-  try { await navigator.clipboard.writeText(d.text); toast('Скопировано'); } catch { toast('Не получилось скопировать — выделите текст вручную'); }
+  toast((await copyRich(d.text).catch(() => false)) ? 'Скопировано' : 'Не получилось скопировать — выделите текст вручную');
 };

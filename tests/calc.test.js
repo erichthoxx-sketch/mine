@@ -673,3 +673,16 @@ test('прогноз месяца: дни сбоя, отмеченные впе�
   // сбоев ещё не было, но отмечен день впереди — треть обычного темпа
   assert.equal(paceForecast(60000, 20, 31, { days: 0, fact: 0, ahead: 1 }), 60000 + 3000 * 10 + 900);
 });
+
+test('чек налога по площадкам: Литнет первым, остаток — Литнет, чужой месяц не считается', async () => {
+  const { taxByPlatform } = await import('../js/calc.js');
+  const sales = [
+    { date: '2026-10-03', price: 100, qty: 10, royalty: 700 },
+    { date: '2026-10-05', price: 200, qty: 2, royalty: 300, platform: 'Литмаркет' },
+    { date: '2026-10-06', price: 50, qty: 1, royalty: 35, platform: 'литнет' },
+    { date: '2026-09-30', price: 999, qty: 1, royalty: 1, platform: 'Литгород' },
+  ];
+  assert.deepEqual(taxByPlatform(sales, '2026-10', 1500), [{ name: 'Литнет', sum: 1100 }, { name: 'Литмаркет', sum: 400 }]);
+  assert.deepEqual(taxByPlatform(sales.slice(0, 1), '2026-10', 1000), [{ name: 'Литнет', sum: 1000 }]);
+  assert.deepEqual(taxByPlatform(sales, '2026-10', 1035, 'royalty'), [{ name: 'Литнет', sum: 735 }, { name: 'Литмаркет', sum: 300 }]);
+});

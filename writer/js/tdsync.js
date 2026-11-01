@@ -65,7 +65,8 @@ export async function runTodoist(a, { force = false, pull = false } = {}) {
     }
     // идеи: метка «идея» в Todoist ⇄ Идеи Мастерской
     try { const ri = await syncIdeas(token, c.data.w_ideas, c.wbooksById); for (const x of ri.puts) await a.store.put('w_ideas', x); if (force && ri.created) toast(`Из Todoist пришло идей: ${ri.created}`); } catch (e) { console.error(e); }
-    await a.store.saveSettings({ todoist: { ...r.state, err: '' } });
+    // поверх текущего: журнал переносов (moved) и время своих дел не теряются
+    await a.store.saveSettings({ todoist: { ...(a.ctx().settings.todoist || {}), ...r.state, err: '' } });
     if (force) {
       const st = r.stats, parts = [st.created && `добавлено ${st.created}`, st.updated && `обновлено ${st.updated}`, st.closed && `закрыто ${st.closed}`, r.doneInTodoist.length && `сделано в Todoist: ${r.doneInTodoist.length}`].filter(Boolean);
       toast('Todoist: ' + (parts.join(' · ') || 'всё уже совпадает'));
