@@ -181,10 +181,17 @@ class FirebaseStore extends Base {
     p.catch(e => { this.sync = 'error'; this.error = e; this.emit(); });
     if (navigator.onLine) await p;
   }
+  // Пишем только изменённые поля (каждое — целиком), а не весь документ: иначе приложение со старой копией настроек
+  // (другая вкладка, телефон после сна, одновременная синхронизация Todoist) затирало свежие правки — дата домена «откатывалась»
   async saveSettings(s) {
-    const { setDoc, doc } = this.F;
-    const merged = { ...this.data.settings, ...clean(s) };
-    await setDoc(doc(this.db, 'users', this.user.uid, 'meta', 'settings'), merged);
+    const { setDoc, updateDoc, doc } = this.F;
+    const patch = clean(s);
+    if (!Object.keys(patch).length) return;
+    this.data.settings = { ...this.data.settings, ...patch };
+    this.emit();
+    const ref = doc(this.db, 'users', this.user.uid, 'meta', 'settings');
+    try { await updateDoc(ref, patch); }
+    catch (e) { if (e?.code === 'not-found') await setDoc(ref, { ...this.data.settings }); else throw e; }
   }
   signIn(email, pw) { return this.A.signInWithEmailAndPassword(this.auth, email, pw); }
   signUp(email, pw) { return this.A.createUserWithEmailAndPassword(this.auth, email, pw); }

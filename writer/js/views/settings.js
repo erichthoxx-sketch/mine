@@ -1,4 +1,4 @@
-import { PALETTES, applyAccent } from '../../../js/accent.js';
+import { PALETTES, applyAccent, parseCustom, customKey, customPalette } from '../../../js/accent.js';
 import { ic } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, opt, toast, download, ask } from '../../../js/ui.js';
 import * as drive from '../drive.js';
@@ -31,7 +31,8 @@ export function settingsView(a) {
   <div class="card"><h2>Оформление и аккаунт</h2>
     <label for="th" style="margin-top:0">Тема</label><select id="th" data-chg="theme">${opt('auto', 'как в телефоне', a.theme)}${opt('light', 'светлая', a.theme)}${opt('dark', 'тёмная', a.theme)}</select>
     <label style="margin-top:14px">Цвет акцентов <span class="muted small">— для всех приложений</span></label>
-    <div class="acc-pick">${Object.entries(PALETTES).map(([k, p]) => `<button type="button" class="acc-sw${(c.settings.accent || 'rose') === k ? ' on' : ''}" data-act="accent.set" data-v="${k}" title="${p.name}" aria-label="${p.name}"><i style="background:linear-gradient(135deg, ${p.light.to}, ${p.light.accent})"></i><span>${p.name}</span></button>`).join('')}</div>
+    <div class="acc-pick">${Object.entries(PALETTES).map(([k, p]) => `<button type="button" class="acc-sw${(c.settings.accent || 'rose') === k ? ' on' : ''}" data-act="accent.set" data-v="${k}" title="${p.name}" aria-label="${p.name}"><i style="background:linear-gradient(135deg, ${p.light.to}, ${p.light.accent})"></i><span>${p.name}</span></button>`).join('')}${(() => { const cu = parseCustom(c.settings.accent), cp = cu && customPalette(cu.h, cu.sat);
+      return `<button type="button" class="acc-sw acc-own${cu ? ' on' : ''}" data-act="accent.custom" title="Свой цвет" aria-label="Свой цвет"><i style="background:${cp ? `linear-gradient(135deg, ${cp.light.to}, ${cp.light.accent})` : 'conic-gradient(from 200deg, #e8a5b8, #e9c49b, #c9dba0, #9fd0c4, #a7bfe6, #c4aee6, #e8a5b8)'}"></i><span>Свой</span></button>`; })()}</div>
     <p class="small muted" style="margin-top:12px">${st.mode === 'firebase' ? `Вы вошли как <b>${esc(st.user.email)}</b> — тот же вход, что в приложении доходов.` : 'Пробный режим.'}</p>
     ${st.mode === 'firebase' ? '<button data-act="auth.out">Выйти</button>' : ''}</div>`;
   return { html, after: () => loadArchive() };
@@ -104,3 +105,25 @@ acts['td.off'] = async () => { if (!(await ask('Отключить Todoist? За
 changes['td.auto'] = async (v, el, checked) => { await app().store.saveSettings({ todoistOff: !checked }); if (checked) runTodoist(app(), { force: true }); };
 
 acts['accent.set'] = async (d) => { applyAccent(d.v); await app().store.saveSettings({ accent: d.v }); toast(`Цвет акцентов: ${PALETTES[d.v].name.toLowerCase()} — во всех приложениях`); };
+// свой цвет: оттенок и насыщенность ползунками, приложение перекрашивается сразу; «Отмена» возвращает прежний цвет
+acts['accent.custom'] = () => {
+  const was = app().ctx().settings.accent || 'rose', cu = parseCustom(was) || { h: 200, sat: 45 };
+  let saved = false;
+  const f = openSheet('Свой цвет акцентов', `<div class="own-prev"><i id="own-a"></i><i id="own-b"></i><i id="own-c"></i></div>
+    <label for="own-h">Оттенок</label><input id="own-h" class="own-range own-hue" type="range" min="0" max="359" step="1" name="h" value="${cu.h}" data-chg="accent.own">
+    <label for="own-s">Насыщенность <span class="muted small">— нежнее ← → ярче</span></label><input id="own-s" class="own-range own-sat" type="range" min="0" max="100" step="1" name="s" value="${cu.sat}" data-chg="accent.own">
+    <p class="small muted">Светлые и тёмные тона приложение подберёт само — цвет останется мягким в обеих темах.</p>`,
+  async (fd) => { const k = customKey(fd.get('h'), fd.get('s')); saved = true; applyAccent(k); await app().store.saveSettings({ accent: k }); toast('Свой цвет акцентов — во всех приложениях'); }, { submitText: 'Выбрать этот цвет' });
+  const dlg = document.getElementById('sheet');
+  dlg.addEventListener('close', () => { if (!saved) applyAccent(was); }, { once: true });
+  f.querySelectorAll('.own-range').forEach((r) => r.addEventListener('input', () => ownPreview(f)));
+  ownPreview(f);
+  return false;
+};
+const ownPreview = (f) => {
+  const h = +f.querySelector('#own-h').value, sat = +f.querySelector('#own-s').value, p = customPalette(h, sat).light;
+  f.querySelector('#own-a').style.background = p.soft; f.querySelector('#own-b').style.background = p.to; f.querySelector('#own-c').style.background = p.accent;
+  f.querySelector('#own-s').style.setProperty('--own-from', customPalette(h, 0).light.to); f.querySelector('#own-s').style.setProperty('--own-to', customPalette(h, 100).light.accent);
+  applyAccent(customKey(h, sat), { save: false });
+};
+changes['accent.own'] = (v, el) => { ownPreview(el.form); return false; };
