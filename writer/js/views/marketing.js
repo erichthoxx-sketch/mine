@@ -12,6 +12,7 @@ import { svcInfo } from './pubfiles.js';
 import { chaptersOf, docxBlob } from '../publish.js';
 import { authorshipParas, sha256Hex } from '../authorship.js';
 import { promoLinksPanel, promoLinksInline } from './promolinks.js';
+import { linksView } from './links.js';
 
 const app = () => window.__app;
 export const MTYPES = { banner: 'Баннер для постов', cover: 'Обложка', target: 'Креатив для таргета', manuscript: 'Рукопись', synopsis: 'Синопсис', 'review-shot': 'Отзывы (скриншот)', other: 'Другое' };
@@ -27,13 +28,24 @@ const directOf = (b) => b.direct || { ads: [] };
 const mediaOf = (c, b, types) => c.data.w_media.filter((m) => m.bookId === b.id && types.includes(m.type)).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
 
 // ---------- список книг: по статусам, с поиском и готовностью материалов ----------
-export function marketingView(a) {
+// Маркетинг — три вкладки тонкой линией: Книги · Конкурсы · Связи (Связи переехали сюда из меню, на их месте — «Сайт»)
+const MK_TABS = [['books', 'Книги', '/marketing'], ['contests', 'Конкурсы', '/marketing/contests'], ['links', 'Связи', '/links']];
+export function marketingView(a, sub = 'books') {
+  const tabs = `<div class="lg-tabs mk-tabs">${MK_TABS.map(([k, t, to]) => `<button class="${sub === k ? 'on' : ''}" data-act="go" data-to="${to}">${t}</button>`).join('')}</div>`;
+  if (sub === 'links') return { html: `<h2>Маркетинг</h2>${tabs}${linksView(a, { embedded: true }).html}` };
+  if (sub === 'contests') {
+    const c = a.ctx();
+    return { html: `<h2>Маркетинг</h2>${tabs}
+  <div class="psec-h" style="margin-top:14px"><h2>Конкурсы</h2><button class="small-btn" data-act="contest.new">+ Конкурс</button></div>
+  ${contests(c)}
+  ${contestCalendar(c)}` };
+  }
   const c = a.ctx(), st = a.ui.mSt || 'progress', q = (a.ui.mQ || '').toLowerCase();
   const by = (s) => c.wbooks.filter((b) => (b.status || 'progress') === s);
   const list = (st === 'all' ? c.wbooks : by(st)).filter((b) => !q || b.title.toLowerCase().includes(q));
   const chip = (k, label, n) => `<button class="chip${st === k ? ' on' : ''}" data-act="mk.st" data-v="${k}">${label}${n != null ? ` · ${n}` : ''}</button>`;
-  const html = `<h2>Маркетинг</h2>
-  <div class="chips">${chip('progress', 'В процессе', by('progress').length)}${chip('done', 'Завершённые', by('done').length)}${chip('idea', 'Идеи', by('idea').length)}${chip('all', 'Все', c.wbooks.length)}</div>
+  const html = `<h2>Маркетинг</h2>${tabs}
+  <div class="chips" style="margin-top:14px">${chip('progress', 'В процессе', by('progress').length)}${chip('done', 'Завершённые', by('done').length)}${chip('idea', 'Идеи', by('idea').length)}${chip('all', 'Все', c.wbooks.length)}</div>
   ${c.wbooks.length > 6 ? `<input type="search" value="${esc(a.ui.mQ || '')}" placeholder="Найти книгу" data-chg="mk.q" aria-label="Найти книгу" style="margin-bottom:10px">` : ''}
   ${list.length ? `<div class="mk-book-list">${list.map((b) => bookRow(c, b)).join('')}</div>` : `<div class="card"><p class="muted" style="margin:0">${c.wbooks.length ? 'В этой группе книг нет.' : 'Книг пока нет — добавьте их на вкладке «Книги».'}</p></div>`}
   <h2 style="margin-top:20px">Рекламные инструменты</h2>
@@ -42,9 +54,6 @@ export function marketingView(a) {
     <a class="item" href="#" data-act="go" data-to="/social"><span class="mk-go-ic">${ic('links')}</span><span class="mk-go-t"><b>Соцсети</b><span class="sub">ссылки Threads и других площадок</span></span>${ic('chevron')}</a>
     <a class="item" href="../#/ads"><span class="mk-go-ic">${ic('ruble')}</span><span class="mk-go-t"><b>Реклама в «Доходах»</b><span class="sub">расходы и окупаемость: Литнет, Директ, Rocket</span></span>${ic('chevron')}</a>
   </div>
-  <div class="psec-h" style="margin-top:22px"><h2>Конкурсы</h2><button class="small-btn" data-act="contest.new">+ Конкурс</button></div>
-  ${contests(c)}
-  ${contestCalendar(c)}
   <div style="margin-top:16px">${widgetCard(c)}</div>`;
   return { html };
 }

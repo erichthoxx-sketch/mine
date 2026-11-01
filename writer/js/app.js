@@ -66,18 +66,20 @@ function getCtx() {
   return cache;
 }
 
-const TABS = [['/', 'house', 'Главная'], ['/books', 'books', 'Книги'], ['/ideas', 'ideas', 'Идеи'], ['/plan', 'plan', 'Планер'], ['/marketing', 'marketing', 'Маркетинг'], ['/links', 'links', 'Связи']];
+const TABS = [['/', 'house', 'Главная'], ['/books', 'books', 'Книги'], ['/ideas', 'ideas', 'Идеи'], ['/plan', 'plan', 'Планер'], ['/marketing', 'marketing', 'Маркетинг'], ['/site', 'globe', 'Сайт']];
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'book' && b) return { tab: '/books', view: (x) => bookPage(x, decodeURIComponent(b)) };
   if (a === 'reviews' && b) return { tab: '/books', view: (x) => reviewsPage(x, decodeURIComponent(b)) };
   if (a === 'legend' && b) return { tab: '/books', view: (x) => legendPage(x, decodeURIComponent(b)) };
   if (a === 'ed' && b) { const [, , bid, ...rest] = ('#' + ui.route).split('/'); return { tab: '/books', view: (x) => editorView(x, decodeURIComponent(bid), decodeURIComponent(rest.join('/'))) }; }
-  if (a === 'link' && b) return { tab: '/links', view: (x) => linkPage(x, decodeURIComponent(b)) };
-  if (a === 'blog' && b) return { tab: '/links', view: (x) => blogEditor(x, decodeURIComponent(b)) };
+  // «Связи» живут в «Маркетинге» (вкладка «Связи»), на их месте в меню — «Сайт»
+  if (a === 'link' && b) return { tab: '/marketing', view: (x) => linkPage(x, decodeURIComponent(b)) };
+  if (a === 'blog' && b) return { tab: '/marketing', view: (x) => blogEditor(x, decodeURIComponent(b)) };
+  if (a === 'marketing') return { tab: '/marketing', view: (x) => marketingView(x, b || 'books') };
   if (a === 'mk' && b) return { tab: '/marketing', view: (x) => bookMarketing(x, decodeURIComponent(b)) };
-  const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, marketing: marketingView, links: linksView, social: socialView, mysite: mySiteView, settings: settingsView };
-  return { tab: a === 'social' || a === 'mysite' ? '/links' : '/' + (a || ''), view: map[a || ''] || homeView };
+  const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, links: (x) => marketingView(x, 'links'), social: socialView, site: mySiteView, mysite: mySiteView, settings: settingsView };
+  return { tab: a === 'social' || a === 'links' ? '/marketing' : a === 'mysite' ? '/site' : '/' + (a || ''), view: map[a || ''] || homeView };
 }
 
 function authScreen() {
