@@ -3151,13 +3151,18 @@ main .rev-actions button.dl .ic { opacity: 1; }
 :root .top h1 { font-weight: 500 !important; font-size: 27px; }
 :root :is(main, dialog, .top, aside, .side) :is(button, .btn):not(.link):not(.dl):not(.icon-btn):not(.stat):not(.lg-tabs button),
 :root .side-actions :is(button, .btn), :root .chip { font-family: var(--font-display) !important; font-weight: 500 !important; letter-spacing: .015em; }
-/* медведь со значка сайта вместо иконки «Сайт»: в светлой теме как есть, в тёмной — светлее, серебристый */
-:root .ic-bear { display: inline-block; flex: none; width: 24px; height: 24px; background: url("bear-head.png") center / contain no-repeat; vertical-align: middle; }
-:root nav.tabs a:not(.on) .ic-bear { opacity: .7; }
-@media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) .ic-bear { filter: brightness(2.3) contrast(.85); } }
-:root[data-theme="dark"] .ic-bear { filter: brightness(2.3) contrast(.85); }
-:root .ic-bear { width: 28px; height: 28px; margin: -2px; filter: contrast(1.15); }
-:root nav.tabs a:not(.on) .ic-bear { opacity: .8; }
-@media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) .ic-bear { filter: brightness(2.7) contrast(.9); } :root:where(:not([data-theme="light"])) nav.tabs a:not(.on) .ic-bear { opacity: .85; } }
-:root[data-theme="dark"] .ic-bear { filter: brightness(2.7) contrast(.9); }
-:root[data-theme="dark"] nav.tabs a:not(.on) .ic-bear { opacity: .85; }
+/* меню слева — Jost обычными буквами, без разрядки; «Ближайшее» — спокойные строки текста (владелица: «эти шрифты тоже не нравятся») */
+@media (min-width: 1180px) {
+  :root nav.tabs a { font-family: var(--font-display); font-size: 15px; font-weight: 400; letter-spacing: .01em; text-transform: none; }
+  :root nav.tabs a.on { font-weight: 500; }
+  :root nav.tabs a.nav-side-i { font-family: var(--font-body); font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; line-height: 1.45; color: var(--text); padding: 8px 12px; border-radius: 12px; background: transparent; }
+  :root nav.tabs a.nav-side-i:hover { background: var(--soft); }
+  :root nav.tabs a.nav-side-i::before { display: none; }
+  :root .nav-side-i span { font-family: var(--font-body); font-size: 12px; letter-spacing: 0; color: var(--text-2); margin-bottom: 1px; }
+  :root .nav-side-h, :root .nt-date, :root .side-k { font-family: var(--font-display); font-size: 13px; font-weight: 500; letter-spacing: .01em; text-transform: none; color: var(--text-2); }
+}
+:root .side-k, :root .nt-date { font-family: var(--font-display); font-size: 13px; font-weight: 500; letter-spacing: .01em; text-transform: none; }
+/* сумма в плитке сама чуть уменьшается, если плитка узкая, — никогда не вылезает за край */
+:root :is(.stat, .tiles > div) .v { font-size: min(24px, 13cqi) !important; }
+/* «Доходы» на компьютере с правой колонкой: плитки по две в ряд, пока места мало для четырёх, — цифры остаются крупными */
+@media (min-width: 1180px) and (max-width: 1640px) { html:not(.app-writer) main .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
