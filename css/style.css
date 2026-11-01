@@ -3237,3 +3237,12 @@ main .rev-actions button.dl .ic { opacity: 1; }
 .ml-btns { gap: 14px; flex-wrap: wrap; align-items: center; }
 .ml-pvbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; background: var(--soft); }
 .ml-pvwrap.dark { background: #141517; }
+/* свой цвет акцентов: ползунки оттенка и насыщенности, три образца тонов */
+.own-prev { display: flex; gap: 10px; margin: 2px 0 6px; }
+.own-prev i { width: 44px; height: 44px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+:root input.own-range { -webkit-appearance: none; appearance: none; width: 100%; height: 14px; padding: 0; margin: 8px 0 4px; border: 0 !important; border-radius: 999px; background-color: transparent; cursor: pointer; }
+:root input.own-hue { background: linear-gradient(90deg, hsl(0 55% 72%), hsl(40 55% 72%), hsl(80 55% 72%), hsl(120 55% 72%), hsl(160 55% 72%), hsl(200 55% 72%), hsl(240 55% 72%), hsl(280 55% 72%), hsl(320 55% 72%), hsl(359 55% 72%)); }
+:root input.own-sat { background: linear-gradient(90deg, var(--own-from, #ddd), var(--own-to, #888)); }
+input.own-range::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 2px solid var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+input.own-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 2px solid var(--text); }
+.acc-own i { position: relative; }
