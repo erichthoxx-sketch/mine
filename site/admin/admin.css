@@ -155,3 +155,9 @@ h3.sub:first-child{margin-top:4px}
   .four{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 .raf-win{border:1px solid var(--line);padding:14px 16px;margin-top:14px;line-height:1.6}
+
+.prop-bar{display:block;width:100%;margin:0 0 18px;padding:12px 14px;border:1px solid var(--ink);background:none;color:var(--ink);font:500 13px/1.4 var(--f-body);text-align:left;cursor:pointer}
+.prop{padding:16px 0;border-top:1px solid var(--line);display:grid;gap:8px}
+.prop-w{font:500 11px/1.4 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+.prop-old{font-size:14px;line-height:1.55;color:var(--ink-2);text-decoration:line-through;text-decoration-color:var(--line)}
+.prop-new{font-size:15px;line-height:1.55;color:var(--ink)}

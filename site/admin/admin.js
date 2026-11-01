@@ -3,6 +3,7 @@
 import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc, seriesList, slugify, raffleFriday, drawRaffle } from '../content.js';
 import { openStore, authError } from './store.js';
 import { RULES } from './rules.js';
+import { PROPOSALS } from '../proposals.js';
 
 const app = document.getElementById('app');
 const S = { store: null, user: null, phase: 'boot', content: null, imgs: {}, tab: 'blocks', open: null, adding: false, pasting: false, pv: false, save: 'ok', pvBook: '', subs: null, subsErr: '', raf: null, drawn: null };
@@ -33,6 +34,16 @@ async function checkVersion() {
   } catch { /* нет сети — проверим позже */ }
 }
 if (MY_V && MY_V !== '__V__') { setInterval(checkVersion, 120000); addEventListener('focus', checkVersion); }
+// «Мастерская» могла обновить книги сайта (аннотация, фрагмент) — при возвращении во вкладку берём свежее, если здесь ничего не правится
+addEventListener('focus', async () => {
+  if (S.phase !== 'ready' || S.save !== 'ok' || document.activeElement?.matches?.('input,textarea')) return;
+  try {
+    const d = await S.store.load();
+    if (d.owner !== 'me' || !d.content || S.save !== 'ok') return;
+    const fresh = normalize(d.content);
+    if (JSON.stringify(fresh) !== JSON.stringify(S.content)) { S.content = fresh; S.imgs = d.imgs || S.imgs; renderEditor(); preview(); }
+  } catch { /* нет сети — оставим как есть */ }
+});
 
 // ---------- запуск ----------
 (async () => {
@@ -116,6 +127,32 @@ function render() {
   renderEditor();
 }
 
+// ---------- предложенные тексты (site/proposals.js): было → станет ----------
+const plainKey = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+function propTarget(at) {
+  const [kind, a, f] = at;
+  if (kind === 'site') return { o: S.content, f: a };
+  if (kind === 'block') return { o: S.content.blocks.find((b) => b.type === a && !b.hidden) || S.content.blocks.find((b) => b.type === a), f };
+  if (kind === 'book') return { o: S.content.books.find((b) => plain(b.title).toLowerCase().includes(String(a).toLowerCase())), f };
+  return {};
+}
+const star = (t) => esc(t).replace(/\*([^*\n]+)\*/g, '<i>$1</i>').replace(/\n/g, '<br>');
+const propKey = (p) => p.at.join(':') + ':' + plainKey(p.to).slice(0, 40);
+function pendingProps() {
+  const skip = new Set(S.content.propSkip || []);
+  return PROPOSALS.filter((p) => { const t = propTarget(p.at); return t.o && !skip.has(propKey(p)) && plainKey(t.o[t.f]) === plainKey(p.from) && plainKey(p.from) !== plainKey(p.to); });
+}
+function propTab() {
+  const list = pendingProps();
+  if (!list.length) return '<p class="note">Новых предложений нет.</p><div class="links"><button class="quiet" data-act="tab" data-t="blocks">← К блокам</button></div>';
+  return `<p class="note">Тексты, которые я предлагаю поправить. Примите или оставьте как было — каждое отдельно или все сразу. Принятое сразу видно справа, «Вернуть» — в уведомлении.</p>
+    <div class="links" style="margin-bottom:6px"><button class="btn" data-act="propAll">Принять все · ${list.length}</button><button class="quiet" data-act="tab" data-t="blocks">Потом</button></div>
+    ${list.map((p, i) => `<div class="prop"><div class="prop-w">${esc(p.where)}</div>
+      <div class="prop-old">${star(p.from)}</div>
+      <div class="prop-new">${star(p.to)}</div>
+      <div class="links"><button class="btn line" data-act="propOk" data-i="${PROPOSALS.indexOf(p)}">Принять</button><button class="quiet" data-act="propNo" data-i="${PROPOSALS.indexOf(p)}">Оставить как было</button></div></div>`).join('')}`;
+}
+
 function renderEditor() {
   const tabs = [['blocks', 'Блоки'], ['books', 'Книги'], ['sub', 'Подписка'], ['cab', 'Кабинет'], ['raf', 'Подарок'], ['look', 'Вид'], ['more', 'Ещё']];
   document.getElementById('tabs').innerHTML = tabs.map(([k, n]) => `<button role="tab" aria-selected="${S.tab === k}" data-act="tab" data-t="${k}">${n}</button>`).join('');
@@ -123,7 +160,8 @@ function renderEditor() {
   document.querySelector('.adm').classList.toggle('show-pv', S.pv);
   document.querySelector('.ed-top .logo').textContent = S.content.name || 'Сайт';
   const body = document.getElementById('body');
-  body.innerHTML = ({ blocks: blocksTab, books: booksTab, sub: subTab, look: lookTab, cab: cabTab, raf: rafTab, more: moreTab }[S.tab] || blocksTab)();
+  const nProp = S.tab === 'prop' ? 0 : pendingProps().length;
+  body.innerHTML = (nProp ? `<button class="prop-bar" data-act="tab" data-t="prop">Новые тексты для сайта: ${nProp} — посмотреть</button>` : '') + ({ prop: propTab, blocks: blocksTab, books: booksTab, sub: subTab, look: lookTab, cab: cabTab, raf: rafTab, more: moreTab }[S.tab] || blocksTab)();
   body.querySelectorAll('textarea').forEach(grow);
   applyColors();
   status();
@@ -541,6 +579,13 @@ const acts = {
   copyRules: async () => { await copy(RULES, 'rules-text'); return false; },
   reSubs: () => { S.subs = null; loadSubs(); },
   reRaf: () => { S.raf = null; loadRaf(); },
+  propOk: (d) => { const p = PROPOSALS[Number(d.i)], t = propTarget(p.at), was = t.o[t.f]; t.o[t.f] = p.to; changed(); toast('Принято: ' + p.where, () => { t.o[t.f] = was; changed(); renderEditor(); }); },
+  propNo: (d) => { const p = PROPOSALS[Number(d.i)]; S.content.propSkip = [...(S.content.propSkip || []), propKey(p)]; changed(); },
+  propAll: () => {
+    const snap = structuredClone(S.content);
+    for (const p of pendingProps()) { const t = propTarget(p.at); t.o[t.f] = p.to; }
+    changed(); toast('Новые тексты приняты', () => { S.content = snap; changed(); renderEditor(); });
+  },
   copyText: async (d) => { await copy(d.v); return false; },
   draw: async () => {
     const R = S.raf, t = todayIso(), fri = raffleFriday(t);

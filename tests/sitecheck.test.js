@@ -43,3 +43,14 @@ test('розыгрыш на сайте: дело на пятницу, пока �
   assert.deepEqual(raffleTodo({ raffleOn: true }, '2026-10-29'), { date: '2026-10-30' });
   assert.equal(raffleTodo({ raffleOn: true, raffleLast: '2026-10-30' }, '2026-10-31'), null);
 });
+
+test('фрагмент для сайта — из глав рукописи до бесплатной на Литнете', async () => {
+  const { fragText, fragChars, fitFree } = await import('../writer/js/sitefrag.js');
+  const ch = (title, ps, chars) => ({ title, chars, paras: [{ kind: 'h', runs: [{ t: title }] }, ...ps.map((t) => ({ kind: 'p', runs: [{ t }] })), { kind: 'p', runs: [{ t: '' }] }] });
+  const chs = [ch('Пролог', ['Раз.', 'Два.'], 100000), ch('Глава 1', ['Три.'], 90000), ch('Глава 2', ['Четыре.'], 50000)];
+  assert.equal(fragText(chs, 1), 'Пролог\nРаз.\nДва.\nГлава 1\nТри.');
+  assert.equal(fragChars(chs, 1), 190000);
+  assert.equal(fitFree(chs), 1); // третья глава уже за 200 000 знаков
+  const { fragBlocks } = await import('../site/content.js');
+  assert.deepEqual(fragBlocks(fragText(chs, 0)), [{ h: 'Пролог' }, { p: 'Раз.' }, { p: 'Два.' }]);
+});

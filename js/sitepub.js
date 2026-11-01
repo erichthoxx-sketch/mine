@@ -22,7 +22,7 @@ export function siteInfo(content) {
     let url = slugify(b.slug) || slugify(plainTitle(b.title)) || b.id;
     if (taken.has(url)) url += '-' + b.id.slice(-4);
     taken.add(url);
-    return { id: b.id, title: plainTitle(b.title), status: b.status || '', hidden: !!b.hidden, series: b.series || '', url, page: SITE_URL + '?kniga=' + url, litnet: b.litnet || '', startDate: b.startDate || '', startPrice: b.startPrice || '', price: b.price || '' };
+    return { id: b.id, title: plainTitle(b.title), status: b.status || '', hidden: !!b.hidden, series: b.series || '', url, page: SITE_URL + '?kniga=' + url, litnet: b.litnet || '', ann: !!String(b.ann || '').trim(), tagline: !!String(b.tagline || '').trim(), frag: String(b.frag || '').length, startDate: b.startDate || '', startPrice: b.startPrice || '', price: b.price || '' };
   });
   return { books, subOn: content.subOn !== false, giftName: content.giftName || '', giftUrl: content.giftUrl || '', metrika: content.metrika ?? '113843691', raffleOn: content.cabOn === true && !!content.raffleOn && Number(content.rafStock) > 0, raffleLast: content.raffleLast || '' };
 }
@@ -33,6 +33,30 @@ export async function loadSite() {
   if (!r.ok) throw new Error('site ' + r.status);
   const doc = await r.json();
   return siteInfo(JSON.parse(doc.fields?.json?.stringValue || 'null'));
+}
+
+// Всё содержимое сайта как есть — чтобы «Мастерская» могла обновить у книги аннотацию, крючок, фрагмент
+const LOCAL = typeof location !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+export async function loadSiteRaw() {
+  if (LOCAL) { try { return JSON.parse(localStorage.getItem('lanaSite.v1') || 'null')?.content || null; } catch { return null; } }
+  const r = await fetch(`${BASE}/site/main?key=${firebaseConfig.apiKey}`, { cache: 'no-store' });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('site ' + r.status);
+  return JSON.parse((await r.json()).fields?.json?.stringValue || 'null');
+}
+// Обновить книгу сайта (найдена по названию) — записывает владелица своим входом (правила: site/* меняет только она)
+export async function patchSiteBook(title, patch, idToken) {
+  const c = await loadSiteRaw();
+  const b = c?.books?.find((x) => sameTitle(x.title, title));
+  if (!b) throw new Error('На сайте нет книги «' + plainTitle(title) + '»');
+  Object.assign(b, patch);
+  if (LOCAL) { const d = JSON.parse(localStorage.getItem('lanaSite.v1') || '{}'); d.content = c; localStorage.setItem('lanaSite.v1', JSON.stringify(d)); return b; }
+  const r = await fetch(`${BASE}/site/main?updateMask.fieldPaths=json&updateMask.fieldPaths=at`, {
+    method: 'PATCH', headers: { Authorization: 'Bearer ' + idToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { json: { stringValue: JSON.stringify(c) }, at: { stringValue: new Date().toISOString() } } }),
+  });
+  if (!r.ok) throw new Error(r.status === 403 ? 'Сайт закреплён за другим входом' : 'Не получилось записать на сайт (' + r.status + ')');
+  return b;
 }
 
 // Подписчики сайта — нужен вход владелицы (токен Firebase)
