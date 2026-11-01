@@ -203,7 +203,7 @@ export function letterView(a) {
   // перерисовка экрана (синхронизация, Todoist) не должна сбивать курсор в поле
   const ae = document.activeElement, foc = ae?.dataset?.ml ? { k: ae.dataset.ml, s: ae.selectionStart, e: ae.selectionEnd } : null;
   const d = M.cfg.draft, n = subsStats(M.info?.list || [], c.today).ok;
-  const slots = sendSlots(c.wbooks, M.raw ? siteInfo(M.raw) : null, c.today, plannedPubs);
+  const slots = sendSlots(c.wbooks, M.raw ? siteInfo(M.raw) : null, c.today, plannedPubs, { focus: books().find((b) => b.id === d.book)?.title || '' });
   // по умолчанию — ближайший выход главы или старт подписки, иначе завтра в 10:00
   const at = M.at || (d.at ? localParts(d.at) : { date: slots[0]?.date || addDays(c.today, 1), time: '10:00' });
   M.at = at;
