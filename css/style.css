@@ -3136,3 +3136,12 @@ main .rev-actions button.dl .ic { opacity: 1; }
 :root main h2 { font-size: 21px !important; }
 :root .psec-h h2, :root .home-h h2 { font-size: 22px !important; }
 :root .side-date, :root .tb-date { font-size: 19px; }
+/* меню на телефоне — только иконки, без подписей (владелица, 01.11.2026); подпись остаётся во всплывающей подсказке и для экранного диктора */
+@media (max-width: 1179px) {
+  :root nav.tabs a .nl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  :root nav.tabs a { min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px 0 6px; }
+  :root nav.tabs a b { font-size: 0; line-height: 0; }
+  :root nav.tabs a .ic { width: 24px; height: 24px; }
+  :root nav.tabs a::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: transparent; }
+  :root nav.tabs a.on::after { background: var(--text); }
+}
