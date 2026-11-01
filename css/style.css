@@ -3129,3 +3129,10 @@ main .rev-actions button.dl .ic { opacity: 1; }
 :root :is(.stat .v, .tiles .v) { font-size: 24px; }
 :root .wday .wk-n { font-family: var(--font-num) !important; font-weight: 500 !important; font-size: 18px !important; }
 :root .wday.on .wk-n, :root .wday.today .wk-n { font-weight: 600 !important; }
+/* заголовки — Playfair Display обычными буквами (владелица выбрала вариант «В», 01.11.2026); Oranienbaum заглавными больше нет */
+:root { --font-display: "Playfair Display", Georgia, "Times New Roman", serif; }
+:root :is(h1, h2, .tb-date, .side-date) { font-family: var(--font-display); font-weight: 600 !important; text-transform: none !important; letter-spacing: 0 !important; line-height: 1.2; }
+:root .top h1 { font-size: 26px; font-weight: 700 !important; }
+:root main h2 { font-size: 21px !important; }
+:root .psec-h h2, :root .home-h h2 { font-size: 22px !important; }
+:root .side-date, :root .tb-date { font-size: 19px; }
