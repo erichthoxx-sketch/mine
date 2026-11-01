@@ -167,7 +167,7 @@ function drawChart() {
 const M_FIELDS = [['subject', 'Тема письма', 'Её видно в списке писем'], ['eyebrow', 'Над заголовком', 'Маленькими буквами между тире; по желанию'], ['title', 'Заголовок', '*Звёздочки* — тонкий курсив'],
   ['text', 'Текст', 'Пустая строка — новый абзац; *курсив*, **жирный**, [слова](ссылка)', 'area'], ['quote', 'Цитата из книги', 'По желанию: крупным курсивом между тонкими линиями', 'area'], ['btn', 'Кнопка']];
 const M_MORE = [['preheader', 'Строка после темы', 'Серым рядом с темой во входящих; пусто — начало текста'], ['url', 'Куда ведёт кнопка', 'Пусто — на книгу на Литнете (или на её страницу на сайте)'], ['sign', 'Подпись', 'Пусто — подпись из «Оформления»']];
-const L_FIELDS = [['bear', 'Медведь в кружке сверху', 'toggle'], ['links', 'Внизу — ссылки на сайт и Telegram', 'toggle'], ['sign', 'Подпись в конце письма', '', 'Курсивом, например имя'], ['footer', 'Текст внизу письма', 'area', 'Над ссылкой «Отписаться»']];
+const L_FIELDS = [['autograph', 'Автограф с медведем в конце письма', 'toggle'], ['bear', 'Медведь в кружке сверху', 'toggle'], ['links', 'Внизу — ссылки на сайт и Telegram', 'toggle'], ['sign', 'Подпись в конце письма', '', 'Курсивом — когда автограф выключен'], ['footer', 'Текст внизу письма', 'area', 'Над ссылкой «Отписаться»']];
 const design = () => ({ ...LETTER_DEFAULTS, ...(M.raw?.letter || {}) });
 const tgOf = (c) => { const b = (c?.blocks || []).find((x) => x.type === 'tg' && /^https?:/.test(x.url || '')); return b?.url || (/^https?:/.test(c?.headUrl || '') ? c.headUrl : ''); };
 const books = () => (M.raw ? siteInfo(M.raw).books.filter((b) => !b.hidden) : []);
@@ -374,7 +374,7 @@ acts['mail.import'] = async () => {
 };
 acts['mail.connect'] = async () => {
   const url = M.newUrl ?? (document.querySelector('[data-ml-url]')?.value || '').trim(), key = M.newKey ?? (document.querySelector('[data-ml-key]')?.value || '').trim();
-  if (!/^https:\/\//.test(url) || !key) { toast('Впишите адрес сервиса и пароль'); return false; }
+  if (!/^https?:\/\//.test(url) || !key) { toast('Впишите адрес сервиса и пароль'); return false; }
   try {
     await mailCall(url, key, { op: 'list' });
     const w = await who();
@@ -391,7 +391,7 @@ acts['mail.ai'] = () => {
 
 Правила ответа: верни ВЕСЬ JSON целиком одним блоком кода, те же поля.
 - letter — само письмо: subject (тема), preheader (строка после темы во входящих), eyebrow (маленькая строка над заголовком), title (заголовок; *звёздочки* — тонкий курсив), text (абзацы через пустую строку), quote (цитата из книги — только настоящая, из текста, не выдумывай), btn (кнопка), url (куда ведёт кнопка; пусто — на книгу), sign (подпись). Поле book не меняй
-- design — оформление всех писем: bear (медведь в кружке сверху, true/false), links (ссылки на сайт и Telegram внизу), sign (подпись по умолчанию), footer (текст внизу над «Отписаться»), tint (подложка под обложкой, #RRGGBB или пусто), paper (фон, #RRGGBB), ink (текст и кнопка, #RRGGBB)
+- design — оформление всех писем: autograph (автограф с медведем в конце, true/false), bear (медведь в кружке сверху, true/false), links (ссылки на сайт и Telegram внизу), sign (подпись по умолчанию), footer (текст внизу над «Отписаться»), tint (подложка под обложкой, #RRGGBB или пусто), paper (фон, #RRGGBB), ink (текст и кнопка, #RRGGBB)
 - В тексте: *курсив*, **жирный**, [слова](https://ссылка)
 ${b ? `- Книга в письме: «${b.title}»${rb?.ann ? `. Аннотация: ${plain(rb.ann).slice(0, 1200)}` : ''}\n` : ''}
 \`\`\`json

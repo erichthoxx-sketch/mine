@@ -55,13 +55,16 @@ test('сервис писем: подписка → подтверждение �
 test('письмо: обложка, абзацы, кнопка и ссылка отписки', () => {
   const { html, text } = letterHtml({ title: 'Развод *для черной вдовы*', text: 'Первый.\n\nВторой.', book: { title: 'Развод', cover: 'https://x/c.jpg', url: 'https://lanafreitag.ru/?kniga=r' }, btn: 'Читать' });
   assert.match(html, /font-style:italic[^>]*>для черной вдовы<\/span>/); // курсив заголовка — тонким шрифтом, как на сайте
-  const q = letterHtml({ text: 'Это **важно** и [тут](https://x.ru)', quote: 'Цитата', sign: '', design: { bear: false, sign: 'Лана', footer: '' } }).html;
+  const q = letterHtml({ text: 'Это **важно** и [тут](https://x.ru)', quote: 'Цитата', sign: '', design: { bear: false, autograph: false, sign: 'Лана', footer: '' } }).html;
   assert.match(q, /<b>важно<\/b>/);
   assert.match(q, /href="https:\/\/x\.ru"/);
   assert.match(q, /prefers-color-scheme:dark/); // тёмная тема почты
   assert.doesNotMatch(letterHtml({ book: { title: 'К', cover: 'https://x/c.jpg' } }).html, /class="tint"/); // без серой подложки
   assert.match(q, />Лана</); // подпись из оформления
   assert.doesNotMatch(q, /mail-bear/); // медведя выключили
+  const ag = letterHtml({ design: { autograph: true } }).html;
+  assert.match(ag, /autograph\.png/); assert.match(ag, /autograph-light\.png/); // автограф: тёмный и для тёмной почты
+  assert.match(ag, /\.sig-d\{display:block!important\}/);
   assert.match(html, /src="https:\/\/x\/c\.jpg"/);
   assert.equal((html.match(/Второй\./g) || []).length, 1);
   assert.match(html, /href="\{unsub\}"/);
