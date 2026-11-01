@@ -67,8 +67,39 @@ const cors = (origin) => (ORIGINS.some((re) => re.test(origin || '')) ? { 'Acces
 const json = (o, status = 200, h = {}) => ({ statusCode: status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...h }, body: JSON.stringify(o) });
 const back = (q) => ({ statusCode: 302, headers: { Location: `${ENV.SITE}?pismo=${q}` }, body: '' });
 
+// ---------- отложенные письма: таймер (триггер функции раз в 5–10 минут) отправляет те, чьё время пришло ----------
+const clean = (x) => ({ id: x.id, at: x.at, subject: x.subject, draft: x.draft || null, made: x.made });
+async function sendAll(d, subject, html, text) {
+  let sent = 0; const failed = [];
+  for (const p of d.list.filter((x) => x.status === 'ok')) {
+    try { await send(p.email, subject, fill(html, p), fill(text, p), link('unsub', p.token)); sent++; } catch { failed.push(p.email); }
+  }
+  return { sent, failed };
+}
+async function runQueue() {
+  const d = await loadList(), now = Date.now();
+  let changed = false;
+  // копия адресов раз в день — в том же бакете (backup/подписчицы-ГГГГ-ММ-ДД.json)
+  const day = new Date(now + 3 * 3600e3).toISOString().slice(0, 10);
+  if (d.backupDay !== day && d.list.length) { await putObj(`backup/subs-${day}.json`, JSON.stringify(d.list.map(({ token, ...x }) => x))); d.backupDay = day; changed = true; }
+  const due = (d.queue || []).filter((q) => Date.parse(q.at) <= now && (!q.sending || now - Date.parse(q.sending) > 15 * 60e3));
+  if (!due.length) { if (changed) await saveList(d); return { due: 0 }; }
+  for (const q of due) q.sending = new Date().toISOString(); // чтобы второй вызов не отправил то же письмо
+  await saveList(d);
+  for (const q of due) {
+    const r = await sendAll(d, q.subject, q.html, q.text);
+    d.queue = d.queue.filter((x) => x.id !== q.id);
+    d.sent = [...(d.sent || []), { id: q.id, at: new Date().toISOString(), subject: q.subject, sent: r.sent, failed: r.failed.length, planned: q.at, draft: q.draft || null }].slice(-50);
+  }
+  await saveList(d);
+  return { due: due.length };
+}
+
 module.exports.handler = async function (event, context) {
   TOKEN = context?.token?.access_token || '';
+  if (Array.isArray(event?.messages)) { // вызов таймером (триггер Yandex Cloud)
+    try { return json(await runQueue()); } catch (e) { return json({ error: String(e.message || e).slice(0, 300) }, 500); }
+  }
   const q = event.queryStringParameters || {}, h = event.headers || {}, origin = h.Origin || h.origin || '';
   const C = cors(origin);
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: C, body: '' };
@@ -102,7 +133,14 @@ module.exports.handler = async function (event, context) {
     if (q.a === 'admin') {
       if (!ENV.ADMIN_KEY || body.key !== ENV.ADMIN_KEY) return json({ error: 'key' }, 403, C);
       const d = await loadList();
-      if (body.op === 'list') return json({ list: d.list.map(({ token, ...x }) => x), sent: d.sent || [], from: ENV.FROM, replyTo: ENV.REPLY_TO }, 200, C);
+      if (body.op === 'list') return json({ list: d.list.map(({ token, ...x }) => x), sent: d.sent || [], queue: (d.queue || []).map(clean), tick: d.backupDay || '', from: ENV.FROM, replyTo: ENV.REPLY_TO }, 200, C);
+      if (body.op === 'schedule') { // отложить письмо на дату и время (at — ISO); тот же id — заменить
+        if (!Date.parse(body.at)) return json({ error: 'at' }, 400, C);
+        const q = { id: String(body.id || rnd()).slice(0, 40), at: new Date(body.at).toISOString(), subject: String(body.subject || ''), html: String(body.html || ''), text: String(body.text || ''), draft: body.draft || null, made: new Date().toISOString() };
+        d.queue = [...(d.queue || []).filter((x) => x.id !== q.id), q].sort((a, b) => a.at.localeCompare(b.at));
+        await saveList(d); return json({ ok: true, queue: d.queue.map(clean) }, 200, C);
+      }
+      if (body.op === 'unschedule') { d.queue = (d.queue || []).filter((x) => x.id !== body.id); await saveList(d); return json({ ok: true, queue: d.queue.map(clean) }, 200, C); }
       if (body.op === 'import') { // подписчицы, оставившие почту раньше (с согласием) — сразу подтверждённые
         let n = 0;
         for (const x of body.list || []) {
@@ -119,12 +157,14 @@ module.exports.handler = async function (event, context) {
         return json({ ok: true, url: `${S3}/${ENV.BUCKET}/${key}` }, 200, C);
       }
       if (body.op === 'send') { // письмо: пробное — только владелице, иначе — всем подтверждённым
-        const to = body.test ? [{ email: ENV.REPLY_TO, token: 'test', name: '' }] : d.list.filter((x) => x.status === 'ok');
-        let sent = 0; const failed = [];
-        for (const p of to) {
-          try { await send(p.email, String(body.subject || ''), fill(body.html || '', p), fill(body.text || '', p), body.test ? '' : link('unsub', p.token)); sent++; } catch (e) { failed.push(p.email); }
+        const subject = String(body.subject || ''), html = String(body.html || ''), text = String(body.text || '');
+        if (body.test) {
+          const p = { email: ENV.REPLY_TO, token: 'test', name: '' };
+          try { await send(p.email, subject, fill(html, p), fill(text, p), ''); return json({ ok: true, sent: 1, failed: [] }, 200, C); } catch { return json({ ok: true, sent: 0, failed: [p.email] }, 200, C); }
         }
-        if (!body.test) { d.sent = [...(d.sent || []), { at: new Date().toISOString(), subject: String(body.subject || ''), sent, failed: failed.length }].slice(-50); await saveList(d); }
+        const { sent, failed } = await sendAll(d, subject, html, text);
+        d.sent = [...(d.sent || []), { id: rnd().slice(0, 12), at: new Date().toISOString(), subject, sent, failed: failed.length, draft: body.draft || null }].slice(-50);
+        await saveList(d);
         return json({ ok: true, sent, failed }, 200, C);
       }
       return json({ error: 'op' }, 400, C);

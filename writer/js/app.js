@@ -21,6 +21,7 @@ import { linksView, linkPage } from './views/links.js';
 import { blogEditor } from './views/blog.js';
 import { socialView } from './views/social.js';
 import { mySiteView } from './views/mysite.js';
+import { mailView, letterView } from './views/mail.js';
 import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
 import { cleanText, cleanedMsg } from '../../js/cleantext.js';
@@ -80,6 +81,9 @@ function route() {
   if (a === 'blog' && b) return { tab: '/marketing', view: (x) => blogEditor(x, decodeURIComponent(b)) };
   if (a === 'marketing') return { tab: '/marketing', view: (x) => marketingView(x, b || 'books') };
   if (a === 'mk' && b) return { tab: '/marketing', view: (x) => bookMarketing(x, decodeURIComponent(b)) };
+  // «Сайт»: Обзор · Почта (письмо — свой экран-редактор)
+  if (a === 'site' && b === 'mail') return { tab: '/site', view: mailView };
+  if (a === 'site' && b === 'letter') return { tab: '/site', view: letterView };
   const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, links: (x) => marketingView(x, 'links'), social: socialView, site: mySiteView, mysite: mySiteView, settings: settingsView };
   return { tab: a === 'social' || a === 'links' ? '/marketing' : a === 'mysite' ? '/site' : '/' + (a || ''), view: map[a || ''] || homeView };
 }
@@ -114,7 +118,7 @@ function render() {
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере.</div>' : ''}
   <div class="top"><div><h1>Мастерская</h1><small>${esc(c.settings.pseudonym)}${sync ? ' · ' + sync : ''}</small></div>
   <div class="row"><a class="btn" href="../">${ic('ruble')} Доходы</a><button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">${ic('settings')}</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
-  <main>${ui.route.startsWith('/ed/') || ui.route.startsWith('/blog/') ? r.html : tidyNums(r.html)}</main>
+  <main>${ui.route.startsWith('/ed/') || ui.route.startsWith('/blog/') || ui.route.startsWith('/site/letter') ? r.html : tidyNums(r.html)}</main>
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}${wide() ? (() => { try { return tidyNums(navToday(c)); } catch (e) { console.error(e); return ''; } })() : ''}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
   afterFn = r.after || null;
   afterFn?.();

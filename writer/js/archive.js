@@ -9,7 +9,8 @@ export const ARCHIVE_NAME = 'Архив Мастерской';
 export const INDEX_NAME = 'Архив Мастерской — оглавление.json';
 export const STALE_DAYS = 2;
 // версия программы Google: выросла — приложение попросит вставить программу заново
-export const SCRIPT_V = 4; // 3 — главы с разметкой и «Книга целиком»; 4 — архив повторяет папки Диска
+export const SCRIPT_V = 5; // 3 — главы с разметкой и «Книга целиком»; 4 — архив повторяет папки Диска; 5 — копия адресов подписчиц (Почта)
+export const LAYOUT_V = 4; // раскладка копий и GitHub — меняется реже, чем программа (смена — переотправить всё)
 
 // какие копии оставить: за 30 дней — все, до полугода — по одной в неделю, дальше — по одной в месяц (навсегда)
 export function thinKeep(dates, today) {
@@ -51,7 +52,7 @@ export function paraMd(text, runs, heading) {
 }
 
 // ---------------- программа Google (Apps Script) ----------------
-/* global DriveApp, DocumentApp, MimeType, PropertiesService, ScriptApp, UrlFetchApp, Utilities, Session, LockService, BOOKS_FOLDER_ID */
+/* global DriveApp, DocumentApp, MimeType, PropertiesService, ScriptApp, UrlFetchApp, Utilities, Session, LockService, BOOKS_FOLDER_ID, MAIL_URL */
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 function setup() {
@@ -75,7 +76,7 @@ function runBackup() {
   var archive = folderIn(DriveApp.getRootFolder(), ARCHIVE_NAME);
   var index = readIndex(archive);
   var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Europe/Moscow', 'yyyy-MM-dd');
-  var ghFresh = props.getProperty('ghv') !== String(SCRIPT_V);
+  var ghFresh = props.getProperty('ghv') !== String(LAYOUT_V);
   var ghState = ghFresh ? {} : JSON.parse(props.getProperty('ghstate') || '{}'); // новая версия — переотправить всё в новом виде
   if (ghFresh) props.setProperty('ghclean', '1'); // и убрать из текущей версии старое расположение файлов
   var withGh = !!(props.getProperty('GITHUB_TOKEN') && props.getProperty('GITHUB_REPO'));
@@ -85,9 +86,9 @@ function runBackup() {
   var docFolders = {};
   Object.keys(index.books).forEach(function (id) { if (index.books[id].folderId) docFolders[index.books[id].folderId] = 1; });
   // новая версия программы: разложить уже сделанные копии по папкам, как на Диске
-  if (props.getProperty('drivev') !== String(SCRIPT_V)) {
+  if (props.getProperty('drivev') !== String(LAYOUT_V)) {
     files.forEach(function (f) { var b = index.books[f.id]; if (b && b.folderId) { try { archiveDir(archive, f, b, docFolders); b.path = f.path; } catch (e) { errors.push(f.name + ': ' + (e && e.message || e)); } } });
-    props.setProperty('drivev', String(SCRIPT_V));
+    props.setProperty('drivev', String(LAYOUT_V));
   }
   for (var i = 0; i < files.length; i++) {
     var f = files[i];
@@ -134,10 +135,11 @@ function runBackup() {
       var msg = pushGithub(gh, stamp, props, clean ? files.map(ghDir) : null);
       if (clean) props.deleteProperty('ghclean');
       gh.forEach(function (x) { ghState[x.id] = x.upd; });
-      props.setProperty('ghstate', JSON.stringify(ghState)); props.setProperty('ghv', String(SCRIPT_V));
+      props.setProperty('ghstate', JSON.stringify(ghState)); props.setProperty('ghv', String(LAYOUT_V));
       index.github = { repo: props.getProperty('GITHUB_REPO'), at: new Date().toISOString(), ok: true, msg: msg };
     } catch (e) { index.github = { repo: props.getProperty('GITHUB_REPO'), at: new Date().toISOString(), ok: false, msg: String(e && e.message || e).slice(0, 300) }; }
   }
+  try { backupMail(archive, stamp, props, index); } catch (e) { index.mail = { at: new Date().toISOString(), ok: false, msg: String(e && e.message || e).slice(0, 300) }; }
   index.folderId = archive.getId(); index.source = BOOKS_FOLDER_ID; index.sv = SCRIPT_V;
   index.lastRun = new Date().toISOString(); index.errors = errors; index.left = left; index.total = files.length;
   writeIndex(archive, index);
@@ -271,19 +273,56 @@ function pushGithub(items, stamp, props, keepDirs) {
   return 'сохранено';
 }
 
+// Почта: адреса подписчиц из сервиса писем — в архив на Диске («Почта/Подписчицы.csv» + копия на каждый месяц) и в GitHub.
+// Пароль сервиса — только в «Свойствах скрипта» (MAIL_KEY), адрес сервиса — MAIL_URL в тексте программы.
+function mailCsv(list) {
+  var q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var st = { ok: 'подтвердила', pending: 'ждёт подтверждения', unsub: 'отписалась' };
+  var rows = [['Почта', 'Имя', 'Статус', 'Оставила почту', 'Подтвердила', 'Отписалась', 'Откуда']].concat(list.map(function (p) {
+    return [p.email, p.name || '', st[p.status] || p.status || '', String(p.at || '').slice(0, 10), String(p.okAt || '').slice(0, 10), String(p.unsubAt || '').slice(0, 10), p.src || ''];
+  }));
+  return '﻿' + rows.map(function (r) { return r.map(q).join(';'); }).join('\n');
+}
+function backupMail(archive, stamp, props, index) {
+  var key = String(props.getProperty('MAIL_KEY') || '').trim();
+  if (!MAIL_URL || !key) return;
+  var r = UrlFetchApp.fetch(MAIL_URL + (MAIL_URL.indexOf('?') < 0 ? '?' : '&') + 'a=admin', { method: 'post', contentType: 'application/json', payload: JSON.stringify({ key: key, op: 'list' }), muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) throw new Error('Сервис писем ' + r.getResponseCode() + (r.getResponseCode() === 403 ? ': MAIL_KEY не подходит' : ''));
+  var list = JSON.parse(r.getContentText()).list || [], csv = mailCsv(list);
+  var dir = folderIn(archive, 'Почта');
+  var put = function (name) { var it = dir.getFilesByName(name); if (it.hasNext()) it.next().setContent(csv); else dir.createFile(name, csv, 'text/csv'); };
+  put('Подписчицы.csv'); put('Подписчицы ' + stamp.slice(0, 7) + '.csv');
+  var gh = 'нет';
+  var token = String(props.getProperty('GITHUB_TOKEN') || '').trim();
+  var repo = String(props.getProperty('GITHUB_REPO') || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, '');
+  if (token && repo) {
+    var url = 'https://api.github.com/repos/' + repo + '/contents/' + encodeURIComponent('Почта') + '/' + encodeURIComponent('Подписчицы.csv');
+    var h = { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' };
+    var cur = UrlFetchApp.fetch(url, { headers: h, muteHttpExceptions: true }), sha = cur.getResponseCode() === 200 ? JSON.parse(cur.getContentText()).sha : null;
+    var body = { message: 'Подписчицы ' + stamp + ': ' + list.length, content: Utilities.base64Encode(csv, Utilities.Charset.UTF_8) };
+    if (sha) body.sha = sha;
+    var w = UrlFetchApp.fetch(url, { method: 'put', contentType: 'application/json', payload: JSON.stringify(body), headers: h, muteHttpExceptions: true });
+    gh = w.getResponseCode() < 300 ? 'да' : 'ошибка ' + w.getResponseCode();
+  }
+  index.mail = { at: new Date().toISOString(), ok: true, n: list.length, github: gh };
+}
+
 // текст программы для вставки в Google Apps Script (папка с книгами уже подставлена)
-export function scriptCode(folderId) {
-  const fns = [setup, nightly, more, runBackup, walk, docTabs, archiveDir, ghDir, folderIn, readIndex, writeIndex, trashCopy, pushGithub, thinKeep, safeName, bookTabs, bookChars, paraMd];
+export function scriptCode(folderId, mailUrl = '') {
+  const fns = [setup, nightly, more, runBackup, walk, docTabs, archiveDir, ghDir, folderIn, readIndex, writeIndex, trashCopy, pushGithub, mailCsv, backupMail, thinKeep, safeName, bookTabs, bookChars, paraMd];
   return [
     '// Архив Мастерской — ночная копия книг. Сделано для приложения «Мастерская».',
     '// Первый запуск: выберите вверху функцию setup и нажмите «Выполнить» (Google попросит разрешение один раз).',
     '// Копия в GitHub (по желанию): «Настройки проекта» → «Свойства скрипта» → GITHUB_TOKEN и GITHUB_REPO.',
+    '// Копия адресов подписчиц (по желанию): там же свойство MAIL_KEY — пароль сервиса писем (ADMIN_KEY).',
     '',
     `var BOOKS_FOLDER_ID = ${JSON.stringify(String(folderId || ''))};`,
     `var ARCHIVE_NAME = ${JSON.stringify(ARCHIVE_NAME)};`,
     `var INDEX_NAME = ${JSON.stringify(INDEX_NAME)};`,
     `var DOCX = ${JSON.stringify(DOCX)};`,
     `var SCRIPT_V = ${SCRIPT_V};`,
+    `var LAYOUT_V = ${LAYOUT_V};`,
+    `var MAIL_URL = ${JSON.stringify(String(mailUrl || ''))};`,
     '',
     ...fns.map((f) => f.toString() + '\n'),
   ].join('\n');

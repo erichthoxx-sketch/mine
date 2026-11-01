@@ -4,7 +4,6 @@ import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newB
 import { openStore, authError } from './store.js';
 import { RULES } from './rules.js';
 import { PROPOSALS } from '../proposals.js';
-import { letterHtml, LETTER_DEFAULTS } from '../letter.js';
 
 const app = document.getElementById('app');
 const S = { store: null, user: null, phase: 'boot', content: null, imgs: {}, tab: 'blocks', open: null, adding: false, pasting: false, pv: false, save: 'ok', pvBook: '', subs: null, subsErr: '', raf: null, drawn: null, mail: null };
@@ -121,7 +120,7 @@ function render() {
         <nav class="tabs" role="tablist" id="tabs"></nav>
         <div class="ed-body" id="body"></div>
       </aside>
-      <section class="pv"><iframe id="pv" title="Как выглядит сайт" src="../index.html?preview=1"></iframe><iframe id="pvmail" title="Как выглядит письмо"></iframe></section>
+      <section class="pv"><iframe id="pv" title="Как выглядит сайт" src="../index.html?preview=1"></iframe></section>
       <nav class="mtabs" id="mtabs"></nav>
     </div>`;
   }
@@ -157,15 +156,14 @@ function propTab() {
 function renderEditor() {
   const tabs = [['blocks', 'Блоки'], ['books', 'Книги'], ['sub', 'Подписка'], ['mail', 'Письма'], ['cab', 'Кабинет'], ['raf', 'Подарок'], ['look', 'Вид'], ['more', 'Ещё']].filter(([k]) => k !== 'raf' || S.content.cabOn === true || S.tab === 'raf'); // подарок — только с кабинетом
   document.getElementById('tabs').innerHTML = tabs.map(([k, n]) => `<button role="tab" aria-selected="${S.tab === k}" data-act="tab" data-t="${k}">${n}</button>`).join('');
-  document.getElementById('mtabs').innerHTML = `<button aria-selected="${!S.pv}" data-act="pv" data-v="0">Правка</button><button aria-selected="${S.pv}" data-act="pv" data-v="1">${S.tab === 'mail' ? 'Письмо' : 'Сайт'}</button>`;
-  document.querySelector('.adm').classList.toggle('is-mail', S.tab === 'mail');
+  document.getElementById('mtabs').innerHTML = `<button aria-selected="${!S.pv}" data-act="pv" data-v="0">Правка</button><button aria-selected="${S.pv}" data-act="pv" data-v="1">Сайт</button>`;
   document.querySelector('.adm').classList.toggle('show-pv', S.pv);
   document.querySelector('.ed-top .logo').textContent = S.content.name || 'Сайт';
   const body = document.getElementById('body');
   const nProp = S.tab === 'prop' ? 0 : pendingProps().length;
   body.innerHTML = (nProp ? `<button class="prop-bar" data-act="tab" data-t="prop">Новые тексты для сайта: ${nProp} — посмотреть</button>` : '') + ({ prop: propTab, blocks: blocksTab, books: booksTab, sub: subTab, look: lookTab, cab: cabTab, raf: rafTab, mail: mailTab, more: moreTab }[S.tab] || blocksTab)();
   body.querySelectorAll('textarea').forEach(grow);
-  if (S.tab === 'mail') { if (!S.mail) loadMail(); else mailPreview(); }
+  if (S.tab === 'mail' && !S.mail) loadMail();
   applyColors();
   status();
 }
@@ -386,30 +384,18 @@ function subTab() {
       ${field('site', c, { k: 'giftName', label: 'Название книги-подарка' })}
       ${field('site', c, { k: 'giftUrl', label: 'Ссылка на файл', type: 'url', hint: 'Google Диск, Яндекс Диск…' })}
     </div>
-    ${c.mailUrl ? `<h3 class="sub">Подписчицы</h3><p class="note">Адреса хранятся в вашем сервисе писем — в Яндекс Облаке, в России. Список, письма и отписки — во вкладке «Письма».</p><div class="links"><button class="btn line" data-act="tab" data-t="mail">Открыть «Письма»</button></div>`
+    ${c.mailUrl ? `<h3 class="sub">Подписчицы</h3><p class="note">Адреса хранятся в вашем сервисе писем — в Яндекс Облаке, в России. Список, рост, письма и отписки — в Мастерской → Сайт → Почта.</p><div class="links"><a class="btn line" href="${MAIL_APP}" target="_blank" rel="noopener">Открыть Почту</a></div>`
       : `<h3 class="sub">Подписчицы${S.subs ? ` · ${S.subs.length}` : ''}</h3>${subsHtml()}`}
     <h3 class="sub">Политика конфиденциальности</h3>
     ${field('site', c, { k: 'privacy', label: 'Текст страницы', type: 'area', hint: 'Отдельная страница по ссылке внизу сайта. Проверьте его под себя' })}`;
 }
 
-// ---------- Письма: свой сервис (Yandex Cloud) — подписка с подтверждением, письма от имени сайта ----------
-const SITE_URL = 'https://lanafreitag.ru/';
-const M_FIELDS = [['subject', 'Тема письма', 'Её видно в списке писем'], ['eyebrow', 'Над заголовком', 'Маленькими буквами между тире; по желанию'], ['title', 'Заголовок', '*Звёздочки* — тонкий курсив'],
-  ['text', 'Текст', 'Пустая строка — новый абзац; *курсив*, **жирный**, [слова](ссылка)', 'area'], ['quote', 'Цитата из книги', 'По желанию: крупным курсивом между тонкими линиями', 'area'], ['btn', 'Кнопка']];
-const M_MORE = [['preheader', 'Строка после темы', 'Серым рядом с темой во входящих; пусто — начало текста'], ['url', 'Куда ведёт кнопка', 'Пусто — на книгу на Литнете (или на её страницу на сайте)'], ['sign', 'Подпись', 'Пусто — подпись из «Оформления писем»']];
-// оформление — общее для всех писем, хранится вместе с сайтом (content.letter): его видит и меняет нейросеть
-const L_FIELDS = [['bear', 'Медведь в кружке сверху', 'toggle'], ['links', 'Внизу — ссылки на сайт и Telegram', 'toggle'], ['sign', 'Подпись в конце письма', '', 'Курсивом, например имя'],
-  ['footer', 'Текст внизу письма', 'area', 'Над ссылкой «Отписаться»'], ['tint', 'Подложка под обложкой', 'color', 'Пусто — цвет акцента сайта']];
-// раскрытые разделы «Писем» остаются раскрытыми после перерисовки
-const OPEN = new Set();
-const det = (k) => (OPEN.has(k) ? ' open' : '');
-app.addEventListener('toggle', (e) => { const k = e.target.dataset?.det; if (k) { if (e.target.open) OPEN.add(k); else OPEN.delete(k); } }, true);
-const design = () => ({ ...LETTER_DEFAULTS, ...(S.content.letter || {}) });
-const tgOf = (c) => { const b = (c.blocks || []).find((x) => x.type === 'tg' && /^https?:/.test(x.url || '')); return b?.url || (/^https?:/.test(c.headUrl || '') ? c.headUrl : ''); };
+// ---------- Письма: свой сервис (Yandex Cloud). Письма, подписчицы, график, отложенная отправка — в Мастерской → Сайт → Почта;
+// здесь — подключение (адрес сервиса нужен сайту для подписки) и короткая сводка ----------
+const MAIL_APP = 'https://erichthoxx-sketch.github.io/mine/pisatel/#/site/mail';
 async function loadMail() {
   S.mail = { cfg: {}, info: null };
   try { S.mail.cfg = await S.store.getMail(); } catch { /* нет связи — поля пустые */ }
-  S.mail.cfg.draft ||= {};
   if (S.tab === 'mail') renderEditor();
   mailInfo();
 }
@@ -430,117 +416,30 @@ async function mailInfo() {
 }
 let mailT = null;
 const saveMail = () => { clearTimeout(mailT); mailT = setTimeout(() => S.store.setMail(S.mail.cfg).catch(() => {}), 700); };
-// ссылка кнопки: своя → Литнет книги с меткой «из письма» → страница книги на сайте
-function letterUrl(d, b) {
-  if (d.url) return d.url;
-  if (!b) return SITE_URL;
-  if (b.litnet) { try { const x = new URL(b.litnet); x.searchParams.set('utm_source', 'lanafreitag.ru'); x.searchParams.set('utm_medium', 'email'); x.searchParams.set('utm_campaign', b.url); return x.href; } catch { /* кривая ссылка */ } }
-  return `${SITE_URL}?kniga=${encodeURIComponent(b.url)}`;
-}
-function letterOf(cover, bearUrl = '') {
-  const d = S.mail.cfg.draft, b = normalize(S.content).books.find((x) => x.id === d.book);
-  return letterHtml({ author: S.content.name || 'Лана Фрейтаг', title: d.title || '', eyebrow: d.eyebrow || '', text: d.text || '', quote: d.quote || '',
-    btn: d.btn ?? 'Читать', sign: d.sign || '', preheader: d.preheader || '', url: letterUrl(d, b), site: SITE_URL,
-    design: design(), accent: colors(S.content).a2, tg: tgOf(S.content), bearUrl,
-    book: b ? { title: b.title, series: b.series, seriesNo: b.seriesNo, cover: cover === undefined ? (b.cover && S.imgs[b.cover]) || '' : cover } : null });
-}
-let mpT = null;
-function mailPreview() {
-  clearTimeout(mpT);
-  mpT = setTimeout(() => { const f = document.getElementById('pvmail'); if (f && S.mail) f.srcdoc = letterOf(undefined, new URL('../mail-bear.jpg', location.href).href).html; }, 150);
-}
 function mailTab() {
   if (!S.mail) return '<p class="note">Загружаю…</p>';
-  const c = S.content, cfg = S.mail.cfg, info = S.mail.info, d = cfg.draft;
-  const ready = mailUrl() && cfg.key && info && info.list;
+  const c = S.content, cfg = S.mail.cfg, info = S.mail.info;
   const setup = `<div class="list" style="gap:16px">
       ${field('site', c, { k: 'mailUrl', label: 'Адрес сервиса писем', type: 'url', hint: 'Из Yandex Cloud: функция → «Обзор» → ссылка для вызова' })}
       <label class="f"><span>Пароль сервиса</span><input type="password" autocomplete="off" data-mcfg="key" value="${esc(cfg.key || '')}"><small>Тот, что вписан в функцию как ADMIN_KEY. Хранится только в ваших данных, не на сайте</small></label>
     </div>
     <div class="links" style="margin-top:12px"><button class="btn line" data-act="mailCheck">Проверить</button></div>
-    ${info?.err === 'key' ? '<p class="note bad">Пароль не подходит — сверьте с ADMIN_KEY в функции.</p>' : info?.err ? '<p class="note bad">Сервис не отвечает — проверьте адрес и что функция публичная.</p>' : ''}`;
-  if (!ready) {
-    return `<p class="note">Письма читательницам — с вашего адреса на lanafreitag.ru, через ваш сервис в Yandex Cloud. Подписка — с подтверждением по письму, в каждом письме — «Отписаться».</p>
-      ${info === 'busy' ? '<p class="note">Проверяю…</p>' : ''}
+    ${info === 'busy' ? '<p class="note">Проверяю…</p>' : info?.err === 'key' ? '<p class="note bad">Пароль не подходит — сверьте с ADMIN_KEY в функции.</p>' : info?.err ? '<p class="note bad">Сервис не отвечает — проверьте адрес и что функция публичная.</p>' : ''}`;
+  if (!(mailUrl() && cfg.key && info && info.list)) {
+    return `<p class="note">Письма читательницам — с вашего адреса на lanafreitag.ru, через ваш сервис в Yandex Cloud. Подписка на сайте — с подтверждением по письму, в каждом письме — «Отписаться».</p>
       <h3 class="sub">Подключение</h3>${setup}`;
   }
-  const L = info.list, ok = L.filter((x) => x.status === 'ok'), wait = L.filter((x) => x.status === 'pending'), off = L.filter((x) => x.status === 'unsub');
+  const L = info.list, ok = L.filter((x) => x.status === 'ok').length, wait = L.filter((x) => x.status === 'pending').length;
   const known = new Set(L.map((x) => x.email));
   const old = (S.subs || []).filter((x) => x.email && !known.has(String(x.email).trim().toLowerCase()));
-  const books = normalize(c).books;
-  const sure = S.mail.sure;
-  return `<p class="note">Письмо уходит с ${esc(info.from || 'вашего адреса')}, ответы читательниц — на ${esc(info.replyTo || 'вашу почту')}. Справа — как его увидят.</p>
-    <h3 class="sub">Подписчицы · ${ok.length}</h3>
-    <p class="note">Подтвердили: ${ok.length}${wait.length ? ` · ждут подтверждения: ${wait.length}` : ''}${off.length ? ` · отписались: ${off.length}` : ''}</p>
+  return `<p class="note">Сервис писем подключён: подписка на сайте идёт через него. Письма (сейчас или в назначенный день и час), подписчицы, рост и адреса — в Мастерской → Сайт → Почта.</p>
+    <div class="links"><a class="btn" href="${MAIL_APP}" target="_blank" rel="noopener">Открыть Почту в Мастерской</a></div>
+    <h3 class="sub">Подписчицы · ${ok}</h3>
+    <p class="note">${wait ? `Ждут подтверждения: ${wait}. ` : ''}${(info.queue || []).length ? `Отложенных писем: ${info.queue.length}.` : ''}</p>
     ${old.length ? `<p class="note">Адреса из прежней формы подписки (с согласием): ${old.length}.</p><div class="links"><button class="btn line" data-act="mailImport">Перенести в рассылку · ${old.length}</button></div>` : ''}
-    ${ok.length || wait.length ? `<details class="m-list" data-det="list"${det('list')}><summary>Список адресов</summary><div class="subs">${[...ok, ...wait].slice(0, 300).map((x) => `<div class="sub-r"><span>${x.name ? `${esc(x.name)} · ` : ''}${esc(x.email)}</span><small>${x.status === 'pending' ? 'ждёт подтверждения' : esc(String(x.okAt || x.at || '').slice(0, 10).split('-').reverse().join('.'))}</small><button class="ico" data-act="mailDel" data-e="${esc(x.email)}" aria-label="Удалить адрес" title="Удалить">${ic('trash')}</button></div>`).join('')}</div></details>` : ''}
-    <h3 class="sub">Новое письмо</h3>
-    <div class="list" style="gap:16px">
-      <label class="f"><span>Книга</span><select data-mail="book"><option value="">— без книги —</option>${books.map((b) => `<option value="${b.id}"${b.id === d.book ? ' selected' : ''}>${esc(plain(b.title))}</option>`).join('')}</select><small>Обложка встанет в письмо сама</small></label>
-      ${M_FIELDS.map(mField).join('')}
-    </div>
-    <details class="m-list" data-det="more"${det('more')}><summary>Ещё настройки письма</summary><div class="list" style="gap:16px">${M_MORE.map(mField).join('')}</div></details>
-    <div class="links" style="margin-top:16px">
-      ${sure ? `<button class="btn" data-act="mailSend">Да, отправить ${ok.length}</button><button class="quiet" data-act="mailSure">Отмена</button>`
-        : `<button class="btn line" data-act="mailSend" data-test="1">Прислать мне на пробу</button><button class="btn" data-act="mailSure"${ok.length ? '' : ' disabled'}>Отправить всем · ${ok.length}</button>`}
-    </div>
-    ${sure ? `<p class="note">Письмо «${esc(d.subject || '')}» уйдёт ${ok.length} ${ok.length % 10 === 1 && ok.length % 100 !== 11 ? 'читательнице' : 'читательницам'}. Отменить отправку будет нельзя.</p>` : ''}
-    ${(info.sent || []).length ? `<h3 class="sub">Отправлено</h3><div class="subs">${info.sent.slice().reverse().map((x) => `<div class="sub-r"><span>${esc(x.subject || 'Без темы')}</span><small>${esc(String(x.at).slice(0, 10).split('-').reverse().join('.'))} · ${x.sent}${x.failed ? ` · не дошло: ${x.failed}` : ''}</small></div>`).join('')}</div>` : ''}
-    <details class="m-list" data-det="design"${det('design')}><summary>Оформление писем</summary><p class="note">Общее для всех писем — справа видно сразу.</p><div class="list" style="gap:16px">${L_FIELDS.map(lField).join('')}</div></details>
-    <details class="m-list" data-det="ai"${det('ai')}><summary>Нейросеть</summary><p class="note">Скопируйте письмо и оформление для любой нейросети (Claude, ChatGPT…), попросите поправить и вставьте её ответ — письмо обновится. Отправка — только вашей кнопкой.</p>
-      <div class="links"><button class="btn line" data-act="mailAI">Скопировать для нейросети</button><button class="quiet" data-act="mailPasting">Вставить ответ</button></div>
-      ${S.mail.pasting ? `<div style="display:grid;gap:10px;margin-top:14px"><textarea class="paste" id="mail-answer" placeholder="Вставьте сюда ответ нейросети целиком"></textarea><div class="links"><button class="btn" data-act="mailApply">Применить</button><button class="quiet" data-act="mailPasting">Отмена</button></div></div>` : ''}</details>
-    <details class="m-list" data-det="conn"${det('conn')}><summary>Подключение</summary>${setup}</details>`;
+    <details class="m-list"><summary>Подключение</summary>${setup}</details>`;
 }
-function mField([k, label, hint, type]) {
-  const d = S.mail.cfg.draft, v = k === 'btn' ? (d.btn ?? 'Читать') : d[k] || '';
-  return type === 'area'
-    ? `<label class="f"><span>${label}</span><textarea rows="${k === 'text' ? 4 : 2}" data-mail="${k}">${esc(v)}</textarea><small>${hint}</small></label>`
-    : `<label class="f"><span>${label}</span><input data-mail="${k}" value="${esc(v)}">${hint ? `<small>${hint}</small>` : ''}</label>`;
-}
-function lField([k, label, type, hint]) {
-  const v = design()[k];
-  if (type === 'toggle') return `<label class="tgl"><input type="checkbox" data-letter="${k}"${v ? ' checked' : ''}><span>${label}</span></label>`;
-  if (type === 'area') return `<label class="f"><span>${label}</span><textarea rows="2" data-letter="${k}">${esc(v)}</textarea><small>${hint}</small></label>`;
-  if (type === 'color') return `<label class="f"><span>${label}</span><span style="display:flex;gap:12px;align-items:center"><input type="color" data-letter="${k}" value="${esc(v || colors(S.content).a2)}" style="width:48px;height:32px;padding:0;border:0;background:none">${v ? `<button class="quiet" type="button" data-act="letterReset" data-k="${k}">Как на сайте</button>` : ''}</span><small>${hint}</small></label>`;
-  return `<label class="f"><span>${label}</span><input data-letter="${k}" value="${esc(v)}"><small>${hint}</small></label>`;
-}
-// текст для нейросети: черновик + оформление + правила; ответ — тот же JSON
-function mailAIText() {
-  const d = S.mail.cfg.draft, b = S.content.books.find((x) => x.id === d.book);
-  const draft = Object.fromEntries([...M_FIELDS, ...M_MORE].map(([k]) => [k, k === 'btn' ? (d.btn ?? 'Читать') : d[k] || '']));
-  return `Это письмо читательницам с моего авторского сайта (я пишу любовные романы; подписчицы ждут писем только о выходе новых романов). Помоги: [напишите, что нужно — например, сделать текст живее и короче].
-
-Правила ответа: верни ВЕСЬ JSON целиком одним блоком кода, те же поля.
-- letter — само письмо: subject (тема), preheader (строка после темы во входящих), eyebrow (маленькая строка над заголовком), title (заголовок), text (абзацы через пустую строку), quote (цитата из книги — только настоящая, из текста, не выдумывай), btn (кнопка), url (куда ведёт кнопка; пусто — на книгу), sign (подпись)
-- design — оформление всех писем: bear (медведь в кружке сверху, true/false), links (ссылки на сайт и Telegram внизу), sign (подпись по умолчанию), footer (текст внизу над «Отписаться»), tint (цвет подложки под обложкой, #RRGGBB или пусто), paper (фон, #RRGGBB), ink (текст и кнопка, #RRGGBB)
-- В тексте: *курсив*, **жирный**, [слова](https://ссылка)
-${b ? `- Книга в письме: «${plain(b.title)}»${b.ann ? `. Аннотация: ${plain(b.ann).slice(0, 1200)}` : ''}
-` : ''}
-\`\`\`json
-${JSON.stringify({ letter: draft, design: design() }, null, 2)}
-\`\`\``;
-}
-// обложка для письма — картинкой по ссылке (в письмах встроенные картинки часто режутся): один раз в хранилище сервиса
-async function letterCover() {
-  const d = S.mail.cfg.draft, b = S.content.books.find((x) => x.id === d.book);
-  const id = b?.cover, data = id && S.imgs[id];
-  if (!data) return '';
-  S.mail.cfg.covers ||= {};
-  if (!S.mail.cfg.covers[id]) {
-    const r = await mailCall({ op: 'img', name: `cover-${id}.jpg`, type: (/^data:([^;]+)/.exec(data) || [])[1] || 'image/jpeg', data });
-    S.mail.cfg.covers[id] = r.url; saveMail();
-  }
-  return S.mail.cfg.covers[id];
-}
-app.addEventListener('input', (e) => {
-  const el = e.target;
-  if (el.dataset.mail && S.mail) { S.mail.cfg.draft[el.dataset.mail] = el.value; if (el.tagName === 'TEXTAREA') grow(el); saveMail(); mailPreview(); }
-  if (el.dataset.mcfg && S.mail) { S.mail.cfg[el.dataset.mcfg] = el.value.trim(); saveMail(); }
-  if (el.dataset.letter && el.type !== 'checkbox' && S.mail) { S.content.letter = { ...(S.content.letter || {}), [el.dataset.letter]: el.value }; if (el.tagName === 'TEXTAREA') grow(el); changed(); mailPreview(); }
-});
-app.addEventListener('change', (e) => { const el = e.target; if (el.dataset.letter && el.type === 'checkbox') { S.content.letter = { ...(S.content.letter || {}), [el.dataset.letter]: el.checked }; changed(); mailPreview(); } });
-app.addEventListener('change', (e) => { if (e.target.dataset.mail === 'book' && S.mail) { S.mail.cfg.draft.book = e.target.value; saveMail(); mailPreview(); } });
+app.addEventListener('input', (e) => { const el = e.target; if (el.dataset.mcfg && S.mail) { S.mail.cfg[el.dataset.mcfg] = el.value.trim(); saveMail(); } });
 
 // Ещё: статистика, нейросеть, копия сайта, вход
 function moreTab() {
@@ -769,48 +668,10 @@ const acts = {
     try { await S.store.delSub(d.id); S.subs = S.subs.filter((y) => y !== x); toast(`Адрес ${x.email} удалён`); } catch { toast('Не получилось удалить — попробуйте ещё раз'); }
   },
   mailCheck: async () => { clearTimeout(mailT); await S.store.setMail(S.mail.cfg).catch(() => {}); if (S.save !== 'ok') await saveNow(); await mailInfo(); if (S.mail.info?.list) toast('Сервис писем подключён'); return false; },
-  mailSure: () => {
-    const d = S.mail.cfg.draft;
-    if (!S.mail.sure && (!d.subject || !d.text)) { toast('Впишите тему и текст письма'); return false; }
-    S.mail.sure = !S.mail.sure;
-  },
-  mailSend: async (d) => {
-    const dr = S.mail.cfg.draft, test = !!d.test;
-    if (!dr.subject || !dr.text) { toast('Впишите тему и текст письма'); return false; }
-    const btn = app.querySelector('[data-act="mailSend"]'); if (btn) { btn.disabled = true; btn.textContent = 'Отправляю…'; }
-    try {
-      const L = letterOf(await letterCover());
-      const r = await mailCall({ op: 'send', test, subject: dr.subject, html: L.html, text: L.text });
-      S.mail.sure = false;
-      if (test) toast(r.sent ? `Пробное письмо отправлено на ${S.mail.info.replyTo || 'вашу почту'}` : 'Не получилось отправить — проверьте адрес отправителя в Postbox');
-      else { toast(`Отправлено: ${r.sent}${r.failed?.length ? `, не дошло: ${r.failed.length}` : ''}`); S.mail.cfg.draft = {}; saveMail(); await mailInfo(); }
-    } catch (x) { toast(x.why === 'key' ? 'Пароль сервиса не подходит' : 'Не получилось — проверьте интернет и попробуйте ещё раз'); }
-  },
-  letterReset: (d) => { const L = { ...(S.content.letter || {}) }; delete L[d.k]; S.content.letter = L; changed(); },
-  mailAI: async () => { await copy(mailAIText()); return false; },
-  mailPasting: () => { S.mail.pasting = !S.mail.pasting; OPEN.add('ai'); },
-  mailApply: () => {
-    const raw = document.getElementById('mail-answer').value;
-    let j; try { j = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); } catch { j = null; }
-    if (!j || (!j.letter && !j.design)) { toast('Не нашла в ответе письма. Попросите нейросеть прислать JSON целиком одним блоком кода.'); return false; }
-    const was = { draft: { ...S.mail.cfg.draft }, letter: S.content.letter ? { ...S.content.letter } : undefined };
-    const keys = new Set([...M_FIELDS, ...M_MORE].map(([k]) => k));
-    for (const [k, v] of Object.entries(j.letter || {})) if (keys.has(k) && typeof v === 'string') S.mail.cfg.draft[k] = v;
-    if (j.design && typeof j.design === 'object') {
-      const L = { ...(S.content.letter || {}) };
-      for (const [k, v] of Object.entries(j.design)) if (k in LETTER_DEFAULTS && typeof v === typeof LETTER_DEFAULTS[k]) L[k] = v;
-      S.content.letter = L; changed();
-    }
-    S.mail.pasting = false; saveMail();
-    toast('Ответ нейросети применён', () => { S.mail.cfg.draft = was.draft; S.content.letter = was.letter; saveMail(); changed(); renderEditor(); });
-  },
   mailImport: async () => {
     const known = new Set(S.mail.info.list.map((x) => x.email));
     const list = (S.subs || []).filter((x) => x.email && !known.has(String(x.email).trim().toLowerCase())).map((x) => ({ email: x.email, name: x.name || '', at: x.at || '' }));
     try { const r = await mailCall({ op: 'import', list }); toast(`Перенесено адресов: ${r.added}`); await mailInfo(); } catch { toast('Не получилось — попробуйте ещё раз'); }
-  },
-  mailDel: async (d) => {
-    try { await mailCall({ op: 'remove', email: d.e }); S.mail.info.list = S.mail.info.list.filter((x) => x.email !== d.e); toast(`Адрес ${d.e} удалён`); } catch { toast('Не получилось удалить — попробуйте ещё раз'); }
   },
   copyAI: async () => { await copy(aiText()); return false; },
   pasting: () => { S.pasting = !S.pasting; },

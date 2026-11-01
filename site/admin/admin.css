@@ -161,10 +161,6 @@ h3.sub:first-child{margin-top:4px}
 .prop-w{font:500 11px/1.4 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
 .prop-old{font-size:14px;line-height:1.55;color:var(--ink-2);text-decoration:line-through;text-decoration-color:var(--line)}
 .prop-new{font-size:15px;line-height:1.55;color:var(--ink)}
-/* Письма: справа вместо сайта — письмо */
-#pvmail{display:none;background:#f6f6f4}
-.adm.is-mail #pv{display:none}
-.adm.is-mail #pvmail{display:block}
 .note.bad{color:var(--bad,#a2333b)}
 .m-list{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
 .m-list>summary{cursor:pointer;font-size:14px;color:var(--ink-2);list-style:none}

@@ -8,6 +8,7 @@ import { fragText, fragChars, fitFree, LITNET_FREE_MAX } from '../sitefrag.js';
 import { siteChecks, SITE_LINK, domainInfo } from '../sitecheck.js';
 import { addDays } from '../../../js/calc.js';
 import { addLinkedTask } from './links.js';
+import { siteTabs, mailCount } from './mail.js';
 
 const app = () => window.__app;
 const st = { site: undefined, subs: null, busy: false, err: '' };
@@ -43,16 +44,20 @@ export function mySiteView(a) {
   const shown = st.site ? st.site.books.filter((b) => !b.hidden).length : null;
   const fresh = checks.find((x) => x.k === 'subs')?.subs || 0;
   const dm = domainInfo(c.settings, c.today);
+  const mc = mailCount();
   const html = `<section class="links-page">
-  <div class="row between links-title" style="margin-bottom:10px"><h2 style="margin:0">Сайт</h2>
-    <button class="icon-btn" data-act="site.reload" title="Обновить" aria-label="Обновить">${ic('refresh')}</button></div>
+  ${siteTabs('site')}
+  <div class="site-go">
+    <a href="${SITE_URL}" target="_blank" rel="noopener">${ic('globe')}<span><b>lanafreitag.ru</b><small>открыть сайт</small></span></a>
+    <a href="${SITE_ADMIN}" target="_blank" rel="noopener">${ic('pen')}<span><b>Админка</b><small>тексты, книги, вид</small></span></a>
+    <a href="../direct/#/an/site" target="_blank" rel="noopener">${ic('ads')}<span><b>Статистика</b><small>посетители и «Читать»</small></span></a>
+  </div>
   <div class="card">
-    <div class="row" style="gap:16px;flex-wrap:wrap"><a href="${SITE_URL}" target="_blank" rel="noopener"><b>lanafreitag.ru</b></a><a href="${SITE_ADMIN}" target="_blank" rel="noopener">Админка сайта</a><a href="../direct/#/an/site" target="_blank" rel="noopener">Статистика</a></div>
     <div class="tiles">
       <div><div class="k">Книг на сайте</div><div class="v">${shown == null ? '—' : shown}</div><div class="s">${st.site ? `из ${c.wbooks.filter((b) => b.status !== 'idea').length} в Мастерской` : st.busy ? 'загружаю…' : 'нет связи с сайтом'}</div></div>
-      <div><div class="k">Подписчики</div><div class="v">${st.subs ? st.subs.length : '—'}</div><div class="s">${st.subs ? (fresh ? `новых ${fresh}` : 'новых нет') : 'видны после входа'}</div></div>
+      ${mc ? `<div class="tile-go" role="link" tabindex="0" data-act="go" data-to="/site/mail" title="Открыть Почту"><div class="k">Подписчицы</div><div class="v">${mc.ok}</div><div class="s">${mc.new30 ? `+${mc.new30} за 30 дней` : 'новых за 30 дней нет'}</div></div>`
+        : `<div><div class="k">Подписчики</div><div class="v">${st.subs ? st.subs.length : '—'}</div><div class="s">${st.subs ? (fresh ? `новых ${fresh}` : 'новых нет') : 'видны после входа'}</div></div>`}
     </div>
-    <p class="small muted" style="margin:6px 0 0">Посетители, нажатия «Читать» и откуда пришли — в «Директе» → Аналитика → Сайт.</p>
     <div class="row between" style="gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
       <span><b>Домен ${esc(dm.name)}</b><span class="sub">${dm.late ? 'срок оплаты прошёл — продлите в Рег.ру' : `оплачен до ${fmtDate(dm.till)}`} · напомню за 2 месяца</span></span>
       <span class="row" style="gap:10px;flex-shrink:0">${dm.soon ? `<button class="small-btn" data-act="site.renewed">Продлила на год</button>` : ''}<button class="link" data-act="site.domain">Изменить дату</button></span></div>

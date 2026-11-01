@@ -72,3 +72,52 @@ export async function loadSubs(idToken) {
   } while (token);
   return out;
 }
+
+// Картинка сайта (обложка) — для письма; читать может любой
+export async function siteImg(id) {
+  if (!id) return '';
+  if (LOCAL) { try { return JSON.parse(localStorage.getItem('lanaSite.v1') || 'null')?.imgs?.[id] || ''; } catch { return ''; } }
+  const r = await fetch(`${BASE}/site_img/${encodeURIComponent(id)}?key=${firebaseConfig.apiKey}`);
+  return r.ok ? (await r.json()).fields?.data?.stringValue || '' : '';
+}
+// Поменять настройки сайта верхнего уровня (оформление писем letter, адрес сервиса mailUrl) — вход владелицы
+export async function patchSite(patch, idToken) {
+  const c = await loadSiteRaw();
+  if (!c) throw new Error('Сайт ещё не настроен в админке');
+  Object.assign(c, patch);
+  if (LOCAL) { const d = JSON.parse(localStorage.getItem('lanaSite.v1') || '{}'); d.content = c; localStorage.setItem('lanaSite.v1', JSON.stringify(d)); return c; }
+  const r = await fetch(`${BASE}/site/main?updateMask.fieldPaths=json&updateMask.fieldPaths=at`, {
+    method: 'PATCH', headers: { Authorization: 'Bearer ' + idToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { json: { stringValue: JSON.stringify(c) }, at: { stringValue: new Date().toISOString() } } }),
+  });
+  if (!r.ok) throw new Error(r.status === 403 ? 'Сайт закреплён за другим входом' : 'Не получилось записать на сайт (' + r.status + ')');
+  return c;
+}
+
+// Почта: пароль сервиса писем, черновик письма, адреса обложек — в её личных данных users/{uid}/meta/sitemail
+// (тот же документ, что у админки сайта; на localhost — в этом браузере, как у пробной админки)
+export async function loadMailCfg(uid, idToken) {
+  if (LOCAL || !uid) { try { return JSON.parse(localStorage.getItem('lanaSite.mail') || '{}'); } catch { return {}; } }
+  const r = await fetch(`${BASE}/users/${uid}/meta/sitemail`, { headers: { Authorization: 'Bearer ' + idToken } });
+  if (r.status === 404) return {};
+  if (!r.ok) throw new Error('mailcfg ' + r.status);
+  return JSON.parse((await r.json()).fields?.json?.stringValue || '{}');
+}
+export async function saveMailCfg(uid, idToken, cfg) {
+  if (LOCAL || !uid) { localStorage.setItem('lanaSite.mail', JSON.stringify(cfg)); return; }
+  const r = await fetch(`${BASE}/users/${uid}/meta/sitemail`, {
+    method: 'PATCH', headers: { Authorization: 'Bearer ' + idToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { json: { stringValue: JSON.stringify(cfg) }, at: { stringValue: new Date().toISOString() } } }),
+  });
+  if (!r.ok) throw new Error('mailcfg ' + r.status);
+}
+// Сервис писем (функция Yandex Cloud): admin-запрос с паролем
+export async function mailCall(url, key, body) {
+  const u = String(url || '').trim();
+  if (!u) throw Object.assign(new Error('Сервис писем не подключён'), { why: 'nourl' });
+  const r = await fetch(`${u}${u.includes('?') ? '&' : '?'}a=admin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: key || '', ...body }) });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 403) throw Object.assign(new Error('Пароль сервиса не подходит'), { why: 'key' });
+  if (!r.ok) throw Object.assign(new Error(j.error || 'Сервис писем не отвечает (' + r.status + ')'), { why: 'net' });
+  return j;
+}

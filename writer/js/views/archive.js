@@ -143,7 +143,7 @@ acts['arc.setup'] = () => {
   return false;
 };
 acts['arc.copy'] = async () => {
-  const code = scriptCode(app().ctx().settings.wBooksFolder);
+  const code = scriptCode(app().ctx().settings.wBooksFolder, app().ctx().settings.site?.mailUrl || '');
   try { await navigator.clipboard.writeText(code); toast('Программа скопирована — вставьте её на script.google.com'); } catch { if (await download('arhiv_masterskoy.gs.txt', new Blob([code], { type: 'text/plain' }), 'text/plain')) toast('Программа скачана файлом — откройте и скопируйте текст'); }
   return false;
 };

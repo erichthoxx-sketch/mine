@@ -154,3 +154,32 @@ test('архив: статус и разница в знаках', () => {
   const c = copiesWithDiff({ copies: [{ date: '2026-10-14', chars: 1000 }, { date: '2026-10-16', chars: 1500 }] });
   assert.deepEqual(c.map((x) => [x.date, x.diff]), [['2026-10-16', 500], ['2026-10-14', null]]);
 });
+
+test('архив: адреса подписчиц — в «Почта/Подписчицы.csv» на Диске и в GitHub, пароль только в свойствах', () => {
+  const g = fakeGoogle();
+  const fetch0 = g.ctx.UrlFetchApp.fetch;
+  g.ctx.UrlFetchApp.fetch = (url, o = {}) => {
+    if (url.startsWith('https://functions.yandexcloud.net/')) { g.fetches.push({ url, o }); return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ list: [{ email: 'a@ya.ru', name: 'Анна', status: 'ok', at: '2026-10-20T10:00:00Z' }] }) }; }
+    if (url.includes('/contents/')) { g.fetches.push({ url, o }); return { getResponseCode: () => (o.method === 'put' ? 201 : 404), getContentText: () => '{}' }; }
+    return fetch0(url, o);
+  };
+  const code = scriptCode(g.books.id, 'https://functions.yandexcloud.net/f1');
+  assert.match(code, /var MAIL_URL = "https:\/\/functions.yandexcloud.net\/f1"/);
+  vm.createContext(g.ctx);
+  vm.runInContext(code, g.ctx);
+  vm.runInContext('setup()', g.ctx); // без MAIL_KEY — сервис писем не трогаем
+  assert.equal(g.fetches.filter((f) => f.url.includes('yandexcloud')).length, 0);
+  g.props.MAIL_KEY = 'k'; g.props.GITHUB_TOKEN = 't'; g.props.GITHUB_REPO = 'me/arhiv';
+  vm.runInContext('nightly()', g.ctx);
+  const call = g.fetches.find((f) => f.url.includes('yandexcloud'));
+  assert.equal(JSON.parse(call.o.payload).op, 'list');
+  const csv = Object.values(g.files).find((f) => f.name === 'Подписчицы.csv');
+  assert.match(csv.text, /"a@ya.ru";"Анна";"подтвердила";"2026-10-20"/);
+  assert.equal(g.folders[csv.parent].name, 'Почта');
+  assert.ok(Object.values(g.files).some((f) => /^Подписчицы \d{4}-\d{2}\.csv$/.test(f.name))); // копия на месяц
+  const put = g.fetches.find((f) => f.url.includes('/contents/') && f.o.method === 'put');
+  assert.ok(put);
+  const idx = JSON.parse(Object.values(g.files).find((f) => f.name === INDEX_NAME).text);
+  assert.deepEqual([idx.mail.ok, idx.mail.n, idx.mail.github], [true, 1, 'да']);
+  assert.equal(idx.sv, 5);
+});

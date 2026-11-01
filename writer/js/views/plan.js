@@ -7,6 +7,8 @@ import { widgetReminder } from './widgets.js';
 import { linkTodos, addLinkedTask } from './links.js';
 import { domainInfo, raffleTodo } from '../sitecheck.js';
 import { siteNow } from './mysite.js';
+import { mailQueue } from './mail.js';
+import { localParts } from '../../../js/mailcalc.js';
 import { SITE_ADMIN } from '../../../js/sitepub.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
@@ -102,6 +104,8 @@ export function planItems(c, from, to) {
   // Мой сайт: розыгрыш по пятницам (в админке сайта → «Розыгрыш»)
   const rf = typeof window !== 'undefined' ? raffleTodo(siteNow(), t) : null;
   if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Пятничный подарок: выбрать, кому', 'Админка сайта → Подарок', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
+  // Почта: отложенные письма подписчицам (отправит сам сервис писем; здесь — чтобы видеть в своём дне)
+  for (const q of mailQueue(c.settings)) { const p = localParts(q.at); if (p.date >= t) add(p.date, 'mk', `Письмо подписчицам уйдёт в ${p.time}`, `«${esc(q.subject || 'Без темы')}» · отправится само`, { to: '/site/mail', id: 'mail-' + q.id }); }
   // Связи: напоминания по контактам (просроченные — на сегодня)
   for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', esc(x.text), esc(x.name) + ((mf) => (mf ? ` · перенесено с ${mf.slice(8, 10)}.${mf.slice(5, 7)}` : ''))(movedFrom(c.settings.todoist?.moved, x.k, x.date)) + (x.date < t ? ' · просрочено' : ''), { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k, section: x.section || 'Связи', ...(x.bookId ? { bookId: x.bookId } : {}), ...(x.detail ? { description: x.detail } : {}) });
   // свои задачи из Todoist (проекты «Книги» и «Мастерская»)

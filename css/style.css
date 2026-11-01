@@ -3168,3 +3168,72 @@ main .rev-actions button.dl .ic { opacity: 1; }
 @media (min-width: 1180px) and (max-width: 1640px) { html:not(.app-writer) main .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
 /* iPhone: нижнее меню всегда у настоящего низа экрана (сдвиг считает js/vvfix.js) */
 @media (max-width: 1179px) { nav.tabs { transform: translate3d(0, var(--nav-shift, 0px), 0); } }
+/* ---------- Сайт → Обзор · Почта (01.11.2026) ---------- */
+/* три входа на сайт — мягкие плитки с иконкой и подписью вместо жирных ссылок */
+.site-go { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0 12px; }
+.site-go a { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--r-tile, 16px); background: var(--soft); color: var(--text); text-decoration: none; min-width: 0; transition: background .2s; }
+.site-go a:hover { background: var(--soft-2); }
+.site-go .ic { width: 22px; height: 22px; flex-shrink: 0; color: var(--text-2); }
+.site-go span { display: flex; flex-direction: column; min-width: 0; }
+.site-go b { font: 500 15px/1.25 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.site-go small { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) { .site-go { grid-template-columns: 1fr; gap: 6px; } .site-go a { padding: 12px 14px; } }
+.tiles .tile-go { cursor: pointer; transition: background .2s; }
+.tiles .tile-go:hover { background: var(--soft-2) !important; }
+/* переключатель-дорожка (30 дней · 90 дней · Всё время; Подтвердили · Ждут …) */
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--soft); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg::-webkit-scrollbar { display: none; }
+:root main .seg > button { background: transparent !important; border: 0 !important; box-shadow: none !important; min-height: 30px !important; padding: 0 12px !important; border-radius: 999px !important; font: 500 13px/1 var(--font-body) !important; color: var(--text-2) !important; white-space: nowrap; letter-spacing: 0 !important; }
+:root main .seg > button.on { background: var(--card) !important; color: var(--text) !important; }
+.mail-tiles { margin: 14px 0 12px; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+@media (max-width: 640px) { .mail-tiles { grid-template-columns: 1fr 1fr !important; } .mail-tiles > div:first-child { grid-column: 1 / -1; } }
+.mail-chart { margin-top: 12px; min-height: 120px; }
+.mail-chart svg { display: block; overflow: visible; }
+.mail-area { fill: color-mix(in srgb, var(--text) 7%, transparent); }
+.mail-line { stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.mail-dot { fill: var(--text); }
+.mail-cross { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 2 3; }
+.mail-tipt { font: 500 12px var(--font-body); fill: var(--text); }
+.mail-find { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.mail-find input[type=search] { flex: 1 1 220px; min-width: 0; }
+.mail-old { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: var(--soft); }
+.mail-list { margin-top: 8px; }
+.mail-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.mail-row:last-child { border-bottom: 0; }
+.mail-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.mail-who b { font-weight: 500; }
+.mail-meta { font-size: 12px; color: var(--text-2); white-space: nowrap; }
+@media (max-width: 640px) { .mail-row { grid-template-columns: minmax(0, 1fr) auto; } .mail-meta { grid-column: 1; grid-row: 2; margin-top: -8px; } .mail-row .icon-btn { grid-row: 1 / span 2; grid-column: 2; } }
+.mail-more { margin: 12px 0; }
+.mail-more > summary { cursor: pointer; list-style: none; font-size: 14px; color: var(--text-2); padding: 6px 0; }
+.mail-more > summary::-webkit-details-marker { display: none; }
+.mail-more > summary::after { content: " ↓"; font-size: 12px; }
+.mail-more[open] > summary::after { content: " ↑"; }
+.mail-conn { display: grid; gap: 12px; }
+.mail-conn label { display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
+/* редактор письма: слева поля, справа письмо как его увидят; на телефоне — переключателем */
+.ml-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 10px; }
+.ml-mtabs { display: none !important; }
+.ml-pvwrap { position: sticky; top: 14px; border-radius: var(--r-card, 20px); overflow: hidden; background: #f6f6f4; }
+.ml-pvwrap iframe { display: block; width: 100%; height: 640px; border: 0; background: transparent; }
+@media (max-width: 1000px) {
+  .ml-grid { grid-template-columns: 1fr; }
+  .ml-mtabs { display: flex !important; margin-top: 10px; }
+  .ml-grid:not(.show-pv) .ml-pvwrap { display: none; }
+  .ml-grid.show-pv .ml-form { display: none; }
+  .ml-pvwrap { position: static; }
+}
+.ml-f { display: grid; gap: 6px; margin: 0 0 16px; }
+.ml-f > span { font-size: 13px; color: var(--text-2); }
+.ml-f > small { font-size: 12px; color: var(--muted); }
+.ml-f textarea { resize: none; overflow: hidden; line-height: 1.55; }
+.ml-tgl { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; font-size: 15px; }
+.ml-send { display: grid; gap: 12px; }
+.ml-at { display: flex; gap: 10px; flex-wrap: wrap; }
+.ml-at input { flex: 1 1 140px; min-width: 0; }
+.ml-slots { display: flex; flex-wrap: wrap; gap: 6px; }
+:root main .ml-slots > button { background: var(--soft) !important; border: 0 !important; box-shadow: none !important; min-height: 30px !important; padding: 4px 12px !important; border-radius: 999px !important; font: 400 13px/1.3 var(--font-body) !important; color: var(--text-2) !important; text-align: left; letter-spacing: 0 !important; }
+:root main .ml-slots > button.on { background: var(--text) !important; color: var(--card) !important; }
+.ml-btns { gap: 14px; flex-wrap: wrap; align-items: center; }
+.ml-pvbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; background: var(--soft); }
+.ml-pvwrap.dark { background: #141517; }

@@ -57,7 +57,9 @@ test('письмо: обложка, абзацы, кнопка и ссылка �
   assert.match(html, /font-style:italic[^>]*>для черной вдовы<\/span>/); // курсив заголовка — тонким шрифтом, как на сайте
   const q = letterHtml({ text: 'Это **важно** и [тут](https://x.ru)', quote: 'Цитата', sign: '', design: { bear: false, sign: 'Лана', footer: '' } }).html;
   assert.match(q, /<b>важно<\/b>/);
-  assert.match(q, /<a href="https:\/\/x\.ru"/);
+  assert.match(q, /href="https:\/\/x\.ru"/);
+  assert.match(q, /prefers-color-scheme:dark/); // тёмная тема почты
+  assert.doesNotMatch(letterHtml({ book: { title: 'К', cover: 'https://x/c.jpg' } }).html, /class="tint"/); // без серой подложки
   assert.match(q, />Лана</); // подпись из оформления
   assert.doesNotMatch(q, /mail-bear/); // медведя выключили
   assert.match(html, /src="https:\/\/x\/c\.jpg"/);
@@ -79,4 +81,64 @@ test('сайт: подписка идёт в сервис писем, если �
   globalThis.fetch = async (url) => { calls.push({ url: String(url) }); return { ok: true, status: 200 }; };
   await subscribe({ mailUrl: '' }, 'c@d.ru', 'glavnaya');
   assert.match(calls.at(-1).url, /firestore\.googleapis\.com.*site_subs/);
+});
+
+test('сервис писем: отложенное письмо уходит по таймеру один раз, отменённое — нет', async () => {
+  const { sent } = stub();
+  Object.assign(process.env, { BUCKET: 'b', ADMIN_KEY: 'k', FROM: 'Лана <hello@lanafreitag.ru>', REPLY_TO: 'me@ya.ru', SITE: 'https://lanafreitag.ru/', SELF: 'https://f/x' });
+  delete require.cache[require.resolve('../mail/mail-function.cjs')];
+  const { handler } = require('../mail/mail-function.cjs');
+  const ctx = { token: { access_token: 't' } };
+  const adm = (b) => handler({ httpMethod: 'POST', queryStringParameters: { a: 'admin' }, headers: {}, body: JSON.stringify({ key: 'k', ...b }) }, ctx).then((r) => JSON.parse(r.body));
+  await adm({ op: 'import', list: [{ email: 'a@ya.ru' }, { email: 'b@ya.ru' }] });
+  const past = new Date(Date.now() - 60e3).toISOString(), future = new Date(Date.now() + 864e5).toISOString();
+  await adm({ op: 'schedule', id: 'p1', at: past, subject: 'Вышел роман', html: '<p>x {unsub}</p>', text: 'x', draft: { title: 'X' } });
+  await adm({ op: 'schedule', id: 'p2', at: future, subject: 'Завтра', html: 'y', text: 'y' });
+  await adm({ op: 'schedule', id: 'p3', at: past, subject: 'Отменю', html: 'z', text: 'z' });
+  let L = await adm({ op: 'unschedule', id: 'p3' });
+  assert.deepEqual(L.queue.map((q) => q.id), ['p1', 'p2']);
+  assert.equal(L.queue[0].html, undefined); // в списке — без вёрстки
+  const tick = () => handler({ messages: [{ event_metadata: { event_type: 'yandex.cloud.events.serverless.triggers.TimerMessage' } }] }, ctx);
+  await tick(); await tick();
+  const mine = sent.filter((m) => m.Content.Simple.Subject.Data === 'Вышел роман');
+  assert.equal(mine.length, 2); // обеим — и только один раз
+  assert.equal(sent.some((m) => /Отменю|Завтра/.test(m.Content.Simple.Subject.Data)), false);
+  L = await adm({ op: 'list' });
+  assert.deepEqual(L.queue.map((q) => q.id), ['p2']);
+  assert.equal(L.sent.at(-1).sent, 2);
+  assert.equal(L.sent.at(-1).draft.title, 'X');
+  assert.ok(L.tick); // копия адресов за день сделана
+});
+
+test('шаблон письма: копия для приложений совпадает с site/letter.js', async () => {
+  const fs = await import('node:fs');
+  const a = fs.readFileSync(new URL('../site/letter.js', import.meta.url), 'utf8');
+  const b = fs.readFileSync(new URL('../js/letter.js', import.meta.url), 'utf8');
+  assert.equal(b.split('\n').slice(1).join('\n'), a); // первая строка — пометка «копия»
+});
+
+test('почта: цифры, рост по дням, таблица, поиск, подсказки «когда отправить»', async () => {
+  const { subsStats, subsSeries, subsCsv, filterSubs, sendSlots, localIso, localParts } = await import('../js/mailcalc.js');
+  const list = [
+    { email: 'a@ya.ru', name: 'Анна', status: 'ok', at: '2026-10-20T10:00:00Z', okAt: '2026-10-20T10:05:00Z', src: 'glavnaya' },
+    { email: 'b@ya.ru', status: 'ok', at: '2026-10-28T10:00:00Z', src: 'firebase' }, // перенесена — считается с at
+    { email: 'c@ya.ru', status: 'unsub', at: '2026-10-21T10:00:00Z', okAt: '2026-10-21T11:00:00Z', unsubAt: '2026-10-30T09:00:00Z' },
+    { email: 'd@ya.ru', status: 'pending', at: '2026-10-31T10:00:00Z' },
+  ];
+  assert.deepEqual(subsStats(list, '2026-11-01'), { ok: 2, wait: 1, unsub: 1, new30: 3, gone30: 1 });
+  const s = subsSeries(list, '2026-11-01', 90);
+  assert.equal(s[0].date, '2026-10-19'); // за день до первой
+  assert.equal(s[0].value, 0);
+  assert.equal(s.find((x) => x.date === '2026-10-29').value, 3);
+  assert.equal(s.at(-1).value, 2); // отписавшаяся ушла
+  const csv = subsCsv(list);
+  assert.ok(csv.startsWith('﻿"Почта";"Имя"'));
+  assert.match(csv, /"a@ya.ru";"Анна";"подтвердила";"2026-10-20"/);
+  assert.deepEqual(filterSubs(list, { q: 'анна', status: 'all' }).map((p) => p.email), ['a@ya.ru']);
+  assert.deepEqual(filterSubs(list, {}).map((p) => p.email), ['b@ya.ru', 'a@ya.ru']); // свежие сверху
+  const planned = (b) => b.p || [];
+  const slots = sendSlots([{ title: 'Книга', p: [{ ch: 'Глава 1', pf: 'Литнет', date: '2026-11-05' }] }], { books: [{ title: 'Книга', startDate: '2026-11-20' }] }, '2026-11-01', planned);
+  assert.deepEqual(slots.map((x) => x.date), ['2026-11-05', '2026-11-20']);
+  assert.match(slots[0].label, /Выход «Глава 1»/);
+  assert.deepEqual(localParts(localIso('2026-11-05', '10:30')), { date: '2026-11-05', time: '10:30' });
 });
