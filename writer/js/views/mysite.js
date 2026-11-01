@@ -44,7 +44,7 @@ export function mySiteView(a) {
   const fresh = checks.find((x) => x.k === 'subs')?.subs || 0;
   const dm = domainInfo(c.settings, c.today);
   const html = `<section class="links-page">
-  <div class="row between links-title" style="margin-bottom:10px"><h2 style="margin:0">Мой сайт</h2>
+  <div class="row between links-title" style="margin-bottom:10px"><h2 style="margin:0">Сайт</h2>
     <button class="icon-btn" data-act="site.reload" title="Обновить" aria-label="Обновить">${ic('refresh')}</button></div>
   <div class="card">
     <div class="row" style="gap:16px;flex-wrap:wrap"><a href="${SITE_URL}" target="_blank" rel="noopener"><b>lanafreitag.ru</b></a><a href="${SITE_ADMIN}" target="_blank" rel="noopener">Админка сайта</a><a href="../direct/#/an/site" target="_blank" rel="noopener">Статистика</a></div>

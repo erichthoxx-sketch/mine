@@ -20,7 +20,7 @@ const matches = (x, q) => !q || [x.name, x.net, x.handle, x.contact, x.note, x.c
 const safeUrl = (u) => (/^https?:\/\//i.test(u || '') ? u : u ? 'https://' + u : '');
 
 // ---------- список ----------
-export function linksView(a) {
+export function linksView(a, { embedded = false } = {}) {
   const c = a.ctx(), q = a.ui.linkQ || '';
   const all = [...c.data.w_links].sort((x, y) => (x.name || '').localeCompare(y.name || '', 'ru'));
   const list = all.filter((x) => matches(x, q));
@@ -32,10 +32,10 @@ export function linksView(a) {
   const socialCount = (c.data.w_promolinks || []).filter(x => x.status !== 'archived' && promoChannel(x) === 'social').length;
   const socialHub = showSocialHub ? `<a class="item row between" href="#" data-act="go" data-to="/social"><span><b>Мой Литнет</b><span class="sub">Персональные ссылки · ${socialCount} ${plural(socialCount, ['ссылка', 'ссылки', 'ссылок'])}</span></span></a>` : '';
   // «Мой сайт» — первым в «Площадках»: сайт автора, его дела и сверка с Мастерской
-  const showSite = !q || 'мой сайт lanafreitag'.includes(q.toLowerCase());
+  const showSite = false; // сайт — отдельная вкладка «Сайт» в меню
   const groups = Object.keys(LKINDS).map((k) => [k, list.filter((x) => (x.kind || 'other') === k)])
     .filter(([k, l]) => l.length || k === 'target' || (k === 'social' && showSocialHub) || (k === 'platform' && showSite));
-  const html = `<section class="links-page"><div class="row between links-title" style="margin-bottom:10px"><h2 style="margin:0">Связи</h2><button class="primary" data-act="link.new">+ Добавить</button></div>
+  const html = `<section class="links-page">${embedded ? `<div class="row between links-title" style="margin:14px 0 10px"><span class="small muted">Издательства, соцсети, площадки, нужные люди</span><button class="primary" data-act="link.new">+ Добавить</button></div>` : `<div class="row between links-title" style="margin-bottom:10px"><h2 style="margin:0">Связи</h2><button class="primary" data-act="link.new">+ Добавить</button></div>`}
   ${blogList(c)}
   ${all.length > 5 ? `<input type="search" value="${esc(q)}" placeholder="Поиск: имя, ник, заметка…" data-chg="link.q" aria-label="Поиск по связям" style="margin-bottom:12px">` : ''}
   <div class="psec-h" style="margin-top:4px"><h2>Запросы без ответа <span class="muted">${reqs.length || ''}</span></h2><button class="small-btn" data-act="wait.new">+ Запрос</button></div>
