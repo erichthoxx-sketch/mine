@@ -21,6 +21,8 @@ const local = {
   async addWin(w) { const l = JSON.parse(localStorage.getItem('lanaSite.wins') || '[]'); l.push(w); localStorage.setItem('lanaSite.wins', JSON.stringify(l)); },
   async getCodes() { return JSON.parse(localStorage.getItem('lanaSite.codes') || '{}'); },
   async setCodes(book, list) { const all = JSON.parse(localStorage.getItem('lanaSite.codes') || '{}'); all[book] = list; localStorage.setItem('lanaSite.codes', JSON.stringify(all)); },
+  async getMail() { return JSON.parse(localStorage.getItem('lanaSite.mail') || '{}'); },
+  async setMail(m) { localStorage.setItem('lanaSite.mail', JSON.stringify(m)); },
 };
 
 // ---------- Firebase ----------
@@ -66,6 +68,9 @@ async function firebase() {
     addWin: (w) => F.addDoc(F.collection(db, 'site_wins'), w),
     async getCodes() { const out = {}; (await F.getDocs(F.collection(db, 'site_codes'))).forEach((d) => { out[d.id] = d.data().codes || []; }); return out; },
     setCodes: (book, list) => F.setDoc(ref('site_codes', book), { codes: list, at: new Date().toISOString() }),
+    // письма: пароль сервиса, черновик, адреса обложек — в её личных данных (users/{uid}/meta/sitemail), не на сайте
+    async getMail() { const d = await F.getDoc(F.doc(db, 'users', auth.currentUser.uid, 'meta', 'sitemail')); return d.exists() ? JSON.parse(d.data().json || '{}') : {}; },
+    setMail: (m) => F.setDoc(F.doc(db, 'users', auth.currentUser.uid, 'meta', 'sitemail'), { json: JSON.stringify(m), at: new Date().toISOString() }),
   };
 }
 

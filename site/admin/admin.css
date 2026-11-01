@@ -50,8 +50,8 @@ a{color:inherit}
 .saved.busy i{background:var(--line)}
 .saved.bad{color:var(--bad)}
 .saved.bad i{background:var(--bad)}
-.tabs{display:flex;gap:14px;padding:0 18px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
-.tabs button{background:none;border:0;padding:12px 0 11px;border-bottom:1.5px solid transparent;font:500 11px/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);white-space:nowrap}
+.tabs{display:flex;gap:13px;padding:0 18px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tabs button{background:none;border:0;padding:12px 0 11px;border-bottom:1.5px solid transparent;font:500 11px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);white-space:nowrap}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
 .ed-body{flex:1;overflow-y:auto;padding:18px 20px 120px}
 .pv{position:relative;background:var(--paper-2);min-width:0}
@@ -161,3 +161,14 @@ h3.sub:first-child{margin-top:4px}
 .prop-w{font:500 11px/1.4 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
 .prop-old{font-size:14px;line-height:1.55;color:var(--ink-2);text-decoration:line-through;text-decoration-color:var(--line)}
 .prop-new{font-size:15px;line-height:1.55;color:var(--ink)}
+/* Письма: справа вместо сайта — письмо */
+#pvmail{display:none;background:#f6f6f4}
+.adm.is-mail #pv{display:none}
+.adm.is-mail #pvmail{display:block}
+.note.bad{color:var(--bad,#a2333b)}
+.m-list{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
+.m-list>summary{cursor:pointer;font-size:14px;color:var(--ink-2);list-style:none}
+.m-list>summary::-webkit-details-marker{display:none}
+.m-list>summary::after{content:' ↓';font-size:12px}
+.m-list[open]>summary{margin-bottom:12px}
+.m-list[open]>summary::after{content:' ↑'}

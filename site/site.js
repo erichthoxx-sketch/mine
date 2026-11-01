@@ -1,6 +1,6 @@
 // Сайт автора: главная или страница книги (?kniga=адрес). Сначала — сохранённое в браузере (мгновенно), потом свежее.
 import { renderSite, renderBook, renderPrivacy, renderReader, DEFAULT_CONTENT, normalize, safeUrl, esc } from './content.js';
-import { loadPublic, addSub, LOCAL } from './data.js';
+import { loadPublic, subscribe, LOCAL } from './data.js';
 
 const CACHE = 'lanaSite.cache';
 const $ = (id) => document.getElementById(id);
@@ -58,13 +58,14 @@ function show(content, imgs) {
   watchCta();
   if (cabOn) cab?.after(normalize(current), shownImgs, bookKey, () => show(current, shownImgs));
   let done = false;
-  try { done = localStorage.getItem('lanaSite.subscribed') === '1'; } catch { /* без памяти */ }
+  try { done = localStorage.getItem('lanaSite.subscribed') || ''; } catch { /* без памяти */ }
   const f = document.querySelector('[data-sub]');
   if (done && f && !preview) {
     f.querySelector('.sub-row').hidden = true;
     f.querySelector('.consent').hidden = true;
-    const m = f.querySelector('.sub-msg'); m.hidden = false; m.innerHTML = giftHtml(normalize(current));
+    const m = f.querySelector('.sub-msg'); m.hidden = false; m.innerHTML = done === 'wait' ? waitHtml(normalize(current)) : giftHtml(normalize(current));
   }
+  pismoNote(normalize(current));
   reader();
   const d = document.querySelector('meta[name="description"]');
   if (d && r.description) d.setAttribute('content', r.description);
@@ -155,6 +156,24 @@ document.addEventListener('click', (e) => {
 
 // Подписка: почта → база; сразу показываем подарок. Уже подписанным — тоже подарок, без повторной формы
 const SUBD = 'lanaSite.subscribed';
+// свой сервис писем: сначала письмо «Подтвердите подписку»
+const waitHtml = (c) => esc(c.subWait || 'Проверьте почту: в письме — кнопка «Подтвердить».');
+// пришли по ссылке из письма: ?pismo=ok (подтвердила) | unsub (отписалась) | net (ссылка устарела)
+const pismo = qs.get('pismo') || '';
+if (pismo && !preview) {
+  try { if (pismo === 'ok') localStorage.setItem(SUBD, '1'); if (pismo === 'unsub') localStorage.removeItem(SUBD); } catch { /* без памяти */ }
+  history.replaceState(null, '', location.pathname + location.search.replace(/[?&]pismo=[^&]*/, '').replace(/^&/, '?') + location.hash);
+}
+function pismoNote(c) {
+  if (!pismo || preview || document.querySelector('.pismo')) return;
+  const t = { ok: c.pismoOk || c.subDone || 'Подписка подтверждена.', unsub: c.pismoUnsub || 'Вы отписались — писем больше не будет.', net: c.pismoNet || 'Ссылка устарела. Оставьте почту на сайте ещё раз.' }[pismo];
+  if (!t) return;
+  const n = document.createElement('div');
+  n.className = 'pismo'; n.setAttribute('role', 'status'); n.textContent = t;
+  document.body.appendChild(n);
+  setTimeout(() => n.classList.add('out'), 7000);
+  setTimeout(() => n.remove(), 8000);
+}
 function giftHtml(c) {
   const u = safeUrl(c.giftUrl);
   return `${esc(c.subDone || 'Готово, спасибо!')}${u ? ` <a class="btn btn-dark" href="${esc(u)}" target="_blank" rel="noopener">Скачать «${esc(c.giftName || 'книгу')}»</a>` : ''}`;
@@ -172,12 +191,12 @@ document.addEventListener('submit', async (e) => {
   const btn = f.querySelector('button');
   btn.disabled = true;
   try {
-    await addSub(email, bookKey ? 'kniga:' + bookKey : 'glavnaya');
-    try { localStorage.setItem(SUBD, '1'); } catch { /* без памяти */ }
+    const res = await subscribe(normalize(current), email, bookKey ? 'kniga:' + bookKey : 'glavnaya');
+    try { localStorage.setItem(SUBD, res.confirm ? 'wait' : '1'); } catch { /* без памяти */ }
     goal('subscribe', { from: bookKey || 'glavnaya' });
     f.querySelector('.sub-row').hidden = true;
     f.querySelector('.consent').hidden = true;
-    say(giftHtml(normalize(current)));
+    say(res.confirm ? waitHtml(normalize(current)) : giftHtml(normalize(current)));
   } catch {
     say('Не получилось отправить — проверьте интернет и нажмите ещё раз.', true);
   } finally { btn.disabled = false; }
