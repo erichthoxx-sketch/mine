@@ -3121,3 +3121,11 @@ main .rev-actions button.dl .ic { opacity: 1; }
 :root :is(main, dialog) .idea-seg > button { background: transparent !important; border: 0 !important; font: 500 14px/1.2 var(--font-body); }
 :root :is(main, dialog) .idea-seg > button.on { background: var(--card) !important; box-shadow: none; }
 :root :is(main, dialog) .idea-pk.idea-pk { border: 0 !important; background-color: var(--soft); font-weight: 500; }
+/* цифры — шрифтом текста (Golos Text), ровно и легко читать (владелица выбрала вариант «А», 01.11.2026); заголовки остаются шрифтом сайта */
+:root { --font-num: var(--font-body); }
+:root :is(.stat .v, .tiles .v, .big, .day-sum, .tax-sum, .side-big, .kv b, .taxline .tl-v, .bh-tile b, .app-direct .ln-stats b) {
+  font-family: var(--font-num) !important; font-weight: 600 !important; letter-spacing: -.01em; font-variant-numeric: lining-nums tabular-nums;
+}
+:root :is(.stat .v, .tiles .v) { font-size: 24px; }
+:root .wday .wk-n { font-family: var(--font-num) !important; font-weight: 500 !important; font-size: 18px !important; }
+:root .wday.on .wk-n, :root .wday.today .wk-n { font-weight: 600 !important; }
