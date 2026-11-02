@@ -161,6 +161,13 @@ test('цели: главы к сроку считаются по отметка�
   // главу 13 поставила на таймер сегодня — засчитывается сегодня
   s = goalStatus({ ...g, perDay: 2 }, { ...book, pub: { ...pub, 'Глава 13': { 'Литнет': { date: '2026-10-09', planned: true, at: t } } } }, t);
   assert.equal(s.todayCh, 2); assert.equal(s.doneToday, true);
+  // глава с таймера вышла сегодня (на таймер ставила вчера) — сегодня не засчитывается
+  const pubT = { ...pub, 'Глава 12': { 'Литнет': { date: t, planned: true, at: '2026-10-06' } } };
+  s = goalStatus(g, { ...book, pub: pubT }, t);
+  assert.equal(s.todayCh, 0); assert.equal(s.doneToday, false);
+  // та же глава отмечена сегодня ещё на одной площадке или заново — всё равно день первой отметки
+  s = goalStatus(g, { ...book, platforms: ['Литнет', 'Литмаркет'], pub: { ...pub, 'Глава 12': { 'Литнет': { date: t, at: t }, 'Литмаркет': { date: '2026-10-07', planned: true, at: '2026-10-05' } } } }, t);
+  assert.equal(s.todayCh, 0);
   // ничего не отметила
   s = goalStatus(g, { ...book, pub: { 'Глава 1': { 'Литнет': { date: '2000-01-01', past: true } } } }, t);
   assert.equal(s.doneToday, false); assert.equal(s.needToday, 1);

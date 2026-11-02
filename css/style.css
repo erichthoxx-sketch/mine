@@ -3259,3 +3259,12 @@ input.own-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50
 .mail-pg { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; font-size: 13px; color: var(--text-2); }
 .mail-pg span { min-width: 96px; text-align: center; font-variant-numeric: tabular-nums; }
 :is(main) .mail-pg button.nav-arr[disabled] { opacity: .3; pointer-events: none; }
+/* выделение цветом в редакторе — снова тёмно-изумрудное, как в Google Документе (общий --link стал графитовым) */
+:root { --mark: #0b6b4f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --mark: #6fd0aa; } }
+:root[data-theme="dark"] { --mark: #6fd0aa; }
+.editor [data-c="#0b6b4f"] { color: var(--mark) !important; }
+:root button.ed-ic.ed-color span { color: var(--mark); border-bottom-color: var(--mark); }
+/* значки панели редактора — прозрачные, как раньше (не «таблетки»); при наведении — мягкая подложка */
+:root button.ed-ic { background: transparent !important; border-radius: 10px !important; padding: 0 9px !important; min-height: 34px; box-shadow: none !important; }
+:root button.ed-ic:hover { background: var(--soft, var(--surface-2)) !important; }

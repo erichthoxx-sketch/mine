@@ -7,7 +7,7 @@ import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
 import { writtenToday, writtenWeek } from './wcalc.js';
 import * as drive from './drive.js';
 import { ic } from '../../js/icons.js';
-import { booksView, bookPage, refreshAll } from './views/books.js';
+import { booksView, bookPage, refreshAll, refreshOne, refreshing } from './views/books.js';
 import { reviewsPage } from './views/reviews.js';
 import { ideasView } from './views/ideas.js';
 import { homeView } from './views/home.js';
@@ -221,6 +221,16 @@ store.init().then(() => {
   store.subscribe(tryRefresh); tryRefresh();
   // вернулись в приложение — подтягиваем знаки, если доступ к Диску ещё действует
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && drive.hasFreshToken()) refreshAll(app, { quiet: true }).catch(() => {}); });
+  // открыла книгу — она сама перечитывается из Документа (новые вкладки-главы, знаки). Доступ Google живёт час:
+  // истёк — берём новый прямо в это нажатие (окно Google без вопросов, доступ уже дан), иначе браузер окно не пустит
+  document.addEventListener('click', (e) => {
+    const to = e.target.closest?.('[data-to^="/book/"]')?.dataset.to;
+    const b = to && store.data.w_books.find((x) => x.id === to.slice(6));
+    if (!b?.fileId || !drive.isConnected() || refreshing.on) return;
+    (drive.hasFreshToken() ? Promise.resolve() : drive.ensureToken())
+      .then(() => refreshOne(app, store.data.w_books.find((x) => x.id === b.id) || b))
+      .then((ch) => { if (ch) render(); }).catch(() => {});
+  }, true);
 }).catch((e) => {
   console.error(e);
   document.getElementById('app').innerHTML = `<div class="auth"><h1>Не удалось запустить</h1><p>${esc(e.message || e)}</p></div>`;

@@ -468,12 +468,16 @@ export function goalStatus(g, book, today) {
     // «главы к сроку»: глава засчитывается, когда отмечена выложенной или поставлена на таймер (на основной площадке)
     const pf = pubPlatforms(book)[0], pm = pubMap(book);
     const planCh = Number(g.chapters || book.planChapters) || null;
-    const marks = Object.values(pm).map((x) => x[pf]).filter((v) => v && v.date);
-    const marked = marks.length;
-    // в какой день отмечена: at (когда нажала), иначе дата выкладки (не для таймера и не для «уже выложено раньше»)
+    const marked = Object.values(pm).filter((x) => x[pf]?.date).length;
+    // в какой день отмечена: at (когда нажала), иначе дата выкладки (не для таймера и не для «уже выложено раньше»);
+    // глава засчитывается один раз — в день самой первой отметки на любой площадке (выход с таймера и повторная отметка — не новая глава)
     const dayOf = (v) => v.at || (v.planned || v.past ? null : v.date);
     const byDay = {};
-    for (const v of marks) { const d = dayOf(v); if (d) byDay[d] = (byDay[d] || 0) + 1; }
+    for (const x of Object.values(pm)) {
+      if (!x[pf]?.date) continue;
+      const d = Object.values(x).filter((v) => v?.date).map(dayOf).filter(Boolean).sort()[0];
+      if (d) byDay[d] = (byDay[d] || 0) + 1;
+    }
     r.unit = 'ch';
     r.perDayCh = (Number(g.perDay) || 1) * Math.max(1, goalMult(g, today));
     r.todayCh = byDay[today] || 0;

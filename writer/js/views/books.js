@@ -508,7 +508,9 @@ acts['pub.mark'] = (d) => {
         if (mode === 'past') { next[ch][x] = { date: PAST, past: true }; await chapterUnset(b, ch, x); continue; }
         const dt = dateOf[x][ch];
         // at — когда отметила (для цели «по главе в день»)
-        next[ch][x] = mode === 'plan' ? { date: dt, planned: true, at: c.today } : { date: dt, at: c.today };
+        // уже отмеченная глава (вышла с таймера, отмечена на другой площадке, поправлена дата) — день первой отметки не меняется
+        const at0 = Object.values(pm[ch] || {}).map((v) => v?.at).filter(Boolean).sort()[0] || c.today;
+        next[ch][x] = mode === 'plan' ? { date: dt, planned: true, at: at0 } : { date: dt, at: at0 };
         await chapterEvent(c, b, ch, dt, x);
       }
       if (!Object.keys(next[ch]).length) delete next[ch];
