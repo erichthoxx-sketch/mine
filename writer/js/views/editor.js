@@ -395,8 +395,19 @@ const MARK = '#0b6b4f', CLEAR = '#010203';
 function colorSel() {
   const el = document.getElementById('ed'), sel = window.getSelection();
   if (!el || !sel.rangeCount || sel.isCollapsed || !el.contains(sel.anchorNode)) { toast('Выделите текст, который пометить цветом'); return false; }
-  const at = (n) => (n.nodeType === 3 ? n.parentElement : n)?.closest?.('[data-c]');
-  const on = [sel.anchorNode, sel.focusNode].every((n) => at(n)?.getAttribute('data-c') === MARK);
+  // помечено ли всё выделенное: смотрим каждый кусок текста внутри выделения, а не только его края
+  // (выделенный целиком абзац захватывает начало следующего — по краю казалось «не помечено», и цвет не снимался)
+  const rg = sel.getRangeAt(0), root = rg.commonAncestorContainer.nodeType === 3 ? rg.commonAncestorContainer.parentNode : rg.commonAncestorContainer;
+  const marked = (n) => n.parentElement?.closest?.('[data-c]')?.getAttribute('data-c') === MARK;
+  const parts = [];
+  if (rg.commonAncestorContainer.nodeType === 3) parts.push(rg.commonAncestorContainer);
+  else for (const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); w.nextNode();) {
+    const n = w.currentNode;
+    if (!rg.intersectsNode(n)) continue;
+    const a = n === rg.startContainer ? rg.startOffset : 0, b = n === rg.endContainer ? rg.endOffset : n.length;
+    if (n.textContent.slice(a, b).trim()) parts.push(n);
+  }
+  const on = parts.length > 0 && parts.every(marked);
   snap(el, true);
   document.execCommand('styleWithCSS', false, true);
   document.execCommand('foreColor', false, on ? CLEAR : MARK);
