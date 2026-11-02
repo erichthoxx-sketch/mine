@@ -13,11 +13,12 @@ import { niceMax, ticks } from '../../../js/charts.js';
 import { addDays } from '../../../js/calc.js';
 
 const app = () => window.__app;
-const M = { cfg: null, raw: undefined, info: null, err: '', busy: false, imgs: {}, old: null, q: '', status: 'ok', show: 20, range: 90, when: 'now', at: null, sure: false, pasting: false, pv: false };
+const M = { cfg: null, raw: undefined, info: null, err: '', busy: false, imgs: {}, old: null, q: '', status: 'ok', page: 0, range: 90, when: 'now', at: null, sure: false, pasting: false, pv: false };
 // раскрытые разделы не сворачиваются при перерисовке
 const OPEN = new Set();
 const det = (k) => ` data-det="${k}"${OPEN.has(k) ? ' open' : ''}`;
 if (typeof document !== 'undefined') document.addEventListener('toggle', (e) => { const k = e.target.dataset?.det; if (k) { if (e.target.open) OPEN.add(k); else OPEN.delete(k); } }, true);
+const PER = 10;
 const plain = (s) => String(s ?? '').replace(/\*/g, '').replace(/\s+/g, ' ').trim();
 const dm = (iso) => { const p = localParts(iso); return `${fmtDate(p.date)} в ${p.time}`; };
 
@@ -77,6 +78,8 @@ export function mailView(a) {
   const d = M.cfg.draft, hasDraft = !!(d.subject || d.title || d.text);
   const queue = M.info.queue || [], sent = (M.info.sent || []).slice().reverse();
   const list = filterSubs(L, { q: M.q, status: M.status });
+  // адреса — страницами по 10: поиск и статус сверху, стрелки внизу (длинную простыню владелица не хочет)
+  const pages = Math.max(1, Math.ceil(list.length / PER)), pg = Math.min(M.page, pages - 1);
   const html = `<section class="links-page mail-page">${head}
   <div class="tiles mail-tiles">
     <div><div class="k">Подписчицы</div><div class="v">${s.ok}</div><div class="s">${s.new30 ? `+${s.new30} за 30 дней` : 'новых за 30 дней нет'}</div></div>
@@ -105,11 +108,13 @@ export function mailView(a) {
     <div class="mail-find"><input type="search" placeholder="Поиск по почте или имени" value="${esc(M.q)}" data-ml-q aria-label="Поиск по адресам">
       <div class="seg">${[['ok', 'Подтвердили', s.ok], ['pending', 'Ждут', s.wait], ['unsub', 'Отписались', s.unsub], ['all', 'Все', L.length]].map(([k, t, n]) => `<button class="${M.status === k ? 'on' : ''}" data-act="mail.status" data-v="${k}">${t} <span class="muted">${n}</span></button>`).join('')}</div></div>
     ${old.length ? `<div class="item row between mail-old"><span><b>Адреса из прежней формы: ${old.length}</b><span class="sub">оставили почту с согласием до подключения сервиса</span></span><button class="small-btn" data-act="mail.import">Перенести</button></div>` : ''}
-    <div class="mail-list">${list.length ? list.slice(0, M.show).map((p) => `<div class="mail-row"><span class="mail-who"><b>${esc(p.email)}</b>${p.name ? `<span class="muted"> · ${esc(p.name)}</span>` : ''}</span>
+    <div class="mail-list">${list.length ? list.slice(pg * PER, pg * PER + PER).map((p) => `<div class="mail-row"><span class="mail-who"><b>${esc(p.email)}</b>${p.name ? `<span class="muted"> · ${esc(p.name)}</span>` : ''}</span>
       <span class="mail-meta">${esc(statusName(p.status))} ${p.okAt || p.at ? fmtDate(String(p.okAt || p.at).slice(0, 10)) : ''}${srcName(p.src) ? ` · ${esc(srcName(p.src))}` : ''}</span>
       <button class="icon-btn" data-act="mail.del" data-e="${esc(p.email)}" title="Удалить адрес" aria-label="Удалить адрес">${ic('trash')}</button></div>`).join('')
       : `<p class="small muted" style="margin:10px 0 0">${M.q ? 'Никого не нашла.' : M.status === 'ok' ? 'Подтверждённых подписчиц пока нет — первые появятся здесь сами.' : 'Пусто.'}</p>`}</div>
-    ${list.length > M.show ? `<button class="link" data-act="mail.more" style="margin-top:10px">Показать ещё · ${list.length - M.show}</button>` : ''}
+    ${pages > 1 ? `<div class="mail-pg"><button class="nav-arr" data-act="mail.page" data-v="-1"${pg ? '' : ' disabled'} aria-label="Назад">${ic('chevron')}</button>
+      <span>${pg * PER + 1}–${Math.min(list.length, pg * PER + PER)} из ${list.length}</span>
+      <button class="nav-arr next" data-act="mail.page" data-v="1"${pg < pages - 1 ? '' : ' disabled'} aria-label="Дальше">${ic('chevron')}</button></div>` : ''}
     <p class="small muted" style="margin:12px 0 0">Адреса хранятся в вашем сервисе писем в Яндекс Облаке (в России), копия — каждую ночь там же и в архиве Мастерской. Письма уходят с ${esc(M.info.from || 'вашего адреса')}, ответы — на ${esc(M.info.replyTo || 'вашу почту')}.</p>
   </div>
   <details class="mail-more"${det('arc')}><summary>Копия адресов в архив Мастерской</summary>
@@ -264,7 +269,7 @@ if (typeof document !== 'undefined') {
     const el = e.target;
     if (!M.cfg) return;
     if (el.dataset.ml) { M.cfg.draft[el.dataset.ml] = el.value; if (el.tagName === 'TEXTAREA') grow(el); saveCfg(); clearTimeout(pvT); pvT = setTimeout(preview, 200); }
-    else if (el.dataset.mlQ !== undefined) { M.q = el.value; M.show = 20; clearTimeout(pvT); pvT = setTimeout(() => { const p = el.selectionStart; app().rerender(); const n = document.querySelector('[data-ml-q]'); if (n) { n.focus(); n.setSelectionRange(p, p); } }, 250); }
+    else if (el.dataset.mlQ !== undefined) { M.q = el.value; M.page = 0; clearTimeout(pvT); pvT = setTimeout(() => { const p = el.selectionStart; app().rerender(); const n = document.querySelector('[data-ml-q]'); if (n) { n.focus(); n.setSelectionRange(p, p); } }, 250); }
     else if (el.dataset.ld && el.type !== 'checkbox') { M.raw.letter = { ...(M.raw.letter || {}), [el.dataset.ld]: el.value }; saveDesign(); clearTimeout(pvT); pvT = setTimeout(preview, 200); }
     else if (el.dataset.mlAt) { M.at = { ...M.at, [el.dataset.mlAt]: el.value }; }
   });
@@ -296,8 +301,8 @@ const draftFields = () => { const d = M.cfg.draft; return Object.fromEntries(['b
 // ---------- действия ----------
 acts['mail.reload'] = () => { M.cfg = null; M.info = null; load(true); return false; };
 acts['mail.range'] = (d) => { M.range = Number(d.v); };
-acts['mail.status'] = (d) => { M.status = d.v; M.show = 20; };
-acts['mail.more'] = () => { M.show += 50; };
+acts['mail.status'] = (d) => { M.status = d.v; M.page = 0; };
+acts['mail.page'] = (d) => { M.page = Math.max(0, M.page + Number(d.v)); };
 acts['mail.pv'] = (d) => { M.pv = d.v === '1'; };
 acts['mail.dark'] = (d) => { M.dark = d.v === '1'; preview(); document.querySelectorAll('[data-act="mail.dark"]').forEach((b) => b.classList.toggle('on', b.dataset.v === d.v)); return false; };
 acts['mail.when'] = (d) => { M.when = d.v; M.sure = false; };

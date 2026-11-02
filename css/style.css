@@ -3255,3 +3255,7 @@ input.own-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50
   :root .top .row { gap: 8px; }
   :root .top + main, :root .top ~ main { padding-top: 10px; }
 }
+/* адреса в Почте — страницами: «‹ 1–10 из 136 ›» */
+.mail-pg { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; font-size: 13px; color: var(--text-2); }
+.mail-pg span { min-width: 96px; text-align: center; font-variant-numeric: tabular-nums; }
+:is(main) .mail-pg button.nav-arr[disabled] { opacity: .3; pointer-events: none; }
