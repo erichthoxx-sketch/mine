@@ -10,7 +10,8 @@
 // В тексте: *курсив*, **жирный**, [слова](https://ссылка); пустая строка — новый абзац.
 
 export const LETTER_DEFAULTS = {
-  bear: true, // медведь в кружке сверху (site/mail-bear.png, прозрачный — хорош и в тёмной теме)
+  bear: true, // медведь в кружке сверху (site/mail-bear.png, прозрачный — хорош и в тёмной теме) — владелица: не трогать
+  autograph: true, // в конце письма — автограф: из медведя тянется нить в «Лана Фрейтаг» (site/autograph.png, для тёмной почты — autograph-light.png)
   sign: '', // подпись в конце каждого письма (курсивом), например имя
   footer: 'Вы подписались на lanafreitag.ru — я пишу только когда выходит новый роман.',
   links: true, // внизу — ссылки на сайт и Telegram
@@ -57,7 +58,7 @@ export function letterHtml(o = {}) {
   // тёмная тема почты (iPhone, Apple Mail, Outlook): бумага → графит, текст → светлый, кнопка — светлая
   const dark = `.bg{background:#141517!important}.ink{color:#eeeeec!important}.soft{color:#a3a7ac!important}.tx{color:#d9d9d6!important}
 .faint{color:#7d8186!important}.ln{border-color:rgba(238,238,236,.16)!important}.lnb{background:rgba(238,238,236,.16)!important}
-.dash{background:#eeeeec!important}.btn{background:#eeeeec!important;color:#141517!important}.tint{background:#1d1e21!important}`;
+.dash{background:#eeeeec!important}.sig-l{display:none!important}.sig-d{display:block!important}.btn{background:#eeeeec!important;color:#141517!important}.tint{background:#1d1e21!important}`;
 
   const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${esc(plain(title))}</title>
@@ -81,7 +82,8 @@ ${series ? row(`<span class="soft" style="font-family:${F_ACC};font-style:italic
 ${paras(text).map((p, i) => row(`<div class="tx" style="font-family:${F_TEXT};font-size:16px;line-height:1.7;color:#2a2c30">${rich(p, ink)}</div>`, `padding-top:${i ? 14 : 26}px`)).join('')}
 ${quote ? row(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="ink ln" style="border-top:1px solid ${line};border-bottom:1px solid ${line};padding:24px 8px;text-align:center;font-family:${F_ACC};font-style:italic;font-size:22px;line-height:1.45;color:${ink}">${rich(paras(quote).join('\n'), ink)}</td></tr></table>`, 'padding-top:30px') : ''}
 ${btn ? row(`<a class="btn" href="${esc(url)}" style="display:inline-block;background:${ink};color:${paper};text-decoration:none;font-family:${F_TEXT};font-size:12px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;padding:17px 34px">${esc(btn)}</a>`, 'text-align:center;padding-top:32px') : ''}
-${sign ? row(`<span class="ink" style="font-family:${F_ACC};font-style:italic;font-size:24px;color:${ink}">${esc(sign)}</span>`, 'padding-top:34px') : ''}
+${D.autograph ? row(`<img class="sig-l" src="${esc(site)}autograph.png?1" width="300" alt="${esc(sign || author)}" style="display:block;width:300px;max-width:100%;height:auto;border:0"><img class="sig-d" src="${esc(site)}autograph-light.png?1" width="300" alt="" style="display:none;width:300px;max-width:100%;height:auto;border:0">`, 'padding-top:30px')
+  : sign ? row(`<span class="ink" style="font-family:${F_ACC};font-style:italic;font-size:24px;color:${ink}">${esc(sign)}</span>`, 'padding-top:34px') : ''}
 ${row(`<div class="lnb" style="height:1px;background:${line};line-height:1px;font-size:1px;margin-top:40px">&nbsp;</div>`)}
 ${D.links ? row(`<a class="soft" href="${esc(site)}" style="color:${soft};text-decoration:none">${esc(host)}</a>${tg ? `&nbsp;&nbsp;·&nbsp;&nbsp;<a class="soft" href="${esc(tg)}" style="color:${soft};text-decoration:none">Telegram</a>` : ''}`, `text-align:center;padding-top:22px;font-family:${F_TEXT};font-size:11px;letter-spacing:.18em;text-transform:uppercase`) : ''}
 ${row(`<span class="faint">${D.footer ? `${esc(D.footer)}<br>` : ''}</span><a class="faint" href="{unsub}" style="color:${faint}">Отписаться</a>`, `text-align:center;padding-top:14px;font-family:${F_TEXT};font-size:12px;line-height:1.6;color:${faint}`)}

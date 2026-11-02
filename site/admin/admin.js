@@ -6,7 +6,7 @@ import { RULES } from './rules.js';
 import { PROPOSALS } from '../proposals.js';
 
 const app = document.getElementById('app');
-const S = { store: null, user: null, phase: 'boot', content: null, imgs: {}, tab: 'blocks', open: null, adding: false, pasting: false, pv: false, save: 'ok', pvBook: '', subs: null, subsErr: '', raf: null, drawn: null, mail: null };
+const S = { store: null, user: null, phase: 'boot', content: null, imgs: {}, tab: 'blocks', open: null, adding: false, pasting: false, pv: false, save: 'ok', pvBook: '', subs: null, subsErr: '', raf: null, drawn: null };
 
 const ICON = {
   up: '<path d="M6 15l6-6 6 6"/>',
@@ -70,7 +70,7 @@ async function loadAll() {
 
 async function loadSubs() {
   try { S.subs = await S.store.listSubs(); S.subsErr = ''; } catch (e) { S.subs = []; S.subsErr = /permission/i.test(e?.code || e?.message || '') ? 'rules' : 'net'; }
-  if (S.tab === 'sub' || S.tab === 'mail') renderEditor();
+  if (S.tab === 'sub') renderEditor();
 }
 
 // Сколько промокодов в запасе — числом в содержимое сайта (сами коды видит только владелица): без них подарок читательницам не показывается
@@ -154,16 +154,15 @@ function propTab() {
 }
 
 function renderEditor() {
-  const tabs = [['blocks', 'Блоки'], ['books', 'Книги'], ['sub', 'Подписка'], ['mail', 'Письма'], ['cab', 'Кабинет'], ['raf', 'Подарок'], ['look', 'Вид'], ['more', 'Ещё']].filter(([k]) => k !== 'raf' || S.content.cabOn === true || S.tab === 'raf'); // подарок — только с кабинетом
+  const tabs = [['blocks', 'Блоки'], ['books', 'Книги'], ['sub', 'Подписка'], ['cab', 'Кабинет'], ['raf', 'Подарок'], ['look', 'Вид'], ['more', 'Ещё']].filter(([k]) => k !== 'raf' || S.content.cabOn === true || S.tab === 'raf'); // подарок — только с кабинетом
   document.getElementById('tabs').innerHTML = tabs.map(([k, n]) => `<button role="tab" aria-selected="${S.tab === k}" data-act="tab" data-t="${k}">${n}</button>`).join('');
   document.getElementById('mtabs').innerHTML = `<button aria-selected="${!S.pv}" data-act="pv" data-v="0">Правка</button><button aria-selected="${S.pv}" data-act="pv" data-v="1">Сайт</button>`;
   document.querySelector('.adm').classList.toggle('show-pv', S.pv);
   document.querySelector('.ed-top .logo').textContent = S.content.name || 'Сайт';
   const body = document.getElementById('body');
   const nProp = S.tab === 'prop' ? 0 : pendingProps().length;
-  body.innerHTML = (nProp ? `<button class="prop-bar" data-act="tab" data-t="prop">Новые тексты для сайта: ${nProp} — посмотреть</button>` : '') + ({ prop: propTab, blocks: blocksTab, books: booksTab, sub: subTab, look: lookTab, cab: cabTab, raf: rafTab, mail: mailTab, more: moreTab }[S.tab] || blocksTab)();
+  body.innerHTML = (nProp ? `<button class="prop-bar" data-act="tab" data-t="prop">Новые тексты для сайта: ${nProp} — посмотреть</button>` : '') + ({ prop: propTab, blocks: blocksTab, books: booksTab, sub: subTab, look: lookTab, cab: cabTab, raf: rafTab, more: moreTab }[S.tab] || blocksTab)();
   body.querySelectorAll('textarea').forEach(grow);
-  if (S.tab === 'mail' && !S.mail) loadMail();
   applyColors();
   status();
 }
@@ -390,56 +389,8 @@ function subTab() {
     ${field('site', c, { k: 'privacy', label: 'Текст страницы', type: 'area', hint: 'Отдельная страница по ссылке внизу сайта. Проверьте его под себя' })}`;
 }
 
-// ---------- Письма: свой сервис (Yandex Cloud). Письма, подписчицы, график, отложенная отправка — в Мастерской → Сайт → Почта;
-// здесь — подключение (адрес сервиса нужен сайту для подписки) и короткая сводка ----------
+// Письма и подписчицы сервиса писем — в Мастерской → Сайт → Почта (там же подключение)
 const MAIL_APP = 'https://erichthoxx-sketch.github.io/mine/pisatel/#/site/mail';
-async function loadMail() {
-  S.mail = { cfg: {}, info: null };
-  try { S.mail.cfg = await S.store.getMail(); } catch { /* нет связи — поля пустые */ }
-  if (S.tab === 'mail') renderEditor();
-  mailInfo();
-}
-const mailUrl = () => String(S.content.mailUrl || '').trim();
-async function mailCall(body) {
-  const u = mailUrl();
-  const r = await fetch(`${u}${u.includes('?') ? '&' : '?'}a=admin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: S.mail.cfg.key || '', ...body }) });
-  const j = await r.json().catch(() => ({}));
-  if (r.status === 403) throw Object.assign(new Error('key'), { why: 'key' });
-  if (!r.ok) throw Object.assign(new Error(j.error || 'mail ' + r.status), { why: 'net' });
-  return j;
-}
-async function mailInfo() {
-  if (!mailUrl() || !S.mail.cfg.key) return;
-  S.mail.info = 'busy'; if (S.tab === 'mail') renderEditor();
-  try { S.mail.info = await mailCall({ op: 'list' }); } catch (e) { S.mail.info = { err: e.why || 'net' }; }
-  if (S.tab === 'mail') renderEditor();
-}
-let mailT = null;
-const saveMail = () => { clearTimeout(mailT); mailT = setTimeout(() => S.store.setMail(S.mail.cfg).catch(() => {}), 700); };
-function mailTab() {
-  if (!S.mail) return '<p class="note">Загружаю…</p>';
-  const c = S.content, cfg = S.mail.cfg, info = S.mail.info;
-  const setup = `<div class="list" style="gap:16px">
-      ${field('site', c, { k: 'mailUrl', label: 'Адрес сервиса писем', type: 'url', hint: 'Из Yandex Cloud: функция → «Обзор» → ссылка для вызова' })}
-      <label class="f"><span>Пароль сервиса</span><input type="password" autocomplete="off" data-mcfg="key" value="${esc(cfg.key || '')}"><small>Тот, что вписан в функцию как ADMIN_KEY. Хранится только в ваших данных, не на сайте</small></label>
-    </div>
-    <div class="links" style="margin-top:12px"><button class="btn line" data-act="mailCheck">Проверить</button></div>
-    ${info === 'busy' ? '<p class="note">Проверяю…</p>' : info?.err === 'key' ? '<p class="note bad">Пароль не подходит — сверьте с ADMIN_KEY в функции.</p>' : info?.err ? '<p class="note bad">Сервис не отвечает — проверьте адрес и что функция публичная.</p>' : ''}`;
-  if (!(mailUrl() && cfg.key && info && info.list)) {
-    return `<p class="note">Письма читательницам — с вашего адреса на lanafreitag.ru, через ваш сервис в Yandex Cloud. Подписка на сайте — с подтверждением по письму, в каждом письме — «Отписаться».</p>
-      <h3 class="sub">Подключение</h3>${setup}`;
-  }
-  const L = info.list, ok = L.filter((x) => x.status === 'ok').length, wait = L.filter((x) => x.status === 'pending').length;
-  const known = new Set(L.map((x) => x.email));
-  const old = (S.subs || []).filter((x) => x.email && !known.has(String(x.email).trim().toLowerCase()));
-  return `<p class="note">Сервис писем подключён: подписка на сайте идёт через него. Письма (сейчас или в назначенный день и час), подписчицы, рост и адреса — в Мастерской → Сайт → Почта.</p>
-    <div class="links"><a class="btn" href="${MAIL_APP}" target="_blank" rel="noopener">Открыть Почту в Мастерской</a></div>
-    <h3 class="sub">Подписчицы · ${ok}</h3>
-    <p class="note">${wait ? `Ждут подтверждения: ${wait}. ` : ''}${(info.queue || []).length ? `Отложенных писем: ${info.queue.length}.` : ''}</p>
-    ${old.length ? `<p class="note">Адреса из прежней формы подписки (с согласием): ${old.length}.</p><div class="links"><button class="btn line" data-act="mailImport">Перенести в рассылку · ${old.length}</button></div>` : ''}
-    <details class="m-list"><summary>Подключение</summary>${setup}</details>`;
-}
-app.addEventListener('input', (e) => { const el = e.target; if (el.dataset.mcfg && S.mail) { S.mail.cfg[el.dataset.mcfg] = el.value.trim(); saveMail(); } });
 
 // Ещё: статистика, нейросеть, копия сайта, вход
 function moreTab() {
@@ -666,12 +617,6 @@ const acts = {
   delSub: async (d) => {
     const x = S.subs.find((y) => y.id === d.id);
     try { await S.store.delSub(d.id); S.subs = S.subs.filter((y) => y !== x); toast(`Адрес ${x.email} удалён`); } catch { toast('Не получилось удалить — попробуйте ещё раз'); }
-  },
-  mailCheck: async () => { clearTimeout(mailT); await S.store.setMail(S.mail.cfg).catch(() => {}); if (S.save !== 'ok') await saveNow(); await mailInfo(); if (S.mail.info?.list) toast('Сервис писем подключён'); return false; },
-  mailImport: async () => {
-    const known = new Set(S.mail.info.list.map((x) => x.email));
-    const list = (S.subs || []).filter((x) => x.email && !known.has(String(x.email).trim().toLowerCase())).map((x) => ({ email: x.email, name: x.name || '', at: x.at || '' }));
-    try { const r = await mailCall({ op: 'import', list }); toast(`Перенесено адресов: ${r.added}`); await mailInfo(); } catch { toast('Не получилось — попробуйте ещё раз'); }
   },
   copyAI: async () => { await copy(aiText()); return false; },
   pasting: () => { S.pasting = !S.pasting; },
