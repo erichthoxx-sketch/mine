@@ -65,10 +65,14 @@ export function sendSlots(wbooks, site, today, plannedPubs, { focus = '' } = {})
   const out = [];
   for (const b of wbooks || []) {
     if (b.archived) continue;
+    // письма — только о новых романах: подсказываем лишь начало книги (первая глава), пока книга ещё не начата;
+    // выход очередной главы уже идущей книги — не повод писать подписчицам
+    const started = Object.values(b.pub || {}).some((x) => Object.values(x || {}).some((y) => y?.date && y.date <= today)) || Object.keys(b.published || {}).length > 0;
+    if (started) continue;
     const p = plannedPubs(b, today).filter((x) => x.date >= today)[0];
-    if (p) out.push({ date: p.date, label: `Выход «${p.ch}» · ${b.title}`, book: b.title });
-    const pubbed = Object.values(b.pub || {}).some((x) => Object.values(x || {}).some((y) => y?.date && !y.planned && y.date <= today));
-    if (b.publishStart && b.publishStart >= today && !pubbed && (!p || p.date !== b.publishStart)) out.push({ date: b.publishStart, label: `Первая глава · ${b.title}`, book: b.title });
+    const first = p && /^\s*(пролог|глава\s*0*1(\D|$))/i.test(p.ch) ? p : null;
+    const date = first?.date || (b.publishStart >= today ? b.publishStart : '');
+    if (date && (first || !p)) out.push({ date, label: `Первая глава · ${b.title}`, book: b.title });
   }
   for (const s of site?.books || []) if (s.startDate && s.startDate >= today) out.push({ date: s.startDate, label: `Старт подписки · ${s.title}`, book: s.title });
   const seen = new Set(), mine = (x) => (focus && sameBook(x.book, focus) ? 0 : 1);
