@@ -51,6 +51,7 @@ async function recolorFavicon(k) {
   if (!link) return;
   const orig = link.dataset.orig || (link.dataset.orig = link.getAttribute('href'));
   const p = paletteOf(k).light;
+  if (!/\.svg(\?|$)/.test(orig)) return; // значок-картинка (фото медведя в Мастерской) — не перекрашиваем, ярлык телефона тоже остаётся свой
   try {
     const svg = await getSvg(orig);
     if (k !== 'rose') link.setAttribute('href', 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(/#fbdbe6/gi, p.from).replace(/#f3bcd0/gi, p.to)));
