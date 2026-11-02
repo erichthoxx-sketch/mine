@@ -42,9 +42,18 @@ async function load(force) {
   app().rerender();
 }
 async function refresh(quiet) {
+  M.at0 = Date.now();
   try { M.info = await mailCall(mailUrl(), M.cfg.key, { op: 'list' }); M.err = ''; syncPlanner(); } catch (e) { M.info = null; M.err = e.message; }
   if (!quiet) app().rerender();
 }
+// свежие данные сами: при открытии Почты, если прошло больше 2 минут, и когда время отложенного письма прошло
+// (сервис отправляет его по таймеру — список «уйдёт …» сам сменится на «отправлено»)
+function fresh() {
+  if (!M.info || M.fetching) return;
+  const age = Date.now() - (M.at0 || 0), due = (M.info.queue || []).some((q) => Date.parse(q.at) <= Date.now());
+  if (age > 120e3 || (due && age > 60e3)) { M.fetching = true; refresh().finally(() => { M.fetching = false; }); }
+}
+if (typeof window !== 'undefined') setInterval(() => { if (window.__app && /^\/site\/mail/.test(window.__app.ui?.route || '')) fresh(); }, 60e3);
 let saveT = null;
 const saveCfg = () => { clearTimeout(saveT); saveT = setTimeout(async () => { try { const w = await who(); await saveMailCfg(w.uid, w.token, M.cfg); } catch { /* повторим при следующей правке */ } }, 700); };
 // отложенные письма — в Планер (без интернета Планер читает последнюю копию из настроек)
@@ -67,7 +76,7 @@ export function mailCount() { load(); return M.info?.list ? subsStats(M.info.lis
 // ---------- экран «Почта» ----------
 export function mailView(a) {
   const c = a.ctx();
-  load();
+  load(); fresh();
   const head = siteTabs('mail');
   if (!M.cfg || M.raw === undefined) return { html: `<section class="links-page">${head}<p class="muted" style="margin-top:16px">Загружаю почту…</p></section>` };
   if (!ready() || (!M.info && M.err)) return { html: `<section class="links-page">${head}${connectCard()}</section>` };
@@ -95,7 +104,7 @@ export function mailView(a) {
 
   <div class="psec-h"><h2>Письма</h2><button class="primary" data-act="mail.new">${hasDraft ? 'Продолжить письмо' : 'Новое письмо'}</button></div>
   <div class="card list">
-    ${queue.length ? queue.map((q) => `<div class="item row between"><span><b>${esc(q.subject || 'Без темы')}</b><span class="sub">${ic('timer')} уйдёт ${dm(q.at)} · ${s.ok} ${plural(s.ok, ['читательнице', 'читательницам', 'читательницам'])}</span></span>
+    ${queue.length ? queue.map((q) => `<div class="item row between"><span><b>${esc(q.subject || 'Без темы')}</b><span class="sub">${ic('timer')} ${Date.parse(q.at) <= Date.now() ? `отправляется (${dm(q.at)})` : `уйдёт ${dm(q.at)}`} · ${s.ok} ${plural(s.ok, ['читательнице', 'читательницам', 'читательницам'])}</span></span>
       <span class="row" style="gap:6px;flex-shrink:0"><button class="link" data-act="mail.edit" data-id="${esc(q.id)}">Изменить</button><button class="icon-btn" data-act="mail.unq" data-id="${esc(q.id)}" title="Отменить отправку" aria-label="Отменить отправку">${ic('trash')}</button></span></div>`).join('') : ''}
     ${hasDraft && !d.id ? `<div class="item row between"><span><b>${esc(d.subject || plain(d.title) || 'Черновик')}</b><span class="sub">черновик — ещё не отправлен</span></span><button class="link" data-act="mail.new">Открыть</button></div>` : ''}
     ${sent.length ? sent.slice(0, 8).map((x) => `<div class="item row between"><span><b>${esc(x.subject || 'Без темы')}</b><span class="sub">${ic('check')} ${dm(x.at)} · ${x.sent} ${plural(x.sent, ['письмо', 'письма', 'писем'])}${x.failed ? ` · не дошло: ${x.failed}` : ''}</span></span>

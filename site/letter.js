@@ -10,7 +10,7 @@
 
 export const LETTER_DEFAULTS = {
   bear: true, // медведь в кружке сверху (site/mail-bear.png, прозрачный — хорош и в тёмной теме) — владелица: не трогать
-  autograph: true, // в конце письма — автограф: из медведя тянется нить в «Лана Фрейтаг» (site/autograph.png, для тёмной почты — autograph-light.png)
+  autograph: false, // автограф в конце письма (site/autograph.png, для тёмной почты — autograph-light.png); пока выключен — владелица дорабатывает вид
   sign: '', // подпись в конце каждого письма (курсивом), например имя
   footer: 'Вы подписались на lanafreitag.ru — я пишу только когда выходит новый роман.',
   links: true, // внизу — ссылки на сайт и Telegram
