@@ -1,13 +1,13 @@
 import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
-import { num, fmtDate, pct } from '../../../js/format.js';
+import { num, fmtDate, pct, plural } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
 import { reminders } from './home.js';
 import { widgetReminder } from './widgets.js';
 import { linkTodos, addLinkedTask } from './links.js';
 import { domainInfo, raffleTodo } from '../sitecheck.js';
 import { siteNow } from './mysite.js';
-import { mailQueue } from './mail.js';
+import { mailQueue, mailSent } from './mail.js';
 import { localParts } from '../../../js/mailcalc.js';
 import { SITE_ADMIN } from '../../../js/sitepub.js';
 import { mkSummary } from './marketing.js';
@@ -105,7 +105,14 @@ export function planItems(c, from, to) {
   const rf = typeof window !== 'undefined' ? raffleTodo(siteNow(), t) : null;
   if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Пятничный подарок: выбрать, кому', 'Админка сайта → Подарок', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
   // Почта: отложенные письма подписчицам (отправит сам сервис писем; здесь — чтобы видеть в своём дне)
-  for (const q of mailQueue(c.settings)) { const p = localParts(q.at); if (p.date >= t) add(p.date, 'mk', `Письмо подписчицам уйдёт в ${p.time}`, `«${esc(q.subject || 'Без темы')}» · отправится само`, { to: '/site/mail', id: 'mail-' + q.id }); }
+  // отложенные письма: впереди — «уйдёт», время прошло — сервис отправляет (Мастерская сама сверится), ушло — галочкой
+  const sentIds = new Set(mailSent(c.settings).map((x) => x.id));
+  for (const q of mailQueue(c.settings)) {
+    if (sentIds.has(q.id)) continue;
+    const p = localParts(q.at), due = Date.parse(q.at) <= Date.now();
+    if (p.date >= t || due) add(due ? t : p.date, 'mk', due ? `Письмо подписчицам отправляется` : `Письмо подписчицам уйдёт в ${p.time}`, `«${esc(q.subject || 'Без темы')}» · ${due ? `по плану в ${p.time}` : 'отправится само'}`, { to: '/site/mail', id: 'mail-' + q.id });
+  }
+  for (const x of mailSent(c.settings)) { const p = localParts(x.at); add(p.date, 'done', `✓ Письмо подписчицам отправлено в ${p.time}`, `«${esc(x.subject || 'Без темы')}» · ${x.n} ${plural(x.n, ['письмо', 'письма', 'писем'])}`, { to: '/site/mail' }); }
   // Связи: напоминания по контактам (просроченные — на сегодня)
   for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', esc(x.text), esc(x.name) + ((mf) => (mf ? ` · перенесено с ${mf.slice(8, 10)}.${mf.slice(5, 7)}` : ''))(movedFrom(c.settings.todoist?.moved, x.k, x.date)) + (x.date < t ? ' · просрочено' : ''), { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k, section: x.section || 'Связи', ...(x.bookId ? { bookId: x.bookId } : {}), ...(x.detail ? { description: x.detail } : {}) });
   // свои задачи из Todoist (проекты «Книги» и «Мастерская»)

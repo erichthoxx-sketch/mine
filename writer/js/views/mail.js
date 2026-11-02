@@ -59,10 +59,23 @@ const saveCfg = () => { clearTimeout(saveT); saveT = setTimeout(async () => { tr
 // отложенные письма — в Планер (без интернета Планер читает последнюю копию из настроек)
 function syncPlanner() {
   const s = app().ctx().settings, q = (M.info?.queue || []).map((x) => ({ id: x.id, at: x.at, subject: x.subject }));
+  // отправленные за 2 недели — в Планер галочкой «отправлено»
+  const since = Date.now() - 14 * 864e5;
+  const sent = (M.info?.sent || []).filter((x) => Date.parse(x.at) >= since).slice(-10).map((x) => ({ id: x.id || x.at, at: x.at, subject: x.subject, n: x.sent || 0 }));
   // адрес сервиса — ещё и для ночного архива (программа архива берёт его в свой текст)
-  if (JSON.stringify(s.site?.mailQueue || []) !== JSON.stringify(q) || (s.site?.mailUrl || '') !== mailUrl()) app().store.saveSettings({ site: { ...(s.site || {}), mailQueue: q, mailUrl: mailUrl() } });
+  if (JSON.stringify(s.site?.mailQueue || []) !== JSON.stringify(q) || JSON.stringify(s.site?.mailSent || []) !== JSON.stringify(sent) || (s.site?.mailUrl || '') !== mailUrl()) app().store.saveSettings({ site: { ...(s.site || {}), mailQueue: q, mailSent: sent, mailUrl: mailUrl() } });
 }
 export function mailQueue(settings) { return settings?.site?.mailQueue || []; }
+export function mailSent(settings) { return settings?.site?.mailSent || []; }
+// Мастерская открыта, а время отложенного письма прошло — сама спрашивает сервис, ушло ли оно (Почту открывать не нужно)
+let lastCheck = 0;
+export function checkMailQueue() {
+  if (typeof window === 'undefined' || !window.__app || M.fetching || M.busy) return;
+  const q = mailQueue(app().ctx().settings);
+  if (!q.some((x) => Date.parse(x.at) <= Date.now()) || Date.now() - lastCheck < 120e3) return;
+  lastCheck = Date.now(); M.fetching = true;
+  (M.cfg ? (ready() ? refresh(true) : Promise.resolve()) : load(true)).catch(() => {}).finally(() => { M.fetching = false; });
+}
 
 // ---------- вкладки раздела «Сайт» ----------
 export function siteTabs(sub) {

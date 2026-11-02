@@ -21,7 +21,7 @@ import { linksView, linkPage } from './views/links.js';
 import { blogEditor } from './views/blog.js';
 import { socialView } from './views/social.js';
 import { mySiteView } from './views/mysite.js';
-import { mailView, letterView } from './views/mail.js';
+import { mailView, letterView, checkMailQueue } from './views/mail.js';
 import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
 import { cleanText, cleanedMsg } from '../../js/cleantext.js';
@@ -207,6 +207,8 @@ document.addEventListener('paste', (e) => {
   toast(cleanedMsg(x.n));
 });
 setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(app, 1000, { pull: true }); }, 3 * 60000); // и раз в 3 минуты, пока приложение открыто
+// время отложенного письма прошло — сверяемся с сервисом писем: ушло — в Планере галочкой «отправлено»
+setInterval(() => { if (document.visibilityState === 'visible') checkMailQueue(); }, 60e3);
 drive.preload().catch(() => {});
 let autoRefreshed = false;
 store.init().then(() => {
@@ -219,6 +221,7 @@ store.init().then(() => {
     refreshAll(app, { quiet: true }).catch(() => {});
   };
   store.subscribe(tryRefresh); tryRefresh();
+  setTimeout(checkMailQueue, 3000);
   // вернулись в приложение — подтягиваем знаки, если доступ к Диску ещё действует
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && drive.hasFreshToken()) refreshAll(app, { quiet: true }).catch(() => {}); });
   // открыла книгу — она сама перечитывается из Документа (новые вкладки-главы, знаки). Доступ Google живёт час:
