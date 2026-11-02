@@ -144,12 +144,21 @@ class FirebaseStore extends Base {
     const request = Promise.all(names.map(name =>
       getDocsFromServer(collection(this.db, 'users', uid, name))
     ));
+    // Живая подписка уже получила продажи и книги с сервера и держит их свежими — тогда свежую копию ждём недолго:
+    // при нескольких открытых вкладках (Доходы, Мастерская, Директ) связь с сервером держит одна из них, и если она
+    // в фоне, Chrome её притормаживает — прямой запрос висел, выгрузка не загружалась
+    const synced = () => navigator.onLine && this.sync !== 'error' && names.every((n) => this.loaded?.[n]) && !this.pending?.sales && !this.pending?.books;
     let timer;
     const timeout = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error('Не удалось получить данные с Firebase. Проверь интернет и попробуй снова.')), 15000);
+      timer = setTimeout(() => reject(new Error('Не удалось получить данные с Firebase. Проверь интернет и попробуй снова.')), synced() ? 8000 : 30000);
     });
     let snapshots;
     try { snapshots = await Promise.race([request, timeout]); }
+    catch (e) {
+      request.catch(() => {});
+      if (synced() && uid === this.user?.uid) return; // данные подписки сверены с сервером — их и сопоставляем
+      throw e;
+    }
     finally { clearTimeout(timer); }
     if (uid !== this.user?.uid) throw new Error('Аккаунт изменился во время загрузки');
     // Не затираем локальные неподтвержденные изменения серверной копией.
