@@ -102,7 +102,7 @@ test('сервис писем: отложенное письмо уходит п
   assert.deepEqual(L.queue.map((q) => q.id), ['p1', 'p2']);
   assert.equal(L.queue[0].html, undefined); // в списке — без вёрстки
   const tick = () => handler({ messages: [{ event_metadata: { event_type: 'yandex.cloud.events.serverless.triggers.TimerMessage' } }] }, ctx);
-  await tick(); await tick();
+  await tick(); await handler({ httpMethod: 'GET', queryStringParameters: { a: 'tick' }, headers: {}, body: '' }, ctx); // таймер Яндекса или GitHub — второй раз не отправит
   const mine = sent.filter((m) => m.Content.Simple.Subject.Data === 'Вышел роман');
   assert.equal(mine.length, 2); // обеим — и только один раз
   assert.equal(sent.some((m) => /Отменю|Завтра/.test(m.Content.Simple.Subject.Data)), false);

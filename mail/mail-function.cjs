@@ -120,6 +120,8 @@ module.exports.handler = async function (event, context) {
       await send(email, m.subject, m.html, m.text);
       return json({ ok: true }, 200, C);
     }
+    // «проверить очередь» — без пароля: отправляет только то, что владелица уже запланировала (будит таймер GitHub раз в 10 минут)
+    if (q.a === 'tick') return json(await runQueue(), 200, C);
     // ссылки из писем
     if (q.a === 'confirm' || q.a === 'unsub') {
       const d = await loadList(), p = d.list.find((x) => x.token === q.t);

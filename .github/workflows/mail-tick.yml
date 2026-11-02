@@ -1,0 +1,15 @@
+name: Почта — отложенные письма
+# Раз в 10 минут будит сервис писем (Yandex Cloud): он отправляет письма, время которых пришло, и раз в день делает копию адресов.
+# Адрес сервиса не секретный (он же стоит на сайте для подписки); пароля здесь нет — «tick» умеет только отправить уже запланированное.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tick:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - run: curl -fsS --max-time 300 "https://functions.yandexcloud.net/d4e6ekc9jclard2cejcu?a=tick" || echo "сервис не ответил — попробую через 10 минут"
