@@ -24,7 +24,7 @@ const store = createStore({ colls: [...COLLECTIONS, 'd_snap', 'sales_history', '
 initAccent(store);
 keepNavDown(); // iPhone: нижнее меню не «повисает» посреди экрана
 const ui = { route: '/', range: 90, table: 'weeks', day: null, month: null };
-keepPlace(ui, ['range', 'table', 'day', 'month', 'adMonth', 'booksMonth']);
+keepPlace(ui, ['range', 'table', 'day', 'month', 'monthAt', 'adMonth', 'booksMonth']);
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* нет доступа к памяти браузера */ }
 

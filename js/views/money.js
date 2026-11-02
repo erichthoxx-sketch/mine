@@ -17,7 +17,8 @@ export function money(a) {
   if (!c.hasData) return { html: '<div class="card"><p>Сначала загрузите выгрузку продаж на вкладке «Данные».</p></div>' };
   const cur = monthKey(c.dataEnd); // последний месяц, по которому есть данные
   const keys = monthsBetween(monthKey(c.firstDate), monthKey(c.today)).reverse();
-  const sel = ui.month && keys.includes(ui.month) ? ui.month : cur;
+  // выбранный вручную месяц помним только до конца календарного месяца: с 1-го числа снова открывается текущий
+  const sel = ui.month && keys.includes(ui.month) && ui.monthAt === monthKey(c.today) ? ui.month : cur;
   const f = fin(c, sel), dsc = c.discounts[sel], cash = cashOf(c, sel);
   const s = c.settings;
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) });
@@ -75,7 +76,7 @@ export function money(a) {
   return { html, after: () => goalChart(document.getElementById('goalChart'), { rows, fmtVal: (v) => rub(v, 0) }) };
 }
 
-changes['money.month'] = (v) => { app().ui.month = v; app().rerender(); };
+changes['money.month'] = (v) => { const a = app(); a.ui.month = v; a.ui.monthAt = monthKey(a.ctx().today); a.rerender(); };
 
 
 acts['month.edit'] = (d) => {
