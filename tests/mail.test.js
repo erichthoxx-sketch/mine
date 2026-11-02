@@ -152,3 +152,24 @@ test('почта: цифры, рост по дням, таблица, поиск
   assert.deepEqual(s2.map((x) => x.date), ['2026-11-09', '2026-11-05']); // книга письма — первой
   assert.deepEqual(localParts(localIso('2026-11-05', '10:30')), { date: '2026-11-05', time: '10:30' });
 });
+
+test('сервис писем: опоздавшее больше чем на 2 часа письмо само не уходит — ждёт решения («Отправить сейчас»)', async () => {
+  const { sent } = stub();
+  Object.assign(process.env, { BUCKET: 'b', ADMIN_KEY: 'k', FROM: 'Лана <hello@lanafreitag.ru>', REPLY_TO: 'me@ya.ru', SITE: 'https://lanafreitag.ru/', SELF: 'https://f/x' });
+  delete require.cache[require.resolve('../mail/mail-function.cjs')];
+  const { handler } = require('../mail/mail-function.cjs');
+  const ctx = { token: { access_token: 't' } };
+  const adm = (b) => handler({ httpMethod: 'POST', queryStringParameters: { a: 'admin' }, headers: {}, body: JSON.stringify({ key: 'k', ...b }) }, ctx).then((r) => JSON.parse(r.body));
+  await adm({ op: 'import', list: [{ email: 'a@ya.ru' }] });
+  await adm({ op: 'schedule', id: 'old', at: new Date(Date.now() - 8 * 3600e3).toISOString(), subject: 'Опоздало', html: 'x', text: 'x' });
+  await adm({ op: 'schedule', id: 'ok', at: new Date(Date.now() - 5 * 60e3).toISOString(), subject: 'Вовремя', html: 'y', text: 'y' });
+  await handler({ httpMethod: 'GET', queryStringParameters: { a: 'tick' }, headers: {}, body: '' }, ctx);
+  assert.deepEqual(sent.map((m) => m.Content.Simple.Subject.Data), ['Вовремя']);
+  let L = await adm({ op: 'list' });
+  assert.equal(L.queue.length, 1); assert.ok(L.queue[0].late);
+  await handler({ httpMethod: 'GET', queryStringParameters: { a: 'tick' }, headers: {}, body: '' }, ctx);
+  assert.equal(sent.length, 1); // и дальше само не уходит
+  L = await adm({ op: 'sendq', id: 'old' });
+  assert.equal(L.sent, 1); assert.equal(L.queue.length, 0);
+  assert.equal(sent.at(-1).Content.Simple.Subject.Data, 'Опоздало');
+});

@@ -3,7 +3,7 @@
 // в её личных данных users/{uid}/meta/sitemail (тот же документ читает админка сайта); оформление писем — на сайте (content.letter).
 // Отложенные письма отправляет сам сервис по таймеру — компьютер и Мастерская для этого не нужны.
 import { ic } from '../../../js/icons.js';
-import { esc, acts, changes, toast, download, copyRich } from '../../../js/ui.js';
+import { esc, acts, changes, toast, download, copyRich, ask } from '../../../js/ui.js';
 import { fmtDate, plural } from '../../../js/format.js';
 import { loadSiteRaw, siteInfo, siteImg, patchSite, loadMailCfg, saveMailCfg, mailCall, loadSubs, SITE_URL } from '../../../js/sitepub.js';
 import { letterHtml, LETTER_DEFAULTS } from '../../../js/letter.js';
@@ -117,7 +117,9 @@ export function mailView(a) {
 
   <div class="psec-h"><h2>Письма</h2><button class="primary" data-act="mail.new">${hasDraft ? 'Продолжить письмо' : 'Новое письмо'}</button></div>
   <div class="card list">
-    ${queue.length ? queue.map((q) => `<div class="item row between"><span><b>${esc(q.subject || 'Без темы')}</b><span class="sub">${ic('timer')} ${Date.parse(q.at) <= Date.now() ? `отправляется (${dm(q.at)})` : `уйдёт ${dm(q.at)}`} · ${s.ok} ${plural(s.ok, ['читательнице', 'читательницам', 'читательницам'])}</span></span>
+    ${queue.length ? queue.map((q) => q.late ? `<div class="item row between"><span><b>${esc(q.subject || 'Без темы')}</b><span class="sub down">не ушло вовремя (${dm(q.at)}) — само не отправится</span></span>
+      <span class="row" style="gap:6px;flex-shrink:0"><button class="small-btn" data-act="mail.sendq" data-id="${esc(q.id)}">Отправить сейчас</button><button class="icon-btn" data-act="mail.unq" data-id="${esc(q.id)}" title="Отменить" aria-label="Отменить">${ic('trash')}</button></span></div>`
+      : `<div class="item row between"><span><b>${esc(q.subject || 'Без темы')}</b><span class="sub">${ic('timer')} ${Date.parse(q.at) <= Date.now() ? `отправляется (${dm(q.at)})` : `уйдёт ${dm(q.at)}`} · ${s.ok} ${plural(s.ok, ['читательнице', 'читательницам', 'читательницам'])}</span></span>
       <span class="row" style="gap:6px;flex-shrink:0"><button class="link" data-act="mail.edit" data-id="${esc(q.id)}">Изменить</button><button class="icon-btn" data-act="mail.unq" data-id="${esc(q.id)}" title="Отменить отправку" aria-label="Отменить отправку">${ic('trash')}</button></span></div>`).join('') : ''}
     ${hasDraft && !d.id ? `<div class="item row between"><span><b>${esc(d.subject || plain(d.title) || 'Черновик')}</b><span class="sub">черновик — ещё не отправлен</span></span><button class="link" data-act="mail.new">Открыть</button></div>` : ''}
     ${sent.length ? sent.slice(0, 8).map((x) => `<div class="item row between"><span><b>${esc(x.subject || 'Без темы')}</b><span class="sub">${ic('check')} ${dm(x.at)} · ${x.sent} ${plural(x.sent, ['письмо', 'письма', 'писем'])}${x.failed ? ` · не дошло: ${x.failed}` : ''}</span></span>
@@ -342,6 +344,13 @@ acts['mail.again'] = (d) => {
   if (!x?.draft) return;
   M.cfg.draft = { ...x.draft }; saveCfg(); M.when = 'now'; M.at = null; M.sure = false;
   app().go('/site/letter'); return false;
+};
+acts['mail.sendq'] = async (d, el) => {
+  const q = (M.info?.queue || []).find((x) => x.id === d.id);
+  if (!q || !(await ask(`Отправить «${q.subject || 'письмо'}» всем подписчицам сейчас?`, 'Отправить'))) return false;
+  el.disabled = true;
+  try { const r = await mailCall(mailUrl(), M.cfg.key, { op: 'sendq', id: d.id }); M.info.queue = r.queue; syncPlanner(); toast(`Отправлено: ${r.sent}`); await refresh(true); }
+  catch (e) { toast(e.message); el.disabled = false; return false; }
 };
 acts['mail.unq'] = async (d) => {
   const q = (M.info?.queue || []).find((x) => x.id === d.id);

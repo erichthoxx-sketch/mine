@@ -68,7 +68,8 @@ const json = (o, status = 200, h = {}) => ({ statusCode: status, headers: { 'Con
 const back = (q) => ({ statusCode: 302, headers: { Location: `${ENV.SITE}?pismo=${q}` }, body: '' });
 
 // ---------- отложенные письма: таймер (триггер функции раз в 5–10 минут) отправляет те, чьё время пришло ----------
-const clean = (x) => ({ id: x.id, at: x.at, subject: x.subject, draft: x.draft || null, made: x.made });
+const LATE = 2 * 3600e3;
+const clean = (x) => ({ id: x.id, at: x.at, subject: x.subject, draft: x.draft || null, made: x.made, late: x.late || '' });
 async function sendAll(d, subject, html, text) {
   let sent = 0; const failed = [];
   for (const p of d.list.filter((x) => x.status === 'ok')) {
@@ -82,7 +83,9 @@ async function runQueue() {
   // копия адресов раз в день — в том же бакете (backup/подписчицы-ГГГГ-ММ-ДД.json)
   const day = new Date(now + 3 * 3600e3).toISOString().slice(0, 10);
   if (d.backupDay !== day && d.list.length) { await putObj(`backup/subs-${day}.json`, JSON.stringify(d.list.map(({ token, ...x }) => x))); d.backupDay = day; changed = true; }
-  const due = (d.queue || []).filter((q) => Date.parse(q.at) <= now && (!q.sending || now - Date.parse(q.sending) > 15 * 60e3));
+  // опоздало больше чем на 2 часа (таймер не будил сервис) — само не уходит: владелица решит в Почте («Отправить сейчас» или отменить)
+  for (const q of d.queue || []) if (!q.late && !q.sending && now - Date.parse(q.at) > LATE) { q.late = new Date().toISOString(); changed = true; }
+  const due = (d.queue || []).filter((q) => !q.late && Date.parse(q.at) <= now && (!q.sending || now - Date.parse(q.sending) > 15 * 60e3));
   if (!due.length) { if (changed) await saveList(d); return { due: 0 }; }
   for (const q of due) q.sending = new Date().toISOString(); // чтобы второй вызов не отправил то же письмо
   await saveList(d);
@@ -141,6 +144,14 @@ module.exports.handler = async function (event, context) {
         const q = { id: String(body.id || rnd()).slice(0, 40), at: new Date(body.at).toISOString(), subject: String(body.subject || ''), html: String(body.html || ''), text: String(body.text || ''), draft: body.draft || null, made: new Date().toISOString() };
         d.queue = [...(d.queue || []).filter((x) => x.id !== q.id), q].sort((a, b) => a.at.localeCompare(b.at));
         await saveList(d); return json({ ok: true, queue: d.queue.map(clean) }, 200, C);
+      }
+      if (body.op === 'sendq') { // отложенное письмо — сейчас (например, опоздавшее: владелица нажала «Отправить сейчас»)
+        const q = (d.queue || []).find((x) => x.id === body.id);
+        if (!q) return json({ error: 'нет такого письма' }, 404, C);
+        const r = await sendAll(d, q.subject, q.html, q.text);
+        d.queue = d.queue.filter((x) => x.id !== q.id);
+        d.sent = [...(d.sent || []), { id: q.id, at: new Date().toISOString(), subject: q.subject, sent: r.sent, failed: r.failed.length, planned: q.at, draft: q.draft || null }].slice(-50);
+        await saveList(d); return json({ ok: true, sent: r.sent, failed: r.failed, queue: d.queue.map(clean) }, 200, C);
       }
       if (body.op === 'unschedule') { d.queue = (d.queue || []).filter((x) => x.id !== body.id); await saveList(d); return json({ ok: true, queue: d.queue.map(clean) }, 200, C); }
       if (body.op === 'import') { // подписчицы, оставившие почту раньше (с согласием) — сразу подтверждённые
