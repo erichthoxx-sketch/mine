@@ -49,7 +49,7 @@ export function reminders(c) {
   const na = npdAlert(npdStatusOf(d.sales || [], [], c.settings, t), t); if (na) add(t, na.title, na.sub, '/plan', 0);
   // свои задачи из Todoist (Книги, Мастерская) — на сегодня и просроченные
   // с приоритетом — всегда на Главной (без даты — сегодня), остальные — на сегодня и просроченные
-  for (const x of ownTasks(c.settings)) if (x.d || isImportant(x)) add(!x.d || x.d < t ? t : x.d, esc(tdText(x.t)), esc(x.s || x.p) + (x.d && x.d < t ? ' · просрочено' : ''), '/plan', isImportant(x) ? 3650 : 0);
+  for (const x of ownTasks(c.settings)) if (x.d || isImportant(x)) add(!x.d || x.d < t ? t : x.d, tdText(x.t), esc(x.s || x.p) + (x.d && x.d < t ? ' · просрочено' : ''), '/plan', isImportant(x) ? 3650 : 0);
   // приоритетные показы: подать заявку до 25-го
   const wr = widgetReminder(c); if (wr) add(wr.date, wr.title, wr.sub, wr.to, 15);
   // напоминания по связям и подготовка маркетинга
