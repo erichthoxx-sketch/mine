@@ -64,7 +64,7 @@ async function loadScorer() {
   // The upstream stealer module produces this JSON using steal.py build.
   // Until a trained target-language/target-model corpus is available,
   // the checked-in file deliberately contains no scores.
-  const response = await fetch(new URL('../watermark/s_star.json', import.meta.url), { cache: 'no-store' });
+  const response = await fetch(new URL('./s_star.json', import.meta.url), { cache: 'no-store' });
   if (!response.ok) throw Error('Не удалось загрузить статистическую модель');
   return response.json();
 }
