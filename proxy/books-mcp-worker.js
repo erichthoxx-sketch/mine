@@ -142,12 +142,16 @@ async function sectionTool(env, name, a = {}) {
   const d = item.data || {};
   if (name === 'get_marketing_overview') return msg({ updatedAt: item.updatedAt,
     books: (d.books || []).map((x) => ({ ...x, promo: x.promo || {} })),
-    ideas: (d.ideas || []).slice(0, 100), contests: (d.contests || []).slice(0, 50) });
+    ideas: (d.ideas || []).slice(0, 100), contests: (d.contests || []).slice(0, 50),
+    reviews: (d.reviews || []).slice(0, 80), promos: (d.promos || []).slice(0, 150), blogs: (d.blogs || []).slice(0, 50) });
   if (name === 'get_book_marketing') {
     const b = (d.books || []).find((x) => x.id === a.book_id);
     return b ? msg({ updatedAt: item.updatedAt, book: b,
       ideas: (d.ideas || []).filter((x) => x.bookId === b.id),
-      contests: (d.contests || []).filter((x) => (x.bookIds || []).includes(b.id)) }) :
+      contests: (d.contests || []).filter((x) => (x.bookIds || []).includes(b.id)),
+      reviews: (d.reviews || []).filter((x) => x.bookId === b.id),
+      promos: (d.promos || []).filter((x) => x.bookId === b.id),
+      blogs: (d.blogs || []).filter((x) => x.bookId === b.id) }) :
       msg('Книга не найдена в маркетинговом контексте.', true);
   }
   if (name === 'get_income_overview') return msg({ updatedAt: item.updatedAt,
@@ -280,6 +284,31 @@ async function sync(req, env, id) {
   });
   return json(req, { ok: true, updatedAt, chapters: b.chapters.length });
 }
+// Сервисные команды доступны только владелице: убрать старые книги, удалённые из Мастерской,
+// или полностью отключить всё. Через MCP эти операции не вызываются.
+async function manageSnapshots(req, env, action) {
+  if (action === 'prune' && req.method !== 'POST') return error(req, 405, 'Метод не поддерживается');
+  if (action === 'all' && req.method !== 'DELETE') return error(req, 405, 'Метод не поддерживается');
+  if (!(await verifyOwner(req, env))) return error(req, 401, 'Требуется вход владельца');
+  let keep = null;
+  if (action === 'prune') {
+    const body = await req.json().catch(() => null);
+    if (!body || !Array.isArray(body.ids) || body.ids.length > 500 || body.ids.some((id) => !validId(id)))
+      return error(req, 400, 'Неверный список книг');
+    keep = new Set(body.ids);
+  }
+  const books = await indexOf(env.BOOKS);
+  let removed = 0;
+  for (const book of books) {
+    if (keep && keep.has(book.id)) continue;
+    await env.BOOKS.delete(bookKey(book.id));
+    removed++;
+  }
+  if (action === 'all') {
+    for (const name of SECTION_NAMES) await env.BOOKS.delete(sectionKey(name));
+  }
+  return json(req, { ok: true, removed, action });
+}
 export default {
   async fetch(req, env) {
     const url = new URL(req.url), origin = req.headers.get('Origin') || '';
@@ -291,6 +320,8 @@ export default {
     if (!env.BOOKS) return error(req, 503, 'Не подключено KV BOOKS');
     try {
       if (url.pathname === '/mcp') return await mcp(req, env);
+      if (url.pathname === '/sync/prune') return await manageSnapshots(req, env, 'prune');
+      if (url.pathname === '/sync/all') return await manageSnapshots(req, env, 'all');
       const section = /^\/sync\/section\/([a-z]+)$/.exec(url.pathname);
       if (section) return await syncSection(req, env, section[1]);
       const match = /^\/sync\/([^/]+)$/.exec(url.pathname);

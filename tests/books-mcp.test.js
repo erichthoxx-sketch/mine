@@ -57,3 +57,37 @@ test('write endpoints never accept MCP reader key or arbitrary origin', async ()
   const list = await a.BOOKS.get('index', { type: 'json' });
   assert.equal(list.length, 1);
 });
+
+test('MCP marketing, income and Direct sources are read-only and separately queryable', async () => {
+  const a = env();
+  await a.BOOKS.put('section:marketing', JSON.stringify({
+    updatedAt: '2026-11-03', data: { books: [{ id: 'b1', title: 'Тестовая книга', promo: { annotation: 'История' } }], ideas: [], contests: [] }
+  }));
+  await a.BOOKS.put('section:income', JSON.stringify({
+    updatedAt: '2026-11-03', data: { lastSaleDate: '2026-11-03', months: [{ month: '2026-11', royalty: 190 }],
+      totals: { royalty: 190 }, sales: [{ book: 'Тестовая книга', bookId: 'b1', date: '2026-11-03', qty: 1, royalty: 190 }], reports: [] }
+  }));
+  await a.BOOKS.put('section:direct', JSON.stringify({
+    updatedAt: '2026-11-03', data: { campaigns: [{ id: 7, name: 'Тестовая реклама' }], daily: [{ cid: 7, date: '2026-11-03', cost: 10 }] }
+  }));
+  const toolList = await (await worker.fetch(call('tools/list'), a)).json();
+  assert.ok(toolList.result.tools.some((t) => t.name === 'get_system_status'));
+  assert.ok(toolList.result.tools.some((t) => t.name === 'get_income_overview'));
+  assert.equal(toolList.result.tools.some((t) => t.name.startsWith('change_')), false);
+  const status = await (await worker.fetch(call('tools/call', { name: 'get_system_status', arguments: {} }), a)).json();
+  assert.equal(JSON.parse(status.result.content[0].text).sections.filter((s) => s.available).length, 3);
+  const sales = await (await worker.fetch(call('tools/call', { name: 'get_book_sales', arguments: { book: 'b1' } }), a)).json();
+  assert.equal(JSON.parse(sales.result.content[0].text).rows[0].royalty, 190);
+  const ads = await (await worker.fetch(call('tools/call', { name: 'get_direct_campaign', arguments: { campaign_id: '7' } }), a)).json();
+  assert.equal(JSON.parse(ads.result.content[0].text).daily[0].cost, 10);
+});
+test('MCP cannot overwrite connected finance or advertising via reader key', async () => {
+  const a = env();
+  const req = new Request(URL + '/sync/section/income', {
+    method: 'PUT',
+    headers: { 'X-Master-Key': KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ section: 'income', generatedAt: '2026-11-03' })
+  });
+  assert.equal((await worker.fetch(req, a)).status, 401);
+  assert.equal(await a.BOOKS.get('section:income'), null);
+});
