@@ -424,9 +424,10 @@ acts['ed.copy'] = async () => {
   const body = kids.slice(k), box = document.createElement('div');
   body.forEach((n) => box.append(n.cloneNode(true)));
   const text = blocksText(htmlToBlocks(box));
-  // строки через одинарный перенос, а не абзацы-блоки: редактор Литнета каждый вставленный абзац-блок превращает в «текст + пустая строка»
-  const parts = body.map(cleanPara);
-  const html = `<div>${parts.map((x, i) => (x.al ? `<div style="text-align:${x.al}">${x.h}</div>` : x.h + (i < parts.length - 1 && !parts[i + 1].al ? '<br>' : ''))).join('')}</div>`;
+  // абзацы через одну пустую строку (двойной перенос). Абзацы-блоки Литнет показывал с двумя пустыми строками между ними,
+  // одинарный перенос — слитно, без промежутка; пустые абзацы самого текста не дублируем
+  const parts = body.map(cleanPara).filter((x, i, a) => x.h.trim() || x.al || (i > 0 && a[i - 1].h.trim()));
+  const html = `<div>${parts.map((x, i) => (x.al ? `<div style="text-align:${x.al}">${x.h}</div>` : x.h + (i < parts.length - 1 && !parts[i + 1].al ? (x.h.trim() && parts[i + 1].h.trim() ? '<br><br>' : '<br>') : ''))).join('')}</div>`;
   try {
     if (window.ClipboardItem && navigator.clipboard?.write) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
     else await navigator.clipboard.writeText(text);
