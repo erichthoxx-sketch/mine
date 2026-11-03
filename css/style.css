@@ -3268,3 +3268,11 @@ input.own-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50
 /* значки панели редактора — прозрачные, как раньше (не «таблетки»); при наведении — мягкая подложка */
 :root button.ed-ic { background: transparent !important; border-radius: 10px !important; padding: 0 9px !important; min-height: 34px; box-shadow: none !important; }
 :root button.ed-ic:hover { background: var(--soft, var(--surface-2)) !important; }
+
+/* Experimental statistical token highlight: CSS Highlight API only (no document mutation). */
+.ed-wm-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
+.ed-wm-row .ed-wm-btn { min-height: 32px; padding: 0 12px; border: 1px solid var(--line) !important; border-radius: 9px; color: var(--text-2) !important; font-size: 12px; font-weight: 500; background: transparent; }
+.ed-wm-row .ed-wm-btn[aria-pressed="true"] { border-color: var(--accent) !important; color: var(--accent) !important; }
+.ed-wm-row .ed-wm-status { flex: 1 1 240px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.ed-wm-row .ed-wm-status[hidden] { display: none; }
+::highlight(writer-experimental-watermark) { background-color: rgba(218, 126, 83, .42); text-decoration: underline dotted #b46d46; }

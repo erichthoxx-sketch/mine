@@ -11,6 +11,7 @@ import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedSt
 import { alNum, chapterList } from '../wcalc.js';
 import { cleanText, cleanedMsg } from '../../../js/cleantext.js';
 import { editorToolbar, editorFindBar } from '../editor-ui.js';
+import { toggleWatermarkHighlights, clearWatermarkHighlights } from '../watermark-highlight.js';
 
 const app = () => window.__app;
 let ed = null; // { key, bookId, title, tabId, status, html, baseText, dirty, savedAt, err, draft, named, startChars }
@@ -169,6 +170,7 @@ export function editorView(a, bookId, title) {
       <button class="primary" data-act="ed.save" title="Ctrl+S">Сохранить в Документ</button>
     </div>
     ${editorToolbar('ed')}
+    <div class="ed-wm-row"><button class="ed-ic ed-wm-btn" type="button" data-act="ed.watermark" aria-pressed="false" title="Экспериментальная статистическая подсветка токенов">Подсветить шифр</button><span class="ed-wm-status" id="ed-wm-status" role="status" hidden></span></div>
     ${editorFindBar('ed')}
   </div>
   ${ed.draft ? `<div class="alert alert-thin ed-draft">На этом устройстве есть несохранённый черновик от ${fmtDate(ed.draft.at.slice(0, 10))} ${ed.draft.at.slice(11, 16)}. <button class="link" data-act="ed.useDraft">Открыть черновик</button> <button class="link" data-act="ed.dropDraft">Отбросить</button></div>` : ''}
@@ -191,6 +193,7 @@ function stats(el) {
   box.innerHTML = `<span><b>${num(s.words)}</b> <i>${plural(s.words, ['слово', 'слова', 'слов'])}</i></span><span><b>${num(s.chars)}</b> <i>зн.</i></span><span><b>${alNum(s.chars)}</b> <i>а.л.</i></span><span class="es-sess"><b class="${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '+' : '−'}${num(Math.abs(diff))}</b> <i>зн. за сессию</i></span>`;
 }
 function wire() {
+  clearWatermarkHighlights(true);
   const el = document.getElementById('ed');
   if (!el) return;
   try { document.execCommand('defaultParagraphSeparator', false, 'p'); document.execCommand('styleWithCSS', false, false); } catch { /* старый браузер */ }
@@ -202,7 +205,7 @@ function wire() {
     clearTimeout(autoTimer);
     if (pref('auto', true)) autoTimer = setTimeout(() => save({ auto: true }), 30000);
   };
-  el.addEventListener('input', () => { changed(); snap(el); });
+  el.addEventListener('input', () => { clearWatermarkHighlights(true); changed(); snap(el); });
   hist.stack = [{ html: el.innerHTML, caret: null }]; hist.i = 0;
   const q = document.getElementById('edq');
   q?.addEventListener('input', () => { fnd.i = -1; findStep(1); });
@@ -440,6 +443,7 @@ acts['ed.copy'] = async () => {
 };
 
 acts['ed.save'] = () => { save(); return false; };
+acts['ed.watermark'] = async () => { await toggleWatermarkHighlights(); return false; };
 // выделение цветом: тёмно-изумрудный, как в Google Документе; на уже выделенном — снимает цвет
 const MARK = '#0b6b4f', CLEAR = '#010203';
 function colorSel() {
