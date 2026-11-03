@@ -4,7 +4,7 @@
 
 ## Подключение Cloudflare — один раз
 
-1. Открой https://dash.cloudflare.com → Workers & Pages → Create → создай **новый** Worker, например с именем masterskaya-books. Это не новый аккаунт.
+1. Открой https://dash.cloudflare.com → Workers & Pages → Create → создай **новый** Worker, например с именем masterskaya-ai. Это не новый аккаунт.
 2. В Edit code вставь содержимое файла [proxy/books-mcp-worker.js](../proxy/books-mcp-worker.js) (скопировать полностью) и нажми Deploy.
 3. В Cloudflare открой Workers KV (Storage & databases → KV) → Create namespace. Назови namespace masterskaya_books. В настройках нового Worker → Bindings → Add binding → KV namespace выбери его. **Variable name: BOOKS** (большими буквами). Сохрани.
 4. Открой «Мастерскую» → любую книгу → «Для нейросети» → «Настроить» → «Скопировать ID». В настройках Worker добавь **Variable (Text) с именем OWNER_UID**, значение — скопированный Firebase ID. Это не пароль: Worker проверяет подпись реального входа в приложение.
@@ -15,7 +15,7 @@
 
 ## Привязка к Мастерской
 
-1. Скопируй корневой адрес нового Worker (вида https://masterskaya-books.ИМЯ.workers.dev).
+1. Скопируй корневой адрес нового Worker (вида https://masterskaya-ai.ИМЯ.workers.dev).
 2. В книге → «Для нейросети» → «Настроить» вставь адрес **без /mcp**, нажми «Сохранить».
 3. Открой книгу → «Подключить книгу». Мастерская заново прочитает Google Документ и сохранит в Cloudflare только эту рукопись и утверждённую Легенду.
 4. Когда изменишь главу или каркас — нажми «Обновить у нейросети». Для прекращения доступа — «Отключить». Оригинал на Google Диске не изменится.
@@ -48,3 +48,7 @@
 - [writer/js/bookai.js](../writer/js/bookai.js) — сбор рукописи и Легенды.
 - [writer/js/views/bookai.js](../writer/js/views/bookai.js) — кнопки в карточке книги.
 - [tests/books-mcp.test.js](../tests/books-mcp.test.js) — базовые тесты защиты и чтения.
+
+## Единая архитектура на будущее
+
+Worker называется masterskaya-ai, но текущий готовый код включает только книгу (MCP-инструменты list_books, get_book_context, list_chapters, read_chapter, search_book). Далее без создания дополнительных Workers можно добавить строго разделённые области `marketing`, `income`, `direct`: экспорт только выбранных и разрешённых данных, отдельные кнопки включения/отключения, доступ только для чтения, без паролей, OAuth-токенов и операций над рекламными кампаниями. До реализации и проверки этих областей **не считать их подключёнными**. В Claude Free доступен один пользовательский коннектор, поэтому сервер расширяем, а не создаём четыре отдельных подключения.
