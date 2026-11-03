@@ -280,6 +280,31 @@ async function sync(req, env, id) {
   });
   return json(req, { ok: true, updatedAt, chapters: b.chapters.length });
 }
+// Сервисные команды доступны только владелице: убрать старые книги, удалённые из Мастерской,
+// или полностью отключить всё. Через MCP эти операции не вызываются.
+async function manageSnapshots(req, env, action) {
+  if (action === 'prune' && req.method !== 'POST') return error(req, 405, 'Метод не поддерживается');
+  if (action === 'all' && req.method !== 'DELETE') return error(req, 405, 'Метод не поддерживается');
+  if (!(await verifyOwner(req, env))) return error(req, 401, 'Требуется вход владельца');
+  let keep = null;
+  if (action === 'prune') {
+    const body = await req.json().catch(() => null);
+    if (!body || !Array.isArray(body.ids) || body.ids.length > 500 || body.ids.some((id) => !validId(id)))
+      return error(req, 400, 'Неверный список книг');
+    keep = new Set(body.ids);
+  }
+  const books = await indexOf(env.BOOKS);
+  let removed = 0;
+  for (const book of books) {
+    if (keep && keep.has(book.id)) continue;
+    await env.BOOKS.delete(bookKey(book.id));
+    removed++;
+  }
+  if (action === 'all') {
+    for (const name of SECTION_NAMES) await env.BOOKS.delete(sectionKey(name));
+  }
+  return json(req, { ok: true, removed, action });
+}
 export default {
   async fetch(req, env) {
     const url = new URL(req.url), origin = req.headers.get('Origin') || '';
@@ -291,6 +316,8 @@ export default {
     if (!env.BOOKS) return error(req, 503, 'Не подключено KV BOOKS');
     try {
       if (url.pathname === '/mcp') return await mcp(req, env);
+      if (url.pathname === '/sync/prune') return await manageSnapshots(req, env, 'prune');
+      if (url.pathname === '/sync/all') return await manageSnapshots(req, env, 'all');
       const section = /^\/sync\/section\/([a-z]+)$/.exec(url.pathname);
       if (section) return await syncSection(req, env, section[1]);
       const match = /^\/sync\/([^/]+)$/.exec(url.pathname);
