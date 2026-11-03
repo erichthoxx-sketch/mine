@@ -142,12 +142,16 @@ async function sectionTool(env, name, a = {}) {
   const d = item.data || {};
   if (name === 'get_marketing_overview') return msg({ updatedAt: item.updatedAt,
     books: (d.books || []).map((x) => ({ ...x, promo: x.promo || {} })),
-    ideas: (d.ideas || []).slice(0, 100), contests: (d.contests || []).slice(0, 50) });
+    ideas: (d.ideas || []).slice(0, 100), contests: (d.contests || []).slice(0, 50),
+    reviews: (d.reviews || []).slice(0, 80), promos: (d.promos || []).slice(0, 150), blogs: (d.blogs || []).slice(0, 50) });
   if (name === 'get_book_marketing') {
     const b = (d.books || []).find((x) => x.id === a.book_id);
     return b ? msg({ updatedAt: item.updatedAt, book: b,
       ideas: (d.ideas || []).filter((x) => x.bookId === b.id),
-      contests: (d.contests || []).filter((x) => (x.bookIds || []).includes(b.id)) }) :
+      contests: (d.contests || []).filter((x) => (x.bookIds || []).includes(b.id)),
+      reviews: (d.reviews || []).filter((x) => x.bookId === b.id),
+      promos: (d.promos || []).filter((x) => x.bookId === b.id),
+      blogs: (d.blogs || []).filter((x) => x.bookId === b.id) }) :
       msg('Книга не найдена в маркетинговом контексте.', true);
   }
   if (name === 'get_income_overview') return msg({ updatedAt: item.updatedAt,
