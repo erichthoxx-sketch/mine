@@ -99,8 +99,13 @@ export async function discoverModelCandidates({
   const tree = checks[0].status === 'fulfilled' ? checks[0].value : null;
   const release = checks[1].status === 'fulfilled' ? checks[1].value : null;
   const items = modelCandidates(tree, release);
-  cacheWrite(storage, { at: now, items });
-  return { items, stale: false };
+  const partial = checks.some((x) => x.status === 'rejected');
+  if (partial && items.length === 0) {
+    if (cached) return { items: cached.items, stale: true };
+    throw new Error('Не удалось проверить все источники обновлений');
+  }
+  if (!partial) cacheWrite(storage, { at: now, items });
+  return { items, stale: partial };
 }
 
 function validation(data) {
