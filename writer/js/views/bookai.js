@@ -35,6 +35,8 @@ acts['bai.settings'] = () => {
   openSheet('Коннектор для книг',
     '<p class="small muted">Вставьте адрес отдельного Cloudflare Worker из инструкции. Здесь хранится только адрес, не пароль и не ключи.</p>' +
     '<label for="baiUrl">Адрес Cloudflare Worker</label><input id="baiUrl" name="url" type="url" placeholder="https://master-books.ваш-домен.workers.dev/" value="' + esc(url) + '">' +
+    '<label for="baiUid">ID владельца Firebase (для Cloudflare)</label><input id="baiUid" readonly value="' + esc(app().store.user?.uid || '') + '">' +
+    '<button type="button" data-act="bai.copyuid">Скопировать ID</button> <button type="button" data-act="bai.key">Создать ключ доступа</button>' +
     '<p class="small muted">В Claude: Добавить свой коннектор → URL /mcp → «Без входа» → заголовок X-Master-Key. Полные инструкции — docs/SETUP-BOOKS-MCP.md.</p>' +
     '<button type="button" data-act="bai.copyurl">Скопировать адрес MCP</button>',
     async (f) => {
@@ -49,6 +51,24 @@ acts['bai.settings'] = () => {
 acts['bai.copyurl'] = async () => {
   if (!workerOf()) { toast('Сначала укажите адрес Worker'); return false; }
   if (await copyRich(workerOf() + '/mcp')) toast('Адрес MCP скопирован');
+  return false;
+};
+acts['bai.copyuid'] = async () => {
+  const uid = app().store.user?.uid || '';
+  if (uid && await copyRich(uid)) toast('ID владельца скопирован');
+  return false;
+};
+acts['bai.key'] = () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const key = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  openSheet('Личный ключ доступа', '<p class="small muted">Скопируйте ключ один раз. Добавьте его в Cloudflare как секрет MCP_READ_KEY, затем в Claude как значение заголовка X-Master-Key. В Мастерской и GitHub ключ не сохраняется.</p>' +
+    '<input readonly id="baiGenerated" value="' + esc(key) + '">' +
+    '<button type="button" data-act="bai.copykey">Скопировать ключ</button>', null);
+  return false;
+};
+acts['bai.copykey'] = async () => {
+  const key = document.getElementById('baiGenerated')?.value;
+  if (key && await copyRich(key)) toast('Ключ скопирован');
   return false;
 };
 acts['bai.download'] = async (d) => {
