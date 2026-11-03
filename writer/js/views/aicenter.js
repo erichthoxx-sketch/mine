@@ -94,6 +94,8 @@ acts['ai.all'] = async () => {
         booksDone++;
       } catch (e) { errors.push(book.title + ': ' + (e.message || e)); }
     }
+    try { await request('POST', '/sync/prune', { ids: books.map((x) => x.id) }); }
+    catch (e) { errors.push('Удаление старых книг: ' + (e.message || e)); }
     const now = new Date().toISOString();
     await store.saveSettings({
       aiLastSyncedAt: now, aiLastCount: booksDone, aiLastError: errors.join('; ').slice(0, 700),
@@ -116,22 +118,15 @@ acts['ai.clear'] = async () => {
   running = true; app().rerender();
   const errors = [];
   try {
-    for (const name of ['marketing', 'income', 'direct']) {
-      try { await request('DELETE', '/sync/section/' + name); }
-      catch (e) { errors.push(name + ': ' + (e.message || e)); }
-    }
+    await request('DELETE', '/sync/all');
     for (const b of app().ctx().wbooks || []) {
-      try {
-        await request('DELETE', '/sync/' + encodeURIComponent(b.id));
-        await app().store.patch('w_books', b.id, { aiShared: false, aiUpdatedAt: '' });
-      } catch (e) { errors.push(b.title + ': ' + (e.message || e)); }
+      try { await app().store.patch('w_books', b.id, { aiShared: false, aiUpdatedAt: '' }); }
+      catch (e) { errors.push(b.title + ': ' + (e.message || e)); }
     }
     await app().store.saveSettings({
-      aiLastSyncedAt: errors.length ? app().ctx().settings.aiLastSyncedAt : '',
-      aiLastCount: errors.length ? app().ctx().settings.aiLastCount : 0,
-      aiLastError: errors.join('; ').slice(0, 700)
+      aiLastSyncedAt: '', aiLastCount: 0, aiLastError: errors.join('; ').slice(0, 700)
     });
-    toast(errors.length ? 'Некоторые источники не отключились — проверьте статус' : 'Доступ к сохранённому контексту отключён');
+    toast(errors.length ? 'Облачные копии удалены, но не все метки книг обновились' : 'Все облачные копии контекста удалены');
   } catch (e) { toast('Не удалось отключить: ' + (e.message || e)); }
   finally { running = false; app().rerender(); }
   return false;
