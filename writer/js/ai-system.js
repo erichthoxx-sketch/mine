@@ -32,7 +32,16 @@ export function marketingSnapshot(data, generatedAt = new Date().toISOString()) 
     name: x.name, platform: x.platform, end: x.end, status: x.status,
     genres: x.genres, bookIds: x.bookIds, conditions: text(x.conditions, 1000)
   }));
-  return { section: 'marketing', generatedAt, note: 'Только маркетинговые сведения. Без контактов, ключей и финансовых настроек.', books, ideas, contests };
+  const reviews = (data.w_reviews || []).slice(0, 200).map((x) => ({
+    bookId: x.bookId || null, source: x.source, date: x.date, text: text(x.text, 6000)
+  }));
+  const promos = (data.w_promolinks || []).slice(0, 200).map((x) => pick(x,
+    ['bookId', 'channel', 'campaign', 'status', 'createdAt', 'start', 'end', 'clicks', 'notes']));
+  const blogs = (data.w_blog || []).slice(0, 100).map((x) => ({
+    bookId: x.bookId || null, title: text(x.title, 200), status: x.status,
+    modifiedAt: x.modifiedAt, text: text(x.html, 6000).replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim()
+  }));
+  return { section: 'marketing', generatedAt, note: 'Только маркетинговые сведения. Без контактов, ключей и финансовых настроек.', books, ideas, contests, reviews, promos, blogs };
 }
 export function incomeSnapshot(data, generatedAt = new Date().toISOString()) {
   const sales = (data.sales || []).map((x) => pick(x, ['date', 'book', 'bookId', 'kind', 'price', 'qty', 'royalty']))
