@@ -71,7 +71,25 @@ async function verifyReader(request, env) {
   return diff === 0;
 }
 const bookKey = (id) => 'book:' + id;
-const indexOf = async (kv) => (await kv.get('index', { type: 'json' })) || [];
+// KV list + metadata вместо общего индекса: книги обновляются за один проход без
+// конфликта «не более 1 записи в секунду» на ключе index в бесплатном Cloudflare.
+const indexOf = async (kv) => {
+  if (typeof kv.list !== 'function') return (await kv.get('index', { type: 'json' })) || [];
+  const rows = [];
+  let cursor;
+  do {
+    const page = await kv.list({ prefix: 'book:', limit: 500, ...(cursor ? { cursor } : {}) });
+    for (const k of page.keys || []) {
+      if (k.metadata?.id) rows.push(k.metadata);
+      else {
+        const data = await kv.get(k.name, { type: 'json' });
+        if (data) rows.push({ id: data.id, title: data.title, updatedAt: data.updatedAt, chapters: data.chapters?.length || 0 });
+      }
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  return rows.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ru'));
+};
 const tool = (name, description, properties, required = []) => ({
   name, description, inputSchema: { type: 'object', properties, required, additionalProperties: false }
 });
@@ -239,8 +257,7 @@ async function sync(req, env, id) {
   if (!(await verifyOwner(req, env))) return error(req, 401, 'Требуется вход владельца в Мастерскую');
   if (req.method === 'DELETE') {
     await env.BOOKS.delete(bookKey(id));
-    const index = (await indexOf(env.BOOKS)).filter((x) => x.id !== id);
-    await env.BOOKS.put('index', JSON.stringify(index));
+    // Список книг формируется из ключей KV; отдельного индекса нет.
     return json(req, { ok: true, removed: true });
   }
   const size = Number(req.headers.get('Content-Length') || '0');
@@ -258,10 +275,9 @@ async function sync(req, env, id) {
   }
   const updatedAt = new Date().toISOString();
   const save = { id, title: b.title, context: b.context, chapters: b.chapters.map((c) => ({ title: c.title, text: c.text })), updatedAt };
-  await env.BOOKS.put(bookKey(id), JSON.stringify(save));
-  const index = (await indexOf(env.BOOKS)).filter((x) => x.id !== id);
-  index.push({ id, title: b.title, updatedAt, chapters: b.chapters.length });
-  await env.BOOKS.put('index', JSON.stringify(index.sort((a, b) => a.title.localeCompare(b.title, 'ru'))));
+  await env.BOOKS.put(bookKey(id), JSON.stringify(save), {
+    metadata: { id, title: b.title, updatedAt, chapters: b.chapters.length }
+  });
   return json(req, { ok: true, updatedAt, chapters: b.chapters.length });
 }
 export default {

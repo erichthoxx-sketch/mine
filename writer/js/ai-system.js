@@ -39,7 +39,7 @@ export function incomeSnapshot(data, generatedAt = new Date().toISOString()) {
     .filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.date || ''))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5000);
   const campaigns = (data.campaigns || []).slice(0, 200).map((x) => pick(x, ['id', 'name', 'bookId', 'book', 'channel', 'start', 'end', 'budget', 'spent', 'status']));
-  const reports = (data.reports || []).slice(0, 1500).map((x) => pick(x, ['date', 'from', 'to', 'start', 'end', 'campaignId', 'cid', 'cost', 'spent', 'clicks', 'impressions', 'orders', 'sales', 'source']));
+  const reports = (data.reports || []).slice(0, 1500).map((x) => pick(x, ['date', 'from', 'to', 'start', 'end', 'campaignId', 'cid', 'spend', 'cost', 'spent', 'name', 'clicks', 'impressions', 'orders', 'sales', 'source']));
   return { section: 'income', generatedAt, note: 'Дата последней выгрузки определяет свежесть продаж. Валюта: RUB. Персональные и налоговые реквизиты не передаются.',
     lastSaleDate: sales[0]?.date || null,
     books: (data.books || []).slice(0, 200).map((x) => pick(x, ['id', 'title', 'name', 'status'])),
