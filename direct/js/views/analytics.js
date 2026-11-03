@@ -9,6 +9,7 @@ import { SITE_COUNTER, SITE_GOALS, sitePages, sumDays, weekPair, byWeekday, mkIn
 import { metrikaOf } from './metrika.js';
 import { packageText, sendToChat } from './ai.js';
 import { litnetView } from './litnet.js';
+import { activePromoLinks, promoToken } from '../../../writer/js/promolinks.js';
 import { adEvents, weekContext, visitReasons } from '../adcontext.js';
 import { demo } from '../demo.js';
 import { loadSite, SITE_URL, SITE_ADMIN } from '../../../js/sitepub.js';
@@ -124,7 +125,14 @@ function booksTab(a, M) {
 
 // ---------- Источники и UTM ----------
 // Ссылки Литнета и свои метки — одна таблица с деньгами (за 90 дней)
-const tableOf = (M) => utmTable(M.mk.utm || [], M.c.settings.direct?.utms || [], M.main, M.perSale, litrefRows(M.mk.litref || [], M.main, M.titles));
+// ссылки Литнета из общего списка («Мой Литнет» здесь и «Мастерская» → Маркетинг) сами попадают в таблицу — второй раз их не добавляем
+const tableOf = (M) => {
+  const utms = M.c.settings.direct?.utms || [], have = new Set(utms.filter((x) => x.litref).map((x) => x.litref.toLowerCase()));
+  const books = Object.fromEntries((M.c.data.w_books || []).map((b) => [b.id, b.title]));
+  const pl = activePromoLinks(M.c.data.w_promolinks || []).map((x) => ({ x, code: promoToken(x.url) })).filter(({ code }) => code && !have.has(code.toLowerCase()) && have.add(code.toLowerCase()))
+    .map(({ x, code }) => ({ id: 'pl_' + x.id, pl: true, label: [books[x.bookId], x.campaign].filter(Boolean).join(' · ') || `Ссылка Литнета ${code}`, litref: code, cost: 0 }));
+  return utmTable(M.mk.utm || [], [...utms, ...pl], M.main, M.perSale, litrefRows(M.mk.litref || [], M.main, M.titles)).map((r) => (r.saved?.pl ? { ...r, saved: null } : r));
+};
 function srcTab(a, M) {
   const { mk, main, hasGoals } = M;
   const totV = (mk.sources || []).reduce((s, x) => s + x.visits, 0) || 1, totC = (mk.sources || []).reduce((s, x) => s + reach(x, main), 0);
@@ -137,12 +145,7 @@ function srcTab(a, M) {
         <div class="small muted">отказы ${pct(x.bounce, 0)} · время ${mmss(x.dur)}${hasGoals ? ` · ${esc(M.goalName)}: ${num(reach(x, main))} (${pct(crOf(x, main) || 0, 1)})` : ''} ${hasGoals ? vsAvg(reach(x, main), x.visits, totC, totV) : ''}</div></div>`).join('') || `<p class="muted">Метрика не отдала источники${(mk.errors || [])[0] ? ': ' + esc(mk.errors[0]) : ''}. Нажмите ↻ вверху.</p>`}</div></div>
     <div class="card"><h2>Ссылки и метки</h2>
       <p class="small">Здесь видно, какая ссылка приводит покупателей и окупилось ли платное продвижение. Визиты и покупки — по Метрике за 90 дней.</p>
-      <form data-form="an.ref" class="settings-form">
-        <label>Ссылка для продвижения из кабинета Литнета</label><input name="ref" placeholder="https://litnet.com/ref/…" required>
-        <div class="f2"><div><label>Название (необязательно)</label><input name="name" placeholder="Реклама на Литнете, октябрь"></div>
-          <div><label>Сколько заплатили, ₽</label><input name="cost" inputmode="decimal"></div></div>
-        <div class="row d-save"><button class="primary" type="submit">Добавить</button></div></form>
-      <p class="small muted">Ссылки Литнета, по которым уже приходили читатели, приложение находит само — их нужно только добавить с расходом. «Новых читателей» в кабинете Литнета и визиты здесь считаются по-разному, цифры не совпадут — это нормально.</p>
+      <p class="small muted">Ссылки Литнета сюда не добавляются отдельно: всё, что записано в «Мой Литнет» ниже (или в «Мастерской»), и ссылки, по которым уже приходили читатели, появляются тут сами. Расход — «Указать расход» у строки. «Новых читателей» в кабинете Литнета и визиты здесь считаются по-разному, цифры не совпадут — это нормально.</p>
       ${rows.length ? `<div class="list">${rows.map((x, i) => `<div class="item"><div class="row between"><b>${esc(x.label)}</b><span class="small">${num(x.visits)} визитов</span></div>
         <div class="small">${hasGoals ? `покупок ${num(x.conv)}${x.cr != null ? ` (${pct(x.cr, 1)})` : ''}` : ''}${x.cost ? ` · расход ${rub(x.cost, 0)}${x.cpa != null ? ` · покупатель ${rub(x.cpa, 0)}` : ''}${x.romi != null ? ` · <span class="${x.romi >= 0 ? 'up' : 'down'}">окупаемость ${x.romi >= 0 ? '+' : ''}${pct(x.romi, 0)}</span>` : ''}` : ''}</div>
         <div class="small muted">${esc([x.source, x.medium, x.campaign].filter(Boolean).join(' / '))}${x.visits && x.visits < MIN_VISITS ? ' · данных пока мало' : ''}</div>
@@ -172,16 +175,6 @@ forms['an.utm'] = async (fd) => {
   await saveD({ utms: [...utms, { id: uid(), label: `${label}: ${v.campaign}${v.content ? ' · ' + v.content : ''}`, url: link, source, medium, campaign: v.campaign, content: v.content, cost: v.cost || 0, at: app().ctx().today }] });
   try { await navigator.clipboard.writeText(link); toast('Ссылка создана и скопирована'); } catch { toast('Ссылка создана'); }
   app().rerender();
-};
-forms['an.ref'] = async (fd) => {
-  const code = litrefOf(fd.get('ref').trim());
-  if (!code) { toast('Нужна ссылка вида https://litnet.com/ref/…'); return; }
-  const utms = app().ctx().settings.direct?.utms || [];
-  if (utms.some((x) => x.litref?.toLowerCase() === code.toLowerCase())) { toast('Эта ссылка уже добавлена'); return; }
-  const found = litrefRows(model(app()).mk.litref || [], [], model(app()).titles).find((r) => r.code.toLowerCase() === code.toLowerCase());
-  const label = fd.get('name').trim() || `Ссылка Литнета: ${found?.title || (found?.slug ? found.slug.charAt(0).toUpperCase() + found.slug.slice(1).replace(/-/g, ' ') : code)}`;
-  await saveD({ utms: [...utms, { id: uid(), label, litref: code, cost: N(fd.get('cost')) || 0, at: app().ctx().today }] });
-  toast('Добавлено — визиты и покупки по ссылке будут в таблице');
 };
 acts['an.copy'] = async () => { try { await navigator.clipboard.writeText(app().ui.utm.link); toast('Скопировано'); } catch { toast('Не получилось скопировать'); } return false; };
 acts['an.del'] = async (d) => { await saveD({ utms: (app().ctx().settings.direct?.utms || []).filter((x) => x.id !== d.id) }); };
