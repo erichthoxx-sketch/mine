@@ -29,7 +29,7 @@ function chaptersFromDocx(xml, title) {
   const dom = new DOMParser().parseFromString(xml, 'application/xml');
   if (dom.querySelector('parsererror')) throw Error('Не удалось прочитать Word');
   const paragraphs = [...dom.getElementsByTagNameNS('*', 'p')].map((p) => [...p.getElementsByTagNameNS('*', 't')].map((x) => x.textContent || '').join(''));
-  const out = [], head = /^\s*(?:пролог|эпилог|глава\s+\d+)\b/i;
+  const out = [], head = /^\s*(?:пролог|эпилог|глава\s+\d+)(?=\s|$|[.:—–-])/i;
   let current = null;
   for (const p of paragraphs) {
     if (head.test(p) && p.trim().length < 150) {
