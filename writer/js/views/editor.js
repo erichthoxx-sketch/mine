@@ -402,7 +402,7 @@ acts['ed.replaceAll'] = () => {
 
 // ---------- скопировать всю главу: с оформлением (для редакторов площадок) и простым текстом ----------
 // абзац для вставки на площадку (Литнет и др.): только сам абзац, жирный/курсив/подчёркнутый/зачёркнутый и выравнивание по центру или вправо.
-// Межстрочный интервал, шрифты и цвета из Документа не уносим; отступы между абзацами — нулевые (Литнет показывал их пустыми строками)
+// Межстрочный интервал, шрифты, цвета и отступы из Документа не уносим
 function cleanPara(b) {
   const n = b.cloneNode(true);
   for (const x of [...n.querySelectorAll('*')].reverse()) {
@@ -411,8 +411,7 @@ function cleanPara(b) {
     else x.replaceWith(...x.childNodes);
   }
   const al = b.style.textAlign;
-  // отступы сверху и снизу — явно нулевые: иначе Литнет ставит абзацу свой отступ, и между абзацами видна пустая строка
-  return `<p style="margin-top:0pt;margin-bottom:0pt${al === 'center' || al === 'right' ? `;text-align:${al}` : ''}">${n.innerHTML || '<br>'}</p>`;
+  return { h: n.innerHTML.replace(/(<br>)+$/, ''), al: al === 'center' || al === 'right' ? al : '' };
 }
 acts['ed.copy'] = async () => {
   const el = document.getElementById('ed');
@@ -425,7 +424,9 @@ acts['ed.copy'] = async () => {
   const body = kids.slice(k), box = document.createElement('div');
   body.forEach((n) => box.append(n.cloneNode(true)));
   const text = blocksText(htmlToBlocks(box));
-  const html = `<div>${body.map(cleanPara).join('')}</div>`;
+  // строки через одинарный перенос, а не абзацы-блоки: редактор Литнета каждый вставленный абзац-блок превращает в «текст + пустая строка»
+  const parts = body.map(cleanPara);
+  const html = `<div>${parts.map((x, i) => (x.al ? `<div style="text-align:${x.al}">${x.h}</div>` : x.h + (i < parts.length - 1 && !parts[i + 1].al ? '<br>' : ''))).join('')}</div>`;
   try {
     if (window.ClipboardItem && navigator.clipboard?.write) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
     else await navigator.clipboard.writeText(text);
