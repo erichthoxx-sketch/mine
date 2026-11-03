@@ -102,6 +102,26 @@ function htmlToBlocks(root) {
   return blocks.map((p) => ({ st: p.st, runs: p.runs.reduce((a, r) => { const l = a[a.length - 1]; if (l && same(l, r)) l.t += r.t; else a.push({ ...r }); return a; }, []) }));
 }
 
+// Глава уже открыта, а её правили в самом Документе (с телефона, в Google Документах) — подтягиваем свежий текст:
+// при возвращении к главе и во вкладку. Есть несохранённые правки здесь — текст не заменяем, а предупреждаем.
+let pullAt = 0;
+async function pullFresh(b) {
+  if (!ed || ed.status !== 'ready' || ed.saving || Date.now() - pullAt < 20e3 || !drive.hasFreshToken()) return;
+  pullAt = Date.now();
+  const key = ed.key;
+  try {
+    const doc = await drive.getDoc(b.fileId), tab = findTab(doc, ed.tabId || ed.title);
+    const content = tab ? tab.documentTab?.body?.content : (doc.tabs ? null : doc.body?.content);
+    if (!content || !ed || ed.key !== key || ed.saving) return;
+    if (blocksText(contentToBlocks(content)) === ed.baseText) return;
+    if (ed.dirty) { ed.conflict = true; const st = document.getElementById('edstat'); if (st) st.textContent = 'глава менялась в Документе — сохраните вручную'; return; }
+    await load(key, b, ed.title);
+  } catch { /* нет сети — в следующий раз */ }
+}
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !ed || !/^\/ed\//.test(app()?.ui?.route || '')) return;
+  const b = app().ctx().wbooksById[ed.bookId]; if (b) { pullAt = 0; pullFresh(b); }
+});
 // ---------- загрузка главы ----------
 async function load(key, b, title) {
   ed = { key, bookId: b.id, title, status: 'loading' };
@@ -129,6 +149,7 @@ export function editorView(a, bookId, title) {
   if (!b) return { html: '<div class="card"><p>Книга не найдена.</p></div>' };
   const key = `${bookId}:${title}`;
   if (!ed || ed.key !== key) load(key, b, title);
+  else pullFresh(b);
   const eb = a.ui.edBack || '', backTo = eb.startsWith('/legend/') ? 'К Легенде' : eb.startsWith('/mk/') ? 'К маркетингу' : 'К книге';
   const back = `<a class="btn back" href="#" data-act="ed.back" data-id="${b.id}">← ${backTo}</a>`;
   if (ed.status === 'loading') return { html: `<p>${back}</p><div class="card"><p class="muted" style="margin:0">Загружаю «${esc(title)}» из Google Документа…</p></div>` };
@@ -228,6 +249,17 @@ function selectedBlocks() {
   const r = sel.getRangeAt(0);
   return [...el.children].filter((b) => r.intersectsNode(b));
 }
+// Доступ Google живёт час. Пока открыт редактор, при любом нажатии (курсор в текст, кнопка панели) берём новый доступ заранее —
+// окно Google без вопросов, доступ уже дан; без нажатия браузер окно не пустит. Иначе автосохранение молча вставало,
+// а правки копились только черновиком на устройстве
+let tokenAsk = false;
+const freshToken = (e) => {
+  if (!ed || tokenAsk || !/^\/ed\//.test(app()?.ui?.route || '') || !drive.isConnected() || !drive.tokenSoon()) return;
+  if (e.target.closest?.('[data-act="ed.save"]')) return; // «Сохранить в Документ» берёт доступ сама
+  tokenAsk = true;
+  drive.connect().then(() => { if (ed?.dirty) save({ auto: true }); }).catch(() => {}).finally(() => { tokenAsk = false; });
+};
+if (typeof document !== 'undefined') { document.addEventListener('mousedown', freshToken, true); document.addEventListener('touchend', freshToken, true); }
 // сохранить в Google Документ (вручную или авто)
 async function save({ auto = false } = {}) {
   const el = document.getElementById('ed'), c = app().ctx(), b = ed && c.wbooksById[ed.bookId];
@@ -253,6 +285,9 @@ async function save({ auto = false } = {}) {
     ls.del(draftKey(ed.key));
     if (!auto) toast('Глава сохранена в Google Документ');
     try { const { refreshOne } = await import('./books.js'); await refreshOne(app(), app().ctx().wbooksById[b.id], true); } catch { /* не страшно */ }
+    // обновление книги само выравнивает строку с названием главы в Документе — запоминаем главу такой, какой она стала,
+    // иначе следующее автосохранение решит, что главу правили в Документе, и остановится («сохраните вручную»)
+    try { const d2 = await drive.getDoc(b.fileId), t2 = findTab(d2, ed.tabId || ed.title), c2 = t2 ? t2.documentTab?.body?.content : d2.body?.content; if (c2) ed.baseText = blocksText(contentToBlocks(c2)); } catch { /* в следующий раз */ }
   } catch (e) { if (!auto) toast('Не сохранилось: ' + e.message + ' Текст остался в черновике на устройстве.'); }
   ed.saving = false; setStatus();
 }

@@ -28,6 +28,8 @@ function loadToken() {
 // когда он истёк, следующее нажатие любой кнопки Диска тихо берёт новый (без экрана согласия).
 export const isConnected = () => (isLocalDev ? !!ls.get('gdrive.mock') : !!loadToken() || !!ls.get('gdrive.consented'));
 export const hasFreshToken = () => (isLocalDev ? !!ls.get('gdrive.mock') : !!loadToken());
+// доступ скоро кончится (меньше 10 минут) или уже кончился — пора взять новый по ближайшему нажатию
+export const tokenSoon = () => (isLocalDev ? false : !loadToken() || token.exp - Date.now() < 10 * 60e3);
 
 let gis;
 export function preload() {
