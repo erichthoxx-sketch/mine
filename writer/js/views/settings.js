@@ -7,6 +7,7 @@ import { runTodoist } from '../tdsync.js';
 import { TD_DAYS, TD_LABEL } from '../todoist.js';
 import { archiveCard, loadArchive } from './archive.js';
 import { proxyCard } from '../../../js/proxycard.js';
+import { aiCenterCard } from './aicenter.js';
 
 const app = () => window.__app;
 
@@ -23,6 +24,7 @@ export function settingsView(a) {
       <button class="danger" data-act="set.disconnect" style="margin-top:10px">Отключить Диск на этом устройстве</button>`
     : '<p>На этом устройстве Диск не подключён.</p><button class="primary" data-act="drive.connect">Подключить Google Диск</button>'}
     <p class="hint">Подключать нужно на каждом устройстве один раз. Google даёт браузерным приложениям доступ на час — после этого кнопка «Обновить» на Главной продлевает его одним нажатием, без повторного разрешения.</p></div>
+  ${aiCenterCard(c)}
   ${todoistCard(c)}
   ${archiveCard(c)}
   ${proxyCard(s)}
