@@ -65,14 +65,19 @@ function cacheRead(storage) {
 function cacheWrite(storage, record) {
   try { storage?.setItem(CACHE_KEY, JSON.stringify(record)); } catch { /* private mode */ }
 }
-async function readJson(url, fetcher, timeoutMs = 10000) {
+async function readJson(url, fetcher, timeoutMs = 10000, maxBytes = MAX_SINGLE_BYTES) {
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
     const response = await fetcher(url, { cache: 'no-store', signal: controller?.signal,
       headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error('HTTP ' + response.status);
-    return response.json();
+    const reported = Number(response.headers?.get?.('content-length') || 0);
+    if (reported > maxBytes) throw new Error('Таблица превышает лимит размера');
+    if (typeof response.text !== 'function') return response.json();
+    const body = await response.text();
+    if (body.length > maxBytes) throw new Error('Таблица превышает лимит размера');
+    return JSON.parse(body);
   } finally { if (timer) clearTimeout(timer); }
 }
 
