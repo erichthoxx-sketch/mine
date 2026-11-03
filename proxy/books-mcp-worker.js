@@ -89,8 +89,97 @@ const TOOLS = [
     book_id: BOOK_ID, query: { type: 'string', minLength: 2, maxLength: 200 }
   }, ['book_id', 'query'])
 ];
+
+const SECTION_NAMES = ['marketing', 'income', 'direct'];
+const sectionKey = (name) => 'section:' + name;
+const contextTools = [
+  tool('get_system_status', 'Состояние сохранённых источников: доступные книги, маркетинг, доходы, Директ и время их последней синхронизации.', {}),
+  tool('get_marketing_overview', 'Аннотации, жанры, темы, идеи и сведения о продвижении книг из Мастерской.', {}),
+  tool('get_book_marketing', 'Маркетинговые сведения только одной книги.', { book_id: BOOK_ID }, ['book_id']),
+  tool('get_income_overview', 'Динамика роялти по месяцам, число продаж и обзор рекламных расходов. Даты выгрузки обязательны для интерпретации.', {}),
+  tool('get_book_sales', 'Строки продаж и роялти выбранной книги (не более 250 за запрос).', {
+    book: { type: 'string', description: 'Название книги или bookId' },
+    from: { type: 'string', description: 'Дата от YYYY-MM-DD' },
+    to: { type: 'string', description: 'Дата до YYYY-MM-DD' }
+  }, ['book']),
+  tool('get_direct_overview', 'Сохранённая сводка кампаний Директа, последние расходы и качество рекламного трафика.', {}),
+  tool('get_direct_campaign', 'Подробности одной кампании Директа и её статистика.', { campaign_id: { type: 'string' } }, ['campaign_id'])
+];
+TOOLS.push(...contextTools);
+async function sectionTool(env, name, a = {}) {
+  const keys = { get_marketing_overview: 'marketing', get_book_marketing: 'marketing',
+    get_income_overview: 'income', get_book_sales: 'income',
+    get_direct_overview: 'direct', get_direct_campaign: 'direct' };
+  if (name === 'get_system_status') {
+    const [books, ...sections] = await Promise.all([indexOf(env.BOOKS),
+      ...SECTION_NAMES.map((v) => env.BOOKS.get(sectionKey(v), { type: 'json' }))]);
+    return msg({ books, sections: SECTION_NAMES.map((name, i) => ({
+      name, available: !!sections[i], updatedAt: sections[i]?.updatedAt || null
+    })) });
+  }
+  const section = keys[name];
+  if (!section) return null;
+  const item = await env.BOOKS.get(sectionKey(section), { type: 'json' });
+  if (!item) return msg('Источник ' + section + ' ещё не подключён или доступ к нему отозван.', true);
+  const d = item.data || {};
+  if (name === 'get_marketing_overview') return msg({ updatedAt: item.updatedAt,
+    books: (d.books || []).map((x) => ({ ...x, promo: x.promo || {} })),
+    ideas: (d.ideas || []).slice(0, 100), contests: (d.contests || []).slice(0, 50) });
+  if (name === 'get_book_marketing') {
+    const b = (d.books || []).find((x) => x.id === a.book_id);
+    return b ? msg({ updatedAt: item.updatedAt, book: b,
+      ideas: (d.ideas || []).filter((x) => x.bookId === b.id),
+      contests: (d.contests || []).filter((x) => (x.bookIds || []).includes(b.id)) }) :
+      msg('Книга не найдена в маркетинговом контексте.', true);
+  }
+  if (name === 'get_income_overview') return msg({ updatedAt: item.updatedAt,
+    lastSaleDate: d.lastSaleDate, totals: d.totals, months: d.months,
+    books: d.books, campaigns: d.campaigns, reports: d.reports });
+  if (name === 'get_book_sales') {
+    const q = String(a.book || '').trim().toLocaleLowerCase('ru');
+    if (!q) return msg('Нужно название книги.', true);
+    const found = (d.sales || []).filter((x) =>
+      (String(x.book || '').toLocaleLowerCase('ru') === q || String(x.bookId || '').toLocaleLowerCase('ru') === q)
+      && (!a.from || x.date >= a.from) && (!a.to || x.date <= a.to));
+    return msg({ book: a.book, lastSaleDate: d.lastSaleDate, updatedAt: item.updatedAt,
+      count: found.length, rows: found.slice(0, 250) });
+  }
+  if (name === 'get_direct_overview') return msg({ updatedAt: item.updatedAt, sourceAt: d.snapshotAt,
+    campaigns: d.campaigns || [], daily: (d.daily || []).slice(-300),
+    queries: (d.queries || []).slice(0, 50), metrika: d.metrika });
+  if (name === 'get_direct_campaign') {
+    const q = String(a.campaign_id || '');
+    const camp = (d.campaigns || []).find((x) => String(x.id) === q);
+    if (!camp) return msg('Кампания не найдена.', true);
+    return msg({ updatedAt: item.updatedAt, campaign: camp,
+      daily: (d.daily || []).filter((x) => String(x.cid) === q).slice(-90),
+      queries: (d.queries || []).filter((x) => String(x.cid) === q).slice(0, 100),
+      keywords: (d.keywords || []).filter((x) => String(x.cid) === q).slice(0, 100),
+      adDaily: (d.adDaily || []).filter((x) => String(x.cid) === q).slice(-100) });
+  }
+  return null;
+}
+async function syncSection(req, env, name) {
+  if (!SECTION_NAMES.includes(name)) return error(req, 404, 'Такого раздела нет');
+  if (!['PUT', 'DELETE'].includes(req.method)) return error(req, 405, 'Метод не поддерживается');
+  if (!(await verifyOwner(req, env))) return error(req, 401, 'Требуется вход владельца');
+  if (req.method === 'DELETE') {
+    await env.BOOKS.delete(sectionKey(name));
+    return json(req, { ok: true, removed: true, section: name });
+  }
+  const raw = await req.text();
+  if (utf8(raw).length > 5 * 1024 * 1024) return error(req, 413, 'Контекст слишком большой');
+  let data; try { data = JSON.parse(raw); } catch { return error(req, 400, 'Неверный JSON'); }
+  if (!data || data.section !== name || typeof data.generatedAt !== 'string') return error(req, 400, 'Неверный формат');
+  const updatedAt = new Date().toISOString();
+  await env.BOOKS.put(sectionKey(name), JSON.stringify({ data, updatedAt }));
+  return json(req, { ok: true, section: name, updatedAt });
+}
+
 const msg = (x, isError = false) => ({ content: [{ type: 'text', text: typeof x === 'string' ? x : JSON.stringify(x, null, 2) }], ...(isError ? { isError: true } : {}) });
 async function callTool(env, name, a) {
+  const external = await sectionTool(env, name, a);
+  if (external) return external;
   if (name === 'list_books') return msg(await indexOf(env.BOOKS));
   if (!validId(a?.book_id)) return msg('Укажите book_id из list_books.', true);
   const b = await env.BOOKS.get(bookKey(a.book_id), { type: 'json' });
@@ -133,7 +222,7 @@ async function mcp(req, env) {
   let result;
   try {
     switch (body.method) {
-      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-books', version: '1.0.0' } }; break;
+      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.1.0' } }; break;
       case 'ping': result = {}; break;
       case 'tools/list': result = { tools: TOOLS }; break;
       case 'tools/call':
@@ -186,6 +275,8 @@ export default {
     if (!env.BOOKS) return error(req, 503, 'Не подключено KV BOOKS');
     try {
       if (url.pathname === '/mcp') return await mcp(req, env);
+      const section = /^\/sync\/section\/([a-z]+)$/.exec(url.pathname);
+      if (section) return await syncSection(req, env, section[1]);
       const match = /^\/sync\/([^/]+)$/.exec(url.pathname);
       if (match) return await sync(req, env, match[1]);
     } catch { return error(req, 500, 'Временная ошибка сервиса'); }
