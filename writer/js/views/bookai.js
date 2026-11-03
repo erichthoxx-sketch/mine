@@ -32,7 +32,7 @@ function validWorker(raw) {
 }
 acts['bai.settings'] = () => {
   const url = workerOf();
-  openSheet('Коннектор для книг',
+  openSheet('Единый коннектор Мастерской',
     '<p class="small muted">Вставьте адрес отдельного Cloudflare Worker из инструкции. Здесь хранится только адрес, не пароль и не ключи.</p>' +
     '<label for="baiUrl">Адрес Cloudflare Worker</label><input id="baiUrl" name="url" type="url" placeholder="https://master-books.ваш-домен.workers.dev/" value="' + esc(url) + '">' +
     '<label for="baiUid">ID владельца Firebase (для Cloudflare)</label><input id="baiUid" readonly value="' + esc(app().store.user?.uid || '') + '">' +
@@ -76,7 +76,7 @@ acts['bai.download'] = async (d) => {
   try {
     toast('Собираю контекст книги…');
     const s = await bookSnapshot(b);
-    if (await download('kontekst_' + safeFile(b.title) + '.md', snapshotMarkdown(s), 'text/markdown')) {
+    if (await download('kontekst_' + safeFile(b.title) + '.md', new Blob([snapshotMarkdown(s)], { type: 'text/markdown;charset=utf-8' }), 'text/markdown')) {
       toast('Контекст скачан: ' + s.chapters.length + ' глав. Прикрепите файл к нейросети.');
     }
   } catch (e) { toast('Не удалось собрать контекст: ' + (e.message || e)); }
