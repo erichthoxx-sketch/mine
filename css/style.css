@@ -3268,3 +3268,10 @@ input.own-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50
 /* значки панели редактора — прозрачные, как раньше (не «таблетки»); при наведении — мягкая подложка */
 :root button.ed-ic { background: transparent !important; border-radius: 10px !important; padding: 0 9px !important; min-height: 34px; box-shadow: none !important; }
 :root button.ed-ic:hover { background: var(--soft, var(--surface-2)) !important; }
+
+/* Read-only source marker inspector: never changes the manuscript. */
+.ed-markscan { display: flex; justify-content: flex-end; margin: 2px 0 0; }
+.ed-markscan button.ed-markscan-btn { min-height: 30px; border: 1px solid var(--line) !important; border-radius: 9px; color: var(--muted) !important; font-size: 12px; font-weight: 500; padding: 0 10px; }
+.ed-markscan button.ed-markscan-btn:hover { color: var(--text) !important; background: var(--surface-2); }
+.markscan-preview { padding: 12px; min-height: 65px; max-height: 340px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--text); font-size: 13px; line-height: 1.55; }
+.markscan-hit { padding: 1px 3px; border-radius: 3px; background: #f7d6cf; color: #70291e; font-weight: 600; }
