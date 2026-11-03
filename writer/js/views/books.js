@@ -10,6 +10,7 @@ import { promoLinksPanel } from './promolinks.js';
 import { blogBookCard } from './blog.js';
 import { reviewsCard } from './reviews.js';
 import { publisherCard, svcInfo } from './pubfiles.js';
+import { bookAiCard } from './bookai.js';
 import { ownTasks, bookOfTask, addOwnTask, tdText } from '../../../js/tdtasks.js';
 import { isOpen, ideaTitle } from '../ideacalc.js';
 import { titleRequests } from '../docedit.js';
@@ -245,6 +246,7 @@ export function bookPage(a, id) {
     ${(c.data.w_promolinks || []).some(x => x.bookId === b.id && x.status !== 'archived') ? promoLinksPanel(c, { bookId: b.id, compact: true }) : ''}
   </div>
   ${publisherCard(b)}
+  ${bookAiCard(c, b)}
   <div class="card"><h2>О книге</h2>
   <form data-form="wbook.save" data-id="${b.id}">
     <label for="bt" style="margin-top:0">Название</label><input id="bt" name="title" value="${esc(b.title)}" required>
