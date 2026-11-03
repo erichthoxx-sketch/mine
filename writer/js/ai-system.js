@@ -39,7 +39,7 @@ export function marketingSnapshot(data, generatedAt = new Date().toISOString()) 
     ['bookId', 'channel', 'campaign', 'status', 'createdAt', 'start', 'end', 'clicks', 'notes']));
   const blogs = (data.w_blog || []).slice(0, 100).map((x) => ({
     bookId: x.bookId || null, title: text(x.title, 200), status: x.status,
-    modifiedAt: x.modifiedAt, text: text(x.html, 6000).replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim()
+    modifiedAt: x.modifiedAt, text: text(x.html, 6000).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
   }));
   return { section: 'marketing', generatedAt, note: 'Только маркетинговые сведения. Без контактов, ключей и финансовых настроек.', books, ideas, contests, reviews, promos, blogs };
 }
