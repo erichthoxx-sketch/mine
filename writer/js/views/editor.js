@@ -11,6 +11,7 @@ import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedSt
 import { alNum, chapterList } from '../wcalc.js';
 import { cleanText, cleanedMsg } from '../../../js/cleantext.js';
 import { editorToolbar, editorFindBar } from '../editor-ui.js';
+import { openMarkInspector } from '../watermark-inspector.js';
 
 const app = () => window.__app;
 let ed = null; // { key, bookId, title, tabId, status, html, baseText, dirty, savedAt, err, draft, named, startChars }
@@ -169,6 +170,7 @@ export function editorView(a, bookId, title) {
       <button class="primary" data-act="ed.save" title="Ctrl+S">Сохранить в Документ</button>
     </div>
     ${editorToolbar('ed')}
+    <div class="ed-markscan"><button class="ed-ic ed-markscan-btn" type="button" data-act="ed.marks" title="Проверить скрытые символы исходного текста. Статистическая маркировка Claude не определяется">◌ Метки</button></div>
     ${editorFindBar('ed')}
   </div>
   ${ed.draft ? `<div class="alert alert-thin ed-draft">На этом устройстве есть несохранённый черновик от ${fmtDate(ed.draft.at.slice(0, 10))} ${ed.draft.at.slice(11, 16)}. <button class="link" data-act="ed.useDraft">Открыть черновик</button> <button class="link" data-act="ed.dropDraft">Отбросить</button></div>` : ''}
@@ -440,6 +442,7 @@ acts['ed.copy'] = async () => {
 };
 
 acts['ed.save'] = () => { save(); return false; };
+acts['ed.marks'] = () => { openMarkInspector(document.getElementById('ed')?.innerText || ''); return false; };
 // выделение цветом: тёмно-изумрудный, как в Google Документе; на уже выделенном — снимает цвет
 const MARK = '#0b6b4f', CLEAR = '#010203';
 function colorSel() {
