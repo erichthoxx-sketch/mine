@@ -1,9 +1,12 @@
 // Read-only token highlighting for the experimental s* statistical scorer.
 // No Unicode scan, no rewriting, and no changes to editor HTML or Google Docs.
-import { scoreTokenPositions, isTrainedScorer } from './watermark-score.js';
+import { scoreTokenPositions } from './watermark-score.js';
+import { availableModelScorers } from './watermark-catalog.js';
 
 const HIGHLIGHT_NAME = 'writer-experimental-watermark';
 let active = false;
+let requestId = 0;
+let searching = false;
 
 function status(message) {
   const el = document.getElementById('ed-wm-status');
@@ -18,6 +21,7 @@ function button() {
 }
 
 export function clearWatermarkHighlights(silent = false) {
+  requestId++;
   if (globalThis.CSS?.highlights) globalThis.CSS.highlights.delete(HIGHLIGHT_NAME);
   active = false;
   button();
@@ -60,42 +64,58 @@ function getRange(hit, refs) {
   return range;
 }
 
-async function loadScorer() {
-  // The upstream stealer module produces this JSON using steal.py build.
-  // Until a trained target-language/target-model corpus is available,
-  // the checked-in file deliberately contains no scores.
-  const response = await fetch(new URL('./s_star.json', import.meta.url), { cache: 'no-store' });
-  if (!response.ok) throw Error('Не удалось загрузить статистическую модель');
-  return response.json();
-}
-
+// Одна кнопка: без ручного выбора модели проверяем всеми подходящими
+// опубликованными таблицами. Оценка s* приблизительная, не секретный ключ.
 export async function toggleWatermarkHighlights() {
   if (active) { clearWatermarkHighlights(); return; }
+  if (searching) return;
   const root = document.getElementById('ed');
   if (!root) return;
   if (!globalThis.CSS?.highlights || !globalThis.Highlight) {
     status('Браузер не поддерживает подсветку без изменения текста.');
     return;
   }
-  status('Проверяю доступность экспериментальной модели…');
-  let scorer;
-  try { scorer = await loadScorer(); }
-  catch (error) { status('Не удалось загрузить модель: ' + error.message); return; }
-  if (!isTrainedScorer(scorer)) {
-    status('Модуль статистической подсветки подключён, но обученная таблица Opus 5.5 пока отсутствует. Подсвечивать произвольные слова не буду.');
+  const currentRequest = ++requestId;
+  searching = true;
+  status('Проверяю обновления анализаторов…');
+  let catalog;
+  try { catalog = await availableModelScorers(); }
+  catch (error) {
+    if (requestId === currentRequest) status('Проверка обновлений недоступна: ' + error.message);
+    searching = false;
     return;
   }
-  // Reject any stale, superseded chapter while the scorer was being loaded.
-  if (document.getElementById('ed') !== root) return;
+  searching = false;
+  if (requestId !== currentRequest || document.getElementById('ed') !== root) return;
+  if (!catalog.models.length) {
+    if (catalog.availableCount === 0) {
+      status('В открытом источнике ещё нет обученных статистических анализаторов. Обновления проверяются автоматически, до одного раза в 6 часов.');
+    } else {
+      status('Обнаружены файлы анализаторов, но подходящих обученных таблиц для русского текста пока нет.');
+    }
+    return;
+  }
   try {
     const { text, refs } = editorTextMap(root);
-    const result = scoreTokenPositions(text, scorer);
-    const ranges = result.hits.slice(0, 1500).map((hit) => getRange(hit, refs)).filter(Boolean);
+    const hits = new Map();
+    let scored = 0;
+    const names = [];
+    for (const model of catalog.models) {
+      const result = scoreTokenPositions(text, model.data);
+      scored = Math.max(scored, result.tokenCount);
+      names.push(model.label);
+      for (const hit of result.hits) hits.set(hit.start + ':' + hit.end, hit);
+    }
+    const ranges = [...hits.values()].slice(0, 1500)
+      .map((hit) => getRange(hit, refs)).filter(Boolean);
     globalThis.CSS.highlights.set(HIGHLIGHT_NAME, new globalThis.Highlight(...ranges));
     active = true;
     button();
-    status('Экспериментальные совпадения: ' + ranges.length + ' из ' + result.tokenCount +
-      ' токенов. Оценка stealer/s*, не подтверждение маркировки Claude; текст не изменён.');
+    const labels = names.slice(0, 3).join(', ') + (names.length > 3 ? ' и другие' : '');
+    status('Анализаторов: ' + catalog.models.length + ' (' + labels + '). ' +
+      'Экспериментальных совпадений: ' + ranges.length + ' из ' + scored + ' токенов. ' +
+      (catalog.stale ? 'Каталог обновлений временно недоступен. ' : '') +
+      'Это приблизительная оценка, не доказательство водяного знака Claude. Текст не изменён.');
   } catch (error) {
     status('Не удалось выполнить статистическую проверку: ' + error.message);
   }
