@@ -159,13 +159,23 @@ export function watchForUpdates() {
       if (live && live !== mine) {
         const key = 'reloadedFor';
         if (sessionStorage.getItem(key) === live) return; // не зацикливаемся
+        // идёт работа (открыт редактор главы, окно, курсор в поле) — не перезагружаем: несохранённый текст сбросился бы.
+        // Новая версия откроется сама, когда работа закончена (переход в другой раздел)
+        if (busyNow()) { pending = live; return; }
         sessionStorage.setItem(key, live);
         location.reload();
       }
     } catch { /* нет сети — проверим в следующий раз */ }
   };
+  let pending = '';
+  const busyNow = () => {
+    try { if (window.__keepPage?.()) return true; } catch { /* ок */ }
+    const a = document.activeElement;
+    return !!(document.querySelector('dialog[open]') || (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))));
+  };
   check();
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+  window.addEventListener('hashchange', () => { if (pending) setTimeout(check, 300); });
 }
 
 // После обновления страницы остаёмся там же: адрес раздела — в адресной строке (#/book/…),

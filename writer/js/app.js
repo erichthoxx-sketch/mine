@@ -148,6 +148,8 @@ document.addEventListener('focusout', () => { if (pending) setTimeout(() => { co
 window.addEventListener('online', render); window.addEventListener('offline', render);
 
 installHandlers(() => render());
+// пока открыт редактор главы или правка не сохранена — новая версия приложения не перезагружает страницу
+window.__keepPage = () => /^\/ed\//.test(app.ui?.route || '') || editorDirty();
 watchForUpdates();
 try { sessionStorage.removeItem('staleReload'); } catch { /* нет доступа к памяти браузера */ }
 applyTheme();

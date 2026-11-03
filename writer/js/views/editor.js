@@ -367,7 +367,7 @@ acts['ed.replaceAll'] = () => {
 
 // ---------- скопировать всю главу: с оформлением (для редакторов площадок) и простым текстом ----------
 // абзац для вставки на площадку (Литнет и др.): только сам абзац, жирный/курсив/подчёркнутый/зачёркнутый и выравнивание по центру или вправо.
-// Отступы после абзаца, межстрочный интервал, шрифты и цвета из Документа не уносим — Литнет вставлял их пустыми строками между абзацами
+// Межстрочный интервал, шрифты и цвета из Документа не уносим; отступы между абзацами — нулевые (Литнет показывал их пустыми строками)
 function cleanPara(b) {
   const n = b.cloneNode(true);
   for (const x of [...n.querySelectorAll('*')].reverse()) {
@@ -376,7 +376,8 @@ function cleanPara(b) {
     else x.replaceWith(...x.childNodes);
   }
   const al = b.style.textAlign;
-  return `<p${al === 'center' || al === 'right' ? ` style="text-align:${al}"` : ''}>${n.innerHTML || '<br>'}</p>`;
+  // отступы сверху и снизу — явно нулевые: иначе Литнет ставит абзацу свой отступ, и между абзацами видна пустая строка
+  return `<p style="margin-top:0pt;margin-bottom:0pt${al === 'center' || al === 'right' ? `;text-align:${al}` : ''}">${n.innerHTML || '<br>'}</p>`;
 }
 acts['ed.copy'] = async () => {
   const el = document.getElementById('ed');
