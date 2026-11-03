@@ -1,0 +1,13 @@
+{
+  "config": {
+    "context_len": 8,
+    "topk": 50,
+    "alpha": 0.4,
+    "min_context": 1,
+    "baseline_fallback": "unigram",
+    "source": "guillaumemeyer/watermarks-remover/stealer",
+    "model": "Opus 5.5 (table not trained)",
+    "language": "ru"
+  },
+  "scorer": {}
+}
