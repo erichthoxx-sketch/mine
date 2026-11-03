@@ -366,6 +366,18 @@ acts['ed.replaceAll'] = () => {
 };
 
 // ---------- скопировать всю главу: с оформлением (для редакторов площадок) и простым текстом ----------
+// абзац для вставки на площадку (Литнет и др.): только сам абзац, жирный/курсив/подчёркнутый/зачёркнутый и выравнивание по центру или вправо.
+// Отступы после абзаца, межстрочный интервал, шрифты и цвета из Документа не уносим — Литнет вставлял их пустыми строками между абзацами
+function cleanPara(b) {
+  const n = b.cloneNode(true);
+  for (const x of [...n.querySelectorAll('*')].reverse()) {
+    const tag = x.tagName.toLowerCase();
+    if (/^(b|strong|i|em|u|s|strike|br)$/.test(tag)) { for (const a of [...x.attributes]) x.removeAttribute(a.name); }
+    else x.replaceWith(...x.childNodes);
+  }
+  const al = b.style.textAlign;
+  return `<p${al === 'center' || al === 'right' ? ` style="text-align:${al}"` : ''}>${n.innerHTML || '<br>'}</p>`;
+}
 acts['ed.copy'] = async () => {
   const el = document.getElementById('ed');
   if (!el) return false;
@@ -377,7 +389,7 @@ acts['ed.copy'] = async () => {
   const body = kids.slice(k), box = document.createElement('div');
   body.forEach((n) => box.append(n.cloneNode(true)));
   const text = blocksText(htmlToBlocks(box));
-  const html = `<div>${body.map((b) => `<${b.tagName.toLowerCase()}${b.getAttribute('style') ? ` style="${b.getAttribute('style')}"` : ''}>${b.innerHTML}</${b.tagName.toLowerCase()}>`).join('')}</div>`;
+  const html = `<div>${body.map(cleanPara).join('')}</div>`;
   try {
     if (window.ClipboardItem && navigator.clipboard?.write) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
     else await navigator.clipboard.writeText(text);
