@@ -37,7 +37,7 @@ acts['bai.settings'] = () => {
     '<label for="baiUrl">Адрес Cloudflare Worker</label><input id="baiUrl" name="url" type="url" placeholder="https://masterskaya-ai.ваш-домен.workers.dev/" value="' + esc(url) + '">' +
     '<label for="baiUid">ID владельца Firebase (для Cloudflare)</label><input id="baiUid" readonly value="' + esc(app().store.user?.uid || '') + '">' +
     '<button type="button" data-act="bai.copyuid">Скопировать ID</button> <button type="button" data-act="bai.key">Создать ключ доступа</button>' +
-    '<p class="small muted">Для нейросетей с поддержкой пользовательских MCP: адрес /mcp и ключ в заголовке X-Master-Key, если поддерживаются произвольные заголовки. Без MCP используйте скачивание файла в настройках «Мастерской». Ключ не вставляйте в текст чата.</p>' +
+    '<p class="small muted">Для нейросетей с поддержкой пользовательских MCP: адрес /mcp и ключ в заголовке x-api-key (или Authorization: Bearer), если поддерживаются произвольные заголовки. Без MCP используйте скачивание файла в настройках «Мастерской». Ключ не вставляйте в текст чата.</p>' +
     '<button type="button" data-act="bai.copyurl">Скопировать адрес MCP</button>',
     async (f) => {
       const raw = String(f.get('url') || '').trim();
@@ -61,7 +61,7 @@ acts['bai.copyuid'] = async () => {
 acts['bai.key'] = () => {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const key = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  openSheet('Личный ключ доступа', '<p class="small muted">Скопируйте ключ один раз. Добавьте его в Cloudflare как секрет MCP_READ_KEY, затем в поддерживающей MCP нейросети как заголовок X-Master-Key. Не передавайте ключ в чат и не публикуйте в GitHub. В Мастерской ключ не сохраняется.</p>' +
+  openSheet('Личный ключ доступа', '<p class="small muted">Скопируйте ключ один раз. Добавьте его в Cloudflare как секрет MCP_READ_KEY, затем в поддерживающей MCP нейросети как заголовок x-api-key. Не передавайте ключ в чат и не публикуйте в GitHub. В Мастерской ключ не сохраняется.</p>' +
     '<input readonly id="baiGenerated" value="' + esc(key) + '">' +
     '<button type="button" data-act="bai.copykey">Скопировать ключ</button>', null);
   return false;
