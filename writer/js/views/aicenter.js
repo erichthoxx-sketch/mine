@@ -1,8 +1,8 @@
 // Один центр подключения всей писательской системы к личному MCP.
 // Все данные только на чтение для нейросети, отправка только по кнопке владелицы.
-import { acts, ask, esc, toast, copyRich } from '../../../js/ui.js';
+import { acts, ask, esc, toast, download } from '../../../js/ui.js';
 import { ic } from '../../../js/icons.js';
-import { bookSnapshot } from '../bookai.js';
+import { bookSnapshot, snapshotMarkdown } from '../bookai.js';
 import { marketingSnapshot, incomeSnapshot, directSnapshot, readDirectDocs } from '../ai-system.js';
 
 const app = () => window.__app;
@@ -24,13 +24,14 @@ export function aiCenterCard(c) {
     '<p class="small muted" style="margin:8px 0 12px">Один защищённый доступ к рукописям, маркетингу, продажам и статистике Яндекс.Директа. Нейросеть может читать данные, но не изменять их.</p>' +
     '<div class="row" style="gap:8px;flex-wrap:wrap">' +
     '<button class="primary" data-act="ai.all"' + (running ? ' disabled' : '') + '>' + ic('link') + (when ? 'Обновить весь контекст' : 'Подключить весь контекст') + '</button>' +
+    '<button data-act="ai.export"' + (running ? ' disabled' : '') + '>' + ic('download') + 'Скачать для любой нейросети</button>' +
     '<button data-act="bai.settings">Настроить</button>' +
     (when ? '<button class="link" data-act="ai.clear">Отключить всё</button>' : '') +
     '</div>' +
     (when ? '<p class="small muted" style="margin:10px 0 0">Последняя передача: ' + esc(when) +
       (s.aiLastCount != null ? ' · Книг: ' + Number(s.aiLastCount) : '') +
       (s.aiLastError ? ' · ' + esc(s.aiLastError) : '') + '</p>' : '') +
-    '<p class="hint">Первоначально нужно один раз развернуть отдельный Worker в существующем Cloudflare и добавить его в Claude. Кнопка передаёт снимок данных; обновления в Google Docs и Директе появятся здесь после следующей синхронизации.</p>' +
+    '<p class="hint">Прямой доступ работает в совместимых с MCP нейросетях после добавления адреса /mcp. Для остальных скачайте универсальный файл .md. Обновление данных выполняется отдельно; добавить коннектор в чужой чат автоматически нельзя.</p>' +
     '</div>';
 }
 async function request(method, path, data) {
@@ -102,7 +103,7 @@ acts['ai.all'] = async () => {
       aiConsentAt: app().ctx().settings.aiConsentAt || now
     });
     toast(errors.length ? ('Передано ' + sectionsDone + ' раздела(ов), книг: ' + booksDone + '. Есть ошибки — см. статус.') :
-      ('Готово: ' + booksDone + ' книг и ' + sectionsDone + ' раздела. Добавьте адрес MCP в Claude.'));
+      ('Готово: ' + booksDone + ' книг и ' + sectionsDone + ' раздела. MCP готов для совместимых нейросетей.'));
   } catch (e) {
     toast('Подключение не завершено: ' + (e.message || e));
   } finally {
@@ -129,5 +130,67 @@ acts['ai.clear'] = async () => {
     toast(errors.length ? 'Облачные копии удалены, но не все метки книг обновились' : 'Все облачные копии контекста удалены');
   } catch (e) { toast('Не удалось отключить: ' + (e.message || e)); }
   finally { running = false; app().rerender(); }
+  return false;
+};
+
+
+// Экспорт в единый Markdown, который можно вручную прикрепить к любому ИИ с поддержкой файлов.
+// Данные собираются на устройстве и не передаются в новую облачную систему из этого действия.
+acts['ai.export'] = async () => {
+  if (running) return false;
+  running = true;
+  app().rerender();
+  try {
+    const a = app(), now = new Date().toISOString(), data = a.ctx().data;
+    const sections = [
+      '# Контекст авторской системы «Мастерская»',
+      '',
+      'Создано: ' + now,
+      '',
+      'В файле: книги, канон, написанные главы, маркетинг, доходы и сохранённая статистика Директа.',
+      'Это снимок на указанную дату, а не актуальная онлайн-база. Отсутствующие сведения не выдумывать.',
+      'Утверждённый канон и текст рукописи имеют приоритет над предположениями.',
+      '',
+      '# Маркетинг',
+      '',
+      '~~~json',
+      JSON.stringify(marketingSnapshot(data, now), null, 2),
+      '~~~',
+      '',
+      '# Доходы',
+      '',
+      '~~~json',
+      JSON.stringify(incomeSnapshot(data, now), null, 2),
+      '~~~'
+    ];
+    try {
+      const direct = directSnapshot(await readDirectDocs(a.store), now);
+      sections.push('', '# Яндекс.Директ (сохранённая статистика)', '', '~~~json', JSON.stringify(direct, null, 2), '~~~');
+    } catch (e) {
+      sections.push('', '# Яндекс.Директ', '', 'Статистика недоступна: ' + String(e.message || e).slice(0, 300));
+    }
+    const skipped = [];
+    for (const book of [...a.ctx().wbooks]) {
+      try {
+        const snapshot = await bookSnapshot(book);
+        sections.push('', '# Роман: ' + snapshot.title, '',
+          'Обновлено: ' + snapshot.generatedAt, '', snapshotMarkdown(snapshot));
+      } catch (e) {
+        skipped.push(book.title + ': ' + String(e.message || e).slice(0, 200));
+      }
+    }
+    if (skipped.length) sections.splice(8, 0, '', 'Не удалось прочитать: ' + skipped.join('; '));
+    const file = new Blob([sections.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    if (await download('masterskaya_ai_full_context.md', file, 'text/markdown')) {
+      toast(skipped.length
+        ? 'Контекст сохранён с пропусками: ' + skipped.length + ' книг. Проверьте начало файла.'
+        : 'Контекст сохранён. Прикрепите .md к чату или проекту нужной нейросети.');
+    }
+  } catch (e) {
+    toast('Не удалось собрать единый файл: ' + (e.message || e));
+  } finally {
+    running = false;
+    app().rerender();
+  }
   return false;
 };
