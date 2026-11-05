@@ -62,7 +62,10 @@ async function verifyOwner(request, env) {
 }
 async function verifyReader(request, env) {
   const key = String(env.MCP_READ_KEY || '');
-  const got = request.headers.get('X-Master-Key') || '';
+  // Standard auth headers supported by more MCP clients. Keep the legacy header for existing connections.
+  const auth = request.headers.get('Authorization') || '';
+  const got = request.headers.get('x-api-key') || request.headers.get('X-Master-Key') ||
+    (/^Bearer\\s+(.+)$/i.exec(auth)?.[1] || '');
   if (key.length < 32 || got.length !== key.length) return false;
   const [a, b] = await Promise.all([crypto.subtle.digest('SHA-256', utf8(key)), crypto.subtle.digest('SHA-256', utf8(got))]);
   const x = new Uint8Array(a), y = new Uint8Array(b);
