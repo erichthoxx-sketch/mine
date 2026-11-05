@@ -7,6 +7,50 @@ const HIGHLIGHT_NAME = 'writer-experimental-watermark';
 let active = false;
 let requestId = 0;
 let searching = false;
+const RECHECK_MS = 6 * 60 * 60 * 1000;
+let cachedModels = null;
+let modelsCheckedAt = 0;
+let visibilityCheckId = 0;
+
+// Проверяем наличие реально загружаемых таблиц, а не просто имена файлов.
+// Рукопись в эту проверку не передаётся.
+function availableModels() {
+  const now = Date.now();
+  if (!cachedModels || now - modelsCheckedAt >= RECHECK_MS) {
+    modelsCheckedAt = now;
+    cachedModels = availableModelScorers();
+  }
+  return cachedModels;
+}
+
+export function watermarkControlAvailable(catalog, supported = true) {
+  return Boolean(supported && Array.isArray(catalog?.models) && catalog.models.length > 0);
+}
+
+export async function updateWatermarkVisibility() {
+  const row = document.querySelector('.ed-wm-row');
+  const root = document.getElementById('ed');
+  if (!row || !root) return;
+  row.hidden = true;
+  if (!globalThis.CSS?.highlights || !globalThis.Highlight) return;
+  const checkId = ++visibilityCheckId;
+  try {
+    const catalog = await availableModels();
+    if (checkId !== visibilityCheckId || document.getElementById('ed') !== root || !row.isConnected) return;
+    row.hidden = !watermarkControlAvailable(catalog);
+  } catch {
+    // При отсутствии сети или таблиц недоступная функция не показывается.
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void updateWatermarkVisibility();
+  });
+  setInterval(() => {
+    if (document.visibilityState === 'visible') void updateWatermarkVisibility();
+  }, RECHECK_MS);
+}
 
 function status(message) {
   const el = document.getElementById('ed-wm-status');
@@ -79,7 +123,7 @@ export async function toggleWatermarkHighlights() {
   searching = true;
   status('Проверяю обновления анализаторов…');
   let catalog;
-  try { catalog = await availableModelScorers(); }
+  try { catalog = await availableModels(); }
   catch (error) {
     if (requestId === currentRequest) status('Проверка обновлений недоступна: ' + error.message);
     searching = false;
