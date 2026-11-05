@@ -3271,6 +3271,7 @@ input.own-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50
 
 /* Experimental statistical token highlight: CSS Highlight API only (no document mutation). */
 .ed-wm-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
+.ed-wm-row[hidden] { display: none !important; }
 .ed-wm-row .ed-wm-btn { min-height: 32px; padding: 0 12px; border: 1px solid var(--line) !important; border-radius: 9px; color: var(--text-2) !important; font-size: 12px; font-weight: 500; background: transparent; }
 .ed-wm-row .ed-wm-btn[aria-pressed="true"] { border-color: var(--accent) !important; color: var(--accent) !important; }
 .ed-wm-row .ed-wm-status { flex: 1 1 240px; font-size: 12px; line-height: 1.45; color: var(--muted); }
