@@ -23,6 +23,10 @@ function availableModels() {
   return cachedModels;
 }
 
+export function watermarkControlAvailable(catalog, supported = true) {
+  return Boolean(supported && Array.isArray(catalog?.models) && catalog.models.length > 0);
+}
+
 export async function updateWatermarkVisibility() {
   const row = document.querySelector('.ed-wm-row');
   const root = document.getElementById('ed');
@@ -33,7 +37,7 @@ export async function updateWatermarkVisibility() {
   try {
     const catalog = await availableModels();
     if (checkId !== visibilityCheckId || document.getElementById('ed') !== root || !row.isConnected) return;
-    row.hidden = !catalog.models?.length;
+    row.hidden = !watermarkControlAvailable(catalog);
   } catch {
     // При отсутствии сети или таблиц недоступная функция не показывается.
   }
