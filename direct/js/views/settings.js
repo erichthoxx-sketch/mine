@@ -1,5 +1,5 @@
 // Настройки: подключение (переходник → приложение Яндекса → вход), предохранители, тестовый бюджет
-import { esc, acts, forms, toast, ask, N } from '../../../js/ui.js';
+import { esc, acts, forms, toast, ask, N, fold } from '../../../js/ui.js';
 import { rub } from '../../../js/format.js';
 import { authorizeUrl } from '../api.js';
 import { proxyCard } from '../../../js/proxycard.js';
@@ -10,17 +10,29 @@ import { DEFAULT_MAX_BID, DEFAULT_TEST_BUDGET } from '../dcalc.js';
 const app = () => window.__app;
 const saveD = (patch) => app().store.saveSettings({ direct: { ...(app().ctx().settings.direct || {}), ...patch } });
 
+// настройки Директа: подключение (если ещё нет) и «Обновить переходник» — сверху, остальное одним списком строк
 export function settingsView(a) {
   const s = a.ctx().settings, d = s.direct || {}, on = !!s.directToken;
   const exp = s.directTokenExp ? new Date(s.directTokenExp) : null;
   const left = exp ? Math.round((exp - Date.now()) / 86400000) : null;
   return {
     html: `${setupCard(a.ctx())}
-    ${on ? `<div class="card"><div class="row between"><h2 style="margin:0">Ключ Яндекса</h2><span class="d-st good">● подключён</span></div>
-      <p class="small">${left != null ? `Действует ещё ${left} дн.` : 'Сохранён.'} ${left != null && left < 14 ? '<b>Скоро истечёт — войдите заново.</b>' : ''}</p>
-      <div class="row"><button data-act="d.login"${d.clientId ? '' : ' disabled'}>Войти заново</button><button class="link danger" data-act="d.off">Отключить</button></div></div>` : ''}
     ${proxyCard(s)}
-    <div class="card"><div class="row between"><h2 style="margin:0">Wordstat API</h2><span class="d-st">требует настройки</span></div>
+    <div class="card folds">
+    ${fold('ds-key', 'Ключ Яндекса', (on ? `<div class="card"><div class="row between"><h2 style="margin:0">Ключ Яндекса</h2><span class="d-st good">● подключён</span></div>
+      <p class="small">${left != null ? `Действует ещё ${left} дн.` : 'Сохранён.'} ${left != null && left < 14 ? '<b>Скоро истечёт — войдите заново.</b>' : ''}</p>
+      <div class="row"><button data-act="d.login"${d.clientId ? '' : ' disabled'}>Войти заново</button><button class="link danger" data-act="d.off">Отключить</button></div></div>` : '') + `    <div class="card"><details><summary class="small">Вставить ключ Яндекса вручную</summary><form data-form="d.token"><input name="t" type="password" autocomplete="off" placeholder="OAuth-токен Яндекса"><div class="row"><button type="submit">Сохранить ключ</button></div></form></details></div>`, { sub: on ? (left != null ? (left < 14 ? `скоро истечёт: ${left} дн.` : `подключён · ещё ${left} дн.`) : 'подключён') : 'не подключён', open: on && left != null && left < 14 })}
+    ${on ? fold('ds-mk', 'Метрика', metrikaCard(a.ctx()), { sub: d.metrika?.counterId ? 'подключена' : 'не подключена' }) : ''}
+    ${fold('ds-safe', 'Тест и предохранители', `    <div class="card"><h2>Тест и предохранители</h2>
+      <form data-form="d.opts" class="settings-form">
+        <div class="f2"><div><label>Тестовый бюджет, ₽</label><input name="testBudget" inputmode="decimal" value="${esc(d.testBudget ?? DEFAULT_TEST_BUDGET)}"></div><div><label>Тест с даты</label><input type="date" name="testFrom" value="${esc(d.testFrom || '')}"></div></div>
+        <label>Предел ставки за клик, ₽</label><input name="maxBid" inputmode="decimal" value="${esc(d.maxBid ?? DEFAULT_MAX_BID)}">
+        <p class="hint">Дороже приложение (и ИИ через него) ставку не поставит. Бюджет и дневной лимит меняются только в кабинете Директа.</p>
+        <label class="d-check"><input type="checkbox" name="sandbox" ${d.sandbox ? 'checked' : ''}> Песочница Директа (тренировка без денег)</label>
+        <details class="d-more"><summary class="small">Для агентского аккаунта</summary><label>Логин клиента (Client-Login)</label><input name="clientLogin" value="${esc(d.clientLogin || '')}"></details>
+        <div class="row d-save"><button class="primary" type="submit">Сохранить</button></div>
+      </form></div>`, { sub: `ставка не выше ${esc(d.maxBid ?? DEFAULT_MAX_BID)} ₽` })}
+    ${fold('ds-ws', 'Wordstat API', `    <div class="card"><div class="row between"><h2 style="margin:0">Wordstat API</h2><span class="d-st">требует настройки</span></div>
       <p class="small muted">Подбор ключей по реальной частотности. Платные обращения не выполняются автоматически: только после твоего подтверждения. За один запуск — одна фраза, ориентировочно 0,02 ₽.</p>
       <details class="d-more"><summary class="small">Как включить через Yandex Cloud</summary>
         <ol class="small st-how">
@@ -33,18 +45,8 @@ export function settingsView(a) {
         <p class="small muted">Пока эти настройки не сделаны, Wordstat останется выключенным. Другие функции Директа продолжат работать.</p>
         <a href="https://aistudio.yandex.ru/ru/docs/search-api/operations/wordstat-gettop" target="_blank" rel="noopener">Официальная инструкция Яндекса ↗</a>
       </details>
-    </div>
-    ${on ? metrikaCard(a.ctx()) : ''}
-    <div class="card"><details><summary class="small">Вставить ключ Яндекса вручную</summary><form data-form="d.token"><input name="t" type="password" autocomplete="off" placeholder="OAuth-токен Яндекса"><div class="row"><button type="submit">Сохранить ключ</button></div></form></details></div>
-    <div class="card"><h2>Тест и предохранители</h2>
-      <form data-form="d.opts" class="settings-form">
-        <div class="f2"><div><label>Тестовый бюджет, ₽</label><input name="testBudget" inputmode="decimal" value="${esc(d.testBudget ?? DEFAULT_TEST_BUDGET)}"></div><div><label>Тест с даты</label><input type="date" name="testFrom" value="${esc(d.testFrom || '')}"></div></div>
-        <label>Предел ставки за клик, ₽</label><input name="maxBid" inputmode="decimal" value="${esc(d.maxBid ?? DEFAULT_MAX_BID)}">
-        <p class="hint">Дороже приложение (и ИИ через него) ставку не поставит. Бюджет и дневной лимит меняются только в кабинете Директа.</p>
-        <label class="d-check"><input type="checkbox" name="sandbox" ${d.sandbox ? 'checked' : ''}> Песочница Директа (тренировка без денег)</label>
-        <details class="d-more"><summary class="small">Для агентского аккаунта</summary><label>Логин клиента (Client-Login)</label><input name="clientLogin" value="${esc(d.clientLogin || '')}"></details>
-        <div class="row d-save"><button class="primary" type="submit">Сохранить</button></div>
-      </form></div>`,
+    </div>`, { sub: 'требует настройки' })}
+    </div>`,
   };
 }
 forms['d.opts'] = async (fd) => {

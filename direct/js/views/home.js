@@ -1,5 +1,5 @@
 // Обзор: как идёт реклама за неделю, тестовый бюджет, «что сделать сейчас», список кампаний
-import { esc, acts } from '../../../js/ui.js';
+import { esc, acts, more } from '../../../js/ui.js';
 import { rub, num, pct, fmtShort } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
@@ -145,7 +145,7 @@ export function homeView(a) {
       <div class="small muted">${pace.left <= 0 ? 'Тестовый бюджет потрачен — время подвести итоги.' : pace.daysLeft != null ? `≈ ${rub(pace.perDay, 0)} в день — остатка хватит примерно на ${num(pace.daysLeft)} дн.` : 'Пока расходов нет.'}</div></div>
       <div class="chart" id="dSpend"></div><div class="chart-cap small muted">Расход по дням за 30 дней</div></div>
     ${partnerPanel(c)}
-    <div class="card"><h2>Что сделать сейчас</h2>${m?.counterId ? '' : `<p class="small muted">Подключите Метрику (⚙ Настройки) — и подсказки будут учитывать покупки, а не только клики.</p>`}${tasks.length ? `<div class="list">${tasks.join('')}</div>` : '<p class="muted">Ничего срочного. Загляните через пару дней — появятся новые запросы.</p>'}
+    <div class="card"><h2>Что сделать сейчас</h2>${m?.counterId ? '' : `<p class="small muted">Подключите Метрику (⚙ Настройки) — и подсказки будут учитывать покупки, а не только клики.</p>`}${tasks.length ? `<div class="list">${more('dir-todo', tasks, 4)}</div>` : '<p class="muted">Ничего срочного. Загляните через пару дней — появятся новые запросы.</p>'}
       <div class="row dl-row"><button class="dl" data-act="ai.dl">${ic('download')} Скачать для нейросети</button><button class="dl" data-act="go" data-to="/quality">Качество трафика</button></div></div>
     <div class="card"><h2>Кампании</h2>${camps.length ? `<div class="list">${camps.map((k) => {
       const kt = totals(daily, addDays(t, -6), t, k.id);

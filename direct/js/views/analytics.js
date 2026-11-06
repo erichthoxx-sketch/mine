@@ -1,6 +1,6 @@
 // «Аналитика»: всё о читателях по Метрике автора на Литнете — с подсвеченными шагами, книгами, воронкой,
 // метками UTM, деньгами и формулами. Работает и без Директа: нужна только Метрика.
-import { esc, acts, forms, toast, openSheet, opt, N, uid } from '../../../js/ui.js';
+import { esc, acts, forms, toast, openSheet, opt, N, uid, more, fold } from '../../../js/ui.js';
 import { num, pct, rub, fmtShort } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
@@ -74,11 +74,11 @@ function summaryTab(a, M) {
       ${M.perSale && hasGoals ? `<p class="small">Одна покупка приносит в среднем <b>${rub(M.perSale, 0)}</b>${M.allSale ? ' (по «Доходам» за 60 дней)' : ' (из «Экономики книги»)'} → один визит стоит <b>${rub((w.cr || 0) * M.perSale, 1)}</b>.</p>` : ''}
       <p class="small muted">Неделя: глав вышло ${cx.w.chapters} (неделей раньше — ${cx.pw.chapters})${cx.w.outage + cx.pw.outage ? ` · дней сбоя ${cx.w.outage + cx.pw.outage} — в расчёты не входят` : ''}${cx.w.adStart.length ? ' · ' + esc(cx.w.adStart.join(', ')) : ''}${cx.w.adEnd.length ? ' · ' + esc(cx.w.adEnd.join(', ')) : ''}</p><div class="chart" id="mkChart"></div><div class="chart-cap small muted">Визиты по дням за 8 недель</div></div>
     <div class="card"><div class="row between"><h2 style="margin:0">Главное сейчас</h2>${steps ? `<span class="small warnc">шагов: ${steps}</span>` : ''}</div>
-      <div class="list">${ins.map((x) => `<div class="item ${x.level === 'step' ? 'l-hl' : ''}"><span class="small ${LEVEL[x.level][1]}">● ${LEVEL[x.level][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b>
+      <div class="list">${more('an-ins', ins.map((x) => `<div class="item ${x.level === 'step' ? 'l-hl' : ''}"><span class="small ${LEVEL[x.level][1]}">● ${LEVEL[x.level][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b>
         ${x.why ? `<div class="small">${esc(x.why)}</div>` : ''}${x.step ? `<div class="small"><b>Что сделать:</b> ${esc(x.step)}</div>` : ''}
-        ${x.lesson ? `<div class="small"><button class="link l-why" data-act="l.lesson" data-k="${x.lesson}">Почему так →</button></div>` : ''}</div>`).join('') || '<p class="muted">Пока всё ровно.</p>'}</div>
+        ${x.lesson ? `<div class="small"><button class="link l-why" data-act="l.lesson" data-k="${x.lesson}">Почему так →</button></div>` : ''}</div>`), 3) || '<p class="muted">Пока всё ровно.</p>'}</div>
       <div class="row dl-row"><button class="dl" data-act="an.ai">${ic('copy')} Глубокий разбор с Claude</button></div></div>
-    <div class="card"><h2>Дни недели</h2><p class="small muted">Средние визиты за полный день (дни сбоя не считаются)${hasGoals ? ' · доля покупок' : ''}</p>${[1, 2, 3, 4, 5, 6, 0].map((i) => `<div class="bar-row"><div class="row between small"><span>${WD[i]}</span><span>${wd[i].days ? Math.round(wd[i].avg) : '—'}${hasGoals && wd[i].cr != null ? ` · ${pct(wd[i].cr, 1)}` : ''}</span></div><div class="progress"><i style="width:${(wd[i].avg / maxWd * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>`;
+    <div class="card folds">${fold('an-wd', 'Дни недели', `<p class="small muted" style="margin-top:0">Средние визиты за полный день (дни сбоя не считаются)${hasGoals ? ' · доля покупок' : ''}</p>${[1, 2, 3, 4, 5, 6, 0].map((i) => `<div class="bar-row"><div class="row between small"><span>${WD[i]}</span><span>${wd[i].days ? Math.round(wd[i].avg) : '—'}${hasGoals && wd[i].cr != null ? ` · ${pct(wd[i].cr, 1)}` : ''}</span></div><div class="progress"><i style="width:${(wd[i].avg / maxWd * 100).toFixed(1)}%"></i></div></div>`).join('')}`, { sub: (() => { const best = [1, 2, 3, 4, 5, 6, 0].filter((i) => wd[i].days).sort((x, y) => wd[y].avg - wd[x].avg)[0]; return best != null ? `больше всего читателей — ${WD[best]}` : ''; })() })}</div>`;
 }
 
 // ---------- Книги и воронка ----------
