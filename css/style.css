@@ -3307,3 +3307,8 @@ details.fold-more[open] > summary { align-self: flex-start; }
 /* вкладки тонкой линией (Финансы, Читатели, Маркетинг…) — обычными буквами, шрифт заголовков */
 :root main .lg-tabs button { text-transform: none !important; letter-spacing: 0 !important; font: 500 15px/1.2 var(--font-display) !important; }
 :root .money-tabs { margin: 0 0 14px; }
+/* синопсис для чтения (Маркетинг → Для издательства) */
+.syn-read p { margin: 0 0 6px; line-height: 1.55; }
+.syn-read .syn-h { font-weight: 600; margin: 14px 0 4px; }
+.syn-read .syn-h:first-child { margin-top: 4px; }
+.prof-row { gap: 8px; flex-wrap: wrap; align-items: baseline; }

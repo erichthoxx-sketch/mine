@@ -13,6 +13,7 @@ import { chaptersOf, docxBlob } from '../publish.js';
 import { authorshipParas, sha256Hex } from '../authorship.js';
 import { promoLinksPanel, promoLinksInline } from './promolinks.js';
 import { linksView } from './links.js';
+import { profileLinkCard } from './profilelink.js';
 
 const app = () => window.__app;
 export const MTYPES = { banner: 'Баннер для постов', cover: 'Обложка', target: 'Креатив для таргета', manuscript: 'Рукопись', synopsis: 'Синопсис', 'review-shot': 'Отзывы (скриншот)', other: 'Другое' };
@@ -48,6 +49,7 @@ export function marketingView(a, sub = 'books') {
   <div class="chips" style="margin-top:14px">${chip('progress', 'В процессе', by('progress').length)}${chip('done', 'Завершённые', by('done').length)}${chip('idea', 'Идеи', by('idea').length)}${chip('all', 'Все', c.wbooks.length)}</div>
   ${c.wbooks.length > 6 ? `<input type="search" value="${esc(a.ui.mQ || '')}" placeholder="Найти книгу" data-chg="mk.q" aria-label="Найти книгу" style="margin-bottom:10px">` : ''}
   ${list.length ? `<div class="mk-book-list">${list.map((b) => bookRow(c, b)).join('')}</div>` : `<div class="card"><p class="muted" style="margin:0">${c.wbooks.length ? 'В этой группе книг нет.' : 'Книг пока нет — добавьте их на вкладке «Книги».'}</p></div>`}
+  <div style="margin-top:16px">${profileLinkCard(c)}</div>
   <h2 style="margin-top:20px">Рекламные инструменты</h2>
   <div class="card list mk-go">
     <a class="item" href="../direct/"><span class="mk-go-ic">${ic('ads')}</span><span class="mk-go-t"><b>Яндекс Директ</b><span class="sub">кампании, клики, покупки и что поправить</span></span>${ic('chevron')}</a>
@@ -84,6 +86,18 @@ acts['mk.go'] = (d) => { app().ui.mTab = d.tab || 'texts'; app().go('/mk/' + d.i
 changes['mk.q'] = (v) => { app().ui.mQ = v.trim(); app().rerender(); };
 acts['mk.st'] = (d) => { app().ui.mSt = d.v; };
 
+// синопсис для чтения: строка-заголовок («Сеттинг», «Герои», «На что похож роман») — жирным, «Автор: …» — подпись жирным;
+// длинный — первые строки и «Показать полностью» (раскрытие запоминается)
+function synReadable(text) {
+  const lines = String(text || '').split('\n').map((x) => x.trim()).filter(Boolean);
+  const head = (l, i) => i < lines.length - 1 && l.length <= 48 && !/[.!?,;:»"…)]$/.test(l) && !/^[—–-]/.test(l) && l.split(/\s+/).length <= 6;
+  const row = (l, i) => { const m = /^([^:]{2,28}):\s+(.+)$/.exec(l);
+    return m ? `<p><b>${esc(m[1])}:</b> ${esc(m[2])}</p>` : head(l, i) && !l.includes(':') ? `<p class="syn-h">${esc(l)}</p>` : `<p>${esc(l)}</p>`; };
+  const html = lines.map(row);
+  if (html.length <= 12) return `<div class="syn-read">${html.join('')}</div>`;
+  return `<div class="syn-read">${html.slice(0, 10).join('')}<details class="fold-more" data-fold="syn-full"><summary><span class="fm-o">Показать полностью</span><span class="fm-c">Свернуть</span></summary>${html.slice(10).join('')}</details></div>`;
+}
+
 // ---------- страница книги: три блока ----------
 export function bookMarketing(a, id) {
   const c = a.ctx(), b = c.wbooksById[id];
@@ -96,7 +110,7 @@ export function bookMarketing(a, id) {
     <div><h2 style="margin:0">${esc(b.title)}</h2><div class="small muted">${STATUS[b.status] || STATUS.progress}</div></div></div>
   <div class="chips">${tab('texts', 'Тексты и баннеры')}${tab('target', 'Для таргета')}${tab('pub', 'Для издательства')}</div>
   ${body}
-  ${t === 'target' ? promoLinksPanel(c, { bookId: b.id, channel: 'direct' }) : ''}
+  ${t === 'target' ? promoLinksPanel(c, { bookId: b.id, channel: 'direct' }) + profileLinkCard(c) : ''}
   ${b.fileId ? `<div class="mk-auth"><button class="dl" data-act="mk.auth" data-id="${b.id}" title="Когда и как писалась книга: Документ, история версий, главы с отпечатками — в Word">${ic('download')}Справка об авторстве</button></div>` : ''}`;
   return { html };
 }
@@ -169,7 +183,7 @@ function pubBlock(c, b) {
     <div class="list">${man.map(fileRow).join('')}</div>
     <div class="row" style="margin-top:8px">${ok ? upBtn(b, 'manuscript', '+ Загрузить файл рукописи', '.doc,.docx,.pdf,.rtf,.odt,.txt') : ''}</div></div>
   <div class="card"><div class="row between"><h2 style="margin:0">Синопсис</h2><button data-act="syn.edit" data-id="${b.id}" data-back="/mk/${b.id}">${synText(b) ? 'Изменить' : 'Написать'}</button></div>
-    ${synText(b) ? `<div class="small muted" style="margin:4px 0 6px">${esc(synSource(b))}</div><div class="idea-text">${esc(synText(b))}</div>` : '<p class="small muted" style="margin:6px 0 0">Можно написать здесь или загрузить готовый файл.</p>'}
+    ${synText(b) ? `<div class="small muted" style="margin:4px 0 6px">${esc(synSource(b))}</div>${synReadable(synText(b))}` : '<p class="small muted" style="margin:6px 0 0">Можно написать здесь или загрузить готовый файл.</p>'}
     <div class="list">${syn.map(fileRow).join('')}</div>
     <div class="row" style="margin-top:8px">${ok ? upBtn(b, 'synopsis', '+ Загрузить файл синопсиса', '.doc,.docx,.pdf,.rtf,.odt,.txt') : ''}</div></div>
   <div class="card"><h2>Отправить в издательство</h2>

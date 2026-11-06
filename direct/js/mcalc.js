@@ -223,7 +223,7 @@ export function royaltyPerSale(sales = [], today, { book = null, days = 60 } = {
 export const UTM_PRESETS = {
   telegram: ['telegram', 'social', 'Телеграм'], vk: ['vk', 'social', 'ВКонтакте'], dzen: ['dzen', 'social', 'Дзен'],
   litnet_blog: ['litnet_blog', 'blog', 'Блог на Литнете'], email: ['email', 'email', 'Рассылка'], direct: ['yandex', 'cpc', 'Яндекс Директ'],
-  partner: ['partner', 'referral', 'Другой автор / паблик'], other: ['other', 'other', 'Другое'],
+  partner: ['partner', 'referral', 'Другой автор / паблик'], litnet_pays: ['litnet', 'litnet_platit', '«Литнет платит» / таргетолог'], other: ['other', 'other', 'Другое'],
 };
 const slugify = (t) => translit(t).join('_').slice(0, 40);
 export function buildUtm(url, { source, medium, campaign, content = '' }) {
