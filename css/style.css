@@ -3312,3 +3312,5 @@ details.fold-more[open] > summary { align-self: flex-start; }
 .syn-read .syn-h { font-weight: 600; margin: 14px 0 4px; }
 .syn-read .syn-h:first-child { margin-top: 4px; }
 .prof-row { gap: 8px; flex-wrap: wrap; align-items: baseline; }
+/* редактор главы: справа всегда место для колонки цифр (слова, знаки, а.л.) — на средних экранах она залезала на край страницы */
+@media (min-width: 1380px) and (max-width: 1799px) { html.on-ed main { padding-right: 104px !important; } }
