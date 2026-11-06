@@ -1,6 +1,6 @@
 import { PALETTES, applyAccent, parseCustom, customKey, customPalette } from '../../../js/accent.js';
 import { ic } from '../../../js/icons.js';
-import { esc, acts, forms, changes, openSheet, opt, toast, download, ask } from '../../../js/ui.js';
+import { esc, acts, forms, changes, openSheet, opt, toast, download, ask, fold } from '../../../js/ui.js';
 import * as drive from '../drive.js';
 import { WCOLLS } from '../app.js';
 import { runTodoist } from '../tdsync.js';
@@ -11,11 +11,22 @@ import { aiCenterCard } from './aicenter.js';
 
 const app = () => window.__app;
 
+// настройки — одной карточкой: каждый раздел строкой с состоянием справа, раскрывается по нажатию (раскрытое запоминается);
+// «Обновить переходник» — отдельной заметной карточкой сверху, когда он нужен
 export function settingsView(a) {
   const c = a.ctx(), s = c.settings, st = a.store;
   const folder = (id, name, act, label) => `<div class="item"><div class="small muted">${label}</div><div class="row between"><b>${id ? ic('folder') + ' ' + esc(name || id) : 'не выбрана'}</b><button data-act="${act}">${id ? 'Сменить' : 'Выбрать'}</button></div></div>`;
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/">← Назад</a></p>
-  <div class="card"><h2>Google Диск</h2>
+  ${proxyCard(s)}
+  <div class="card folds">
+  ${fold('set-look', 'Оформление и аккаунт', `  <div class="card"><h2>Оформление и аккаунт</h2>
+    <label for="th" style="margin-top:0">Тема</label><select id="th" data-chg="theme">${opt('auto', 'как в телефоне', a.theme)}${opt('light', 'светлая', a.theme)}${opt('dark', 'тёмная', a.theme)}</select>
+    <label style="margin-top:14px">Цвет акцентов <span class="muted small">— для всех приложений</span></label>
+    <div class="acc-pick">${Object.entries(PALETTES).map(([k, p]) => `<button type="button" class="acc-sw${(c.settings.accent || 'rose') === k ? ' on' : ''}" data-act="accent.set" data-v="${k}" title="${p.name}" aria-label="${p.name}"><i style="background:linear-gradient(135deg, ${p.light.to}, ${p.light.accent})"></i><span>${p.name}</span></button>`).join('')}${(() => { const cu = parseCustom(c.settings.accent), cp = cu && customPalette(cu.h, cu.sat);
+      return `<button type="button" class="acc-sw acc-own${cu ? ' on' : ''}" data-act="accent.custom" title="Свой цвет" aria-label="Свой цвет"><i style="background:${cp ? `linear-gradient(135deg, ${cp.light.to}, ${cp.light.accent})` : 'conic-gradient(from 200deg, #e8a5b8, #e9c49b, #c9dba0, #9fd0c4, #a7bfe6, #c4aee6, #e8a5b8)'}"></i><span>Свой</span></button>`; })()}</div>
+    <p class="small muted" style="margin-top:12px">${st.mode === 'firebase' ? `Вы вошли как <b>${esc(st.user.email)}</b> — тот же вход, что в приложении доходов.` : 'Пробный режим.'}</p>
+    ${st.mode === 'firebase' ? '<button data-act="auth.out">Выйти</button>' : ''}</div>`, { sub: PALETTES[c.settings.accent]?.name || (parseCustom(c.settings.accent) ? 'свой цвет' : 'Розовый') })}
+  ${fold('set-drive', 'Google Диск', `  <div class="card"><h2>Google Диск</h2>
     ${!drive.driveConfigured ? '<p>Диск ещё не подключён к приложению: нужен ключ Google. Инструкция — docs/SETUP-WRITER.md; пришлите ключ Claude, он вставит.</p>'
     : drive.isConnected() ? `<p><span class="badge good">● подключён на этом устройстве</span></p>
       ${folder(s.wBooksFolder, s.wBooksFolderName, 'set.booksFolder', 'Папка с книгами (подпапки тоже просматриваются)')}
@@ -23,20 +34,13 @@ export function settingsView(a) {
       ${folder(s.wIdeasFolder, s.wIdeasFolderName, 'set.ideasFolder', 'Папка для документов из идей (по умолчанию — папка с книгами)')}
       <button class="danger" data-act="set.disconnect" style="margin-top:10px">Отключить Диск на этом устройстве</button>`
     : '<p>На этом устройстве Диск не подключён.</p><button class="primary" data-act="drive.connect">Подключить Google Диск</button>'}
-    <p class="hint">Подключать нужно на каждом устройстве один раз. Google даёт браузерным приложениям доступ на час — после этого кнопка «Обновить» на Главной продлевает его одним нажатием, без повторного разрешения.</p></div>
-  ${aiCenterCard(c)}
-  ${todoistCard(c)}
-  ${archiveCard(c)}
-  ${proxyCard(s)}
-  <div class="card"><h2>Резервная копия мастерской</h2><p class="small muted">Книги, идеи, планер и галерея (без самих файлов Диска — они и так на Диске).</p>
-    <div class="row"><button class="primary" data-act="set.backup">Скачать копию</button><label class="btn">Восстановить<input type="file" accept=".json" data-chg="set.restore" hidden></label></div></div>
-  <div class="card"><h2>Оформление и аккаунт</h2>
-    <label for="th" style="margin-top:0">Тема</label><select id="th" data-chg="theme">${opt('auto', 'как в телефоне', a.theme)}${opt('light', 'светлая', a.theme)}${opt('dark', 'тёмная', a.theme)}</select>
-    <label style="margin-top:14px">Цвет акцентов <span class="muted small">— для всех приложений</span></label>
-    <div class="acc-pick">${Object.entries(PALETTES).map(([k, p]) => `<button type="button" class="acc-sw${(c.settings.accent || 'rose') === k ? ' on' : ''}" data-act="accent.set" data-v="${k}" title="${p.name}" aria-label="${p.name}"><i style="background:linear-gradient(135deg, ${p.light.to}, ${p.light.accent})"></i><span>${p.name}</span></button>`).join('')}${(() => { const cu = parseCustom(c.settings.accent), cp = cu && customPalette(cu.h, cu.sat);
-      return `<button type="button" class="acc-sw acc-own${cu ? ' on' : ''}" data-act="accent.custom" title="Свой цвет" aria-label="Свой цвет"><i style="background:${cp ? `linear-gradient(135deg, ${cp.light.to}, ${cp.light.accent})` : 'conic-gradient(from 200deg, #e8a5b8, #e9c49b, #c9dba0, #9fd0c4, #a7bfe6, #c4aee6, #e8a5b8)'}"></i><span>Свой</span></button>`; })()}</div>
-    <p class="small muted" style="margin-top:12px">${st.mode === 'firebase' ? `Вы вошли как <b>${esc(st.user.email)}</b> — тот же вход, что в приложении доходов.` : 'Пробный режим.'}</p>
-    ${st.mode === 'firebase' ? '<button data-act="auth.out">Выйти</button>' : ''}</div>`;
+    <p class="hint">Подключать нужно на каждом устройстве один раз. Google даёт браузерным приложениям доступ на час — после этого кнопка «Обновить» на Главной продлевает его одним нажатием, без повторного разрешения.</p></div>`, { sub: !drive.driveConfigured ? 'нет ключа' : drive.isConnected() ? 'подключён' : 'не подключён' })}
+  ${fold('set-td', 'Todoist', todoistCard(c), { sub: s.todoistToken ? (s.todoistOff ? 'выключен' : 'подключён') : 'не подключён' })}
+  ${fold('set-arc', 'Архив книг', archiveCard(c))}
+  ${fold('set-ai', 'Нейросети', aiCenterCard(c))}
+  ${fold('set-backup', 'Резервная копия', `  <div class="card"><h2>Резервная копия мастерской</h2><p class="small muted">Книги, идеи, планер и галерея (без самих файлов Диска — они и так на Диске).</p>
+    <div class="row"><button class="primary" data-act="set.backup">Скачать копию</button><label class="btn">Восстановить<input type="file" accept=".json" data-chg="set.restore" hidden></label></div></div>`)}
+  </div>`;
   return { html, after: () => loadArchive() };
 }
 

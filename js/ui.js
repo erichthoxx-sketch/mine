@@ -213,3 +213,25 @@ export function tidyNums(html) {
     return t;
   }).join('');
 }
+
+// ---------- Свёрнутые разделы: второстепенное прячется в одну строку и раскрывается по нажатию ----------
+// fold(ключ, заголовок, содержимое, { sub, open }) — открытые разделы запоминаются на этом устройстве,
+// перерисовка экрана и обновление страницы их не сворачивают. Пустое содержимое — раздела нет вовсе.
+let FOLDS = null;
+const foldsGet = () => { if (!FOLDS) { try { FOLDS = new Set(JSON.parse(localStorage.getItem('folds') || '[]')); } catch { FOLDS = new Set(); } } return FOLDS; };
+export const foldOpen = (key) => foldsGet().has(key);
+export function fold(key, title, body, { sub = '', open = false, cls = '' } = {}) {
+  if (!body) return '';
+  return `<details class="fold${cls ? ' ' + cls : ''}" data-fold="${esc(key)}"${open || foldOpen(key) ? ' open' : ''}><summary><span class="fold-t">${title}</span>${sub ? `<span class="fold-s">${sub}</span>` : ''}</summary><div class="fold-b">${body}</div></details>`;
+}
+// длинный список: первые n видны, остальное — «Ещё N» (раскрытие тоже запоминается)
+export function more(key, items, n = 3) {
+  if (items.length <= n) return items.join('');
+  const rest = items.slice(n);
+  return items.slice(0, n).join('') + `<details class="fold-more" data-fold="${esc(key)}"${foldOpen(key) ? ' open' : ''}><summary><span class="fm-o">Ещё ${rest.length}</span><span class="fm-c">Свернуть</span></summary>${rest.join('')}</details>`;
+}
+if (typeof document !== 'undefined') document.addEventListener('toggle', (e) => {
+  const k = e.target?.dataset?.fold; if (!k) return;
+  const s = foldsGet(); if (e.target.open) s.add(k); else s.delete(k);
+  try { localStorage.setItem('folds', JSON.stringify([...s])); } catch { /* нет памяти — не страшно */ }
+}, true);

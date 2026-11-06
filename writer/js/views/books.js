@@ -1,5 +1,5 @@
 import { ic, icx } from '../../../js/icons.js';
-import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
+import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask, fold } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
 import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter, writtenMonth } from '../wcalc.js';
 import { goalTitle, goalToday, goalOver } from './goals.js';
@@ -217,27 +217,17 @@ export function bookPage(a, id) {
   const series = dailyWritten(b, addDays(c.today, -13), c.today, c.today);
   const wch = writtenChapters(b), planCh = Number(fin?.g.chapters || b.planChapters) || null;
 
-  const html = `<div class="bk-top"><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a>${bookSeg(b, 'book')}</div>
-  ${headCard(c, b, p)}
-  <div class="card"><div class="row between"><h2 style="margin:0">Прогресс и сроки</h2><button data-act="wb.dates" data-id="${b.id}">Сроки</button></div>
-    <label class="inline-num">Глав в книге, примерно <input type="number" min="1" inputmode="numeric" value="${b.planChapters || ''}" placeholder="—" data-chg="wb.planCh" data-id="${b.id}"></label>
-    ${progressBlock(c, b)}
-  </div>
-  <div class="card goals-card"><div class="row between"><h2 style="margin:0">Цели</h2><button class="small-btn" data-act="goal.new" data-book="${b.id}">+ цель</button></div>
-    ${bookGoals.length ? `<div class="plist">${bookGoals.map(({ g, st }) => `<a class="pitem tap${st.doneToday ? ' done-today' : ''}" href="#" data-act="goal.edit" data-id="${g.id}">${st.doneToday ? `<span class="pi-ok">${icx('check')}</span>` : '<span class="dot k-goal"></span>'}<span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:4px 0 0">Например, «по главе в день до 15 октября» — буду напоминать.</p>'}
-    ${b.status === 'done' ? '' : `<div class="mini-chart"><div class="row between small muted"><span>Написано за 2 недели</span><b>+${al(series.reduce((a, d) => a + (d.known ? d.value : 0), 0))}</b></div><div class="chart" id="bchart1"></div></div>`}
-</div>
-  ${bookTasksCard(c, b)}
-  <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><div class="row">${canEdit ? `<button data-act="ch.add" data-id="${b.id}" title="Отдельная вкладка в Google Документе">+ Глава</button>` : ''}<button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div></div>
-    ${chs.length ? chaptersBlock() : `<p class="small muted" style="margin:8px 0 0">${canEdit ? 'Глав пока нет. Нажмите «+ Глава» — в Google Документе появится новая вкладка.' : 'Глав пока нет. Когда отмечаете выкладку, просто впишите название главы.'}</p>`}
-</div>
-  ${bookContests(c, b, contests)}
-  ${blogBookCard(c, b.id)}
-  ${reviewsCard(c, b)}
-  <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
+  // страница книги: сверху главное (главы, сроки, задачи, цели), остальное — строками, раскрываются по нажатию (раскрытое запоминается)
+  const nIdeas = ideas.length, nRev = (c.data.w_reviews || []).filter((x) => x.bookId === b.id).length;
+  const more = [
+    fold('bk-contests', 'Конкурсы', bookContests(c, b, contests), { sub: contests.length ? `${contests.length} ${plural(contests.length, ['конкурс', 'конкурса', 'конкурсов'])}` : '' }),
+    fold('bk-blog', 'Блог', blogBookCard(c, b.id)),
+    fold('bk-ideas', 'Идеи к книге', `  <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(ideaTitle(x))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
       ${ideas.length > IDEAS_MAX ? `<div style="margin-top:10px"><button data-act="idea.open" data-book="${b.id}">Все идеи к книге (${ideas.length})</button></div>` : ''}` : '<p class="small muted" style="margin:8px 0 0">Идей к этой книге пока нет.</p>'}</div>
-  <div class="card"><h2>Маркетинг</h2>
+`, { sub: nIdeas ? String(nIdeas) : '' }),
+    fold('bk-reviews', 'Отзывы', reviewsCard(c, b), { sub: nRev ? String(nRev) : '' }),
+    fold('bk-mk', 'Маркетинг', `  <div class="card"><h2>Маркетинг</h2>
     <div class="list">
       <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="texts"><span>Тексты и баннеры<span class="sub">тексты ${mk.texts} из ${mk.textsAll} · картинок ${mk.banners}</span></span><span>${mark(mk.texts === mk.textsAll)}</span></a>
       <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="target"><span>Для таргета<span class="sub">креативов ${mk.creatives} · объявлений ${mk.ads}</span></span><span>${mark(mk.creatives && mk.ads)}</span></a>
@@ -245,9 +235,10 @@ export function bookPage(a, id) {
     ${mk.creatives || mk.ads ? `<div class="row" style="margin-top:10px"><button data-act="mk.targetZip" data-id="${b.id}">Скачать пакет для таргетолога</button></div>` : ''}
     ${(c.data.w_promolinks || []).some(x => x.bookId === b.id && x.status !== 'archived') ? promoLinksPanel(c, { bookId: b.id, compact: true }) : ''}
   </div>
-  ${publisherCard(b)}
-  ${bookAiCard(c, b)}
-  <div class="card"><h2>О книге</h2>
+`),
+    fold('bk-pub', 'Для издательства', publisherCard(b)),
+    fold('bk-ai', 'Для нейросети', bookAiCard(c, b)),
+    fold('bk-about', 'О книге', `  <div class="card"><h2>О книге</h2>
   <form data-form="wbook.save" data-id="${b.id}">
     <label for="bt" style="margin-top:0">Название</label><input id="bt" name="title" value="${esc(b.title)}" required>
     <label for="bs">Статус</label><select id="bs" name="status">${Object.entries(STATUS).map(([k, v]) => opt(k, v, b.status || 'progress')).join('')}</select>
@@ -278,7 +269,23 @@ export function bookPage(a, id) {
     <label for="bl">Ссылка на файл (если без Google Диска)</label><input id="bl" name="link" value="${esc(b.fileId ? '' : b.webViewLink || '')}" ${b.fileId ? 'disabled placeholder="файл с Google Диска подключён"' : ''}>
     <label for="bn">Заметки</label><textarea id="bn" name="note">${esc(b.note || '')}</textarea>
     <div class="row between" style="margin-top:14px"><button class="primary" type="submit">Сохранить</button><button type="button" class="danger" data-act="wbook.del" data-id="${b.id}">Убрать из приложения</button></div>
-  </form></div>`;
+  </form></div>`),
+  ].join('');
+  const html = `<div class="bk-top"><a class="btn back" href="#" data-act="go" data-to="/books">← Все книги</a>${bookSeg(b, 'book')}</div>
+  ${headCard(c, b, p)}
+  <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><div class="row">${canEdit ? `<button data-act="ch.add" data-id="${b.id}" title="Отдельная вкладка в Google Документе">+ Глава</button>` : ''}<button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div></div>
+    ${chs.length ? chaptersBlock() : `<p class="small muted" style="margin:8px 0 0">${canEdit ? 'Глав пока нет. Нажмите «+ Глава» — в Google Документе появится новая вкладка.' : 'Глав пока нет. Когда отмечаете выкладку, просто впишите название главы.'}</p>`}
+</div>
+  <div class="card"><div class="row between"><h2 style="margin:0">Прогресс и сроки</h2><button data-act="wb.dates" data-id="${b.id}">Сроки</button></div>
+    <label class="inline-num">Глав в книге, примерно <input type="number" min="1" inputmode="numeric" value="${b.planChapters || ''}" placeholder="—" data-chg="wb.planCh" data-id="${b.id}"></label>
+    ${progressBlock(c, b)}
+  </div>
+  ${bookTasksCard(c, b)}
+  <div class="card goals-card"><div class="row between"><h2 style="margin:0">Цели</h2><button class="small-btn" data-act="goal.new" data-book="${b.id}">+ цель</button></div>
+    ${bookGoals.length ? `<div class="plist">${bookGoals.map(({ g, st }) => `<a class="pitem tap${st.doneToday ? ' done-today' : ''}" href="#" data-act="goal.edit" data-id="${g.id}">${st.doneToday ? `<span class="pi-ok">${icx('check')}</span>` : '<span class="dot k-goal"></span>'}<span class="pi-body"><span class="pi-t">${esc(goalTitle(c, g))}</span><span class="pi-s">${goalToday(c, g, st)}</span></span></a>`).join('')}</div>` : '<p class="small muted" style="margin:4px 0 0">Например, «по главе в день до 15 октября» — буду напоминать.</p>'}
+    ${b.status === 'done' ? '' : `<div class="mini-chart"><div class="row between small muted"><span>Написано за 2 недели</span><b>+${al(series.reduce((a, d) => a + (d.known ? d.value : 0), 0))}</b></div><div class="chart" id="bchart1"></div></div>`}
+</div>
+  <div class="card folds">${more}</div>`;
   return { html, after: () => { writtenChart(document.getElementById('bchart1'), { days: series, target, height: 86, mini: true }); mountBookTaxonomy(); } };
 }
 

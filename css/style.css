@@ -3277,3 +3277,30 @@ input.own-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50
 .ed-wm-row .ed-wm-status { flex: 1 1 240px; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .ed-wm-row .ed-wm-status[hidden] { display: none; }
 ::highlight(writer-experimental-watermark) { background-color: rgba(218, 126, 83, .42); text-decoration: underline dotted #b46d46; }
+/* ---------- свёрнутые разделы (fold в ui.js): второстепенное — одной строкой, раскрывается по нажатию ---------- */
+.card.folds { padding-top: 6px; padding-bottom: 6px; }
+details.fold { border-top: 1px solid var(--line, rgba(0,0,0,.08)); }
+.card.folds > details.fold:first-child, .card.folds > h2 + details.fold { border-top: 0; }
+details.fold > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 10px; padding: 14px 26px 14px 0; position: relative; margin: 0 !important; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::after { content: ''; position: absolute; right: 4px; top: 50%; width: 7px; height: 7px; border-right: 1.6px solid var(--muted); border-bottom: 1.6px solid var(--muted); transform: translateY(-70%) rotate(45deg); transition: transform .15s; }
+details.fold[open] > summary::after { transform: translateY(-30%) rotate(-135deg); }
+.fold-t { font: 500 16px/1.3 var(--font-display, inherit); color: var(--text); }
+.fold-s { font-size: 13px; color: var(--muted); margin-left: auto; text-align: right; }
+.fold-b { padding: 2px 0 16px; }
+/* карточка внутри раздела — без своей подложки и без повторного заголовка (он уже в строке раздела) */
+.fold-b > .card, .fold-b > .ct-wrap { background: none !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; border: 0 !important; }
+.fold-b > .card > h2:first-child, .fold-b > .card > .row.between:first-child > h2, .fold-b > .ct-wrap > .row.between:first-child > h2 { display: none; }
+.fold-b > .card > .row.between:first-child, .fold-b > .ct-wrap > .row.between:first-child { justify-content: flex-end; margin-top: 0 !important; }
+.fold-b > .card > .row.between:first-child:not(:has(> :not(h2))) { display: none; }
+/* «Ещё N» в длинных списках */
+details.fold-more > summary { list-style: none; cursor: pointer; display: inline-block; margin: 10px 0 2px; font-size: 14px; color: var(--text-2); border-bottom: 1px solid currentColor; }
+details.fold-more > summary::-webkit-details-marker { display: none; }
+details.fold-more .fm-c, details.fold-more[open] .fm-o { display: none; }
+details.fold-more[open] .fm-c { display: inline; }
+details.fold-more[open] > summary { order: 2; }
+details.fold-more[open] { display: flex; flex-direction: column; }
+details.fold-more[open] > summary { align-self: flex-start; }
+/* «Скоро» в левой колонке — обычными буквами, как остальное меню (заглавные с разрядкой владелица отвергла) */
+:root .nav-soon .nt-k { text-transform: none !important; letter-spacing: 0 !important; font-size: 12px; }
+@media (max-width: 600px) { .fold-s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; } }

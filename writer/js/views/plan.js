@@ -1,5 +1,5 @@
 import { ic, icx } from '../../../js/icons.js';
-import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask } from '../../../js/ui.js';
+import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask, fold } from '../../../js/ui.js';
 import { num, fmtDate, pct, plural } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
 import { reminders } from './home.js';
@@ -345,15 +345,15 @@ export function planView(a) {
   <div class="card" data-day="${sel}"><div class="row between plan-dayh"><h2 style="margin:0">${dayName(sel, t)}</h2><button class="plus-btn" data-act="td.addPlan" data-d="${sel}" title="Добавить дело" aria-label="Добавить дело">${ic('plus')}</button></div>
     ${c.settings.todoistToken && !c.settings.todoistOff && c.settings.todoist?.err ? `<p class="td-warn">Todoist не обновился: ${esc(String(c.settings.todoist.err).slice(0, 120))} · <button class="link" data-act="td.syncNow">Обновить</button></p>` : ''}
     ${dayList.length || goalHtml || hist.length ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}${hist.map(histHtml).join('')}</div>` : `<p class="small muted" style="margin:0">${histWait ? 'Смотрю, что было сделано…' : 'Дел на этот день нет.'}</p>`}</div>
+  ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 4px">Дальше</h2><div class="agenda">${nextDays.map((k) => `<div class="arow"><span class="ad">${DOW[dowI(k)]} ${Number(k.slice(8, 10))}</span><span class="ai">${by[k].map((x) => shortItem(c, x, multi)).join('')}</span></div>`).join('')}</div></div>` : ''}
   <div class="psec-h"><h2>Цели <span class="muted">${activeGoals(c).length || ''}</span></h2><button class="small-btn" data-act="goal.new">+ Цель</button></div>
   ${goalsSection(c)}
-  <div class="psec-h"><h2>Книги в работе <span class="muted">${inWork.length || ''}</span></h2></div>
-  ${booksPlan(c, inWork)}
-  ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 4px">Дальше</h2><div class="agenda">${nextDays.map((k) => `<div class="arow"><span class="ad">${DOW[dowI(k)]} ${Number(k.slice(8, 10))}</span><span class="ai">${by[k].map((x) => shortItem(c, x, multi)).join('')}</span></div>`).join('')}</div></div>` : ''}
-  ${live.length ? `<div class="psec-h"><h2>Конкурсы <span class="muted">${live.length}</span></h2><button class="link" data-act="go" data-to="/marketing">все конкурсы →</button></div>
-  ${live.map((x) => contestCard(c, x)).join('')}` : ''}
   <div class="psec-h"><h2>Что пишу дальше <span class="muted">${qTodo.length || ''}</span></h2><button class="small-btn" data-act="queue.new">+ В очередь</button></div>
-  ${queue(c)}`;
+  ${queue(c)}
+  ${(() => { // книги в работе (они же на Главной) и конкурсы — строками, раскрываются по нажатию
+    const f = fold('pl-books', 'Книги в работе', inWork.length ? booksPlan(c, inWork) : '', { sub: inWork.length ? String(inWork.length) : '' })
+      + fold('pl-contests', 'Конкурсы', live.length ? live.map((x) => contestCard(c, x)).join('') + '<p style="margin:10px 0 0"><button class="link" data-act="go" data-to="/marketing/contests">все конкурсы →</button></p>' : '', { sub: String(live.length) });
+    return f ? `<div class="card folds">${f}</div>` : ''; })()}`;
   return { html };
 }
 acts['plan.day'] = (d) => { app().ui.planDay = d.v; };
