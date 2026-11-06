@@ -3304,3 +3304,6 @@ details.fold-more[open] > summary { align-self: flex-start; }
 /* «Скоро» в левой колонке — обычными буквами, как остальное меню (заглавные с разрядкой владелица отвергла) */
 :root .nav-soon .nt-k { text-transform: none !important; letter-spacing: 0 !important; font-size: 12px; }
 @media (max-width: 600px) { .fold-s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; } }
+/* вкладки тонкой линией (Финансы, Читатели, Маркетинг…) — обычными буквами, шрифт заголовков */
+:root main .lg-tabs button { text-transform: none !important; letter-spacing: 0 !important; font: 500 15px/1.2 var(--font-display) !important; }
+:root .money-tabs { margin: 0 0 14px; }

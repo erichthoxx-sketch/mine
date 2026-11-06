@@ -15,11 +15,11 @@ const when = (n) => (n < 0 ? `просрочено на ${-n} дн.` : n === 0 ?
 // ближайшие важные даты (на 3 недели): налог, Rocket, конец рекламы, заявка на показы
 export function incomeDates(c) {
   const t = c.today, d = c.data, out = [];
-  const add = (date, title, sub, to) => { if (date <= addDays(t, 21)) out.push({ date, title, sub, to }); };
+  const add = (date, title, sub, to, mtab) => { if (date <= addDays(t, 21)) out.push({ date, title, sub, to, mtab }); };
   const mOf = (k) => (d.months || []).find((m) => m.id === k) || {};
   const prev = addMonths(monthKey(t), -1);
   const gross = sumSeries(incomeSeries(c.sales, [], prev + '-01', addDays(monthKey(t) + '-01', -1)), 'gross');
-  if (gross > 0 && !mOf(prev).taxPaid) add(npdDeadline(prev), `Налог за ${fmtMonth(prev)}`, `≈ ${rub(gross * (Number(c.settings.taxRate) || 4) / 100, 0)}`, '/money');
+  if (gross > 0 && !mOf(prev).taxPaid) add(npdDeadline(prev), `Налог за ${fmtMonth(prev)}`, `≈ ${rub(gross * (Number(c.settings.taxRate) || 4) / 100, 0)}`, '/money', 'tax');
   if (gross > 0 && mOf(prev).rocketFee == null && t >= monthKey(t) + '-20') add(t, `Цифры Rocket за ${fmtMonth(prev)}`, 'записать из кабинета', '/ads');
   for (const k of c.campaigns) {
     if (k.oneOff) continue;
@@ -36,7 +36,8 @@ export function incomeDates(c) {
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function sideIncome(c) {
+// на Главной «Доход за день» уже крупно в центре — справа его не повторяем
+export function sideIncome(c, { home = false } = {}) {
   const t = c.today, s = c.settings, mk = monthKey(t);
   const last = c.hasData ? c.dataEnd : null, st = last ? dayStats(c.sales, c.legacyDays, last) : null;
   const plan = buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount), growth: Number(s.goalGrowth) / 100, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) }).find((p) => p.month === mk);
@@ -46,13 +47,13 @@ export function sideIncome(c) {
   const dates = incomeDates(c);
   const chg = st && st.vsAvg != null ? `<span class="${st.vsAvg >= 0 ? 'up' : 'down'}">${st.vsAvg >= 0 ? '▲' : '▼'} ${pct(Math.abs(st.vsAvg), 0)}</span> к среднему за неделю` : '';
   return `<div class="side-h"><div class="side-k">Сегодня</div><div class="side-date">${dayLong(t)}</div></div>
-    ${st ? `<a class="side-card tap" href="#" data-act="go" data-to="/day"><div class="small muted">Доход ${last === t ? 'сегодня' : `за ${fmtDate(last).slice(0, 5)}`}</div><div class="side-big">${rub(st.royalty, 0)}</div><div class="small">${chg}</div></a>` : ''}
-    ${plan ? `<a class="side-card tap" href="#" data-act="go" data-to="/money"><div class="row between small"><span class="muted">Цель на ${fmtMonth(mk).split(' ')[0]}</span><span>${pct(mtd / plan.plan, 0)}</span></div>
+    ${st && !home ? `<a class="side-card tap" href="#" data-act="go" data-to="/day"><div class="small muted">Доход ${last === t ? 'сегодня' : `за ${fmtDate(last).slice(0, 5)}`}</div><div class="side-big">${rub(st.royalty, 0)}</div><div class="small">${chg}</div></a>` : ''}
+    ${plan ? `<a class="side-card tap" href="#" data-act="go" data-to="/money" data-mtab="goals"><div class="row between small"><span class="muted">Цель на ${fmtMonth(mk).split(' ')[0]}</span><span>${pct(mtd / plan.plan, 0)}</span></div>
       <div class="side-big">${rub(mtd, 0)} <span class="muted small">из ${rub(plan.plan, 0)}</span></div>
       <div class="progress"><i style="width:${Math.min(100, (mtd / plan.plan) * 100).toFixed(1)}%"></i></div>
       <div class="small muted">${need > 0 ? `≈ ${rub(need, 0)} в день до конца месяца` : 'цель месяца выполнена ✓'}</div></a>` : ''}
     <div class="side-k" style="margin-top:20px">Ближайшее</div>
-    ${dates.length ? `<div class="side-card"><div class="plist">${dates.map((x) => `<a class="pitem tap" href="#" data-act="go" data-to="${x.to}"><span class="dot k-money"></span><span class="pi-body"><span class="pi-t">${esc(x.title)}</span><span class="pi-s">${fmtDate(x.date).slice(0, 5)} · ${when(dleft(x.date, t))}${x.sub ? ' · ' + esc(x.sub) : ''}</span></span></a>`).join('')}</div></div>` : '<p class="small muted">Ничего срочного на три недели ✓</p>'}
+    ${dates.length ? `<div class="side-card"><div class="plist">${dates.map((x) => `<a class="pitem tap" href="#" data-act="go" data-to="${x.to}"${x.mtab ? ` data-mtab="${x.mtab}"` : ''}><span class="dot k-money"></span><span class="pi-body"><span class="pi-t">${esc(x.title)}</span><span class="pi-s">${fmtDate(x.date).slice(0, 5)} · ${when(dleft(x.date, t))}${x.sub ? ' · ' + esc(x.sub) : ''}</span></span></a>`).join('')}</div></div>` : '<p class="small muted">Ничего срочного на три недели ✓</p>'}
     <div class="side-actions"><button data-act="event.quick" data-date="${t}">+ Событие</button><button data-act="sale.manual" data-date="${t}">+ Продажи</button><label class="btn" style="cursor:pointer" title="Отчёт о продажах Литнета (CSV) — загрузится сразу">Загрузить выгрузку<input type="file" accept=".csv,.txt" data-chg="imp.any" hidden></label></div>`;
 }
 export { fmtMonthIn };

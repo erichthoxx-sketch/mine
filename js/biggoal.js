@@ -106,7 +106,7 @@ export function bigGoalCard(st) {
 export function bigGoalLine(st) {
   if (!st) return '';
   const { g, now: base, plan, onTrack } = st;
-  return `<a class="bg-line tap" href="#" data-act="go" data-to="/money"><span>Большая цель: <b>${rub(g.amount, 0)}</b> ${word(g)} ${byMonthText(g.by)}</span><span class="muted">сейчас ≈ ${rub(base, 0)} (${pct(Math.min(1, base / g.amount), 0)}) · нужно +${num(plan.growth * 100, 1)}% в месяц${onTrack == null ? '' : onTrack ? ' · <span class="up">в темпе</span>' : ' · <span class="down">медленнее плана</span>'}</span></a>`;
+  return `<a class="bg-line tap" href="#" data-act="go" data-to="/money" data-mtab="goals"><span>Большая цель: <b>${rub(g.amount, 0)}</b> ${word(g)} ${byMonthText(g.by)}</span><span class="muted">сейчас ≈ ${rub(base, 0)} (${pct(Math.min(1, base / g.amount), 0)}) · нужно +${num(plan.growth * 100, 1)}% в месяц${onTrack == null ? '' : onTrack ? ' · <span class="up">в темпе</span>' : ' · <span class="down">медленнее плана</span>'}</span></a>`;
 }
 
 // всё по данным «Доходов»: месяц → роялти и чистыми

@@ -1,4 +1,4 @@
-import { esc, acts, forms, changes, openSheet, opt, toast, N, download, readFile, closeSheet, uid } from '../ui.js';
+import { esc, acts, forms, changes, openSheet, opt, toast, N, download, readFile, closeSheet, uid, fold } from '../ui.js';
 import { rub, fmtDate, fmtMonth, num, parseNum } from '../format.js';
 import { decodeBuffer, parseStatistic, parseLegacy, parseSalesText, makeBackup, readBackup, toCsv, csvDec } from '../parse.js';
 import { safeSalesImport, inferPriceChanges, monthKey, r2, addDays, manualSaleRow } from '../calc.js';
@@ -7,6 +7,7 @@ import { buildReportModel, toMarkdown, toHtml, toJson, toXlsxBook } from '../rep
 const app = () => window.__app;
 const stamp = () => new Date().toISOString().slice(0, 10);
 
+// «Данные»: сверху — загрузка выгрузки (главное действие), остальное одним списком строк; контроль данных сам раскрыт, если есть что сверить
 export function data(a) {
   const c = a.ctx(), s = c.settings, st = a.store;
   const html = `
@@ -15,20 +16,21 @@ export function data(a) {
     <button data-act="sale.manual">Добавить продажи вручную</button></div>
     <p class="hint">Загрузка: выгрузка Литнета (Statistic.csv) или таблица старого трекера (dohody.csv). Совпадающие строки обновляются, новые добавляются. Неполная выгрузка больше не удаляет прежние продажи. Перед исправлением старых цифр сохрани резервную копию.</p>
     <div class="hint">Сейчас в расчете: ${c.sales.length} строк продаж${c.hasData ? ` за ${fmtDate(c.firstDate)} – ${fmtDate(c.dataEnd)}` : ''}.</div></div>
-  <div class="card">
+  <div class="card folds">
+  ${fold('dt-check', 'Контроль данных', `  <div class="card">
     <h2>Контроль финансовых данных</h2>
     <p class="small">${c.salesReconciliation?.ok ? 'Суммы по дням и книгам внутри базы сходятся.' : c.salesReconciliation ? 'Обнаружено расхождение между итогами по дням и книгам.' : 'Нет сохраненных продаж для проверки.'}</p>
     <div class="small muted">Учтено ${c.sales.length} строк · история изменений: ${st.data.sales_history?.length || 0} сохраненных частей импорта.</div>
     ${c.ledgerWarnings?.length ? `<div class="alert bad"><b>Требуется сверка ${c.ledgerWarnings.length} замечаний</b><p class="small">Есть несовпадения ручного ввода с CSV, повторные идентификаторы или некорректные записи. До сверки суммы могут быть приблизительными.</p></div>` : ''}
     <p class="hint">Этот контроль сверяет расчеты внутри приложения. Актуальные продажи подтверждает только выгрузка из кабинета Литнета.</p>
-  </div>
-  ${reportCard(a)}
-  <div class="card"><h2>Резервная копия</h2>
+  </div>`, { sub: c.ledgerWarnings?.length ? `нужна сверка: ${c.ledgerWarnings.length}` : c.salesReconciliation?.ok ? 'всё сходится' : c.salesReconciliation ? 'есть расхождение' : '', open: !!(c.ledgerWarnings?.length || (c.salesReconciliation && !c.salesReconciliation.ok)) })}
+  ${fold('dt-report', 'Отчёт для нейросети и таблиц', reportCard(a))}
+  ${fold('dt-backup', 'Резервная копия и Excel', `  <div class="card"><h2>Резервная копия</h2>
     <div class="row"><button class="primary" data-act="backup.save">Скачать копию (JSON)</button><label class="btn" style="cursor:pointer">Восстановить из копии<input type="file" accept=".json,application/json" data-chg="backup.restore" hidden></label></div>
     <h3>Экспорт в CSV (для Excel)</h3>
     <div class="row">${[['sales', 'Продажи'], ['daily', 'Доход по дням'], ['monthly', 'Итоги по месяцам'], ['campaigns', 'Кампании'], ['reports', 'Отчёты таргетологов'], ['days', 'События и заметки']].map(([k, t]) => `<button data-act="export.csv" data-k="${k}">${t}</button>`).join('')}</div>
-    <div class="hint">Совет: раз в месяц скачивайте резервную копию и кладите в надёжное место.</div></div>
-  <div class="card"><h2>Настройки</h2>
+    <div class="hint">Совет: раз в месяц скачивайте резервную копию и кладите в надёжное место.</div></div>`)}
+  ${fold('dt-settings', 'Настройки расчётов', `  <div class="card"><h2>Настройки</h2>
   <form data-form="settings" class="settings-form">
     <div class="f2"><div><label class="first">Налог, % (самозанятая: 4 %)</label><input name="taxRate" inputmode="decimal" value="${s.taxRate}"></div>
     <div><label class="first">Налог считать от</label><select name="taxBase">${opt('gross', 'полной цены книг', s.taxBase)}${opt('royalty', 'роялти', s.taxBase)}</select></div></div>
@@ -44,11 +46,12 @@ export function data(a) {
     <label>Рост в месяц, %</label><input name="goalGrowth" inputmode="decimal" value="${s.goalGrowth}">
     <label>Псевдоним (в шапке)</label><input name="pseudonym" value="${esc(s.pseudonym)}">
     <div style="margin-top:12px"><button class="primary" type="submit">Сохранить настройки</button></div>
-  </form></div>
-  <div class="card"><h2>Оформление и аккаунт</h2>
+  </form></div>`, { sub: `налог ${s.taxRate} %, «Литнет платит», цели` })}
+  ${fold('dt-look', 'Оформление и аккаунт', `  <div class="card"><h2>Оформление и аккаунт</h2>
     <label style="margin-top:0">Тема</label><select data-chg="theme">${opt('auto', 'как в телефоне', a.theme)}${opt('light', 'светлая', a.theme)}${opt('dark', 'тёмная', a.theme)}</select>
     <p class="small muted" style="margin-top:12px">${st.mode === 'firebase' ? `Вы вошли как <b>${esc(st.user.email)}</b>. Данные синхронизируются между устройствами.` : 'Пробный режим: данные хранятся только в этом браузере. Чтобы работать с телефона и компьютера, настройте Firebase по инструкции (docs/SETUP.md).'}</p>
-    ${st.mode === 'firebase' ? '<button data-act="auth.out">Выйти</button>' : ''}</div>`;
+    ${st.mode === 'firebase' ? '<button data-act="auth.out">Выйти</button>' : ''}</div>`)}
+  </div>`;
   return { html };
 }
 

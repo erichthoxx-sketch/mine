@@ -24,7 +24,7 @@ const store = createStore({ colls: [...COLLECTIONS, 'd_snap', 'sales_history', '
 initAccent(store);
 keepNavDown(); // iPhone: нижнее меню не «повисает» посреди экрана
 const ui = { route: '/', range: 90, table: 'weeks', day: null, month: null };
-keepPlace(ui, ['range', 'table', 'day', 'month', 'monthAt', 'adMonth', 'booksMonth']);
+keepPlace(ui, ['range', 'table', 'day', 'month', 'monthAt', 'adMonth', 'booksMonth', 'moneyTab']);
 let theme = 'auto';
 try { theme = localStorage.getItem('theme') || 'auto'; } catch { /* нет доступа к памяти браузера */ }
 
@@ -136,7 +136,7 @@ function render() {
   <main>${c.ledgerWarnings?.length || (c.salesReconciliation && !c.salesReconciliation.ok) ?
     `<div class="alert bad"><b>Нужна проверка финансовых данных</b><p class="small">Найдены несверенные ручные записи или некорректные данные (${c.ledgerWarnings?.length || 0}). Проверь раздел «Данные» и исходный CSV. До сверки суммы могут быть предварительными.</p></div>` : ''}
   ${tidyNums(r.html)}</main>
-  ${wide() ? `<aside class="side">${(() => { try { return tidyNums(sideIncome(c)); } catch (e) { console.error(e); return ''; } })()}</aside><button class="side-grip" aria-label="Скрыть или показать панель «Сегодня»" title="Потяните вправо, чтобы скрыть"><span></span></button>` : ''}
+  ${wide() ? `<aside class="side">${(() => { try { return tidyNums(sideIncome(c, { home: tab === '#/' })); } catch (e) { console.error(e); return ''; } })()}</aside><button class="side-grip" aria-label="Скрыть или показать панель «Сегодня»" title="Потяните вправо, чтобы скрыть"><span></span></button>` : ''}
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h.slice(1)}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
   afterFn = r.after || null;
   afterFn?.();
@@ -157,7 +157,7 @@ function setRoute(path) {
   if (path !== '/ads' && !path.startsWith('/ad/')) ui.adMonth = null;
   if (path !== '/books' && !path.startsWith('/book/')) ui.booksMonth = null;
 }
-acts.go = (d) => { setRoute(d.to); window.scrollTo(0, 0); };
+acts.go = (d) => { if (d.mtab) ui.moneyTab = d.mtab; setRoute(d.to); window.scrollTo(0, 0); }; // data-mtab — сразу нужная вкладка «Финансов»
 // широкий экран: меню слева, колонка «Сегодня» справа
 const wide = () => window.matchMedia('(min-width: 1180px)').matches;
 let rt, wasWide = wide();

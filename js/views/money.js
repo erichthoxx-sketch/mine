@@ -29,8 +29,21 @@ export function money(a) {
   const outM = monthOutages(c.sales, c.legacyDays, c.dataEnd, c.outages);
   const forecast = curRow && monthKey(c.dataEnd) === cur && dom ? paceForecast(curRow.fact, dom, daysInMonth(cur), outM) : null;
 
-  const html = `
-  ${taxCard(c, sel, keys)}
+  // три вкладки тонкой линией: Месяц (итоги и все месяцы) · Налог · Цели (план, большая цель, бюджет рекламы на следующий месяц)
+  const MT = [['month', 'Месяц'], ['tax', 'Налог'], ['goals', 'Цели']];
+  const tab = MT.some(([k]) => k === ui.moneyTab) ? ui.moneyTab : 'month';
+  const tabs = `<div class="lg-tabs money-tabs">${MT.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-act="money.tab" data-k="${k}">${t}</button>`).join('')}</div>`;
+  const html = tabs + (tab === 'tax' ? taxCard(c, sel, keys) : tab === 'goals' ? `
+  <div class="card"><div class="row between"><h2>Цели</h2><button class="primary" data-act="goal.all">Изменить цели</button></div>
+    <p class="small muted">${s.planPath && Object.keys(s.planPath).length ? `По пути к большой цели: ${fmtMonth(Object.keys(s.planPath)[0])} — ${rub(Object.values(s.planPath)[0], 0)}, дальше ≈ +${s.goalGrowth}% в месяц (с учётом налога)` : `Старт: ${fmtMonth(s.goalStart)} — ${rub(s.goalAmount, 0)}, дальше +${s.goalGrowth}% в месяц`}; свои цели по месяцам — кнопка «Изменить цели». План и факт — до вычетов (роялти).</p>
+    <div class="chart" id="goalChart"></div>
+    <div class="legend"><span><i style="background:var(--bar)"></i>факт (светлый — месяц ещё идёт)</span><span><i class="ln"></i>план</span><span><i class="ln3"></i>среднее за 3 месяца</span></div>
+    ${forecast != null ? `<div class="alert ${forecast >= curRow.plan ? 'ok' : ''}">${fmtMonthCap(cur)}: пока ${rub(curRow.fact, 0)}, при таком темпе к концу месяца ≈ ${rub(forecast, 0)} (план ${rub(curRow.plan, 0)}).${outM.days || outM.ahead ? `<div class="small muted" style="margin-top:4px">${outageNote(outM)}</div>` : ''}</div>` : ''}
+    <div class="scroll"><table><tr><th>Месяц</th><th>План</th><th>Факт</th><th>±</th><th>Среднее 3 мес.</th><th></th></tr>
+    ${rows.map((r) => `<tr><td>${fmtMonthShort(r.month)}</td><td>${rub(r.plan, 0)}${s.planOverrides?.[r.month] != null && s.planOverrides[r.month] !== '' ? '*' : ''}</td><td>${r.fact == null ? '—' : rub(r.fact, 0)}</td><td class="${r.diff == null ? '' : r.diff >= 0 ? 'up' : 'down'}">${r.diff == null ? '' : rub(r.diff, 0)}</td><td>${r.ma3 == null ? '—' : rub(r.ma3, 0)}</td><td><button class="link" data-act="goal.edit" data-m="${r.month}">✎</button></td></tr>`).join('')}</table></div>
+    <div class="hint">* план изменён вручную. Среднее за 3 месяца считается по полным и текущему месяцам.</div></div>
+  ${bigGoalCard(bigGoalOf(c))}
+  ${budgetCard(c)}` : `
   <div class="card"><div class="row between"><h2 style="margin:0">Итоги месяца</h2><select id="mSel" data-chg="money.month" style="width:auto">${keys.map((k) => opt(k, fmtMonth(k), sel)).join('')}</select></div>
     <table style="margin-top:8px">
       <tr><td><b>Доход до вычетов</b> <span class="muted small">(роялти)</span></td><td><b>${rub(f.royalty)}</b></td></tr>
@@ -63,19 +76,11 @@ export function money(a) {
       <td>${x.payoutActual != null ? rub(x.payoutActual, 0) : `≈ ${rub(x.payoutExpected, 0)}`}</td>
       <td>${h.cash == null ? '—' : `≈ ${rub(h.cash, 0)}`}</td></tr>`; }).join('')}</table></div>
     <div class="hint">Всё считается само. Реклама — сколько открутилось за месяц. Скидка — от Литнета по программе «Литнет платит». Выплата — сколько Литнет перечислит за продажи месяца. На руках — пришедшая выплата за прошлый месяц минус оплаты рекламы и налог.</div></div>
-  ${budgetCard(c)}
-  ${bigGoalCard(bigGoalOf(c))}
-  <div class="card"><div class="row between"><h2>Цели</h2><button class="primary" data-act="goal.all">Изменить цели</button></div>
-    <p class="small muted">${s.planPath && Object.keys(s.planPath).length ? `По пути к большой цели: ${fmtMonth(Object.keys(s.planPath)[0])} — ${rub(Object.values(s.planPath)[0], 0)}, дальше ≈ +${s.goalGrowth}% в месяц (с учётом налога)` : `Старт: ${fmtMonth(s.goalStart)} — ${rub(s.goalAmount, 0)}, дальше +${s.goalGrowth}% в месяц`}; свои цели по месяцам — кнопка «Изменить цели». План и факт — до вычетов (роялти).</p>
-    <div class="chart" id="goalChart"></div>
-    <div class="legend"><span><i style="background:var(--bar)"></i>факт (светлый — месяц ещё идёт)</span><span><i class="ln"></i>план</span><span><i class="ln3"></i>среднее за 3 месяца</span></div>
-    ${forecast != null ? `<div class="alert ${forecast >= curRow.plan ? 'ok' : ''}">${fmtMonthCap(cur)}: пока ${rub(curRow.fact, 0)}, при таком темпе к концу месяца ≈ ${rub(forecast, 0)} (план ${rub(curRow.plan, 0)}).${outM.days || outM.ahead ? `<div class="small muted" style="margin-top:4px">${outageNote(outM)}</div>` : ''}</div>` : ''}
-    <div class="scroll"><table><tr><th>Месяц</th><th>План</th><th>Факт</th><th>±</th><th>Среднее 3 мес.</th><th></th></tr>
-    ${rows.map((r) => `<tr><td>${fmtMonthShort(r.month)}</td><td>${rub(r.plan, 0)}${s.planOverrides?.[r.month] != null && s.planOverrides[r.month] !== '' ? '*' : ''}</td><td>${r.fact == null ? '—' : rub(r.fact, 0)}</td><td class="${r.diff == null ? '' : r.diff >= 0 ? 'up' : 'down'}">${r.diff == null ? '' : rub(r.diff, 0)}</td><td>${r.ma3 == null ? '—' : rub(r.ma3, 0)}</td><td><button class="link" data-act="goal.edit" data-m="${r.month}">✎</button></td></tr>`).join('')}</table></div>
-    <div class="hint">* план изменён вручную. Среднее за 3 месяца считается по полным и текущему месяцам.</div></div>`;
-  return { html, after: () => goalChart(document.getElementById('goalChart'), { rows, fmtVal: (v) => rub(v, 0) }) };
+`);
+  return { html, after: () => { const el = document.getElementById('goalChart'); if (el) goalChart(el, { rows, fmtVal: (v) => rub(v, 0) }); } };
 }
 
+acts['money.tab'] = (d) => { app().ui.moneyTab = d.k; };
 changes['money.month'] = (v) => { const a = app(); a.ui.month = v; a.ui.monthAt = monthKey(a.ctx().today); a.rerender(); };
 
 
