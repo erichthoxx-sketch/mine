@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru" class="app-writer app-freitag">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f4f2">
+  <meta name="description" content="Личная рабочая среда Freitag AI">
+  <title>Freitag AI</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="../pisatel/photo-32.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@1,400;1,500&family=Golos+Text:wght@400;500;600;700&family=Jost:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="f-head">
+      <div class="f-brand">
+        <span class="f-monogram" aria-hidden="true">F</span>
+        <div><h1>Freitag AI</h1><small>Личная ИИ-среда</small></div>
+      </div>
+      <div class="f-head-actions">
+        <a href="../pisatel/" class="f-quiet-link" title="Открыть Мастерскую">Мастерская</a>
+        <button type="button" class="f-icon-btn" data-action="theme" title="Переключить тему" aria-label="Переключить тему">◐</button>
+      </div>
+    </header>
+    <div class="f-layout">
+      <aside class="f-sidebar" aria-label="Разделы Freitag AI">
+        <nav class="f-nav" aria-label="Главное меню">
+          <button data-nav="chat" class="on">Чаты</button>
+          <button data-nav="projects">Проекты</button>
+          <button data-nav="knowledge">Знания</button>
+          <button data-nav="settings">Настройки</button>
+        </nav>
+        <div class="f-sidebar-content" id="sidebar-content"></div>
+        <div class="f-sidebar-foot"><span class="f-status-dot" id="status-dot"></span><span id="connection-label">Подключение не проверено</span></div>
+      </aside>
+      <main class="f-main" id="panel" aria-live="polite"></main>
+    </div>
+    <nav class="f-mobile-nav" aria-label="Разделы на телефоне">
+      <button data-nav="chat" class="on">Чаты</button>
+      <button data-nav="projects">Проекты</button>
+      <button data-nav="knowledge">Знания</button>
+      <button data-nav="settings">Настройки</button>
+    </nav>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
