@@ -81,13 +81,21 @@ function renderProjects(){
 }
 function renderKnowledge(){
   const docs=state.docs.filter(d=>!state.activeProjectId||d.projectId===state.activeProjectId);
-  $("#panel").innerHTML='<div class="f-content">'+titleLine("Знания","Текстовые материалы, доступные выбранному проекту.")+
-  '<div class="f-notice">Это не дообучение модели. Отрывки из глав подбираются из материалов проекта, утверждённая «Легенда» поступает из подключённой «Мастерской». Для точной проверки целого романа одной выдержки недостаточно.</div>'+
+  const examples=state.feedback.filter(f=>!state.activeProjectId||f.projectId===state.activeProjectId).slice().reverse();
+  $("#panel").innerHTML='<div class="f-content">'+titleLine("Знания","Материалы романов и твоя личная школа письма.")+
+  '<div class="f-notice">Канон из «Мастерской» и загруженные главы — источники. Авторские образцы и замечания — правила стиля. Ни один из этих материалов сам по себе не меняет веса модели.</div>'+
   '<div class="f-section"><label class="f-label">Проект</label><select class="f-select" id="f-doc-project"><option value="">Выбери проект</option>'+
     state.projects.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===state.activeProjectId?"selected":"")+'>'+esc(p.name)+'</option>').join("")+'</select></div>'+
-  (state.activeProjectId?'<div class="f-section"><h2>Добавить материал</h2><p class="f-muted">Только .txt, .md или .json, до 2 МБ за файл. Содержимое сохраняется в браузере, а не публикуется в GitHub.</p><input id="f-upload" class="f-upload" type="file" accept=".txt,.md,.json,text/plain,application/json"><div class="f-row" style="margin-top:10px"><button class="f-btn" data-action="add-note">+ Добавить заметку</button></div></div>':'<div class="f-notice">Сначала создай или выбери проект.</div>')+
+  (state.activeProjectId?'<div class="f-section"><h2>Добавить материал</h2><p class="f-muted">Только .txt, .md или .json, до 2 МБ за файл. Содержимое остаётся в твоём браузере и не публикуется на GitHub.</p><input id="f-upload" class="f-upload" type="file" accept=".txt,.md,.json,text/plain,application/json"><div class="f-row" style="margin-top:10px"><button class="f-btn" data-action="add-note">+ Добавить заметку</button></div></div>':'<div class="f-notice">Сначала создай или выбери проект.</div>')+
   '<div class="f-section"><h2>Материалы'+(state.activeProjectId?" проекта":"")+'</h2>'+
-    (docs.length?'<ul class="f-list">'+docs.map(d=>'<li class="f-spread"><div><strong>'+esc(d.name)+'</strong><p class="f-muted">'+(d.text.length).toLocaleString("ru-RU")+' знаков</p></div><button class="f-btn danger" data-action="delete-doc" data-id="'+esc(d.id)+'">Удалить</button></li>').join("")+'</ul>':empty("Материалов нет","Добавь краткий канон, биографию или текстовую заметку."))+'</div></div>';
+    (docs.length?'<ul class="f-list">'+docs.map(d=>'<li class="f-spread"><div><strong>'+esc(d.name)+'</strong><p class="f-muted">'+(d.text.length).toLocaleString("ru-RU")+' знаков</p></div><button class="f-btn danger" data-action="delete-doc" data-id="'+esc(d.id)+'">Удалить</button></li>').join("")+'</ul>':empty("Материалов нет","Добавь главу или текстовую заметку."))+'</div>'+
+  '<div class="f-section"><div class="f-spread"><div><h2>Мой стиль · память соавтора</h2><p class="f-muted">Одобренные сцены, твои правки и причины отказов. Они будут учитываться в задании для Claude.</p></div>'+
+    (state.activeProjectId?'<button class="f-btn" data-action="add-style">+ Мой образец</button>':"")+'</div>'+
+    (examples.length?'<div class="f-examples">'+examples.map(x=>'<article class="f-example"><div class="f-spread"><strong>'+(x.kind==="good"?"Одобрено":"Не повторять")+' · '+esc(x.source||"Автор")+'</strong>'+
+      '<button class="f-btn danger" data-action="delete-feedback" data-id="'+esc(x.id)+'">Удалить</button></div>'+
+      '<p>'+esc(x.reason||"")+'</p><p class="f-muted">'+esc(String(x.finalText||x.answer||"").slice(0,260))+'</p></article>').join("")+'</div>':
+      empty("Примеров пока нет","Добавь любимый абзац или сохрани ответ кнопкой «В образцы»."))+
+    '</div></div>';
 }
 function renderSettings(){
   const s=state.settings;
@@ -496,6 +504,23 @@ document.addEventListener("click",async(e)=>{
     state.projects=state.projects.filter(x=>x.id!==id);state.chats=state.chats.filter(x=>x.projectId!==id);state.docs=state.docs.filter(x=>x.projectId!==id);
     if(state.activeProjectId===id){state.activeProjectId=null;state.activeChatId=null;}await save();render();}
   if(a==="add-note")await addNote();
+  if(a==="add-style"){
+    if(!state.activeProjectId)return notice("Выбери проект.");
+    const v=await openModal("Мой образец письма",[
+      {key:"reason",label:"Что мне нравится в этом фрагменте / правило стиля",multi:true,required:true},
+      {key:"finalText",label:"Фрагмент моего окончательного текста",multi:true,required:true}
+    ]);
+    if(v?.reason?.trim()&&v?.finalText?.trim()){
+      state.feedback.push({id:uid(),projectId:state.activeProjectId,chatId:null,kind:"good",
+        reason:v.reason.trim().slice(0,1500),prompt:"",answer:"",
+        finalText:v.finalText.trim().slice(0,18000),source:"Автор",at:stamp()});
+      await save();render();notice("Твой авторский образец сохранён в памяти Freitag AI.");
+    }
+  }
+  if(a==="delete-feedback"){
+    if(!confirm("Удалить этот пример из памяти стиля?"))return;
+    state.feedback=state.feedback.filter(x=>x.id!==id);await save();render();
+  }
   if(a==="delete-doc"){if(!confirm("Удалить материал?"))return;state.docs=state.docs.filter(d=>d.id!==id);await save();render();}
   if(a==="rename-chat"){const c=chat();if(!c)return;const v=await openModal("Название чата",[{key:"title",label:"Название",required:true}],{title:c.title});if(v){c.title=v.title.trim();await save();render();}}
   if(a==="delete-chat"){const c=chat();if(!c||!confirm("Удалить этот чат?"))return;state.chats=state.chats.filter(x=>x.id!==c.id);state.activeChatId=null;await save();render();}
