@@ -128,28 +128,34 @@ function renderSettings(){
   '<div class="f-row"><button type="button" class="f-btn" data-action="export">Скачать архив JSON</button><label class="f-btn f-file-label">Импортировать JSON<input id="f-import" type="file" accept=".json,application/json" hidden></label></div></div></form></div>';
 }
 function renderChat(){
-  let c=chat();if(c && c.projectId!==state.activeProjectId) state.activeProjectId=c.projectId||null;
+  let c=chat();if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
   const p=project(c?.projectId||state.activeProjectId);
-  if(!c){$("#panel").innerHTML='<div class="f-content">'+titleLine("Новый чат",p?'Проект: '+p.name:"Без проекта")+
-    empty("С чего начнем?","Открой чат и отправь сообщение установленной модели.")+
-    '<div class="f-row" style="justify-content:center"><button class="f-btn primary" data-action="new-chat">+ Создать чат</button></div></div>';return;}
-  const body=c.messages.map((m,i)=>'<div class="f-msg '+esc(m.role)+'"><span class="f-speaker">'+(m.role==="user"?"Ты":m.provider==="Claude"?"Claude · Freitag AI":"Qwen · Freitag AI")+'</span><div class="f-msg-text">'+esc(m.content)+'</div>'+
-    (m.role==="assistant"&&!m.content.startsWith("Не удалось")?'<div class="f-feedback-actions"><button class="f-inline-btn" data-action="feedback-good" data-i="'+i+'">В образцы</button><button class="f-inline-btn" data-action="feedback-bad" data-i="'+i+'">Не то</button></div>':"")+
+  if(!c){$("#panel").innerHTML='<div class="f-content">'+titleLine("Новый чат",p?'Книга: '+p.name:"Без проекта")+
+    empty("Чат ещё не создан","Нажми «Новый чат», чтобы писать прямо здесь.")+
+    '<div class="f-row" style="justify-content:center"><button class="f-btn primary" data-action="new-chat">+ Новый чат</button></div></div>';return;}
+  const body=c.messages.map((m,i)=>'<div class="f-msg '+esc(m.role)+'"><span class="f-speaker">'+(m.role==="user"?"Ты":m.provider==="Claude"?"Ответ Claude":"Freitag AI · локальная Qwen")+'</span><div class="f-msg-text">'+esc(m.content)+'</div>'+
+    (m.role==="assistant"&&m.content&&!m.content.startsWith("Не удалось")?'<div class="f-feedback-actions"><button class="f-inline-btn" data-action="feedback-good" data-i="'+i+'">В образцы</button><button class="f-inline-btn" data-action="feedback-bad" data-i="'+i+'">Не то</button></div>':"")+
     '</div>').join("");
-  const modeOptions=Object.entries(WRITING_MODES).map(([key,v])=>'<option value="'+key+'" '+((c.mode||"dialog")===key?"selected":"")+'>'+esc(v.name)+'</option>').join("");
+  const modeOptions=Object.entries(WRITING_MODES).map(([key,v])=>'<option value="'+key+'" '+((c.mode||"draft")===key?"selected":"")+'>'+esc(v.name)+'</option>').join("");
   $("#panel").innerHTML='<div class="f-chat">'+
-    (!connectOk&&connectText==="Нет соединения"?'<div class="f-notice">Нет связи с локальной Ollama. <button class="f-btn" data-action="open-settings">Исправить подключение</button></div>':"")+
-    '<div class="f-chat-meta f-spread"><div><h1 class="f-title">'+esc(c.title)+'</h1><p class="f-subtitle">'+esc(p?.name||"Без проекта")+' · литературный соавтор</p></div>'+
-    '<div class="f-row"><button class="f-btn" data-action="rename-chat">Переименовать</button><button class="f-btn danger" data-action="delete-chat">Удалить</button></div></div>'+
-    '<div class="f-chat-body" id="f-messages">'+(body||empty("Пустой чат","Задай первый вопрос."))+'</div>'+
-    '<form id="f-chat-form" class="f-compose"><div class="f-writing-bar"><label for="f-writing-mode">Режим работы</label><select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
-    (p?'<span class="f-writing-hint">'+(p.masterCanon?"Легенда из Мастерской":p.canon?"Ручной канон":"Канон не заполнен")+' · <button type="button" class="f-inline-btn" data-action="edit-active-project">Настроить книгу</button></span>':'<span class="f-writing-hint">Создай проект для памяти о книге</span>')+'</div>'+
-    '<textarea class="f-textarea" id="f-message-input" placeholder="Задача, сцена или отрывок… (Enter — отправить, Shift+Enter — новая строка)" aria-label="Сообщение" '+(busy?"disabled":"")+'></textarea>'+
-    '<div class="f-compose-controls"><span class="f-mini">Claude — через твой аккаунт, без API · Qwen — локально</span><div class="f-row">'+
-    (busy?'<button type="button" class="f-btn danger" data-action="stop">Остановить</button>':
-      '<button type="button" class="f-btn" data-action="paste-claude">Добавить ответ Claude</button>'+
-      '<button type="button" class="f-btn" data-action="ask-local">Локальная Qwen</button>'+
-      '<button type="button" class="f-btn primary" data-action="ask-claude">Спросить Claude</button>')+'</div></div></form></div>';
+    '<div class="f-chat-meta f-spread"><div><h1 class="f-title">'+esc(c.title)+'</h1><p class="f-subtitle">'+esc(p?.name||"Без проекта")+'</p></div>'+
+    '<div class="f-row f-chat-head-actions"><button class="f-btn" data-action="rename-chat">Переименовать</button><button class="f-btn danger" data-action="delete-chat">Удалить</button></div></div>'+
+    '<div class="f-chat-body" id="f-messages">'+(body||empty("Начни разговор","Напиши задачу. Ответ появится прямо в этом чате."))+'</div>'+
+    '<form id="f-chat-form" class="f-compose">'+
+      '<div class="f-writing-bar"><select class="f-select" id="f-writing-mode" aria-label="Режим работы" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
+      '<span class="f-writing-hint">'+(p?.masterCanon?"Легенда из Мастерской":p?.canon?"Канон указан":p?"Канон не заполнен":"Без проекта")+
+      (p?' · <button type="button" class="f-inline-btn" data-action="edit-active-project">Настроить</button>':"")+'</span></div>'+
+    '<textarea class="f-textarea" id="f-message-input" placeholder="Напиши сообщение или вставь сцену…" aria-label="Сообщение" '+(busy?"disabled":"")+'></textarea>'+
+    '<div class="f-compose-controls">'+
+      '<span class="f-mini">'+(connectOk?"● Ollama подключена":connectText==="Нет соединения"?"Нет связи с Ollama":"Локальная Qwen · "+esc(state.settings.model))+'</span>'+
+      '<div class="f-row">'+(busy?'<button type="button" class="f-btn danger" data-action="stop">Остановить</button>':
+      '<button type="submit" class="f-btn primary">Отправить</button>')+'</div></div>'+
+    '<details class="f-extra-tools"><summary>Дополнительные инструменты</summary><div class="f-row">'+
+      '<button type="button" class="f-btn" data-action="ask-claude">Подготовить задание для Claude</button>'+
+      '<button type="button" class="f-btn" data-action="paste-claude">Сохранить ответ Claude</button>'+
+      '<button type="button" class="f-btn" data-action="open-settings">Подключение</button></div>'+
+      '<p class="f-muted">Claude здесь не подключён автоматически. Задание можно скопировать в Claude вручную; обычная кнопка «Отправить» отвечает локальной Qwen.</p></details>'+
+    '</form></div>';
   $("#f-messages")?.lastElementChild?.scrollIntoView({block:"nearest"});
 }
 function ensureChat(){
@@ -310,6 +316,25 @@ const safeEndpoint=(endpoint)=>{
   if(u.protocol==="http:"&&!["localhost","127.0.0.1","[::1]"].includes(u.hostname))return null;
   return u.origin+u.pathname.replace(/\/+$/,"");
 };
+async function probeLocalConnection(){
+  const endpoint=safeEndpoint(state.settings.endpoint);
+  if(!endpoint)return;
+  connectText="Проверка Ollama…";renderHeader();
+  try{
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),6000);
+    let response;
+    try{response=await ollamaRequest(endpoint,"/api/tags",{signal:controller.signal});}
+    finally{clearTimeout(timeout);}
+    if(!response.ok)throw Error("HTTP "+response.status);
+    const json=await response.json();
+    connectOk=true;connectText="Ollama подключена";
+    const found=(json.models||[]).some(m=>(m.name||m.model)===state.settings.model);
+    if(!found)connectText="Модель не обнаружена";
+  }catch{connectOk=false;connectText="Нет соединения";}
+  renderHeader();
+  const mini=document.querySelector(".f-compose-controls .f-mini");
+  if(mini)mini.textContent=connectOk?"● Ollama подключена":connectText==="Нет соединения"?"Нет связи с Ollama":connectText;
+}
 async function testConnection(){
   const endpoint=safeEndpoint($("#f-endpoint")?.value||state.settings.endpoint);
   if(!endpoint)return notice("Разрешен локальный http://localhost:11434 или защищенный HTTPS-адрес.");
@@ -527,7 +552,7 @@ document.addEventListener("click",async(e)=>{
   if(a==="stop")currentController?.abort();
   if(a==="test-connection")await testConnection();
   if(a==="ask-local"){const v=$("#f-message-input")?.value||"";if(v.trim()){await sendMessage(v);}else notice("Напиши задачу.");}
-  if(a==="ask-claude"){const v=$("#f-message-input")?.value||"";if(v.trim()){await prepareClaude(v);}else notice("Напиши задачу.");}
+  if(a==="ask-claude"){const v=$("#f-message-input")?.value||"";if(v.trim()){await prepareClaude(v);}else notice("Сначала напиши задачу, чтобы подготовить её для Claude.");}
   if(a==="paste-claude")await saveClaudeAnswer();
   if(a==="feedback-good"||a==="feedback-bad")await saveFeedback(Number(b.dataset.i),a==="feedback-good"?"good":"bad");
   if(a==="open-settings"){tab="settings";render();}
@@ -550,7 +575,7 @@ document.addEventListener("click",async(e)=>{
   if(a==="export"){await save();download("FreitagAI-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify({app:"FreitagAI",version:1,data:state},null,2));}
 });
 document.addEventListener("submit",async(e)=>{
-  if(e.target.id==="f-chat-form"){e.preventDefault();const inp=$("#f-message-input"),val=inp?.value||"";if(inp)inp.value="";await prepareClaude(val);}
+  if(e.target.id==="f-chat-form"){e.preventDefault();const inp=$("#f-message-input"),val=inp?.value||"";if(!val.trim())return;if(inp)inp.value="";await sendMessage(val);}
   if(e.target.id==="f-master-auth"){
     e.preventDefault();const fd=new FormData(e.target);const password=String(fd.get("password")||"");
     try{await master.login(String(fd.get("email")||"").trim(),password);render();notice("Мастерская подключена. Книги доступны только для чтения.");}
@@ -597,4 +622,7 @@ document.addEventListener("keydown",e=>{
   catch(e){$("#panel").innerHTML=empty("Хранилище недоступно","Разреши браузеру сохранять данные сайта: "+e.message);return;}
   state.feedback=Array.isArray(state.feedback)?state.feedback:[];
   render();
+  // Не требуем от пользователя вручную проверять уже настроенную Ollama
+  // при каждом обновлении страницы. Это тихая проверка без всплывающих окон.
+  probeLocalConnection().catch(()=>{});
 })();
