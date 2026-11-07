@@ -110,6 +110,11 @@ html.app-freitag button { cursor: pointer; }
 .f-feedback-actions {display:flex;align-items:center;gap:16px;margin-top:10px;opacity:.85;}
 .f-feedback-actions .f-inline-btn {font-size:12px !important;}
 .f-feedback-actions .f-inline-btn:hover {opacity:1;text-decoration:underline;}
+.f-examples {display:grid;gap:12px;margin-top:18px;}
+.f-example {border:1px solid var(--line);border-radius:15px;padding:12px 15px;background:var(--surface);}
+.f-example strong {font-size:13px;}
+.f-example p {font-size:13px;line-height:1.55;margin:8px 0;}
+.f-example .f-muted {white-space:pre-wrap;overflow-wrap:anywhere;}
 .f-master-section {margin-top:22px;}
 .f-master-books {display:grid;gap:4px;max-height:440px;overflow-y:auto;margin:16px 0 0;}
 .f-master-book {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px;}
