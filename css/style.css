@@ -3314,3 +3314,24 @@ details.fold-more[open] > summary { align-self: flex-start; }
 .prof-row { gap: 8px; flex-wrap: wrap; align-items: baseline; }
 /* редактор главы: справа всегда место для колонки цифр (слова, знаки, а.л.) — на средних экранах она залезала на край страницы */
 @media (min-width: 1380px) and (max-width: 1799px) { html.on-ed main { padding-right: 104px !important; } }
+/* ---------- плитки-разделы (tiles в ui.js): страница книги и др. ---------- */
+.tiles-nav { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+:root main button.tile-b { display: grid !important; grid-template-columns: 22px 1fr; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; text-align: left;
+  min-height: 64px !important; padding: 12px 14px !important; border-radius: 16px !important; background: var(--soft) !important; border: 0 !important; color: var(--text) !important;
+  font: 500 15px/1.25 var(--font-display) !important; letter-spacing: 0 !important; text-transform: none !important; box-shadow: none !important; transition: background .15s; }
+:root main button.tile-b:hover { background: var(--soft-2, var(--surface-2)) !important; }
+:root main button.tile-b.on { background: var(--text) !important; color: var(--bg) !important; }
+.tile-b .tile-i { grid-row: 1 / span 2; display: flex; color: var(--muted); }
+.tile-b .tile-i .ic { width: 20px; height: 20px; }
+.tile-b .tile-t { grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile-b .tile-s { grid-column: 2; font: 400 12.5px/1.3 var(--font-body); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile-b:not(:has(.tile-s)) .tile-t { grid-row: 1 / span 2; }
+.tile-b.on .tile-i, .tile-b.on .tile-s { color: color-mix(in srgb, var(--bg) 70%, transparent); }
+.tile-pane { margin-top: 16px; padding-top: 4px; }
+.tile-pane > .card, .tile-pane > .ct-wrap, .tile-pane > section { background: none !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; border: 0 !important; }
+.tile-pane > .card > h2:first-child, .tile-pane > .card > .row.between:first-child > h2, .tile-pane > .ct-wrap > .row.between:first-child > h2 { display: none; }
+.tile-pane > .card > .row.between:first-child, .tile-pane > .ct-wrap > .row.between:first-child { justify-content: flex-end; margin-top: 0 !important; }
+@media (max-width: 600px) { .tiles-nav { grid-template-columns: 1fr 1fr; gap: 6px; } :root main button.tile-b { min-height: 58px !important; padding: 10px 12px !important; font-size: 14px !important; grid-template-columns: 18px 1fr; column-gap: 8px; } .tile-b .tile-i .ic { width: 17px; height: 17px; } }
+.card.bk-more { padding: 14px; }
+.card.bk-more .tile-pane { padding: 4px 6px 6px; }
+@media (min-width: 900px) { .tiles-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

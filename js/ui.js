@@ -235,3 +235,19 @@ if (typeof document !== 'undefined') document.addEventListener('toggle', (e) => 
   const s = foldsGet(); if (e.target.open) s.add(k); else s.delete(k);
   try { localStorage.setItem('folds', JSON.stringify([...s])); } catch { /* нет памяти — не страшно */ }
 }, true);
+
+// ---------- Плитки-разделы: значок, название и главное состояние; по нажатию раздел раскрывается под плитками (открыт один) ----------
+// tiles(ключ, [{ k, title, sub, icon, html }]) — пустые html пропускаются; какой раздел открыт, запоминается на устройстве
+export function tiles(key, items, iconFn = () => '') {
+  const list = items.filter((x) => x && x.html);
+  if (!list.length) return '';
+  let open = ''; try { open = localStorage.getItem('tile:' + key) || ''; } catch { /* ок */ }
+  if (!list.some((x) => x.k === open)) open = '';
+  const cur = list.find((x) => x.k === open);
+  return `<div class="tiles-nav" role="tablist">${list.map((x) => `<button type="button" class="tile-b${x.k === open ? ' on' : ''}" role="tab" aria-selected="${x.k === open}" data-act="tile.open" data-key="${esc(key)}" data-k="${esc(x.k)}">${x.icon ? `<span class="tile-i">${iconFn(x.icon)}</span>` : ''}<span class="tile-t">${x.title}</span>${x.sub ? `<span class="tile-s">${x.sub}</span>` : ''}</button>`).join('')}</div>
+    ${cur ? `<div class="tile-pane">${cur.html}</div>` : ''}`;
+}
+acts['tile.open'] = (d) => {
+  let open = ''; try { open = localStorage.getItem('tile:' + d.key) || ''; } catch { /* ок */ }
+  try { localStorage.setItem('tile:' + d.key, open === d.k ? '' : d.k); } catch { /* ок */ }
+};
