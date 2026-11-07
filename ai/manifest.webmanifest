@@ -9,12 +9,12 @@
   "theme_color": "#f6f4f2",
   "icons": [
     {
-      "src": "../pisatel/photo-180.png",
+      "src": "../pisatel/bear-180.png",
       "sizes": "180x180",
       "type": "image/png"
     },
     {
-      "src": "../pisatel/photo-512.png",
+      "src": "../pisatel/bear-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
