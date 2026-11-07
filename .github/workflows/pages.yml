@@ -27,7 +27,7 @@ jobs:
           # каждая версия — в своей папке, чтобы браузер не держал старые файлы
           V=v${GITHUB_SHA::8}
           mkdir -p _site/$V
-          mkdir -p _site/$V/writer _site/pisatel _site/$V/direct _site/direct
+          mkdir -p _site/$V/writer _site/pisatel _site/$V/direct _site/direct _site/$V/ai _site/ai
           cp -r css js _site/$V/
           cp -r js/vendor _site/vendor  # постоянная копия библиотек — для страниц, открытых до обновления сайта
           cp -r writer/js _site/$V/writer/
@@ -36,6 +36,10 @@ jobs:
           cp manifest.webmanifest heart-line.svg heart-line-180.png heart-line-512.png _site/
           cp writer/manifest.webmanifest writer/photo-32.png writer/photo-180.png writer/photo-512.png writer/bear.svg writer/bear-180.png writer/bear-512.png writer/star.svg writer/star-180.png writer/star-512.png _site/pisatel/
           cp direct/manifest.webmanifest direct/target.svg direct/target-180.png direct/target-512.png proxy/direct-worker.js _site/direct/
+          cp ai/manifest.webmanifest ai/style.css _site/ai/
+          cp ai/app.js _site/$V/ai/app.js
+          sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\./style.css#./style.css?v=$V#; s#\./app.js#../$V/ai/app.js#" ai/index.html > _site/ai/index.html
+          grep -q "$V/ai/app.js" _site/ai/index.html
           sed "s#__APPV__#$V#; s#css/style.css#$V/css/style.css#; s#js/app.js#$V/js/app.js#" index.html > _site/index.html
           sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/writer/js/app.js#" writer/index.html > _site/pisatel/index.html
           sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/direct/js/app.js#" direct/index.html > _site/direct/index.html
