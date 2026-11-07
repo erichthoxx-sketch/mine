@@ -173,7 +173,9 @@ async function addNote(){
 function searchTerms(question) {
   const stop = new Set(["который","которая","которые","этого","этому","чтобы","нужно","можно","потом","сейчас","только","глава","главе","главу","текст","сцена","сцену","роман","книге","пожалуйста","почему","какой","какая","какие"]);
   return [...new Set((String(question).toLowerCase().replace(/ё/g,"е").match(/[а-яa-z0-9]{4,}/g)||[])
-    .map(w=>w.length>7?w.slice(0,w.length-2):w).filter(w=>!stop.has(w)))].slice(0,22);
+    .filter(w=>!stop.has(w))
+    .map(w=>w.length>=6?w.slice(0,-2):w.slice(0,-1))
+    .filter(w=>w.length>=3))].slice(0,22);
 }
 function relevantNotes(question,projectId,maxLength=2200){
   if(!projectId)return "";
