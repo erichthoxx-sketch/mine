@@ -60,8 +60,8 @@ export const master = {
     if(!user)throw Error("Сначала войди в аккаунт Мастерской через раздел «Проекты».");
     const {doc,writeBatch}=state.mods.F;
     const rows=[
-      ...projects.map(p=>({group:"freitag_projects",id:p.id,data:p})),
-      ...feedback.map(f=>({group:"freitag_examples",id:f.id,data:f}))
+      ...projects.map(p=>({group:"freitag_projects",id:p.id,data:JSON.parse(JSON.stringify(p))})),
+      ...feedback.map(f=>({group:"freitag_examples",id:f.id,data:JSON.parse(JSON.stringify(f))}))
     ];
     for(const row of rows){
       if(!/^[a-zA-Z0-9_-]{1,180}$/.test(row.id))throw Error("Недопустимый идентификатор записи.");
