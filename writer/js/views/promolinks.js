@@ -1,12 +1,12 @@
 // UTM/реферальные ссылки Литнета: единый реестр в Маркетинге + карточках книг.
 import { esc, acts, toast, openSheet, ask, opt, uid } from '../../../js/ui.js';
 import { fmtDate } from '../../../js/format.js';
-import { activePromoLinks, isLitnetLink, promoReminderDate, promoToken, promoChannel, promoChannelName } from '../promolinks.js';
+import { activePromoLinks, isLitnetLink, promoReminderDate, promoToken, promoChannel, promoChannelName, PROMO_CHANNELS, PROFILE, PROFILE_NAME } from '../promolinks.js';
 
 const app = () => window.__app;
 const linkList = (c, bookId = '', channel = '') => activePromoLinks(c.data.w_promolinks || []).filter(x => (!bookId || x.bookId === bookId) && (!channel || promoChannel(x) === channel));
 const human = value => value ? fmtDate(value) : 'Не указана';
-const bookTitle = (c, x) => c.wbooksById[x.bookId]?.title || 'Книга не найдена';
+const bookTitle = (c, x) => x.bookId === PROFILE ? PROFILE_NAME : c.wbooksById[x.bookId]?.title || 'Книга не найдена';
 const safeLink = url => isLitnetLink(url) ? url : '';
 const displayLink = url => {
   const u = safeLink(url);
@@ -24,10 +24,11 @@ export function promoLinksInline(c, bookId) {
     UTM · ${items.length} <span>${expired ? 'истекла ' : 'до '}${human(nearest.expires)}</span>
   </button>`;
 }
-export function promoLinksPanel(c, { bookId = '', compact = false, channel = '' } = {}) {
+export function promoLinksPanel(c, { bookId = '', compact = false, channel = '', title = '', hint = '', newChannel = '' } = {}) {
   const items = linkList(c, bookId, channel);
   return `<div class="${compact ? 'utm-panel utm-panel-compact' : 'card utm-panel'}">
-    <div class="row between"><h2 style="margin:0">${channel==='social'?'Ссылки соцсетей':channel==='direct'?'Ссылки Директа':'UTM-ссылки'}</h2><button class="small-btn" data-act="utm.new"${bookId ? ` data-book="${esc(bookId)}"` : ''}${channel ? ` data-channel="${channel}"` : ''}>+ Ссылка</button></div>
+    <div class="row between"><h2 style="margin:0">${title || (channel==='social'?'Ссылки соцсетей':channel==='direct'?'Ссылки Директа':channel==='litnet'?'Ссылки «Литнет платит»':'UTM-ссылки')}</h2><button class="small-btn" data-act="utm.new"${bookId ? ` data-book="${esc(bookId)}"` : ''}${channel || newChannel ? ` data-channel="${channel || newChannel}"` : ''}>+ Ссылка</button></div>
+    ${hint ? `<p class="small muted" style="margin:4px 0 8px">${hint}</p>` : ''}
     ${!items.length ? '<p class="small muted">Ссылок пока нет.</p>' : `
       <div class="utm-list">${items.map(x=>`<div class="utm-item">
         <div class="row between">
@@ -53,15 +54,16 @@ const fields = (c, x={}, locked='', presetChannel='') => `
   <label>Книга</label>
   <select name="bookId" required>
     <option value="">Выбрать книгу</option>
+    ${opt(PROFILE, PROFILE_NAME + ' (все книги)', locked||x.bookId||'')}
     ${c.wbooks.map(b=>opt(b.id,b.title,locked||x.bookId||'')).join('')}
   </select>
   <label>Канал</label>
-  <select name="channel"><option value="direct"${(presetChannel||promoChannel(x))==='direct'?' selected':''}>Директ</option><option value="social"${(presetChannel||promoChannel(x))==='social'?' selected':''}>Соцсети</option></select>
+  <select name="channel">${PROMO_CHANNELS.map(([k, t]) => opt(k, t, presetChannel || promoChannel(x))).join('')}</select>
   <label>Кампания / площадка</label>
   <input name="campaign" value="${esc(x.campaign||'')}" maxlength="180" placeholder="Threads · шапка профиля / реклама таргетолога" required>
   <label>Ссылка для продвижения из Литнета</label>
   <input name="url" type="url" value="${esc(x.url||'')}" placeholder="https://litnet.com/ref/..." required>
-  <label>Ссылка на книгу (необязательно)</label>
+  <label>Куда ведёт: книга или профиль (необязательно)</label>
   <input name="destination" type="url" value="${esc(x.destination||'')}" placeholder="https://litnet.com/ru/book/...">
   <div class="f2">
     <div><label>Новые привязки до</label><input name="expires" type="date" value="${esc(x.expires||'')}" required></div>
@@ -72,7 +74,7 @@ function entry(fd, previous = {}) {
   const bookId=String(fd.get('bookId')||''), campaign=String(fd.get('campaign')||'').trim(),
     url=String(fd.get('url')||'').trim(), destination=String(fd.get('destination')||'').trim(),
     expires=String(fd.get('expires')||''), rawReaders=String(fd.get('readers')||'').trim();
-  if(!app().ctx().wbooksById[bookId]) throw new Error('Выберите существующую книгу');
+  if(bookId!==PROFILE && !app().ctx().wbooksById[bookId]) throw new Error('Выберите книгу или «Профиль автора»');
   if(!campaign) throw new Error('Впиши название кампании');
   if(!isLitnetLink(url)) throw new Error('Нужна действительная ссылка вида https://litnet.com/ref/...');
   if(destination && !isLitnetLink(destination,'destination')) throw new Error('Ссылка на книгу должна вести на https://litnet.com/');
@@ -82,9 +84,9 @@ function entry(fd, previous = {}) {
   const history = [...(previous.history||[])];
   if (previous.url && changed) history.push({ url: previous.url, expires: previous.expires, savedAt: new Date().toISOString() });
   const channel=String(fd.get('channel')||promoChannel(previous));
-  if(channel!=='direct'&&channel!=='social') throw new Error('Выберите «Директ» или «Соцсети»');
-  return { ...previous, bookId,campaign,channel,url,destination,expires,readers:rawReaders===''?'':Number(rawReaders),
-    ...(channel==='social'?{directCampaignId:'',appliedTag:'',appliedAt:''}:{}),
+  if(!PROMO_CHANNELS.some(([k])=>k===channel)) throw new Error('Выберите канал');
+  return { ...previous, bookId,book:bookId===PROFILE?PROFILE_NAME:(app().ctx().wbooksById[bookId]?.title||previous.book||''),campaign,channel,url,destination,expires,readers:rawReaders===''?'':Number(rawReaders),
+    ...(channel!=='direct'?{directCampaignId:'',appliedTag:'',appliedAt:''}:{}),
     history:history.slice(-20), ...(changed ? {reminderDoneFor:''} : {}),
     status:'active', modifiedAt:new Date().toISOString() };
 }

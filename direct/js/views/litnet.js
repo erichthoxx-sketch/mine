@@ -75,13 +75,14 @@ function fields(a,x={}) {
   const bs=bookList(a);
   return `
     <label>Книга</label>
-    <select name="bookId"><option value="">Другая книга / пока не в Мастерской</option>${bs.map(b=>opt(b.id,b.title,x.bookId||'')).join('')}</select>
+    <select name="bookId"><option value="">Другая книга / пока не в Мастерской</option>${opt('profile','Профиль автора (все книги)',x.bookId||'')}${bs.map(b=>opt(b.id,b.title,x.bookId||'')).join('')}</select>
     <label>Название книги, если ее нет в списке</label>
     <input name="book" value="${esc(x.book||'')}" placeholder="Развод для черной вдовы" maxlength="180">
     <label>Канал продвижения</label>
     <select name="channel">
       <option value="direct"${promoChannel(x)==='direct'?' selected':''}>Директ</option>
       <option value="social"${promoChannel(x)==='social'?' selected':''}>Соцсети</option>
+      <option value="litnet"${promoChannel(x)==='litnet'?' selected':''}>Литнет платит</option>
     </select>
     <label>Кампания / площадка</label>
     <input name="campaign" value="${esc(x.campaign||'')}" placeholder="Threads · шапка профиля / реклама таргетолога" maxlength="180" required>
@@ -95,7 +96,7 @@ function fields(a,x={}) {
 }
 function collect(a,fd,old={}) {
   const bookId=String(fd.get('bookId')||'');
-  const book=bookName(a,bookId)||String(fd.get('book')||'').trim();
+  const book=bookId==='profile'?'Профиль автора':bookName(a,bookId)||String(fd.get('book')||'').trim();
   const campaign=String(fd.get('campaign')||'').trim();
   const channel=String(fd.get('channel')||promoChannel(old));
   const directCampaignId=channel==='direct' ? String(old.directCampaignId||'') : '';
@@ -106,7 +107,7 @@ function collect(a,fd,old={}) {
   if(!isLitnetLink(url)||!exactTag(url))throw Error('Нужна персональная ссылка вида https://litnet.com/ref/...');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(expires)||!promoReminderDate(expires))throw Error('Укажи дату окончания из Литнета');
   if(raw&&!/^\d{1,9}$/.test(raw))throw Error('Количество читателей должно быть целым неотрицательным числом');
-  if(channel!=='direct'&&channel!=='social')throw Error('Выбери Директ или Соцсети');
+  if(!['direct','social','litnet'].includes(channel))throw Error('Выбери канал');
   const changed=old.url!==url||old.expires!==expires;
   const history=[...(old.history||[])];
   const readers=raw===''?'':Number(raw);
@@ -121,7 +122,7 @@ function collect(a,fd,old={}) {
     readers,readersHistory:readersHistory.slice(-90),status:'active',
     history:history.slice(-20),modifiedAt:new Date().toISOString(),
     ...(changed?{reminderDoneFor:''}:{}),
-    ...(channel==='social'?{appliedTag:'',appliedAt:''}:{})};
+    ...(channel!=='direct'?{appliedTag:'',appliedAt:''}:{})};
 }
 acts['ln.new']=()=>{
   const a=app();

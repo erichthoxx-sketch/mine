@@ -132,7 +132,7 @@ export function planItems(c, from, to) {
     }
   }
   // UTM: дата задачи опережает истечение. Дата истечения остается отдельным пассивным событием.
-  const utms = (d.w_promolinks || []).map(x => ({ ...x, book: c.wbooksById[x.bookId]?.title || x.book || 'Книга' }));
+  const utms = (d.w_promolinks || []).map(x => ({ ...x, book: x.bookId === 'profile' ? 'Профиль автора' : c.wbooksById[x.bookId]?.title || x.book || 'Книга' }));
   for (const x of promoLinkTasks(utms, t)) add(x.date, 'utm', esc(x.title), esc(x.sub), { to: x.to, id: x.id, book: x.bookId, dueRaw: x.due, expires: x.expires, channel: x.channel });
   for (const x of activePromoLinks(utms)) if (x.expires) add(x.expires, 'utm-expiry', promoChannelName(x) + ': заканчиваются новые привязки — «' + esc(x.book) + '»', esc(x.campaign || 'Мой Литнет') + ' · ссылка продолжает открываться', { to: promoSection(x) });
   // Никаких общих «Посмотреть дела на выходные». Автовыкладка и сроки остаются в своих датах.

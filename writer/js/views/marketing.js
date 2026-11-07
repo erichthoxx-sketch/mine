@@ -12,8 +12,8 @@ import { svcInfo } from './pubfiles.js';
 import { chaptersOf, docxBlob } from '../publish.js';
 import { authorshipParas, sha256Hex } from '../authorship.js';
 import { promoLinksPanel, promoLinksInline } from './promolinks.js';
+import { PROFILE } from '../promolinks.js';
 import { linksView } from './links.js';
-import { profileLinkCard } from './profilelink.js';
 
 const app = () => window.__app;
 export const MTYPES = { banner: 'Баннер для постов', cover: 'Обложка', target: 'Креатив для таргета', manuscript: 'Рукопись', synopsis: 'Синопсис', 'review-shot': 'Отзывы (скриншот)', other: 'Другое' };
@@ -49,7 +49,7 @@ export function marketingView(a, sub = 'books') {
   <div class="chips" style="margin-top:14px">${chip('progress', 'В процессе', by('progress').length)}${chip('done', 'Завершённые', by('done').length)}${chip('idea', 'Идеи', by('idea').length)}${chip('all', 'Все', c.wbooks.length)}</div>
   ${c.wbooks.length > 6 ? `<input type="search" value="${esc(a.ui.mQ || '')}" placeholder="Найти книгу" data-chg="mk.q" aria-label="Найти книгу" style="margin-bottom:10px">` : ''}
   ${list.length ? `<div class="mk-book-list">${list.map((b) => bookRow(c, b)).join('')}</div>` : `<div class="card"><p class="muted" style="margin:0">${c.wbooks.length ? 'В этой группе книг нет.' : 'Книг пока нет — добавьте их на вкладке «Книги».'}</p></div>`}
-  <div style="margin-top:16px">${profileLinkCard(c)}</div>
+  <div style="margin-top:16px">${promoLinksPanel(c, { bookId: PROFILE, newChannel: 'litnet', title: 'Ссылка на профиль для таргетологов', hint: '«Литнет платит» и таргетологи просят ссылку на профиль. Сделайте в кабинете Литнета ссылку для продвижения на свой профиль и добавьте сюда с датой окончания — Планер напомнит обновить её вовремя.' })}</div>
   <h2 style="margin-top:20px">Рекламные инструменты</h2>
   <div class="card list mk-go">
     <a class="item" href="../direct/"><span class="mk-go-ic">${ic('ads')}</span><span class="mk-go-t"><b>Яндекс Директ</b><span class="sub">кампании, клики, покупки и что поправить</span></span>${ic('chevron')}</a>
@@ -110,7 +110,7 @@ export function bookMarketing(a, id) {
     <div><h2 style="margin:0">${esc(b.title)}</h2><div class="small muted">${STATUS[b.status] || STATUS.progress}</div></div></div>
   <div class="chips">${tab('texts', 'Тексты и баннеры')}${tab('target', 'Для таргета')}${tab('pub', 'Для издательства')}</div>
   ${body}
-  ${t === 'target' ? promoLinksPanel(c, { bookId: b.id, channel: 'direct' }) + profileLinkCard(c) : ''}
+  ${t === 'target' ? promoLinksPanel(c, { bookId: b.id, channel: 'direct' }) : ''}
   ${b.fileId ? `<div class="mk-auth"><button class="dl" data-act="mk.auth" data-id="${b.id}" title="Когда и как писалась книга: Документ, история версий, главы с отпечатками — в Word">${ic('download')}Справка об авторстве</button></div>` : ''}`;
   return { html };
 }

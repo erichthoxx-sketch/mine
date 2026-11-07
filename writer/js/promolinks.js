@@ -28,16 +28,18 @@ export function promoToken(link) {
   if (!isLitnetLink(link)) return '';
   return new URL(link).pathname.split('/').filter(Boolean)[1] || '';
 }
-// Два канала: реклама или соцсети. Старые ссылки не переименовываем,
+// Три канала: Директ, соцсети или «Литнет платит» (таргетологи просят ссылку на профиль). Старые ссылки не переименовываем,
  // но распознаем явно названные Threads как соцсети.
-export const PROMO_CHANNELS = [['direct','Директ'],['social','Соцсети']];
+export const PROMO_CHANNELS = [['direct','Директ'],['social','Соцсети'],['litnet','Литнет платит']];
+// «Профиль автора» вместо книги: ссылка для продвижения на страницу автора (все книги)
+export const PROFILE = 'profile', PROFILE_NAME = 'Профиль автора';
 export function promoChannel(x = {}) {
-  if (x.channel === 'social' || x.channel === 'direct') return x.channel;
+  if (x.channel === 'social' || x.channel === 'direct' || x.channel === 'litnet') return x.channel;
   const source = String(x.campaign || x.socialPlatform || '').toLocaleLowerCase('ru');
   return /threads|тредс|инстаграм|instagram|вконтакте|\bvk\b|соцсет|tiktok|тик ?ток/.test(source) ? 'social' : 'direct';
 }
-export const promoChannelName = x => promoChannel(x) === 'social' ? 'Соцсети' : 'Директ';
-export const promoSourceName = x => promoChannel(x) === 'social' ? String(x.socialPlatform || x.campaign || 'Соцсети').trim() : 'Директ';
+export const promoChannelName = x => ({ social: 'Соцсети', litnet: 'Литнет платит' })[promoChannel(x)] || 'Директ';
+export const promoSourceName = x => promoChannel(x) === 'social' ? String(x.socialPlatform || x.campaign || 'Соцсети').trim() : promoChannelName(x);
 export const promoSection = x => promoChannel(x) === 'social' ? '/social' : '/marketing';
 
 export function promoLinkTasks(links = [], today = '', { includeOverdue = true } = {}) {
@@ -50,7 +52,7 @@ export function promoLinkTasks(links = [], today = '', { includeOverdue = true }
         channel: promoChannel(x), source: promoSourceName(x),
         date: includeOverdue && today && due < today ? today : due,
         overdue: !!today && due < today,
-        title: (promoChannel(x) === 'social' ? 'Соцсети' + (promoSourceName(x) !== 'Соцсети' ? ' · ' + promoSourceName(x) : '') : 'Директ') + ': обновить ссылку — «' + (x.book || 'книга') + '»',
+        title: (promoChannel(x) === 'social' ? 'Соцсети' + (promoSourceName(x) !== 'Соцсети' ? ' · ' + promoSourceName(x) : '') : promoChannelName(x)) + ': обновить ссылку — «' + (x.bookId === PROFILE ? PROFILE_NAME : x.book || 'книга') + '»',
         sub: 'Мой Литнет · новые привязки до ' + x.expires + (x.campaign ? ' · ' + x.campaign : ''),
         to: promoSection(x),
       };

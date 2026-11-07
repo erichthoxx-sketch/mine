@@ -128,7 +128,7 @@ function booksTab(a, M) {
 // ссылки Литнета из общего списка («Мой Литнет» здесь и «Мастерская» → Маркетинг) сами попадают в таблицу — второй раз их не добавляем
 const tableOf = (M) => {
   const utms = M.c.settings.direct?.utms || [], have = new Set(utms.filter((x) => x.litref).map((x) => x.litref.toLowerCase()));
-  const books = Object.fromEntries((M.c.data.w_books || []).map((b) => [b.id, b.title]));
+  const books = { profile: 'Профиль автора', ...Object.fromEntries((M.c.data.w_books || []).map((b) => [b.id, b.title])) };
   const pl = activePromoLinks(M.c.data.w_promolinks || []).map((x) => ({ x, code: promoToken(x.url) })).filter(({ code }) => code && !have.has(code.toLowerCase()) && have.add(code.toLowerCase()))
     .map(({ x, code }) => ({ id: 'pl_' + x.id, pl: true, label: [books[x.bookId], x.campaign].filter(Boolean).join(' · ') || `Ссылка Литнета ${code}`, litref: code, cost: 0 }));
   return utmTable(M.mk.utm || [], [...utms, ...pl], M.main, M.perSale, litrefRows(M.mk.litref || [], M.main, M.titles)).map((r) => (r.saved?.pl ? { ...r, saved: null } : r));

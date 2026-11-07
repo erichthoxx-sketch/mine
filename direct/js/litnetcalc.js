@@ -24,7 +24,7 @@ export function linkStatus(link, today) {
 export function visibleLinks(data = [], books = [], {today = ''} = {}) {
   const names = Object.fromEntries(books.map(b=>[String(b.id),b.title]));
   return data.filter(x=>x?.status!=='archived').map(x=>({
-    ...x,bookTitle:names[String(x.bookId)]||x.book||'Без книги',
+    ...x,bookTitle:x.bookId==='profile'?'Профиль автора':names[String(x.bookId)]||x.book||'Без книги',
     tag:exactTag(x.url),state:linkStatus(x,today)
   })).sort((a,b)=>a.expires.localeCompare(b.expires));
 }
