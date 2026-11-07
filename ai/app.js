@@ -114,7 +114,9 @@ function renderSettings(){
   [["auto","Как в системе"],["light","Светлая"],["dark","Темная"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===state.theme?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></div>'+
   '<div class="f-section"><h2>Моя литературная память</h2><p class="f-muted">Одобренных ответов: '+state.feedback.filter(x=>x.kind==="good").length+
   ' · Отклонённых: '+state.feedback.filter(x=>x.kind==="bad").length+'. Сохраняй примеры после редактирования: это материал для будущего дообучения. Примеры входят в JSON-архив.</p></div>'+
-  '<div class="f-section"><h2>Данные</h2><p class="f-muted">Экспортируй резервную копию перед очисткой браузера. Данные между устройствами пока не синхронизируются.</p>'+
+  '<div class="f-section"><h2>Мои данные и резервные копии</h2><p class="f-muted">Можно сохранить проекты, канон и авторские примеры в твой Firebase. Сохранение и восстановление запускаются только по твоей команде. Чаты пока входят в полный JSON-экспорт и не синхронизируются автоматически.</p>'+
+  '<div class="f-row"><button type="button" class="f-btn" data-action="cloud-save">Сохранить память в Firebase</button>'+
+  '<button type="button" class="f-btn" data-action="cloud-load">Восстановить память из Firebase</button></div>'+
   '<div class="f-row"><button type="button" class="f-btn" data-action="export">Скачать архив JSON</button><label class="f-btn f-file-label">Импортировать JSON<input id="f-import" type="file" accept=".json,application/json" hidden></label></div></div></form></div>';
 }
 function renderChat(){
@@ -504,6 +506,21 @@ document.addEventListener("click",async(e)=>{
   if(a==="paste-claude")await saveClaudeAnswer();
   if(a==="feedback-good"||a==="feedback-bad")await saveFeedback(Number(b.dataset.i),a==="feedback-good"?"good":"bad");
   if(a==="open-settings"){tab="settings";render();}
+  if(a==="cloud-save"){
+    if(!confirm("Сохранить проекты, канон и одобренные/отклонённые примеры в твой Firebase? Чаты не загружаются."))return;
+    try{const res=await master.saveMemory(state.projects,state.feedback);notice("Память сохранена в Firebase: "+res.projectIds.length+" проектов, "+res.feedbackIds.length+" примеров.");}
+    catch(err){notice("Облако: "+err.message);}
+  }
+  if(a==="cloud-load"){
+    if(!confirm("Загрузить сохранённую память из Firebase? Совпадающие проекты и примеры будут обновлены, остальные локальные данные останутся."))return;
+    try{const res=await master.loadMemory();
+      const p=new Map(state.projects.map(x=>[x.id,x])),f=new Map(state.feedback.map(x=>[x.id,x]));
+      for(const x of res.projects)p.set(x.id,x);
+      for(const x of res.feedback)f.set(x.id,x);
+      state.projects=[...p.values()];state.feedback=[...f.values()];
+      await save();render();notice("Память восстановлена: "+res.projects.length+" проектов, "+res.feedback.length+" примеров.");
+    }catch(err){notice("Облако: "+err.message);}
+  }
   if(a==="copy-origins"){try{await navigator.clipboard.writeText(originsCommand());notice("Команда скопирована. Выполни её в PowerShell и перезапусти Ollama.");}catch{prompt("Скопируй команду для PowerShell:",originsCommand());}}
   if(a==="export"){await save();download("FreitagAI-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify({app:"FreitagAI",version:1,data:state},null,2));}
 });
