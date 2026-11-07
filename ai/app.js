@@ -1,4 +1,5 @@
-// Freitag AI — отдельная личная оболочка для локальных моделей.
+// Freitag AI — персональная литературная среда: сменяемые модели, память и контекст автора.
+import { master } from './master-sync.js';
 // Чаты, проекты и текстовые материалы хранятся только в IndexedDB этого браузера.
 // Никаких ключей и рукописей в репозитории.
 const $ = (q) => document.querySelector(q);
@@ -13,7 +14,7 @@ const WRITING_MODES = {
   plot: {name:"Сюжет",instruction:"Работай как сюжетный редактор. Проверяй причинность, мотивацию, ставки и последствия; предлагай не более трёх конкретных вариантов и указывай слабые места без лести. Отделяй гипотезы от фактов канона.",maxTokens:520},
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
-const blank = () => ({projects:[], chats:[], docs:[], activeProjectId:null, activeChatId:null,
+const blank = () => ({projects:[], chats:[], docs:[], feedback:[], activeProjectId:null, activeChatId:null,
   settings:{endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
 let state=blank(), tab="chat", busy=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено";
 const MAX_DOC=2*1024*1024;
@@ -63,14 +64,25 @@ function renderProjects(){
     (state.projects.length?'<div class="f-projects">'+state.projects.map(p=>{
       const count=state.chats.filter(c=>c.projectId===p.id).length;
       const docs=state.docs.filter(d=>d.projectId===p.id).length;
-      return '<article class="f-project-card"><h2>'+esc(p.name)+'</h2><p>'+esc(p.description||"Без описания")+'</p><p>'+count+' чатов · '+docs+' материалов'+(p.canon?" · канон закреплён":" · канон не заполнен")+'</p><div class="f-row"><button class="f-btn primary" data-action="open-project" data-id="'+esc(p.id)+'">Открыть</button><button class="f-btn" data-action="edit-project" data-id="'+esc(p.id)+'">Настроить</button><button class="f-btn danger" data-action="delete-project" data-id="'+esc(p.id)+'">Удалить</button></div></article>';
+      return '<article class="f-project-card"><h2>'+esc(p.name)+'</h2><p>'+esc(p.description||"Без описания")+'</p><p>'+count+' чатов · '+docs+' материалов'+(p.masterBookId?" · связан с Мастерской":p.canon?" · канон закреплён":" · канон не заполнен")+'</p><div class="f-row"><button class="f-btn primary" data-action="open-project" data-id="'+esc(p.id)+'">Открыть</button><button class="f-btn" data-action="edit-project" data-id="'+esc(p.id)+'">Настроить</button><button class="f-btn danger" data-action="delete-project" data-id="'+esc(p.id)+'">Удалить</button></div></article>';
     }).join("")+'</div>':empty("Проектов пока нет","Создай первый проект, например «Развод для черной вдовы»."))+
-    '<p class="f-muted f-bottom-note">Все данные хранятся в этом браузере. Для переноса используй экспорт в настройках.</p></div>';
+    '<div class="f-section f-master-section"><h2>Книги из «Мастерской»</h2><p class="f-muted">Подключение только для чтения. Импортируются утверждённые факты Легенды, персонажи, каркас и синопсис; рукописи не изменяются.</p>'+
+    (!master.ready?'<button class="f-btn" data-action="master-connect">Подключить аккаунт</button>':
+     master.user?'<p class="f-muted">Аккаунт: '+esc(master.user.email||"подключён")+'</p>'+
+       '<div class="f-row"><button class="f-btn" data-action="master-refresh">Обновить список и связанные книги</button></div>'+
+       (master.books.length?'<div class="f-master-books">'+master.books.map(b=>{
+         const link=state.projects.find(p=>p.masterBookId===b.id);
+         return '<div class="f-master-book"><span>'+esc(b.title||"Без названия")+'</span><button class="f-btn" data-action="master-import" data-id="'+esc(b.id)+'">'+(link?"Обновить канон":"Создать проект")+'</button></div>';
+       }).join("")+'</div>':'<p class="f-muted">Нажми «Обновить список и связанные книги», чтобы получить актуальные книги.</p>'):
+     '<form id="f-master-auth" class="f-master-login"><label>Email Мастерской<input class="f-text-field" type="email" name="email" autocomplete="username" required></label>'+
+       '<label>Пароль<input class="f-text-field" type="password" name="password" autocomplete="current-password" required></label><button class="f-btn primary" type="submit">Войти и получить книги</button></form>')+
+    '</div>'+
+    '<p class="f-muted f-bottom-note">Чаты и рабочие заметки пока хранятся в этом браузере — для резервной копии используй экспорт в настройках.</p></div>';
 }
 function renderKnowledge(){
   const docs=state.docs.filter(d=>!state.activeProjectId||d.projectId===state.activeProjectId);
   $("#panel").innerHTML='<div class="f-content">'+titleLine("Знания","Текстовые материалы, доступные выбранному проекту.")+
-  '<div class="f-notice">Это не дообучение модели. Freitag AI выбирает релевантные отрывки из загруженных материалов; весь роман целиком в один запрос не помещается. В разделе «Проекты → Настроить» закрепи канон, стиль и текущую сцену. Синхронизация с «Мастерской» пока не подключена.</div>'+
+  '<div class="f-notice">Это не дообучение модели. Отрывки из глав подбираются из материалов проекта, утверждённая «Легенда» поступает из подключённой «Мастерской». Для точной проверки целого романа одной выдержки недостаточно.</div>'+
   '<div class="f-section"><label class="f-label">Проект</label><select class="f-select" id="f-doc-project"><option value="">Выбери проект</option>'+
     state.projects.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===state.activeProjectId?"selected":"")+'>'+esc(p.name)+'</option>').join("")+'</select></div>'+
   (state.activeProjectId?'<div class="f-section"><h2>Добавить материал</h2><p class="f-muted">Только .txt, .md или .json, до 2 МБ за файл. Содержимое сохраняется в браузере, а не публикуется в GitHub.</p><input id="f-upload" class="f-upload" type="file" accept=".txt,.md,.json,text/plain,application/json"><div class="f-row" style="margin-top:10px"><button class="f-btn" data-action="add-note">+ Добавить заметку</button></div></div>':'<div class="f-notice">Сначала создай или выбери проект.</div>')+
@@ -100,6 +112,8 @@ function renderSettings(){
   '<p class="f-muted">Большой контекст может замедлять модель на ноутбуке.</p></div>'+
   '<div class="f-section"><h2>Внешний вид</h2><label for="f-theme">Тема</label><select id="f-theme" class="f-select" name="theme">'+
   [["auto","Как в системе"],["light","Светлая"],["dark","Темная"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===state.theme?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></div>'+
+  '<div class="f-section"><h2>Моя литературная память</h2><p class="f-muted">Одобренных ответов: '+state.feedback.filter(x=>x.kind==="good").length+
+  ' · Отклонённых: '+state.feedback.filter(x=>x.kind==="bad").length+'. Сохраняй примеры после редактирования: это материал для будущего дообучения. Примеры входят в JSON-архив.</p></div>'+
   '<div class="f-section"><h2>Данные</h2><p class="f-muted">Экспортируй резервную копию перед очисткой браузера. Данные между устройствами пока не синхронизируются.</p>'+
   '<div class="f-row"><button type="button" class="f-btn" data-action="export">Скачать архив JSON</button><label class="f-btn f-file-label">Импортировать JSON<input id="f-import" type="file" accept=".json,application/json" hidden></label></div></div></form></div>';
 }
@@ -109,23 +123,28 @@ function renderChat(){
   if(!c){$("#panel").innerHTML='<div class="f-content">'+titleLine("Новый чат",p?'Проект: '+p.name:"Без проекта")+
     empty("С чего начнем?","Открой чат и отправь сообщение установленной модели.")+
     '<div class="f-row" style="justify-content:center"><button class="f-btn primary" data-action="new-chat">+ Создать чат</button></div></div>';return;}
-  const body=c.messages.map(m=>'<div class="f-msg '+esc(m.role)+'"><span class="f-speaker">'+(m.role==="user"?"Ты":"Freitag AI")+'</span><div class="f-msg-text">'+esc(m.content)+'</div></div>').join("");
+  const body=c.messages.map((m,i)=>'<div class="f-msg '+esc(m.role)+'"><span class="f-speaker">'+(m.role==="user"?"Ты":m.provider==="Claude"?"Claude · Freitag AI":"Qwen · Freitag AI")+'</span><div class="f-msg-text">'+esc(m.content)+'</div>'+
+    (m.role==="assistant"&&!m.content.startsWith("Не удалось")?'<div class="f-feedback-actions"><button class="f-inline-btn" data-action="feedback-good" data-i="'+i+'">В образцы</button><button class="f-inline-btn" data-action="feedback-bad" data-i="'+i+'">Не то</button></div>':"")+
+    '</div>').join("");
   const modeOptions=Object.entries(WRITING_MODES).map(([key,v])=>'<option value="'+key+'" '+((c.mode||"dialog")===key?"selected":"")+'>'+esc(v.name)+'</option>').join("");
   $("#panel").innerHTML='<div class="f-chat">'+
     (!connectOk&&connectText==="Нет соединения"?'<div class="f-notice">Нет связи с локальной Ollama. <button class="f-btn" data-action="open-settings">Исправить подключение</button></div>':"")+
-    '<div class="f-chat-meta f-spread"><div><h1 class="f-title">'+esc(c.title)+'</h1><p class="f-subtitle">'+esc(p?.name||"Без проекта")+' · '+esc(state.settings.model)+'</p></div>'+
+    '<div class="f-chat-meta f-spread"><div><h1 class="f-title">'+esc(c.title)+'</h1><p class="f-subtitle">'+esc(p?.name||"Без проекта")+' · литературный соавтор</p></div>'+
     '<div class="f-row"><button class="f-btn" data-action="rename-chat">Переименовать</button><button class="f-btn danger" data-action="delete-chat">Удалить</button></div></div>'+
     '<div class="f-chat-body" id="f-messages">'+(body||empty("Пустой чат","Задай первый вопрос."))+'</div>'+
     '<form id="f-chat-form" class="f-compose"><div class="f-writing-bar"><label for="f-writing-mode">Режим работы</label><select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
-    (p?'<span class="f-writing-hint">'+(p.canon?"Канон закреплён":"Канон не заполнен")+' · <button type="button" class="f-inline-btn" data-action="edit-active-project">Настроить книгу</button></span>':'<span class="f-writing-hint">Создай проект для памяти о книге</span>')+'</div>'+
+    (p?'<span class="f-writing-hint">'+(p.masterCanon?"Легенда из Мастерской":p.canon?"Ручной канон":"Канон не заполнен")+' · <button type="button" class="f-inline-btn" data-action="edit-active-project">Настроить книгу</button></span>':'<span class="f-writing-hint">Создай проект для памяти о книге</span>')+'</div>'+
     '<textarea class="f-textarea" id="f-message-input" placeholder="Задача, сцена или отрывок… (Enter — отправить, Shift+Enter — новая строка)" aria-label="Сообщение" '+(busy?"disabled":"")+'></textarea>'+
-    '<div class="f-compose-controls"><span class="f-mini">Локальная модель · '+esc(state.settings.model)+'</span><div class="f-row">'+
-    (busy?'<button type="button" class="f-btn danger" data-action="stop">Остановить</button>':'<button type="submit" class="f-btn primary">Отправить</button>')+'</div></div></form></div>';
+    '<div class="f-compose-controls"><span class="f-mini">Claude — через твой аккаунт, без API · Qwen — локально</span><div class="f-row">'+
+    (busy?'<button type="button" class="f-btn danger" data-action="stop">Остановить</button>':
+      '<button type="button" class="f-btn" data-action="paste-claude">Добавить ответ Claude</button>'+
+      '<button type="button" class="f-btn" data-action="ask-local">Локальная Qwen</button>'+
+      '<button type="button" class="f-btn primary" data-action="ask-claude">Спросить Claude</button>')+'</div></div></form></div>';
   $("#f-messages")?.lastElementChild?.scrollIntoView({block:"nearest"});
 }
 function ensureChat(){
   if(chat())return chat();
-  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:"dialog",messages:[],updated:stamp()};
+  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:"draft",messages:[],updated:stamp()};
   state.chats.unshift(c);state.activeChatId=c.id;save();return c;
 }
 function openModal(title,fields,preset={},saveLabel="Сохранить"){
@@ -248,7 +267,8 @@ function buildMessages(c){
     s.globalInstruction.slice(0,budget.global),
     "Режим «"+mode.name+"». "+mode.instruction,
     p?.instruction?"Инструкция проекта «"+p.name+"»: "+p.instruction.slice(0,budget.extra):"",
-    p?.canon?"ЗАКРЕПЛЁННЫЙ КАНОН:\n"+pinnedExcerpt(p.canon,lastUser,budget.canon):"",
+    p?.masterCanon?"УТВЕРЖДЁННАЯ ЛЕГЕНДА ИЗ МАСТЕРСКОЙ:\n"+pinnedExcerpt(p.masterCanon,lastUser,Math.round(budget.canon*.6)):"",
+    p?.canon?"ДОПОЛНЕНИЯ АВТОРА К КАНОНУ:\n"+pinnedExcerpt(p.canon,lastUser,p.masterCanon?Math.round(budget.canon*.4):budget.canon):"",
     p?.voice?"Голос автора и ограничения:\n"+p.voice.slice(0,budget.voice):"",
     p?.scene?"ТЕКУЩАЯ СЦЕНА/ПОСЛЕДНИЕ СОБЫТИЯ:\n"+p.scene.slice(0,budget.scene):"",
     "Выдержки не равны полной рукописи. Если данных недостаточно, скажи об этом.",
@@ -309,7 +329,7 @@ async function sendMessage(text){
   if(c.title==="Новый чат")c.title=msg.slice(0,65);
   c.updated=stamp();await save();
   busy=true;render();
-  const assistant={role:"assistant",content:"",at:stamp()};c.messages.push(assistant);
+  const assistant={role:"assistant",provider:"Qwen",content:"",at:stamp()};c.messages.push(assistant);
   const messages=buildMessages(c).filter((x,i,a)=>!(i===a.length-1&&x.role==="assistant"&&!x.content));
   const el=document.createElement("div");el.className="f-msg assistant";
   el.innerHTML='<span class="f-speaker">Freitag AI</span><div class="f-msg-text pending">Генерация ответа…</div>';
@@ -358,6 +378,27 @@ document.addEventListener("click",async(e)=>{
   if(a==="select-chat"){state.activeChatId=id;state.activeProjectId=chat(id)?.projectId||null;save();tab="chat";render();}
   if(a==="add-project")await editProject(null);
   if(a==="edit-project")await editProject(id);
+  if(a==="master-connect"){
+    try{await master.init();if(master.user)await master.refresh();render();notice(master.user?"Книги из Мастерской получены.":"Войди с тем же аккаунтом, что в Мастерской.");}
+    catch(err){notice("Не удалось подключить Мастерскую: "+err.message);render();}
+  }
+  if(a==="master-refresh"){
+    try{await master.refresh();let changed=0;for(const p of state.projects){
+      const b=master.books.find(x=>x.id===p.masterBookId);
+      if(b){p.masterCanon=master.canonicalText(b);p.masterSyncedAt=stamp();changed++;}
+    }await save();render();notice("Книги обновлены. Связанных проектов: "+changed);}
+    catch(err){notice("Ошибка чтения из Мастерской: "+err.message);}
+  }
+  if(a==="master-import"){
+    const b=master.books.find(x=>x.id===id);if(!b)return;
+    let p=state.projects.find(x=>x.masterBookId===b.id);
+    if(!p){
+      p={id:uid(),name:b.title||"Книга без названия",description:"Канон автоматически из Мастерской",instruction:"Не нарушай утверждённый канон.",canon:"",voice:"",scene:"",masterBookId:b.id};
+      state.projects.unshift(p);
+    }
+    p.masterCanon=master.canonicalText(b);p.masterSyncedAt=stamp();
+    state.activeProjectId=p.id;state.activeChatId=null;await save();render();notice("Книга «"+p.name+"» связана с Freitag AI.");
+  }
   if(a==="edit-active-project"){const selected=project(chat()?.projectId||state.activeProjectId);if(selected)await editProject(selected.id);}
   if(a==="open-project"){state.activeProjectId=id;state.activeChatId=null;save();tab="chat";render();}
   if(a==="delete-project"){const p=project(id);if(!p||!confirm("Удалить проект «"+p.name+"» и все его чаты и материалы?"))return;
@@ -369,12 +410,21 @@ document.addEventListener("click",async(e)=>{
   if(a==="delete-chat"){const c=chat();if(!c||!confirm("Удалить этот чат?"))return;state.chats=state.chats.filter(x=>x.id!==c.id);state.activeChatId=null;await save();render();}
   if(a==="stop")currentController?.abort();
   if(a==="test-connection")await testConnection();
+  if(a==="ask-local"){const v=$("#f-message-input")?.value||"";if(v.trim()){await sendMessage(v);}else notice("Напиши задачу.");}
+  if(a==="ask-claude"){const v=$("#f-message-input")?.value||"";if(v.trim()){await prepareClaude(v);}else notice("Напиши задачу.");}
+  if(a==="paste-claude")await saveClaudeAnswer();
+  if(a==="feedback-good"||a==="feedback-bad")await saveFeedback(Number(b.dataset.i),a==="feedback-good"?"good":"bad");
   if(a==="open-settings"){tab="settings";render();}
   if(a==="copy-origins"){try{await navigator.clipboard.writeText(originsCommand());notice("Команда скопирована. Выполни её в PowerShell и перезапусти Ollama.");}catch{prompt("Скопируй команду для PowerShell:",originsCommand());}}
   if(a==="export"){await save();download("FreitagAI-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify({app:"FreitagAI",version:1,data:state},null,2));}
 });
 document.addEventListener("submit",async(e)=>{
-  if(e.target.id==="f-chat-form"){e.preventDefault();const inp=$("#f-message-input"),val=inp?.value||"";if(inp)inp.value="";await sendMessage(val);}
+  if(e.target.id==="f-chat-form"){e.preventDefault();const inp=$("#f-message-input"),val=inp?.value||"";if(inp)inp.value="";await prepareClaude(val);}
+  if(e.target.id==="f-master-auth"){
+    e.preventDefault();const fd=new FormData(e.target);const password=String(fd.get("password")||"");
+    try{await master.login(String(fd.get("email")||"").trim(),password);render();notice("Мастерская подключена. Книги доступны только для чтения.");}
+    catch(err){notice("Вход в Мастерскую не удался: "+err.message);}return;
+  }
   if(e.target.id==="f-settings"){e.preventDefault();const fd=new FormData(e.target);
     const url=safeEndpoint(String(fd.get("endpoint")||""));if(!url)return notice("Неверный адрес Ollama.");
     state.settings.endpoint=url;state.settings.model=String(fd.get("model")||"").trim();
@@ -401,7 +451,7 @@ document.addEventListener("change",async(e)=>{
       const data=JSON.parse(await file.text());
       if(data.app!=="FreitagAI"||!Array.isArray(data.data?.projects)||!Array.isArray(data.data?.chats)||!Array.isArray(data.data?.docs))throw new Error("Это не архив Freitag AI.");
       if(!confirm("Заменить текущие чаты, проекты и материалы импортированным архивом?"))return;
-      state={...blank(),...data.data,settings:{...blank().settings,...data.data.settings}};
+      state={...blank(),...data.data,feedback:Array.isArray(data.data.feedback)?data.data.feedback:[],settings:{...blank().settings,...data.data.settings}};
       await save();render();notice("Архив импортирован.");
     }catch(err){notice("Ошибка импорта: "+err.message);}
   }
@@ -414,5 +464,6 @@ document.addEventListener("keydown",e=>{
 (async()=>{
   try{db=await openDb();const loaded=await getDb();if(loaded&&Array.isArray(loaded.projects)&&Array.isArray(loaded.chats))state={...blank(),...loaded,settings:{...blank().settings,...loaded.settings}};}
   catch(e){$("#panel").innerHTML=empty("Хранилище недоступно","Разреши браузеру сохранять данные сайта: "+e.message);return;}
+  state.feedback=Array.isArray(state.feedback)?state.feedback:[];
   render();
 })();
