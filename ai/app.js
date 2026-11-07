@@ -89,7 +89,7 @@ function renderKnowledge(){
   (state.activeProjectId?'<div class="f-section"><h2>Добавить материал</h2><p class="f-muted">Только .txt, .md или .json, до 2 МБ за файл. Содержимое остаётся в твоём браузере и не публикуется на GitHub.</p><input id="f-upload" class="f-upload" type="file" accept=".txt,.md,.json,text/plain,application/json"><div class="f-row" style="margin-top:10px"><button class="f-btn" data-action="add-note">+ Добавить заметку</button></div></div>':'<div class="f-notice">Сначала создай или выбери проект.</div>')+
   '<div class="f-section"><h2>Материалы'+(state.activeProjectId?" проекта":"")+'</h2>'+
     (docs.length?'<ul class="f-list">'+docs.map(d=>'<li class="f-spread"><div><strong>'+esc(d.name)+'</strong><p class="f-muted">'+(d.text.length).toLocaleString("ru-RU")+' знаков</p></div><button class="f-btn danger" data-action="delete-doc" data-id="'+esc(d.id)+'">Удалить</button></li>').join("")+'</ul>':empty("Материалов нет","Добавь главу или текстовую заметку."))+'</div>'+
-  '<div class="f-section"><div class="f-spread"><div><h2>Мой стиль · память соавтора</h2><p class="f-muted">Одобренные сцены, твои правки и причины отказов. Они будут учитываться в задании для Claude.</p></div>'+
+  '<div class="f-section"><div class="f-spread"><div><h2>Мой стиль · память соавтора</h2><p class="f-muted">Одобренные сцены, твои правки и причины отказов. Они будут учитываться в заданиях для выбранной модели.</p></div>'+
     (state.activeProjectId?'<button class="f-btn" data-action="add-style">+ Мой образец</button>':"")+'</div>'+
     (examples.length?'<div class="f-examples">'+examples.map(x=>'<article class="f-example"><div class="f-spread"><strong>'+(x.kind==="good"?"Одобрено":"Не повторять")+' · '+esc(x.source||"Автор")+'</strong>'+
       '<button class="f-btn danger" data-action="delete-feedback" data-id="'+esc(x.id)+'">Удалить</button></div>'+
@@ -151,10 +151,10 @@ function renderChat(){
       '<div class="f-row">'+(busy?'<button type="button" class="f-btn danger" data-action="stop">Остановить</button>':
       '<button type="submit" class="f-btn primary">Отправить</button>')+'</div></div>'+
     '<details class="f-extra-tools"><summary>Дополнительные инструменты</summary><div class="f-row">'+
-      '<button type="button" class="f-btn" data-action="ask-claude">Подготовить задание для Claude</button>'+
-      '<button type="button" class="f-btn" data-action="paste-claude">Сохранить ответ Claude</button>'+
+      '<button type="button" class="f-btn" data-action="export-context">Подготовить контекст</button>'+
+      '<button type="button" class="f-btn" data-action="paste-external">Сохранить внешний ответ</button>'+
       '<button type="button" class="f-btn" data-action="open-settings">Подключение</button></div>'+
-      '<p class="f-muted">Claude здесь не подключён автоматически. Задание можно скопировать в Claude вручную; обычная кнопка «Отправить» отвечает локальной Qwen.</p></details>'+
+      '<p class="f-muted">Контекст можно передать в выбранную тобой модель вручную. Никакие рукописи без твоего действия никуда не отправляются. «Отправить» пока работает через локальную Qwen.</p></details>'+
     '</form></div>';
   $("#f-messages")?.lastElementChild?.scrollIntoView({block:"nearest"});
 }
@@ -355,10 +355,8 @@ async function testConnection(){
     notice("Нет доступа к Ollama из браузера. Открой инструкцию в настройках.");
   }renderHeader();
 }
-// Основной литературный движок — Claude через существующий аккаунт автора.
-// Подписка Claude не даёт права на вызовы Claude API; поэтому никаких скрытых
-// запросов или ключей: пользователь сама вставляет подготовленное задание.
-function buildClaudeBrief(c){
+// Платформенно-независимый экспорт контекста книги. Без отправки рукописей сторонним сервисам.
+function buildExternalBrief(c){
   const p=project(c.projectId), mode=WRITING_MODES[c.mode]||WRITING_MODES.draft;
   const question=[...c.messages].reverse().find(m=>m.role==="user")?.content||"";
   const all=state.feedback.filter(f=>f.projectId===c.projectId);
@@ -391,43 +389,43 @@ function buildClaudeBrief(c){
     "Сначала выполни именно задачу. Не добавляй похвалу, рекламные обещания и длинное вступление."
   ].filter(Boolean).join("\n\n---\n\n").slice(0,85000);
 }
-function openClaudeTransfer(prompt){
-  document.querySelector("#f-claude-modal")?.remove();
-  const dlg=document.createElement("dialog");dlg.id="f-claude-modal";dlg.className="f-dialog f-transfer-dialog";
-  dlg.innerHTML='<div class="f-transfer"><h2>Задание для Claude готово</h2>'+
-    '<p class="f-muted">Это не API-интеграция: книга и память пока остаются у тебя. В Claude отправится только текст, который ты сама вставишь.</p>'+
-    '<textarea class="f-textarea" id="f-claude-brief" readonly aria-label="Подготовленный контекст">'+esc(prompt)+'</textarea>'+
+function openExternalTransfer(prompt){
+  document.querySelector("#f-external-modal")?.remove();
+  const dlg=document.createElement("dialog");dlg.id="f-external-modal";dlg.className="f-dialog f-transfer-dialog";
+  dlg.innerHTML='<div class="f-transfer"><h2>Контекст книги подготовлен</h2>'+
+    '<p class="f-muted">Это не API-интеграция. Ничего не отправлено сторонним моделям. Ты сама выбираешь сервис и проверяешь правила использования его данных.</p>'+
+    '<textarea class="f-textarea" id="f-external-brief" readonly aria-label="Подготовленный контекст">'+esc(prompt)+'</textarea>'+
     '<div class="f-row f-transfer-actions"><button class="f-btn primary" type="button" data-transfer="copy">Копировать задание</button>'+
-    '<a class="f-btn" target="_blank" rel="noopener noreferrer" href="https://claude.ai/new">Открыть Claude</a>'+
+    ''+
     '<button class="f-btn" type="button" data-transfer="close">Закрыть</button></div>'+
-    '<p class="f-muted">Вставь задание в Claude. Потом верни ответ сюда кнопкой «Добавить ответ Claude», чтобы сохранить его и обучающий пример.</p></div>';
+    '<p class="f-muted">Сохраняй ответы одобренной модели в рабочем чате, если хочешь собирать примеры для будущей собственной модели.</p></div>';
   document.body.appendChild(dlg);dlg.showModal();
   dlg.addEventListener("close",()=>dlg.remove(),{once:true});
   dlg.addEventListener("click",async e=>{
     const action=e.target.closest("[data-transfer]")?.dataset.transfer;
     if(action==="close"){dlg.close();return;}
     if(action==="copy"){
-      const field=dlg.querySelector("#f-claude-brief");
-      try{await navigator.clipboard.writeText(field.value);notice("Задание скопировано. Теперь вставь его в Claude.");}
+      const field=dlg.querySelector("#f-external-brief");
+      try{await navigator.clipboard.writeText(field.value);notice("Контекст скопирован.");}
       catch{field.focus();field.select();notice("Нажми Ctrl+C, чтобы скопировать выделенный текст.");}
     }
   });
 }
-async function prepareClaude(text){
+async function prepareExternal(text){
   if(busy||!text.trim())return;
   const c=ensureChat(),q=text.trim();
   c.messages.push({role:"user",content:q,at:stamp()});
   if(c.title==="Новый чат")c.title=q.slice(0,65);
   c.updated=stamp();
-  const brief=buildClaudeBrief(c);
-  await save();render();openClaudeTransfer(brief);
+  const brief=buildExternalBrief(c);
+  await save();render();openExternalTransfer(brief);
 }
-async function saveClaudeAnswer(){
+async function saveExternalAnswer(){
   const c=chat();if(!c)return notice("Сначала открой чат.");
-  const v=await openModal("Сохранить ответ Claude",[{key:"text",label:"Вставь текст ответа Claude",multi:true,required:true}]);
+  const v=await openModal("Сохранить ответ внешней модели",[{key:"text",label:"Вставь текст ответа",multi:true,required:true}]);
   if(!v?.text?.trim())return;
-  c.messages.push({role:"assistant",content:v.text.trim().slice(0,160000),provider:"Claude",at:stamp()});
-  c.updated=stamp();await save();render();notice("Ответ Claude сохранён в рабочем чате.");
+  c.messages.push({role:"assistant",content:v.text.trim().slice(0,160000),provider:"Внешняя модель",at:stamp()});
+  c.updated=stamp();await save();render();notice("Внешний ответ сохранён в рабочем чате.");
 }
 async function saveFeedback(i,kind){
   const c=chat(),response=c?.messages[i];
@@ -552,8 +550,8 @@ document.addEventListener("click",async(e)=>{
   if(a==="stop")currentController?.abort();
   if(a==="test-connection")await testConnection();
   if(a==="ask-local"){const v=$("#f-message-input")?.value||"";if(v.trim()){await sendMessage(v);}else notice("Напиши задачу.");}
-  if(a==="ask-claude"){const v=$("#f-message-input")?.value||"";if(v.trim()){await prepareClaude(v);}else notice("Сначала напиши задачу, чтобы подготовить её для Claude.");}
-  if(a==="paste-claude")await saveClaudeAnswer();
+  if(a==="export-context"){const v=$("#f-message-input")?.value||"";if(v.trim()){await prepareExternal(v);}else notice("Сначала напиши задачу, чтобы подготовить её для Claude.");}
+  if(a==="paste-external")await saveExternalAnswer();
   if(a==="feedback-good"||a==="feedback-bad")await saveFeedback(Number(b.dataset.i),a==="feedback-good"?"good":"bad");
   if(a==="open-settings"){tab="settings";render();}
   if(a==="cloud-save"){
