@@ -77,7 +77,15 @@ function renderSettings(){
   '<label for="f-endpoint">Адрес Ollama на этом компьютере</label><input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
   '<label for="f-model">Модель</label><input id="f-model" class="f-text-field" name="model" list="f-model-list" value="'+esc(s.model)+'" required><datalist id="f-model-list"></datalist>'+
   '<div class="f-row" style="margin-top:14px"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button><button type="submit" class="f-btn primary">Сохранить</button></div>'+
-  '<p id="f-test-status" class="f-muted">Для ответов требуется запущенная Ollama. На другом устройстве localhost означает уже то устройство, а не твой ноутбук.</p></div>'+
+  '<p id="f-test-status" class="f-muted">Для ответов требуется запущенная Ollama на этом компьютере. На телефоне localhost означает телефон, а не ноутбук.</p>'+
+  '<details class="f-notice f-connection-help" open><summary>Как включить доступ к Ollama с этого сайта</summary>'+
+  '<p>Freitag AI работает через HTTPS, а Ollama запущена на ноутбуке. Для связи нужны два разрешения:</p>'+
+  '<p><b>1.</b> В PowerShell выполни команду ниже. Она разрешит доступ только сайту <code>'+esc(location.origin)+'</code>, а не всем сайтам:</p>'+
+  '<code class="f-command">'+esc(originsCommand())+'</code>'+
+  '<button type="button" class="f-btn" data-action="copy-origins">Копировать команду</button>'+
+  '<p><b>2.</b> Полностью закрой Ollama через значок в области уведомлений Windows (Quit), затем открой Ollama заново.</p>'+
+  '<p><b>3.</b> Нажми «Проверить соединение» выше. Если Chrome спросит разрешение на доступ к локальному устройству или сети, разреши его для Freitag AI.</p>'+
+  '<p>Ollama остаётся доступной только на этом компьютере; публичный порт открывать не нужно.</p></details></div>'+
   '<div class="f-section"><h2>Поведение модели</h2><label for="f-global">Общая инструкция</label>'+
   '<textarea id="f-global" name="globalInstruction" class="f-textarea">'+esc(s.globalInstruction)+'</textarea>'+
   '<label for="f-context">Контекст</label><select id="f-context" name="context" class="f-select">'+
@@ -95,7 +103,9 @@ function renderChat(){
     empty("С чего начнем?","Открой чат и отправь сообщение установленной модели.")+
     '<div class="f-row" style="justify-content:center"><button class="f-btn primary" data-action="new-chat">+ Создать чат</button></div></div>';return;}
   const body=c.messages.map(m=>'<div class="f-msg '+esc(m.role)+'"><span class="f-speaker">'+(m.role==="user"?"Ты":"Freitag AI")+'</span><div class="f-msg-text">'+esc(m.content)+'</div></div>').join("");
-  $("#panel").innerHTML='<div class="f-chat"><div class="f-chat-meta f-spread"><div><h1 class="f-title">'+esc(c.title)+'</h1><p class="f-subtitle">'+esc(p?.name||"Без проекта")+' · '+esc(state.settings.model)+'</p></div>'+
+  $("#panel").innerHTML='<div class="f-chat">'+
+    (!connectOk&&connectText==="Нет соединения"?'<div class="f-notice">Нет связи с локальной Ollama. <button class="f-btn" data-action="open-settings">Исправить подключение</button></div>':"")+
+    '<div class="f-chat-meta f-spread"><div><h1 class="f-title">'+esc(c.title)+'</h1><p class="f-subtitle">'+esc(p?.name||"Без проекта")+' · '+esc(state.settings.model)+'</p></div>'+
     '<div class="f-row"><button class="f-btn" data-action="rename-chat">Переименовать</button><button class="f-btn danger" data-action="delete-chat">Удалить</button></div></div>'+
     '<div class="f-chat-body" id="f-messages">'+(body||empty("Пустой чат","Задай первый вопрос."))+'</div>'+
     '<form id="f-chat-form" class="f-compose"><textarea class="f-textarea" id="f-message-input" placeholder="Напиши сообщение… (Enter — отправить, Shift+Enter — новая строка)" aria-label="Сообщение" '+(busy?"disabled":"")+'></textarea>'+
@@ -165,6 +175,15 @@ function buildMessages(c){
   while(history.reduce((n,m)=>n+m.content.length,0)>8500&&history.length>2)history.shift();
   return [{role:"system",content:sys.slice(0,5300)},...history];
 }
+// На GitHub Pages обращение к локальному Ollama требует разрешения Chrome (LNA)
+// и CORS-разрешения для ТОЧНОГО origin этого сайта в настройках Ollama.
+const originsCommand=()=>"[Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS','"+location.origin+"','User')";
+const ollamaRequest=(endpoint,path,options={})=>{
+  const u=new URL(endpoint);
+  const isLoopback=u.protocol==="http:"&&["localhost","127.0.0.1","[::1]"].includes(u.hostname);
+  return fetch(endpoint+path,{...options,mode:"cors",...(isLoopback?{targetAddressSpace:"loopback"}:{})});
+};
+const connectionHint=()=> "Проверь, что Ollama запущена. Для доступа с сайта разреши локальную сеть в Chrome и добавь адрес Freitag AI в OLLAMA_ORIGINS (Настройки → Подключение).";
 const safeEndpoint=(endpoint)=>{
   let u;try{u=new URL(endpoint);}catch{return null;}
   if(u.username||u.password||u.search||u.hash)return null;
@@ -178,7 +197,7 @@ async function testConnection(){
   connectText="Проверка…";renderHeader();
   try{
     const ac=new AbortController(),t=setTimeout(()=>ac.abort(),8000);
-    let response;try{response=await fetch(endpoint+"/api/tags",{signal:ac.signal});}finally{clearTimeout(t);}
+    let response;try{response=await ollamaRequest(endpoint,"/api/tags",{signal:ac.signal});}finally{clearTimeout(t);}
     if(!response.ok)throw new Error("HTTP "+response.status);
     const data=await response.json();
     const names=(data.models||[]).map(x=>x.name||x.model).filter(Boolean);
@@ -188,8 +207,8 @@ async function testConnection(){
     notice("Подключение к Ollama работает.");
   }catch(e){
     connectOk=false;connectText="Нет соединения";
-    const m=$("#f-test-status");if(m)m.textContent="Нет соединения: "+e.message+". Проверь, что Ollama запущена и разрешен доступ браузера (CORS).";
-    notice("Ollama недоступна из браузера. Это не ошибка установки модели.");
+    const m=$("#f-test-status");if(m)m.textContent="Нет соединения: "+e.message+". "+connectionHint();
+    notice("Нет доступа к Ollama из браузера. Открой инструкцию в настройках.");
   }renderHeader();
 }
 async function sendMessage(text){
@@ -208,7 +227,7 @@ async function sendMessage(text){
   $("#f-messages")?.append(el);const target=el.querySelector(".f-msg-text");
   currentController=new AbortController();
   try{
-    const res=await fetch(endpoint+"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+    const res=await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",options:{num_ctx:Number(state.settings.context)||4096}}),signal:currentController.signal});
     if(!res.ok)throw new Error("HTTP "+res.status+": "+(await res.text()).slice(0,180));
     if(!res.body)throw new Error("Браузер не получил поток ответа");
@@ -226,7 +245,7 @@ async function sendMessage(text){
     connectOk=true;connectText="Ollama доступна";
   }catch(e){
     if(e.name==="AbortError"){assistant.content=assistant.content||"Ответ остановлен.";}
-    else {assistant.content="Не удалось получить ответ: "+e.message+". Проверь адрес и доступ браузера к Ollama в настройках.";connectOk=false;connectText="Нет соединения";}
+    else {assistant.content="Не удалось подключиться к Ollama: "+e.message+". "+connectionHint();connectOk=false;connectText="Нет соединения";}
     target.textContent=assistant.content;target.classList.remove("pending");
   }finally{
     busy=false;currentController=null;c.updated=stamp();await save();render();
@@ -260,6 +279,8 @@ document.addEventListener("click",async(e)=>{
   if(a==="delete-chat"){const c=chat();if(!c||!confirm("Удалить этот чат?"))return;state.chats=state.chats.filter(x=>x.id!==c.id);state.activeChatId=null;await save();render();}
   if(a==="stop")currentController?.abort();
   if(a==="test-connection")await testConnection();
+  if(a==="open-settings"){tab="settings";render();}
+  if(a==="copy-origins"){try{await navigator.clipboard.writeText(originsCommand());notice("Команда скопирована. Выполни её в PowerShell и перезапусти Ollama.");}catch{prompt("Скопируй команду для PowerShell:",originsCommand());}}
   if(a==="export"){await save();download("FreitagAI-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify({app:"FreitagAI",version:1,data:state},null,2));}
 });
 document.addEventListener("submit",async(e)=>{
