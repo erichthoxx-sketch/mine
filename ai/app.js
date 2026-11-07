@@ -5,7 +5,14 @@ const $ = (q) => document.querySelector(q);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid = () => (globalThis.crypto?.randomUUID?.() || "id-" + Date.now() + "-" + Math.random().toString(36).slice(2));
 const stamp = () => new Date().toISOString();
-const DEFAULT_INSTRUCTION = "Отвечай на русском языке ясно, по делу, без демонстрации промежуточных рассуждений. Не выдумывай факты о книгах, отделяй известное из источников от предположений.";
+const DEFAULT_INSTRUCTION = "Отвечай по-русски, точно и без внутренних рассуждений. В авторском тексте сохраняй голос и факты книги. Не подменяй канон догадками и не выдумывай содержание отсутствующих глав.";
+const WRITING_MODES = {
+  dialog: {name:"Диалог",instruction:"Отвечай кратко и конкретно. При нехватке сведений сообщи, каких именно.",maxTokens:320},
+  draft: {name:"Написать сцену",instruction:"Ты работаешь над художественной сценой. Пиши сразу прозу, не вступай с объяснениями. Соблюдай канон, POV, время, место, характеры, заданный стиль и последнюю сцену. Не изобретай события и родственные связи без запроса. Если нет нужной завязки, задай один конкретный вопрос.",maxTokens:700},
+  edit: {name:"Редактор",instruction:"Редактируй только то, что просит автор. Сохраняй индивидуальный синтаксис и голос. Отмечай провисания в темпе, мотивации, диалогах и логике. Не переписывай весь отрывок, если просят точечную правку.",maxTokens:600},
+  plot: {name:"Сюжет",instruction:"Работай как сюжетный редактор. Проверяй причинность, мотивацию, ставки и последствия; предлагай не более трёх конкретных вариантов и указывай слабые места без лести. Отделяй гипотезы от фактов канона.",maxTokens:520},
+  canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
+};
 const blank = () => ({projects:[], chats:[], docs:[], activeProjectId:null, activeChatId:null,
   settings:{endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
 let state=blank(), tab="chat", busy=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено";
@@ -56,14 +63,14 @@ function renderProjects(){
     (state.projects.length?'<div class="f-projects">'+state.projects.map(p=>{
       const count=state.chats.filter(c=>c.projectId===p.id).length;
       const docs=state.docs.filter(d=>d.projectId===p.id).length;
-      return '<article class="f-project-card"><h2>'+esc(p.name)+'</h2><p>'+esc(p.description||"Без описания")+'</p><p>'+count+' чатов · '+docs+' материалов</p><div class="f-row"><button class="f-btn primary" data-action="open-project" data-id="'+esc(p.id)+'">Открыть</button><button class="f-btn" data-action="edit-project" data-id="'+esc(p.id)+'">Настроить</button><button class="f-btn danger" data-action="delete-project" data-id="'+esc(p.id)+'">Удалить</button></div></article>';
+      return '<article class="f-project-card"><h2>'+esc(p.name)+'</h2><p>'+esc(p.description||"Без описания")+'</p><p>'+count+' чатов · '+docs+' материалов'+(p.canon?" · канон закреплён":" · канон не заполнен")+'</p><div class="f-row"><button class="f-btn primary" data-action="open-project" data-id="'+esc(p.id)+'">Открыть</button><button class="f-btn" data-action="edit-project" data-id="'+esc(p.id)+'">Настроить</button><button class="f-btn danger" data-action="delete-project" data-id="'+esc(p.id)+'">Удалить</button></div></article>';
     }).join("")+'</div>':empty("Проектов пока нет","Создай первый проект, например «Развод для черной вдовы»."))+
     '<p class="f-muted f-bottom-note">Все данные хранятся в этом браузере. Для переноса используй экспорт в настройках.</p></div>';
 }
 function renderKnowledge(){
   const docs=state.docs.filter(d=>!state.activeProjectId||d.projectId===state.activeProjectId);
   $("#panel").innerHTML='<div class="f-content">'+titleLine("Знания","Текстовые материалы, доступные выбранному проекту.")+
-  '<div class="f-notice">Это не обучение весов модели. При ответе используется ограниченная подборка фрагментов документов; полноценный поиск по книгам и синхронизация с «Мастерской» будут отдельным этапом.</div>'+
+  '<div class="f-notice">Это не дообучение модели. Freitag AI выбирает релевантные отрывки из загруженных материалов; весь роман целиком в один запрос не помещается. В разделе «Проекты → Настроить» закрепи канон, стиль и текущую сцену. Синхронизация с «Мастерской» пока не подключена.</div>'+
   '<div class="f-section"><label class="f-label">Проект</label><select class="f-select" id="f-doc-project"><option value="">Выбери проект</option>'+
     state.projects.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===state.activeProjectId?"selected":"")+'>'+esc(p.name)+'</option>').join("")+'</select></div>'+
   (state.activeProjectId?'<div class="f-section"><h2>Добавить материал</h2><p class="f-muted">Только .txt, .md или .json, до 2 МБ за файл. Содержимое сохраняется в браузере, а не публикуется в GitHub.</p><input id="f-upload" class="f-upload" type="file" accept=".txt,.md,.json,text/plain,application/json"><div class="f-row" style="margin-top:10px"><button class="f-btn" data-action="add-note">+ Добавить заметку</button></div></div>':'<div class="f-notice">Сначала создай или выбери проект.</div>')+
@@ -103,19 +110,22 @@ function renderChat(){
     empty("С чего начнем?","Открой чат и отправь сообщение установленной модели.")+
     '<div class="f-row" style="justify-content:center"><button class="f-btn primary" data-action="new-chat">+ Создать чат</button></div></div>';return;}
   const body=c.messages.map(m=>'<div class="f-msg '+esc(m.role)+'"><span class="f-speaker">'+(m.role==="user"?"Ты":"Freitag AI")+'</span><div class="f-msg-text">'+esc(m.content)+'</div></div>').join("");
+  const modeOptions=Object.entries(WRITING_MODES).map(([key,v])=>'<option value="'+key+'" '+((c.mode||"dialog")===key?"selected":"")+'>'+esc(v.name)+'</option>').join("");
   $("#panel").innerHTML='<div class="f-chat">'+
     (!connectOk&&connectText==="Нет соединения"?'<div class="f-notice">Нет связи с локальной Ollama. <button class="f-btn" data-action="open-settings">Исправить подключение</button></div>':"")+
     '<div class="f-chat-meta f-spread"><div><h1 class="f-title">'+esc(c.title)+'</h1><p class="f-subtitle">'+esc(p?.name||"Без проекта")+' · '+esc(state.settings.model)+'</p></div>'+
     '<div class="f-row"><button class="f-btn" data-action="rename-chat">Переименовать</button><button class="f-btn danger" data-action="delete-chat">Удалить</button></div></div>'+
     '<div class="f-chat-body" id="f-messages">'+(body||empty("Пустой чат","Задай первый вопрос."))+'</div>'+
-    '<form id="f-chat-form" class="f-compose"><textarea class="f-textarea" id="f-message-input" placeholder="Напиши сообщение… (Enter — отправить, Shift+Enter — новая строка)" aria-label="Сообщение" '+(busy?"disabled":"")+'></textarea>'+
+    '<form id="f-chat-form" class="f-compose"><div class="f-writing-bar"><label for="f-writing-mode">Режим работы</label><select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
+    (p?'<span class="f-writing-hint">'+(p.canon?"Канон закреплён":"Канон не заполнен")+' · <button type="button" class="f-inline-btn" data-action="edit-active-project">Настроить книгу</button></span>':'<span class="f-writing-hint">Создай проект для памяти о книге</span>')+'</div>'+
+    '<textarea class="f-textarea" id="f-message-input" placeholder="Задача, сцена или отрывок… (Enter — отправить, Shift+Enter — новая строка)" aria-label="Сообщение" '+(busy?"disabled":"")+'></textarea>'+
     '<div class="f-compose-controls"><span class="f-mini">Локальная модель · '+esc(state.settings.model)+'</span><div class="f-row">'+
     (busy?'<button type="button" class="f-btn danger" data-action="stop">Остановить</button>':'<button type="submit" class="f-btn primary">Отправить</button>')+'</div></div></form></div>';
   $("#f-messages")?.lastElementChild?.scrollIntoView({block:"nearest"});
 }
 function ensureChat(){
   if(chat())return chat();
-  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",messages:[],updated:stamp()};
+  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:"dialog",messages:[],updated:stamp()};
   state.chats.unshift(c);state.activeChatId=c.id;save();return c;
 }
 function openModal(title,fields,preset={},saveLabel="Сохранить"){
@@ -137,11 +147,17 @@ function openModal(title,fields,preset={},saveLabel="Сохранить"){
 }
 async function editProject(id){
   const p=project(id);const v=await openModal(p?"Настройки проекта":"Новый проект",
-    [{key:"name",label:"Название",required:true},{key:"description",label:"Описание"},{key:"instruction",label:"Инструкция для модели",multi:true}],
+    [{key:"name",label:"Название",required:true},{key:"description",label:"Описание"},
+     {key:"canon",label:"Канон книги (постоянные факты о героях, событиях, связях)",multi:true},
+     {key:"voice",label:"Голос и стиль (POV, тон, запреты)",multi:true},
+     {key:"scene",label:"Где остановилась история / ближайшая сцена",multi:true},
+     {key:"instruction",label:"Дополнительные указания модели",multi:true}],
     p||{name:"",instruction:"Отвечай с учетом канона проекта. Если факта нет в материалах, скажи об этом."});
   if(!v)return;
-  if(p)Object.assign(p,{name:v.name.trim(),description:v.description.trim(),instruction:v.instruction.trim()});
-  else{const q={id:uid(),name:v.name.trim(),description:v.description.trim(),instruction:v.instruction.trim()};state.projects.unshift(q);state.activeProjectId=q.id;state.activeChatId=null;}
+  const details={name:v.name.trim(),description:v.description.trim(),instruction:v.instruction.trim(),
+    canon:(v.canon||"").trim(),voice:(v.voice||"").trim(),scene:(v.scene||"").trim()};
+  if(p)Object.assign(p,details);
+  else{const q={id:uid(),...details};state.projects.unshift(q);state.activeProjectId=q.id;state.activeChatId=null;}
   await save();render();
 }
 async function addNote(){
@@ -151,29 +167,68 @@ async function addNote(){
   state.docs.unshift({id:uid(),projectId:state.activeProjectId,name:v.name.trim(),text:v.text.slice(0,MAX_DOC),added:stamp()});
   await save();render();notice("Заметка сохранена только в этом браузере.");
 }
-function relevantNotes(question,projectId){
-  const docs=state.docs.filter(d=>d.projectId===projectId);if(!docs.length)return "";
-  const terms=[...new Set((question.toLowerCase().match(/[а-яa-z0-9]{4,}/gi)||[]))].slice(0,20);
+// Поиск по материалам полностью локальный: отбираем короткие отрывки, а не
+// отправляем в маленькую модель весь роман. Для продолжения сцены добавляем
+// контекст из закреплённых сведений проекта, независимо от результатов поиска.
+function searchTerms(question) {
+  const stop = new Set(["который","которая","которые","этого","этому","чтобы","нужно","можно","потом","сейчас","только","глава","главе","главу","текст","сцена","сцену","роман","книге","пожалуйста","почему","какой","какая","какие"]);
+  return [...new Set((String(question).toLowerCase().replace(/ё/g,"е").match(/[а-яa-z0-9]{4,}/g)||[])
+    .map(w=>w.length>7?w.slice(0,w.length-2):w).filter(w=>!stop.has(w)))].slice(0,22);
+}
+function relevantNotes(question,projectId,maxLength=2200){
+  if(!projectId)return "";
+  const docs=state.docs.filter(d=>d.projectId===projectId);
+  const terms=searchTerms(question);
+  if(!docs.length||!terms.length)return "";
   const scored=[];
   for(const d of docs){
-    const chunks=d.text.match(/[\s\S]{1,650}/g)||[];
-    chunks.forEach((chunk,i)=>{const lower=chunk.toLowerCase();const score=terms.reduce((n,t)=>n+(lower.includes(t)?1:0),0);scored.push({score:score+(d.name.toLowerCase().includes(terms[0]||"§")?1:0),text:chunk,name:d.name,i});});
+    const title=d.name.toLowerCase().replace(/ё/g,"е");
+    const normalized=d.text.toLowerCase().replace(/ё/g,"е");
+    for(let at=0;at<d.text.length;at+=750){
+      const excerpt=d.text.slice(at,at+900);
+      const part=normalized.slice(at,at+900);
+      let score=0;
+      for(const term of terms){
+        if(part.includes(term))score+=1;
+        if(title.includes(term))score+=2;
+      }
+      if(score)scored.push({name:d.name,text:excerpt,score,at});
+    }
   }
-  scored.sort((a,b)=>b.score-a.score);
-  const selected=scored.filter(x=>x.score>0).slice(0,5);
-  // Если вопрос общий, подставляем начало одного документа — без претензии на полный RAG.
-  if(!selected.length && docs.length)selected.push({text:docs[0].text.slice(0,900),name:docs[0].name});
-  return selected.map(x=>"Источник «"+x.name+"»:\n"+x.text).join("\n\n").slice(0,3500);
+  scored.sort((a,b)=>b.score-a.score||a.at-b.at);
+  const out=[],seen=new Map();
+  for(const item of scored){
+    if((seen.get(item.name)||0)>=2)continue;
+    const remaining=maxLength-out.join("\n\n").length;
+    if(remaining<250||out.length>=4)break;
+    out.push("Из «"+item.name+"» (фрагмент около знака "+(item.at+1)+"):\n"+item.text.slice(0,Math.min(remaining-100,900)));
+    seen.set(item.name,(seen.get(item.name)||0)+1);
+  }
+  return out.join("\n\n");
 }
 function buildMessages(c){
   const p=project(c.projectId),s=state.settings;
-  let sys=s.globalInstruction+"\n"+(p?.instruction?"\nИнструкция проекта «"+p.name+"»:\n"+p.instruction:"");
+  const mode=WRITING_MODES[c.mode]||WRITING_MODES.dialog;
+  const ctx=Number(s.context)||4096;
+  // Бюджет ограничен: Qwen 4B на 8 ГБ ОЗУ не тянет большие запросы
+  // быстро. Самое важное — закреплённый канон и текущая сцена.
+  const short=ctx<=2048, long=ctx>=8192;
+  const cap=short?2000:long?5700:3600;
   const lastUser=[...c.messages].reverse().find(m=>m.role==="user")?.content||"";
-  const knowledge=relevantNotes(lastUser,c.projectId);
-  if(knowledge)sys+="\n\nДоступные выдержки из материалов проекта (цитируй точно, не выдумывай остальные главы):\n"+knowledge;
-  const history=c.messages.filter(m=>m.role==="user"||m.role==="assistant").slice(-10).map(m=>({role:m.role,content:m.content.slice(-3500)}));
-  while(history.reduce((n,m)=>n+m.content.length,0)>8500&&history.length>2)history.shift();
-  return [{role:"system",content:sys.slice(0,5300)},...history];
+  const sys=[
+    s.globalInstruction.slice(0,650),
+    "Режим «"+mode.name+"». "+mode.instruction,
+    p?.instruction?"Инструкция проекта «"+p.name+"»: "+p.instruction.slice(0,550):"",
+    p?.canon?"ЗАКРЕПЛЁННЫЙ КАНОН (приоритет над предположениями):\n"+p.canon.slice(0,short?550:long?2100:1150):"",
+    p?.voice?"Голос автора и ограничения:\n"+p.voice.slice(0,short?300:long?900:450):"",
+    p?.scene?"ТЕКУЩАЯ СЦЕНА/ПОСЛЕДНИЕ СОБЫТИЯ:\n"+p.scene.slice(0,short?350:long?1000:550):"",
+    "Выдержки — лишь часть материалов, не полная книга. Не утверждай, что проверила всю рукопись, если источников недостаточно.",
+    relevantNotes(lastUser,c.projectId,short?850:long?3300:1900)
+  ].filter(Boolean).join("\n\n").slice(0,cap);
+  const limit=short?1500:long?6500:2800;
+  const history=c.messages.filter(m=>m.role==="user"||m.role==="assistant").slice(-7).map(m=>({role:m.role,content:m.content.slice(-1800)}));
+  while(history.reduce((n,m)=>n+m.content.length,0)>limit&&history.length>1)history.shift();
+  return [{role:"system",content:sys},...history];
 }
 // На GitHub Pages обращение к локальному Ollama требует разрешения Chrome (LNA)
 // и CORS-разрешения для ТОЧНОГО origin этого сайта в настройках Ollama.
@@ -228,7 +283,7 @@ async function sendMessage(text){
   currentController=new AbortController();
   try{
     const res=await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",options:{num_ctx:Number(state.settings.context)||4096}}),signal:currentController.signal});
+      body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",options:{num_ctx:Number(state.settings.context)||4096,num_predict:(WRITING_MODES[c.mode]||WRITING_MODES.dialog).maxTokens}}),signal:currentController.signal});
     if(!res.ok)throw new Error("HTTP "+res.status+": "+(await res.text()).slice(0,180));
     if(!res.body)throw new Error("Браузер не получил поток ответа");
     const reader=res.body.getReader(), decoder=new TextDecoder();let pending="";
@@ -269,6 +324,7 @@ document.addEventListener("click",async(e)=>{
   if(a==="select-chat"){state.activeChatId=id;state.activeProjectId=chat(id)?.projectId||null;save();tab="chat";render();}
   if(a==="add-project")await editProject(null);
   if(a==="edit-project")await editProject(id);
+  if(a==="edit-active-project"){const selected=project(chat()?.projectId||state.activeProjectId);if(selected)await editProject(selected.id);}
   if(a==="open-project"){state.activeProjectId=id;state.activeChatId=null;save();tab="chat";render();}
   if(a==="delete-project"){const p=project(id);if(!p||!confirm("Удалить проект «"+p.name+"» и все его чаты и материалы?"))return;
     state.projects=state.projects.filter(x=>x.id!==id);state.chats=state.chats.filter(x=>x.projectId!==id);state.docs=state.docs.filter(x=>x.projectId!==id);
@@ -293,6 +349,10 @@ document.addEventListener("submit",async(e)=>{
     state.theme=String(fd.get("theme"))||"auto";await save();render();notice("Настройки сохранены.");}
 });
 document.addEventListener("change",async(e)=>{
+  if(e.target.id==="f-writing-mode"){
+    const c=chat();if(c&&WRITING_MODES[e.target.value]){c.mode=e.target.value;await save();notice("Режим: "+WRITING_MODES[c.mode].name);}
+    return;
+  }
   if(e.target.id==="f-sidebar-project"||e.target.id==="f-doc-project"){
     state.activeProjectId=e.target.value||null;state.activeChatId=null;await save();render();return;
   }
