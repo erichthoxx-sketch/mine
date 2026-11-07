@@ -52,6 +52,53 @@ export const master = {
       state.error="";return state.books;
     }catch(e){state.error=e?.message||String(e);throw e;}
   },
+  // Резервная копия только памяти (проекты + авторские примеры).
+  // Рукописи в Мастерской не меняем. Чаты остаются в IndexedDB и JSON-экспорте.
+  async saveMemory(projects,feedback){
+    await this.init();
+    const user=state.auth.currentUser;
+    if(!user)throw Error("Сначала войди в аккаунт Мастерской через раздел «Проекты».");
+    const {doc,writeBatch}=state.mods.F;
+    const rows=[
+      ...projects.map(p=>({group:"freitag_projects",id:p.id,data:p})),
+      ...feedback.map(f=>({group:"freitag_examples",id:f.id,data:f}))
+    ];
+    for(const row of rows){
+      if(!/^[a-zA-Z0-9_-]{1,180}$/.test(row.id))throw Error("Недопустимый идентификатор записи.");
+      if(new TextEncoder().encode(JSON.stringify(row.data)).length>700000)
+        throw Error("Слишком большой проект для облачной записи. Сначала скачай полный JSON-архив.");
+    }
+    for(let offset=0;offset<rows.length;offset+=300){
+      if(state.auth.currentUser?.uid!==user.uid)throw Error("Аккаунт изменился во время сохранения.");
+      const batch=writeBatch(state.db);
+      for(const row of rows.slice(offset,offset+300))
+        batch.set(doc(state.db,"users",user.uid,row.group,row.id),row.data);
+      await batch.commit();
+    }
+    const meta={version:1,projectIds:projects.map(p=>p.id),feedbackIds:feedback.map(f=>f.id),savedAt:new Date().toISOString()};
+    const batch=writeBatch(state.db);
+    batch.set(doc(state.db,"users",user.uid,"freitag_meta","snapshot"),meta);
+    await batch.commit();
+    return meta;
+  },
+  async loadMemory(){
+    await this.init();
+    const user=state.auth.currentUser;
+    if(!user)throw Error("Сначала войди в аккаунт Мастерской через раздел «Проекты».");
+    const {doc,getDocFromServer,collection,getDocsFromServer}=state.mods.F;
+    const metaSnap=await getDocFromServer(doc(state.db,"users",user.uid,"freitag_meta","snapshot"));
+    if(!metaSnap.exists())throw Error("Резервной копии Freitag AI в Firebase пока нет.");
+    const meta=metaSnap.data();
+    const [p,f]=await Promise.all([
+      getDocsFromServer(collection(state.db,"users",user.uid,"freitag_projects")),
+      getDocsFromServer(collection(state.db,"users",user.uid,"freitag_examples"))
+    ]);
+    if(state.auth.currentUser?.uid!==user.uid)throw Error("Аккаунт изменился во время загрузки.");
+    const pids=new Set(meta.projectIds||[]),fids=new Set(meta.feedbackIds||[]);
+    return {projects:p.docs.filter(d=>pids.has(d.id)).map(d=>({...d.data(),id:d.id})),
+      feedback:f.docs.filter(d=>fids.has(d.id)).map(d=>({...d.data(),id:d.id})),
+      savedAt:meta.savedAt};
+  },
   canonicalText(book){
     const L=book?.legend||{};
     const synopsis=typeof book?.synopsis==="string"?book.synopsis:typeof book?.svc?.synopsis==="string"?book.svc.synopsis:"";
