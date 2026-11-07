@@ -208,28 +208,60 @@ function relevantNotes(question,projectId,maxLength=2200){
   }
   return out.join("\n\n");
 }
+// Если канон длиннее бюджета, сохраняем его начало (общие правила)
+// и добавляем относящийся к текущему вопросу фрагмент вместо обрезания
+// всегда на первых строках.
+function pinnedExcerpt(raw,question,maxLength){
+  const text=String(raw||"");
+  if(text.length<=maxLength)return text;
+  const head=text.slice(0,Math.min(250,Math.floor(maxLength*.25)));
+  const terms=searchTerms(question);
+  const pieces=[];
+  const normalized=text.toLowerCase().replace(/ё/g,"е");
+  for(let at=head.length;at<text.length;at+=450){
+    const chunk=normalized.slice(at,at+520);
+    const score=terms.reduce((n,term)=>n+(chunk.includes(term)?1:0),0);
+    if(score)pieces.push({score,at});
+  }
+  pieces.sort((a,b)=>b.score-a.score||a.at-b.at);
+  const slots=pieces.length?pieces.slice(0,2).sort((a,b)=>a.at-b.at):[{at:Math.max(head.length,text.length-(maxLength-head.length))}];
+  let result=head;
+  for(const item of slots){
+    const remaining=maxLength-result.length-8;
+    if(remaining<90)break;
+    result+="\n[…]\n"+text.slice(item.at,item.at+Math.min(remaining,520));
+  }
+  return result.slice(0,maxLength);
+}
 function buildMessages(c){
   const p=project(c.projectId),s=state.settings;
   const mode=WRITING_MODES[c.mode]||WRITING_MODES.dialog;
   const ctx=Number(s.context)||4096;
-  // Бюджет ограничен: Qwen 4B на 8 ГБ ОЗУ не тянет большие запросы
-  // быстро. Самое важное — закреплённый канон и текущая сцена.
-  const short=ctx<=2048, long=ctx>=8192;
-  const cap=short?2000:long?5700:3600;
+  const short=ctx<=2048,long=ctx>=8192;
+  const budget=short?
+    {total:2100,global:220,extra:160,canon:500,voice:160,scene:250,docs:400,history:1500}:
+    long?
+    {total:6000,global:500,extra:450,canon:1700,voice:500,scene:750,docs:1100,history:6500}:
+    {total:3850,global:330,extra:280,canon:1100,voice:300,scene:420,docs:850,history:2800};
   const lastUser=[...c.messages].reverse().find(m=>m.role==="user")?.content||"";
-  const sys=[
-    s.globalInstruction.slice(0,650),
+  const parts=[
+    s.globalInstruction.slice(0,budget.global),
     "Режим «"+mode.name+"». "+mode.instruction,
-    p?.instruction?"Инструкция проекта «"+p.name+"»: "+p.instruction.slice(0,550):"",
-    p?.canon?"ЗАКРЕПЛЁННЫЙ КАНОН (приоритет над предположениями):\n"+p.canon.slice(0,short?550:long?2100:1150):"",
-    p?.voice?"Голос автора и ограничения:\n"+p.voice.slice(0,short?300:long?900:450):"",
-    p?.scene?"ТЕКУЩАЯ СЦЕНА/ПОСЛЕДНИЕ СОБЫТИЯ:\n"+p.scene.slice(0,short?350:long?1000:550):"",
-    "Выдержки — лишь часть материалов, не полная книга. Не утверждай, что проверила всю рукопись, если источников недостаточно.",
-    relevantNotes(lastUser,c.projectId,short?850:long?3300:1900)
-  ].filter(Boolean).join("\n\n").slice(0,cap);
-  const limit=short?1500:long?6500:2800;
+    p?.instruction?"Инструкция проекта «"+p.name+"»: "+p.instruction.slice(0,budget.extra):"",
+    p?.canon?"ЗАКРЕПЛЁННЫЙ КАНОН:\n"+pinnedExcerpt(p.canon,lastUser,budget.canon):"",
+    p?.voice?"Голос автора и ограничения:\n"+p.voice.slice(0,budget.voice):"",
+    p?.scene?"ТЕКУЩАЯ СЦЕНА/ПОСЛЕДНИЕ СОБЫТИЯ:\n"+p.scene.slice(0,budget.scene):"",
+    "Выдержки не равны полной рукописи. Если данных недостаточно, скажи об этом.",
+    relevantNotes(lastUser,c.projectId,budget.docs)
+  ].filter(Boolean);
+  let sys=parts.join("\n\n");
+  if(sys.length>budget.total){
+    // Сохраняем найденные выдержки: сначала сокращаем второстепенные
+    // инструкции, затем хвост истории. При обычном бюджете лимит не достигается.
+    sys=sys.slice(0,budget.total);
+  }
   const history=c.messages.filter(m=>m.role==="user"||m.role==="assistant").slice(-7).map(m=>({role:m.role,content:m.content.slice(-1800)}));
-  while(history.reduce((n,m)=>n+m.content.length,0)>limit&&history.length>1)history.shift();
+  while(history.reduce((n,m)=>n+m.content.length,0)>budget.history&&history.length>1)history.shift();
   return [{role:"system",content:sys},...history];
 }
 // На GitHub Pages обращение к локальному Ollama требует разрешения Chrome (LNA)
