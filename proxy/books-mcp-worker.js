@@ -161,10 +161,15 @@ async function sectionTool(env, name, a = {}) {
     lastSaleDate: d.lastSaleDate, totals: d.totals, months: d.months,
     books: d.books, campaigns: d.campaigns, reports: d.reports });
   if (name === 'get_book_sales') {
-    const q = String(a.book || '').trim().toLocaleLowerCase('ru');
+    // В «Доходах» книга названа как на Литнете («Альпийский развод. Он оставил меня умирать»),
+    // в Мастерской — коротко; ищем и по началу названия, и по ID книги Мастерской.
+    const norm = (v) => String(v || '').toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    let q = norm(a.book);
     if (!q) return msg('Нужно название книги.', true);
-    const found = (d.sales || []).filter((x) =>
-      (String(x.book || '').toLocaleLowerCase('ru') === q || String(x.bookId || '').toLocaleLowerCase('ru') === q)
+    const own = (await indexOf(env.BOOKS)).find((b) => norm(b.id) === q);
+    if (own) q = norm(own.title);
+    const same = (x) => { const t = norm(x.book); return t === q || norm(x.bookId) === q || (q.length >= 6 && (t.startsWith(q + ' ') || q.startsWith(t + ' '))); };
+    const found = (d.sales || []).filter((x) => same(x)
       && (!a.from || x.date >= a.from) && (!a.to || x.date <= a.to));
     return msg({ book: a.book, lastSaleDate: d.lastSaleDate, updatedAt: item.updatedAt,
       count: found.length, rows: found.slice(0, 250) });
@@ -247,7 +252,7 @@ async function mcp(req, env) {
   let result;
   try {
     switch (body.method) {
-      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.1.0' } }; break;
+      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.2.0' } }; break;
       case 'ping': result = {}; break;
       case 'tools/list': result = { tools: TOOLS }; break;
       case 'tools/call':

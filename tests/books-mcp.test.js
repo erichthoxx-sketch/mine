@@ -78,6 +78,11 @@ test('MCP marketing, income and Direct sources are read-only and separately quer
   assert.equal(JSON.parse(status.result.content[0].text).sections.filter((s) => s.available).length, 3);
   const sales = await (await worker.fetch(call('tools/call', { name: 'get_book_sales', arguments: { book: 'b1' } }), a)).json();
   assert.equal(JSON.parse(sales.result.content[0].text).rows[0].royalty, 190);
+  await a.BOOKS.put('section:income', JSON.stringify({ updatedAt: '2026-11-03', data: { sales: [
+    { book: 'Альпийский развод. Он оставил меня умирать', bookId: 'b9', date: '2026-11-03', qty: 1, royalty: 120 },
+    { book: 'Альпийская сказка', bookId: 'b8', date: '2026-11-03', qty: 1, royalty: 5 }] } }));
+  const short = await (await worker.fetch(call('tools/call', { name: 'get_book_sales', arguments: { book: 'Альпийский развод' } }), a)).json();
+  assert.deepEqual(JSON.parse(short.result.content[0].text).rows.map((r) => r.royalty), [120]);
   const ads = await (await worker.fetch(call('tools/call', { name: 'get_direct_campaign', arguments: { campaign_id: '7' } }), a)).json();
   assert.equal(JSON.parse(ads.result.content[0].text).daily[0].cost, 10);
 });

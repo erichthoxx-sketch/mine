@@ -56,17 +56,18 @@ export function incomeSnapshot(data, generatedAt = new Date().toISOString()) {
     months: byMonth(sales),
     sales, campaigns, reports };
 }
-export function directSnapshot(docs, generatedAt = new Date().toISOString()) {
+export function directSnapshot(docs, generatedAt = new Date().toISOString(), goalList = []) {
   const main = docs?.main || {}, stats = docs?.stats || {}, mk = docs?.mk || {};
   const campaigns = (main.campaigns || []).slice(0, 200).map((x) => pick(x, ['id', 'name', 'state', 'status', 'type', 'start', 'daily', 'budget', 'strategy', 'counters']));
-  const daily = (stats.daily || []).slice(-4000).map((x) => pick(x, ['date', 'cid', 'impr', 'clicks', 'cost', 'conversions', 'orders']));
+  const daily = (stats.daily || []).slice(-4000).map((x) => pick(x, ['date', 'cid', 'name', 'impr', 'clicks', 'cost', 'conversions', 'orders']));
   const queries = (stats.queries || []).slice(0, 250).map((x) => pick(x, ['cid', 'query', 'text', 'phrase', 'clicks', 'impr', 'cost', 'conversions']));
   const keywords = (main.keywords || []).slice(0, 300).map((x) => pick(x, ['id', 'cid', 'text', 'kw', 'bid', 'status', 'state']));
   const adDaily = (stats.adDaily || []).slice(-2000).map((x) => pick(x, ['date', 'cid', 'aid', 'net', 'impr', 'clicks', 'cost']));
   return { section: 'direct', generatedAt, note: 'Сохранённый снимок статистики Яндекс.Директа из приложения; не является запросом в рекламный кабинет в реальном времени. Ключи и параметры доступа не включены.',
     snapshotAt: main.syncedAt || main.at || stats.at || null, campaigns, daily, keywords, queries, adDaily,
-    metrika: { daily: (mk.daily || []).slice(-100).map((x) => pick(x, ['key', 'visits', 'bounce', 'goals'])),
-      sources: (mk.sources || []).slice(0, 40).map((x) => pick(x, ['source', 'visits', 'goals'])) } };
+    metrika: { goalNames: Object.fromEntries((goalList || []).filter((g) => g?.id).map((g) => [String(g.id), text(g.name, 120)])),
+      daily: (mk.daily || []).slice(-100).map((x) => pick(x, ['key', 'visits', 'bounce', 'goals'])),
+      sources: (mk.sources || []).slice(0, 40).map((x) => pick(x, ['name', 'source', 'visits', 'bounce', 'goals'])) } };
 }
 // Прямое чтение только d_snap. В саму базу и рекламный кабинет ничего не записываем.
 export async function readDirectDocs(store) {

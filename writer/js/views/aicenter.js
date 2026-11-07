@@ -77,7 +77,7 @@ acts['ai.all'] = async () => {
       ['marketing', marketingSnapshot(data)],
       ['income', incomeSnapshot(data)]
     ];
-    try { sections.push(['direct', directSnapshot(await readDirectDocs(store))]); }
+    try { sections.push(['direct', directSnapshot(await readDirectDocs(store), undefined, app().ctx().settings.direct?.metrika?.goals)]); }
     catch (e) { errors.push('Директ: ' + (e.message || e)); }
     for (const [name, snapshot] of sections) {
       try {
@@ -164,7 +164,7 @@ acts['ai.export'] = async () => {
       '~~~'
     ];
     try {
-      const direct = directSnapshot(await readDirectDocs(a.store), now);
+      const direct = directSnapshot(await readDirectDocs(a.store), now, a.ctx().settings.direct?.metrika?.goals);
       sections.push('', '# Яндекс.Директ (сохранённая статистика)', '', '~~~json', JSON.stringify(direct, null, 2), '~~~');
     } catch (e) {
       sections.push('', '# Яндекс.Директ', '', 'Статистика недоступна: ' + String(e.message || e).slice(0, 300));

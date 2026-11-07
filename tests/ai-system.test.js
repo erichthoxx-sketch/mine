@@ -34,4 +34,8 @@ test('Direct snapshot only exports explicitly safe fields from cached reports', 
   assert.equal(d.campaigns[0].name, 'Реклама романа');
   assert.equal(d.daily[0].cost, 140);
   assert.equal(JSON.stringify(d).includes('secret123'), false);
+  const m = directSnapshot({ mk: { sources: [{ key: 'ad', name: 'Переходы по рекламе', visits: 5, goals: { 11: 2 } }] } },
+    '2026-11-07', [{ id: 11, name: 'Покупка книги' }]);
+  assert.equal(m.metrika.sources[0].name, 'Переходы по рекламе');
+  assert.equal(m.metrika.goalNames['11'], 'Покупка книги');
 });
