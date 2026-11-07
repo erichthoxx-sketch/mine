@@ -320,6 +320,95 @@ async function testConnection(){
     notice("Нет доступа к Ollama из браузера. Открой инструкцию в настройках.");
   }renderHeader();
 }
+// Основной литературный движок — Claude через существующий аккаунт автора.
+// Подписка Claude не даёт права на вызовы Claude API; поэтому никаких скрытых
+// запросов или ключей: пользователь сама вставляет подготовленное задание.
+function buildClaudeBrief(c){
+  const p=project(c.projectId), mode=WRITING_MODES[c.mode]||WRITING_MODES.draft;
+  const question=[...c.messages].reverse().find(m=>m.role==="user")?.content||"";
+  const all=state.feedback.filter(f=>f.projectId===c.projectId);
+  const good=all.filter(f=>f.kind==="good").slice(-3);
+  const bad=all.filter(f=>f.kind==="bad").slice(-3);
+  const memory=[
+    ...good.map((f,i)=>"ОДОБРЕННЫЙ ПРИМЕР "+(i+1)+(f.reason?" — "+f.reason:"")+":\n"+String(f.finalText||f.answer).slice(0,2100)),
+    ...bad.map((f,i)=>"НЕ ПОВТОРЯТЬ "+(i+1)+": "+(f.reason||"Автор отклонила фрагмент")+
+      "\nНежелательный пример: "+String(f.answer||"").slice(0,350)+
+      (f.finalText?"\nАвторский вариант: "+f.finalText.slice(0,1200):""))
+  ].join("\n\n");
+  const recent=c.messages.slice(-9,-1).map(m=>(m.role==="assistant"?"ОТВЕТ":"АВТОР")+": "+String(m.content).slice(0,2200)).join("\n\n").slice(-9000);
+  const source=p?.masterCanon?
+    "УТВЕРЖДЁННЫЙ КАНОН ИЗ «МАСТЕРСКОЙ» (исключены отвергнутые и неутверждённые главы):\n"+
+      (p.masterCanon.length>36000?pinnedExcerpt(p.masterCanon,question,36000):p.masterCanon):"";
+  return [
+    "Ты — опытный литературный соавтор и редактор автора. Работай на русском языке.",
+    "Режим: "+mode.name+". "+mode.instruction,
+    "Главное правило: факты книги не менять без запроса, авторский голос не стирать. Не используй шаблонную нейросетевую прозу; если в источниках нет данных, не выдумывай и отметь пробел.",
+    p?"РОМАН: "+p.name:"",
+    source,
+    p?.canon?"ДОПОЛНЕНИЯ АВТОРА К КАНОНУ:\n"+p.canon.slice(0,9000):"",
+    p?.voice?"ПРАВИЛА АВТОРСКОГО СТИЛЯ:\n"+p.voice.slice(0,9000):"",
+    p?.scene?"ТЕКУЩАЯ СЦЕНА:\n"+p.scene.slice(0,9000):"",
+    p?.instruction?"ДРУГИЕ УКАЗАНИЯ:\n"+p.instruction.slice(0,5000):"",
+    memory?"ЛИЧНЫЕ ПРЕДПОЧТЕНИЯ, СОХРАНЁННЫЕ ПО РЕШЕНИЮ АВТОРА:\n"+memory:"",
+    relevantNotes(question,c.projectId,7000)?"НАЙДЕННЫЕ ФРАГМЕНТЫ МАТЕРИАЛОВ (это лишь выборка):\n"+relevantNotes(question,c.projectId,7000):"",
+    recent?"ПРЕДЫДУЩИЕ РЕПЛИКИ В РАБОЧЕМ ЧАТЕ:\n"+recent:"",
+    "ТЕКУЩАЯ ЗАДАЧА АВТОРА:\n"+question,
+    "Сначала выполни именно задачу. Не добавляй похвалу, рекламные обещания и длинное вступление."
+  ].filter(Boolean).join("\n\n---\n\n").slice(0,85000);
+}
+function openClaudeTransfer(prompt){
+  document.querySelector("#f-claude-modal")?.remove();
+  const dlg=document.createElement("dialog");dlg.id="f-claude-modal";dlg.className="f-dialog f-transfer-dialog";
+  dlg.innerHTML='<div class="f-transfer"><h2>Задание для Claude готово</h2>'+
+    '<p class="f-muted">Это не API-интеграция: книга и память пока остаются у тебя. В Claude отправится только текст, который ты сама вставишь.</p>'+
+    '<textarea class="f-textarea" id="f-claude-brief" readonly aria-label="Подготовленный контекст">'+esc(prompt)+'</textarea>'+
+    '<div class="f-row f-transfer-actions"><button class="f-btn primary" type="button" data-transfer="copy">Копировать задание</button>'+
+    '<a class="f-btn" target="_blank" rel="noopener noreferrer" href="https://claude.ai/new">Открыть Claude</a>'+
+    '<button class="f-btn" type="button" data-transfer="close">Закрыть</button></div>'+
+    '<p class="f-muted">Вставь задание в Claude. Потом верни ответ сюда кнопкой «Добавить ответ Claude», чтобы сохранить его и обучающий пример.</p></div>';
+  document.body.appendChild(dlg);dlg.showModal();
+  dlg.addEventListener("close",()=>dlg.remove(),{once:true});
+  dlg.addEventListener("click",async e=>{
+    const action=e.target.closest("[data-transfer]")?.dataset.transfer;
+    if(action==="close"){dlg.close();return;}
+    if(action==="copy"){
+      const field=dlg.querySelector("#f-claude-brief");
+      try{await navigator.clipboard.writeText(field.value);notice("Задание скопировано. Теперь вставь его в Claude.");}
+      catch{field.focus();field.select();notice("Нажми Ctrl+C, чтобы скопировать выделенный текст.");}
+    }
+  });
+}
+async function prepareClaude(text){
+  if(busy||!text.trim())return;
+  const c=ensureChat(),q=text.trim();
+  c.messages.push({role:"user",content:q,at:stamp()});
+  if(c.title==="Новый чат")c.title=q.slice(0,65);
+  c.updated=stamp();
+  const brief=buildClaudeBrief(c);
+  await save();render();openClaudeTransfer(brief);
+}
+async function saveClaudeAnswer(){
+  const c=chat();if(!c)return notice("Сначала открой чат.");
+  const v=await openModal("Сохранить ответ Claude",[{key:"text",label:"Вставь текст ответа Claude",multi:true,required:true}]);
+  if(!v?.text?.trim())return;
+  c.messages.push({role:"assistant",content:v.text.trim().slice(0,160000),provider:"Claude",at:stamp()});
+  c.updated=stamp();await save();render();notice("Ответ Claude сохранён в рабочем чате.");
+}
+async function saveFeedback(i,kind){
+  const c=chat(),response=c?.messages[i];
+  if(!c||response?.role!=="assistant")return;
+  const title=kind==="good"?"Добавить в образцы":"Сохранить отказ и правку";
+  const v=await openModal(title,[
+    {key:"reason",label:kind==="good"?"Что в этом тексте удачно?":"Что не нравится / чего нельзя повторять?",multi:true,required:true},
+    {key:"finalText",label:"Твоя окончательная редакция (необязательно)",multi:true}
+  ],{reason:"",finalText:kind==="good"?response.content.slice(0,10000):""});
+  if(!v?.reason?.trim())return;
+  const preceding=[...c.messages.slice(0,i)].reverse().find(m=>m.role==="user");
+  state.feedback.push({id:uid(),projectId:c.projectId,chatId:c.id,kind,reason:v.reason.trim().slice(0,1500),
+    prompt:preceding?.content?.slice(0,10000)||"",answer:response.content.slice(0,18000),
+    finalText:v.finalText.trim().slice(0,18000),source:response.provider||"Qwen",at:stamp()});
+  await save();notice(kind==="good"?"Пример добавлен в память стиля.":"Отказ и причина сохранены для следующих заданий.");
+}
 async function sendMessage(text){
   if(busy||!text.trim())return;
   const endpoint=safeEndpoint(state.settings.endpoint);
