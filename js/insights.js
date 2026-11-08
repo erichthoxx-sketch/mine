@@ -84,7 +84,7 @@ export function discountEffects(data = {}, settings = {}, today) {
     const before = known(incomeSeries(ctx.sales, ctx.legacyDays, addDays(r.from, -14), addDays(r.from, -1), r.bookId)).filter((x) => !discDays.has(x.date) && !ctx.outages.has(x.date));
     const a = avg(during), b = avg(before);
     const extra = a != null && b != null ? Math.round((a - b) * during.length) : null;
-    return { ...r, book: (data.books || []).find((x) => x.id === r.bookId)?.title || 'все книги', days: during.length, perDay: a == null ? null : Math.round(a), base: b == null ? null : Math.round(b), extra, lift: b ? a / b - 1 : null, enough: before.length >= 5 };
+    return { ...r, book: (data.books || []).find((x) => x.id === r.bookId)?.title || 'Все книги', days: during.length, perDay: a == null ? null : Math.round(a), base: b == null ? null : Math.round(b), extra, lift: b ? a / b - 1 : null, enough: before.length >= 5 };
   }).reverse();
 }
 
