@@ -73,7 +73,7 @@ export function creatorCard(a, fl, m) {
         <select name="litnetLinkId"><option value="">Пока нет — добавлю перед запуском</option>
           ${candidates.map(x => opt(x.id, `${x.campaign || 'Реклама'} · до ${x.expires}`, d.litnetLinkId)).join('')}
         </select>
-        ${linked ? `<p class="small muted">Параметры URL для кампании: <code>${esc(exactTag(linked.url))}</code></p>` : '<p class="small muted"><button type="button" class="link" data-act="go" data-to="/litnet">Добавить ссылку в «Мой Литнет» →</button></p>'}
+        ${linked ? `<p class="small muted">Параметры URL для кампании: <code>${esc(exactTag(linked))}</code></p>` : '<p class="small muted"><button type="button" class="link" data-act="go" data-to="/litnet">Добавить ссылку в «Мой Литнет» →</button></p>'}
         ${staleTag ? '<p class="small warnc">Ссылка истечет до старта рекламы. Выбери новую ссылку из Литнета.</p>' : ''}
         <div class="row d-save"><button class="primary" type="submit">Сохранить настройки</button></div>
       </form>
@@ -151,7 +151,7 @@ acts['fl.createCampaign'] = async () => {
   if (d.litnetLinkId && (!readyForCampaign(withBook, d.start, fl.book) || !bookMatches(linkBook, fl.book))) {
     toast('Выбранная ссылка «Мой Литнет» не подходит этой книге или уже истекает. Выбери другую.');return false;
   }
-  const trackingParams = link ? exactTag(link.url) : '';
+  const trackingParams = link ? exactTag(link) : '';
   if (err.length) { toast(err[0]); return false; }
   if (!(await confirmWrite('Создать кампанию «'+d.name+'» в реальном Директе? Лимит '+rub(d.budget,0)+' на период, без автопродления. Без запуска показов.', 'Создать черновик'))) return false;
   busy = true;

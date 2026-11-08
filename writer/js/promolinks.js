@@ -24,6 +24,14 @@ export function isLitnetLink(value, type = 'promo') {
       (type !== 'promo' || /^\/ref\/[a-zA-Z0-9_-]+\/?$/.test(u.pathname));
   } catch { return false; }
 }
+// UTM-метка из «Мой Литнет» (в кабинете у ссылки своя метка: utm_litref=…; код может не совпадать с кодом в самой ссылке)
+export function utmToken(s) {
+  const v = String(s || '').trim(), m = /utm_litref=([A-Za-z0-9_-]{1,128})/.exec(v);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{6,128}$/.test(v) ? v : '';
+}
+// код ссылки для Метрики и Директа: вставленная UTM-метка главнее, иначе — код из самой ссылки
+export const linkCode = (x) => utmToken(x?.utm) || promoToken(x?.url);
 export function promoToken(link) {
   if (!isLitnetLink(link)) return '';
   return new URL(link).pathname.split('/').filter(Boolean)[1] || '';

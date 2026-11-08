@@ -42,7 +42,7 @@ export function promoLinksPanel(c, { bookId = '', compact = false, channel = '',
           <button class="link" data-act="utm.edit" data-id="${esc(x.id)}">Изменить</button>
         </div>
         <div class="utm-urlrow">${displayLink(x.url)}</div>
-        <div class="small muted utm-token">utm_litref=${esc(promoToken(x.url))}</div>
+        <div class="small muted utm-token">utm_litref=${esc(promoToken(x.url))} <button class="link" data-act="utm.copy" data-v="utm_litref=${esc(promoToken(x.url))}">Скопировать для Директа</button></div>
         ${x.destination ? `<div class="small muted">${displayLink(x.destination)}</div>` : ''}
         <div class="utm-meta">
           <span class="${x.expires < c.today ? 'down' : 'muted'}">${esc(status(x,c.today))}</span>
@@ -93,6 +93,8 @@ function entry(fd, previous = {}) {
     history:history.slice(-20), ...(changed ? {reminderDoneFor:''} : {}),
     status:'active', modifiedAt:new Date().toISOString() };
 }
+// метка = код из самой ссылки (в Литнете они всегда совпадают) — для Директа: кампания → «Параметры URL»
+acts['utm.copy'] = async (d) => { try { await navigator.clipboard.writeText(d.v); toast('Скопировано — вставьте в Директе: кампания → «Параметры URL»'); } catch { prompt('Скопируйте метку:', d.v); } return false; };
 acts['utm.new'] = d => {
   const c=app().ctx();
   openSheet('Новая персональная ссылка',fields(c,{},d.book||'',d.channel||''),async fd=>{

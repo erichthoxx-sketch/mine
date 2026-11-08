@@ -84,3 +84,9 @@ test('Сравнение каналов: Литнет платит со ссыл
   const v = channelVerdict(rows);
   assert.equal(v.best, 'litnet');
 });
+
+test('Метка Литнета — тот же код, что в ссылке', async () => {
+  const { exactTag } = await import('../direct/js/litnetcalc.js');
+  assert.equal(exactTag('https://litnet.com/ref/PZSWjdD9ctDTys9A'), 'utm_litref=PZSWjdD9ctDTys9A');
+  assert.equal(exactTag({ url: 'https://litnet.com/ref/vkZDPLyk6BJ1S_JZ' }), 'utm_litref=vkZDPLyk6BJ1S_JZ');
+});

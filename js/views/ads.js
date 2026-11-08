@@ -13,7 +13,7 @@ import { totals as dTotals } from '../../direct/js/dcalc.js';
 import { ic } from '../icons.js';
 import { linkedTargetologists, targetReminders } from '../target-partners.js';
 import { campaignVerdict, campaignBook, campaignLink, reportDue } from '../adroi.js';
-import { promoToken } from '../../writer/js/promolinks.js';
+import { linkCode } from '../../writer/js/promolinks.js';
 import { discountEffects, cycleTail } from '../insights.js';
 import { litrefRows } from '../../direct/js/mcalc.js';
 
@@ -230,7 +230,7 @@ function verdictHtml(c, k, m) {
   if (reportDue(k, c.data.reports || [], c.today)) out.push(`<p class="small warnc">Нет отчёта о расходе за последнюю неделю — попросите у таргетолога. <button class="link" data-act="rep.paste" data-id="${esc(k.id)}">Вставить отчёт</button></p>`);
   const l = campaignLink(k, c.data.w_promolinks || [], c.data.w_books || [], c.data.books || []);
   if (l) {
-    const code = promoToken(l.url), mk = (c.data.d_snap || []).find((x) => x.id === 'mk');
+    const code = linkCode(l), mk = (c.data.d_snap || []).find((x) => x.id === 'mk');
     const r = litrefRows(mk?.litref || [], (c.settings.direct?.metrika?.main || []).map(String)).find((x) => x.code.toLowerCase() === code.toLowerCase());
     out.push(`<p class="small muted">Ссылка Литнета «${esc(l.campaign || code)}»${r ? `: за 90 дней ${num(r.visits)} визитов, покупок ${num(r.conv)} (Метрика)` : ' — визитов по ней Метрика пока не видела'}</p>`);
   }

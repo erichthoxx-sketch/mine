@@ -7,7 +7,7 @@ import { addDays, budgetPlan } from '../../../js/calc.js';
 import { adCtx } from '../../../js/adroi.js';
 import { fmtMonth } from '../../../js/format.js';
 import { goalTotals } from '../dcalc.js';
-import { promoToken } from '../../../writer/js/promolinks.js';
+import { linkCode } from '../../../writer/js/promolinks.js';
 import { litrefRows, royaltyPerSale } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { demo } from '../demo.js';
@@ -25,7 +25,7 @@ export function boardCard(a) {
     const { c: k, m, p, v } = x, started = m.status !== 'planned';
     const state = x.live ? `● идёт${p.total ? ` · день ${num(p.day)} из ${num(p.total)}` : ''}` : `закончилась ${fmtShort(k.end)}`;
     const money = started ? [`расход ${rub(m.spendTotal, 0)}${v.est ? ' (оценка)' : ''}`, p.returned != null && v.kind !== 'wait' ? (p.returned >= 0 ? `вернула ${rub(p.returned, 0)} сверх обычного` : `доход ниже обычного на ${rub(-p.returned, 0)}`) : ''].filter(Boolean).join(' · ') : '';
-    const code = x.link && promoToken(x.link.url), ref = code && refs[code.toLowerCase()];
+    const code = x.link && linkCode(x.link), ref = code && refs[code.toLowerCase()];
     const hints = [];
     if (!k.bookId && x.book) hints.push(`Книга не выбрана, поэтому доход считается по всем книгам. По названию это «${esc(x.book.title)}» — выберите её в кампании.`);
     if (x.reportDue) hints.push('Нет отчёта о расходе за последнюю неделю — попросите у таргетолога и вставьте его сообщение в кампании («Вставить отчёт»). Пока расход — оценка: бюджет поровну по дням.');

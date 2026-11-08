@@ -3,7 +3,7 @@
 // Чистые функции: расчёт дохода — тот же campaignMetrics, что в «Доходах», здесь только сведение и выводы.
 import { campaignMetrics, campaignProgress, outageSet, lastSaleDate, addDays, countDays } from './calc.js';
 import { financialLedger } from './sales-integrity.js';
-import { promoChannel, promoToken } from '../writer/js/promolinks.js';
+import { promoChannel, linkCode } from '../writer/js/promolinks.js';
 
 // Контекст расчёта как в «Доходах» (js/app.js getCtx), из сырых данных Firebase
 export function adCtx(data = {}, settings = {}, today) {
@@ -36,7 +36,7 @@ export function campaignLink(c, links = [], wbooks = [], books = []) {
   if (!book) return null;
   const wb = wbooks.filter((w) => titleMatch(w.title, book.title)).map((w) => w.id);
   const end = c.end || '9999-12-31';
-  const cand = links.filter((x) => x.status !== 'archived' && promoToken(x.url) && wb.includes(x.bookId)
+  const cand = links.filter((x) => x.status !== 'archived' && linkCode(x) && wb.includes(x.bookId)
     && (c.channel === 'litnet' ? promoChannel(x) === 'litnet' : promoChannel(x) !== 'litnet')
     && (!x.createdAt || x.createdAt.slice(0, 10) <= end) && (!x.expires || x.expires >= c.start));
   if (cand.length < 2) return cand[0] || null;
@@ -108,7 +108,7 @@ export function channelCompare(data = {}, settings = {}, today, { refs = {}, dir
   const period = { from: addDays(today, -(days - 1)), to: today };
   const rows = {};
   const row = (key) => (rows[key] ||= { key, name: CHANNEL_NAMES[key] || key, spend: 0, est: false, returned: 0, hasRet: false, readers: 0, buys: 0, hasReaders: false, camps: 0, codes: new Set() });
-  const addLink = (r, l) => { const code = l && promoToken(l.url); if (!code || r.codes.has(code.toLowerCase())) return; r.codes.add(code.toLowerCase()); const x = refs[code.toLowerCase()]; if (x) { r.readers += x.visits; r.buys += x.conv; r.hasReaders = true; } };
+  const addLink = (r, l) => { const code = l && linkCode(l); if (!code || r.codes.has(code.toLowerCase())) return; r.codes.add(code.toLowerCase()); const x = refs[code.toLowerCase()]; if (x) { r.readers += x.visits; r.buys += x.conv; r.hasReaders = true; } };
   for (const k of data.campaigns || []) {
     if (k.oneOff || !k.start || k.start > today || (k.end && k.end < period.from)) continue;
     const m = campaignMetrics(k, { ...ctx, period });

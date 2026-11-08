@@ -11,7 +11,7 @@ import { SITE_COUNTER, SITE_GOALS, sitePages, sumDays, weekPair, byWeekday, mkIn
 import { metrikaOf } from './metrika.js';
 import { packageText, sendToChat } from './ai.js';
 import { litnetView } from './litnet.js';
-import { activePromoLinks, promoToken } from '../../../writer/js/promolinks.js';
+import { activePromoLinks, linkCode } from '../../../writer/js/promolinks.js';
 import { adEvents, weekContext, visitReasons } from '../adcontext.js';
 import { demo } from '../demo.js';
 import { loadSite, SITE_URL, SITE_ADMIN } from '../../../js/sitepub.js';
@@ -142,7 +142,7 @@ function booksTab(a, M) {
 const tableOf = (M) => {
   const utms = M.c.settings.direct?.utms || [], have = new Set(utms.filter((x) => x.litref).map((x) => x.litref.toLowerCase()));
   const books = { profile: 'Профиль автора', ...Object.fromEntries((M.c.data.w_books || []).map((b) => [b.id, b.title])) };
-  const pl = activePromoLinks(M.c.data.w_promolinks || []).map((x) => ({ x, code: promoToken(x.url) })).filter(({ code }) => code && !have.has(code.toLowerCase()) && have.add(code.toLowerCase()))
+  const pl = activePromoLinks(M.c.data.w_promolinks || []).map((x) => ({ x, code: linkCode(x) })).filter(({ code }) => code && !have.has(code.toLowerCase()) && have.add(code.toLowerCase()))
     .map(({ x, code }) => {
       // расход — из кампаний «Доходов», у которых эта ссылка (js/adroi.js): вписывать второй раз не нужно
       const sp = linkSpend(x.id, M.c.data, M.c.settings, M.t);
