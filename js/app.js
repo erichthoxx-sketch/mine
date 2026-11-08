@@ -2,7 +2,7 @@
 import { initAccent } from './accent.js';
 import { keepNavDown } from './vvfix.js';
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
-import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from './ui.js';
+import { installHandlers, esc, toast, acts, forms, changes, watchForUpdates, keepPlace, tidyNums } from './ui.js';
 import {
   todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth, litnetMoneyByMonth, litnetDiscountBase, monthKey,
   outageSet,
@@ -165,6 +165,18 @@ window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() =
 window.addEventListener('online', render); window.addEventListener('offline', render);
 
 installHandlers(() => render());
+// выгрузку Литнета можно просто перетащить в окно «Доходов» — загрузится так же, как кнопкой «Загрузить выгрузку»
+if (typeof document !== 'undefined') {
+  const isFile = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  document.addEventListener('dragover', (e) => { if (isFile(e)) e.preventDefault(); });
+  document.addEventListener('drop', (e) => {
+    if (!isFile(e)) return;
+    e.preventDefault();
+    const f = [...e.dataTransfer.files].find((x) => /\.(csv|txt)$/i.test(x.name));
+    if (!f) { toast('Перетащите выгрузку Литнета — файл .csv'); return; }
+    changes['imp.any']?.('', { files: [f], value: '' });
+  });
+}
 watchForUpdates();
 try { sessionStorage.removeItem('staleReload'); } catch { /* нет доступа к памяти браузера */ }
 applyTheme();

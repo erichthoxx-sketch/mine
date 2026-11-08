@@ -14,6 +14,8 @@ import { domainInfo } from '../sitecheck.js';
 import { marketingNeeds, planItems } from './plan.js';
 import { writtenChart } from '../wcharts.js';
 import { archiveWarn, loadArchive } from './archive.js';
+import { fold } from '../../../js/ui.js';
+import { weekSummary, finishPace } from '../../../js/insights.js';
 
 const zn = (n) => al(n);
 const dleft = (date, today) => Math.round((new Date(date + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 86400000);
@@ -91,6 +93,25 @@ function workCard(c, r) {
         ${r.income != null ? `<span>доход <b>${rub(r.income, 0)}</b></span>` : ''}</span></span></a>`;
 }
 
+// Сводка недели (js/insights.js): доход за 7 дней с данными против прошлых 7, почему, что с рекламой, дела на неделю.
+// В понедельник и вторник раскрыта сама; дальше — строкой (раскрытие запоминается).
+function weekCard(c) {
+  const w = weekSummary(c.data, c.settings, c.today);
+  if (!w.income && !w.was) return '';
+  // успеть к конкурсу: книга в работе, привязанная к идущему конкурсу «для законченных»
+  for (const ct of c.data.w_contests || []) for (const id of contestBookIds(ct)) {
+    const b = c.wbooksById[id], fp = b && (b.status || 'progress') === 'progress' && ct.status !== 'done' ? finishPace(b, ct, c.today) : null;
+    if (fp && !fp.done) w.todo.push({ k: 'contest:' + ct.id, text: `«${b.title}» к конкурсу «${ct.name}» (до ${fmtDate(ct.end).slice(0, 5)}): ≈ ${num(fp.left)} зн. — по ${num(fp.perDay)} в день${fp.onTrack ? ', по нынешнему темпу успеваете' : fp.forecast ? `, по нынешнему темпу — к ${fmtDate(fp.forecast).slice(0, 5)}, не успеваете` : ''}` });
+  }
+  const KIND = { good: 'up', bad: 'down', even: '' };
+  const d = w.delta, wd = new Date(c.today + 'T00:00:00Z').getUTCDay();
+  const body = `<div class="row between"><b>${rub(w.income, 0)} за 7 дней</b><span class="small ${d == null ? 'muted' : d >= 0 ? 'up' : 'down'}">${d == null ? '' : `${d >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(d * 100))} % · прошлая неделя ${rub(w.was, 0)}`}</span></div>
+    ${w.reasons.length ? `<p class="small muted" style="margin:6px 0 0">${esc(w.reasons.join(' · '))}</p>` : ''}
+    ${w.ads.length ? `<h3>Реклама</h3><div class="list">${w.ads.map((x) => `<div class="item"><b>${esc(x.name)}</b><div class="small ${KIND[x.kind]}">${esc(x.text.charAt(0).toUpperCase() + x.text.slice(1))}${x.est ? ' <span class="muted">(расход — оценка)</span>' : ''}</div></div>`).join('')}</div>` : ''}
+    ${w.todo.length ? `<h3>На эту неделю</h3><div class="list">${w.todo.slice(0, 5).map((x) => `<div class="item small">${esc(x.text)}</div>`).join('')}</div>` : ''}`;
+  return `<div class="card folds">${fold('home-week', `Неделя ${fmtDate(w.from).slice(0, 5)}–${fmtDate(w.to).slice(0, 5)}`, body, { open: wd === 1 || wd === 2, sub: `${rub(w.income, 0)}${d != null ? ` · ${d >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(d * 100))} %` : ''}` })}</div>`;
+}
+
 export function homeView(a) {
   const c = a.ctx(), t = c.today, mk = monthKey(t), from = mk + '-01';
   const rem = reminders(c);
@@ -127,6 +148,7 @@ export function homeView(a) {
     <div class="stat"><div class="k">Доход за ${fmtMonth(mk).split(' ')[0]}</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div></div>
     <div class="stat"><div class="k">В работе</div><div class="v">${inWork.length}</div><div class="s">${plural(inWork.length, ['книга', 'книги', 'книг'])}</div></div>
   </div>
+  ${weekCard(c)}
   ${archiveWarn(c)}
   ${rem.length ? `<div class="card"><h2>Напоминания</h2><div class="list">${rem.map((r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}</span></a>`).join('')}</div></div>` : ''}
   ${chartCard}

@@ -1,4 +1,4 @@
-import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask } from '../ui.js';
+import { esc, acts, forms, changes, openSheet, opt, toast, N, uid, ask, fold } from '../ui.js';
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthCap, fmtMonthIn } from '../format.js';
 import { widgetShows, widgetProgram, addMonths, campaignMetrics, litnetPace, ctr, cpc, addDays, monthKey, monthEnd, bookIdFor, monthsBetween, DISCOUNT_NOTE } from '../calc.js';
 import { rocketCard } from './money.js';
@@ -14,6 +14,7 @@ import { ic } from '../icons.js';
 import { linkedTargetologists, targetReminders } from '../target-partners.js';
 import { campaignVerdict, campaignBook, campaignLink, reportDue } from '../adroi.js';
 import { promoToken } from '../../writer/js/promolinks.js';
+import { discountEffects, cycleTail } from '../insights.js';
 import { litrefRows } from '../../direct/js/mcalc.js';
 
 const app = () => window.__app;
@@ -185,8 +186,21 @@ export function ads(a) {
   <div class="card"><div class="row between"><h2 style="margin:0">Другие расходы на рекламу</h2><button data-act="extra.new">+ Расход</button></div>
     ${extras.length ? `<div class="list">${extras.sort((x, y) => (y.start || '').localeCompare(x.start || '')).slice(0, 12).map((k) => `<div class="item row between"><span><b>${esc(k.name)}</b><br><span class="small muted">${fmtDate(k.start)}${k.end && k.end !== k.start ? '–' + fmtDate(k.end) : ''}</span></span><span class="row"><b>${rub(k.budget || 0, 0)}</b><button class="link danger" data-act="extra.del" data-id="${k.id}">убрать</button></span></div>`).join('')}</div>` : '<p class="muted">Баннеры, услуги, рассылки — всё, что не кампания. Учитывается в расходах месяца и в чистом доходе.</p>'}
   </div>
+  ${salesLevers(c)}
   ${archive}`;
   return { html };
+}
+
+// Скидки и «хвост» цикла (js/insights.js): что принесла каждая скидка и как продаются старые книги, пока выходит новая
+function salesLevers(c) {
+  const disc = discountEffects(c.data, c.settings, c.today), tail = cycleTail(c.data, c.settings, c.today);
+  const parts = [];
+  if (disc.length) parts.push(fold('ads-disc', 'Скидки — что принесли', `<p class="small muted" style="margin-top:0">Доход в дни скидки против обычного дня за две недели до неё. Дни скидки — события «Скидка» в дне.</p>
+    <div class="list">${disc.slice(0, 8).map((d) => `<div class="item"><div class="row between"><b>${esc(d.book)}</b><span class="small muted">${fmtShort(d.from)}${d.to !== d.from ? '–' + fmtShort(d.to) : ''}${d.text ? ' · ' + esc(d.text) : ''}</span></div>
+      <div class="small ${d.extra == null ? 'muted' : d.extra >= 0 ? 'up' : 'down'}">${d.extra == null ? 'не с чем сравнить: нет продаж за две недели до скидки' : `${d.extra >= 0 ? '+' : '−'}${rub(Math.abs(d.extra), 0)} сверх обычного · ${rub(d.perDay, 0)} в день против ${rub(d.base, 0)}${d.lift != null ? ` (${d.lift >= 0 ? '+' : ''}${Math.round(d.lift * 100)} %)` : ''}`}${d.extra != null && !d.enough ? ' · данных до скидки мало' : ''}</div></div>`).join('')}</div>`, { sub: (() => { const ok = disc.filter((d) => d.extra != null); return ok.length ? `всего ${ok.reduce((a, d) => a + d.extra, 0) >= 0 ? '+' : '−'}${rub(Math.abs(ok.reduce((a, d) => a + d.extra, 0)), 0)}` : ''; })() }));
+  for (const t of tail) parts.push(fold('ads-tail-' + t.book, `Пока выходит «${esc(t.book)}»`, `<p class="small muted" style="margin-top:0">Сколько в день приносят другие книги с ${fmtShort(t.start)} против 30 дней до этого. Дни, когда у книги шла своя реклама, не считаются. Кто именно перешёл с книги на книгу, Литнет в выгрузке не показывает.</p>
+    <div class="list">${t.rows.map((r) => `<div class="item row between"><span>${esc(r.book)}<span class="sub">${rub(r.after, 0)} в день против ${rub(r.before, 0)}</span></span><b class="${r.lift >= 0 ? 'up' : 'down'}">${r.lift >= 0 ? '+' : ''}${Math.round(r.lift * 100)} %</b></div>`).join('')}</div>`, { sub: t.rows[0] ? `«${esc(t.rows[0].book)}» ${t.rows[0].lift >= 0 ? '+' : ''}${Math.round(t.rows[0].lift * 100)} %` : '' }));
+  return parts.length ? `<div class="card folds">${parts.join('')}</div>` : '';
 }
 
 acts['ads.month'] = (d) => { if (d.v) app().ui.adMonth = d.v; window.scrollTo(0, 0); };

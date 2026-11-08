@@ -1,6 +1,8 @@
 import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask, fold, tiles } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
+import { releaseTiming } from '../../../js/insights.js';
+import { loadSite, patchSiteBook, sameTitle } from '../../../js/sitepub.js';
 import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter, writtenMonth } from '../wcalc.js';
 import { goalTitle, goalToday, goalOver } from './goals.js';
 import { writtenChart } from '../wcharts.js';
@@ -167,6 +169,15 @@ function mountBookTaxonomy() {
   drawTags();
 }
 
+// Лучший день выкладки — по всем книгам (js/insights.js): совет только при 3+ выходах в день и заметной разнице
+let rtCache = { key: '', v: null };
+function releaseTip(c) {
+  const key = [c.today, (c.data.sales || []).length, (c.data.w_books || []).map((b) => Object.keys(b.pub || {}).length).join(',')].join('|');
+  if (rtCache.key !== key) rtCache = { key, v: releaseTiming(c.data, c.settings, c.today) };
+  const t = rtCache.v?.tip;
+  return t ? `<p class="small" style="margin:10px 0 0">${ic('sparkle')} ${esc(t.text)}</p>` : '';
+}
+
 export function bookPage(a, id) {
   const c = a.ctx();
   const b = c.wbooksById[id];
@@ -267,6 +278,8 @@ export function bookPage(a, id) {
     </section>
     <label>Где выкладывается</label><div class="checks">${PLATFORMS.map((x) => `<label class="check"><input type="checkbox" name="pf" value="${x}"${(b.platforms || []).includes(x) ? ' checked' : ''}>${x}</label>`).join('')}</div>
     <label for="bx">Другие площадки (через запятую)</label><input id="bx" name="pfx" value="${esc(extra)}">
+    <label for="blu">Ссылка на книгу на Литнете</label><input id="blu" name="litnetUrl" type="url" inputmode="url" value="${esc(b.direct?.link || '')}" placeholder="https://litnet.com/ru/book/…">
+    <span class="bm-hint">Одна ссылка на всё: сама попадёт в план рекламы Директа, в пакет для таргетолога и на сайт (если там ещё пусто).</span>
     <div class="f2"><div><label for="bp">Глав в книге, примерно</label><input id="bp" name="planChapters" inputmode="numeric" value="${b.planChapters ?? ''}"></div>
     <div><label for="bi">Книга в приложении доходов</label><select id="bi" name="incomeBookId"><option value="">—</option>${c.incomeBooks.map((x) => opt(x.id, x.title, c.incomeIdOf(b))).join('')}</select></div></div>
     ${b.fileId ? '' : `<label for="bm">Объём сейчас, а.л. (книга без файла)</label><input id="bm" name="manualChars" inputmode="decimal" value="${b.chars != null ? alNum(b.chars) : ''}">`}
@@ -279,6 +292,7 @@ export function bookPage(a, id) {
   ${headCard(c, b, p)}
   <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><div class="row">${canEdit ? `<button data-act="ch.add" data-id="${b.id}" title="Отдельная вкладка в Google Документе">+ Глава</button>` : ''}<button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div></div>
     ${chs.length ? chaptersBlock() : `<p class="small muted" style="margin:8px 0 0">${canEdit ? 'Глав пока нет. Нажмите «+ Глава» — в Google Документе появится новая вкладка.' : 'Глав пока нет. Когда отмечаете выкладку, просто впишите название главы.'}</p>`}
+    ${(b.status || 'progress') === 'progress' ? releaseTip(c) : ''}
 </div>
   <div class="card"><div class="row between"><h2 style="margin:0">Прогресс и сроки</h2><button data-act="wb.dates" data-id="${b.id}">Сроки</button></div>
     <label class="inline-num">Глав в книге, примерно <input type="number" min="1" inputmode="numeric" value="${b.planChapters || ''}" placeholder="—" data-chg="wb.planCh" data-id="${b.id}"></label>
@@ -459,6 +473,17 @@ acts['wbook.addFile'] = async (d) => {
 };
 
 // ---------- карточка книги ----------
+// на сайте у книги ещё нет ссылки на Литнет — ставим ту же (вход владелицы); если уже есть своя — не трогаем
+async function siteLitnet(title, url) {
+  try {
+    const site = await loadSite();
+    const sb = site?.books?.find((x) => sameTitle(x.title, title));
+    if (!sb || sb.litnet) return;
+    const u = app().store.auth?.currentUser;
+    await patchSiteBook(title, { litnet: url }, u ? await u.getIdToken() : '');
+    toast('Ссылка на Литнет поставлена и на сайте');
+  } catch { /* сайт недоступен — ссылку можно вписать в админке */ }
+}
 forms['wbook.save'] = async (fd, f) => {
   const c = app().ctx(), b = c.wbooksById[f.dataset.id];
   const platforms = [...fd.getAll('pf'), ...String(fd.get('pfx') || '').split(',').map((x) => x.trim()).filter(Boolean)];
@@ -474,7 +499,12 @@ forms['wbook.save'] = async (fd, f) => {
   }
   if (patch.status === 'done' && b.status !== 'done') { patch.finishedAt = b.finishedAt || c.today; await syncFinish(c, { ...b, ...patch }); }
   if (patch.status !== 'done' && b.status === 'done') { patch.finishedAt = ''; await removeEvent(`w:${b.id}:finish`); }
+  // ссылка на книгу на Литнете — та же, что «Для таргетолога» в Маркетинге (w_books.direct.link): её берут Директ и пакет таргетологу
+  const lu = String(fd.get('litnetUrl') ?? b.direct?.link ?? '').trim();
+  if (lu && !/^https:\/\/(www\.)?litnet\.com\//.test(lu)) { toast('Нужна ссылка на книгу на Литнете: https://litnet.com/…'); return false; }
+  if (lu !== (b.direct?.link || '')) patch.direct = { ...(b.direct || { ads: [] }), link: lu };
   await app().store.patch('w_books', b.id, patch);
+  if (lu && patch.direct) siteLitnet(b.title, lu);
   toast(patch.status === 'done' && b.status !== 'done' ? `Сохранено — в «Доходах» книга завершится ${(releaseDate({ ...b, ...patch }) || c.today) > c.today ? 'в день выхода последней главы' : 'сегодня'}` : 'Книга, жанры и теги сохранены');
 };
 // ---------- выкладка глав: «выложила» / «запланировала» (отложенная) / «снять» — по главам и площадкам ----------

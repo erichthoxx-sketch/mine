@@ -24,10 +24,13 @@ export function promoLinksInline(c, bookId) {
     UTM · ${items.length} <span>${expired ? 'истекла ' : 'до '}${human(nearest.expires)}</span>
   </button>`;
 }
-export function promoLinksPanel(c, { bookId = '', compact = false, channel = '', title = '', hint = '', newChannel = '' } = {}) {
+export function promoLinksPanel(c, { bookId = '', compact = false, channel = '', title = '', hint = '', newChannel = '', newChannels = null } = {}) {
   const items = linkList(c, bookId, channel);
+  // несколько кнопок «+»: например, у профиля — отдельная ссылка для «Литнет платит» и для своего Директа
+  const btn = (ch, label) => `<button class="small-btn" data-act="utm.new"${bookId ? ` data-book="${esc(bookId)}"` : ''}${ch ? ` data-channel="${ch}"` : ''}>${label}</button>`;
+  const btns = newChannels ? newChannels.map(([ch, label]) => btn(ch, label)).join('') : btn(channel || newChannel, '+ Ссылка');
   return `<div class="${compact ? 'utm-panel utm-panel-compact' : 'card utm-panel'}">
-    <div class="row between"><h2 style="margin:0">${title || (channel==='social'?'Ссылки соцсетей':channel==='direct'?'Ссылки Директа':channel==='litnet'?'Ссылки «Литнет платит»':'UTM-ссылки')}</h2><button class="small-btn" data-act="utm.new"${bookId ? ` data-book="${esc(bookId)}"` : ''}${channel || newChannel ? ` data-channel="${channel || newChannel}"` : ''}>+ Ссылка</button></div>
+    <div class="row between"><h2 style="margin:0">${title || (channel==='social'?'Ссылки соцсетей':channel==='direct'?'Ссылки Директа':channel==='litnet'?'Ссылки «Литнет платит»':'UTM-ссылки')}</h2><div class="row">${btns}</div></div>
     ${hint ? `<p class="small muted" style="margin:4px 0 8px">${hint}</p>` : ''}
     ${!items.length ? '<p class="small muted">Ссылок пока нет.</p>' : `
       <div class="utm-list">${items.map(x=>`<div class="utm-item">
