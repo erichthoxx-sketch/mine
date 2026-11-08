@@ -134,7 +134,7 @@ function externalTargetSection(c) {
     <div class="list">${partners.map(x=>{
       const tasks=targetReminders(x,c.today);
       const sub=[x.campaignNote, x.partnerStatus==='paused'?'На паузе':x.partnerStatus==='done'?'Сотрудничество завершено':'В работе',tasks.length?`дел: ${tasks.length}`:''].filter(Boolean).map(esc).join(' · ');
-      return `<a class="item target-linked-item" href="pisatel/#/link/${encodeURIComponent(x.id)}"><b>${esc(x.name)}</b>${sub?`<span class="sub">${sub}</span>`:''}${tasks.length?`<span class="small muted">${esc(tasks[0].text)}${tasks[0].date?' · '+fmtDate(tasks[0].date):''}</span>`:''}</a>`;
+      return `<a class="item target-linked-item" href="workshop/#/link/${encodeURIComponent(x.id)}"><b>${esc(x.name)}</b>${sub?`<span class="sub">${sub}</span>`:''}${tasks.length?`<span class="small muted">${esc(tasks[0].text)}${tasks[0].date?' · '+fmtDate(tasks[0].date):''}</span>`:''}</a>`;
     }).join('')}</div>
     <p class="small muted" style="margin:8px 0 0">Контакты и договоренности — без добавления расходов. Бюджеты учитываются только через кампании и отчеты.</p>
   </div>`;

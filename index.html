@@ -25,7 +25,7 @@ setTimeout(function () {
 window.__V = '__APPV__';
 (function () {
   if (window.__V.indexOf('__') === 0) return; // локальная разработка
-  var url = (location.pathname.indexOf('/pisatel/') >= 0 ? '../' : '') + 'version.txt';
+  var url = (/\/(workshop|pisatel)\//.test(location.pathname) ? '../' : '') + 'version.txt';
   function check() {
     fetch(url + '?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (v) {
       v = (v || '').trim();

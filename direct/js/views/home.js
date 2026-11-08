@@ -47,7 +47,7 @@ function partnerPanel(c) {
     <div class="list">${people.map(p=>{
       const tasks=targetReminders(p,c.today);
       const last=[...(p.log||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
-      return `<a class="item target-linked-item" href="../pisatel/#/link/${encodeURIComponent(p.id)}"><b>${esc(p.name)}</b>
+      return `<a class="item target-linked-item" href="../workshop/#/link/${encodeURIComponent(p.id)}"><b>${esc(p.name)}</b>
         <span class="sub">${[p.campaignNote, p.partnerStatus==='paused'?'На паузе':p.partnerStatus==='done'?'Завершено':'В работе'].filter(Boolean).map(esc).join(' · ')}</span>
         ${tasks.length?`<span class="small muted">Следующее: ${esc(tasks[0].text)}${tasks[0].date?' · '+tasks[0].date:''}</span>`:last?`<span class="small muted">Последнее: ${esc(last.text)}</span>`:''}</a>`;
     }).join('')}</div><p class="small muted" style="margin:8px 0 0">Здесь только договоренности и дела. Расходы и ставки не меняются.</p></div>`;

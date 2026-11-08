@@ -4,7 +4,7 @@
 Работает в браузере на телефоне и компьютере; данные в Firebase (бесплатно), вход по почте.
 
 - **Доходы:** https://erichthoxx-sketch.github.io/mine/ — настройка: [docs/SETUP.md](docs/SETUP.md)
-- **Мастерская** (книги на Google Диске, идеи, планер, маркетинг): https://erichthoxx-sketch.github.io/mine/pisatel/ — подключение Диска: [docs/SETUP-WRITER.md](docs/SETUP-WRITER.md)
+- **Мастерская** (книги на Google Диске, идеи, планер, маркетинг): https://erichthoxx-sketch.github.io/mine/workshop/ — подключение Диска: [docs/SETUP-WRITER.md](docs/SETUP-WRITER.md)
 - **Для нейросетей и разработчиков:** полная инструкция — [AGENTS.md](AGENTS.md)
 - **Расчёты:** `js/calc.js` (доходы), `js/parse.js` (разбор файлов), `writer/js/wcalc.js` (знаки, конкурсы, прогнозы). Тесты: `npm test`
 - Firebase настроен: данные хранятся в аккаунте и синхронизируются между телефоном и компьютером. Пробный режим (данные только в браузере) включается лишь при проверке на своём компьютере (localhost).
