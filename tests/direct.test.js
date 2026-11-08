@@ -431,3 +431,27 @@ test('сайт: адреса книг в приложениях совпадаю
   const raw = { v: 4, books: [{ id: 'a1', title: 'Тише *воды*' }, { id: 'a2', title: 'Тише воды' }, { id: 'a3', title: 'X', slug: 'Моя-книга' }], blocks: [] };
   assert.deepEqual(siteInfo(raw).books.map((b) => b.url), normalize(raw).books.map((b) => b.url));
 });
+
+test('Стартовые минус-слова: чего не хватает в кампании', async () => {
+  const { starterMinusMissing, STARTER_MINUS, toRequest } = await import('../direct/js/dcalc.js');
+  assert.equal(starterMinusMissing([]).length, STARTER_MINUS.length);
+  assert.ok(!starterMinusMissing(['-скачать', 'FB2']).includes('скачать'));
+  assert.ok(!starterMinusMissing(['-скачать', 'FB2']).includes('fb2'));
+  // добавление не стирает минус-слова, которые уже стоят в кампании
+  const q = toRequest({ do: 'minus', campaign: 1, phrases: ['скачать'] }, { negatives: ['бесплатно'] });
+  assert.deepEqual(q.params.Campaigns[0].NegativeKeywords.Items.sort(), ['бесплатно', 'скачать']);
+});
+
+test('Смена цели: меняется только цель, бюджет и ставки — как были', async () => {
+  const { withGoal, moneyOf, describe } = await import('../direct/js/dcalc.js');
+  const raw = { Id: 7, UnifiedCampaign: { BiddingStrategy: {
+    Search: { BiddingStrategyType: 'WB_MAXIMUM_CONVERSION_RATE', WbMaximumConversionRate: { GoalId: 111, CustomPeriodBudget: { SpendLimit: 10000000000, StartDate: '2026-11-10', EndDate: '2026-12-01', AutoContinue: 'NO' } } },
+    Network: { BiddingStrategyType: 'SERVING_OFF' } } } };
+  const g = withGoal(raw, 222);
+  assert.equal(g.from, 111);
+  assert.equal(g.params.Campaigns[0].UnifiedCampaign.BiddingStrategy.Search.WbMaximumConversionRate.GoalId, 222);
+  assert.deepEqual(moneyOf(g.strategy), moneyOf(raw.UnifiedCampaign.BiddingStrategy));
+  assert.equal(raw.UnifiedCampaign.BiddingStrategy.Search.WbMaximumConversionRate.GoalId, 111); // исходник не тронут
+  assert.throws(() => withGoal({ Id: 8, TextCampaign: { BiddingStrategy: { Search: { BiddingStrategyType: 'WB_MAXIMUM_CLICKS', WbMaximumClicks: { WeeklySpendLimit: 1 } } } } }, 222), /не конверсии/);
+  assert.match(describe({ do: 'goal', campaign: 7, goal: 222, goalName: 'Покупка' }, { campaigns: {} }), /бюджет и ставки не меняются/);
+});

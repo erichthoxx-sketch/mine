@@ -3,13 +3,13 @@ import { esc, acts, more } from '../../../js/ui.js';
 import { rub, num, pct, fmtShort } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
-import { totals, spendSeries, budgetPace, queryHints, keywordHints, withAvgCpc, goalHints, goalTotals, fatigueHints, spendAdvice, spendHint, DEFAULT_TEST_BUDGET } from '../dcalc.js';
+import { totals, spendSeries, budgetPace, queryHints, keywordHints, withAvgCpc, goalHints, goalTotals, fatigueHints, spendAdvice, spendHint, DEFAULT_TEST_BUDGET, starterMinusMissing } from '../dcalc.js';
 import { royaltyPerSale } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { stateDot, tiles, actBtn, q } from './common.js';
 import { demo } from '../demo.js';
 import { OUTAGE_TEXT } from '../api.js';
-import { resolvedLaunches } from './launchctx.js';
+import { resolvedLaunches, goalSwitch } from './launchctx.js';
 import { outageNotice } from '../adcontext.js';
 import { launchStrip, phaseSteps } from './launch.js';
 import { ic } from '../../../js/icons.js';
@@ -96,6 +96,13 @@ export function todo(main, stats, ctx = null) {
   // выгорание: сначала то, что уже выгорает, потом «пора готовить замену»
   if (ctx) for (const h of fatigueHints({ main, stats, today: ctx.today, goals: metrikaOf(ctx)?.main || null, skip: outageSet(ctx.data.days || []) }).slice(0, 2)) {
     out.push(`<div class="item"><div class="row between"><b>${esc(h.title)}</b>${h.act ? actBtn(h.act, h.actLabel, 'small-btn') : ''}</div><div class="small muted">${esc(h.how)} · ${lessonLink(h.lesson)}</div></div>`);
+  }
+  // старт подписки — сменить цель кампании запуска на покупку
+  if (ctx && !demo.on) for (const L of resolvedLaunches(app())) { const g = goalSwitch(L.plan); if (g) out.unshift(`<div class="item"><div class="row between"><b>«${esc(L.plan.book)}»: началась подписка — цель на покупку</b>${actBtn(g, 'Сменить цель', 'small-btn')}</div><div class="small muted">Кампания «${esc(L.plan.picked.name)}» всё ещё учится на добавлениях в библиотеку. Бюджет и ставки не меняются.</div></div>`); }
+  // у идущей кампании нет стартовых минус-слов (скачать, fb2, аудиокнига…) — добавить одной кнопкой
+  for (const camp of (main.campaigns || []).filter((x) => x.state === 'ON')) {
+    const miss = starterMinusMissing(camp.negatives || []);
+    if (miss.length >= 5) out.push(`<div class="item"><div class="row between"><b>«${esc(camp.name)}»: нет стартовых минус-слов</b>${actBtn({ do: 'minus', campaign: camp.id, phrases: miss, why: 'по таким запросам ищут файл, озвучку или экранизацию, а не книгу на Литнете' }, 'Добавить', 'small-btn')}</div><div class="small muted">${esc(miss.join(', '))} — деньги на такие запросы уходят впустую.</div></div>`);
   }
   const neg = Object.fromEntries((main.campaigns || []).map((c) => [c.id, c.negatives || []]));
   for (const h of queryHints(stats.queries, neg).slice(0, 3)) {

@@ -295,6 +295,7 @@ export function describe(a, names = {}) {
     case 'bid': return `Фраза ${nm('keywords', a.keyword)}: ставка на поиске ${String(a.rub).replace('.', ',')} ₽`;
     case 'keywords': return `Группа ${nm('groups', a.group)}: добавить фразы — ${a.phrases.join(', ')}`;
     case 'counter': return `Кампания ${nm('campaigns', a.campaign)}: привязать счётчик Метрики №${a.counter}`;
+    case 'goal': return `Кампания ${nm('campaigns', a.campaign)}: стратегия — на цель «${a.goalName || a.goal}» (бюджет и ставки не меняются)`;
     default: return 'Неизвестное действие';
   }
 }
@@ -601,4 +602,34 @@ export function auditCampaign({ camp, main = {}, stats = {}, log = [], today, ec
   for (const x of weekInsights(daily, today, cid).filter((x) => x.kind !== 'few').slice(0, 1)) add(x.kind === 'good' ? 'ok' : x.kind === 'calm' ? 'info' : 'fix', 'Динамика', x.text, x.why || '', { lesson: x.lesson });
   const order = { fix: 0, wait: 1, info: 2, ok: 3 };
   return { items: out.sort((a, b) => order[a.status] - order[b.status]), w, m30 };
+}
+
+// Стартовые минус-слова для книги на Литнете: эти запросы ищут не покупку — скачать файл, послушать, посмотреть экранизацию
+export const STARTER_MINUS = ['скачать', 'торрент', 'fb2', 'epub', 'txt', 'pdf', 'флибуста', 'аудиокнига', 'слушать', 'озвучка', 'фильм', 'сериал', 'краткое'];
+export function starterMinusMissing(negatives = []) {
+  const have = new Set(negatives.map((x) => String(x).toLowerCase().replace(/^[-!+"\s]+|["\s]+$/g, '')));
+  return STARTER_MINUS.filter((w) => !have.has(w));
+}
+
+// Смена цели стратегии (старт подписки: «добавление в библиотеку» → «покупка»). Бюджет не трогаем:
+// берём стратегию кампании целиком, как её только что отдал Директ, и меняем в ней ТОЛЬКО GoalId.
+// raw — кампания из campaigns.get ({Id, Type, UnifiedCampaign|TextCampaign: {BiddingStrategy: {Search, Network}}})
+const MONEY_KEYS = ['WeeklySpendLimit', 'BidCeiling', 'AverageCpa', 'Cpa', 'SpendLimit', 'FilterAverageCpa'];
+export function moneyOf(bs = {}) {
+  const out = {};
+  const walk = (o, path) => { for (const [k, v] of Object.entries(o || {})) { if (v && typeof v === 'object') walk(v, path + k + '.'); else if (MONEY_KEYS.includes(k)) out[path + k] = v; } };
+  walk(bs, '');
+  return out;
+}
+export function withGoal(raw, goalId) {
+  const key = raw?.UnifiedCampaign ? 'UnifiedCampaign' : raw?.TextCampaign ? 'TextCampaign' : null;
+  const bs = key && raw[key].BiddingStrategy;
+  if (!bs) throw new Error('Директ не отдал стратегию кампании');
+  const next = JSON.parse(JSON.stringify(bs));
+  let found = false, from = null;
+  for (const side of ['Search', 'Network']) for (const [k, v] of Object.entries(next[side] || {})) {
+    if (v && typeof v === 'object' && 'GoalId' in v) { from = from ?? v.GoalId; v.GoalId = Number(goalId); found = true; }
+  }
+  if (!found) throw new Error('Стратегия кампании оптимизирует не конверсии (например, клики) — цель в ней не меняется. Сменить стратегию можно в кабинете Директа.');
+  return { key, from, strategy: next, params: { Campaigns: [{ Id: raw.Id, [key]: { BiddingStrategy: next } }] } };
 }

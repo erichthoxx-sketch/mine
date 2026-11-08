@@ -7,6 +7,9 @@ import { creatorOf, workshopAds, validateCreator, campaignPayload, groupPayload,
 import { resolvedLaunch, launchGoal, saveLaunch } from './launchctx.js';
 import { exactTag, bookMatches, readyForCampaign } from '../litnetcalc.js';
 import { promoChannel } from '../../../writer/js/promolinks.js';
+import { spoilerList, spoilerHits } from '../../../js/spoilers.js';
+import { STARTER_MINUS } from '../dcalc.js';
+import { actBtn } from './common.js';
 
 const app = () => window.__app;
 // книга Мастерской этого запуска — её объявления идут в черновик
@@ -97,6 +100,7 @@ export function creatorCard(a, fl, m) {
           <label>Тексты (с новой строки, до 81 знака каждый)</label>
           <textarea name="texts" rows="3" required>${esc(d.texts)}</textarea>
           <p class="small muted">${fromWs ? 'Заголовки и тексты — из Мастерской (Маркетинг → книга → «Объявления для Директа»). ' : 'Свои объявления можно завести в Мастерской: Маркетинг → книга → «Объявления для Директа» — они подставятся сюда сами. '}Будет создано комбинаторное объявление со ссылкой из раздела «Книга и экономика». Обложку добавим позже.</p>
+          ${spoilerHits([d.titles, d.texts].join(' '), spoilerList(wb)).map((h) => `<p class="small down">Раскрывает поворот «${esc(h)}» — уберите это из заголовков и текстов.</p>`).join('')}
           <div class="row d-save"><button type="submit">Сохранить объявление</button></div>
         </form>
         ${btn('fl.createAd','Создать объявление без модерации',blocked || !fl.bookUrl)}
@@ -112,6 +116,7 @@ export function creatorCard(a, fl, m) {
         </form>
         ${btn('fl.createKeywords','Добавить ключевые фразы',blocked)}
       ` : '<p class="small up">✓ Фразы добавлены.</p>'}
+      ${(a.ctx().data.d_log || []).some((l) => l.do === 'minus' && l.ok && String(l.cid) === String(id)) ? '<p class="small up">✓ Стартовые минус-слова добавлены.</p>' : `<div class="item"><b>Стартовые минус-слова</b><div class="small muted">${STARTER_MINUS.join(', ')} — по таким запросам ищут файл, озвучку или экранизацию, а не книгу на Литнете. Деньги на них не уйдут.</div>${actBtn({ do: 'minus', campaign: Number(id), phrases: STARTER_MINUS, why: 'стартовый список: эти запросы ищут не покупку книги на Литнете' }, 'Добавить минус-слова', 'small-btn')}</div>`}
       <p class="small">Теперь проверь кампанию в <a href="https://direct.yandex.ru/" target="_blank" rel="noopener">Директе ↗</a>. На модерацию и в показы приложение ее не отправляло.</p>
     ` : ''}
   </div>
@@ -195,7 +200,8 @@ acts['fl.createAd'] = async () => {
   if (!d.suspended || !d.groupId || d.adId) return false;
   let payload;
   try { payload=adPayload(d,d.groupId,current().plan.bookUrl); }catch(e){toast(e.message);return false;}
-  if (!(await confirmWrite('Создать комбинаторное объявление-черновик? Модерация не запускается.', 'Создать объявление')))return false;
+  const hits=spoilerHits([d.titles,d.texts].join(' '),spoilerList(wbOf(a,fl)));
+  if (!(await confirmWrite(hits.length?`Объявление раскрывает «${hits.join('», «')}». Всё равно создать?`:'Создать комбинаторное объявление-черновик? Модерация не запускается.', 'Создать объявление')))return false;
   busy=true;
   try {const id=addedId(await createAd(s,payload),'Объявление');await save({adId:String(id)});toast('Объявление создано');}
   catch(e){toast('Ошибка объявления: '+(e.message||e));}

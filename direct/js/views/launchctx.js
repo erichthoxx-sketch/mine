@@ -46,3 +46,10 @@ export async function saveLaunch(a, id, patch) {
 }
 // Цель для стратегии «на конверсии»: до подписки — библиотека, с подпиской — покупка
 export const launchGoal = (plan) => (plan.phase === 'paid' ? plan.buy : plan.lib || plan.buy) || null;
+
+// Старт подписки: стратегия кампании запуска всё ещё на цели «библиотека» — смена на «покупку» одной кнопкой (с подтверждением)
+export function goalSwitch(plan) {
+  const k = plan?.picked, buy = plan?.buy;
+  if (!plan || plan.phase !== 'paid' || !k || !buy || !k.goal || Number(k.goal) === Number(buy.id)) return null;
+  return { do: 'goal', campaign: k.id, goal: Number(buy.id), goalName: buy.name, why: 'началась подписка — теперь главное покупки, а не добавления в библиотеку' };
+}

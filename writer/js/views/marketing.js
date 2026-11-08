@@ -1,3 +1,4 @@
+import { spoilerList, spoilerHits } from '../../../js/spoilers.js';
 import { contestCalendar } from './ccal.js';
 import { esc, acts, changes, openSheet, closeSheet, opt, toast, uid, ask, download, copyRich } from '../../../js/ui.js';
 import { fmtDate } from '../../../js/format.js';
@@ -162,9 +163,11 @@ function targetBlock(c, b) {
   <div class="card"><div class="row between"><h2 style="margin:0">Объявления для Яндекс Директа</h2><button data-act="mk.ad" data-id="${b.id}">+ Объявление</button></div>
     ${dr.ads.length ? `<div class="list">${dr.ads.map((x, i) => `<div class="item"><div class="row between"><b>${esc(x.h1 || 'Без заголовка')}</b><button class="link" style="padding:0" data-act="mk.ad" data-id="${b.id}" data-i="${i}">изменить</button></div>
       ${x.h2 ? `<div>${esc(x.h2)}</div>` : ''}<div class="small">${esc(x.text || '')}</div>
-      <div class="small">Заголовок ${len(x.h1, DIRECT.h1)} · доп. заголовок ${len(x.h2, DIRECT.h2)} · текст ${len(x.text, DIRECT.text)}</div></div>`).join('')}</div>` : '<p class="small muted" style="margin:8px 0 0">Добавьте 2–4 варианта: таргетолог запустит их и оставит лучший.</p>'}
+      <div class="small">Заголовок ${len(x.h1, DIRECT.h1)} · доп. заголовок ${len(x.h2, DIRECT.h2)} · текст ${len(x.text, DIRECT.text)}</div>
+      ${spoilerHits([x.h1, x.h2, x.text].join(' '), spoilerList(b)).map((h) => `<div class="small down">Раскрывает: «${esc(h)}»</div>`).join('')}</div>`).join('')}</div>` : '<p class="small muted" style="margin:8px 0 0">Добавьте 2–4 варианта: таргетолог запустит их и оставит лучший.</p>'}
     <h3>Для таргетолога</h3>
     <div class="kv"><div><span>Ссылка на книгу</span><b>${dr.link ? esc(dr.link) : '—'}</b></div><div><span>Аудитория</span><b>${dr.audience ? esc(dr.audience) : '—'}</b></div></div>
+    ${spoilerList(b).length ? `<p class="small" style="margin:0 0 8px">Не раскрывать в рекламе: ${spoilerList(b).map((x) => `«${esc(x)}»`).join(', ')}</p>` : '<p class="small muted" style="margin:0 0 8px">Повороты, которые нельзя выдавать в рекламе, можно записать в «Ссылка, аудитория, пожелания» — приложение будет предупреждать.</p>'}
     ${dr.notes ? `<p class="small" style="margin:0 0 8px">${esc(dr.notes)}</p>` : ''}
     <div class="row"><button data-act="mk.brief" data-id="${b.id}">Ссылка, аудитория, пожелания</button></div></div>
   <div class="card"><h2>Отправить таргетологу</h2>
@@ -279,6 +282,8 @@ acts['mk.ad'] = (d) => {
     const ad = { h1: (fd.get('h1') || '').trim(), h2: (fd.get('h2') || '').trim(), text: (fd.get('text') || '').trim() };
     const ads = [...dr.ads]; if (i != null) ads[i] = ad; else ads.push(ad);
     await app().store.patch('w_books', b.id, { direct: { ...dr, ads } });
+    const hit = spoilerHits([ad.h1, ad.h2, ad.text].join(' '), spoilerList(b));
+    if (hit.length) toast(`Осторожно: объявление раскрывает «${hit.join('», «')}»`);
   });
 };
 acts['mk.adDel'] = async (d) => {
@@ -290,8 +295,10 @@ acts['mk.brief'] = (d) => {
   const b = app().ctx().wbooksById[d.id], dr = directOf(b);
   openSheet('Для таргетолога', `<label for="bl">Ссылка на книгу на Литнете</label><input id="bl" name="link" value="${esc(dr.link || '')}" placeholder="https://litnet.com/ru/book/…">
     <label for="ba">Аудитория и интересы</label><textarea id="ba" name="audience" placeholder="женщины 25–55, любовные романы, бытовое фэнтези…">${esc(dr.audience || '')}</textarea>
-    <label for="bn">Пожелания</label><textarea id="bn" name="notes" placeholder="бюджет, сроки, что уже пробовали">${esc(dr.notes || '')}</textarea>`, async (fd) => {
-    await app().store.patch('w_books', b.id, { direct: { ...dr, link: (fd.get('link') || '').trim(), audience: (fd.get('audience') || '').trim(), notes: (fd.get('notes') || '').trim() } });
+    <label for="bn">Пожелания</label><textarea id="bn" name="notes" placeholder="бюджет, сроки, что уже пробовали">${esc(dr.notes || '')}</textarea>
+    <label for="bs">Не раскрывать в рекламе</label><textarea id="bs" name="spoilers" placeholder="каждый поворот с новой строки, например: муж жив">${esc(dr.spoilers || '')}</textarea>
+    <div class="hint">Приложение предупредит, если объявление здесь, в Директе или на сайте выдаёт это. Таргетолог тоже получит этот список в пакете.</div>`, async (fd) => {
+    await app().store.patch('w_books', b.id, { direct: { ...dr, link: (fd.get('link') || '').trim(), audience: (fd.get('audience') || '').trim(), notes: (fd.get('notes') || '').trim(), spoilers: (fd.get('spoilers') || '').trim() } });
   });
 };
 acts['mk.synopsis'] = (d) => acts['syn.edit']({ id: d.id, back: '/mk/' + d.id });
@@ -299,7 +306,7 @@ acts['mk.synopsis'] = (d) => acts['syn.edit']({ id: d.id, back: '/mk/' + d.id })
 // ---------- пакеты одной кнопкой ----------
 function targetText(c, b) {
   const dr = directOf(b), p = promoOf(b);
-  const lines = [...[`Книга: «${b.title}»`, dr.link ? `Ссылка: ${dr.link}` : null, dr.audience ? `Аудитория: ${dr.audience}` : null, dr.notes ? `Пожелания: ${dr.notes}` : null].filter(Boolean), ''];
+  const lines = [...[`Книга: «${b.title}»`, dr.link ? `Ссылка: ${dr.link}` : null, dr.audience ? `Аудитория: ${dr.audience}` : null, dr.notes ? `Пожелания: ${dr.notes}` : null, spoilerList(b).length ? `Не раскрывать в рекламе (сюжетные повороты): ${spoilerList(b).join('; ')}` : null].filter(Boolean), ''];
   dr.ads.forEach((x, i) => lines.push(...[`Объявление ${i + 1}`, `Заголовок: ${x.h1}`, x.h2 ? `Доп. заголовок: ${x.h2}` : null, `Текст: ${x.text}`].filter(Boolean), ''));
   if (p.annotation) lines.push('Аннотация:', p.annotation, '');
   return lines.filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n').trim();

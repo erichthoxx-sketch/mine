@@ -1,3 +1,4 @@
+import { spoilerList, spoilerHits } from '../../js/spoilers.js';
 // «Мой сайт» (Связи): что сделать на сайте — находится само, сверкой «Мастерской» с сайтом. Чистые функции.
 import { sameTitle } from '../../js/sitepub.js';
 import { addDays, diffDays } from '../../js/calc.js';
@@ -35,6 +36,13 @@ export function siteChecks({ wbooks = [], site = null, subs = null, seenAt = '' 
     }
     if (s.hidden) out.push({ k: 'hidden:' + b.id, title: `Книга «${b.title}» скрыта на сайте`, why: 'Читатели её не видят. Если скрыли нарочно — всё в порядке.', admin: true, soft: true });
     else if (b.status === 'done' && s.status !== 'done') out.push({ k: 'done:' + b.id, title: `Отметить на сайте: «${b.title}» завершена`, why: 'В Мастерской книга завершена, а на сайте всё ещё «Пишу». Завершённую книгу охотнее покупают.', admin: true });
+    // тексты книги на сайте не должны выдавать повороты из «Не раскрывать в рекламе» (Мастерская → Маркетинг → книга)
+    const SITE_F = { tagline: 'крючок', short: 'короткое описание', ann: 'аннотация', quotes: 'цитаты', excerpt: 'отрывок' };
+    const sp = spoilerList(b);
+    if (sp.length) for (const [f, name] of Object.entries(SITE_F)) {
+      const hit = spoilerHits(s[f], sp);
+      if (hit.length) out.push({ k: `spoil:${b.id}:${f}`, title: `На сайте «${b.title}»: ${name} раскрывает «${hit.join('», «')}»`, why: 'Это есть в списке «Не раскрывать в рекламе». Поправьте текст в админке сайта → «Книги».', admin: true });
+    }
   }
   if (site.subOn && site.giftName && !site.giftUrl) out.push({ k: 'gift', title: 'Добавить ссылку на подарок', why: `Читатели подписываются ради «${site.giftName}», но скачать пока нечего.`, admin: true });
   if (subs) {

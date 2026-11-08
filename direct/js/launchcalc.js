@@ -123,12 +123,12 @@ export function launchPlan(cfg, { today, wbooks = [], siteBooks = [], metrika = 
       step('limit', cfg.limitVerified, `Недельный бюджет ≈ ${money.freeWeek} ₽`),
     ],
     paid: [
-      step('switch', cfg.buySwitched, `Главная цель — «${buy?.name || 'Покупка книги'}»`, 'В день старта подписки: стратегия → целевые действия → покупка главной (библиотеку можно оставить второй).'),
+      step('switch', cfg.buySwitched || (picked?.goal && buy && Number(picked.goal) === Number(buy.id)), `Главная цель — «${buy?.name || 'Покупка книги'}»`, 'В день старта подписки: стратегия → целевые действия → покупка главной (библиотеку можно оставить второй).'),
       step('limit2', cfg.limit2Verified, `Недельный бюджет ≈ ${money.paidWeek} ₽ на подписку`),
     ],
   };
   const next = phase === 'prep' ? { date: pubDate, text: 'первая глава — включаем рекламу' } : phase === 'free' ? { date: subDate, text: subDate ? 'старт подписки — меняем цель на покупку' : 'дата старта подписки ещё не известна' } : { date: subDate ? addD(subDate, 14) : '', text: 'две недели подписки — подводим итоги' };
-  return { book: cfg.book, wb, sb, pubDate, subDate, bookUrl, src, phase, lib, buy, royalty: roy, libValue: lv, money, picked, steps, next, daysToNext: next.date ? dayDiff(today, next.date) : null };
+  return { book: cfg.book, wb, sb, pubDate, subDate, bookUrl, src, phase, lib, buy, royalty: roy, libValue: lv, money, picked, steps, next, mk: mkTotals, daysToNext: next.date ? dayDiff(today, next.date) : null };
 }
 
 // Даты для Планера Мастерской (и оттуда — в Todoist)

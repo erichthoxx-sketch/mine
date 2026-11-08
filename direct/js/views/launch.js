@@ -4,7 +4,8 @@
 import { esc, forms, changes, toast, ask, N, opt } from '../../../js/ui.js';
 import { rub, num, fmtShort, fmtMonth } from '../../../js/format.js';
 import { launchMetrics, PHASES } from '../launchcalc.js';
-import { resolvedLaunch, saveLaunch as saveL } from './launchctx.js';
+import { resolvedLaunch, saveLaunch as saveL, goalSwitch } from './launchctx.js';
+import { actBtn } from './common.js';
 import { demo } from '../demo.js';
 import { creatorCard } from './creator.js';
 
@@ -23,6 +24,21 @@ export function launchStrip(p) {
 const stepRow = (s) => `<div class="fl-check-item ${s.ok ? 'fl-check-done' : ''}">${MANUAL.includes(s.flag) ? `<input type="checkbox" data-chg="fl.check" data-k="${s.flag}"${s.ok ? ' checked' : ''}>` : `<span class="fl-check-icon" aria-hidden="true">${s.ok ? '✓' : '○'}</span>`}<span>${esc(s.text)}${!s.ok && s.how ? `<span class="sub">${esc(s.how)}</span>` : ''}</span></div>`;
 const FLAG = { creative: 'creativeReady', limit: 'limitVerified', goal: 'goalVerified', switch: 'buySwitched', limit2: 'limit2Verified' };
 export const phaseSteps = (p) => (p.steps[p.phase] || []).map((s) => ({ ...s, flag: FLAG[s.id] }));
+
+// Догнать тех, кто добавил книгу в библиотеку, но не купил: условие ретаргетинга по целям Метрики (справка Яндекса: «в качестве
+// условия можно использовать любую цель, созданную в Яндекс Метрике»). Размер — порядок: в Метрике это достижения целей, а не люди.
+function retargetHtml(p) {
+  if (!p.lib || !p.buy) return '';
+  const n = p.mk ? Math.max(0, (p.mk.lib || 0) - (p.mk.buy || 0)) : null;
+  return `<div class="card fl-panel"><details class="d-more"><summary>Догнать тех, кто добавил книгу, но не купил</summary>
+    <p class="small">Это самые тёплые читательницы: книга им уже понравилась. Реклама в сетях им напомнит о книге — особенно в старт подписки и в дни скидки.${n != null ? ` За 30 дней «${esc(p.lib.name)}» — ${num(p.mk.lib)}, «${esc(p.buy.name)}» — ${num(p.mk.buy)}: догонять есть кого (порядка ${num(n)}; в Метрике это достижения целей, а не люди — точное число покажет Директ).` : ''}</p>
+    <div class="list fl-how">
+      <div class="item"><b>1. Условие</b><div class="small">В Директе — условие ретаргетинга (в настройках группы объявлений или в разделе «Ретаргетинг и аудитории», смотря какой у вас интерфейс): цель Метрики «${esc(p.lib.name)}» за 30 дней. Если в условии можно исключить цель — исключите «${esc(p.buy.name)}», чтобы не тратиться на тех, кто уже купил.</div></div>
+      <div class="item"><b>2. Кампания</b><div class="small">Отдельная кампания только в рекламной сети с этим условием, ссылка — та же страница книги на Литнете. Небольшой бюджет: аудитория маленькая, частые показы раздражают.</div></div>
+      <div class="item"><b>3. Объявление</b><div class="small">Для своих: про то, что вышло дальше, старт подписки или скидку — без сюжетных поворотов. Например: «Продолжение уже на Литнете».</div></div>
+    </div>
+    <p class="small muted">Если в Директе нет нужной цели или условия — проверьте, что счётчик Метрики привязан к рекламному кабинету (⚙ Настройки → «Яндекс Метрика»).</p></details></div>`;
+}
 
 // Настройка кампании под книгу — конкретно, на цифрах плана
 function setupHtml(p) {
@@ -55,11 +71,13 @@ export function launchView(a, id = null) {
       ${launchStrip(p)}
       <h3 class="fl-now">Сейчас: ${p.phase === 'prep' ? 'готовим кампанию' : p.phase === 'free' ? 'копим добавления в библиотеку' : 'продаём подписку'} <span class="small muted">${done} из ${steps.length}</span></h3>
       <div class="fl-checklist">${steps.map(stepRow).join('')}</div>
+      ${goalSwitch(p) ? `<div class="row" style="margin-top:10px">${actBtn(goalSwitch(p), `Сменить цель на «${esc(p.buy.name)}»`, 'primary')}<span class="small muted">бюджет и ставки не меняются</span></div>` : ''}
     </div>
     <div class="card fl-panel"><div class="row between"><h2 style="margin:0">Деньги</h2><span class="small muted">${money(p.money.budget)} ${p.money.src === 'direct' ? '· из Директа' : '· план'}</span></div>
       <div class="fl-checklist">${bc.lines.map((l) => `<div class="fl-check-item ${l.ok ? 'fl-check-done' : ''}"><span class="fl-check-icon" aria-hidden="true">${l.ok ? '✓' : '!'}</span><span>${l.k === 'month' ? `${esc(fmtMonth(l.month))}: ` : ''}${esc(l.text)}</span></div>`).join('')}</div>
       <p class="small muted">Цена клика — ${esc(bc.cpcSrc)} (${String(Math.round(bc.cpc * 10) / 10).replace('.', ',')} ₽), доля «в библиотеку» для рекламы — ${String(Math.round(bc.cr * 1000) / 10).replace('.', ',')} % (половина от вашей по Метрике). Цели месяцев — из «Доходов». Пересчитывается само, когда появятся данные кампании.</p></div>
     <div class="card fl-panel"><details class="d-more"${p.phase === 'prep' ? ' open' : ''}><summary>Как настроить кампанию под книгу</summary>${setupHtml(p)}</details></div>
+    ${p.phase !== 'prep' ? retargetHtml(p) : ''}
     <div class="card fl-panel"><details class="d-more"${!p.subDate || !p.bookUrl ? ' open' : ''}><summary>Даты, ссылка и деньги</summary>
       <p class="small muted">Первая глава — ${p.pubDate ? `${fmtShort(p.pubDate)} (${SRC[p.src.pub]})` : 'не задана'} · старт подписки — ${p.subDate ? `${fmtShort(p.subDate)} (${SRC[p.src.sub]})` : 'пока не известен: поставьте на сайте в книге «Дата старта подписки» или здесь'} · ссылка — ${p.bookUrl ? SRC[p.src.url] : 'нет'}${p.royalty ? ` · доход с покупки ≈ ${money(p.royalty)}` : ''}</p>
       <form data-form="fl.plan" class="settings-form fl-form">

@@ -2,7 +2,7 @@
 // d_snap/main  — кампании, группы, фразы, объявления;  d_snap/stats — расход по дням, фразы и запросы за 30 дней.
 // Расход связанных кампаний уходит в «Доходы» недельными отчётами (там считается окупаемость).
 import { call, report, metrika } from './api.js';
-import { MICRO, dailyRows, mergeDaily, adRows, mergeAdDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows } from './dcalc.js';
+import { MICRO, dailyRows, mergeDaily, adRows, mergeAdDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows, withGoal, moneyOf } from './dcalc.js';
 import { demoSnapshot, demoMetrikaSnap, demoSiteSnap, isDemo, snap, putSnap, putLog } from './demo.js';
 import { todayISO, addDays, weekStart } from '../../js/calc.js';
 import { SESSION_METRICS, goalMetric, mkRows, SITE_COUNTER, siteGoalIds } from './mcalc.js';
@@ -28,6 +28,8 @@ export async function refresh(app, { onStep = () => {} } = {}) {
     if (e.transient || [53, 58, 513].includes(e.code)) throw e;
     cr = await getSafe(s, 'campaigns', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy'], UnifiedCampaignFieldNames: ['BiddingStrategy'] }, { SelectionCriteria: {}, FieldNames: BASE.slice(0, 7) });
   }
+  // цель стратегии (если стратегия на конверсии)
+  const goalOfStrategy = (st) => { for (const side of [st.Search, st.Network]) for (const v of Object.values(side || {})) if (v && typeof v === 'object' && v.GoalId) return Number(v.GoalId); return null; };
   // бюджет стратегии: недельный или на период (деньги в API — в миллионных долях рубля)
   const budgetOf = (side) => {
     for (const [k, v] of Object.entries(side || {})) {
@@ -43,6 +45,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
       id: c.Id, name: c.Name, state: c.State, status: c.Status, type: c.Type || '', start: c.StartDate || '',
       daily: rub(c.DailyBudget?.Amount), negatives: c.NegativeKeywords?.Items || [],
       strategy: { search: st.Search?.BiddingStrategyType || '', network: st.Network?.BiddingStrategyType || '' },
+      ...(goalOfStrategy(st) ? { goal: goalOfStrategy(st) } : {}),
       ...((budgetOf(st.Search) || budgetOf(st.Network)) ? { budget: budgetOf(st.Search) || budgetOf(st.Network) } : {}),
       ...(x.CounterIds !== undefined ? { counters: x.CounterIds?.Items || [] } : {}),
       ...(x.PriorityGoals !== undefined ? { priorityGoals: (x.PriorityGoals?.Items || []).map((g) => g.GoalId) } : {}),
@@ -174,8 +177,20 @@ export async function apply(app, a, { by = 'app' } = {}) {
       negatives = r.Campaigns?.[0]?.NegativeKeywords?.Items || [];
     }
     const camp = main.campaigns.find((x) => x.id === a.campaign) || {};
-    const q = toRequest(a, { negatives, counters: camp.counters || [], campType: camp.type });
-    out = resultOf(await call(s, q.service, q.method, q.params), q.key);
+    if (a.do === 'goal') {
+      // стратегию читаем прямо перед записью и отправляем обратно целиком — меняется только цель; потом сверяем деньги
+      const get = () => call(s, 'campaigns', 'get', { SelectionCriteria: { Ids: [a.campaign] }, FieldNames: ['Id', 'Type'], TextCampaignFieldNames: ['BiddingStrategy'], UnifiedCampaignFieldNames: ['BiddingStrategy'] }).then((r) => r.Campaigns?.[0]);
+      const raw = await get(), g = withGoal(raw, a.goal);
+      const before = moneyOf(g.strategy);
+      out = resultOf(await call(s, 'campaigns', 'update', g.params, 0, undefined, g.key === 'UnifiedCampaign' ? 'v501' : 'v5'), 'UpdateResults');
+      if (!out.errors.length) {
+        const after = moneyOf(withGoal(await get(), a.goal).strategy);
+        if (JSON.stringify(after) !== JSON.stringify(before)) out.warnings.push('после смены цели денежные настройки стратегии отличаются от прежних — проверьте кампанию в кабинете');
+      }
+    } else {
+      const q = toRequest(a, { negatives, counters: camp.counters || [], campType: camp.type });
+      out = resultOf(await call(s, q.service, q.method, q.params), q.key);
+    }
   }
   if (!out.errors.length) await putSnap(app, [patchSnap(main, a, negatives)]);
   await putLog(app, { id: 'l' + uid(), at: new Date().toISOString(), by, do: a.do, cid: cidOf(main, a), text, why: a.why || '', ok: !out.errors.length, errors: out.errors, warnings: out.warnings, ...(isDemo() ? { demo: true } : {}) });
@@ -203,6 +218,7 @@ function patchSnap(main, a, negatives) {
     for (const x of list) if (a.ids.includes(x.id)) x.state = a.do === 'pause' ? 'SUSPENDED' : 'ON';
   }
   if (a.do === 'bid') { const k = m.keywords.find((x) => x.id === a.keyword); if (k) k.bid = a.rub; }
+  if (a.do === 'goal' && camp) camp.goal = Number(a.goal);
   if (a.do === 'counter' && camp) camp.counters = toRequest(a, { counters: camp.counters || [], campType: camp.type }).items;
   if (a.do === 'keywords') {
     const g = m.groups.find((x) => x.id === a.group);
@@ -230,6 +246,7 @@ export async function refreshMetrika(app) {
   const sources = await get('ym:s:lastTrafficSource', d30, 20);
   const engines = await get('ym:s:lastSourceEngine', d30, 30);
   const devices = await get('ym:s:deviceCategory', d30, 10);
+  const hours = await get('ym:s:hour', d30, 24, 'ym:s:hour'); // по часам — когда показывать рекламу (timePlan)
   const pages = await get('ym:s:startURL', d30, 500); // все книги, не только самые посещаемые (адреса с метками — отдельные строки)
   const d90 = addDays(today, -89); // метки и ссылки — за 90 дней: размещение часто идёт дольше месяца
   const utm = await get('ym:s:lastUTMSource,ym:s:lastUTMMedium,ym:s:lastUTMCampaign,ym:s:lastUTMContent', d90, 100);
@@ -239,7 +256,7 @@ export async function refreshMetrika(app) {
   let perm = null;
   try { perm = (await metrika(s, `management/v1/counter/${m.counterId}`, {})).counter?.permission || null; } catch { /* не важно */ }
   const old = snap(app, 'mk') || {};
-  await putSnap(app, [{ id: 'mk', at: new Date().toISOString(), counterId: m.counterId, goals, perm: perm ?? old.perm ?? null, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], engines: engines ?? old.engines ?? [], devices: devices ?? old.devices ?? [], pages: pages ?? old.pages ?? [], utm: utm ?? old.utm ?? [], litref: litref ?? old.litref ?? [], errors }]);
+  await putSnap(app, [{ id: 'mk', at: new Date().toISOString(), counterId: m.counterId, goals, perm: perm ?? old.perm ?? null, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], engines: engines ?? old.engines ?? [], devices: devices ?? old.devices ?? [], hours: hours ?? old.hours ?? [], pages: pages ?? old.pages ?? [], utm: utm ?? old.utm ?? [], litref: litref ?? old.litref ?? [], errors }]);
 }
 
 // Сайт автора: свой счётчик Метрики (тот же вход Яндекса). Цели сайта находятся по идентификаторам read, subscribe…

@@ -292,3 +292,23 @@ export function sitePages(pages = [], books = [], goalIds = []) {
   }
   return Object.values(by).sort((a, b) => b.visits - a.visits);
 }
+
+// ---------- Когда показывать рекламу: части суток по Метрике (30 дней) + дни недели ----------
+// Советы — только при значимой разнице (twoProp): ночью покупают заметно реже → ставки ночью ниже; есть время, когда покупают чаще → выше.
+export const DAY_PARTS = [['night', 'Ночь', 0, 6], ['morning', 'Утро', 7, 11], ['day', 'День', 12, 17], ['evening', 'Вечер', 18, 23]];
+const hourOf = (r) => { const m = /\d{1,2}/.exec(String(r.key ?? r.name ?? '')); return m ? Number(m[0]) : null; };
+export function timePlan(hours = [], main = []) {
+  const parts = DAY_PARTS.map(([id, name, from, to]) => ({ id, name, from, to, visits: 0, conv: 0 }));
+  for (const r of hours) { const h = hourOf(r); const p = h == null ? null : parts.find((x) => h >= x.from && h <= x.to); if (p) { p.visits += r.visits; p.conv += reach(r, main); } }
+  const V = parts.reduce((a, x) => a + x.visits, 0), C = parts.reduce((a, x) => a + x.conv, 0);
+  const rows = parts.map((x) => ({ ...x, share: C ? x.conv / C : null, vshare: V ? x.visits / V : null, cr: x.visits ? x.conv / x.visits : null, t: twoProp(x.conv, x.visits, C - x.conv, V - x.visits) }));
+  const tips = [];
+  if (V >= MIN_VISITS && C >= 20) {
+    for (const x of rows) {
+      if (x.t.level === 'low') continue;
+      if (x.t.z < 0) tips.push({ part: x.id, pct: 50, text: `${x.name} (${x.from}:00–${x.to}:59) покупают заметно реже: ${String(Math.round(x.cr * 1000) / 10).replace('.', ',')} % визитов против ${String(Math.round(C / V * 1000) / 10).replace('.', ',')} % в среднем — ставки в это время можно снизить до 50 %.` });
+      else tips.push({ part: x.id, pct: 120, text: `${x.name} (${x.from}:00–${x.to}:59) покупают чаще: ${String(Math.round(x.cr * 1000) / 10).replace('.', ',')} % визитов против ${String(Math.round(C / V * 1000) / 10).replace('.', ',')} % — ставки в это время можно поднять до 120 %.` });
+    }
+  }
+  return { rows, visits: V, conv: C, enough: V >= MIN_VISITS && C >= 20, tips };
+}

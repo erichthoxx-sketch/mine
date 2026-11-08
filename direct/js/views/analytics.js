@@ -1,6 +1,7 @@
 // «Аналитика»: всё о читателях по Метрике автора на Литнете — с подсвеченными шагами, книгами, воронкой,
 // метками UTM, деньгами и формулами. Работает и без Директа: нужна только Метрика.
 import { linkSpend } from '../../../js/adroi.js';
+import { timePlan, DAY_PARTS } from '../mcalc.js';
 import { esc, acts, forms, toast, openSheet, opt, N, uid, more, fold } from '../../../js/ui.js';
 import { num, pct, rub, fmtShort } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
@@ -79,7 +80,18 @@ function summaryTab(a, M) {
         ${x.why ? `<div class="small">${esc(x.why)}</div>` : ''}${x.step ? `<div class="small"><b>Что сделать:</b> ${esc(x.step)}</div>` : ''}
         ${x.lesson ? `<div class="small"><button class="link l-why" data-act="l.lesson" data-k="${x.lesson}">Почему так →</button></div>` : ''}</div>`), 3) || '<p class="muted">Пока всё ровно.</p>'}</div>
       <div class="row dl-row"><button class="dl" data-act="an.ai">${ic('copy')} Глубокий разбор с Claude</button></div></div>
-    <div class="card folds">${fold('an-wd', 'Дни недели', `<p class="small muted" style="margin-top:0">Средние визиты за полный день (дни сбоя не считаются)${hasGoals ? ' · доля покупок' : ''}</p>${[1, 2, 3, 4, 5, 6, 0].map((i) => `<div class="bar-row"><div class="row between small"><span>${WD[i]}</span><span>${wd[i].days ? Math.round(wd[i].avg) : '—'}${hasGoals && wd[i].cr != null ? ` · ${pct(wd[i].cr, 1)}` : ''}</span></div><div class="progress"><i style="width:${(wd[i].avg / maxWd * 100).toFixed(1)}%"></i></div></div>`).join('')}`, { sub: (() => { const best = [1, 2, 3, 4, 5, 6, 0].filter((i) => wd[i].days).sort((x, y) => wd[y].avg - wd[x].avg)[0]; return best != null ? `больше всего читателей — ${WD[best]}` : ''; })() })}</div>`;
+    <div class="card folds">${fold('an-wd', 'Дни недели', `<p class="small muted" style="margin-top:0">Средние визиты за полный день (дни сбоя не считаются)${hasGoals ? ' · доля покупок' : ''}</p>${[1, 2, 3, 4, 5, 6, 0].map((i) => `<div class="bar-row"><div class="row between small"><span>${WD[i]}</span><span>${wd[i].days ? Math.round(wd[i].avg) : '—'}${hasGoals && wd[i].cr != null ? ` · ${pct(wd[i].cr, 1)}` : ''}</span></div><div class="progress"><i style="width:${(wd[i].avg / maxWd * 100).toFixed(1)}%"></i></div></div>`).join('')}`, { sub: (() => { const best = [1, 2, 3, 4, 5, 6, 0].filter((i) => wd[i].days).sort((x, y) => wd[y].avg - wd[x].avg)[0]; return best != null ? `больше всего читателей — ${WD[best]}` : ''; })() })}${timeFold(M)}</div>`;
+}
+
+// Когда показывать рекламу: части суток (Метрика, 30 дней) и советы по ставкам — только при значимой разнице
+function timeFold(M) {
+  const tp = timePlan(M.mk.hours || [], M.main);
+  if (!tp.visits) return '';
+  const max = Math.max(...tp.rows.map((x) => x.vshare || 0)) || 1;
+  const body = `<p class="small muted" style="margin-top:0">Доля визитов за 30 дней${M.hasGoals ? ' · доля покупок · из 100 визитов покупают' : ''}</p>
+    ${tp.rows.map((x) => `<div class="bar-row"><div class="row between small"><span>${x.name} <span class="muted">${x.from}–${x.to + 1} ч</span></span><span>${pct(x.vshare || 0, 0)}${M.hasGoals && x.share != null ? ` · ${pct(x.share, 0)} · ${x.cr != null ? String(Math.round(x.cr * 1000) / 10).replace('.', ',') : '—'}` : ''}</span></div><div class="progress"><i style="width:${((x.vshare || 0) / max * 100).toFixed(1)}%"></i></div></div>`).join('')}
+    ${!M.hasGoals ? '<p class="small muted">Отметьте главную цель (покупку) в настройках Метрики — появятся советы по ставкам.</p>' : !tp.enough ? '<p class="small muted">Для советов нужно хотя бы 50 визитов и 20 покупок за 30 дней — пока разница может быть случайной.</p>' : tp.tips.length ? `${tp.tips.map((t) => `<p class="small"><b>${esc(t.text)}</b></p>`).join('')}<p class="small muted">Где поставить: Директ → кампания → «Расписание показов» (временной таргетинг) → для нужных часов — процент ставки. Показы целиком не выключайте: часть читательниц покупает и в «слабые» часы.</p>` : '<p class="small">Покупают примерно одинаково в любое время — расписание показов можно не трогать.</p>'}`;
+  return fold('an-time', 'Когда показывать рекламу', body, { sub: tp.tips.length ? `совет: ${tp.tips.map((t) => `${DAY_PARTS.find((d) => d[0] === t.part)[1].toLowerCase()} ${t.pct} %`).join(', ')}` : '' });
 }
 
 // ---------- Книги и воронка ----------
