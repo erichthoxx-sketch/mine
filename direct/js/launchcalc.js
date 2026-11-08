@@ -94,8 +94,10 @@ export function launchPlan(cfg, { today, wbooks = [], siteBooks = [], metrika = 
   const sb = siteBooks.find((b) => sameBook(b.title, cfg.book)) || null;
   const pubDate = cfg.publicationDate && cfg.pubManual ? cfg.publicationDate : wb?.publishStart || cfg.publicationDate || '';
   const subDate = cfg.subscriptionDate || sb?.startDate || '';
-  const bookUrl = cfg.bookUrl || sb?.litnet || '';
-  const src = { pub: cfg.pubManual ? 'plan' : wb?.publishStart ? 'workshop' : 'plan', sub: cfg.subscriptionDate ? 'plan' : sb?.startDate ? 'site' : '', url: cfg.bookUrl ? 'plan' : sb?.litnet ? 'site' : '' };
+  // ссылка на книгу: вписанная в плане → с сайта → из Мастерской (Маркетинг → книга → «Для таргетолога»)
+  const wbLink = /litnet\.com\//.test(wb?.direct?.link || '') ? wb.direct.link : '';
+  const bookUrl = cfg.bookUrl || sb?.litnet || wbLink || '';
+  const src = { pub: cfg.pubManual ? 'plan' : wb?.publishStart ? 'workshop' : 'plan', sub: cfg.subscriptionDate ? 'plan' : sb?.startDate ? 'site' : '', url: cfg.bookUrl ? 'plan' : sb?.litnet ? 'site' : wbLink ? 'workshop' : '' };
   const phase = !pubDate || today < pubDate ? 'prep' : subDate && today >= subDate ? 'paid' : 'free';
   const lib = libraryGoal(metrika), buy = buyGoal(metrika);
   const roy = Number(cfg.royalty) > 0 ? Number(cfg.royalty) : royalty > 0 ? royalty : null;
@@ -110,7 +112,7 @@ export function launchPlan(cfg, { today, wbooks = [], siteBooks = [], metrika = 
   const steps = {
     prep: [
       step('goals', lib && buy, 'Цели в Метрике: «Добавление в библиотеку» и «Покупка»', lib && buy ? '' : 'Отметьте обе цели в ⚙ Настройках → «Яндекс Метрика».'),
-      step('url', /litnet\.com\//.test(bookUrl), 'Ссылка на книгу на Литнете', 'Появится после создания книги на Литнете: впишите её на сайте (админка → книга → «Литнет») — приложение возьмёт сама.'),
+      step('url', /litnet\.com\//.test(bookUrl), 'Ссылка на книгу на Литнете', 'Появится после создания книги на Литнете: впишите её на сайте (админка → книга → «Литнет») или в Мастерской (Маркетинг → книга → «Для таргетолога») — приложение возьмёт сама.'),
       step('campaign', picked, 'Кампания-черновик в Директе', 'Ниже — конструктор: кампания, группа, объявление и фразы без запуска.'),
       step('creative', cfg.creativeReady, 'Объявления: 2–3 варианта заголовка и обложка для сетей'),
       step('limit', cfg.limitVerified, `Недельный бюджет в Директе ≈ ${money.freeWeek} ₽ на время бесплатных глав`),

@@ -68,3 +68,19 @@ test('Остановка требует успешного ответа Янде
   t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({result:{SuspendResults:[{Errors:[{Message:'Не удалось остановить'}]}]}}), {status:200,headers:{'Content-Type':'application/json'}}));
   await assert.rejects(pauseCampaign({directToken:'test',direct:{proxy:'https://example.workers.dev'}},123), /Не удалось остановить/);
 });
+
+test('Черновик кампании берёт объявления книги из Мастерской', async () => {
+  const { creatorOf, workshopAds } = await import('../direct/js/creator.js');
+  const wb = { title: 'Звериная тропа для двоих', direct: { ads: [
+    { h1: 'Муж оставил ее одну перед медведем', h2: '', text: 'Он вернулся через несколько минут. Но прежней жены уже не нашел.' },
+    { h1: '13 лет брака против нескольких минут страха', h2: '', text: 'Он был хорошим мужем. И однажды уехал, оставив ее одну в самый страшный момент.' }] } };
+  const d = creatorOf({ book: 'Звериная тропа для двоих' }, wb);
+  assert.equal(d.titles.split('\n').length, 2);
+  assert.equal(d.texts.split('\n')[0], 'Он вернулся через несколько минут. Но прежней жены уже не нашел.');
+  assert.deepEqual(workshopAds({ direct: { ads: [] } }), {});
+  // свои правки в конструкторе главнее
+  assert.equal(creatorOf({ book: 'Звериная тропа для двоих', creator: { titles: 'Моё' } }, wb).titles, 'Моё');
+  // прежние черновые тексты с раскрытием сюжета сами заменяются
+  const old = 'Развод для черной вдовы — новый роман\nОна похоронила мужа. Живого\nВдова, у которой муж жив\nВладелица похоронного бюро и опасный конкурент\nОстросюжетный любовный роман на Литнете\nГроб надо было открыть\nПохоронила мужа и спрятала его дома';
+  assert.ok(!/Живого|муж жив/.test(creatorOf({ book: 'Развод для черной вдовы', creator: { titles: old } }).titles));
+});

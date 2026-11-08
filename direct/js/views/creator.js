@@ -2,18 +2,20 @@
 import { esc, acts, forms, toast, ask, N, opt } from '../../../js/ui.js';
 import { rub } from '../../../js/format.js';
 import { proxyVersion } from '../api.js';
-import { creatorOf, validateCreator, campaignPayload, groupPayload, adPayload, keywordsPayload,
+import { creatorOf, workshopAds, validateCreator, campaignPayload, groupPayload, adPayload, keywordsPayload,
   addedId, createCampaign, pauseCampaign, createGroup, createAd, createKeywords } from '../creator.js';
 import { resolvedLaunch, launchGoal, saveLaunch } from './launchctx.js';
 import { exactTag, bookMatches, readyForCampaign } from '../litnetcalc.js';
 import { promoChannel } from '../../../writer/js/promolinks.js';
 
 const app = () => window.__app;
+// книга Мастерской этого запуска — её объявления идут в черновик
+const wbOf = (a, fl) => (a.ctx().data.w_books || []).find((b) => bookMatches(b.title, fl?.book)) || null;
 let busy = false;
 // черновик — того запуска, чей план открыт (ui.launchId)
 const current = () => {
   const a = app(), s = a.ctx().settings, L = resolvedLaunch(a), fl = L?.fl || {};
-  return { a, s, fl, id: L?.id, plan: L?.plan, d: creatorOf(fl), m: s.direct?.metrika || null, today: a.ctx().today };
+  return { a, s, fl, id: L?.id, plan: L?.plan, d: creatorOf(fl, wbOf(a, fl)), m: s.direct?.metrika || null, today: a.ctx().today };
 };
 const save = async patch => {
   const { a, id, d } = current();
@@ -22,7 +24,7 @@ const save = async patch => {
 const done = (label, id) => `<p class="fl-made">✓ ${esc(label)} №${esc(String(id))}</p>`;
 const btn = (action, label, disabled) => `<button class="primary" data-act="${action}"${disabled || busy ? ' disabled' : ''}>${label}</button>`;
 export function creatorCard(a, fl, m) {
-  const d = creatorOf(fl), id = d.campaignId, group = d.groupId, ad = d.adId;
+  const wb = wbOf(a, fl), d = creatorOf(fl, wb), id = d.campaignId, group = d.groupId, ad = d.adId, fromWs = !!workshopAds(wb).titles;
   const { plan } = resolvedLaunch(a) || { plan: {} }, goal = launchGoal(plan), v = Number(a.ctx().settings.direct?.proxyV) || 0;
   fl = { ...fl, bookUrl: plan.bookUrl }; // ссылка — из плана: своя или с сайта
   const issues = validateCreator(d, { today: a.ctx().today, bookUrl: fl.bookUrl, goalId: goal?.id });
@@ -94,7 +96,7 @@ export function creatorCard(a, fl, m) {
           <textarea name="titles" rows="3" required>${esc(d.titles)}</textarea>
           <label>Тексты (с новой строки, до 81 знака каждый)</label>
           <textarea name="texts" rows="3" required>${esc(d.texts)}</textarea>
-          <p class="small muted">Будет создано комбинаторное объявление со ссылкой из раздела «Книга и экономика». Обложку добавим позже.</p>
+          <p class="small muted">${fromWs ? 'Заголовки и тексты — из Мастерской (Маркетинг → книга → «Объявления для Директа»). ' : 'Свои объявления можно завести в Мастерской: Маркетинг → книга → «Объявления для Директа» — они подставятся сюда сами. '}Будет создано комбинаторное объявление со ссылкой из раздела «Книга и экономика». Обложку добавим позже.</p>
           <div class="row d-save"><button type="submit">Сохранить объявление</button></div>
         </form>
         ${btn('fl.createAd','Создать объявление без модерации',blocked || !fl.bookUrl)}
