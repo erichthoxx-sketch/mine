@@ -64,6 +64,13 @@ html.app-freitag button { cursor: pointer; }
 .f-msg-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.68; font-size: 14px; }
 .f-msg-text.pending { color: var(--muted); }
 .f-compose { margin-top: 22px; position: sticky; bottom: 0; padding: 15px 0 5px; background: var(--bg); border-top: 1px solid var(--line); }
+.f-writing-bar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:13px; }
+.f-writing-bar > label { font-size:12px; color:var(--text-2); white-space:nowrap; }
+.f-writing-bar .f-select { width:auto; max-width:240px; min-height:38px; padding:7px 28px 7px 11px; border-radius:12px; font-size:13px !important; }
+.f-writing-hint { font-size:11px; color:var(--muted); }
+.f-inline-btn { background:transparent !important; color:var(--text-2) !important; padding:0; font-size:11px !important; text-decoration:underline; border:0 !important; }
+.f-command { display:block; font:12px/1.6 ui-monospace, monospace; overflow-wrap:anywhere; padding:10px; border-radius:10px; background:var(--surface); color:var(--text); margin-bottom:10px; }
+.f-connection-help summary { cursor:pointer; font-weight:600; }
 .f-compose textarea { min-height: 80px; max-height: 30vh; }
 .f-compose-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .f-mini { font-size: 11px; color: var(--muted); }
@@ -95,4 +102,59 @@ html.app-freitag button { cursor: pointer; }
   .f-heading { align-items: flex-start; }
   .f-msg { max-width: 100%; }
   .f-composer { width: 100%; }
+}
+
+
+/* Литературное рабочее пространство Freitag AI */
+.f-brand-bear { width:42px; height:42px; display:block; flex:none; object-fit:contain; }
+.f-feedback-actions {display:flex;align-items:center;gap:16px;margin-top:10px;opacity:.85;}
+.f-feedback-actions .f-inline-btn {font-size:12px !important;}
+.f-feedback-actions .f-inline-btn:hover {opacity:1;text-decoration:underline;}
+.f-examples {display:grid;gap:12px;margin-top:18px;}
+.f-example {border:1px solid var(--line);border-radius:15px;padding:12px 15px;background:var(--surface);}
+.f-example strong {font-size:13px;}
+.f-example p {font-size:13px;line-height:1.55;margin:8px 0;}
+.f-example .f-muted {white-space:pre-wrap;overflow-wrap:anywhere;}
+.f-master-section {margin-top:22px;}
+.f-master-books {display:grid;gap:4px;max-height:440px;overflow-y:auto;margin:16px 0 0;}
+.f-master-book {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.f-master-book span {overflow-wrap:anywhere;}
+.f-master-login {display:grid;gap:12px;max-width:430px;}
+.f-master-login label {display:grid;gap:6px;color:var(--text-2);font-size:13px;}
+.f-dialog {width:min(540px,calc(100vw - 24px));max-height:calc(100dvh - 35px);overflow:auto;margin:auto;padding:25px;border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--text);box-shadow:0 18px 65px #0002;}
+.f-dialog::backdrop {background:#1515155c;}
+.f-dialog h2 {font:500 22px/1.25 "Jost",sans-serif;margin:0 0 14px;}
+.f-dialog form > label {display:block;font-size:13px;color:var(--text-2);margin:14px 0 7px;}
+.f-dialog .f-textarea {min-height:120px;}
+.f-transfer-dialog {width:min(820px,calc(100vw - 24px));}
+.f-transfer #f-claude-brief {min-height:220px;max-height:47dvh;font-size:12px !important;font-family:ui-monospace,Consolas,monospace;line-height:1.55;}
+.f-transfer-actions {margin:14px 0;justify-content:flex-start;}
+.f-transfer .f-muted {line-height:1.5;}
+@media(max-width:520px) {
+  .f-brand-bear {width:36px;height:36px;}
+  .f-transfer-actions .f-btn {flex:1;min-width:110px;}
+  .f-master-book {flex-wrap:wrap;}
+}
+
+/* Freitag AI: чат без лишних действий */
+.f-chat {max-width:980px;min-height:calc(100dvh - 165px);}
+.f-chat-meta {margin-bottom:16px;}
+.f-chat-body {gap:14px;}
+.f-compose {padding-top:14px;}
+.f-compose .f-textarea {min-height:95px;max-height:45vh;resize:vertical;font-size:15px !important;}
+.f-compose-controls {margin-top:10px;}
+.f-compose-controls .f-btn.primary {min-width:116px;}
+.f-writing-bar {justify-content:flex-start;align-items:center;gap:14px;margin-bottom:10px;}
+.f-writing-bar .f-select {max-width:220px;}
+.f-extra-tools {margin-top:11px;font-size:12px;color:var(--muted);}
+.f-extra-tools summary {cursor:pointer;user-select:none;width:max-content;max-width:100%;}
+.f-extra-tools > .f-row {margin-top:10px;flex-wrap:wrap;}
+.f-extra-tools p {font-size:11px;max-width:660px;line-height:1.6;}
+.f-compose-controls .f-mini {overflow-wrap:anywhere;}
+@media(max-width:640px) {
+.f-chat {min-height:calc(100dvh - 150px);}
+.f-chat-head-actions {gap:5px;}
+.f-chat-head-actions .f-btn {padding:7px 9px !important;font-size:11px !important;min-height:31px;}
+.f-compose .f-textarea {min-height:82px;}
+.f-writing-bar .f-select {max-width:170px;}
 }

@@ -38,6 +38,7 @@ jobs:
           cp direct/manifest.webmanifest direct/target.svg direct/target-180.png direct/target-512.png proxy/direct-worker.js _site/direct/
           cp ai/manifest.webmanifest ai/style.css _site/ai/
           cp ai/app.js _site/$V/ai/app.js
+          cp ai/master-sync.js _site/$V/ai/master-sync.js
           sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\./style.css#./style.css?v=$V#; s#\./app.js#../$V/ai/app.js#" ai/index.html > _site/ai/index.html
           grep -q "$V/ai/app.js" _site/ai/index.html
           sed "s#__APPV__#$V#; s#css/style.css#$V/css/style.css#; s#js/app.js#$V/js/app.js#" index.html > _site/index.html
