@@ -390,7 +390,7 @@ function subTab() {
 }
 
 // Письма и подписчицы сервиса писем — в Мастерской → Сайт → Почта (там же подключение)
-const MAIL_APP = 'https://lanafreitag.ru/my/pisatel/#/site/mail'; // короткий адрес Мастерской
+const MAIL_APP = 'https://erichthoxx-sketch.github.io/mine/pisatel/#/site/mail';
 
 // Ещё: статистика, нейросеть, копия сайта, вход
 function moreTab() {

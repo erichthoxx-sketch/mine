@@ -24,7 +24,7 @@ jobs:
         with: { node-version: 22 }
       - run: npm test
       - run: |
-          # приложения — общей сборкой (её же использует публикация на lanafreitag.ru/my)
+          # приложения — общей сборкой (scripts/build-apps.sh)
           V=v${GITHUB_SHA::8}
           bash scripts/build-apps.sh $V _site
           # сайт автора (/site/) и его админка (/site/admin/)

@@ -2,7 +2,7 @@
 // Хранилище: Cloudflare KV binding BOOKS; секрет MCP_READ_KEY задаётся только в Cloudflare.
 // Публикация книги — только из авторизованной Мастерской по Firebase ID token.
 // Никаких публичных рукописей, анонимных MCP-вызовов и инструментов записи для нейросети.
-const ORIGINS = new Set(['https://erichthoxx-sketch.github.io', 'https://lanafreitag.ru', 'http://localhost:8765']); // lanafreitag.ru/my — короткий адрес
+const ORIGINS = new Set(['https://erichthoxx-sketch.github.io', 'http://localhost:8765']);
 const PROJECT = 'dohody-6d6dd';
 const MAX_BYTES = 6 * 1024 * 1024;
 let keysCache = null, keysUntil = 0;

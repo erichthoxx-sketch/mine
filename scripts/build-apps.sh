@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Сборка приложений (Доходы, Мастерская, Директ, Freitag AI) в папку OUT, каждая версия — в своей папке V.
 # Используется дважды: старый адрес erichthoxx-sketch.github.io/mine (pages.yml, OUT=_site)
-# и новый короткий lanafreitag.ru/my (публикация в хранилище lanafreitag, OUT=out/my).
+# (OUT=_site). Вынесено в скрипт, чтобы сборку можно было повторить для другого адреса.
 # Запуск: bash scripts/build-apps.sh <версия> <папка>   (из корня хранилища mine)
 set -euo pipefail
 V="$1"; OUT="$2"

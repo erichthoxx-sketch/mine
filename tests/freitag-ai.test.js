@@ -16,7 +16,7 @@ test('Freitag AI: entrypoint, styles and manifest exist', () => {
   assert.match(index, /href="\.\.\/css\/style\.css"/);
 });
 test('Freitag AI: deploy pipeline includes the app', () => {
-  // приложения собирает общий скрипт (старый адрес и lanafreitag.ru/my)
+  // приложения собирает общий скрипт scripts/build-apps.sh
   const yaml = readFileSync('.github/workflows/pages.yml', 'utf8'), sh = readFileSync('scripts/build-apps.sh', 'utf8');
   assert.match(yaml, /bash scripts\/build-apps\.sh \$V _site/);
   assert.match(sh, /\$OUT\/ai\/index\.html/);

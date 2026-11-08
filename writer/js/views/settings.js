@@ -33,7 +33,7 @@ export function settingsView(a) {
       ${folder(s.wMarketingFolder, s.wMarketingFolderName, 'set.mkFolder', 'Папка для баннеров и обложек')}
       ${folder(s.wIdeasFolder, s.wIdeasFolderName, 'set.ideasFolder', 'Папка для документов из идей (по умолчанию — папка с книгами)')}
       <button class="danger" data-act="set.disconnect" style="margin-top:10px">Отключить Диск на этом устройстве</button>`
-    : `<p>На этом устройстве Диск не подключён.</p><button class="primary" data-act="drive.connect">Подключить Google Диск</button>${location.hostname === 'lanafreitag.ru' ? '<p class="small muted">Новый адрес lanafreitag.ru/my: если Google пишет «origin_mismatch», один раз добавьте https://lanafreitag.ru в Google Cloud → «Credentials» → ваш ключ OAuth → «Authorized JavaScript origins». Пока не добавили — Диск работает на старом адресе.</p>' : ''}`}
+    : `<p>На этом устройстве Диск не подключён.</p><button class="primary" data-act="drive.connect">Подключить Google Диск</button>`}
     <p class="hint">Подключать нужно на каждом устройстве один раз. Google даёт браузерным приложениям доступ на час — после этого кнопка «Обновить» на Главной продлевает его одним нажатием, без повторного разрешения.</p></div>`, { sub: !drive.driveConfigured ? 'нет ключа' : drive.isConnected() ? 'подключён' : 'не подключён' })}
   ${fold('set-td', 'Todoist', todoistCard(c), { sub: s.todoistToken ? (s.todoistOff ? 'выключен' : 'подключён') : 'не подключён' })}
   ${fold('set-arc', 'Архив книг', archiveCard(c))}
