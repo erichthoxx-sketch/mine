@@ -4,6 +4,7 @@ import { acts, ask, esc, toast, download } from '../../../js/ui.js';
 import { ic } from '../../../js/icons.js';
 import { bookSnapshot, snapshotMarkdown } from '../bookai.js';
 import { marketingSnapshot, incomeSnapshot, directSnapshot, readDirectDocs } from '../ai-system.js';
+import { syncDirectAccess } from '../../../js/aidirect.js';
 
 const app = () => window.__app;
 const worker = () => String(app().ctx().settings.bookAiWorker || '').replace(/\/+$/, '');
@@ -30,7 +31,8 @@ export function aiCenterCard(c) {
     '</div>' +
     (when ? '<p class="small muted" style="margin:10px 0 0">Последняя передача: ' + esc(when) +
       (s.aiLastCount != null ? ' · Книг: ' + Number(s.aiLastCount) : '') +
-      (s.aiLastError ? ' · ' + esc(s.aiLastError) : '') + '</p>' : '') +
+      (s.aiLastError ? ' · ' + esc(s.aiLastError) : '') +
+      (s.aiDirectLive === true ? ' · Директ — вживую, только чтение' : '') + '</p>' : '') +
     '<p class="hint">Прямой доступ работает в совместимых с MCP нейросетях после добавления адреса /mcp. Для остальных скачайте универсальный файл .md. Обновление данных выполняется отдельно; добавить коннектор в чужой чат автоматически нельзя.</p>' +
     '</div>';
 }
@@ -95,6 +97,20 @@ acts['ai.all'] = async () => {
         booksDone++;
       } catch (e) { errors.push(book.title + ': ' + (e.message || e)); }
     }
+    // Директ вживую: нейросеть сама смотрит кампании (и черновики) когда нужно — только чтение.
+    // Ключ Директа уходит в личный Cloudflare владелицы и нейросети не показывается.
+    const st = app().ctx().settings;
+    if (st.directToken && st.aiDirectLive !== false) {
+      let on = st.aiDirectLive === true;
+      if (!on) {
+        on = await ask('Разрешить нейросети смотреть ваш Яндекс Директ вживую? Она увидит кампании, черновики, объявления, фразы и расход — сразу, без обновления копии. Изменить что-либо в Директе она не сможет. Ключ Директа хранится в вашем закрытом Cloudflare, нейросеть его не видит.', 'Разрешить');
+        await store.saveSettings({ aiDirectLive: on });
+      }
+      if (on) {
+        try { await syncDirectAccess(store, { ...st, aiDirectLive: true }); }
+        catch (e) { errors.push('Директ вживую: ' + (e.message || e)); }
+      }
+    }
     try { await request('POST', '/sync/prune', { ids: books.map((x) => x.id) }); }
     catch (e) { errors.push('Удаление старых книг: ' + (e.message || e)); }
     const now = new Date().toISOString();
@@ -114,7 +130,7 @@ acts['ai.all'] = async () => {
 };
 acts['ai.clear'] = async () => {
   if (running) return false;
-  if (!(await ask('Удалить все подключённые книги, маркетинг, доходы и данные Директа из личного Cloudflare? Исходные данные в приложениях останутся.', 'Отключить всё'))) return false;
+  if (!(await ask('Удалить все подключённые книги, маркетинг, доходы, данные и доступ к Директу из личного Cloudflare? Исходные данные в приложениях останутся.', 'Отключить всё'))) return false;
   if (!worker()) return false;
   running = true; app().rerender();
   const errors = [];
@@ -125,7 +141,7 @@ acts['ai.clear'] = async () => {
       catch (e) { errors.push(b.title + ': ' + (e.message || e)); }
     }
     await app().store.saveSettings({
-      aiLastSyncedAt: '', aiLastCount: 0, aiLastError: errors.join('; ').slice(0, 700)
+      aiLastSyncedAt: '', aiLastCount: 0, aiLastError: errors.join('; ').slice(0, 700), aiDirectLive: null
     });
     toast(errors.length ? 'Облачные копии удалены, но не все метки книг обновились' : 'Все облачные копии контекста удалены');
   } catch (e) { toast('Не удалось отключить: ' + (e.message || e)); }

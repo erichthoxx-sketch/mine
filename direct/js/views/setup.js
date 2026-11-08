@@ -2,6 +2,7 @@
 import { esc, acts, forms, toast } from '../../../js/ui.js';
 import { ic } from '../../../js/icons.js';
 import { authorizeUrl } from '../api.js';
+import { syncDirectAccessQuiet } from '../../../js/aidirect.js';
 import { demo } from '../demo.js';
 
 const app = () => window.__app;
@@ -119,6 +120,8 @@ acts['st.login'] = () => { window.open(authorizeUrl(app().ctx().settings.direct.
 forms['st.token'] = async (fd) => {
   const t = fd.get('v').trim();
   if (t.length < 20) { toast('Это не похоже на ключ — скопируйте его целиком'); return; }
-  await app().store.saveSettings({ directToken: t, directTokenExp: Date.now() + 180 * 86400000 });
+  const exp = Date.now() + 180 * 86400000;
+  await app().store.saveSettings({ directToken: t, directTokenExp: exp });
+  syncDirectAccessQuiet(app().store, { ...app().ctx().settings, directToken: t, directTokenExp: exp });
   app().ui.demo = false; toast('Ключ сохранён — загружаю кампании'); app().reload?.({ quiet: true });
 };

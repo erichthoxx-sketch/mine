@@ -96,3 +96,46 @@ test('MCP cannot overwrite connected finance or advertising via reader key', asy
   assert.equal((await worker.fetch(req, a)).status, 401);
   assert.equal(await a.BOOKS.get('section:income'), null);
 });
+
+test('Direct live: key from owner only, never shown, only get methods, drafts visible', async () => {
+  const a = env();
+  // без входа владелицы ключ не принимается (и не по ключу нейросети)
+  const noAuth = await worker.fetch(new Request(URL + '/sync/direct-access', { method: 'PUT', headers: { 'X-Master-Key': KEY }, body: '{"token":"y0_aaaaaaaaaaaaaaaaaaaaaaaa"}' }), a);
+  assert.equal(noAuth.status, 401);
+  let j = await (await worker.fetch(call('tools/call', { name: 'get_direct_live', arguments: {} }), a)).json();
+  assert.equal(j.result.isError, true);
+  assert.match(j.result.content[0].text, /не включён/);
+  await a.BOOKS.put('secret:direct-access', JSON.stringify({ token: 'y0_SECRET_TOKEN_1234567890', clientLogin: '', sandbox: false }));
+  const seen = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    seen.push({ url: String(url), method: body.method, auth: init.headers.Authorization });
+    const svc = String(url).split('/').pop();
+    if (svc === 'reports') return new Response('Date\tCampaignId\tCampaignName\tImpressions\tClicks\tCost\n2026-11-07\t715936525\tЕПК\t0\t0\t0\n', { status: 200 });
+    const result = {
+      campaigns: { Campaigns: [{ Id: 715936525, Name: 'Единая перфоманс-кампания №18', State: 'OFF', Status: 'DRAFT', Type: 'UNIFIED_CAMPAIGN',
+        UnifiedCampaign: { TrackingParams: 'utm_litref=PZSWjdD9ctDTys9A' } }] },
+      adgroups: { AdGroups: [{ Id: 5821756438, Name: 'Новая группа', CampaignId: 715936525, RegionIds: [225] }] },
+      ads: { Ads: [] },
+      keywords: { Keywords: [{ Id: 1, Keyword: 'остросюжетные любовные романы', AdGroupId: 5821756438, CampaignId: 715936525, State: 'OFF', Status: 'DRAFT' }] }
+    }[svc];
+    return new Response(JSON.stringify({ result }), { status: 200 });
+  };
+  try {
+    j = await (await worker.fetch(call('tools/call', { name: 'get_direct_live', arguments: {} }), a)).json();
+  } finally { globalThis.fetch = realFetch; }
+  const text = j.result.content[0].text, out = JSON.parse(text);
+  assert.equal(out.campaigns[0].status, 'DRAFT');
+  assert.equal(out.campaigns[0].trackingParams, 'utm_litref=PZSWjdD9ctDTys9A');
+  assert.deepEqual(out.groups[0].regions, [225]);
+  assert.equal(out.keywords[0].phrase, 'остросюжетные любовные романы');
+  assert.equal(out.daily.length, 1);
+  assert.equal(text.includes('SECRET_TOKEN'), false);
+  assert.ok(seen.every((x) => x.method === 'get' || x.url.endsWith('/reports')));
+  assert.ok(seen.every((x) => x.url.startsWith('https://api.direct.yandex.com/')));
+  // «Отключить всё» удаляет и доступ к Директу (здесь проверяем хранилище напрямую)
+  const status = JSON.parse((await (await worker.fetch(call('tools/call', { name: 'get_system_status', arguments: {} }), a)).json()).result.content[0].text);
+  assert.equal(status.directLive.on, true);
+  assert.equal(JSON.stringify(status).includes('SECRET_TOKEN'), false);
+});

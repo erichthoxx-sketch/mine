@@ -2,6 +2,7 @@
 import { esc, acts, forms, toast, ask, N, fold } from '../../../js/ui.js';
 import { rub } from '../../../js/format.js';
 import { authorizeUrl } from '../api.js';
+import { syncDirectAccessQuiet } from '../../../js/aidirect.js';
 import { proxyCard } from '../../../js/proxycard.js';
 import { setupCard } from './setup.js';
 import { metrikaCard } from './metrika.js';
@@ -58,11 +59,13 @@ forms['d.token'] = async (fd) => {
   const t = fd.get('t').trim();
   if (t.length < 20) { toast('Это не похоже на ключ'); return; }
   await app().store.saveSettings({ directToken: t, directTokenExp: null });
+  syncDirectAccessQuiet(app().store, { ...app().ctx().settings, directToken: t, directTokenExp: null });
   app().ui.demo = false; toast('Ключ сохранён'); app().reload?.({ quiet: true });
 };
 acts['d.login'] = () => { window.open(authorizeUrl(app().ctx().settings.direct.clientId), '_blank', 'noopener'); return false; };
 acts['d.off'] = async () => {
   if (!(await ask('Отключить Директ? Кампании в Директе продолжат работать, просто приложение перестанет их видеть.', 'Отключить'))) return;
   await app().store.saveSettings({ directToken: '', directTokenExp: null });
+  syncDirectAccessQuiet(app().store, app().ctx().settings, { off: true });
   toast('Директ отключён');
 };

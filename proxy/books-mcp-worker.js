@@ -2,6 +2,7 @@
 // Хранилище: Cloudflare KV binding BOOKS; секрет MCP_READ_KEY задаётся только в Cloudflare.
 // Публикация книги — только из авторизованной Мастерской по Firebase ID token.
 // Никаких публичных рукописей, анонимных MCP-вызовов и инструментов записи для нейросети.
+// Директ вживую — только методы get и отчёты (get_direct_live), ключ Директа нейросети не отдаётся.
 const ORIGINS = new Set(['https://erichthoxx-sketch.github.io', 'http://localhost:8765']);
 const PROJECT = 'dohody-6d6dd';
 const MAX_BYTES = 6 * 1024 * 1024;
@@ -123,21 +124,135 @@ const contextTools = [
     from: { type: 'string', description: 'Дата от YYYY-MM-DD' },
     to: { type: 'string', description: 'Дата до YYYY-MM-DD' }
   }, ['book']),
-  tool('get_direct_overview', 'Сохранённая сводка кампаний Директа, последние расходы и качество рекламного трафика.', {}),
+  tool('get_direct_overview', 'Сохранённая (не живая) сводка кампаний Директа, последние расходы и качество рекламного трафика.', {}),
   tool('get_direct_campaign', 'Подробности одной кампании Директа и её статистика.', { campaign_id: { type: 'string' } }, ['campaign_id'])
 ];
 TOOLS.push(...contextTools);
+TOOLS.push(tool('get_direct_live', 'Живое чтение Яндекс.Директа прямо сейчас (только чтение): все кампании, включая черновики, группы с регионами и минус-фразами, объявления, фразы, параметры URL и расход за 30 дней. Без campaign_id — все кампании, с ним — одна.', {
+  campaign_id: { type: 'string', description: 'Номер кампании Директа (необязательно)' },
+  stats: { type: 'boolean', description: 'Расход по дням за 30 дней, по умолчанию да' }
+}));
+
+// ── Живое чтение Директа ─────────────────────────────────────────────────────
+// Ключ Директа владелица передаёт из Мастерской (только по своему входу) и он лежит в KV.
+// Наружу ключ не отдаётся никогда. Вызываются ТОЛЬКО методы get и отчёты — ничего не меняется.
+const DIRECT_KEY = 'secret:direct-access';
+const DIRECT_READ = new Set(['campaigns', 'adgroups', 'ads', 'keywords']);
+const DIRECT_ERR = { 53: 'Ключ Директа устарел. Откройте «Директ», войдите через Яндекс заново, затем в Мастерской → Настройки → Нейросети нажмите «Обновить весь контекст».',
+  58: 'Яндекс не одобрил доступ к API Директа.', 513: 'Этот аккаунт Яндекса не подключён к Директу.' };
+const directBase = (acc, version = 'v5') => 'https://' + (acc.sandbox ? 'api-sandbox' : 'api') + '.direct.yandex.com/json/' + version + '/';
+const directHeaders = (acc, extra = {}) => ({ Authorization: 'Bearer ' + acc.token, 'Content-Type': 'application/json; charset=utf-8',
+  'Accept-Language': 'ru', ...(acc.clientLogin ? { 'Client-Login': acc.clientLogin } : {}), ...extra });
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+async function directGet(acc, service, params, version = 'v5') {
+  if (!DIRECT_READ.has(service)) throw Error('Только чтение');
+  const res = await fetch(directBase(acc, version) + service, { method: 'POST', headers: directHeaders(acc), body: JSON.stringify({ method: 'get', params }) });
+  let data = null; try { data = await res.json(); } catch { /* не JSON */ }
+  if (data?.error) {
+    const e = Error(DIRECT_ERR[data.error.error_code] || ('Директ отказал (код ' + data.error.error_code + '): ' + (data.error.error_string || '') + (data.error.error_detail ? ' — ' + data.error.error_detail : '')));
+    e.code = Number(data.error.error_code);
+    throw e;
+  }
+  if (!res.ok || !data) throw Error('Директ ответил ошибкой ' + res.status);
+  return data.result || {};
+}
+// Расширенные поля — если Директ их не принял, повтор с основными
+async function directSafe(acc, service, full, basic, version) {
+  try { return await directGet(acc, service, full, version); }
+  catch (e) { if (!basic || [53, 58, 513].includes(e.code)) throw e; return directGet(acc, service, basic, version); }
+}
+const rubOf = (v) => (v == null ? null : Math.round(Number(v) / 10000) / 100);
+const tsv = (text) => {
+  const rows = String(text || '').trim().split('\n').filter(Boolean).map((l) => l.split('\t'));
+  const [head, ...rest] = rows;
+  return head ? rest.map((r) => Object.fromEntries(head.map((h, i) => [h, r[i]]))) : [];
+};
+async function directDaily(acc, cid) {
+  const body = { params: { SelectionCriteria: cid ? { Filter: [{ Field: 'CampaignId', Operator: 'EQUALS', Values: [String(cid)] }] } : {},
+    FieldNames: ['Date', 'CampaignId', 'CampaignName', 'Impressions', 'Clicks', 'Cost'], ReportName: 'mcp-days-' + Date.now(),
+    ReportType: 'CUSTOM_REPORT', DateRangeType: 'LAST_30_DAYS', Format: 'TSV', IncludeVAT: 'YES', IncludeDiscount: 'NO' } };
+  const extra = { processingMode: 'auto', returnMoneyInMicros: 'false', skipReportHeader: 'true', skipReportSummary: 'true' };
+  for (let i = 0; i < 5; i++) {
+    const res = await fetch(directBase(acc) + 'reports', { method: 'POST', headers: directHeaders(acc, extra), body: JSON.stringify(body) });
+    if (res.status === 200) return tsv(await res.text()).map((r) => ({ date: r.Date, cid: Number(r.CampaignId), name: r.CampaignName,
+      impr: Number(r.Impressions) || 0, clicks: Number(r.Clicks) || 0, cost: Number(r.Cost) || 0 }));
+    if (res.status === 201 || res.status === 202) { await wait(Math.min(Number(res.headers.get('retryIn')) || 3, 8) * 1000); continue; }
+    throw Error('Отчёт Директа не получен (' + res.status + ')');
+  }
+  return null; // отчёт ещё готовится — структуру отдаём без него
+}
+export async function directLive(acc, { campaign_id, stats = true } = {}) {
+  const only = campaign_id ? [Number(campaign_id)] : null;
+  const BASE = ['Id', 'Name', 'State', 'Status', 'StatusClarification', 'StartDate', 'EndDate', 'DailyBudget', 'NegativeKeywords', 'Type'];
+  const sel = only ? { Ids: only } : {};
+  const cr = await directSafe(acc, 'campaigns',
+    { SelectionCriteria: sel, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'],
+      UnifiedCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals', 'TrackingParams'] },
+    { SelectionCriteria: sel, FieldNames: BASE.slice(0, 7) }, 'v501');
+  const campaigns = (cr.Campaigns || []).map((c) => {
+    const x = c.TextCampaign || c.UnifiedCampaign || {};
+    return { id: c.Id, name: c.Name, type: c.Type || '', state: c.State, status: c.Status, note: c.StatusClarification || '',
+      start: c.StartDate || '', end: c.EndDate || '', daily: rubOf(c.DailyBudget?.Amount),
+      negatives: c.NegativeKeywords?.Items || [], strategy: x.BiddingStrategy || null,
+      counters: x.CounterIds?.Items || [], priorityGoals: x.PriorityGoals?.Items || [], trackingParams: x.TrackingParams || '' };
+  });
+  if (only && !campaigns.length) return { error: 'Кампания ' + campaign_id + ' не найдена в Директе.' };
+  const cids = campaigns.filter((c) => c.state !== 'ARCHIVED').map((c) => c.id);
+  let groups = [], ads = [], keywords = [];
+  if (cids.length) {
+    const gs = { CampaignIds: cids };
+    groups = ((await directSafe(acc, 'adgroups', { SelectionCriteria: gs, FieldNames: ['Id', 'Name', 'CampaignId', 'Status', 'ServingStatus', 'RegionIds', 'NegativeKeywords', 'TrackingParams'] },
+      { SelectionCriteria: gs, FieldNames: ['Id', 'Name', 'CampaignId'] }, 'v501')).AdGroups || [])
+      .map((g) => ({ id: g.Id, name: g.Name, cid: g.CampaignId, status: g.Status || '', serving: g.ServingStatus || '',
+        regions: g.RegionIds || [], negatives: g.NegativeKeywords?.Items || [], trackingParams: g.TrackingParams || '' }));
+    ads = ((await directSafe(acc, 'ads', { SelectionCriteria: gs, FieldNames: ['Id', 'AdGroupId', 'CampaignId', 'Type', 'State', 'Status', 'StatusClarification'], TextAdFieldNames: ['Title', 'Title2', 'Text', 'Href', 'DisplayUrlPath'] },
+      { SelectionCriteria: gs, FieldNames: ['Id', 'AdGroupId', 'CampaignId', 'State', 'Status'] }, 'v501')).Ads || [])
+      .map((a) => ({ id: a.Id, gid: a.AdGroupId, cid: a.CampaignId, type: a.Type || '', state: a.State, status: a.Status, note: a.StatusClarification || '',
+        title: a.TextAd?.Title || '', title2: a.TextAd?.Title2 || '', text: a.TextAd?.Text || '', href: a.TextAd?.Href || '', path: a.TextAd?.DisplayUrlPath || '' }));
+    keywords = ((await directSafe(acc, 'keywords', { SelectionCriteria: gs, FieldNames: ['Id', 'Keyword', 'AdGroupId', 'CampaignId', 'Bid', 'State', 'Status'] },
+      { SelectionCriteria: gs, FieldNames: ['Id', 'Keyword', 'AdGroupId', 'CampaignId', 'State', 'Status'] })).Keywords || [])
+      .map((k) => ({ id: k.Id, phrase: k.Keyword, gid: k.AdGroupId, cid: k.CampaignId, bid: rubOf(k.Bid), state: k.State, status: k.Status }));
+  }
+  let daily = null, statsNote = '';
+  if (stats) {
+    try { daily = await directDaily(acc, only?.[0]); if (!daily) statsNote = 'Отчёт о расходе Директ ещё готовит — спросите ещё раз через минуту.'; }
+    catch (e) { statsNote = e.message || String(e); }
+  }
+  return { at: new Date().toISOString(), live: true, sandbox: !!acc.sandbox, note: 'Живые данные из Директа. Только чтение — изменить отсюда ничего нельзя.',
+    campaigns, groups, ads: ads.slice(0, 300), keywords: keywords.slice(0, 500), ...(stats ? { daily: daily || [], statsNote } : {}) };
+}
+async function directLiveTool(env, a) {
+  const acc = await env.BOOKS.get(DIRECT_KEY, { type: 'json' });
+  if (!acc?.token) return msg('Живой доступ к Директу не включён. В Мастерской → Настройки → Нейросети нажмите «Обновить весь контекст» и разрешите живое чтение Директа.', true);
+  if (a.campaign_id != null && !/^\d{1,20}$/.test(String(a.campaign_id))) return msg('Номер кампании — только цифры.', true);
+  try {
+    const out = await directLive(acc, { campaign_id: a.campaign_id, stats: a.stats !== false });
+    return out.error ? msg(out.error, true) : msg(out);
+  } catch (e) { return msg(e.message || 'Директ не ответил', true); }
+}
+async function syncDirectAccess(req, env) {
+  if (!['PUT', 'DELETE'].includes(req.method)) return error(req, 405, 'Метод не поддерживается');
+  if (!(await verifyOwner(req, env))) return error(req, 401, 'Требуется вход владельца');
+  if (req.method === 'DELETE') { await env.BOOKS.delete(DIRECT_KEY); return json(req, { ok: true, removed: true }); }
+  const b = await req.json().catch(() => null);
+  if (!b || typeof b.token !== 'string' || b.token.length < 20 || b.token.length > 400 || /\s/.test(b.token) ||
+      (b.clientLogin != null && (typeof b.clientLogin !== 'string' || b.clientLogin.length > 100))) return error(req, 400, 'Неверный формат');
+  await env.BOOKS.put(DIRECT_KEY, JSON.stringify({ token: b.token, clientLogin: b.clientLogin || '', sandbox: !!b.sandbox,
+    exp: typeof b.exp === 'string' ? b.exp.slice(0, 40) : '', at: new Date().toISOString() }));
+  return json(req, { ok: true });
+}
 async function sectionTool(env, name, a = {}) {
   const keys = { get_marketing_overview: 'marketing', get_book_marketing: 'marketing',
     get_income_overview: 'income', get_book_sales: 'income',
     get_direct_overview: 'direct', get_direct_campaign: 'direct' };
   if (name === 'get_system_status') {
-    const [books, ...sections] = await Promise.all([indexOf(env.BOOKS),
+    const [books, live, ...sections] = await Promise.all([indexOf(env.BOOKS), env.BOOKS.get(DIRECT_KEY, { type: 'json' }),
       ...SECTION_NAMES.map((v) => env.BOOKS.get(sectionKey(v), { type: 'json' }))]);
     return msg({ books, sections: SECTION_NAMES.map((name, i) => ({
       name, available: !!sections[i], updatedAt: sections[i]?.updatedAt || null
-    })) });
+    })), directLive: live?.token ? { on: true, since: live.at || null, tokenUntil: live.exp || null } : { on: false } });
   }
+  if (name === 'get_direct_live') return directLiveTool(env, a);
   const section = keys[name];
   if (!section) return null;
   const item = await env.BOOKS.get(sectionKey(section), { type: 'json' });
@@ -252,7 +367,7 @@ async function mcp(req, env) {
   let result;
   try {
     switch (body.method) {
-      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.2.0' } }; break;
+      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.3.0' } }; break;
       case 'ping': result = {}; break;
       case 'tools/list': result = { tools: TOOLS }; break;
       case 'tools/call':
@@ -314,6 +429,7 @@ async function manageSnapshots(req, env, action) {
   }
   if (action === 'all') {
     for (const name of SECTION_NAMES) await env.BOOKS.delete(sectionKey(name));
+    await env.BOOKS.delete(DIRECT_KEY);
   }
   return json(req, { ok: true, removed, action });
 }
@@ -330,6 +446,7 @@ export default {
       if (url.pathname === '/mcp') return await mcp(req, env);
       if (url.pathname === '/sync/prune') return await manageSnapshots(req, env, 'prune');
       if (url.pathname === '/sync/all') return await manageSnapshots(req, env, 'all');
+      if (url.pathname === '/sync/direct-access') return await syncDirectAccess(req, env);
       const section = /^\/sync\/section\/([a-z]+)$/.exec(url.pathname);
       if (section) return await syncSection(req, env, section[1]);
       const match = /^\/sync\/([^/]+)$/.exec(url.pathname);
