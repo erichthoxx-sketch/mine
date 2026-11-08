@@ -68,13 +68,6 @@ acts['ai.all'] = async () => {
     const ok = await ask('Передать в ваш закрытый Cloudflare копии всех рукописей, маркетинговых материалов, продаж и рекламной статистики? Данные будут доступны через личный ключ нейросети. Пароли и токены не передаются.', 'Передать контекст');
     if (!ok) return false;
   }
-  // Вопрос о Директе — сразу после нажатия, а не после загрузки всех книг
-  const s0 = app().ctx().settings;
-  let liveOk = s0.aiDirectLive === true;
-  if (s0.directToken && !liveOk) {
-    liveOk = await ask('Разрешить нейросети смотреть ваш Яндекс Директ вживую? Она увидит кампании, черновики, объявления, фразы и расход — сразу, без обновления копии. Изменить что-либо в Директе она не сможет. Ключ Директа хранится в вашем закрытом Cloudflare, нейросеть его не видит.', 'Разрешить');
-    await app().store.saveSettings({ aiDirectLive: liveOk });
-  }
   running = true;
   app().rerender();
   const errors = [], store = app().store, data = app().ctx().data;
@@ -108,8 +101,8 @@ acts['ai.all'] = async () => {
     // Ключ Директа уходит в личный Cloudflare владелицы и нейросети не показывается.
     const st = app().ctx().settings;
     if (!st.directToken) errors.push('Директ вживую: нет входа в Директ — откройте «Директ» и войдите через Яндекс');
-    else if (liveOk) {
-      try { await syncDirectAccess(store, { ...st, aiDirectLive: true }); toast('Директ вживую подключён'); }
+    else {
+      try { if (await syncDirectAccess(store, { ...st, aiDirectLive: true })) await store.saveSettings({ aiDirectLive: true }); }
       catch (e) { errors.push('Директ вживую: ' + (e.message || e)); }
     }
     try { await request('POST', '/sync/prune', { ids: books.map((x) => x.id) }); }
@@ -142,7 +135,7 @@ acts['ai.clear'] = async () => {
       catch (e) { errors.push(b.title + ': ' + (e.message || e)); }
     }
     await app().store.saveSettings({
-      aiLastSyncedAt: '', aiLastCount: 0, aiLastError: errors.join('; ').slice(0, 700), aiDirectLive: null
+      aiLastSyncedAt: '', aiLastCount: 0, aiLastError: errors.join('; ').slice(0, 700), aiDirectLive: 'off'
     });
     toast(errors.length ? 'Облачные копии удалены, но не все метки книг обновились' : 'Все облачные копии контекста удалены');
   } catch (e) { toast('Не удалось отключить: ' + (e.message || e)); }

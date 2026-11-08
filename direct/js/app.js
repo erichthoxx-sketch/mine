@@ -1,7 +1,7 @@
 // Приложение «Директ»: реклама книг в Яндекс Директе — кампании, расход, запросы, минус-фразы, ставки,
 // учебник и ИИ-помощник. Вход и база — общие с «Доходами» и «Мастерской».
 import { createStore, authErrorText } from '../../js/store.js';
-import { syncDirectAccessQuiet } from '../../js/aidirect.js';
+import { syncDirectAccessQuiet, autoDirectAccess } from '../../js/aidirect.js';
 import { initAccent } from '../../js/accent.js';
 import { keepNavDown } from '../../js/vvfix.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from '../../js/ui.js';
@@ -163,7 +163,7 @@ async function savePendingToken() {
   } finally { saving = false; }
 }
 
-store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); });
+store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); });
 store.init().then(async () => {
   await savePendingToken();
   await syncDemo();

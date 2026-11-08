@@ -2,6 +2,7 @@
 import { initAccent } from '../../js/accent.js';
 import { keepNavDown } from '../../js/vvfix.js';
 import { createStore, authErrorText } from '../../js/store.js';
+import { autoDirectAccess } from '../../js/aidirect.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from '../../js/ui.js';
 import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
 import { writtenToday, writtenWeek } from './wcalc.js';
@@ -213,8 +214,10 @@ setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(
 setInterval(() => { if (document.visibilityState === 'visible') checkMailQueue(); }, 60e3);
 drive.preload().catch(() => {});
 let autoRefreshed = false;
+store.subscribe(() => autoDirectAccess(store));
 store.init().then(() => {
   render();
+  autoDirectAccess(store);
   scheduleTodoist(app, 2500, { pull: true });
   // при открытии один раз обновляем знаки книг, если Диск подключён
   const tryRefresh = () => {
