@@ -122,9 +122,14 @@ test('Direct live: key from owner only, never shown, only get methods, drafts vi
     }[svc];
     return new Response(JSON.stringify({ result }), { status: 200 });
   };
+  let camp;
   try {
     j = await (await worker.fetch(call('tools/call', { name: 'get_direct_live', arguments: {} }), a)).json();
+    // прежние инструменты тоже отвечают живыми данными (клиенты, запомнившие старый список инструментов)
+    camp = await (await worker.fetch(call('tools/call', { name: 'get_direct_campaign', arguments: { campaign_id: '715936525' } }), a)).json();
   } finally { globalThis.fetch = realFetch; }
+  assert.equal(JSON.parse(camp.result.content[0].text).campaigns[0].status, 'DRAFT');
+  assert.equal(camp.result.content[0].text.includes('SECRET_TOKEN'), false);
   const text = j.result.content[0].text, out = JSON.parse(text);
   assert.equal(out.campaigns[0].status, 'DRAFT');
   assert.equal(out.campaigns[0].trackingParams, 'utm_litref=PZSWjdD9ctDTys9A');

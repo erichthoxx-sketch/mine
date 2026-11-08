@@ -124,8 +124,8 @@ const contextTools = [
     from: { type: 'string', description: 'Дата от YYYY-MM-DD' },
     to: { type: 'string', description: 'Дата до YYYY-MM-DD' }
   }, ['book']),
-  tool('get_direct_overview', 'Сохранённая (не живая) сводка кампаний Директа, последние расходы и качество рекламного трафика.', {}),
-  tool('get_direct_campaign', 'Подробности одной кампании Директа и её статистика.', { campaign_id: { type: 'string' } }, ['campaign_id'])
+  tool('get_direct_overview', 'Кампании Директа (все, включая черновики), группы, объявления, фразы и расход за 30 дней — живые данные, если владелица дала доступ; иначе сохранённая копия. Плюс Метрика.', {}),
+  tool('get_direct_campaign', 'Одна кампания Директа (в т. ч. черновик): настройки, группы, объявления, фразы, расход — живые данные, если есть доступ.', { campaign_id: { type: 'string' } }, ['campaign_id'])
 ];
 TOOLS.push(...contextTools);
 TOOLS.push(tool('get_direct_live', 'Живое чтение Яндекс.Директа прямо сейчас (только чтение): все кампании, включая черновики, группы с регионами и минус-фразами, объявления, фразы, параметры URL и расход за 30 дней. Без campaign_id — все кампании, с ним — одна.', {
@@ -255,6 +255,25 @@ async function sectionTool(env, name, a = {}) {
   if (name === 'get_direct_live') return directLiveTool(env, a);
   const section = keys[name];
   if (!section) return null;
+  // Директ: если владелица дала живой доступ — отвечаем живыми данными, копия — только запасной вариант
+  if (name === 'get_direct_overview' || name === 'get_direct_campaign') {
+    const acc = await env.BOOKS.get(DIRECT_KEY, { type: 'json' });
+    if (acc?.token) {
+      const q = name === 'get_direct_campaign' ? String(a.campaign_id || '') : '';
+      if (q && !/^\d{1,20}$/.test(q)) return msg('Номер кампании — только цифры.', true);
+      try {
+        const out = await directLive(acc, { campaign_id: q || undefined });
+        if (out.error) return msg(out.error, true);
+        if (!q) { const snap = await env.BOOKS.get(sectionKey('direct'), { type: 'json' }); out.metrika = snap?.data?.metrika; }
+        return msg(out);
+      } catch (e) {
+        const snap = await env.BOOKS.get(sectionKey('direct'), { type: 'json' });
+        if (!snap) return msg(e.message || 'Директ не ответил', true);
+        // ниже — сохранённая копия, с пометкой, почему не живые данные
+        a = { ...a, liveError: e.message || String(e) };
+      }
+    }
+  }
   const item = await env.BOOKS.get(sectionKey(section), { type: 'json' });
   if (!item) return msg('Источник ' + section + ' ещё не подключён или доступ к нему отозван.', true);
   const d = item.data || {};
@@ -289,7 +308,7 @@ async function sectionTool(env, name, a = {}) {
     return msg({ book: a.book, lastSaleDate: d.lastSaleDate, updatedAt: item.updatedAt,
       count: found.length, rows: found.slice(0, 250) });
   }
-  if (name === 'get_direct_overview') return msg({ updatedAt: item.updatedAt, sourceAt: d.snapshotAt,
+  if (name === 'get_direct_overview') return msg({ ...(a.liveError ? { liveError: a.liveError } : {}), updatedAt: item.updatedAt, sourceAt: d.snapshotAt,
     campaigns: d.campaigns || [], daily: (d.daily || []).slice(-300),
     queries: (d.queries || []).slice(0, 50), metrika: d.metrika });
   if (name === 'get_direct_campaign') {
@@ -367,7 +386,7 @@ async function mcp(req, env) {
   let result;
   try {
     switch (body.method) {
-      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.3.0' } }; break;
+      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.4.0' } }; break;
       case 'ping': result = {}; break;
       case 'tools/list': result = { tools: TOOLS }; break;
       case 'tools/call':
