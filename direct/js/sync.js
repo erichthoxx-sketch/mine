@@ -2,7 +2,7 @@
 // d_snap/main  — кампании, группы, фразы, объявления;  d_snap/stats — расход по дням, фразы и запросы за 30 дней.
 // Расход связанных кампаний уходит в «Доходы» недельными отчётами (там считается окупаемость).
 import { call, report, metrika } from './api.js';
-import { MICRO, dailyRows, mergeDaily, adRows, mergeAdDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows, withGoal, moneyOf } from './dcalc.js';
+import { MICRO, dailyRows, mergeDaily, adRows, mergeAdDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows, withGoal, moneyOf, withLitref } from './dcalc.js';
 import { demoSnapshot, demoMetrikaSnap, demoSiteSnap, isDemo, snap, putSnap, putLog } from './demo.js';
 import { todayISO, addDays, weekStart } from '../../js/calc.js';
 import { SESSION_METRICS, goalMetric, mkRows, SITE_COUNTER, siteGoalIds } from './mcalc.js';
@@ -177,7 +177,14 @@ export async function apply(app, a, { by = 'app' } = {}) {
       negatives = r.Campaigns?.[0]?.NegativeKeywords?.Items || [];
     }
     const camp = main.campaigns.find((x) => x.id === a.campaign) || {};
-    if (a.do === 'goal') {
+    if (a.do === 'tracking') {
+      // «Параметры URL» есть у ЕПК; читаем текущие и меняем в них только utm_litref
+      const r = await call(s, 'campaigns', 'get', { SelectionCriteria: { Ids: [a.campaign] }, FieldNames: ['Id', 'Type'], UnifiedCampaignFieldNames: ['TrackingParams'] }, 2, undefined, 'v501');
+      const raw = r.Campaigns?.[0];
+      if (!raw?.UnifiedCampaign) throw new Error('«Параметры URL» есть только у Единой перфоманс-кампании — в этой кампании метку меняют в кабинете Директа');
+      const params = withLitref(raw.UnifiedCampaign.TrackingParams || '', a.tag);
+      out = resultOf(await call(s, 'campaigns', 'update', { Campaigns: [{ Id: a.campaign, UnifiedCampaign: { TrackingParams: params } }] }, 0, undefined, 'v501'), 'UpdateResults');
+    } else if (a.do === 'goal') {
       // стратегию читаем прямо перед записью и отправляем обратно целиком — меняется только цель; потом сверяем деньги
       const get = () => call(s, 'campaigns', 'get', { SelectionCriteria: { Ids: [a.campaign] }, FieldNames: ['Id', 'Type'], TextCampaignFieldNames: ['BiddingStrategy'], UnifiedCampaignFieldNames: ['BiddingStrategy'] }).then((r) => r.Campaigns?.[0]);
       const raw = await get(), g = withGoal(raw, a.goal);

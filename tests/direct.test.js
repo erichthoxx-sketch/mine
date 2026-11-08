@@ -261,7 +261,7 @@ test('переходник: Метрика только на чтение и т�
     const other = await worker.fetch(new Request('https://w.dev/metrika/management/v1/counters', { headers: { Origin: 'https://evil.example' } }));
     assert.equal(other.status, 403);
     const ver = await worker.fetch(new Request('https://w.dev/version', { headers: { Origin: 'https://erichthoxx-sketch.github.io' } }));
-    assert.equal(await ver.text(), '5');
+    assert.equal(await ver.text(), '6');
     // страницы конкурсов: только https и только площадки из списка
     const pg = await worker.fetch(new Request('https://w.dev/page?url=' + encodeURIComponent('https://litnet.com/ru/contests/x-c1'), { headers: { Origin: 'https://erichthoxx-sketch.github.io' } }));
     assert.equal(pg.status, 200); assert.equal(called, 'https://litnet.com/ru/contests/x-c1');
@@ -454,4 +454,12 @@ test('Смена цели: меняется только цель, бюджет 
   assert.equal(raw.UnifiedCampaign.BiddingStrategy.Search.WbMaximumConversionRate.GoalId, 111); // исходник не тронут
   assert.throws(() => withGoal({ Id: 8, TextCampaign: { BiddingStrategy: { Search: { BiddingStrategyType: 'WB_MAXIMUM_CLICKS', WbMaximumClicks: { WeeklySpendLimit: 1 } } } } }, 222), /не конверсии/);
   assert.match(describe({ do: 'goal', campaign: 7, goal: 222, goalName: 'Покупка' }, { campaigns: {} }), /бюджет и ставки не меняются/);
+});
+
+test('Метка Литнета: в «Параметрах URL» меняется только utm_litref', async () => {
+  const { withLitref, describe } = await import('../direct/js/dcalc.js');
+  assert.equal(withLitref('', 'utm_litref=NEW'), 'utm_litref=NEW');
+  assert.equal(withLitref('utm_litref=OLD', 'utm_litref=NEW'), 'utm_litref=NEW');
+  assert.equal(withLitref('utm_source=direct&utm_litref=OLD&utm_campaign={campaign_id}', 'utm_litref=NEW'), 'utm_source=direct&utm_campaign={campaign_id}&utm_litref=NEW');
+  assert.match(describe({ do: 'tracking', campaign: 1, tag: 'utm_litref=NEW' }, { campaigns: {} }), /объявления не меняются/);
 });

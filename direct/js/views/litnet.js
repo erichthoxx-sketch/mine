@@ -4,6 +4,7 @@ import { esc, acts, toast, openSheet, ask, opt, uid } from '../../../js/ui.js';
 import { visibleLinks, exactTag, linkStatus, expiresFromCreated } from '../litnetcalc.js';
 import { isLitnetLink, promoReminderDate, promoChannel, promoChannelName } from '../../../writer/js/promolinks.js';
 import { fmtDate, plural } from '../../../js/format.js';
+import { runAction } from './common.js';
 
 const app=()=>window.__app;
 const links=a=>visibleLinks(a.ctx().data.w_promolinks||[],a.ctx().data.w_books||[],{today:a.ctx().today});
@@ -48,6 +49,7 @@ export function litnetView(a) {
       <div class="ln-tagline">
         <span class="ln-tag">${esc(x.tag||'Некорректная ссылка')}</span>
         <button data-act="ln.copy" data-id="${esc(x.id)}" ${!x.tag?'disabled':''}>Копировать метку</button>
+        ${x.tag && promoChannel(x)==='direct' && !(x.directCampaignId&&x.appliedTag===x.tag) ? `<button class="primary" data-act="ln.replace" data-id="${esc(x.id)}">Заменить метку в Директе</button>` : ''}
       </div>
       <div class="row ln-actions">
         <button class="link" data-act="ln.edit" data-id="${esc(x.id)}">Изменить</button>
@@ -151,6 +153,23 @@ acts['ln.archive']=async d=>{
   if(!x||!(await ask('Убрать ссылку в архив? Напоминания по ней исчезнут, сама реклама не изменится.','В архив')))return false;
   await a.store.put('w_promolinks',{...x,status:'archived',archivedAt:new Date().toISOString()});
   document.getElementById('sheet')?.close();toast('Ссылка в архиве');return false;
+};
+// новая метка — сразу в «Параметры URL» кампании Директа (только ЕПК), с подтверждением и записью в «Что меняли»
+acts['ln.replace']=d=>{
+  const a=app(),x=(a.ctx().data.w_promolinks||[]).find(t=>t.id===d.id),tag=x&&exactTag(x.url);
+  if(!tag)return false;
+  const camps=(a.snap('main')?.campaigns||[]).filter(k=>k.state!=='ARCHIVED');
+  if(!camps.length){toast('Кампаний Директа пока не видно — нажмите ↻ вверху, чтобы загрузить их');return false;}
+  openSheet('Заменить метку в Директе',`<p class="small">Метка <b>${esc(tag)}</b> встанет в «Параметры URL» выбранной кампании вместо прежней метки Литнета. Объявления и бюджет не меняются.</p>
+    <label>Кампания</label><select name="cid">${camps.map(k=>opt(String(k.id),`${k.name} · №${k.id}${k.type==='UNIFIED_CAMPAIGN'?'':' (не ЕПК — только вручную)'}`,String(x.directCampaignId||''))).join('')}</select>`,async fd=>{
+    const cid=Number(fd.get('cid')), k=camps.find(c=>c.id===cid);
+    if(k&&k.type&&k.type!=='UNIFIED_CAMPAIGN'){toast('«Параметры URL» есть только у Единой перфоманс-кампании — в этой метку меняют в кабинете Директа');return false;}
+    let r;
+    try{r=await runAction({do:'tracking',campaign:cid,tag,why:'новая ссылка «Мой Литнет» — меняем только метку, чтобы кампания не переобучалась'},{confirm:false});}
+    catch(e){toast(e.message||'Не получилось');return false;}
+    if(r&&!r.errors.length)await a.store.put('w_promolinks',{...x,directCampaignId:String(cid),appliedTag:tag,appliedAt:new Date().toISOString()});
+  },{submitText:'Заменить'});
+  return false;
 };
 acts['ln.applied']=async d=>{
   const a=app(),x=(a.ctx().data.w_promolinks||[]).find(t=>t.id===d.id),tag=x&&exactTag(x.url);

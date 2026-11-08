@@ -7,14 +7,14 @@
 // Как поставить — docs/SETUP-DIRECT.md.
 
 // Откуда можно пользоваться переходником: только с сайта владелицы (и с компьютера при проверке)
-const ALLOWED_ORIGINS = ['https://erichthoxx-sketch.github.io', 'http://localhost:8765'];
+const ALLOWED_ORIGINS = ['https://erichthoxx-sketch.github.io', 'https://lanafreitag.ru', 'http://localhost:8765']; // lanafreitag.ru/my — короткий адрес приложений
 
 const TARGETS = {
   live: 'https://api.direct.yandex.com',
   sandbox: 'https://api-sandbox.direct.yandex.com',
   metrika: 'https://api-metrika.yandex.net',
 };
-const VERSION = '5'; // 4 — поддержка API v501 для новых единых перфоманс-кампаний
+const VERSION = '6'; // 4 — поддержка API v501 для новых единых перфоманс-кампаний; 6 — короткий адрес lanafreitag.ru/my
 const PAGE_HOSTS = ['litnet.com', 'litgorod.ru', 'litmarket.ru', 'litres.ru', 'author.today', 'prodaman.ru', 'feisovet.ru', 'litsovet.ru', 'ridero.ru', 'eksmo.ru', 'ast.ru', 'vk.com', 'vk.ru', 't.me'];
 // Какие заголовки пропускаем в Директ и обратно
 const PASS_IN = ['authorization', 'content-type', 'client-login', 'accept-language', 'processingmode', 'returnmoneyinmicros', 'skipreportheader', 'skipcolumnheader', 'skipreportsummary'];

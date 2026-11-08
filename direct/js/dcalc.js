@@ -295,6 +295,7 @@ export function describe(a, names = {}) {
     case 'bid': return `Фраза ${nm('keywords', a.keyword)}: ставка на поиске ${String(a.rub).replace('.', ',')} ₽`;
     case 'keywords': return `Группа ${nm('groups', a.group)}: добавить фразы — ${a.phrases.join(', ')}`;
     case 'counter': return `Кампания ${nm('campaigns', a.campaign)}: привязать счётчик Метрики №${a.counter}`;
+    case 'tracking': return `Кампания ${nm('campaigns', a.campaign)}: метка Литнета в «Параметрах URL» → ${a.tag} (объявления не меняются)`;
     case 'goal': return `Кампания ${nm('campaigns', a.campaign)}: стратегия — на цель «${a.goalName || a.goal}» (бюджет и ставки не меняются)`;
     default: return 'Неизвестное действие';
   }
@@ -632,4 +633,11 @@ export function withGoal(raw, goalId) {
   }
   if (!found) throw new Error('Стратегия кампании оптимизирует не конверсии (например, клики) — цель в ней не меняется. Сменить стратегию можно в кабинете Директа.');
   return { key, from, strategy: next, params: { Campaigns: [{ Id: raw.Id, [key]: { BiddingStrategy: next } }] } };
+}
+
+// «Мой Литнет»: новая метка в «Параметрах URL» кампании (ЕПК). Меняется только utm_litref=…, остальные параметры остаются;
+// объявления не трогаются — по словам Литнета, так кампания не переобучается.
+export function withLitref(current = '', tag = '') {
+  const t = String(tag || '').trim(), rest = String(current || '').split('&').map((x) => x.trim()).filter((x) => x && !/^utm_litref=/i.test(x));
+  return [...rest, t].filter(Boolean).join('&');
 }

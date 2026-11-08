@@ -3,7 +3,7 @@
 import { acts, toast } from './ui.js';
 import { ic } from './icons.js';
 
-export const PROXY_LATEST = 5; // 4 — новые ЕПК; 5 — платный Wordstat, выключен до ручной настройки
+export const PROXY_LATEST = 6; // 4 — новые ЕПК; 5 — платный Wordstat, выключен до ручной настройки; 6 — адрес lanafreitag.ru/my
 const app = () => window.__app;
 const saveD = (patch) => app().store.saveSettings({ direct: { ...(app().ctx().settings.direct || {}), ...patch } });
 const base = (s) => (s.direct?.proxy || '').replace(/\/+$/, '');
