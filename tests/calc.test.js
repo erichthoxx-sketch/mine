@@ -579,6 +579,13 @@ test('бюджет рекламы на следующий месяц под це
   assert.equal(r2.booked, 3000); // 300 ₽ в день × 10 дней ноября
   assert.equal(r2.bookedIncome, 12000);
   assert.equal(r2.budget, 12000); // (60 000 − 12 000) ÷ 4
+  // свой общий бюджет на месяц: ничего сверху не предлагаем, сверяем с нужным на цель (60 000 ÷ 4 = 15 000)
+  const r3 = budgetPlan({ sales, legacyDays: [], campaigns: booked, reports: [], settings: { ...settings, adBudget: { '2026-11': 45000 } }, today: '2026-10-10', dataEnd: day(39) });
+  assert.deepEqual([r3.status, r3.need, r3.planned, r3.short, r3.budget], ['planned', 15000, 45000, 0, 0]);
+  const r4 = budgetPlan({ sales, legacyDays: [], campaigns: booked, reports: [], settings: { ...settings, adBudget: { '2026-11': 10000 } }, today: '2026-10-10', dataEnd: day(39) });
+  assert.deepEqual([r4.planned, r4.short], [10000, 5000]);
+  // дни без рекламы свежие — пометки «давно» нет; последний такой день — 30 сентября
+  assert.equal(r.organicLast, '2026-09-30'); assert.equal(r.organicOld, false);
 });
 
 test('окончания по числу', async () => {

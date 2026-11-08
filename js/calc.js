@@ -977,7 +977,11 @@ export function budgetPlan(ctx) {
     bookedList.push({ id: k.id, name: k.name, spend });
   }
   const booked = r2(bookedList.reduce((a, x) => a + x.spend, 0));
-  const out = { month: next, days, goal, organicPerDay, organicDays, organicMonth: organicPerDay == null ? null : r2(organicPerDay * days), roi, spentWithData, threshold: Number(s.litnetThreshold) || 10000, pct: (Number(s.litnetPct) || 20) / 100, booked, bookedList };
+  // свой общий бюджет на месяц (все каналы) — вписывает сама; заведённые кампании внутри него
+  const plannedSet = Number((s.adBudget || {})[next]) || 0;
+  // последний день без рекламы: давно — обычный доход сейчас, скорее всего, выше, а отдача рекламы завышена
+  const organicLast = clean.length >= 3 ? clean[clean.length - 1].date : null;
+  const out = { month: next, days, goal, organicPerDay, organicDays, organicMonth: organicPerDay == null ? null : r2(organicPerDay * days), roi, spentWithData, threshold: Number(s.litnetThreshold) || 10000, pct: (Number(s.litnetPct) || 20) / 100, booked, bookedList, plannedSet, organicLast, organicOld: !!organicLast && organicLast < addDays(ctx.dataEnd, -30) };
   if (goal == null || organicPerDay == null) return { ...out, status: 'nodata' };
   out.gap = r2(goal - out.organicMonth);
   if (out.gap <= 0) return { ...out, status: 'enough', budget: 0 };
@@ -985,6 +989,15 @@ export function budgetPlan(ctx) {
   if (roi < 1) return { ...out, status: 'unprofitable' };
   // то, что принесут уже заведённые кампании, вычитаем из недостающего
   out.bookedIncome = r2(booked * roi);
+  // сколько рекламы за месяц нужно на цель при прошлой отдаче (до тысячи вверх)
+  out.need = Math.ceil(out.gap / roi / 1000) * 1000;
+  out.lowData = spentWithData < 10000 || out.organicDays < 7;
+  // свой бюджет задан — ничего не предлагаем сверху, только сверяем его с нужным
+  if (plannedSet) {
+    out.planned = Math.max(plannedSet, booked);
+    out.short = Math.max(0, out.need - out.planned);
+    return { ...out, status: 'planned', budget: 0 };
+  }
   if (booked && out.bookedIncome >= out.gap) return { ...out, status: 'booked', budget: 0 };
   const raw = (out.gap - out.bookedIncome) / roi;
   // «Литнет платит» принимает от порога; округляем вверх до тысячи
@@ -993,7 +1006,6 @@ export function budgetPlan(ctx) {
   out.discount = out.budget >= out.threshold ? r2(out.budget * out.pct) : 0; // скидка Литнета вернётся с выплатой
   out.cost = r2(out.budget - out.discount);
   out.profit = r2(out.extraIncome - out.cost);
-  out.lowData = spentWithData < 10000 || out.organicDays < 7; // мало данных — оценка грубая
   out.status = 'ok';
   return out;
 }

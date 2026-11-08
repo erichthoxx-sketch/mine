@@ -158,7 +158,7 @@ export function buildReportModel(d, from, to) {
       [`Обычный доход без рекламы (средний за ${bp.organicDays} дн. без рекламы)`, `${cellText(RUB(bp.organicPerDay))} в день ≈ ${cellText(RUB(bp.organicMonth))} за месяц`],
       ['Не хватает до цели', bp.gap > 0 ? RUB(bp.gap) : 'не хватает 0 — цель достижима без рекламы'],
       ['Отдача рекламы в прошлых кампаниях', bp.roi == null ? 'пока неизвестна' : `${cellText(N2(bp.roi))} ₽ дохода сверх обычного на 1 ₽ рекламы`],
-      ['Рекомендуемый бюджет (расчёт приложения)', bp.status === 'ok' ? `${cellText(RUB(bp.budget))} (скидка Литнета ≈ ${cellText(RUB(bp.discount))}, обойдётся ≈ ${cellText(RUB(bp.cost))}, доход сверх обычного ≈ ${cellText(RUB(bp.extraIncome))})` : bp.status === 'unprofitable' ? 'увеличивать невыгодно — реклама пока возвращала меньше, чем стоила' : bp.status === 'enough' ? 'не обязателен' : 'нет данных об отдаче'],
+      ['Рекомендуемый бюджет (расчёт приложения)', bp.status === 'planned' ? `свой бюджет ${cellText(RUB(bp.planned))}; на цель нужно ≈ ${cellText(RUB(bp.need))}${bp.short ? `, не хватает ≈ ${cellText(RUB(bp.short))}` : ' — хватает'}` : bp.status === 'ok' ? `${cellText(RUB(bp.budget))} (скидка Литнета ≈ ${cellText(RUB(bp.discount))}, обойдётся ≈ ${cellText(RUB(bp.cost))}, доход сверх обычного ≈ ${cellText(RUB(bp.extraIncome))})` : bp.status === 'unprofitable' ? 'увеличивать невыгодно — реклама пока возвращала меньше, чем стоила' : bp.status === 'enough' ? 'не обязателен' : 'нет данных об отдаче'],
     ]);
     if (bp.lowData) p('⚠︎ Данных о рекламе пока мало — расчёт бюджета грубый.');
   }

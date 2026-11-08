@@ -105,19 +105,31 @@ export function budgetCard(c) {
   if (b.status === 'nodata') return `<div class="card"><h2>Бюджет на ${fmtMonth(b.month)}</h2><p class="muted" style="margin:0">${b.goal == null ? `Чтобы посчитать бюджет, задайте цель на ${fmtMonth(b.month)} в блоке «Цели» ниже.` : 'Пока не хватает данных о доходе без рекламы — бюджет посчитается, когда появится выгрузка за несколько дней.'}</p></div>`;
   const head = `<h2>Бюджет на ${fmtMonth(b.month)}</h2>
     <div class="kv"><div><span>Цель на ${fmtMonth(b.month)}</span><b>${rub(b.goal, 0)}</b></div><div><span>Без рекламы обычно</span><b>≈ ${rub(b.organicMonth, 0)}</b></div></div>`;
+  // свой общий бюджет на месяц: тогда приложение не предлагает сумму сверху, а сверяет её с нужной для цели
+  const mine = `<div class="row" style="margin:4px 0 10px;gap:10px;align-items:center;flex-wrap:wrap"><label for="adbud" class="small" style="margin:0">Мой бюджет на ${fmtMonth(b.month).replace(/ \d{4}$/, "")}, вся реклама</label><input id="adbud" type="number" inputmode="numeric" min="0" step="1000" placeholder="не задан" value="${b.plannedSet || ''}" data-chg="ads.mbudget" data-m="${b.month}" style="width:130px"></div>`;
+  const old = b.organicOld ? `<div class="alert alert-thin">Дни без рекламы были давно (последний — ${fmtDate(b.organicLast)}). Сейчас без рекламы вы, скорее всего, зарабатываете больше, а реклама приносит меньше, чем здесь посчитано — отдача, вероятно, завышена.</div>` : '';
   const hint = `<div class="hint">Обычный доход — средний за ${b.organicDays} дн. без рекламы (${rub(b.organicPerDay, 0)} в день). Отдача — сколько дохода сверх обычного приносил 1 ₽ в прошлых кампаниях. Это оценка: с ростом бюджета отдача обычно немного падает.</div>`;
   const bookedTxt = b.booked ? `<p class="small" style="margin:0 0 6px">Уже заведено на ${fmtMonth(b.month)}: ${b.bookedList.map((x) => `«${esc(x.name)}» ${rub(x.spend, 0)}`).join(', ')}${b.bookedIncome != null ? ` — принесут ≈ ${rub(b.bookedIncome, 0)} сверх обычного` : ''}.</p>` : '';
   let body;
-  if (b.status === 'booked') body = `${bookedTxt}<p style="margin:0">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>, и уже заведённой рекламы на это хватает. Новый бюджет не нужен — только если хотите вырасти сверх цели.</p>`;
+  if (b.status === 'planned') body = `<p style="margin:0 0 6px">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>. Реклама приносила ≈ <b>${rub(b.roi, 2)}</b> дохода на каждый 1 ₽ — по этой отдаче на цель нужно ≈ <b>${rub(b.need, 0)}</b> рекламы за месяц.</p>${bookedTxt}
+    <div class="tiles"><div><div class="k">Нужно на рекламу для цели</div><div class="v">≈ ${rub(b.need, 0)}</div><div class="s">по отдаче прошлых кампаний</div></div>
+      <div><div class="k">Мой бюджет</div><div class="v">${rub(b.planned, 0)}</div><div class="s">${b.short ? `для цели не хватает ≈ ${rub(b.short, 0)}` : b.planned > b.need ? `хватает · сверх нужного ≈ ${rub(b.planned - b.need, 0)} — на рост сверх цели` : 'хватает'}</div></div></div>
+    ${b.lowData ? '<div class="alert alert-thin">Данных пока мало — оценка грубая. Она уточнится сама после следующих кампаний.</div>' : ''}`;
+  else if (b.status === 'booked') body = `${bookedTxt}<p style="margin:0">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>, и уже заведённой рекламы на это хватает. Новый бюджет не нужен — только если хотите вырасти сверх цели.</p>`;
   else if (b.status === 'enough') body = `<p style="margin:0">Цель достижима и без рекламы. Реклама — чтобы вырасти сверх цели.</p>`;
   else if (b.status === 'noroi') body = `<p style="margin:0">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>. Отдача рекламы пока неизвестна — посчитаю бюджет, когда появятся данные по первой кампании.</p>`;
   else if (b.status === 'unprofitable') body = `<p style="margin:0">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>, но реклама пока возвращала ${rub(b.roi, 2)} на каждый 1 ₽ — меньше, чем стоила. Увеличивать бюджет невыгодно: сначала стоит поменять кампанию (книгу, креативы, аудиторию).</p>`;
   else body = `<p style="margin:0 0 6px">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>. Реклама приносила ≈ <b>${rub(b.roi, 2)}</b> дохода на каждый 1 ₽.</p>${bookedTxt}
     <div class="tiles"><div><div class="k">${b.booked ? 'Добавить к заведённому' : 'Рекомендуемый бюджет'}</div><div class="v">${rub(b.budget, 0)}</div><div class="s">скидка Литнета вернёт ≈ ${rub(b.discount, 0)} → обойдётся ≈ ${rub(b.cost, 0)}</div></div>
-      <div><div class="k">Ожидаемый доход от рекламы</div><div class="v">≈ ${rub(b.extraIncome, 0)}</div><div class="s">сверх обычного · в плюсе ≈ ${rub(b.profit, 0)}</div></div></div>
+      <div><div class="k">Ожидаемый доход от рекламы</div><div class="v">≈ ${rub(b.extraIncome, 0)}</div><div class="s">от этих ${rub(b.budget, 0)} сверх обычного · в плюсе ≈ ${rub(b.profit, 0)}</div></div></div>
     ${b.lowData ? '<div class="alert alert-thin">Данных пока мало — оценка грубая. Она уточнится сама после следующих кампаний.</div>' : ''}`;
-  return `<div class="card">${head}${body}${hint}</div>`;
+  return `<div class="card">${head}${mine}${body}${old}${hint}</div>`;
 }
+changes['ads.mbudget'] = async (v, el) => {
+  const st = app().store, cur = { ...(app().ctx().settings.adBudget || {}) }, n = Math.max(0, Math.round(Number(String(v).replace(/\s/g, '').replace(',', '.')) || 0));
+  if (n) cur[el.dataset.m] = n; else delete cur[el.dataset.m];
+  await st.saveSettings({ adBudget: cur });
+};
 
 // переключатель месяца для сводок: текущий и прошедшие месяцы с рекламой
 function adMonths(c) {

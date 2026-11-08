@@ -60,6 +60,7 @@ export function channelCard(a) {
   const b = budgetPlan({ ...adCtx(c.data, c.settings, t), settings: c.settings });
   const best = v?.best && rows.find((r) => r.key === v.best);
   const plan = b.status === 'ok' ? `На ${fmtMonth(b.month)} до цели не хватает ≈ ${rub(b.gap, 0)}: ${b.booked ? `к уже заведённой рекламе (${rub(b.booked, 0)}) стоит добавить` : 'нужно вложить'} ≈ <b>${rub(b.budget, 0)}</b> — принесёт ≈ ${rub(b.extraIncome, 0)} сверх обычного${best ? `, лучше — в «${esc(best.name)}»` : ''}.${b.lowData ? ' Оценка пока грубая.' : ''}`
+    : b.status === 'planned' ? `На ${fmtMonth(b.month)} ваш бюджет — ${rub(b.planned, 0)}; по прошлой отдаче на цель нужно ≈ ${rub(b.need, 0)}${b.short ? ` — не хватает ≈ ${rub(b.short, 0)}` : ' — хватает'}${best ? `, лучше — в «${esc(best.name)}»` : ''}.${b.lowData ? ' Оценка пока грубая.' : ''}`
     : b.status === 'booked' ? `На ${fmtMonth(b.month)} уже заведённой рекламы (${rub(b.booked, 0)}) хватает до цели — новый бюджет нужен, только чтобы вырасти сверх неё.`
     : b.status === 'unprofitable' ? `На ${fmtMonth(b.month)} до цели не хватает ≈ ${rub(b.gap, 0)}, но реклама пока возвращала меньше, чем стоила: добавлять деньги невыгодно — сначала сменить книгу, текст или аудиторию.`
     : b.status === 'enough' ? `На ${fmtMonth(b.month)} цель достижима и без рекламы.` : '';

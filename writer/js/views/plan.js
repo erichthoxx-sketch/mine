@@ -192,6 +192,7 @@ function incomeItems(c, from, to) {
   if (b25 >= from && b25 <= to && b25 >= t) {
     const b = budgetPlan({ ...adCtx(d, c.settings, t), settings: c.settings });
     const sub = b.status === 'ok' ? `≈ ${rub(b.budget, 0)}${b.booked ? ' к уже заведённой' : ''} — принесёт ≈ ${rub(b.extraIncome, 0)} сверх обычного`
+      : b.status === 'planned' ? (b.short ? `мой бюджет ${rub(b.planned, 0)} — для цели не хватает ≈ ${rub(b.short, 0)}` : `моего бюджета ${rub(b.planned, 0)} хватает для цели`)
       : b.status === 'booked' ? 'уже заведённой рекламы хватает до цели' : b.status === 'unprofitable' ? 'реклама пока не окупалась — сначала сменить подход'
       : b.status === 'enough' ? 'цель достижима и без рекламы' : '';
     if (sub) add(b25, `Решить бюджет рекламы на ${fmtMonth(b.month)}`, sub + ' · Доходы → Финансы → Цели');
