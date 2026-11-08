@@ -12,6 +12,9 @@ import { chartInputs, chartLegend } from './home.js';
 import { totals as dTotals } from '../../direct/js/dcalc.js';
 import { ic } from '../icons.js';
 import { linkedTargetologists, targetReminders } from '../target-partners.js';
+import { campaignVerdict, campaignBook, campaignLink, reportDue } from '../adroi.js';
+import { promoToken } from '../../writer/js/promolinks.js';
+import { litrefRows } from '../../direct/js/mcalc.js';
 
 const app = () => window.__app;
 export const CHANNELS = { litnet: 'Литнет платит', own: 'Мой таргет', other: 'Другое' };
@@ -37,6 +40,7 @@ function summaryBody(c, s, { showBudget = true, past = null } = {}) {
     ${showBudget && !past && s.paid ? bar('Бюджет идущих кампаний израсходован <span class="muted">≈ по плану</span>', `<b>${rub(s.plannedSpent, 0)}</b> из ${rub(s.paid, 0)}`, s.budgetShare) : ''}`;
 }
 
+const VK = { good: 'up', bad: 'down', even: '', wait: 'muted' };
 function miniCampaign(c, k, alerts) {
   const m = metricsFor(c, k), p = campaignProgress(k, m, c.today);
   const al = alerts.find((x) => x.campaignId === k.id && !x.snoozed);
@@ -45,6 +49,7 @@ function miniCampaign(c, k, alerts) {
   return `<a class="item" href="#" data-act="go" data-to="/ad/${k.id}"><div class="row between"><b>${esc(k.name)}</b>${al ? '<span class="badge bad">⚠︎ проверить</span>' : st}</div>
     <div class="small muted">${esc(k.bookId ? c.titleOf(k.bookId, '') : 'все книги')}${k.budget ? ` · ${rub(k.budget, 0)}` : ''} · ${fmtDate(k.start)}–${fmtDate(k.end) || '…'}</div>
     ${m.status === 'planned' ? (started ? '<div class="small muted">окупаемость появится, когда загрузите выгрузку Литнета за эти дни</div>' : '') : `<div class="small">окупаемость в день ${payTxt(m.payback)}${m.costPerSale != null ? ` · продажа ≈ ${rub(m.costPerSale, 0)}` : ''}</div>`}
+    ${m.status !== 'planned' && !k.oneOff ? (() => { const v = campaignVerdict(m, p); return v.kind === 'wait' ? '' : `<div class="small ${VK[v.kind]}">${esc(v.text.charAt(0).toUpperCase() + v.text.slice(1))} — ${esc(v.todo)}${v.est ? ' <span class="muted">(расход — оценка)</span>' : ''}</div>`; })() : ''}
     ${m.overlaps?.length ? `<div class="small warnc">⚠︎ пересекается: ${m.overlaps.map((o) => `${esc(o.name)} (${fmtShort(o.from)}–${fmtShort(o.to)})`).join(', ')}</div>` : ''}
     ${al ? `<div class="small down">${esc(alertText(al))}</div>` : ''}</a>`;
 }
@@ -197,6 +202,31 @@ acts['extra.new'] = () => {
 };
 acts['extra.del'] = async (d) => { if (await ask('Убрать этот расход?', 'Убрать')) await app().store.remove('campaigns', d.id); };
 
+// Вывод «продлевать или нет», книга, если не выбрана, ссылка Литнета кампании (Метрика) и напоминание об отчёте — js/adroi.js
+function verdictHtml(c, k, m) {
+  const out = [];
+  if (!k.oneOff) {
+    const v = campaignVerdict(m, campaignProgress(k, m.status === 'planned' ? { uplift: null, days: 0, spendTotal: 0 } : m, c.today));
+    out.push(`<p class="${VK[v.kind]}"><b>${esc(v.text.charAt(0).toUpperCase() + v.text.slice(1))}</b>${v.todo ? ` — ${esc(v.todo)}` : ''}${v.est && v.kind !== 'wait' ? ' <span class="small muted">(расход — оценка)</span>' : ''}</p>`);
+  }
+  const g = campaignBook(k, c.data.books || []);
+  if (!k.bookId && g.book) out.push(`<p class="small warnc">Книга не выбрана, поэтому доход считается по всем книгам. По названию это «${esc(g.book.title)}». <button class="link" data-act="ad.pickBook" data-id="${esc(k.id)}" data-b="${esc(g.book.id)}">Выбрать эту книгу</button></p>`);
+  if (reportDue(k, c.data.reports || [], c.today)) out.push(`<p class="small warnc">Нет отчёта о расходе за последнюю неделю — попросите у таргетолога. <button class="link" data-act="rep.new" data-id="${esc(k.id)}">+ Отчёт</button></p>`);
+  const l = campaignLink(k, c.data.w_promolinks || [], c.data.w_books || [], c.data.books || []);
+  if (l) {
+    const code = promoToken(l.url), mk = (c.data.d_snap || []).find((x) => x.id === 'mk');
+    const r = litrefRows(mk?.litref || [], (c.settings.direct?.metrika?.main || []).map(String)).find((x) => x.code.toLowerCase() === code.toLowerCase());
+    out.push(`<p class="small muted">Ссылка Литнета «${esc(l.campaign || code)}»${r ? `: за 90 дней ${num(r.visits)} визитов, покупок ${num(r.conv)} (Метрика)` : ' — визитов по ней Метрика пока не видела'}</p>`);
+  }
+  return out.join('');
+}
+acts['ad.pickBook'] = async (d) => {
+  const k = app().ctx().campaigns.find((x) => x.id === d.id);
+  if (!k) return;
+  await app().store.put('campaigns', { ...k, bookId: d.b, scope: 'book' });
+  toast('Книга выбрана — доход считается по ней', { undo: () => app().store.put('campaigns', k) });
+};
+
 export function adPage(a, id) {
   const c = a.ctx();
   const k = c.campaigns.find((x) => x.id === id);
@@ -223,7 +253,7 @@ export function adPage(a, id) {
       <dt>Стоимость одной «лишней» продажи</dt><dd>${m.costPerExtraSale == null ? '<span class="muted">продаж не больше, чем в базе</span>' : rub(m.costPerExtraSale)}</dd>
     </dl>`;
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/ads">← Вся реклама</a></p>
-  <div class="card"><h2>${esc(k.name)}</h2>${metricsHtml}</div>
+  <div class="card"><h2>${esc(k.name)}</h2>${verdictHtml(c, k, m)}${metricsHtml}</div>
   <div class="card"><h2>Доход вокруг кампании</h2><div class="chart" id="chart"></div><div id="legend"></div></div>
   ${notesSection(c, k)}
   <details class="card"><summary>Фактический расход по неделям — если таргетологи его присылают</summary>

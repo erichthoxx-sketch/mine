@@ -36,6 +36,7 @@ export const PROFILE = 'profile', PROFILE_NAME = 'Профиль автора';
 export function promoChannel(x = {}) {
   if (x.channel === 'social' || x.channel === 'direct' || x.channel === 'litnet') return x.channel;
   const source = String(x.campaign || x.socialPlatform || '').toLocaleLowerCase('ru');
+  if (/литнет\s*плат/.test(source)) return 'litnet'; // старые ссылки «Альпийский - Литнет Платит»
   return /threads|тредс|инстаграм|instagram|вконтакте|\bvk\b|соцсет|tiktok|тик ?ток/.test(source) ? 'social' : 'direct';
 }
 export const promoChannelName = x => ({ social: 'Соцсети', litnet: 'Литнет платит' })[promoChannel(x)] || 'Директ';

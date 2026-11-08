@@ -885,7 +885,8 @@ export function campaignProgress(c, m, today) {
   const elapsedEnd = c.end && c.end < today ? c.end : today;
   const elapsed = c.start && c.start <= today ? countDays(c.start, elapsedEnd) : 0;
   const budget = Number(c.budget) || null;
-  const spentToDate = budget && total ? r2(budget / total * elapsed) : (m.spendTotal ?? null);
+  // есть отчёты о расходе за все дни — берём факт, иначе бюджет поровну по дням
+  const spentToDate = m.spendSource === 'reports' ? m.spendTotal : budget && total ? r2(budget / total * elapsed) : (m.spendTotal ?? null);
   const returned = m.uplift == null ? null : r2(m.uplift * m.days); // доход сверх базы, приписанный кампании
   return {
     day: elapsed, total, daysLeft: total ? Math.max(0, total - elapsed) : null,

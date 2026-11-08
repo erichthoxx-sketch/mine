@@ -1,5 +1,6 @@
 // «Аналитика»: всё о читателях по Метрике автора на Литнете — с подсвеченными шагами, книгами, воронкой,
 // метками UTM, деньгами и формулами. Работает и без Директа: нужна только Метрика.
+import { linkSpend } from '../../../js/adroi.js';
 import { esc, acts, forms, toast, openSheet, opt, N, uid, more, fold } from '../../../js/ui.js';
 import { num, pct, rub, fmtShort } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
@@ -130,8 +131,13 @@ const tableOf = (M) => {
   const utms = M.c.settings.direct?.utms || [], have = new Set(utms.filter((x) => x.litref).map((x) => x.litref.toLowerCase()));
   const books = { profile: 'Профиль автора', ...Object.fromEntries((M.c.data.w_books || []).map((b) => [b.id, b.title])) };
   const pl = activePromoLinks(M.c.data.w_promolinks || []).map((x) => ({ x, code: promoToken(x.url) })).filter(({ code }) => code && !have.has(code.toLowerCase()) && have.add(code.toLowerCase()))
-    .map(({ x, code }) => ({ id: 'pl_' + x.id, pl: true, label: [books[x.bookId], x.campaign].filter(Boolean).join(' · ') || `Ссылка Литнета ${code}`, litref: code, cost: 0 }));
-  return utmTable(M.mk.utm || [], [...utms, ...pl], M.main, M.perSale, litrefRows(M.mk.litref || [], M.main, M.titles)).map((r) => (r.saved?.pl ? { ...r, saved: null } : r));
+    .map(({ x, code }) => {
+      // расход — из кампаний «Доходов», у которых эта ссылка (js/adroi.js): вписывать второй раз не нужно
+      const sp = linkSpend(x.id, M.c.data, M.c.settings, M.t);
+      return { id: 'pl_' + x.id, pl: true, label: [books[x.bookId], x.campaign].filter(Boolean).join(' · ') || `Ссылка Литнета ${code}`, litref: code, cost: sp.cost,
+        costNote: sp.names.length ? `расход из «Доходов»: ${sp.names.map((n) => `«${n}»`).join(', ')}${sp.est ? ' — оценка, пока нет отчётов' : ''}` : '' };
+    });
+  return utmTable(M.mk.utm || [], [...utms, ...pl], M.main, M.perSale, litrefRows(M.mk.litref || [], M.main, M.titles)).map((r) => (r.saved?.pl ? { ...r, costNote: r.saved.costNote, saved: null } : r));
 };
 function srcTab(a, M) {
   const { mk, main, hasGoals } = M;
@@ -149,6 +155,7 @@ function srcTab(a, M) {
       ${rows.length ? `<div class="list">${rows.map((x, i) => `<div class="item"><div class="row between"><b>${esc(x.label)}</b><span class="small">${num(x.visits)} визитов</span></div>
         <div class="small">${hasGoals ? `покупок ${num(x.conv)}${x.cr != null ? ` (${pct(x.cr, 1)})` : ''}` : ''}${x.cost ? ` · расход ${rub(x.cost, 0)}${x.cpa != null ? ` · покупатель ${rub(x.cpa, 0)}` : ''}${x.romi != null ? ` · <span class="${x.romi >= 0 ? 'up' : 'down'}">окупаемость ${x.romi >= 0 ? '+' : ''}${pct(x.romi, 0)}</span>` : ''}` : ''}</div>
         <div class="small muted">${esc([x.source, x.medium, x.campaign].filter(Boolean).join(' / '))}${x.visits && x.visits < MIN_VISITS ? ' · данных пока мало' : ''}</div>
+        ${x.costNote ? `<div class="small muted">${esc(x.costNote)}</div>` : ''}
         ${`<div class="row"><button class="link" data-act="an.cost" data-i="${i}">${x.cost ? 'Изменить расход' : 'Указать расход'}</button>${x.saved ? `<button class="link danger" data-act="an.del" data-id="${esc(x.saved.id)}">Убрать</button>` : ''}</div>`}</div>`).join('')}</div>` : '<p class="muted">Пока пусто: Метрика ещё не видела переходов по ссылкам Литнета и своим меткам.</p>'}
 
       <details class="d-more"${u.link ? ' open' : ''}><summary>Своя метка для соцсетей, рассылки, блога</summary>

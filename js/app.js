@@ -20,7 +20,7 @@ import { data } from './views/data.js';
 import { sideIncome } from './views/side.js';
 
 // d_snap — сводка из приложения «Директ» (для баннера во вкладке «Реклама»)
-const store = createStore({ colls: [...COLLECTIONS, 'd_snap', 'sales_history', 'w_links', 'w_books'] }); // w_books — для дат запуска рекламы книг
+const store = createStore({ colls: [...COLLECTIONS, 'd_snap', 'sales_history', 'w_links', 'w_books', 'w_promolinks'] }); // w_books — для дат запуска рекламы книг, w_promolinks — ссылки Литнета кампаний
 initAccent(store);
 keepNavDown(); // iPhone: нижнее меню не «повисает» посреди экрана
 const ui = { route: '/', range: 90, table: 'weeks', day: null, month: null };

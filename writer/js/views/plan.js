@@ -1,4 +1,5 @@
 import { ic, icx } from '../../../js/icons.js';
+import { adBoard } from '../../../js/adroi.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask, fold } from '../../../js/ui.js';
 import { num, fmtDate, pct, plural } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
@@ -173,11 +174,15 @@ function incomeItems(c, from, to) {
     const had = (d.sales || []).some((x) => x.date.startsWith(prev));
     if (had) add(k + '-20' < t ? (k === monthKey(t) ? t : k + '-20') : k + '-20', `Записать цифры Rocket за ${fmtMonth(prev)}`, 'из кабинета Rocket');
   }
-  // реклама: старт и конец кампаний
+  // реклама: старт и конец кампаний; к концу — вывод по окупаемости (js/adroi.js, как в «Доходах»);
+  // идёт неделю без отчёта о расходе — попросить у таргетолога (на сегодня)
+  const board = Object.fromEntries(adBoard(d, c.settings, t, { days: 60 }).map((x) => [x.c.id, x]));
   for (const k of d.campaigns || []) {
     if (k.oneOff) continue;
+    const x = board[k.id];
     if (k.start) add(k.start, `Старт рекламы «${k.name}»`);
-    if (k.end) add(k.end, `Конец рекламы «${k.name}»`, 'решить, продлевать ли');
+    if (k.end) add(k.end, `Конец рекламы «${k.name}»`, x && x.v.kind !== 'wait' ? `${x.v.text}${x.v.est ? ' (расход — оценка)' : ''} — ${x.v.todo}` : 'решить, продлевать ли');
+    if (x?.reportDue) add(t, `Попросить отчёт о расходе: «${k.name}»`, 'у таргетолога за неделю — и внести в «Доходах» кнопкой «Отчёт»; без него окупаемость — оценка');
   }
   // события дней из «Доходов» (что вносила там сама, без выкладки глав из Мастерской)
   for (const day of d.days || []) {
