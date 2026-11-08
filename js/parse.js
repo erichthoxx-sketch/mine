@@ -94,6 +94,34 @@ export function parseTargetReport(text) {
   return { rows: out, bad };
 }
 export const reportId = (campaignId, start) => `r_${campaignId}_${start}`;
+// Сообщение таргетолога как есть («Отчёт за 3–9 ноября: потрачено 5 230 ₽, показов 34 000, кликов 412») → одна неделя
+// Даты: «03.11–09.11», «03.11.2026 - 09.11.2026», «с 3 по 9 ноября», «3–9 ноября», «28 октября – 3 ноября». Год — ближайший к today, не в будущем.
+const RU_MON = ['январ', 'феврал', 'март', 'апрел', 'ма', 'июн', 'июл', 'август', 'сентябр', 'октябр', 'ноябр', 'декабр'];
+const monOf = (w) => { const x = String(w || '').toLowerCase(); const i = RU_MON.findIndex((m, k) => (k === 4 ? /^ма[йя]/.test(x) : x.startsWith(m))); return i < 0 ? null : i + 1; };
+export function parseReportMessage(text, { today } = {}) {
+  const t = String(text || '').replace(/ /g, ' ');
+  const y0 = Number((today || new Date().toISOString()).slice(0, 4));
+  const iso = (d, m, y) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const fix = (d, m, y) => { if (y) return iso(d, m, y < 100 ? 2000 + y : y); let v = iso(d, m, y0); if (today && v > addDaysIso(today, 7)) v = iso(d, m, y0 - 1); return v; };
+  let start = null, end = null, m;
+  if ((m = /(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?\s*(?:[–—-]|по|до)\s*(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?/.exec(t))) {
+    start = fix(+m[1], +m[2], m[3] && +m[3]); end = fix(+m[4], +m[5], m[6] && +m[6]);
+  } else if ((m = /(?:с\s*)?(\d{1,2})\s*([а-яё]+)?\s*(?:[–—-]|по|до)\s*(\d{1,2})\s+([а-яё]+)(?:\s+(\d{4}))?/i.exec(t)) && monOf(m[4])) {
+    const m2 = monOf(m[4]), m1 = m[2] && monOf(m[2]) ? monOf(m[2]) : m2, y = m[5] && +m[5];
+    start = fix(+m[1], m1, y); end = fix(+m[3], m2, y);
+    if (start > end) start = fix(+m[1], m1, (y || +end.slice(0, 4)) - 1);
+  }
+  const num = (re) => { const x = re.exec(t); if (!x) return null; const v = parseNum(x[1].replace(/\s/g, '')); return Number.isFinite(v) ? v : null; };
+  const N = '(\\d[\\d ]*(?:[.,]\\d+)?)';
+  const spend = num(new RegExp(`(?:расход|потрач|списан|израсход|затрат|бюджет[а-я]*\\s+(?:израсход|потрач)[а-я]*)[а-я]*\\s*(?:—|-|:|=)?\\s*${N}`, 'i'))
+    ?? num(new RegExp(`${N}\\s*(?:₽|руб|р\\.)`, 'i'));
+  const impressions = num(new RegExp(`(?:показ[а-я]*|охват[а-я]*)\\s*(?:—|-|:|=)?\\s*${N}`, 'i')) ?? num(new RegExp(`${N}\\s*показ`, 'i'));
+  const clicks = num(new RegExp(`(?:клик[а-я]*|переход[а-я]*)\\s*(?:—|-|:|=)?\\s*${N}`, 'i')) ?? num(new RegExp(`${N}\\s*(?:клик|переход)`, 'i'));
+  if (!start || !end || end < start || spend == null) return null;
+  return { start, end, spend, impressions, clicks };
+}
+const addDaysIso = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+
 
 // ---- dohody.csv (старый трекер): дата, доход, события, заметка ----
 export function eventTypeFromText(t) {

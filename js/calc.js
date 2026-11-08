@@ -967,13 +967,26 @@ export function budgetPlan(ctx) {
   const sum = adGroupSummary(camps, { sales: ctx.sales, legacyDays: ctx.legacyDays || [], reports: ctx.reports || [], campaigns: ctx.campaigns || [], dataEnd: ctx.dataEnd, baseDays: s.baseDays, today: ctx.today });
   const roi = sum.returnShare != null && sum.returned != null ? sum.returnShare : null; // ₽ дохода сверх обычного на 1 ₽ рекламы
   const spentWithData = roi ? r2(sum.returned / roi) : 0;
-  const out = { month: next, days, goal, organicPerDay, organicDays, organicMonth: organicPerDay == null ? null : r2(organicPerDay * days), roi, spentWithData, threshold: Number(s.litnetThreshold) || 10000, pct: (Number(s.litnetPct) || 20) / 100 };
+  // уже заведённые кампании, которые идут и в следующем месяце: их бюджет по дням (бюджет ÷ дни кампании)
+  const nFrom = next + '-01', nTo = monthEnd(next), bookedList = [];
+  for (const k of camps) {
+    if (k.start > nTo || (k.end && k.end < nFrom)) continue;
+    const per = budgetPerDay(k);
+    if (!per) continue;
+    const spend = r2(per * countDays(k.start > nFrom ? k.start : nFrom, k.end && k.end < nTo ? k.end : nTo));
+    bookedList.push({ id: k.id, name: k.name, spend });
+  }
+  const booked = r2(bookedList.reduce((a, x) => a + x.spend, 0));
+  const out = { month: next, days, goal, organicPerDay, organicDays, organicMonth: organicPerDay == null ? null : r2(organicPerDay * days), roi, spentWithData, threshold: Number(s.litnetThreshold) || 10000, pct: (Number(s.litnetPct) || 20) / 100, booked, bookedList };
   if (goal == null || organicPerDay == null) return { ...out, status: 'nodata' };
   out.gap = r2(goal - out.organicMonth);
   if (out.gap <= 0) return { ...out, status: 'enough', budget: 0 };
   if (roi == null) return { ...out, status: 'noroi' };
   if (roi < 1) return { ...out, status: 'unprofitable' };
-  const raw = out.gap / roi;
+  // то, что принесут уже заведённые кампании, вычитаем из недостающего
+  out.bookedIncome = r2(booked * roi);
+  if (booked && out.bookedIncome >= out.gap) return { ...out, status: 'booked', budget: 0 };
+  const raw = (out.gap - out.bookedIncome) / roi;
   // «Литнет платит» принимает от порога; округляем вверх до тысячи
   out.budget = Math.max(out.threshold, Math.ceil(raw / 1000) * 1000);
   out.extraIncome = r2(out.budget * roi);

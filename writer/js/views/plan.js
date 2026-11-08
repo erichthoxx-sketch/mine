@@ -1,5 +1,5 @@
 import { ic, icx } from '../../../js/icons.js';
-import { adBoard } from '../../../js/adroi.js';
+import { adBoard, adCtx } from '../../../js/adroi.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask, fold } from '../../../js/ui.js';
 import { num, fmtDate, pct, plural } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
@@ -15,7 +15,7 @@ import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { fetchPageText } from '../pagetext.js';
 import { goalStatus, al, alNum, fromAl, contestVol, contestIn, contestOut, parseContest, contestBookIds, contestFit, contestSent, contestUnsent, contestPhase, OUTCOMES, cleanContestText, rawContestText, contestHasDiscussion, contestFileName, contestSubmissionUrl, contestEmailPurpose, goalMult, moveGoalDay, releaseDate } from '../wcalc.js';
-import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries } from '../../../js/calc.js';
+import { addDays, addMonths, monthKey, npdDeadline, incomeSeries, sumSeries, budgetPlan } from '../../../js/calc.js';
 import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask, moveOwnTask, tdText, addOwnTask } from '../../../js/tdtasks.js';
 import { bookGuess } from '../ideacalc.js';
@@ -182,7 +182,16 @@ function incomeItems(c, from, to) {
     const x = board[k.id];
     if (k.start) add(k.start, `Старт рекламы «${k.name}»`);
     if (k.end) add(k.end, `Конец рекламы «${k.name}»`, x && x.v.kind !== 'wait' ? `${x.v.text}${x.v.est ? ' (расход — оценка)' : ''} — ${x.v.todo}` : 'решить, продлевать ли');
-    if (x?.reportDue) add(t, `Попросить отчёт о расходе: «${k.name}»`, 'у таргетолога за неделю — и внести в «Доходах» кнопкой «Отчёт»; без него окупаемость — оценка');
+    if (x?.reportDue) add(t, `Попросить отчёт о расходе: «${k.name}»`, 'у таргетолога за неделю — его сообщение вставить в «Доходах»: кампания → «Вставить отчёт»; без него окупаемость — оценка');
+  }
+  // 25-го — решить бюджет рекламы на следующий месяц (по цели и отдаче прошлых кампаний, budgetPlan)
+  const b25 = monthKey(t) + '-25';
+  if (b25 >= from && b25 <= to && b25 >= t) {
+    const b = budgetPlan({ ...adCtx(d, c.settings, t), settings: c.settings });
+    const sub = b.status === 'ok' ? `≈ ${rub(b.budget, 0)}${b.booked ? ' к уже заведённой' : ''} — принесёт ≈ ${rub(b.extraIncome, 0)} сверх обычного`
+      : b.status === 'booked' ? 'уже заведённой рекламы хватает до цели' : b.status === 'unprofitable' ? 'реклама пока не окупалась — сначала сменить подход'
+      : b.status === 'enough' ? 'цель достижима и без рекламы' : '';
+    if (sub) add(b25, `Решить бюджет рекламы на ${fmtMonth(b.month)}`, sub + ' · Доходы → Финансы → Цели');
   }
   // события дней из «Доходов» (что вносила там сама, без выкладки глав из Мастерской)
   for (const day of d.days || []) {

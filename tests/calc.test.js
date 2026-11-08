@@ -573,6 +573,12 @@ test('бюджет рекламы на следующий месяц под це
   assert.equal(r.status, 'ok');
   // цель ниже обычного дохода — реклама не обязательна
   assert.equal(budgetPlan({ sales, legacyDays: [], campaigns, reports: [], settings: { ...settings, goalAmount: 20000 }, today: '2026-10-10', dataEnd: day(39) }).status, 'enough');
+  // кампания, уже заведённая на ноябрь (1–10 ноября, 10 000 ₽ на 30 дней с 12 октября): её отдача вычитается из недостающего
+  const booked = [...campaigns, { id: 'b', name: 'Идёт и в ноябре', channel: 'litnet', scope: 'all', start: '2026-10-12', end: '2026-11-10', budget: 9000 }];
+  const r2 = budgetPlan({ sales, legacyDays: [], campaigns: booked, reports: [], settings, today: '2026-10-10', dataEnd: day(39) });
+  assert.equal(r2.booked, 3000); // 300 ₽ в день × 10 дней ноября
+  assert.equal(r2.bookedIncome, 12000);
+  assert.equal(r2.budget, 12000); // (60 000 − 12 000) ÷ 4
 });
 
 test('окончания по числу', async () => {

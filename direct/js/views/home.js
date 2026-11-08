@@ -14,7 +14,7 @@ import { outageNotice } from '../adcontext.js';
 import { launchStrip, phaseSteps } from './launch.js';
 import { ic } from '../../../js/icons.js';
 import { linkedTargetologists, targetReminders } from '../../../js/target-partners.js';
-import { boardCard } from './adboard.js';
+import { boardCard, channelCard } from './adboard.js';
 
 const app = () => window.__app;
 
@@ -117,11 +117,11 @@ acts['d.toAds'] = (d) => { app().ui.cTab = 'ads'; app().ui.route = '/c/' + d.cid
 export function homeView(a) {
   const c = a.ctx(), main = a.snap('main'), stats = a.snap('stats');
   if (!main) {
-    if (!c.settings.directToken) return { html: launchCard(a) + boardCard(a) + connectCard(c) };
+    if (!c.settings.directToken) return { html: launchCard(a) + boardCard(a) + channelCard(a) + connectCard(c) };
     const last = c.settings.direct?.lastError;
-    if (a.ui.busy || !last) return { html: launchCard(a) + boardCard(a) + '<div class="card"><p class="muted">Загружаю данные из Директа…</p></div>' };
+    if (a.ui.busy || !last) return { html: launchCard(a) + boardCard(a) + channelCard(a) + '<div class="card"><p class="muted">Загружаю данные из Директа…</p></div>' };
     const msg = last.code === 56 ? 'Яндекс временно ограничил частоту запросов. Приложение повторит загрузку автоматически.' : last.text || 'Не получилось получить данные Директа.';
-    return { html: launchCard(a) + boardCard(a) + `<div class="card"><h2>Не получилось загрузить кампании</h2><p class="small">${esc(msg)}</p><button class="primary" data-act="d.reload">Обновить</button></div>` };
+    return { html: launchCard(a) + boardCard(a) + channelCard(a) + `<div class="card"><h2>Не получилось загрузить кампании</h2><p class="small">${esc(msg)}</p><button class="primary" data-act="d.reload">Обновить</button></div>` };
   }
   const t = c.today, daily = stats?.daily || [];
   const w = totals(daily, addDays(t, -6), t), pw = totals(daily, addDays(t, -13), addDays(t, -7));
@@ -138,6 +138,7 @@ export function homeView(a) {
     html: `${demo.on ? `<div class="alert">Это пример — так будет выглядеть ваш Директ. Можно нажимать кнопки: в примере ничего не тратится. ${c.settings.directToken ? '' : '<button class="link" data-act="go" data-to="/settings">Подключить свой</button>'}${a.store.mode !== 'local' ? ' <button class="link" data-act="d.demoOff">Закрыть пример</button>' : ''}</div>` : ''}
     ${launchCard(a)}
     ${boardCard(a)}
+    ${channelCard(a)}
     <div class="card"><div class="row between"><h2 style="margin:0">За 7 дней</h2><span class="small muted">${fmtShort(addDays(t, -6))}–${fmtShort(t)}${delta != null ? ` · <span class="${delta > 0 ? 'warnc' : ''}">${delta > 0 ? '▲' : '▼'} ${pct(Math.abs(delta), 0)} к прошлой неделе</span>` : ''}</span></div>
     ${!demo.on && err?.transient ? outageAlert(err, main) : ''}
     ${stats?.mErr ? `<p class="small muted">${esc(stats.mErr)}</p>` : ''}

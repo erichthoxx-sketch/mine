@@ -99,3 +99,15 @@ test('скриншот продаж: строки таблицы «цена · �
   const short = parseSalesText('Продажи: 12 шт\nНачислено 1 420,50 ₽');
   assert.equal(short.sale.qty, 12); assert.equal(short.royalty, 1420.5);
 });
+
+test('отчёт таргетолога сообщением: даты, расход, показы и клики', async () => {
+  const { parseReportMessage: p } = await import('../js/parse.js');
+  const T = { today: '2026-11-10' };
+  assert.deepEqual(p('Отчет за 3–9 ноября: потрачено 5 230 ₽, показов 34 000, кликов 412', T), { start: '2026-11-03', end: '2026-11-09', spend: 5230, impressions: 34000, clicks: 412 });
+  assert.equal(p('Добрый день! 03.11-09.11 расход 4870 руб, показы 21500, клики 298', T).spend, 4870);
+  const x = p('с 28 октября по 3 ноября израсходовано 6 100,50 р. Переходов 350', T);
+  assert.equal(x.start, '2026-10-28'); assert.equal(x.spend, 6100.5); assert.equal(x.clicks, 350);
+  assert.equal(p('Неделя 27.10.2026 - 02.11.2026\nПотрачено: 5 000\nПоказы: 30 000\nКлики: 400', T).impressions, 30000);
+  assert.equal(p('За 30.12–05.01 списано 3 000 ₽', T).start, '2025-12-30');
+  assert.equal(p('привет как дела', T), null);
+});

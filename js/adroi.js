@@ -98,3 +98,54 @@ export function linkSpend(linkId, data = {}, settings = {}, today) {
   }
   return { cost: Math.round(cost), est, names };
 }
+
+// ---------- Сравнение каналов за 90 дней: где читатель и покупка дешевле ----------
+// refs — {код ссылки Литнета: {visits, conv}} (Метрика), direct — {cost, clicks, conv} Яндекс Директа за те же дни,
+// perSale — доход с одной покупки (для Директа: окупаемость = покупки × доход ÷ расход).
+export const CHANNEL_NAMES = { litnet: 'Литнет платит', own: 'Мой таргет', other: 'Другое', direct: 'Яндекс Директ', social: 'Соцсети' };
+export function channelCompare(data = {}, settings = {}, today, { refs = {}, direct = null, perSale = null, days = 90 } = {}) {
+  const ctx = adCtx(data, settings, today), books = data.books || [], links = data.w_promolinks || [];
+  const period = { from: addDays(today, -(days - 1)), to: today };
+  const rows = {};
+  const row = (key) => (rows[key] ||= { key, name: CHANNEL_NAMES[key] || key, spend: 0, est: false, returned: 0, hasRet: false, readers: 0, buys: 0, hasReaders: false, camps: 0, codes: new Set() });
+  const addLink = (r, l) => { const code = l && promoToken(l.url); if (!code || r.codes.has(code.toLowerCase())) return; r.codes.add(code.toLowerCase()); const x = refs[code.toLowerCase()]; if (x) { r.readers += x.visits; r.buys += x.conv; r.hasReaders = true; } };
+  for (const k of data.campaigns || []) {
+    if (k.oneOff || !k.start || k.start > today || (k.end && k.end < period.from)) continue;
+    const m = campaignMetrics(k, { ...ctx, period });
+    if (m.status === 'planned') continue;
+    const r = row(k.channel || 'other');
+    r.camps++; r.spend += m.spendTotal; r.est = r.est || m.spendSource !== 'reports';
+    if (m.uplift != null) { r.returned += m.uplift * m.days; r.hasRet = true; }
+    addLink(r, campaignLink(k, links, data.w_books || [], books));
+  }
+  // соцсети без оплаченных кампаний: только читатели по ссылкам
+  for (const l of links) if (l.status !== 'archived' && promoChannel(l) === 'social') addLink(row('social'), l);
+  if (direct && (direct.cost > 0 || direct.clicks > 0)) {
+    const r = row('direct');
+    r.spend = direct.cost; r.readers = direct.clicks; r.buys = direct.conv || 0; r.hasReaders = true; r.clicksAsReaders = true;
+    if (perSale != null && direct.conv != null) { r.returned = direct.conv * perSale; r.hasRet = true; r.retByBuys = true; }
+  }
+  return Object.values(rows).filter((r) => r.spend > 0 || r.readers > 0).map((r) => ({
+    key: r.key, name: r.name, spend: Math.round(r.spend), est: r.est, camps: r.camps,
+    readers: r.hasReaders ? r.readers : null, buys: r.hasReaders ? r.buys : null, clicksAsReaders: !!r.clicksAsReaders,
+    perReader: r.hasReaders && r.readers && r.spend ? r.spend / r.readers : null,
+    perBuy: r.hasReaders && r.buys && r.spend ? r.spend / r.buys : null,
+    ret: r.hasRet && r.spend ? r.returned / r.spend : null, retByBuys: !!r.retByBuys,
+  })).sort((a, b) => b.spend - a.spend);
+}
+// Вывод по сравнению — только когда у двух каналов достаточно данных (30+ читателей и расход)
+export function channelVerdict(rows = []) {
+  // главное — сколько возвращает рубль; где этого нет — цена читателя
+  const fmt = (x) => x.toFixed(2).replace('.', ',');
+  const wr = rows.filter((r) => r.spend > 0 && r.ret != null).sort((a, b) => b.ret - a.ret);
+  if (wr.length >= 2) {
+    const best = wr[0], worst = wr[wr.length - 1];
+    if (best.ret < worst.ret * 1.3 && best.ret - worst.ret < 0.3) return { best: best.key, text: `Каналы возвращают рубль примерно одинаково (${fmt(worst.ret)}–${fmt(best.ret)} ₽).` };
+    return { best: best.key, text: `Рубль лучше всего работает в «${best.name}»: на 1 ₽ — ${fmt(best.ret)} ₽, в «${worst.name}» — ${fmt(worst.ret)} ₽. ${best.ret >= 1.2 ? 'Туда и стоит переносить бюджет.' : 'Но окупается пока ни один — сначала менять подход, а не добавлять деньги.'}` };
+  }
+  const ok = rows.filter((r) => r.spend > 0 && r.readers >= 30 && r.perReader != null);
+  if (ok.length < 2) return null;
+  const s = ok.slice().sort((a, b) => a.perReader - b.perReader), best = s[0], worst = s[s.length - 1];
+  if (worst.perReader < best.perReader * 1.3) return { text: 'Читатель обходится примерно одинаково во всех каналах — решает окупаемость, а не цена читателя.' };
+  return { best: best.key, text: `Читатель дешевле всего в «${best.name}»: ${Math.round(best.perReader)} ₽ против ${Math.round(worst.perReader)} ₽ в «${worst.name}». Если окупаемость там не хуже — часть бюджета стоит перенести туда.` };
+}

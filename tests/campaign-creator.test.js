@@ -44,9 +44,9 @@ test('ЕПК: группа, объявление и ключевые фразы 
   const a = adPayload(draft, 101, url).Ads[0];
   assert.equal(a.AdGroupId, 101);
   assert.equal(a.ResponsiveAd.Href, url);
-  assert.equal(a.ResponsiveAd.Titles.length, 1);
+  assert.equal(a.ResponsiveAd.Titles.length, 7); assert.equal(a.ResponsiveAd.Texts.length, 3); assert.ok(a.ResponsiveAd.Titles.every((x) => x.length <= 56) && a.ResponsiveAd.Texts.every((x) => x.length <= 81));
   const k = keywordsPayload(draft, 101).Keywords;
-  assert.equal(k.length, 2);
+  assert.equal(k.length, 9);
   assert.equal(k[0].AdGroupId, 101);
   assert.throws(() => adPayload({ ...draft, titles: 'X'.repeat(57) }, 101, url), /56/);
 });

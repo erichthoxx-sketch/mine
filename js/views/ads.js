@@ -6,7 +6,7 @@ import { targetAlert, campaignProgress, adGroupSummary, budgetPlan } from '../ca
 import { buildTargetPrompt } from '../report.js';
 import { widgetCardHtml } from '../widgetcard.js';
 import { resizeImage } from '../img.js';
-import { parseTargetReport, reportId } from '../parse.js';
+import { parseTargetReport, parseReportMessage, reportId } from '../parse.js';
 import { dailyChart, lineChart } from '../charts.js';
 import { chartInputs, chartLegend } from './home.js';
 import { totals as dTotals } from '../../direct/js/dcalc.js';
@@ -105,12 +105,14 @@ export function budgetCard(c) {
   const head = `<h2>Бюджет на ${fmtMonth(b.month)}</h2>
     <div class="kv"><div><span>Цель на ${fmtMonth(b.month)}</span><b>${rub(b.goal, 0)}</b></div><div><span>Без рекламы обычно</span><b>≈ ${rub(b.organicMonth, 0)}</b></div></div>`;
   const hint = `<div class="hint">Обычный доход — средний за ${b.organicDays} дн. без рекламы (${rub(b.organicPerDay, 0)} в день). Отдача — сколько дохода сверх обычного приносил 1 ₽ в прошлых кампаниях. Это оценка: с ростом бюджета отдача обычно немного падает.</div>`;
+  const bookedTxt = b.booked ? `<p class="small" style="margin:0 0 6px">Уже заведено на ${fmtMonth(b.month)}: ${b.bookedList.map((x) => `«${esc(x.name)}» ${rub(x.spend, 0)}`).join(', ')}${b.bookedIncome != null ? ` — принесут ≈ ${rub(b.bookedIncome, 0)} сверх обычного` : ''}.</p>` : '';
   let body;
-  if (b.status === 'enough') body = `<p style="margin:0">Цель достижима и без рекламы. Реклама — чтобы вырасти сверх цели.</p>`;
+  if (b.status === 'booked') body = `${bookedTxt}<p style="margin:0">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>, и уже заведённой рекламы на это хватает. Новый бюджет не нужен — только если хотите вырасти сверх цели.</p>`;
+  else if (b.status === 'enough') body = `<p style="margin:0">Цель достижима и без рекламы. Реклама — чтобы вырасти сверх цели.</p>`;
   else if (b.status === 'noroi') body = `<p style="margin:0">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>. Отдача рекламы пока неизвестна — посчитаю бюджет, когда появятся данные по первой кампании.</p>`;
   else if (b.status === 'unprofitable') body = `<p style="margin:0">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>, но реклама пока возвращала ${rub(b.roi, 2)} на каждый 1 ₽ — меньше, чем стоила. Увеличивать бюджет невыгодно: сначала стоит поменять кампанию (книгу, креативы, аудиторию).</p>`;
-  else body = `<p style="margin:0 0 6px">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>. Реклама приносила ≈ <b>${rub(b.roi, 2)}</b> дохода на каждый 1 ₽.</p>
-    <div class="tiles"><div><div class="k">Рекомендуемый бюджет</div><div class="v">${rub(b.budget, 0)}</div><div class="s">скидка Литнета вернёт ≈ ${rub(b.discount, 0)} → обойдётся ≈ ${rub(b.cost, 0)}</div></div>
+  else body = `<p style="margin:0 0 6px">До цели не хватает ≈ <b>${rub(b.gap, 0)}</b>. Реклама приносила ≈ <b>${rub(b.roi, 2)}</b> дохода на каждый 1 ₽.</p>${bookedTxt}
+    <div class="tiles"><div><div class="k">${b.booked ? 'Добавить к заведённому' : 'Рекомендуемый бюджет'}</div><div class="v">${rub(b.budget, 0)}</div><div class="s">скидка Литнета вернёт ≈ ${rub(b.discount, 0)} → обойдётся ≈ ${rub(b.cost, 0)}</div></div>
       <div><div class="k">Ожидаемый доход от рекламы</div><div class="v">≈ ${rub(b.extraIncome, 0)}</div><div class="s">сверх обычного · в плюсе ≈ ${rub(b.profit, 0)}</div></div></div>
     ${b.lowData ? '<div class="alert alert-thin">Данных пока мало — оценка грубая. Она уточнится сама после следующих кампаний.</div>' : ''}`;
   return `<div class="card">${head}${body}${hint}</div>`;
@@ -211,7 +213,7 @@ function verdictHtml(c, k, m) {
   }
   const g = campaignBook(k, c.data.books || []);
   if (!k.bookId && g.book) out.push(`<p class="small warnc">Книга не выбрана, поэтому доход считается по всем книгам. По названию это «${esc(g.book.title)}». <button class="link" data-act="ad.pickBook" data-id="${esc(k.id)}" data-b="${esc(g.book.id)}">Выбрать эту книгу</button></p>`);
-  if (reportDue(k, c.data.reports || [], c.today)) out.push(`<p class="small warnc">Нет отчёта о расходе за последнюю неделю — попросите у таргетолога. <button class="link" data-act="rep.new" data-id="${esc(k.id)}">+ Отчёт</button></p>`);
+  if (reportDue(k, c.data.reports || [], c.today)) out.push(`<p class="small warnc">Нет отчёта о расходе за последнюю неделю — попросите у таргетолога. <button class="link" data-act="rep.paste" data-id="${esc(k.id)}">Вставить отчёт</button></p>`);
   const l = campaignLink(k, c.data.w_promolinks || [], c.data.w_books || [], c.data.books || []);
   if (l) {
     const code = promoToken(l.url), mk = (c.data.d_snap || []).find((x) => x.id === 'mk');
@@ -259,7 +261,7 @@ export function adPage(a, id) {
   <details class="card"><summary>Фактический расход по неделям — если таргетологи его присылают</summary>
     <p class="small muted">Не обязательно. Без этих цифр расход считается как бюджет ÷ дни кампании. Если таргетологи пришлют, сколько реально потрачено за неделю, впишите — оценка заменится фактом.</p>
     ${reps.length ? `<div class="scroll"><table><tr><th>Неделя</th><th>Расход</th><th>Показы</th><th>Клики</th><th>CPC</th><th>CTR</th><th></th></tr>${reps.map((r) => `<tr><td>${fmtShort(r.start)}–${fmtDate(r.end)}</td><td>${rub(r.spend)}</td><td>${r.impressions == null ? '—' : num(r.impressions)}</td><td>${r.clicks == null ? '—' : num(r.clicks)}</td><td>${r.clicks ? rub(cpc(r)) : '—'}</td><td>${r.impressions ? pct(ctr(r), 2) : '—'}</td><td><button class="link danger" data-act="rep.del" data-id="${r.id}">убрать</button></td></tr>`).join('')}</table></div>` : '<p class="muted">Отчётов пока нет.</p>'}
-    <div class="row" style="margin-top:10px"><button class="primary" data-act="rep.new" data-id="${k.id}">+ Отчёт</button><button data-act="rep.paste" data-id="${k.id}">Вставить таблицу</button></div>
+    <div class="row" style="margin-top:10px"><button class="primary" data-act="rep.new" data-id="${k.id}">+ Отчёт</button><button data-act="rep.paste" data-id="${k.id}">Вставить отчёт</button></div>
     ${chronological.length ? `<h3>Цена клика (CPC), ₽</h3><div class="chart" id="cpc"></div><h3>CTR, %</h3><div class="chart" id="ctr"></div>` : ''}
   </details>
   <details class="card"${wi ? ' open' : ''}><summary>Примерить свою базу</summary>
@@ -338,9 +340,17 @@ acts['rep.new'] = (d) => {
   });
 };
 acts['rep.paste'] = (d) => {
-  openSheet('Вставить таблицу отчёта', `<p class="small muted">Выделите строки таблицы в отчёте таргетологов (можно с заголовком и «Итого»), скопируйте и вставьте сюда. Строки «Итого» пропускаются, неделя, которая уже есть, обновится.</p><textarea name="t" style="min-height:160px" required></textarea>`, async (fd) => {
-    const r = parseTargetReport(fd.get('t') || '');
-    if (!r.rows.length) { toast('Не нашла строк с неделями. Вставьте таблицу целиком или внесите неделю кнопкой «+ Неделя».'); return false; }
+  openSheet('Вставить отчёт таргетолога', `<p class="small muted">Вставьте сообщение таргетолога как есть («за 3–9 ноября потрачено 5 230 ₽, показов 34 000, кликов 412») или строки таблицы отчёта. Неделя, которая уже есть, обновится.</p><textarea name="t" style="min-height:160px" required></textarea>`, async (fd) => {
+    const txt = fd.get('t') || '', r = parseTargetReport(txt);
+    if (!r.rows.length) {
+      // не таблица — пробуем как обычное сообщение
+      const x = parseReportMessage(txt, { today: app().ctx().today });
+      if (!x) { toast('Не нашла даты и расход. Нужны даты недели и сумма — например «3–9 ноября потрачено 5 230 ₽». Или внесите кнопкой «+ Отчёт».'); return false; }
+      const id = reportId(d.id, x.start), was = app().ctx().data.reports.find((y) => y.id === id);
+      await app().store.put('reports', { id, campaignId: d.id, ...x });
+      toast(`${fmtShort(x.start)}–${fmtShort(x.end)}: расход ${rub(x.spend, 0)}${x.impressions != null ? `, показов ${num(x.impressions)}` : ''}${x.clicks != null ? `, кликов ${num(x.clicks)}` : ''}`, { undo: () => (was ? app().store.put('reports', was) : app().store.remove('reports', id)) });
+      return;
+    }
     await app().store.putMany('reports', r.rows.map((x) => ({ id: reportId(d.id, x.start), campaignId: d.id, start: x.start, end: x.end, spend: x.spend, impressions: x.impressions, clicks: x.clicks })));
     toast(`Добавлено недель: ${r.rows.length}`);
   });

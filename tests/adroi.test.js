@@ -69,3 +69,18 @@ test('Сводка и расход ссылки считаются из тех �
   assert.ok(ls.cost > 4000 && ls.cost < 5000, String(ls.cost));
   assert.deepEqual(ls.names, ['Таргет Альпийский']);
 });
+
+test('Сравнение каналов: Литнет платит со ссылкой и Директ по покупкам', async () => {
+  const { channelCompare, channelVerdict } = await import('../js/adroi.js');
+  const today = '2026-11-08', sales = [];
+  for (let i = 40; i >= 1; i--) sales.push({ id: 's' + i, date: addDays(today, -i), book: books[0].title, bookId: 'b1', kind: 'sale', qty: 2, royalty: i <= 20 ? 600 : 200, price: 100 });
+  const data = { sales, books, w_books: wbooks, w_promolinks: links, days: [], reports: [],
+    campaigns: [{ id: 'k1', name: 'Таргет Альпийский', bookId: 'b1', channel: 'litnet', start: addDays(today, -20), end: addDays(today, 5), budget: 6000 }] };
+  const rows = channelCompare(data, {}, today, { refs: { abc: { visits: 120, conv: 6 }, def: { visits: 40, conv: 1 } }, direct: { cost: 3000, clicks: 300, conv: 3 }, perSale: 150 });
+  const lit = rows.find((r) => r.key === 'litnet'), dir = rows.find((r) => r.key === 'direct'), soc = rows.find((r) => r.key === 'social');
+  assert.equal(lit.readers, 120); assert.equal(lit.buys, 6); assert.ok(lit.ret > 1.2);
+  assert.equal(dir.perReader, 10); assert.equal(dir.ret, 0.15);
+  assert.equal(soc.spend, 0); assert.equal(soc.readers, 40);
+  const v = channelVerdict(rows);
+  assert.equal(v.best, 'litnet');
+});
