@@ -12,8 +12,10 @@ import { uid } from '../../js/ui.js';
 const rub = (micros) => (micros == null ? null : Math.round(micros / MICRO * 100) / 100);
 
 // Запрос с запасным вариантом: если Директ не принял расширенные поля — повторяем с основными
+// Чтение — через API v501: единые перфоманс-кампании (ЕПК) API v5 не отдаёт совсем, v501 отдаёт и их, и обычные
+const V = 'v501';
 async function getSafe(s, service, full, basic) {
-  try { return await call(s, service, 'get', full); } catch (e) { if (e.transient || e.code === 53 || e.code === 58 || e.code === 513 || !basic) throw e; return call(s, service, 'get', basic); }
+  try { return await call(s, service, 'get', full, 2, undefined, V); } catch (e) { if (e.transient || e.code === 53 || e.code === 58 || e.code === 513 || !basic) throw e; return call(s, service, 'get', basic, 2, undefined, V); }
 }
 
 export async function refresh(app, { onStep = () => {} } = {}) {
@@ -24,7 +26,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   const BASE = ['Id', 'Name', 'State', 'Status', 'StartDate', 'DailyBudget', 'NegativeKeywords', 'Type'];
   // счётчики Метрики и приоритетные цели кампании; если Директ не примет — без них, потом совсем просто
   let cr;
-  try { cr = await call(s, 'campaigns', 'get', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'], UnifiedCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'] }); } catch (e) {
+  try { cr = await call(s, 'campaigns', 'get', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'], UnifiedCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'] }, 2, undefined, V); } catch (e) {
     if (e.transient || [53, 58, 513].includes(e.code)) throw e;
     cr = await getSafe(s, 'campaigns', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy'], UnifiedCampaignFieldNames: ['BiddingStrategy'] }, { SelectionCriteria: {}, FieldNames: BASE.slice(0, 7) });
   }
@@ -55,7 +57,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   let groups = [], keywords = [], ads = [];
   if (cids.length) {
     onStep('Группы и фразы…');
-    groups = ((await call(s, 'adgroups', 'get', { SelectionCriteria: { CampaignIds: cids }, FieldNames: ['Id', 'Name', 'CampaignId'] })).AdGroups || [])
+    groups = ((await call(s, 'adgroups', 'get', { SelectionCriteria: { CampaignIds: cids }, FieldNames: ['Id', 'Name', 'CampaignId'] }, 2, undefined, V)).AdGroups || [])
       .map((g) => ({ id: g.Id, name: g.Name, cid: g.CampaignId }));
     const kr = await getSafe(s, 'keywords',
       { SelectionCriteria: { CampaignIds: cids }, FieldNames: ['Id', 'Keyword', 'AdGroupId', 'CampaignId', 'Bid', 'State', 'Status'] },
@@ -173,7 +175,7 @@ export async function apply(app, a, { by = 'app' } = {}) {
   if (!isDemo()) {
     // минус-фразы перечитываем прямо перед записью: вдруг их меняли в кабинете
     if (a.do === 'minus' || a.do === 'unminus') {
-      const r = await call(s, 'campaigns', 'get', { SelectionCriteria: { Ids: [a.campaign] }, FieldNames: ['Id', 'NegativeKeywords'] });
+      const r = await call(s, 'campaigns', 'get', { SelectionCriteria: { Ids: [a.campaign] }, FieldNames: ['Id', 'NegativeKeywords'] }, 2, undefined, V);
       negatives = r.Campaigns?.[0]?.NegativeKeywords?.Items || [];
     }
     const camp = main.campaigns.find((x) => x.id === a.campaign) || {};
@@ -186,7 +188,7 @@ export async function apply(app, a, { by = 'app' } = {}) {
       out = resultOf(await call(s, 'campaigns', 'update', { Campaigns: [{ Id: a.campaign, UnifiedCampaign: { TrackingParams: params } }] }, 0, undefined, 'v501'), 'UpdateResults');
     } else if (a.do === 'goal') {
       // стратегию читаем прямо перед записью и отправляем обратно целиком — меняется только цель; потом сверяем деньги
-      const get = () => call(s, 'campaigns', 'get', { SelectionCriteria: { Ids: [a.campaign] }, FieldNames: ['Id', 'Type'], TextCampaignFieldNames: ['BiddingStrategy'], UnifiedCampaignFieldNames: ['BiddingStrategy'] }).then((r) => r.Campaigns?.[0]);
+      const get = () => call(s, 'campaigns', 'get', { SelectionCriteria: { Ids: [a.campaign] }, FieldNames: ['Id', 'Type'], TextCampaignFieldNames: ['BiddingStrategy'], UnifiedCampaignFieldNames: ['BiddingStrategy'] }, 2, undefined, V).then((r) => r.Campaigns?.[0]);
       const raw = await get(), g = withGoal(raw, a.goal);
       const before = moneyOf(g.strategy);
       out = resultOf(await call(s, 'campaigns', 'update', g.params, 0, undefined, g.key === 'UnifiedCampaign' ? 'v501' : 'v5'), 'UpdateResults');

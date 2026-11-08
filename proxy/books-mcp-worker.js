@@ -210,7 +210,7 @@ export async function directLive(acc, { campaign_id, stats = true } = {}) {
       .map((a) => ({ id: a.Id, gid: a.AdGroupId, cid: a.CampaignId, type: a.Type || '', state: a.State, status: a.Status, note: a.StatusClarification || '',
         title: a.TextAd?.Title || '', title2: a.TextAd?.Title2 || '', text: a.TextAd?.Text || '', href: a.TextAd?.Href || '', path: a.TextAd?.DisplayUrlPath || '' }));
     keywords = ((await directSafe(acc, 'keywords', { SelectionCriteria: gs, FieldNames: ['Id', 'Keyword', 'AdGroupId', 'CampaignId', 'Bid', 'State', 'Status'] },
-      { SelectionCriteria: gs, FieldNames: ['Id', 'Keyword', 'AdGroupId', 'CampaignId', 'State', 'Status'] })).Keywords || [])
+      { SelectionCriteria: gs, FieldNames: ['Id', 'Keyword', 'AdGroupId', 'CampaignId', 'State', 'Status'] }, 'v501')).Keywords || [])
       .map((k) => ({ id: k.Id, phrase: k.Keyword, gid: k.AdGroupId, cid: k.CampaignId, bid: rubOf(k.Bid), state: k.State, status: k.Status }));
   }
   let daily = null, statsNote = '';
