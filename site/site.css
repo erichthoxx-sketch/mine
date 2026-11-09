@@ -595,3 +595,25 @@ button.lnk{background:none;border:0;cursor:pointer;color:inherit}
 .genre{margin:-6px 0 0;font:italic 400 clamp(18px,1.5vw,21px)/1.3 var(--f-italic);color:var(--ink-2)}
 .feat-txt .genre{margin-top:-8px}
 .genre-s{font:500 10px/1.4 var(--f-body);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-top:-2px}
+
+/* окно подписки — тихая карточка в углу (на телефоне — снизу), без затемнения страницы */
+.pop{position:fixed;right:28px;bottom:28px;z-index:60;width:min(392px,calc(100vw - 32px));display:grid;gap:12px;justify-items:start;padding:30px 28px 24px;
+  background:var(--paper);border:1px solid var(--line);box-shadow:0 34px 70px -34px rgba(20,21,23,.5);opacity:0;transform:translateY(18px);transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1)}
+.pop.on{opacity:1;transform:none}
+.pop-x{position:absolute;top:12px;right:12px;width:34px;height:34px;display:grid;place-items:center;background:none;border:0;color:var(--ink-2);cursor:pointer}
+.pop-x svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
+.pop-x:hover{color:var(--ink)}
+.pop-bear{width:64px;height:64px;border-radius:50%;object-fit:cover;margin-bottom:4px;
+  -webkit-mask-image:radial-gradient(circle,#000 52%,rgba(0,0,0,.5) 63%,transparent 71%);mask-image:radial-gradient(circle,#000 52%,rgba(0,0,0,.5) 63%,transparent 71%)}
+.pop h2{font-size:28px;line-height:1.05}
+.pop-t{margin:0;font-size:14.5px;line-height:1.6;color:var(--ink-t)}
+.pop .sub-f{width:100%;margin-top:6px}
+.pop .sub-row{display:grid;gap:10px}
+.pop .sub-row[hidden],.pop .consent[hidden]{display:none}
+.pop .sub-row input{height:46px;width:100%}
+.pop .sub-row .btn{width:100%}
+.pop .consent{font-size:12px}
+@media (max-width:640px){
+  .pop{left:0;right:0;bottom:0;width:auto;border-width:1px 0 0;padding:26px var(--gut-r) calc(20px + env(safe-area-inset-bottom,0px)) var(--gut);max-height:88vh;overflow:auto}
+  .pop h2{font-size:25px}
+}

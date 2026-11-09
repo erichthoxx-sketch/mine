@@ -67,6 +67,7 @@ function show(content, imgs) {
   }
   pismoNote(normalize(current));
   reader();
+  popArm();
   const d = document.querySelector('meta[name="description"]');
   if (d && r.description) d.setAttribute('content', r.description);
 }
@@ -191,9 +192,11 @@ document.addEventListener('submit', async (e) => {
   const btn = f.querySelector('button');
   btn.disabled = true;
   try {
-    const res = await subscribe(normalize(current), email, bookKey ? 'kniga:' + bookKey : 'glavnaya');
+    const from = f.dataset.from === 'popup' ? 'okno' : '';
+    const res = await subscribe(normalize(current), email, (from ? from + ':' : '') + (bookKey ? 'kniga:' + bookKey : 'glavnaya'));
     try { localStorage.setItem(SUBD, res.confirm ? 'wait' : '1'); } catch { /* без памяти */ }
-    goal('subscribe', { from: bookKey || 'glavnaya' });
+    goal('subscribe', { from: from || bookKey || 'glavnaya' });
+    if (from) setTimeout(() => popClose(false), 6000);
     f.querySelector('.sub-row').hidden = true;
     f.querySelector('.consent').hidden = true;
     say(res.confirm ? waitHtml(normalize(current)) : giftHtml(normalize(current)));
@@ -224,3 +227,70 @@ if (preview) {
     if (!LOCAL) try { localStorage.setItem(CACHE, JSON.stringify(d)); } catch { /* места мало — без кэша */ }
   }).catch(() => { if (!cached) { show(null, {}); toHash(); } });
 }
+
+// Окно подписки (09.11.2026, владелица: «стильный попап… по времени и по содержанию как топовый маркетолог»).
+// Правила: не сразу — после 40 с на сайте (время копится по страницам за визит, админка → Подписка → «Через сколько секунд»);
+// на компьютере — раньше, если курсор уходит к вкладкам (хочет уйти), но не раньше 15 с; один раз за визит; закрыли — 14 дней не показываем;
+// не показываем подписанным, в читалке (не мешаем читать), на политике, в предпросмотре и когда форма подписки уже на экране.
+const POP = 'lanaSite.pop', POP_T = 'lanaSite.popT', POP_DAYS = 14;
+let popT = 0, popStart = Date.now(), popEl = null, popExit = null;
+const ss = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* без памяти */ } } };
+const popSpent = () => Number(ss.get(POP_T) || 0) + (Date.now() - popStart);
+addEventListener('pagehide', () => ss.set(POP_T, String(popSpent())));
+function popAllowed(c) {
+  if (preview || readKey || privacyPage || cabPage || popEl || c.subOn === false || c.popOn === false) return false;
+  try {
+    if (localStorage.getItem(SUBD)) return false;
+    const off = Number(localStorage.getItem(POP) || 0);
+    if (off && Date.now() - off < POP_DAYS * 864e5) return false;
+  } catch { /* без памяти — показываем по обычным правилам */ }
+  return !ss.get(POP);
+}
+function popArm() {
+  clearTimeout(popT);
+  if (popExit) { document.removeEventListener('mouseout', popExit); popExit = null; }
+  const c = normalize(current);
+  if (!popAllowed(c)) return;
+  const need = Math.max(15, Number(c.popDelay) || 40) * 1000;
+  popT = setTimeout(() => popOpen('time'), Math.max(1000, need - popSpent()));
+  if (matchMedia('(hover:hover) and (pointer:fine)').matches) {
+    popExit = (e) => { if (!e.relatedTarget && e.clientY <= 4 && popSpent() > 15000) popOpen('exit'); };
+    document.addEventListener('mouseout', popExit);
+  }
+}
+function popOpen(why) {
+  const c = normalize(current);
+  if (!popAllowed(c)) return;
+  // форма подписки уже на экране — не дублируем, попробуем чуть позже
+  const inline = document.getElementById('podpiska')?.getBoundingClientRect();
+  if (inline && inline.top < innerHeight && inline.bottom > 0) { if (why === 'time') popT = setTimeout(() => popOpen('time'), 20000); return; }
+  ss.set(POP, '1');
+  const head = c.popHead || (c.giftName ? `«${c.giftName}» *в подарок*` : c.subHead || 'Новые книги *первой*');
+  const text = c.popText || c.subText || '';
+  const el = document.createElement('div');
+  el.className = 'pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-labelledby', 'pop-h');
+  const f = (t) => esc(t).replace(/\*([^*\n]+)\*/g, '<span class="it">$1</span>');
+  el.innerHTML = `<button class="pop-x" type="button" aria-label="Закрыть"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <img class="pop-bear" src="hero-bear-round.jpg?6" alt="" aria-hidden="true">
+    ${c.subTitle ? `<div class="lbl">${esc(c.subTitle)}</div>` : ''}
+    <h2 id="pop-h">${f(head)}</h2>
+    ${text ? `<p class="pop-t">${f(text)}</p>` : ''}
+    <form class="sub-f" data-sub data-from="popup" novalidate>
+      <div class="sub-row"><input type="email" name="email" required autocomplete="email" placeholder="Ваша почта" aria-label="Ваша почта"><button class="btn btn-dark" type="submit">${esc(c.subBtn || 'Подписаться')}</button></div>
+      <label class="consent"><input type="checkbox" name="ok" required> <span>${esc(c.consent || 'Соглашаюсь получать письма')}${c.privacy ? ' — <a href="./?privacy">политика конфиденциальности</a>' : ''}</span></label>
+      <p class="sub-msg" role="status" hidden></p>
+    </form>`;
+  document.body.appendChild(el);
+  popEl = el;
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('on')));
+  el.querySelector('.pop-x').onclick = () => popClose(true);
+  goal('popup', { why });
+}
+function popClose(byHand) {
+  if (!popEl) return;
+  if (byHand) { try { localStorage.setItem(POP, String(Date.now())); } catch { /* без памяти */ } }
+  const el = popEl; popEl = null;
+  el.classList.remove('on');
+  setTimeout(() => el.remove(), 500);
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && popEl) popClose(true); });

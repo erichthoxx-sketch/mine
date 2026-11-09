@@ -35,7 +35,9 @@ export function subsSeries(list, today, days = 90) {
 }
 
 const STATUS = { ok: 'подтвердила', pending: 'ждёт подтверждения', unsub: 'отписалась' };
-const SRC = (s) => (s === 'kabinet' ? 'кабинет' : s === 'firebase' ? 'прежняя форма' : /^kniga:/.test(s || '') ? 'страница книги' : s === 'glavnaya' ? 'главная' : s || '');
+const SRC0 = (s) => (s === 'kabinet' ? 'кабинет' : s === 'firebase' ? 'прежняя форма' : /^kniga:/.test(s || '') ? 'страница книги' : s === 'glavnaya' ? 'главная' : s || '');
+// «okno:…» — подписалась в окне подписки (на главной или на странице книги)
+const SRC = (s) => (/^okno:/.test(s || '') ? `окно подписки · ${SRC0(s.slice(5))}` : SRC0(s));
 export const statusName = (s) => STATUS[s] || s || '';
 export const srcName = SRC;
 
