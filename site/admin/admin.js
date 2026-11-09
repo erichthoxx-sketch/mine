@@ -1,6 +1,6 @@
 // Админка сайта: блоки (порядок, скрыть, удалить, добавить), книги, цвета, общее.
 // Всё сохраняется само через секунду после правки; справа — живой сайт.
-import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc, seriesList, slugify, raffleFriday, drawRaffle } from '../content.js';
+import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc, seriesList, slugify, raffleFriday, drawRaffle, BOOK_SECTIONS, bookOrder } from '../content.js';
 import { openStore, authError } from './store.js';
 import { RULES } from './rules.js';
 import { PROPOSALS } from '../proposals.js';
@@ -241,7 +241,20 @@ function booksTab() {
       id: b.id, scope: 'book', i, n: bs.length, title: plain(b.title) || 'Без названия', sum: bookSum(b), off: b.hidden, thumb: thumb(b),
       body: () => bookForm(b),
     })).join('')}</div>
-    <button class="add" data-act="addBook">+ Новая книга</button>`;
+    <button class="add" data-act="addBook">+ Новая книга</button>
+    <h3 class="sub">Порядок на странице книги</h3>
+    <p class="note">Для всех книг сразу. Сверху всегда обложка с кнопками «Читать» и аннотацией, дальше — эти разделы. Стрелки — порядок, глаз — скрыть. Пустые разделы на сайте не показываются сами.</p>
+    ${bookSecList()}`;
+}
+// разделы страницы книги: стрелки и глаз — как у блоков главной
+function bookSecList() {
+  const order = bookOrder(S.content), hide = new Set(S.content.bookHide || []), name = Object.fromEntries(BOOK_SECTIONS);
+  return `<div class="list">${order.map((k, i) => `<div class="row${hide.has(k) ? ' off' : ''}"><div class="row-h">
+      <span class="row-main"><b>${esc(name[k])}</b></span>
+      <button class="ico" data-act="bsMove" data-k="${k}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Выше" title="Выше">${ic('up')}</button>
+      <button class="ico" data-act="bsMove" data-k="${k}" data-d="1" ${i === order.length - 1 ? 'disabled' : ''} aria-label="Ниже" title="Ниже">${ic('down')}</button>
+      <button class="ico" data-act="bsHide" data-k="${k}" aria-label="${hide.has(k) ? 'Показать' : 'Скрыть'}" title="${hide.has(k) ? 'Скрыто — показать' : 'Скрыть со страниц книг'}">${ic(hide.has(k) ? 'eyeOff' : 'eye')}</button>
+    </div></div>`).join('')}</div>`;
 }
 
 const bookSum = (b) => [b.series ? `${b.series}${b.seriesNo ? ` · ${b.seriesNo}` : ''}` : '', STATUS[b.status] || ''].filter(Boolean).join(' · ');
@@ -540,6 +553,17 @@ const acts = {
     [L[i], L[j]] = [L[j], L[i]];
     changed(d.s === 'block' ? d.id : null);
   },
+  bsMove: (d) => {
+    const L = bookOrder(S.content), i = L.indexOf(d.k), j = i + Number(d.d);
+    if (i < 0 || j < 0 || j >= L.length) return false;
+    [L[i], L[j]] = [L[j], L[i]];
+    S.content.bookOrder = L; bsPreview(); changed();
+  },
+  bsHide: (d) => {
+    const H = new Set(S.content.bookHide || []);
+    if (H.has(d.k)) H.delete(d.k); else H.add(d.k);
+    S.content.bookHide = [...H]; bsPreview(); changed();
+  },
   hide: (d) => { const o = target(d.s, d.id); o.hidden = !o.hidden; changed(); toast(o.hidden ? 'Скрыто с сайта' : 'Снова на сайте'); },
   del: (d) => {
     const snap = structuredClone(S.content);
@@ -649,6 +673,9 @@ app.addEventListener('click', async (e) => {
   const r = await acts[el.dataset.act]?.(el.dataset, el, e);
   if (r !== false && S.phase === 'ready') renderEditor();
 });
+
+// порядок разделов виден на странице книги: если ни одна не открыта — первая видимая
+function bsPreview() { if (!S.pvBook) S.pvBook = (S.content.books.find((b) => !b.hidden) || S.content.books[0])?.id || ''; }
 
 // ---------- сохранение и предпросмотр ----------
 let saveT = null, pvReady = false, pvT = null, pvGoto = null;

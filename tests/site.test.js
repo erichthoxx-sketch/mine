@@ -202,3 +202,19 @@ test('сайт: ознакомительный фрагмент — главы, 
   assert.match(r.main, /Ознакомительный фрагмент/); assert.match(r.main, /<h2>Глава 1<\/h2>/);
   assert.match(renderBook(c, {}, 'alpiyskiy-razvod').main, /\?chitat=alpiyskiy-razvod/);
 });
+
+test('страница книги: разделы в порядке из админки, скрытые не показываются', async () => {
+  const { renderBook, DEFAULT_CONTENT, normalize, bookOrder } = await import('../site/content.js');
+  const c = normalize(structuredClone(DEFAULT_CONTENT));
+  const b = c.books.find((x) => x.litnet) || c.books[0];
+  b.litnet ||= 'https://litnet.com/ru/book/x'; b.quotes = 'Цитата раз'; b.excerpt = 'Абзац отрывка';
+  const pos = (html, cls) => html.indexOf(cls);
+  let h = renderBook(c, {}, b.url || b.id).main;
+  assert.ok(pos(h, 'bk-final') > pos(h, 'class="qs"')); // по умолчанию призыв — в конце
+  c.bookOrder = ['final', 'excerpt'];
+  assert.deepEqual(bookOrder(c).slice(0, 3), ['final', 'excerpt', 'quotes']); // остальные — следом в прежнем порядке
+  h = renderBook(c, {}, b.url || b.id).main;
+  assert.ok(pos(h, 'bk-final') < pos(h, 'class="excerpt"'));
+  c.bookHide = ['final'];
+  assert.equal(renderBook(c, {}, b.url || b.id).main.includes('bk-final'), false);
+});

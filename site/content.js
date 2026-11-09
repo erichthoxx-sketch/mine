@@ -874,6 +874,12 @@ export function renderSite(raw, imgs = {}) {
 // Страница книги — как карточка книги у издательства: обложка и всё для решения «читать» на первом экране
 // (цикл, название, автор, крючок, характеристики, кнопки магазинов, тропы), ниже — аннотация, отрывок, цитаты,
 // отзывы, коллаж, книги цикла и короткий последний призыв. Пустые разделы не показываются
+// Разделы страницы книги (после обложки с кнопками): порядок — c.bookOrder, скрытые — c.bookHide
+export const BOOK_SECTIONS = [['excerpt', 'Отрывок'], ['quotes', 'Цитаты'], ['reviews', 'Отзывы'], ['collage', 'Фото (атмосфера)'], ['cycle', 'Книги цикла'], ['final', 'Призыв «Читать» (тёмная полоса)']];
+export function bookOrder(c) {
+  const keys = BOOK_SECTIONS.map(([k]) => k), mine = (Array.isArray(c?.bookOrder) ? c.bookOrder : []).filter((k) => keys.includes(k));
+  return [...new Set([...mine, ...keys])];
+}
 export function renderBook(raw, imgs = {}, key = '') {
   const c = normalize(raw);
   const b = findBook(c, key);
@@ -924,13 +930,14 @@ export function renderBook(raw, imgs = {}, key = '') {
           ${b.ann ? `<div class="bk-ann"><h2 class="bk-h">Аннотация</h2>${paras(b.ann)}</div>` : ''}
         </div>
       </div></div></section>`);
-  if (excerpt.length) S.push(sec('Отрывок', `<div class="excerpt">${excerpt.map((p) => `<p>${fmt(p, false)}</p>`).join('')}</div>
+  const P = {}; // разделы страницы книги — порядок и показ задаются в админке (Книги → «Порядок на странице книги»)
+  if (excerpt.length) P.excerpt = (sec('Отрывок', `<div class="excerpt">${excerpt.map((p) => `<p>${fmt(p, false)}</p>`).join('')}</div>
       ${frag.length ? `<a class="btn btn-dark" href="./?chitat=${esc(b.url)}">Читать фрагмент</a>` : links[0] ? `<a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>Читать дальше</a>` : ''}`));
-  if (quotes.length) S.push(sec('Цитаты', `<div class="qs">${quotes.map((q) => `<figure class="qc"><blockquote>${fmt(q.t)}</blockquote>${q.cite ? `<figcaption>${esc(q.cite)}</figcaption>` : ''}</figure>`).join('')}</div>`));
-  if (reviews.length) S.push(sec('Отзывы', `<div class="qs">${reviews.map((r) => `<figure class="qc rv"><blockquote>${fmt(r.t)}</blockquote>${r.who ? `<figcaption>${esc(r.who)}</figcaption>` : ''}</figure>`).join('')}</div>`));
-  if (b.collageOn !== false && photos.length) S.push(`<section class="bk-sec collage n${photos.length}" aria-label="Атмосфера книги"><div class="wrap col-in">
+  if (quotes.length) P.quotes = (sec('Цитаты', `<div class="qs">${quotes.map((q) => `<figure class="qc"><blockquote>${fmt(q.t)}</blockquote>${q.cite ? `<figcaption>${esc(q.cite)}</figcaption>` : ''}</figure>`).join('')}</div>`));
+  if (reviews.length) P.reviews = (sec('Отзывы', `<div class="qs">${reviews.map((r) => `<figure class="qc rv"><blockquote>${fmt(r.t)}</blockquote>${r.who ? `<figcaption>${esc(r.who)}</figcaption>` : ''}</figure>`).join('')}</div>`));
+  if (b.collageOn !== false && photos.length) P.collage = (`<section class="bk-sec collage n${photos.length}" aria-label="Атмосфера книги"><div class="wrap col-in">
       ${photos.map((src) => `<figure><img src="${esc(src)}" alt="" loading="lazy"></figure>`).join('')}</div></section>`);
-  if (others.length > (ser ? 1 : 0)) S.push(`<section class="bk-sec"><div class="wrap">
+  if (others.length > (ser ? 1 : 0)) P.cycle = (`<section class="bk-sec"><div class="wrap">
       <div class="sec-h"><h2 class="bk-h">${ser ? `Цикл «${esc(ser)}»` : 'Другие книги'}</h2>
         ${next ? `<a class="lnk" href="${bookHref(next)}">Следующая книга <span class="arrow">→</span></a>` : ''}</div>
       <div class="mini">${others.map((x, i) => `<a class="mini-b${x === b ? ' here' : ''}" href="${bookHref(x)}">
@@ -938,11 +945,12 @@ export function renderBook(raw, imgs = {}, key = '') {
         <span class="mini-n">${ser ? `Книга ${Number(x.seriesNo) || i + 1}` : esc(STATUS[x.status] || '')}${x === b ? ' · вы здесь' : ''}</span>
         <span class="mini-t">${fmt(x.title, false)}</span></a>`).join('')}</div>
     </div></section>`);
-  if (links[0]) S.push(`<section class="bk-final"><div class="wrap bk-final-in">
+  if (links[0]) P.final = (`<section class="bk-final"><div class="wrap bk-final-in">
       <div><div class="lbl">${b.status === 'writing' ? 'Пишу эту книгу — читайте вместе со мной' : 'Книга завершена'}</div>
       <h2>${fmt(b.title, false)}</h2></div>
       ${shops(true)}
     </div></section>`);
+  for (const k of bookOrder(c)) if (P[k] && !(c.bookHide || []).includes(k)) S.push(P[k]);
   const sticky = links[0] ? `<div class="bk-sticky"><span>${fmt(b.title, false)}</span><a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(cta)}</a></div>` : '';
 
   return {
