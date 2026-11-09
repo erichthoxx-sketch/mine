@@ -16,7 +16,8 @@ import { planView, navToday } from './views/plan.js';
 import { scheduleTodoist } from './tdsync.js';
 import { syncFinish } from './sync.js';
 import { siteDoneDue } from './sitecheck.js';
-import { loadSite, patchSiteBook } from '../../js/sitepub.js';
+import { loadSite, loadSiteRaw, patchSiteBook, sameTitle } from '../../js/sitepub.js';
+import { bookGenres } from './bookmeta.js';
 import { CONTEST_NAV, cleanContestText, rawContestText, parseContest } from './wcalc.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
@@ -216,6 +217,25 @@ store.subscribe(async () => {
       toast(`На сайте «${b.title.replace(/\*/g, '')}» теперь «Завершена»`);
     }
   } catch { /* при следующем открытии */ }
+});
+// жанры книг — сами на сайт (Мастерская → книга → жанры → админка сайта, поле «Жанр»); только когда что-то поменялось
+let genreKey = '';
+store.subscribe(async () => {
+  const books = store.data.w_books;
+  if (!books?.length) return;
+  const want = books.filter((b) => !b.archived && b.status !== 'idea' && bookGenres(b).length).map((b) => [b.title, bookGenres(b).join(' · ')]);
+  const key = JSON.stringify(want);
+  if (!want.length || key === genreKey) return;
+  const u = store.auth?.currentUser, local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  if (!u && !local) return;
+  genreKey = key;
+  try {
+    const site = await loadSiteRaw();
+    for (const [title, g] of want) {
+      const sb = (site?.books || []).find((x) => sameTitle(x.title, title));
+      if (sb && String(sb.genre || '') !== g) await patchSiteBook(title, { genre: g }, u ? await u.getIdToken() : '');
+    }
+  } catch { /* при следующем изменении */ }
 });
 // вернулась в приложение — подтягиваем свежие задачи из Todoist
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleTodoist(app, 800, { pull: true }); });

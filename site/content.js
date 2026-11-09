@@ -100,6 +100,7 @@ export const BOOK_GROUPS = [
     { k: 'total', label: 'Глав всего', type: 'num' },
     { k: 'al', label: 'Объём, а.л.', hint: 'Например: 10,2' },
     { k: 'age', label: 'Возраст', hint: 'Например: 18+' },
+    { k: 'genre', label: 'Жанр', hint: 'Подтягивается сам из Мастерской (книга → жанры). Два жанра — через « · »' },
   ] },
   { name: 'Где читать', fields: [
     ...PLATFORMS.map(([k, n]) => ({ k, label: n, type: 'url' })),
@@ -718,6 +719,9 @@ export function withUtm(u, book, tag = UTM_TAG) {
 const ctaText = (b, links) => (b.cta ? b.cta : links[0] ? (ON[links[0][0]] ? `Читать на ${ON[links[0][0]]}` : `Читать: ${links[0][0]}`) : '');
 
 // Читателю — только статус и возраст (главы и авторские листы ему ни к чему)
+// жанр — тихой строкой: курсивом под названием на странице книги, мелкими заглавными в карточках
+export const genreOf = (b) => String(b?.genre || '').split(/\s*[·,;\n]\s*/).map((x) => x.trim()).filter(Boolean).slice(0, 2);
+const genreSub = (b) => { const g = genreOf(b); return g.length ? `<p class="genre">${esc(g.map((x, i) => (i ? x.charAt(0).toLowerCase() + x.slice(1) : x)).join('\u00a0· '))}</p>` : ''; };
 const statusLine = (b) => [STATUS[b.status], b.age ? esc(b.age) : ''].filter(Boolean);
 
 // Шапка и подвал — общие для главной и страниц книг
@@ -780,6 +784,7 @@ function card(b, imgs, name, opt = {}) {
       <div class="card-txt">
         ${b.mood && !opt.small ? `<span class="mood">${esc(b.mood)}</span>` : ''}
         <h3>${fmt(b.title, false)}</h3>
+        ${genreOf(b).length && !opt.small ? `<span class="genre-s">${esc(genreOf(b)[0])}</span>` : ''}
         ${opt.small ? `<span class="lbl">${esc(b.series ? `${b.series}${b.seriesNo ? ` · ${b.seriesNo}` : ''}` : STATUS[b.status] || '')}</span>` : ''}
         ${(b.short || b.tagline) && !opt.small ? `<p>${fmt(b.short || b.tagline)}</p>` : ''}
         ${opt.small ? '' : '<span class="lnk">О книге <span class="arrow">→</span></span>'}
@@ -849,6 +854,7 @@ export function renderSite(raw, imgs = {}) {
         <div class="feat-txt">
           ${lbl(k.label)}
           <h2 class="feat-t">${fmt(b.title, false)}</h2>
+          ${genreSub(b)}
           ${b.tagline || b.short ? `<p class="ann">${fmt(b.tagline || b.short)}</p>` : ''}
           ${(() => { const st = statusLine(b).filter((x) => !String(k.label || '').toLowerCase().includes(plain(x).toLowerCase())); return st.length ? `<div class="meta-line">${st.join('<i>·</i>')}</div>` : ''; })()}
           <div class="acts">
@@ -974,6 +980,7 @@ export function renderBook(raw, imgs = {}, key = '') {
         <div class="bk-txt">
           ${ser ? `<div class="lbl">Цикл «${esc(ser)}»${no ? ` · книга ${no}` : ''}</div>` : ''}
           <h1 class="bk-t">${fmt(b.title, false)}</h1>
+          ${genreSub(b)}
           <div class="bk-author">${esc(name)}<i>·</i>${statusLine(b).join('<i>·</i>')}</div>
           ${b.tagline ? `<p class="bk-hook">${fmt(b.tagline)}</p>` : ''}
           ${shops(true)}
