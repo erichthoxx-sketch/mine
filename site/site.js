@@ -228,9 +228,21 @@ if (preview) {
   }).catch(() => { if (!cached) { show(null, {}); toHash(); } });
   // вернулась во вкладку сайта (например, после правки в админке) — подтягиваем свежее; страница не прыгает
   let freshAt = Date.now();
-  document.addEventListener('visibilitychange', () => {
+  // вышла новая версия сайта — открытая давно вкладка перезагрузится сама (иначе так и показывает старое)
+  const MY_V = (/[?&]v=([^&]+)/.exec(import.meta.url) || [])[1] || '';
+  const checkVersion = async () => {
+    if (!MY_V || MY_V === '__V__' || LOCAL || document.activeElement?.matches?.('input,textarea') || popEl) return false;
+    try {
+      const t = await (await fetch(location.pathname + '?vc=' + Date.now(), { cache: 'no-store' })).text();
+      const v = (/site\.js\?v=([^"'&]+)/.exec(t) || [])[1];
+      if (v && v !== MY_V) { location.reload(); return true; }
+    } catch { /* нет сети — проверим позже */ }
+    return false;
+  };
+  document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible' || Date.now() - freshAt < 5000) return;
     freshAt = Date.now();
+    if (await checkVersion()) return;
     loadPublic().then((d) => {
       if (JSON.stringify(d.content) === JSON.stringify(current)) return;
       const y = scrollY;
