@@ -226,3 +226,17 @@ test('страница книги: разделы в порядке из адм�
   c.bookHide = ['final'];
   assert.equal(renderBook(c, {}, b.url || b.id).main.includes('bk-final'), false);
 });
+
+test('главная: блок «Призыв «Читать» (тёмная полоса)» — книга, которую пишу сейчас', async () => {
+  const { renderSite, DEFAULT_CONTENT, normalize, newBlock } = await import('../site/content.js');
+  const c = normalize(structuredClone(DEFAULT_CONTENT));
+  const w = c.books.find((x) => x.status === 'writing');
+  w.litnet = 'https://litnet.com/ru/book/x';
+  c.blocks.push(newBlock('now'));
+  let h = renderSite(c, {}).main;
+  assert.match(h, /bk-final/); assert.match(h, /Пишу эту книгу — читайте вместе со мной/); assert.match(h, /Читать на Литнете/);
+  c.blocks.at(-1).label = 'Читайте вместе со мной';
+  assert.match(renderSite(c, {}).main, /Читайте вместе со мной/);
+  for (const b of c.books) { b.litnet = ''; b.links = ''; }
+  assert.doesNotMatch(renderSite(c, {}).main, /bk-final/); // нет ссылки — полосы нет
+});

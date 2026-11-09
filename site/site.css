@@ -277,6 +277,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .bk-final-in{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:20px 32px;padding-block:clamp(32px,4vw,52px)}
 .bk-final-in>div{display:grid;gap:10px}
 .bk-final h2{font-size:clamp(24px,2.4vw,34px)}
+.bk-final h2 a{color:inherit;text-decoration:none}
 .bk-final .lbl{color:color-mix(in srgb,var(--paper) 62%,transparent)}
 .bk-final .btn-dark{background:var(--paper);color:var(--ink);border-color:var(--paper)}
 .bk-final .btn-dark:hover{background:transparent;color:var(--paper)}

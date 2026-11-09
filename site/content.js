@@ -76,6 +76,10 @@ export const BLOCKS = {
     { k: 'url', label: 'Ссылка на канал', type: 'url', hint: 'Например: https://t.me/ваш_канал — по ней же значок-самолётик в меню' },
     MENU,
   ] },
+  now: { name: 'Призыв «Читать» (тёмная полоса)', fields: [
+    { k: 'book', label: 'Книга', type: 'book', hint: 'Пусто — та, которую пишу сейчас (сменится сама, когда начну новую)' },
+    { k: 'label', label: 'Строка над названием', hint: 'Пусто — «Пишу эту книгу — читайте вместе со мной», у завершённой — «Книга завершена»' },
+  ] },
   text: { name: 'Текст', fields: [
     { k: 'label', label: 'Подпись сверху' },
     { k: 'title', label: 'Заголовок', hint: '*Слово в звёздочках* — курсивом' },
@@ -756,6 +760,18 @@ function card(b, imgs, name, opt = {}) {
     </a>`;
 }
 
+// Тёмная полоса «Пишу эту книгу — читайте вместе со мной · Название · Читать на Литнете»: внизу страницы книги и блоком на главной
+function finalBand(b, label = '', id = '') {
+  const links = bookLinks(b);
+  if (!links[0]) return '';
+  return `<section class="bk-final"${id ? ` id="${id}"` : ''}><div class="wrap bk-final-in">
+      <div><div class="lbl">${esc(label || (b.status === 'writing' ? 'Пишу эту книгу — читайте вместе со мной' : 'Книга завершена'))}</div>
+      <h2><a href="${bookHref(b)}">${fmt(b.title, false)}</a></h2></div>
+      <div class="buy"><a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(ctaText(b, links))}</a>
+      ${links.slice(1).map(([n, u]) => `<a class="btn btn-line" href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}</div>
+    </div></section>`;
+}
+
 export function renderSite(raw, imgs = {}) {
   const c = normalize(raw);
   const visible = c.books.filter((b) => !b.hidden);
@@ -790,6 +806,10 @@ export function renderSite(raw, imgs = {}) {
       if (!items.length) return '';
       const one = items.map((t) => `<span${/^\*.*\*$/.test(t) ? ' class="it"' : ''}>${esc(t.replace(/^\*|\*$/g, ''))}</span><b aria-hidden="true">✦</b>`).join('');
       return `<div class="run" id="${k.id}" aria-hidden="true"><div class="run-in">${one}${one}${one}${one}</div></div>`;
+    },
+    now: (k) => {
+      const b = books.get(k.book) || visible.find((x) => x.status === 'writing' && bookLinks(x).length) || visible.find((x) => x.status === 'writing');
+      return b ? finalBand(b, k.label, k.id) : '';
     },
     book: (k) => {
       const b = books.get(k.book);
@@ -948,11 +968,7 @@ export function renderBook(raw, imgs = {}, key = '') {
         <span class="mini-n">${ser ? `Книга ${Number(x.seriesNo) || i + 1}` : esc(STATUS[x.status] || '')}${x === b ? ' · вы здесь' : ''}</span>
         <span class="mini-t">${fmt(x.title, false)}</span></a>`).join('')}</div>
     </div></section>`);
-  if (links[0]) P.final = (`<section class="bk-final"><div class="wrap bk-final-in">
-      <div><div class="lbl">${b.status === 'writing' ? 'Пишу эту книгу — читайте вместе со мной' : 'Книга завершена'}</div>
-      <h2>${fmt(b.title, false)}</h2></div>
-      ${shops(true)}
-    </div></section>`);
+  if (links[0]) P.final = finalBand(b);
   for (const k of bookOrder(c)) if (P[k] && !(c.bookHide || []).includes(k)) S.push(P[k]);
   const sticky = links[0] ? `<div class="bk-sticky"><span>${fmt(b.title, false)}</span><a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(cta)}</a></div>` : '';
 
