@@ -78,7 +78,7 @@ export const BLOCKS = {
   ] },
   now: { name: 'Призыв «Читать» (тёмная полоса)', fields: [
     { k: 'book', label: 'Книга', type: 'book', auto: true, hint: '«Та, что пишу сейчас» — сменится сама, когда начну новую книгу' },
-    { k: 'label', label: 'Строка над названием', hint: 'Пусто — «Пишу эту книгу — читайте вместе со мной», у завершённой — «Книга завершена»' },
+    { k: 'label', label: 'Строка над названием', hint: 'Пусто — «Пишу сейчас · читайте первыми», у завершённой — «Книга завершена»' },
   ] },
   text: { name: 'Текст', fields: [
     { k: 'label', label: 'Подпись сверху' },
@@ -772,12 +772,12 @@ function card(b, imgs, name, opt = {}) {
 
 // Книга, которую пишу сейчас: для блоков, где книга не выбрана («Та, что пишу сейчас») — сменится сама с новой книгой
 export const writingBook = (books) => books.find((x) => x.status === 'writing' && bookLinks(x).length) || books.find((x) => x.status === 'writing') || null;
-// Тёмная полоса «Пишу эту книгу — читайте вместе со мной · Название · Читать на Литнете»: внизу страницы книги и блоком на главной
+// Тёмная полоса «Пишу сейчас · читайте первыми · Название · Читать на Литнете»: внизу страницы книги и блоком на главной
 function finalBand(b, label = '', id = '') {
   const links = bookLinks(b);
   if (!links[0]) return '';
   return `<section class="bk-final"${id ? ` id="${id}"` : ''}><div class="wrap bk-final-in">
-      <div><div class="lbl">${esc(label || (b.status === 'writing' ? 'Пишу эту книгу — читайте вместе со мной' : 'Книга завершена'))}</div>
+      <div><div class="lbl">${esc(label || (b.status === 'writing' ? 'Пишу сейчас · читайте первыми' : 'Книга завершена'))}</div>
       <h2><a href="${bookHref(b)}">${fmt(b.title, false)}</a></h2></div>
       <div class="buy"><a class="btn btn-dark" href="${esc(links[0][1])}"${ext(links[0][1])}>${esc(ctaText(b, links))}</a>
       ${links.slice(1).map(([n, u]) => `<a class="btn btn-line" href="${esc(u)}"${ext(u)}>${esc(n)}</a>`).join('')}</div>
