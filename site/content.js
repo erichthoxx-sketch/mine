@@ -979,7 +979,7 @@ export function renderBook(raw, imgs = {}, key = '') {
           ${shops(true)}
           ${frag.length ? `<a class="lnk bk-frag" href="./?chitat=${esc(b.url)}">Читать фрагмент здесь <span class="arrow">→</span></a>` : ''}
           ${tags.length ? `<ul class="tags">${tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
-          ${b.ann ? `<div class="bk-ann"><h2 class="bk-h">Аннотация</h2>${paras(b.ann)}</div>` : ''}
+          ${b.ann ? `<div class="bk-ann"><h2 class="bk-h">Аннотация</h2>${lines(b.ann).map((p) => `<p>${fmt(p, false)}</p>`).join('')}</div>` : ''}
         </div>
       </div></div></section>`);
   const P = {}; // разделы страницы книги — порядок и показ задаются в админке (Книги → «Порядок на странице книги»)

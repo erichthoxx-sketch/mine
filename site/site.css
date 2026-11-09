@@ -377,6 +377,38 @@ body.rd-night{--paper:#16171a;--paper-2:#1e2024;--ink:#d9d7d1;--ink-2:#9a9da2;--
   .rd-txt{--rd-fs:18px}
   .rd-top{margin-bottom:24px}
 }
+/* телефон: больше воздуха (09.11.2026, владелица: «текст слишком близко, особенно на странице книги») — поля 24px, ровный шаг между строками и разделами */
+@media (max-width:640px){
+  :root{--gut:max(24px,env(safe-area-inset-left,0px));--gut-r:max(24px,env(safe-area-inset-right,0px));--sec:56px}
+  body{line-height:1.7}
+  .crumbs{font-size:12px;margin-bottom:28px}
+  .bk-top .wrap{padding-top:22px}
+  .bk-cover{max-width:220px;margin-bottom:12px}
+  .bk-txt{gap:22px}
+  .bk-author{margin-top:-10px}
+  .bk-hook{font-size:21px;line-height:1.45}
+  .bk-frag{margin-top:0}
+  .tags{gap:8px;margin-top:6px}
+  .tags li{padding:7px 12px}
+  .bk-txt .bk-ann{gap:16px;margin-top:18px;padding-top:32px}
+  .bk-ann p,.excerpt p{font-size:16.5px;line-height:1.8}
+  .bk-two{gap:22px}
+  .excerpt{margin-bottom:28px}
+  .qs{gap:16px}
+  .qc{padding:26px 24px;gap:16px}
+  .qc blockquote{font-size:20px;line-height:1.45}
+  .mini{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:16px;margin-right:calc(-1 * var(--gut-r));padding-right:var(--gut-r);scrollbar-width:none}
+  .mini::-webkit-scrollbar{display:none}
+  .mini-b{flex:0 0 40%;scroll-snap-align:start;gap:10px}
+  .mini-t{font-size:15px;line-height:1.15}
+  .mini-n{font-size:10px}
+  .mini-c .cover .cv-t{font-size:15px}
+  .bk-final-in{gap:24px;padding-block:44px}
+  .bk-final-in>div{gap:12px}
+  .sec-h,.series-h{margin-bottom:28px}
+  .series-h{gap:18px}
+  .prose p{margin-bottom:1.1em}
+}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
 
 /* ---------- Личный кабинет (прототип: ./?proto) ---------- */
