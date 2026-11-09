@@ -67,7 +67,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .nav .tg-ico::after{display:none}
 .tg-ico svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round;transition:transform .3s}
 .tg-ico:hover svg{transform:translate(2px,-2px)}
-.mnav .tg-ico svg{width:22px;height:22px}
+.mnav .tg-ico svg{width:16px;height:16px}
 .logo{display:inline-flex;align-items:center;font:400 22px/1 var(--f-display);letter-spacing:.26em;text-transform:uppercase;white-space:nowrap}
 .top-r{justify-self:end;display:flex;align-items:center;gap:18px}
 .menu-btn{display:none;align-items:center;background:none;border:0;padding:8px 0;color:var(--ink);cursor:pointer;font:500 11px/1 var(--f-body);letter-spacing:.18em;text-transform:uppercase}
@@ -77,8 +77,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .menu-btn[aria-expanded="true"] span:first-child{transform:translateY(3px) rotate(45deg)}
 .menu-btn[aria-expanded="true"] span+span{width:20px;transform:translateY(-3px) rotate(-45deg)}
 .mnav{border-top:1px solid var(--line);background:var(--paper)}
-.mnav .wrap{display:grid;gap:2px;padding-block:16px 24px}
-.mnav a:not(.btn){font:400 26px/1.2 var(--f-display);letter-spacing:.04em;padding:6px 0}
+/* меню телефона — как меню компьютера: мелкие заглавные с разрядкой, тонкие линии между пунктами (владелица: «огромные») */
+.mnav .wrap{display:grid;gap:0;padding-block:6px 18px}
+.mnav a:not(.btn){font:500 12px/1 var(--f-body);letter-spacing:.2em;padding:16px 0;border-bottom:1px solid var(--line)}
+.mnav a:not(.btn):last-of-type{border-bottom:0}
 .mnav .btn{justify-self:start;margin-top:12px}
 
 /* обложки: настоящие или строгие типографские */
