@@ -87,6 +87,37 @@ export function siteTabs(sub) {
 export function mailCount() { load(); return M.info?.list ? subsStats(M.info.list, app().ctx().today) : null; }
 
 // ---------- экран «Почта» ----------
+// Письмо «Подтвердите подписку» — его шлёт сам сервис сразу после подписки; тексты хранятся в сервисе (op: texts)
+const C_FIELDS = [['subj', 'Тема письма', ''], ['head', 'Заголовок', ''], ['text', 'Текст', 'area'], ['btn', 'Кнопка', '']];
+function confirmBox() {
+  const t = M.info?.texts;
+  if (!t || !(M.info.v >= 2)) return `<p class="small muted" style="margin:6px 0">Чтобы менять это письмо, один раз обновите программу сервиса писем в Яндекс Облаке:</p>
+    <ol class="small" style="margin:0 0 10px;padding-left:20px;line-height:1.7"><li>Нажмите «Скопировать программу» ниже.</li>
+      <li>Яндекс Облако → <b>Cloud Functions</b> → функция <b>lana-mail</b> → <b>Редактор</b> → файл <b>index.js</b>.</li>
+      <li>Выделите весь текст (Ctrl+A), вставьте новый (Ctrl+V) → <b>Сохранить изменения</b>.</li>
+      <li>Вернитесь сюда и обновите страницу — появятся поля письма.</li></ol>
+    <button class="small-btn" data-act="mail.fncopy">Скопировать программу</button>`;
+  return `<p class="small muted" style="margin:6px 0 10px">Приходит сразу после подписки с кнопкой подтверждения. Пустое поле — как было.</p>
+    ${C_FIELDS.map(([k, label, type]) => `<label class="ml-f"><span>${label}</span>${type === 'area'
+      ? `<textarea data-ct="${k}" rows="3">${esc(t[k] || '')}</textarea>` : `<input data-ct="${k}" value="${esc(t[k] || '')}">`}</label>`).join('')}
+    <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:6px"><button class="primary" data-act="mail.ctsave">Сохранить</button>
+      <button class="small-btn" data-act="mail.ctsave" data-test="1">Сохранить и прислать себе</button></div>`;
+}
+acts['mail.ctsave'] = async (d) => {
+  const texts = Object.fromEntries([...document.querySelectorAll('[data-ct]')].map((el) => [el.dataset.ct, el.value]));
+  try {
+    const r = await mailCall(mailUrl(), M.cfg.key, { op: 'texts', texts, test: !!d.test });
+    M.info.texts = r.texts;
+    toast(d.test ? `Сохранено. Пробное письмо ушло на ${M.info.replyTo || M.info.from || 'вашу почту'}` : 'Письмо подтверждения сохранено');
+  } catch (e) { toast(e.message); return false; }
+};
+acts['mail.fncopy'] = async () => {
+  const get = async (u) => { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error(); return r.text(); };
+  const code = get(new URL('../mail/mail-function.txt', location.href)).catch(() => get(new URL('../mail/mail-function.cjs', location.href)));
+  try { await copyRich(code); toast('Программа скопирована — вставьте её в index.js в Яндекс Облаке'); } catch { toast('Не получилось скопировать — обновите страницу и нажмите ещё раз'); }
+  return false;
+};
+
 export function mailView(a) {
   const c = a.ctx();
   load(); fresh();
@@ -141,6 +172,7 @@ export function mailView(a) {
       <button class="nav-arr next" data-act="mail.page" data-v="1"${pg < pages - 1 ? '' : ' disabled'} aria-label="Дальше">${ic('chevron')}</button></div>` : ''}
     <p class="small muted" style="margin:12px 0 0">Адреса хранятся в вашем сервисе писем в Яндекс Облаке (в России), копия — каждую ночь там же и в архиве Мастерской. Письма уходят с ${esc(M.info.from || 'вашего адреса')}, ответы — на ${esc(M.info.replyTo || 'вашу почту')}.</p>
   </div>
+  <details class="mail-more"${det('confirm')}><summary>Письмо «Подтвердите подписку»</summary>${confirmBox()}</details>
   <details class="mail-more"${det('arc')}><summary>Копия адресов в архив Мастерской</summary>
     <p class="small muted" style="margin:6px 0">Сервис сам каждую ночь сохраняет копию адресов у себя, в Яндекс Облаке. Чтобы копия была ещё и на Google Диске (папка «Архив Мастерской / Почта») и в GitHub — один раз:</p>
     <ol class="small" style="margin:0 0 6px;padding-left:20px;line-height:1.6"><li>Настройки → «Архив книг» → «Скопировать программу» → на script.google.com заменить текст (Ctrl+A, Ctrl+V, Ctrl+S).</li>

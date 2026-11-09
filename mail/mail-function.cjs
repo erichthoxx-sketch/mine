@@ -47,19 +47,22 @@ async function send(to, subject, html, text, unsub) {
 const link = (a, t) => `${ENV.SELF}?a=${a}&t=${t}`;
 const fill = (s, p) => String(s).replace(/\{unsub\}/g, link('unsub', p.token)).replace(/\{name\}/g, esc(p.name || ''));
 
-// письмо «подтвердите подписку» — короткое, в стиле сайта
-function confirmMail(p) {
+// письмо «подтвердите подписку» — короткое, в стиле сайта; тексты владелица меняет в Мастерской → Сайт → Почта (op: texts → d.texts)
+const FN_V = 2; // версия программы: Почта видит, что программу пора обновить
+const TEXTS_DEF = { subj: 'Подтвердите подписку', head: 'Подтвердите подписку', text: 'Одно нажатие — и я напишу вам, когда выйдет мой новый роман. Только тогда.', btn: 'Подтвердить' };
+const textsOf = (d) => ({ ...TEXTS_DEF, ...Object.fromEntries(Object.entries(d?.texts || {}).filter(([k, v]) => k in TEXTS_DEF && String(v || '').trim())) });
+function confirmMail(p, t = TEXTS_DEF) {
   const url = link('confirm', p.token), site = ENV.SITE || '';
   const html = `<!doctype html><html><body style="margin:0;background:#f6f6f4;font-family:Georgia,'Times New Roman',serif;color:#141517">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f6f4"><tr><td align="center" style="padding:40px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e4e4e0">
 <tr><td style="padding:36px 36px 12px;text-align:center;letter-spacing:.3em;font-size:13px;text-transform:uppercase;color:#5c6167">Лана Фрейтаг</td></tr>
-<tr><td style="padding:12px 36px 8px;text-align:center;font-size:26px;line-height:1.25">Подтвердите подписку</td></tr>
-<tr><td style="padding:8px 36px 24px;text-align:center;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#5c6167">Одно нажатие — и я напишу вам, когда выйдет мой новый роман. Только тогда.</td></tr>
-<tr><td align="center" style="padding:0 36px 32px"><a href="${url}" style="display:inline-block;background:#141517;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;font-size:12px;letter-spacing:.18em;text-transform:uppercase;padding:15px 28px">Подтвердить</a></td></tr>
+<tr><td style="padding:12px 36px 8px;text-align:center;font-size:26px;line-height:1.25">${esc(t.head)}</td></tr>
+<tr><td style="padding:8px 36px 24px;text-align:center;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#5c6167">${esc(t.text).replace(/\n/g, '<br>')}</td></tr>
+<tr><td align="center" style="padding:0 36px 32px"><a href="${url}" style="display:inline-block;background:#141517;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;font-size:12px;letter-spacing:.18em;text-transform:uppercase;padding:15px 28px">${esc(t.btn)}</a></td></tr>
 <tr><td style="padding:0 36px 32px;text-align:center;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#979ca1">Если вы не подписывались на ${esc(site.replace(/^https?:\/\//, '').replace(/\/$/, ''))}, просто удалите это письмо.</td></tr>
 </table></td></tr></table></body></html>`;
-  return { subject: 'Подтвердите подписку', html, text: `Подтвердите подписку: ${url}\n\nЕсли вы не подписывались, просто удалите это письмо.` };
+  return { subject: t.subj, html, text: `${t.head}\n\n${t.text}\n\n${t.btn}: ${url}\n\nЕсли вы не подписывались, просто удалите это письмо.` };
 }
 
 // ---------- ответы ----------
@@ -119,7 +122,7 @@ module.exports.handler = async function (event, context) {
       if (!p) { p = { email, name: String(body.name || '').slice(0, 80), src: String(body.src || '').slice(0, 60), at: new Date().toISOString(), token: rnd() }; d.list.push(p); }
       p.status = 'pending'; p.asked = new Date().toISOString();
       await saveList(d);
-      const m = confirmMail(p);
+      const m = confirmMail(p, textsOf(d));
       await send(email, m.subject, m.html, m.text);
       return json({ ok: true }, 200, C);
     }
@@ -138,7 +141,14 @@ module.exports.handler = async function (event, context) {
     if (q.a === 'admin') {
       if (!ENV.ADMIN_KEY || body.key !== ENV.ADMIN_KEY) return json({ error: 'key' }, 403, C);
       const d = await loadList();
-      if (body.op === 'list') return json({ list: d.list.map(({ token, ...x }) => x), sent: d.sent || [], queue: (d.queue || []).map(clean), tick: d.backupDay || '', from: ENV.FROM, replyTo: ENV.REPLY_TO }, 200, C);
+      if (body.op === 'list') return json({ list: d.list.map(({ token, ...x }) => x), sent: d.sent || [], queue: (d.queue || []).map(clean), tick: d.backupDay || '', from: ENV.FROM, replyTo: ENV.REPLY_TO, texts: textsOf(d), v: FN_V }, 200, C);
+      if (body.op === 'texts') { // письмо «Подтвердите подписку»: свои тексты (пустое поле — как было)
+        const t = body.texts || {};
+        d.texts = Object.fromEntries(Object.keys(TEXTS_DEF).map((k) => [k, String(t[k] || '').trim().slice(0, 400)]));
+        await saveList(d);
+        if (body.test) { const to = ENV.REPLY_TO || ENV.FROM; const m = confirmMail({ token: 'test' }, textsOf(d)); await send(to, m.subject, m.html, m.text); }
+        return json({ ok: true, texts: textsOf(d) }, 200, C);
+      }
       if (body.op === 'schedule') { // отложить письмо на дату и время (at — ISO); тот же id — заменить
         if (!Date.parse(body.at)) return json({ error: 'at' }, 400, C);
         const q = { id: String(body.id || rnd()).slice(0, 40), at: new Date(body.at).toISOString(), subject: String(body.subject || ''), html: String(body.html || ''), text: String(body.text || ''), draft: body.draft || null, made: new Date().toISOString() };

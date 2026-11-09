@@ -30,6 +30,8 @@ jobs:
           # сайт автора (/site/) и его админка (/site/admin/)
           mkdir -p _site/site/admin _site/js
           cp js/firebase-config.js _site/js/
+          # программа сервиса писем — чтобы Мастерская могла её скопировать (ключей в ней нет)
+          mkdir -p _site/mail && cp mail/mail-function.cjs _site/mail/mail-function.txt
           cp site/*.js site/*.css site/*.jpg site/*.png _site/site/
           cp site/admin/*.js site/admin/*.css _site/site/admin/
           # все части сайта — с номером версии, чтобы браузер не смешивал старые и новые файлы

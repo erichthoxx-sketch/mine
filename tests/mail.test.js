@@ -173,3 +173,23 @@ test('сервис писем: опоздавшее больше чем на 2 �
   assert.equal(L.sent, 1); assert.equal(L.queue.length, 0);
   assert.equal(sent.at(-1).Content.Simple.Subject.Data, 'Опоздало');
 });
+
+test('сервис писем: свои тексты письма «Подтвердите подписку» из Почты', async () => {
+  const { sent } = stub();
+  delete require.cache[require.resolve('../mail/mail-function.cjs')];
+  const { handler } = require('../mail/mail-function.cjs');
+  let r = await call(handler, { a: 'admin' }, { key: 'секрет', op: 'list' });
+  const j = JSON.parse(r.body);
+  assert.equal(j.v >= 2, true); assert.equal(j.texts.head, 'Подтвердите подписку');
+  r = await call(handler, { a: 'admin' }, { key: 'секрет', op: 'texts', texts: { subj: 'Последний шаг', head: 'Одно нажатие', text: 'Подтвердите,\nи я напишу.', btn: 'Да, хочу' }, test: true });
+  assert.equal(JSON.parse(r.body).texts.btn, 'Да, хочу');
+  assert.deepEqual(sent.at(-1).Destination.ToAddresses, ['lana@mail.ru']); // пробное — владелице
+  await call(handler, { a: 'sub' }, { email: 'new@ya.ru', ok: true });
+  const m = sent.at(-1);
+  assert.equal(m.Content.Simple.Subject.Data, 'Последний шаг');
+  assert.match(m.Content.Simple.Body.Html.Data, /Подтвердите,<br>и я напишу\./);
+  assert.match(m.Content.Simple.Body.Html.Data, />Да, хочу<\/a>/);
+  await call(handler, { a: 'admin' }, { key: 'секрет', op: 'texts', texts: { subj: '', head: '', text: '', btn: '' } });
+  r = await call(handler, { a: 'admin' }, { key: 'секрет', op: 'list' });
+  assert.equal(JSON.parse(r.body).texts.subj, 'Подтвердите подписку'); // пустое — как было
+});
