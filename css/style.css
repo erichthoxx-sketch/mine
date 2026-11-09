@@ -3335,3 +3335,21 @@ details.fold-more[open] > summary { align-self: flex-start; }
 .card.bk-more { padding: 14px; }
 .card.bk-more .tile-pane { padding: 4px 6px 6px; }
 @media (min-width: 900px) { .tiles-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Мастерская → Сайт: книги на сайте и выбор бесплатного фрагмента (09.11.2026, владелица: «простой механизм выбора глав, сейчас всё непонятно») */
+.site-bk{display:grid;gap:10px}
+.site-bk .sub{display:block;margin-top:2px}
+.site-bk-acts{display:flex;flex-wrap:wrap;gap:8px}
+.frag-list{display:grid;gap:2px;margin:14px 0 10px;max-height:52vh;overflow:auto}
+.frag-row{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;cursor:pointer;color:var(--muted);transition:background .15s}
+.frag-row input{position:absolute;opacity:0;pointer-events:none}
+.frag-row:hover{background:var(--soft,var(--surface-2))}
+.frag-ok{flex:0 0 22px;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center}
+.frag-ok svg{width:13px;height:13px;opacity:0}
+.frag-row.on{color:var(--text)}
+.frag-row.on .frag-ok{background:var(--text);border-color:var(--text);color:var(--bg,#fff)}
+.frag-row.on .frag-ok svg{opacity:1}
+.frag-row:has(input:checked){background:var(--soft,var(--surface-2))}
+.frag-t{flex:1;min-width:0}
+.frag-n{font-size:13px;color:var(--muted);white-space:nowrap}
+.frag-sum{margin:6px 0 10px;font-weight:600}

@@ -408,6 +408,15 @@ body.rd-night{--paper:#16171a;--paper-2:#1e2024;--ink:#d9d7d1;--ink-2:#9a9da2;--
   .sec-h,.series-h{margin-bottom:28px}
   .series-h{gap:18px}
   .prose p{margin-bottom:1.1em}
+  /* главная: обложка «Книги крупно» по центру, карточки книг крупнее и читаемее, курсив в заголовке не рвётся */
+  .feat{gap:28px}
+  .feat-cover{max-width:200px;justify-self:center;width:100%}
+  .start .card{flex:0 0 74%}
+  .card-txt{gap:8px}
+  .card p{font-size:15px;line-height:1.65}
+  .card h3{font-size:22px}
+  .about h2 .it,.feat-t .it,.bk-t .it,.bk-final h2 .it,.sub-txt h2 .it{white-space:nowrap}
+  .about{gap:22px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
 

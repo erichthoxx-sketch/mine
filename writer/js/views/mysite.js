@@ -97,56 +97,100 @@ function booksOnSite(c) {
   const pairs = c.wbooks.filter((b) => b.status !== 'idea' && !b.archived).map((b) => [b, st.site.books.find((x) => sameTitle(x.title, b.title))]).filter(([, s]) => s);
   if (!pairs.length) return '';
   const what = (s) => [s.ann ? 'аннотация' : '', s.tagline ? 'крючок' : '', s.frag ? `фрагмент ${nf(s.frag)} зн.` : ''].filter(Boolean).join(' · ') || 'тексты пока не заполнены';
+  const fragNow = (b, s) => (s.frag ? `до «${b.siteFragUpto || '…'}», ${nf(s.frag)} зн.` : 'нет');
   return `<div class="psec-h"><h2>Книги на сайте</h2></div>
-  <div class="card list">${pairs.map(([b, s]) => `<div class="item row between"><span><b>${esc(b.title)}</b><span class="sub">На сайте: ${esc(what(s))}</span></span>
-    <button class="small-btn" data-act="site.push" data-id="${esc(b.id)}" style="flex-shrink:0">Обновить из Мастерской</button></div>`).join('')}
-    <p class="small muted" style="margin:8px 0 0">Аннотация — из вкладки «Аннотация» Документа, крючок — из Легенды («О чём книга — одной фразой»), фрагмент — из рукописи для издательства, до главы, бесплатной на Литнете.</p></div>`;
+  <div class="card list">${pairs.map(([b, s]) => `<div class="item site-bk"><div><b>${esc(b.title)}</b>
+      <span class="sub">${esc([s.ann ? 'аннотация' : '', s.tagline ? 'крючок' : ''].filter(Boolean).join(' · ') || 'аннотации и крючка пока нет')} · фрагмент: ${esc(fragNow(b, s))}</span></div>
+    <div class="site-bk-acts"><button class="small-btn" data-act="site.frag" data-id="${esc(b.id)}">Бесплатный фрагмент</button>
+      <button class="small-btn" data-act="site.push" data-id="${esc(b.id)}">Аннотация и крючок</button></div></div>`).join('')}
+    <p class="small muted" style="margin:8px 0 0">Аннотация — из вкладки «Аннотация» Документа, крючок — из Легенды («О чём книга — одной фразой»), фрагмент — главы из Документа.</p></div>`;
 }
+
+// Бесплатный фрагмент для сайта — простой выбор: нажать на последнюю главу, всё до неё уйдёт на сайт
+async function bookChapters(b) {
+  const [drive, { chaptersOf }] = await Promise.all([import('../drive.js'), import('../publish.js')]);
+  if (!b.fileId || b.mimeType !== drive.MIME.doc) throw new Error('Книга не из Google Документа — главы не прочитать');
+  try { toast('Открываю Документ…'); await drive.ensureToken(); return chaptersOf(await drive.getDoc(b.fileId)); }
+  catch (e) { throw new Error(e instanceof drive.NeedAuth ? e.message : 'Не получилось открыть Документ'); }
+}
+const fragSum = (chs, i) => {
+  const n = fragChars(chs, i);
+  return i < 0 ? 'Ничего не выбрано' : `${i + 1} ${plural(i + 1, ['глава', 'главы', 'глав'])} · ${nf(n)} знаков${n > LITNET_FREE_MAX ? ' — больше 200 000, по правилам Литнета столько бесплатно выкладывать нельзя' : ''}`;
+};
+acts['site.frag'] = async (d) => {
+  const b = app().ctx().wbooksById[d.id];
+  if (!b) return false;
+  let chs;
+  try { chs = await bookChapters(b); } catch (e) { toast(e.message); return false; }
+  if (!chs.length) { toast('В Документе нет глав'); return false; }
+  fragSheet(b, chs);
+  return false;
+};
+export function fragSheet(b, chs) {
+  const was = chs.findIndex((x) => x.title === b.siteFragUpto);
+  const sel = was >= 0 ? was : Math.min(fitFree(chs), 2);
+  push = { b, chs };
+  const onSite = st.site?.books.find((x) => sameTitle(x.title, b.title))?.frag;
+  openSheet('Бесплатный фрагмент на сайте', `<p class="small muted" style="margin-top:0">«${esc(b.title)}». Нажмите на последнюю главу, которую можно прочитать на сайте бесплатно: все главы до неё уйдут на сайт. Берите не больше, чем открыто бесплатно на Литнете.</p>
+    <div class="frag-list">${chs.map((x, i) => `<label class="frag-row${i <= sel ? ' on' : ''}"><input type="radio" name="upto" value="${i}"${i === sel ? ' checked' : ''} data-chg="site.fragpick">
+      <span class="frag-ok">${ic('check')}</span><span class="frag-t">${esc(String(x.title || '').split('\n')[0])}</span><span class="frag-n">${nf(x.chars || 0)} зн.</span></label>`).join('')}</div>
+    <p class="frag-sum" id="frag-sum">${fragSum(chs, sel)}</p>
+    ${onSite ? '<button type="button" class="link small" data-act="site.fragoff" data-id="' + esc(b.id) + '">Убрать фрагмент с сайта</button>' : ''}`,
+  async (fd) => {
+    const i = Number(fd.get('upto'));
+    if (!(i >= 0)) { toast('Выберите главу'); return false; }
+    if (fragChars(chs, i) > LITNET_FREE_MAX) { toast('Больше 200 000 знаков — по правилам Литнета столько бесплатно выкладывать нельзя'); return false; }
+    try {
+      const u = app().store.auth?.currentUser;
+      await patchSiteBook(b.title, { frag: fragText(chs, i) }, u ? await u.getIdToken() : '');
+      await app().store.patch('w_books', b.id, { siteFragUpto: chs[i].title });
+      toast(`Фрагмент на сайте: ${String(chs[0].title).split('\n')[0]} — ${String(chs[i].title).split('\n')[0]}`);
+      load(true);
+    } catch (e) { toast(e.message); return false; }
+  }, { submitText: 'Поставить на сайт' });
+}
+changes['site.fragpick'] = (v) => {
+  const i = Number(v);
+  document.querySelectorAll('.frag-row').forEach((el, k) => el.classList.toggle('on', k <= i));
+  const el = document.getElementById('frag-sum'); if (el && push) el.textContent = fragSum(push.chs, i);
+  return false;
+};
+acts['site.fragoff'] = async (d) => {
+  const b = app().ctx().wbooksById[d.id];
+  if (!b) return false;
+  try {
+    const u = app().store.auth?.currentUser;
+    await patchSiteBook(b.title, { frag: '' }, u ? await u.getIdToken() : '');
+    await app().store.patch('w_books', b.id, { siteFragUpto: '' });
+    document.getElementById('sheet')?.close();
+    toast('Фрагмент убран с сайта'); load(true);
+  } catch (e) { toast(e.message); }
+  return false;
+};
 let push = null; // книга и её главы, пока открыто окно
 acts['site.push'] = async (d) => {
   const b = app().ctx().wbooksById[d.id];
   if (!b) return false;
-  let chs = [];
-  // Диск и рукопись — по требованию (drive.js нужен браузер)
-  const [drive, { chaptersOf }] = await Promise.all([import('../drive.js'), import('../publish.js')]);
-  if (b.fileId && b.mimeType === drive.MIME.doc) {
-    try { toast('Открываю Документ…'); await drive.ensureToken(); chs = chaptersOf(await drive.getDoc(b.fileId)); }
-    catch (e) { toast(e instanceof drive.NeedAuth ? e.message : 'Не получилось открыть Документ — фрагмент сейчас не собрать'); }
-  }
-  const upto = chs.findIndex((x) => x.title === b.siteFragUpto);
-  push = { b, chs };
-  const ann = annOf(b), hook = hookOf(b), def = upto >= 0 ? upto : fitFree(chs);
-  const row = (k, on, label, sub) => `<label class="row" style="gap:10px;align-items:flex-start;margin:0 0 14px"><input type="checkbox" name="${k}"${on ? ' checked' : ''}${sub ? '' : ' disabled'} style="margin-top:3px"><span><b>${label}</b><span class="sub" style="display:block">${sub || 'нет'}</span></span></label>`;
-  openSheet('Обновить на сайте', `<p class="small muted" style="margin-top:0">«${esc(b.title)}» — отметьте, что заменить на сайте.</p>
+  const ann = annOf(b), hook = hookOf(b);
+  if (!ann && !hook) { toast('Нет ни аннотации (вкладка «Аннотация» в Документе), ни крючка (Легенда → «О чём книга — одной фразой»)'); return false; }
+  const row = (k, on, label, sub) => `<label class="row" style="gap:10px;align-items:flex-start;margin:0 0 14px"><input type="checkbox" name="${k}"${on ? ' checked' : ''}${on ? '' : ' disabled'} style="margin-top:3px"><span><b>${label}</b><span class="sub" style="display:block">${sub}</span></span></label>`;
+  openSheet('Аннотация и крючок на сайте', `<p class="small muted" style="margin-top:0">«${esc(b.title)}» — отметьте, что заменить на сайте.</p>
     ${row('ann', !!ann, 'Аннотация', ann ? esc(ann.slice(0, 140)) + (ann.length > 140 ? '…' : '') : 'в Документе нет вкладки «Аннотация»')}
-    ${row('hook', !!hook, 'Крючок', hook ? esc(hook) : 'в Легенде пусто поле «О чём книга — одной фразой»')}
-    ${chs.length ? `<label class="row" style="gap:10px;align-items:flex-start;margin:0"><input type="checkbox" name="frag" checked style="margin-top:3px"><span style="flex:1"><b>Ознакомительный фрагмент</b>
-      <span class="sub" style="display:block;margin:4px 0 6px">Бесплатно на Литнете — до главы:</span>
-      <select name="upto" data-chg="site.upto">${chs.map((x, i) => `<option value="${i}"${i === def ? ' selected' : ''}>${esc(x.title)}</option>`).join('')}</select>
-      <span class="sub" id="frag-note" style="display:block;margin-top:6px">${fragNote(chs, def)}</span></span></label>`
-    : row('frag', false, 'Ознакомительный фрагмент', '')}`,
+    ${row('hook', !!hook, 'Крючок', hook ? esc(hook) : 'в Легенде пусто поле «О чём книга — одной фразой»')}`,
   async (fd) => {
     const patch = {};
     if (fd.get('ann') && ann) patch.ann = ann;
     if (fd.get('hook') && hook) patch.tagline = hook;
-    const i = Number(fd.get('upto'));
-    if (fd.get('frag') && chs.length) {
-      if (fragChars(chs, i) > LITNET_FREE_MAX) { toast('Больше 200 000 знаков — по правилам Литнета столько бесплатно выкладывать нельзя'); return false; }
-      patch.frag = fragText(chs, i);
-    }
     if (!Object.keys(patch).length) { toast('Ничего не отмечено'); return false; }
     try {
       const u = app().store.auth?.currentUser;
       await patchSiteBook(b.title, patch, u ? await u.getIdToken() : '');
-      if (patch.frag) await app().store.patch('w_books', b.id, { siteFragUpto: chs[i].title });
-      toast('Обновлено на сайте: ' + [patch.ann && 'аннотация', patch.tagline && 'крючок', patch.frag && 'фрагмент'].filter(Boolean).join(', '));
+      toast('Обновлено на сайте: ' + [patch.ann && 'аннотация', patch.tagline && 'крючок'].filter(Boolean).join(', '));
       load(true);
     } catch (e) { toast(e.message); return false; }
   }, { submitText: 'Обновить на сайте' });
   return false;
 };
-const fragNote = (chs, i) => { const n = fragChars(chs, i); return `${nf(n)} знаков${n > LITNET_FREE_MAX ? ' — больше 200 000, по правилам Литнета нельзя' : ''}`; };
-changes['site.upto'] = (v) => { const el = document.getElementById('frag-note'); if (el && push) el.textContent = fragNote(push.chs, Number(v)); return false; };
 
 forms['site.todo'] = async (fd) => {
   const text = String(fd.get('text') || '').trim(), date = String(fd.get('date') || '');
