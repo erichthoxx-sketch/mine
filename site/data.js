@@ -14,7 +14,7 @@ export function loadLocal() {
 // Для посетителей — без библиотек Firebase, обычными запросами
 export async function loadPublic() {
   if (LOCAL) return loadLocal();
-  const r = await fetch(`${BASE}/site/main?key=${firebaseConfig.apiKey}`);
+  const r = await fetch(`${BASE}/site/main?key=${firebaseConfig.apiKey}`, { cache: 'no-store' }); // всегда свежее — правки из админки видны сразу
   if (r.status === 404) return { content: null, imgs: {} };
   if (!r.ok) throw new Error('site ' + r.status);
   const doc = await r.json();

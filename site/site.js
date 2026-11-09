@@ -226,19 +226,31 @@ if (preview) {
     if (!cached) toHash();
     if (!LOCAL) try { localStorage.setItem(CACHE, JSON.stringify(d)); } catch { /* места мало — без кэша */ }
   }).catch(() => { if (!cached) { show(null, {}); toHash(); } });
+  // вернулась во вкладку сайта (например, после правки в админке) — подтягиваем свежее; страница не прыгает
+  let freshAt = Date.now();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || Date.now() - freshAt < 5000) return;
+    freshAt = Date.now();
+    loadPublic().then((d) => {
+      if (JSON.stringify(d.content) === JSON.stringify(current)) return;
+      const y = scrollY;
+      show(d.content, d.imgs); scrollTo(0, y);
+      if (!LOCAL) try { localStorage.setItem(CACHE, JSON.stringify(d)); } catch { /* места мало — без кэша */ }
+    }).catch(() => {});
+  });
 }
 
 // Окно подписки (09.11.2026, владелица: «стильный попап… по времени и по содержанию как топовый маркетолог»).
 // Правила: не сразу — после 40 с на сайте (время копится по страницам за визит, админка → Подписка → «Через сколько секунд»);
 // на компьютере — раньше, если курсор уходит к вкладкам (хочет уйти), но не раньше 15 с; один раз за визит; закрыли — 14 дней не показываем;
-// не показываем подписанным, в читалке (не мешаем читать), на политике, в предпросмотре и когда форма подписки уже на экране.
+// в читалке — только когда дочитала фрагмент до конца; не показываем подписанным, на политике, в предпросмотре и когда форма подписки уже на экране.
 const POP = 'lanaSite.pop', POP_T = 'lanaSite.popT', POP_DAYS = 14;
-let popT = 0, popStart = Date.now(), popEl = null, popExit = null;
+let popT = 0, popStart = Date.now(), popEl = null, popExit = null, popIO = null;
 const ss = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* без памяти */ } } };
 const popSpent = () => Number(ss.get(POP_T) || 0) + (Date.now() - popStart);
 addEventListener('pagehide', () => ss.set(POP_T, String(popSpent())));
 function popAllowed(c) {
-  if (preview || readKey || privacyPage || cabPage || popEl || c.subOn === false || c.popOn === false) return false;
+  if (preview || privacyPage || cabPage || popEl || c.subOn === false || c.popOn === false) return false;
   try {
     if (localStorage.getItem(SUBD)) return false;
     const off = Number(localStorage.getItem(POP) || 0);
@@ -248,9 +260,22 @@ function popAllowed(c) {
 }
 function popArm() {
   clearTimeout(popT);
+  if (popIO) { popIO.disconnect(); popIO = null; }
   if (popExit) { document.removeEventListener('mouseout', popExit); popExit = null; }
   const c = normalize(current);
   if (!popAllowed(c)) return;
+  // читалка: не мешаем читать — окно, когда дочитала до «Конца фрагмента» (самый тёплый момент)
+  if (readKey) {
+    const end = document.querySelector('.rd-end');
+    if (end && 'IntersectionObserver' in window) {
+      // форма подписки под фрагментом уступает место окну (не дублируем); закрыла окно — форма вернётся
+      const box = document.getElementById('podpiska'); if (box) box.hidden = true;
+      // дочитала до конца и не ушла сразу на Литнет (4 с) — тогда предлагаем подписку
+      popIO = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { popIO.disconnect(); popIO = null; popT = setTimeout(() => popOpen('read'), 4000); } }, { threshold: 0.4 });
+      popIO.observe(end);
+    }
+    return;
+  }
   const need = Math.max(15, Number(c.popDelay) || 40) * 1000;
   popT = setTimeout(() => popOpen('time'), Math.max(1000, need - popSpent()));
   if (matchMedia('(hover:hover) and (pointer:fine)').matches) {
@@ -290,6 +315,7 @@ function popClose(byHand) {
   if (!popEl) return;
   if (byHand) { try { localStorage.setItem(POP, String(Date.now())); } catch { /* без памяти */ } }
   const el = popEl; popEl = null;
+  const box = document.getElementById('podpiska'); if (box && box.hidden) box.hidden = false;
   el.classList.remove('on');
   setTimeout(() => el.remove(), 500);
 }
