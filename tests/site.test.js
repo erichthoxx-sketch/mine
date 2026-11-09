@@ -240,3 +240,16 @@ test('главная: блок «Призыв «Читать» (тёмная п�
   for (const b of c.books) { b.litnet = ''; b.links = ''; }
   assert.doesNotMatch(renderSite(c, {}).main, /bk-final/); // нет ссылки — полосы нет
 });
+
+test('главная: «Книга крупно» — «Та, что пишу сейчас» сама меняется на новую книгу', async () => {
+  const { renderSite, DEFAULT_CONTENT, normalize } = await import('../site/content.js');
+  const c = normalize(structuredClone(DEFAULT_CONTENT));
+  const k = c.blocks.find((x) => x.type === 'book');
+  const w = c.books.find((x) => x.status === 'writing');
+  assert.equal(k.book, ''); // подпись «пишу сейчас» про книгу, которую пишу, — блок стал автоматическим
+  const other = c.books.find((x) => x !== w);
+  w.status = 'done'; other.status = 'writing'; other.title = 'Новая *книга*';
+  assert.match(renderSite(c, {}).main, /Новая <span class="it">книга<\/span>/);
+  k.book = w.id; k.label = 'Любимая'; // выбранная вручную книга остаётся
+  assert.equal(normalize(c).blocks.find((x) => x.type === 'book').book, w.id);
+});

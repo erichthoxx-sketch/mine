@@ -1,6 +1,6 @@
 // Админка сайта: блоки (порядок, скрыть, удалить, добавить), книги, цвета, общее.
 // Всё сохраняется само через секунду после правки; справа — живой сайт.
-import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc, seriesList, slugify, raffleFriday, drawRaffle, BOOK_SECTIONS, bookOrder } from '../content.js';
+import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc, seriesList, slugify, raffleFriday, drawRaffle, BOOK_SECTIONS, bookOrder, writingBook } from '../content.js';
 import { openStore, authError } from './store.js';
 import { RULES } from './rules.js';
 import { PROPOSALS } from '../proposals.js';
@@ -198,7 +198,7 @@ function rulesHtml() {
 // ---------- вкладки ----------
 const bookTitle = (id) => plain(S.content.books.find((b) => b.id === id)?.title);
 function blockSummary(b) {
-  if (b.type === 'book' || (b.type === 'hero' && !b.title)) return bookTitle(b.book) || '—';
+  if (b.type === 'book' || b.type === 'now' || (b.type === 'hero' && !b.title)) return bookTitle(b.book) || (b.type === 'hero' ? '—' : `пишу сейчас: ${plain(writingBook(S.content.books.filter((x) => !x.hidden))?.title || '—')}`);
   if (b.type === 'start') return (b.books || []).map(bookTitle).filter(Boolean).join(', ') || plain(b.title);
   return plain(b.title || b.text || b.items || b.label || '') || '—';
 }
@@ -451,7 +451,7 @@ function field(scope, obj, f) {
   const books = S.content.books;
   switch (f.type) {
     case 'area': return `<label class="f"><span>${f.label}</span><textarea ${at} rows="1">${esc(v)}</textarea>${hint}</label>`;
-    case 'book': return `<label class="f"><span>${f.label}</span><select ${at}><option value="">— без книги —</option>${books.map((b) => `<option value="${b.id}"${b.id === v ? ' selected' : ''}>${esc(plain(b.title))}</option>`).join('')}</select>${hint}</label>`;
+    case 'book': return `<label class="f"><span>${f.label}</span><select ${at}><option value="">${f.auto ? `Та, что пишу сейчас${writingBook(books.filter((b) => !b.hidden)) ? ` (${esc(plain(writingBook(books.filter((b) => !b.hidden)).title))})` : ''}` : '— без книги —'}</option>${books.map((b) => `<option value="${b.id}"${b.id === v ? ' selected' : ''}>${esc(plain(b.title))}</option>`).join('')}</select>${hint}</label>`;
     case 'status': return `<label class="f"><span>${f.label}</span><select ${at}>${Object.entries(STATUS).map(([k, n]) => `<option value="${k}"${k === v ? ' selected' : ''}>${n}</option>`).join('')}</select></label>`;
     case 'books': return `<div class="f"><span>${f.label}</span><div class="checks">${books.map((b) => `<label><input type="checkbox" data-s="${scope}" data-id="${obj.id}" data-k="${f.k}" data-book="${b.id}"${(v || []).includes(b.id) ? ' checked' : ''}>${esc(plain(b.title))}</label>`).join('')}</div>${hint}</div>`;
     case 'img': {

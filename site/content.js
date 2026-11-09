@@ -25,7 +25,7 @@ export const BLOCKS = {
     { k: 'title', label: 'Заголовок', type: 'area', hint: '*Слово в звёздочках* — тонким курсивом' },
     { k: 'text', label: 'Текст', type: 'area' },
     { k: 'btn', label: 'Кнопка' },
-    { k: 'book', label: 'Кнопка ведёт на страницу книги', type: 'book', hint: 'Эта книга — и в строке «Новинка» справа' },
+    { k: 'book', label: 'Кнопка ведёт на страницу книги', type: 'book', auto: true, hint: 'Эта книга — и в строке «Новинка» справа' },
     { k: 'art', label: 'Медведь с обложки справа', type: 'toggle', hint: '' },
     { k: 'photo', label: 'Другая картинка вместо медведя', type: 'img', hint: 'По желанию' },
   ] },
@@ -34,7 +34,7 @@ export const BLOCKS = {
   ] },
   book: { name: 'Книга крупно', fields: [
     { k: 'label', label: 'Подпись сверху', hint: 'Например: Новинка · пишу сейчас' },
-    { k: 'book', label: 'Книга', type: 'book' },
+    { k: 'book', label: 'Книга', type: 'book', auto: true, hint: '«Та, что пишу сейчас» — сменится сама, когда начну новую книгу' },
     MENU,
   ] },
   series: { name: 'Цикл', fields: [
@@ -77,7 +77,7 @@ export const BLOCKS = {
     MENU,
   ] },
   now: { name: 'Призыв «Читать» (тёмная полоса)', fields: [
-    { k: 'book', label: 'Книга', type: 'book', hint: 'Пусто — та, которую пишу сейчас (сменится сама, когда начну новую)' },
+    { k: 'book', label: 'Книга', type: 'book', auto: true, hint: '«Та, что пишу сейчас» — сменится сама, когда начну новую книгу' },
     { k: 'label', label: 'Строка над названием', hint: 'Пусто — «Пишу эту книгу — читайте вместе со мной», у завершённой — «Книга завершена»' },
   ] },
   text: { name: 'Текст', fields: [
@@ -607,6 +607,16 @@ export function normalize(c) {
   const out = { ...structuredClone(d), ...c };
   out.books = Array.isArray(c.books) ? c.books.filter((b) => b && b.id).map((b) => ({ ...newBook(), ...b })) : structuredClone(d.books);
   out.blocks = Array.isArray(c.blocks) ? c.blocks.filter((b) => b && b.id && BLOCKS[b.type]).map((b) => ({ ...newBlock(b.type), ...b })) : structuredClone(d.blocks);
+  // тёмная полоса «Читать новинку» (блок now) — один раз сама встаёт после «Книги крупно» (владелица ждала её в списке блоков);
+  // удалит — больше не появится (nowAdded)
+  if (!out.nowAdded) {
+    const at = out.blocks.findIndex((k) => k.type === 'book');
+    if (at >= 0 && !out.blocks.some((k) => k.type === 'now')) out.blocks.splice(at + 1, 0, { ...newBlock('now'), id: 'know' });
+    out.nowAdded = true;
+  }
+  // «Книга крупно» с подписью «…пишу сейчас» про книгу, которую пишу, — сама переключается на новую книгу (владелица попросила 09.11.2026)
+  const wb = writingBook(out.books.filter((b) => !b.hidden));
+  for (const k of out.blocks) if (k.type === 'book' && k.book && wb && k.book === wb.id && /пишу сейчас/i.test(k.label || '')) k.book = '';
   // у каждой книги — свой адрес страницы, без повторов
   const taken = new Set();
   for (const b of out.books) {
@@ -760,6 +770,8 @@ function card(b, imgs, name, opt = {}) {
     </a>`;
 }
 
+// Книга, которую пишу сейчас: для блоков, где книга не выбрана («Та, что пишу сейчас») — сменится сама с новой книгой
+export const writingBook = (books) => books.find((x) => x.status === 'writing' && bookLinks(x).length) || books.find((x) => x.status === 'writing') || null;
 // Тёмная полоса «Пишу эту книгу — читайте вместе со мной · Название · Читать на Литнете»: внизу страницы книги и блоком на главной
 function finalBand(b, label = '', id = '') {
   const links = bookLinks(b);
@@ -808,11 +820,11 @@ export function renderSite(raw, imgs = {}) {
       return `<div class="run" id="${k.id}" aria-hidden="true"><div class="run-in">${one}${one}${one}${one}</div></div>`;
     },
     now: (k) => {
-      const b = books.get(k.book) || visible.find((x) => x.status === 'writing' && bookLinks(x).length) || visible.find((x) => x.status === 'writing');
+      const b = books.get(k.book) || writingBook(visible);
       return b ? finalBand(b, k.label, k.id) : '';
     },
     book: (k) => {
-      const b = books.get(k.book);
+      const b = books.get(k.book) || (k.book ? null : writingBook(visible));
       if (!b) return '';
       const links = bookLinks(b);
       return `<section class="sec" id="${k.id}"><div class="wrap feat">
