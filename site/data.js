@@ -12,22 +12,26 @@ export function loadLocal() {
 }
 
 // Для посетителей — без библиотек Firebase, обычными запросами
-export async function loadPublic() {
+export async function loadPublic(prevImgs = {}) {
   if (LOCAL) return loadLocal();
-  const r = await fetch(`${BASE}/site/main?key=${firebaseConfig.apiKey}`, { cache: 'no-store' }); // всегда свежее — правки из админки видны сразу
+  // тексты — отдельно и первыми: картинки (почти мегабайт) не должны мешать свежим текстам показаться
+  // (раньше сбой загрузки картинок оставлял на экране старые тексты из памяти браузера)
+  const r = await fetch(`${BASE}/site/main?key=${firebaseConfig.apiKey}&_=${Date.now()}`, { cache: 'no-store' });
   if (r.status === 404) return { content: null, imgs: {} };
   if (!r.ok) throw new Error('site ' + r.status);
   const doc = await r.json();
   const content = JSON.parse(doc.fields?.json?.stringValue || 'null');
-  const imgs = {};
-  let token = '';
-  do {
-    const q = await fetch(`${BASE}/site_img?pageSize=100&key=${firebaseConfig.apiKey}${token ? '&pageToken=' + encodeURIComponent(token) : ''}`);
-    if (!q.ok) break;
-    const j = await q.json();
-    for (const d of j.documents || []) imgs[d.name.split('/').pop()] = d.fields?.data?.stringValue || '';
-    token = j.nextPageToken || '';
-  } while (token);
+  let imgs = {};
+  try {
+    let token = '';
+    do {
+      const q = await fetch(`${BASE}/site_img?pageSize=20&key=${firebaseConfig.apiKey}${token ? '&pageToken=' + encodeURIComponent(token) : ''}`);
+      if (!q.ok) throw new Error('img ' + q.status);
+      const j = await q.json();
+      for (const d of j.documents || []) imgs[d.name.split('/').pop()] = d.fields?.data?.stringValue || '';
+      token = j.nextPageToken || '';
+    } while (token);
+  } catch { imgs = { ...prevImgs, ...imgs }; } // картинки не загрузились — берём сохранённые, тексты всё равно свежие
   return { content, imgs };
 }
 

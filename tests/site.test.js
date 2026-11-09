@@ -276,3 +276,11 @@ test('сайт: жанр книги — курсивом под название
   b.genre = '';
   assert.doesNotMatch(renderBook(c, {}, b.url).main, /class="genre"/);
 });
+
+test('сайт: переменные окна подписки объявлены до первого показа страницы (иначе сайт застревал на старом из памяти браузера)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const s = readFileSync(new URL('../site/site.js', import.meta.url), 'utf8');
+  assert.ok(s.indexOf("const POP = 'lanaSite.pop'") > 0);
+  assert.ok(s.indexOf("const POP = 'lanaSite.pop'") < s.indexOf('if (cached) { show('));
+  assert.ok(s.indexOf('let popT') < s.indexOf('if (cached) { show('));
+});

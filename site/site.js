@@ -8,6 +8,12 @@ const preview = new URLSearchParams(location.search).has('preview');
 let bookKey = new URLSearchParams(location.search).get('kniga') || '';
 const privacyPage = new URLSearchParams(location.search).has('privacy');
 const readKey = new URLSearchParams(location.search).get('chitat') || '';
+// окно подписки: переменные — здесь, в самом начале (иначе show() из памяти браузера падал, и свежие тексты не загружались)
+const POP = 'lanaSite.pop', POP_T = 'lanaSite.popT', POP_DAYS = 14;
+let popT = 0, popStart = Date.now(), popEl = null, popExit = null, popIO = null;
+const ss = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* без памяти */ } } };
+const popSpent = () => Number(ss.get(POP_T) || 0) + (Date.now() - popStart);
+addEventListener('pagehide', () => ss.set(POP_T, String(popSpent())));
 let current = null; // что сейчас на экране — нужно форме подписки (подарок, текст «готово»)
 let shownImgs = {};
 // Личный кабинет читателя (вход в шапке, ./?kabinet) — подгружается отдельно, основной сайт его не ждёт
@@ -67,7 +73,7 @@ function show(content, imgs) {
   }
   pismoNote(normalize(current));
   reader();
-  popArm();
+  setTimeout(popArm, 0);
   const d = document.querySelector('meta[name="description"]');
   if (d && r.description) d.setAttribute('content', r.description);
 }
@@ -221,11 +227,16 @@ if (preview) {
   let cached = null;
   if (!LOCAL) try { cached = JSON.parse(localStorage.getItem(CACHE) || 'null'); } catch { /* нет кэша */ }
   if (cached) { show(cached.content, cached.imgs); toHash(); }
-  loadPublic().then((d) => {
+  // свежее с сервера; не вышло (сеть мигнула) — ещё две попытки, чтобы не застрять на старом из памяти браузера
+  const fresh = (n) => loadPublic(cached?.imgs || {}).then((d) => {
     show(d.content, d.imgs);
     if (!cached) toHash();
-    if (!LOCAL) try { localStorage.setItem(CACHE, JSON.stringify(d)); } catch { /* места мало — без кэша */ }
-  }).catch(() => { if (!cached) { show(null, {}); toHash(); } });
+    if (!LOCAL) {
+      try { localStorage.setItem(CACHE, JSON.stringify(d)); }
+      catch { try { localStorage.setItem(CACHE, JSON.stringify({ content: d.content, imgs: {} })); } catch { /* места мало — без кэша */ } }
+    }
+  }).catch(() => { if (n < 2) setTimeout(() => fresh(n + 1), 2500 * (n + 1)); else if (!cached) { show(null, {}); toHash(); } });
+  fresh(0);
   // вернулась во вкладку сайта (например, после правки в админке) — подтягиваем свежее; страница не прыгает
   let freshAt = Date.now();
   // вышла новая версия сайта — открытая давно вкладка перезагрузится сама (иначе так и показывает старое)
@@ -243,7 +254,7 @@ if (preview) {
     if (document.visibilityState !== 'visible' || Date.now() - freshAt < 5000) return;
     freshAt = Date.now();
     if (await checkVersion()) return;
-    loadPublic().then((d) => {
+    loadPublic(shownImgs).then((d) => {
       if (JSON.stringify(d.content) === JSON.stringify(current)) return;
       const y = scrollY;
       show(d.content, d.imgs); scrollTo(0, y);
@@ -256,11 +267,7 @@ if (preview) {
 // Правила: не сразу — после 40 с на сайте (время копится по страницам за визит, админка → Подписка → «Через сколько секунд»);
 // на компьютере — раньше, если курсор уходит к вкладкам (хочет уйти), но не раньше 15 с; один раз за визит; закрыли — 14 дней не показываем;
 // в читалке — только когда дочитала фрагмент до конца; не показываем подписанным, на политике, в предпросмотре и когда форма подписки уже на экране.
-const POP = 'lanaSite.pop', POP_T = 'lanaSite.popT', POP_DAYS = 14;
-let popT = 0, popStart = Date.now(), popEl = null, popExit = null, popIO = null;
-const ss = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* без памяти */ } } };
-const popSpent = () => Number(ss.get(POP_T) || 0) + (Date.now() - popStart);
-addEventListener('pagehide', () => ss.set(POP_T, String(popSpent())));
+// (переменные окна подписки объявлены в начале файла — show() вызывается раньше, чем код дойдёт сюда)
 function popAllowed(c) {
   if (preview || privacyPage || cabPage || popEl || c.subOn === false || c.popOn === false) return false;
   try {

@@ -2,7 +2,8 @@ import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask, fold, tiles } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
 import { releaseTiming } from '../../../js/insights.js';
-import { loadSite, patchSiteBook, sameTitle } from '../../../js/sitepub.js';
+import { loadSite, patchSiteBook, sameTitle, SITE_ADMIN } from '../../../js/sitepub.js';
+import { siteState } from './mysite.js';
 import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter, writtenMonth } from '../wcalc.js';
 import { goalTitle, goalToday, goalOver } from './goals.js';
 import { writtenChart } from '../wcharts.js';
@@ -251,6 +252,7 @@ export function bookPage(a, id) {
     ${(c.data.w_promolinks || []).some(x => x.bookId === b.id && x.status !== 'archived') ? promoLinksPanel(c, { bookId: b.id, compact: true }) : ''}
   </div>
 `, { icon: 'marketing', sub: `тексты ${mk.texts} из ${mk.textsAll}` }),
+    T('site', 'Сайт', siteCard(b), { icon: 'globe', sub: siteSub(b) }),
     T('pub', 'Издательство', publisherCard(b), { icon: 'doc', sub: !ms.ok ? 'нет рукописи' : syn.ok ? 'рукопись и синопсис' : 'нет синопсиса' }),
     T('ai', 'Нейросеть', bookAiCard(c, b), { icon: 'sparkle', sub: b.aiShared ? 'подключена' : 'не подключена' }),
     T('about', 'О книге', `  <div class="card"><h2>О книге</h2>
@@ -699,3 +701,27 @@ function bookContests(c, b, contests) {
     ${contests.map((x) => contestCard(c, x, { forBook: b.id })).join('')}</div>`;
 }
 changes['contest.addBookTo'] = async (v, el) => { if (!v) return; const x = app().ctx().data.w_contests.find((i) => i.id === v), ids = [...new Set([...contestBookIds(x), el.dataset.b])]; await app().store.put('w_contests', { ...x, bookIds: ids, bookId: ids[0], joinedBooks: { [el.dataset.b]: app().ctx().today, ...(x.joinedBooks || {}) } }); toast(`Книга на конкурсе «${x.name}»`); };
+
+// Плитка «Сайт» на странице книги: бесплатный фрагмент и аннотация с крючком — одной кнопкой отсюда (окна те же, что в Сайт → Обзор)
+const nfmt = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+const onSite = (b) => { const s = siteState(); if (s === undefined) return undefined; if (!s) return null; return s.books.find((x) => sameTitle(x.title, b.title)) || false; };
+function siteSub(b) {
+  const s = onSite(b);
+  if (s === undefined) return 'загружаю…';
+  if (s === null) return 'нет связи с сайтом';
+  if (!s) return 'книги нет на сайте';
+  return s.frag ? `фрагмент до «${b.siteFragUpto || '…'}»` : 'фрагмента нет';
+}
+function siteCard(b) {
+  const s = onSite(b);
+  if (s === undefined) return '<div class="card"><h2>Сайт</h2><p class="small muted" style="margin:0">Загружаю сайт…</p></div>';
+  if (s === null) return '<div class="card"><h2>Сайт</h2><p class="small muted" style="margin:0">Не получилось связаться с сайтом — проверьте интернет и обновите страницу.</p></div>';
+  if (!s) return `<div class="card"><h2>Сайт</h2><p class="small muted" style="margin:0 0 10px">Этой книги пока нет на сайте. Добавьте её в админке → «Книги» → «+ Новая книга» — название как здесь.</p>
+    <a class="small-btn" href="${SITE_ADMIN}" target="_blank" rel="noopener">Открыть админку</a></div>`;
+  return `<div class="card"><h2>Сайт</h2>
+    <div class="list">
+      <a class="item row between" href="#" data-act="site.frag" data-id="${b.id}"><span>Бесплатный фрагмент<span class="sub">${s.frag ? `до «${esc(b.siteFragUpto || '…')}» · ${nfmt(s.frag)} зн.` : 'пока нет — выбрать главы'}</span></span><span class="small-btn">${s.frag ? 'Изменить' : 'Выбрать главы'}</span></a>
+      <a class="item row between" href="#" data-act="site.push" data-id="${b.id}"><span>Аннотация и крючок<span class="sub">${[s.ann ? 'аннотация есть' : 'аннотации нет', s.tagline ? 'крючок есть' : 'крючка нет'].join(' · ')}</span></span><span class="small-btn">Обновить</span></a>
+      <a class="item row between" href="${esc(s.page)}" target="_blank" rel="noopener"><span>Страница книги на сайте<span class="sub">${esc(s.page.replace(/^https?:\/\//, ''))}</span></span><span>${ic('chevron')}</span></a>
+    </div></div>`;
+}
