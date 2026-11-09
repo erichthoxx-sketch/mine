@@ -7,6 +7,7 @@
   --f-display:"Oranienbaum","Times New Roman",serif;
   --f-italic:"Cormorant","Georgia",serif;
   --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-serif:"Cormorant Garamond",Georgia,"Times New Roman",serif;
   --wrap:1180px;
   --gut:max(20px,env(safe-area-inset-left,0px));
   --gut-r:max(20px,env(safe-area-inset-right,0px));
@@ -110,6 +111,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hero h1 .ln{display:block}
 .hero h1 .it{white-space:nowrap}
 .lead{margin:0;max-width:30em;font-size:17px;line-height:1.6;color:var(--ink-2)}
+/* тексты под заголовками — книжным шрифтом с засечками (владелица выбрала вариант «В» 09.11.2026) */
+.lead,.series-h p,.sub-txt p,.tg-in p,.about-txt p,.text-b p{font-family:var(--f-serif);font-weight:500;font-size:20px;line-height:1.5}
 .hero.has-art .hero-in{grid-template-columns:minmax(0,540px) minmax(0,500px);justify-content:center;align-items:center;column-gap:0}
 .hero.has-art .hero-mist{margin-left:-48px}
 .hero.has-art .hero-txt{margin-left:clamp(0px,3vw,48px)}  /* у медведя справа туман — сдвиг текста уравновешивает композицию по центру */  /* левый край картинки — туман: медведь чуть заходит под текст, без провала между ними */
@@ -314,7 +317,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     -webkit-mask-image:radial-gradient(circle,#000 52%,rgba(0,0,0,.5) 63%,transparent 71%);mask-image:radial-gradient(circle,#000 52%,rgba(0,0,0,.5) 63%,transparent 71%)}
   .hero-mist img{display:none}
   .hero-mist img.sm{display:block;width:100%;height:100%;object-fit:cover}
-  .lead{font-size:16px}
+  .lead,.series-h p,.sub-txt p,.tg-in p,.about-txt p,.text-b p{font-size:18.5px}
   .sub-row{flex-direction:column}
   .sub-row input{flex:0 0 auto;height:48px}
   .mini{grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 12px}
