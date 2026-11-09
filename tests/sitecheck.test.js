@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { siteChecks } from '../writer/js/sitecheck.js';
+import { siteChecks, siteDoneDue } from '../writer/js/sitecheck.js';
 import { siteInfo } from '../js/sitepub.js';
 
 const site = siteInfo({ subOn: true, giftName: 'Проданная ночь', giftUrl: '', books: [
@@ -53,4 +53,14 @@ test('фрагмент для сайта — из глав рукописи до
   assert.equal(fitFree(chs), 1); // третья глава уже за 200 000 знаков
   const { fragBlocks } = await import('../site/content.js');
   assert.deepEqual(fragBlocks(fragText(chs, 0)), [{ h: 'Пролог' }, { p: 'Раз.' }, { p: 'Два.' }]);
+});
+
+test('мой сайт: дописанная книга сама становится «Завершена» на сайте в день выхода последней главы', () => {
+  const pub = { 'Глава 1': { 'Литнет': { date: '2026-11-01' } }, 'Глава 2': { 'Литнет': { date: '2026-11-20' } } };
+  const b = { id: 'w1', title: 'Альпийский развод', status: 'done', finishedAt: '2026-11-05', pub };
+  assert.deepEqual(siteDoneDue([b], site, '2026-11-10'), []); // последняя глава ещё не вышла
+  assert.equal(siteChecks({ wbooks: [b], site, today: '2026-11-10' }).some((x) => x.k === 'done:w1'), false); // и делом не висит
+  assert.deepEqual(siteDoneDue([b], site, '2026-11-20').map((x) => x.id), ['w1']);
+  assert.deepEqual(siteDoneDue([{ ...b, siteDoneAt: '2026-11-20' }], site, '2026-11-25'), []); // вернула «Пишу» сама — не трогаем
+  assert.deepEqual(siteDoneDue([{ ...b, status: 'progress' }], site, '2026-11-25'), []);
 });

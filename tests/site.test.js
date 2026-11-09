@@ -201,6 +201,14 @@ test('сайт: ознакомительный фрагмент — главы, 
   const r = renderReader(c, {}, 'alpiyskiy-razvod');
   assert.match(r.main, /Ознакомительный фрагмент/); assert.match(r.main, /<h2>Глава 1<\/h2>/);
   assert.match(renderBook(c, {}, 'alpiyskiy-razvod').main, /\?chitat=alpiyskiy-razvod/);
+  // конец фрагмента: площадка — первая ссылка книги, текст — из админки, сам меняется после завершения
+  b.litnet = ''; b.litres = 'https://www.litres.ru/x'; b.status = 'writing';
+  assert.match(renderReader(c, {}, 'alpiyskiy-razvod').main, /на площадке «Литрес»: я выкладываю новые главы, пока пишу/);
+  b.status = 'done';
+  assert.match(renderReader(c, {}, 'alpiyskiy-razvod').main, /Книга целиком — на площадке «Литрес»/);
+  c.rdDone = 'Вся история — на {площадка}, *целиком*.'; c.rdTitle = '';
+  const r2 = renderReader(c, {}, 'alpiyskiy-razvod').main;
+  assert.match(r2, /Вся история — на Литрес, <span class="it">целиком<\/span>/); assert.match(r2, /Что будет/);
 });
 
 test('страница книги: разделы в порядке из админки, скрытые не показываются', async () => {

@@ -2,6 +2,7 @@ import { spoilerList, spoilerHits } from '../../js/spoilers.js';
 // «Мой сайт» (Связи): что сделать на сайте — находится само, сверкой «Мастерской» с сайтом. Чистые функции.
 import { sameTitle } from '../../js/sitepub.js';
 import { addDays, diffDays } from '../../js/calc.js';
+import { releaseDate } from './wcalc.js';
 
 export const SITE_LINK = 'mysite'; // запись в w_links: свои дела по сайту → Планер и Todoist (Мастерская → Сайт)
 
@@ -24,7 +25,15 @@ export function domainInfo(settings = {}, today) {
 }
 
 // wbooks — книги Мастерской; site — siteInfo (js/sitepub.js); subs — подписчики [{at}]; seenAt — когда смотрела подписчиков
-export function siteChecks({ wbooks = [], site = null, subs = null, seenAt = '' } = {}) {
+// Дописанная книга: в день выхода последней главы сайт сам меняет «Пишу сейчас» на «Завершена» (текст в конце фрагмента
+// и тёмная полоса меняются сами). Один раз: siteDoneAt — если владелица вернула «Пишу» вручную, больше не трогаем.
+export function siteDoneDue(wbooks, site, today) {
+  if (!site) return [];
+  return (wbooks || []).filter((b) => b?.title && b.status === 'done' && !b.archived && !b.siteDoneAt && (releaseDate(b) || today) <= today
+    && site.books.some((x) => sameTitle(x.title, b.title) && x.status === 'writing'));
+}
+
+export function siteChecks({ wbooks = [], site = null, subs = null, seenAt = '', today = '' } = {}) {
   if (!site) return [];
   const out = [];
   for (const b of wbooks) {
@@ -35,7 +44,7 @@ export function siteChecks({ wbooks = [], site = null, subs = null, seenAt = '' 
       continue;
     }
     if (s.hidden) out.push({ k: 'hidden:' + b.id, title: `Книга «${b.title}» скрыта на сайте`, why: 'Читатели её не видят. Если скрыли нарочно — всё в порядке.', admin: true, soft: true });
-    else if (b.status === 'done' && s.status !== 'done') out.push({ k: 'done:' + b.id, title: `Отметить на сайте: «${b.title}» завершена`, why: 'В Мастерской книга завершена, а на сайте всё ещё «Пишу». Завершённую книгу охотнее покупают.', admin: true });
+    else if (b.status === 'done' && s.status !== 'done' && !(today && !b.siteDoneAt && (releaseDate(b) || today) > today)) out.push({ k: 'done:' + b.id, title: `Отметить на сайте: «${b.title}» завершена`, why: 'В Мастерской книга завершена, а на сайте всё ещё «Пишу». Завершённую книгу охотнее покупают.', admin: true });
     // тексты книги на сайте не должны выдавать повороты из «Не раскрывать в рекламе» (Мастерская → Маркетинг → книга)
     const SITE_F = { tagline: 'крючок', short: 'короткое описание', ann: 'аннотация', quotes: 'цитаты', excerpt: 'отрывок' };
     const sp = spoilerList(b);

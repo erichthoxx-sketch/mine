@@ -28,7 +28,7 @@ async function load(force) {
 // Сайт для Планера (розыгрыш по пятницам): загружается сам при первом обращении
 export function siteNow() { load(); return st.site || null; }
 export function siteHubRow(c) {
-  const n = st.site ? siteChecks({ wbooks: c.wbooks, site: st.site, subs: st.subs, seenAt: c.settings?.site?.seenSubs }).filter((x) => !x.soft).length : 0;
+  const n = st.site ? siteChecks({ wbooks: c.wbooks, site: st.site, subs: st.subs, seenAt: c.settings?.site?.seenSubs, today: c.today }).filter((x) => !x.soft).length : 0;
   const open = (c.data.w_links.find((l) => l.id === SITE_LINK)?.todos || []).filter((t) => !t.done).length;
   load();
   const sub = ['lanafreitag.ru', open ? `${open} ${plural(open, ['дело', 'дела', 'дел'])}` : ''].filter(Boolean).join(' · ');
@@ -40,7 +40,7 @@ export function mySiteView(a) {
   load();
   const rec = c.data.w_links.find((l) => l.id === SITE_LINK);
   const todos = [...(rec?.todos || [])].sort((x, y) => (x.done - y.done) || (x.date || '').localeCompare(y.date || ''));
-  const checks = st.site ? siteChecks({ wbooks: c.wbooks, site: st.site, subs: st.subs, seenAt: c.settings.site?.seenSubs }) : [];
+  const checks = st.site ? siteChecks({ wbooks: c.wbooks, site: st.site, subs: st.subs, seenAt: c.settings.site?.seenSubs, today: c.today }) : [];
   const shown = st.site ? st.site.books.filter((b) => !b.hidden).length : null;
   const fresh = checks.find((x) => x.k === 'subs')?.subs || 0;
   const dm = domainInfo(c.settings, c.today);

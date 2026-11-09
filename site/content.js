@@ -293,6 +293,9 @@ export const DEFAULT_CONTENT = {
  "cabRemind": "Добавить старт в календарь",
  "cabLabel": "Личный кабинет",
  "cabOut": "Выйти",
+ "rdTitle": "Что будет *дальше*",
+ "rdWriting": "Продолжение — на площадке «{площадка}»: я выкладываю новые главы, пока пишу.",
+ "rdDone": "Книга целиком — на площадке «{площадка}».",
  "cabLevelLabel": "Ваш статус",
  "cabLevels": "Новенькая\nЧитательница\nСвоя\nБлизкий круг",
  "cabSteps": "Создать кабинет\nСкачать подарок\nДобавить старт подписки в календарь\nОтметить книгу «Читаю»\nОтметить прочитанную книгу",
@@ -969,6 +972,14 @@ export function fragBlocks(t) {
   return String(t || '').split('\n').map((x) => x.trim()).filter(Boolean).map((x) =>
     /^(\*\s*){3}$|^[*⁂]{1,3}$/.test(x) ? { br: true } : /^(пролог|эпилог|глава\s+\d+)([.:\s—–-].{0,80})?$/i.test(x) ? { h: x } : { p: x });
 }
+// Текст в конце фрагмента — из админки (Книги → «Конец фрагмента»), сам меняется, когда книга завершена;
+// {площадка} — первая ссылка книги из «Где читать»
+export function rdEndText(c, b, shop) {
+  const k = b.status === 'writing' ? 'rdWriting' : 'rdDone';
+  return String(c[k] || DEFAULT_CONTENT[k]).replace(/\{площадка\}/gi, shop);
+}
+// типографика читалки: тире в начале реплики не отрывается от слова, строка не начинается с тире
+const rdType = (h) => h.replace(/^([—–]) /, '$1\u00a0').replace(/ ([—–])(?= )/g, '\u00a0$1');
 // Читалка фрагмента ./?chitat=<адрес книги>: спокойная колонка текста, в конце — продолжение на площадке
 export function renderReader(raw, imgs = {}, key = '') {
   const c = normalize(raw);
@@ -977,7 +988,7 @@ export function renderReader(raw, imgs = {}, key = '') {
   if (!blocks.length) return null;
   const shown = new Set(renderSite(c, imgs).shown);
   const links = bookLinks(b);
-  const body = blocks.map((x) => (x.br ? '<p class="rd-br" aria-hidden="true">* * *</p>' : x.h ? `<h2>${esc(x.h)}</h2>` : `<p>${fmt(x.p, false)}</p>`)).join('');
+  const body = blocks.map((x) => (x.br ? '<p class="rd-br" aria-hidden="true">* * *</p>' : x.h ? `<h2>${esc(x.h)}</h2>` : `<p>${rdType(fmt(x.p, false))}</p>`)).join('');
   return {
     title: `${plain(b.title)} — фрагмент · ${c.name || 'Автор'}`,
     ...chrome(c, c.blocks.filter((x) => shown.has(x.id))),
@@ -987,8 +998,8 @@ export function renderReader(raw, imgs = {}, key = '') {
       <header class="rd-h"><div class="lbl">Ознакомительный фрагмент</div><h1>${fmt(b.title, false)}</h1><div class="rd-a">${esc(c.name || '')}</div></header>
       <article class="rd-txt">${body}</article>
       <div class="rd-end"><p class="rd-br" aria-hidden="true">* * *</p><div class="lbl">Конец фрагмента</div>
-        <h2>${fmt(links.length ? 'Что будет *дальше*' : 'Продолжение *следует*', false)}</h2>
-        ${links.length ? `<p>${b.status === 'writing' ? `Продолжение — на площадке «${esc(links[0][0])}»: я выкладываю новые главы, пока пишу.` : `Книга целиком — на площадке «${esc(links[0][0])}».`}</p><div class="buy">${links.map(([n, u], i) => `<a class="btn ${i ? 'btn-line' : 'btn-dark'}" href="${esc(u)}"${ext(u)}>${i ? esc(n) : esc(ctaText(b, links))}</a>`).join('')}</div>` : ''}
+        <h2>${fmt(links.length ? c.rdTitle || DEFAULT_CONTENT.rdTitle : 'Продолжение *следует*', false)}</h2>
+        ${links.length ? `<p>${fmt(rdEndText(c, b, links[0][0]), false)}</p><div class="buy">${links.map(([n, u], i) => `<a class="btn ${i ? 'btn-line' : 'btn-dark'}" href="${esc(u)}"${ext(u)}>${i ? esc(n) : esc(ctaText(b, links))}</a>`).join('')}</div>` : ''}
       </div>
     </div></section><div class="rd-prog" aria-hidden="true"><i></i></div>`,
     colors: colors(c),

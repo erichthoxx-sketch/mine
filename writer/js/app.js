@@ -15,6 +15,8 @@ import { homeView } from './views/home.js';
 import { planView, navToday } from './views/plan.js';
 import { scheduleTodoist } from './tdsync.js';
 import { syncFinish } from './sync.js';
+import { siteDoneDue } from './sitecheck.js';
+import { loadSite, patchSiteBook } from '../../js/sitepub.js';
 import { CONTEST_NAV, cleanContestText, rawContestText, parseContest } from './wcalc.js';
 import { marketingView, bookMarketing } from './views/marketing.js';
 import { settingsView } from './views/settings.js';
@@ -196,6 +198,24 @@ store.subscribe(async () => {
   if (finSync || !store.data.w_books?.length || !store.data.days) return;
   finSync = true;
   try { const c = getCtx(); for (const b of store.data.w_books) if (b.status === 'done') await syncFinish(c, b); } catch { /* в следующий раз */ } finally { finSync = false; }
+});
+// дописанная книга: в день выхода последней главы на сайте сама ставится «Завершена» (раз в день проверяем; нужен вход владелицы)
+let siteDoneDay = '';
+store.subscribe(async () => {
+  const books = store.data.w_books;
+  if (!books?.length) return;
+  const t = todayISO();
+  if (siteDoneDay === t || !books.some((b) => b.status === 'done' && !b.siteDoneAt)) return;
+  const u = store.auth?.currentUser, local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  if (!u && !local) return;
+  siteDoneDay = t;
+  try {
+    for (const b of siteDoneDue(books, await loadSite(), t)) {
+      await patchSiteBook(b.title, { status: 'done' }, u ? await u.getIdToken() : '');
+      await store.patch('w_books', b.id, { siteDoneAt: t });
+      toast(`На сайте «${b.title.replace(/\*/g, '')}» теперь «Завершена»`);
+    }
+  } catch { /* при следующем открытии */ }
 });
 // вернулась в приложение — подтягиваем свежие задачи из Todoist
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleTodoist(app, 800, { pull: true }); });
