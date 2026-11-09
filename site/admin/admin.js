@@ -1,6 +1,6 @@
 // Админка сайта: блоки (порядок, скрыть, удалить, добавить), книги, цвета, общее.
 // Всё сохраняется само через секунду после правки; справа — живой сайт.
-import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc, seriesList, slugify, raffleFriday, drawRaffle, BOOK_SECTIONS, bookOrder, writingBook } from '../content.js';
+import { BLOCKS, BOOK_GROUPS, PALETTES, STATUS, DEFAULT_CONTENT, normalize, newBlock, newBook, newId, colors, esc, seriesList, slugify, raffleFriday, drawRaffle, BOOK_SECTIONS, bookOrder, writingBook, withUtm } from '../content.js';
 import { openStore, authError } from './store.js';
 import { RULES } from './rules.js';
 import { PROPOSALS } from '../proposals.js';
@@ -410,6 +410,13 @@ function subTab() {
 // Письма и подписчицы сервиса писем — в Мастерской → Сайт → Почта (там же подключение)
 const MAIL_APP = 'https://erichthoxx-sketch.github.io/mine/workshop/#/site/mail';
 
+// пример: как будет выглядеть ссылка на Литнет с меткой
+function utmExample(c) {
+  const b = (c.books || []).find((x) => x.litnet) || null;
+  const u = withUtm(b ? b.litnet : 'https://litnet.com/ru/book/primer', b ? slugify(b.slug) || slugify(plain(b.title)) : 'kniga', c.utm ?? '');
+  return `Ссылка будет такой: <span style="word-break:break-all">${esc(u)}</span>`;
+}
+
 // Ещё: статистика, нейросеть, копия сайта, вход
 function moreTab() {
   const c = S.content;
@@ -417,6 +424,8 @@ function moreTab() {
   return `<h3 class="sub">Статистика</h3>
     <div class="list" style="gap:16px">
       ${field('site', c, { k: 'metrika', label: 'Счётчик Яндекс Метрики', hint: 'Посещения, нажатия «Читать», подписки — в «Директе» → Читатели → Сайт. Пусто — без статистики' })}
+      ${field('site', c, { k: 'utm', label: 'Метка для ссылок на площадки', type: 'area', hint: `Добавляется ко всем ссылкам с сайта на Литнет и другие площадки. Впишите метку (utm_source=…&utm_medium=…) или вставьте целую ссылку с меткой — возьмётся только метка. Пусто — без метки.${c.utmAt ? ' Меняли ' + c.utmAt.split('-').reverse().join('.') + '.' : ''}` })}
+      <div class="note" id="utm-ex">${utmExample(c)}</div>
     </div>
     <h3 class="sub">Нейросеть</h3>
     <p class="note">Скопируйте сайт для любой нейросети (Claude, ChatGPT…), попросите поправить тексты и вставьте её ответ сюда — сайт обновится. До вставки можно вернуть как было.</p>
@@ -495,6 +504,7 @@ app.addEventListener('input', (e) => {
   if (lab && el.dataset.s === 'block') lab.textContent = blockSummary(o);
   if (lab && el.dataset.s === 'book') lab.textContent = bookSum(o);
   if (el.dataset.k === 'name') document.querySelector('.ed-top .logo').textContent = el.value || 'Сайт';
+  if (el.dataset.k === 'utm' && el.dataset.s === 'site') { const d = new Date(); S.content.utmAt = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; const ex = document.getElementById('utm-ex'); if (ex) ex.innerHTML = utmExample(S.content); }
   changed();
 });
 

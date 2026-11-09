@@ -253,3 +253,15 @@ test('главная: «Книга крупно» — «Та, что пишу с
   k.book = w.id; k.label = 'Любимая'; // выбранная вручную книга остаётся
   assert.equal(normalize(c).blocks.find((x) => x.type === 'book').book, w.id);
 });
+
+test('сайт: общая метка для ссылок на площадки — из админки, можно вставить целую ссылку', async () => {
+  const { withUtm, utmParams, renderBook, DEFAULT_CONTENT, normalize } = await import('../site/content.js');
+  assert.equal(withUtm('https://litnet.com/ru/book/x', 'kniga', 'utm_source=site&utm_medium=nov'), 'https://litnet.com/ru/book/x?utm_source=site&utm_medium=nov&utm_campaign=kniga');
+  assert.equal(withUtm('https://litnet.com/ru/book/x', 'kniga', 'https://litnet.com/ru/book/x?utm_source=a&utm_campaign=dekabr'), 'https://litnet.com/ru/book/x?utm_source=a&utm_campaign=dekabr');
+  assert.equal(withUtm('https://litnet.com/ru/book/x', 'kniga', ''), 'https://litnet.com/ru/book/x'); // пусто — без метки
+  assert.deepEqual(utmParams('?utm_source=a&utm_medium=b'), [['utm_source', 'a'], ['utm_medium', 'b']]);
+  const c = normalize(structuredClone(DEFAULT_CONTENT));
+  const b = c.books[0]; b.litnet = 'https://litnet.com/ru/book/x';
+  c.utm = 'utm_source=lana&utm_medium=noyabr';
+  assert.match(renderBook(c, {}, b.url).main, /utm_source=lana&amp;utm_medium=noyabr/);
+});

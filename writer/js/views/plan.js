@@ -6,7 +6,7 @@ import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap }
 import { reminders } from './home.js';
 import { widgetReminder } from './widgets.js';
 import { linkTodos, addLinkedTask } from './links.js';
-import { domainInfo, raffleTodo } from '../sitecheck.js';
+import { domainInfo, raffleTodo, utmTodo } from '../sitecheck.js';
 import { siteNow } from './mysite.js';
 import { mailQueue, mailSent } from './mail.js';
 import { localParts } from '../../../js/mailcalc.js';
@@ -105,6 +105,9 @@ export function planItems(c, from, to) {
   // Мой сайт: розыгрыш по пятницам (в админке сайта → «Розыгрыш»)
   const rf = typeof window !== 'undefined' ? raffleTodo(siteNow(), t) : null;
   if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Пятничный подарок: выбрать, кому', 'Админка сайта → Подарок', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
+  // Сайт: раз в месяц сменить метку для ссылок на площадки (админка → «Ещё»)
+  const ut = typeof window !== 'undefined' ? utmTodo(siteNow(), t) : null;
+  if (ut) add(ut.date < t ? t : ut.date, 'waitans', 'Сменить метку для ссылок на сайте', 'Админка сайта → Ещё → «Метка для ссылок на площадки»', { href: SITE_ADMIN, id: 'utm-' + ut.date, section: 'Сайт', dueRaw: ut.date, description: SITE_ADMIN });
   // Почта: отложенные письма подписчицам (отправит сам сервис писем; здесь — чтобы видеть в своём дне)
   // отложенные письма: впереди — «уйдёт», время прошло — сервис отправляет (Мастерская сама сверится), ушло — галочкой
   const sentIds = new Set(mailSent(c.settings).map((x) => x.id));

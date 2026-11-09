@@ -297,6 +297,8 @@ export const DEFAULT_CONTENT = {
  "cabRemind": "Добавить старт в календарь",
  "cabLabel": "Личный кабинет",
  "cabOut": "Выйти",
+ "utm": "utm_source=lanafreitag.ru&utm_medium=site",
+ "utmAt": "",
  "rdTitle": "Что будет *дальше*",
  "rdWriting": "Продолжение — на площадке «{площадка}»: я выкладываю новые главы, пока пишу.",
  "rdDone": "Книга целиком — на площадке «{площадка}».",
@@ -605,6 +607,7 @@ export function normalize(c) {
   if (c.cabLevels === 'Случайная свидетельница\nУже связалась\nСвоя в деле\nНе развяжешься') c = { ...c, cabLevels: d.cabLevels, cabAllDone: c.cabAllDone === 'Все шаги пройдены — теперь не развяжешься' ? d.cabAllDone : c.cabAllDone };
   c = personal(c);
   const out = { ...structuredClone(d), ...c };
+  UTM_TAG = out.utm ?? UTM_DEFAULT;
   out.books = Array.isArray(c.books) ? c.books.filter((b) => b && b.id).map((b) => ({ ...newBook(), ...b })) : structuredClone(d.books);
   out.blocks = Array.isArray(c.blocks) ? c.blocks.filter((b) => b && b.id && BLOCKS[b.type]).map((b) => ({ ...newBlock(b.type), ...b })) : structuredClone(d.blocks);
   // тёмная полоса «Читать новинку» (блок now) — один раз сама встаёт после «Книги крупно» (владелица ждала её в списке блоков);
@@ -688,13 +691,27 @@ export function bookLinks(b) {
   return list.filter(([n, u]) => n && u).map(([n, u]) => [n, withUtm(u, b.url)]);
 }
 // Метка «пришли с сайта»: в Метрике автора на Литнете видно, сколько читателей привёл сайт и какая книга
-export function withUtm(u, book) {
+// Общая метка — админка → «Ещё» → «Метка для ссылок на площадки» (content.utm, меняет владелица раз в месяц).
+// Можно вписать «utm_source=…&utm_medium=…» или вставить целую ссылку с меткой — берётся часть после «?». Пусто — без метки.
+export const UTM_DEFAULT = 'utm_source=lanafreitag.ru&utm_medium=site';
+let UTM_TAG = UTM_DEFAULT; // ставит normalize — так метку видят все ссылки страницы
+export function utmParams(tag) {
+  let t = String(tag ?? '').trim();
+  if (t.includes('?')) t = t.slice(t.indexOf('?') + 1);
+  t = t.replace(/^[?&\s]+/, '').replace(/#.*$/, '');
+  const out = [];
+  for (const [k, v] of new URLSearchParams(t)) if (k && !/^https?:/i.test(k)) out.push([k, v]);
+  return out;
+}
+export function withUtm(u, book, tag = UTM_TAG) {
+  const ps = utmParams(tag);
+  if (!ps.length) return u;
   try {
     const x = new URL(u);
-    if (x.searchParams.has('utm_source')) return u;
-    x.searchParams.set('utm_source', 'lanafreitag.ru');
-    x.searchParams.set('utm_medium', 'site');
-    if (book) x.searchParams.set('utm_campaign', book);
+    if ([...x.searchParams.keys()].some((k) => /^utm_/.test(k))) return u; // у ссылки своя метка — её не трогаем
+    for (const [k, v] of ps) x.searchParams.set(k, v);
+    // какая книга — отдельно, если в метке своей кампании нет (в Метрике автора видно, с какой страницы пришли)
+    if (book && !ps.some(([k]) => k === 'utm_campaign')) x.searchParams.set('utm_campaign', book);
     return x.href;
   } catch { return u; }
 }

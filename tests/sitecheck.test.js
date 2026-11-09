@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { siteChecks, siteDoneDue } from '../writer/js/sitecheck.js';
+import { siteChecks, siteDoneDue, utmTodo } from '../writer/js/sitecheck.js';
 import { siteInfo } from '../js/sitepub.js';
 
 const site = siteInfo({ subOn: true, giftName: 'Проданная ночь', giftUrl: '', books: [
@@ -63,4 +63,11 @@ test('мой сайт: дописанная книга сама становит
   assert.deepEqual(siteDoneDue([b], site, '2026-11-20').map((x) => x.id), ['w1']);
   assert.deepEqual(siteDoneDue([{ ...b, siteDoneAt: '2026-11-20' }], site, '2026-11-25'), []); // вернула «Пишу» сама — не трогаем
   assert.deepEqual(siteDoneDue([{ ...b, status: 'progress' }], site, '2026-11-25'), []);
+});
+
+test('мой сайт: метку для ссылок — менять раз в месяц, с 1-го числа', () => {
+  assert.deepEqual(utmTodo({ utmAt: '2026-10-20' }, '2026-11-09'), { date: '2026-11-01' });
+  assert.equal(utmTodo({ utmAt: '2026-11-02' }, '2026-11-09'), null);
+  assert.deepEqual(utmTodo({ utmAt: '' }, '2026-11-09'), { date: '2026-11-01' });
+  assert.equal(utmTodo(null, '2026-11-09'), null);
 });

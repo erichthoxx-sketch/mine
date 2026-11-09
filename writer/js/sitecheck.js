@@ -16,6 +16,14 @@ export function raffleTodo(site, today) {
   return site.raffleLast === fri ? null : { date: fri };
 }
 
+// Метка для ссылок с сайта на площадки (админка → «Ещё») — владелица меняет раз в месяц: дело «Сменить метку» с 1-го числа,
+// пока в этом месяце не меняла (utmAt — дата последней правки, пишет админка)
+export function utmTodo(site, today) {
+  if (!site) return null;
+  const first = today.slice(0, 8) + '01';
+  return (site.utmAt || '') >= first ? null : { date: first };
+}
+
 // Домен сайта: куплен в Рег.ру 27.10.2026 на год. Дата «оплачен до» правится в «Мой сайт» (settings.site.domainTill).
 // Напоминание «Продлить домен» — за 2 месяца; не продлила — висит в Планере на сегодня до продления.
 export const DOMAIN = 'lanafreitag.ru', DOMAIN_TILL = '2027-10-27', DOMAIN_AHEAD = 60;
