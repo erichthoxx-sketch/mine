@@ -1,13 +1,12 @@
 /* Сайт автора. Как сайт хорошего издательства: спокойная сетка, умеренная типографика, плотные разделы без пустот.
    Цвета: бумага и графит; акценты (a1 — глубокий, a2 — светлый) — только тонкие линии, подложки обложек, метки. Без градиентов */
 :root{
-  --paper:#f6f6f4; --paper-2:#ecece8; --ink:#141517; --ink-2:#5c6167; --ink-3:#979ca1; --line:rgba(20,21,23,.12);
+  --paper:#f6f6f4; --paper-2:#ecece8; --ink:#141517; --ink-2:#5c6167; --ink-t:#45494e; --ink-3:#979ca1; --line:rgba(20,21,23,.12);
   --a1:#8a9aa6; --a2:#d3dbe0;           /* акценты: меняются в админке → «Цвета» */
   --tint:color-mix(in srgb,var(--a2) 45%,var(--paper));
   --f-display:"Oranienbaum","Times New Roman",serif;
   --f-italic:"Cormorant","Georgia",serif;
   --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --f-serif:"Cormorant Garamond",Georgia,"Times New Roman",serif;
   --wrap:1180px;
   --gut:max(20px,env(safe-area-inset-left,0px));
   --gut-r:max(20px,env(safe-area-inset-right,0px));
@@ -16,10 +15,10 @@
   --mist-blend:multiply; --mist-o:1;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --paper:#111214; --paper-2:#1a1b1e; --ink:#eeeeec; --ink-2:#a3a7ac; --ink-3:#6e7277; --line:rgba(238,238,236,.13);
+  --paper:#111214; --paper-2:#1a1b1e; --ink:#eeeeec; --ink-2:#a3a7ac; --ink-t:#c3c6ca; --ink-3:#6e7277; --line:rgba(238,238,236,.13);
   --tint:color-mix(in srgb,var(--a1) 22%,var(--paper)); --mist-blend:normal; --mist-o:.75; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --paper:#111214; --paper-2:#1a1b1e; --ink:#eeeeec; --ink-2:#a3a7ac; --ink-3:#6e7277; --line:rgba(238,238,236,.13);
+  --paper:#111214; --paper-2:#1a1b1e; --ink:#eeeeec; --ink-2:#a3a7ac; --ink-t:#c3c6ca; --ink-3:#6e7277; --line:rgba(238,238,236,.13);
   --tint:color-mix(in srgb,var(--a1) 22%,var(--paper)); --mist-blend:normal; --mist-o:.75; color-scheme:dark}
 
 *{box-sizing:border-box}
@@ -111,8 +110,6 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .hero h1 .ln{display:block}
 .hero h1 .it{white-space:nowrap}
 .lead{margin:0;max-width:30em;font-size:17px;line-height:1.6;color:var(--ink-2)}
-/* тексты под заголовками — книжным шрифтом с засечками (владелица выбрала вариант «В» 09.11.2026) */
-.lead,.series-h p,.sub-txt p,.tg-in p,.about-txt p,.text-b p{font-family:var(--f-serif);font-weight:500;font-size:20px;line-height:1.5}
 .hero.has-art .hero-in{grid-template-columns:minmax(0,540px) minmax(0,500px);justify-content:center;align-items:center;column-gap:0}
 .hero.has-art .hero-mist{margin-left:-48px}
 .hero.has-art .hero-txt{margin-left:clamp(0px,3vw,48px)}  /* у медведя справа туман — сдвиг текста уравновешивает композицию по центру */  /* левый край картинки — туман: медведь чуть заходит под текст, без провала между ними */
@@ -317,7 +314,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     -webkit-mask-image:radial-gradient(circle,#000 52%,rgba(0,0,0,.5) 63%,transparent 71%);mask-image:radial-gradient(circle,#000 52%,rgba(0,0,0,.5) 63%,transparent 71%)}
   .hero-mist img{display:none}
   .hero-mist img.sm{display:block;width:100%;height:100%;object-fit:cover}
-  .lead,.series-h p,.sub-txt p,.tg-in p,.about-txt p,.text-b p{font-size:18.5px}
+  .lead{font-size:16px}
   .sub-row{flex-direction:column}
   .sub-row input{flex:0 0 auto;height:48px}
   .mini{grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 12px}
@@ -372,7 +369,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .rd-end .buy{justify-content:center}
 .rd-prog{position:fixed;left:0;right:0;top:0;height:2px;z-index:30;pointer-events:none}
 .rd-prog i{display:block;height:100%;width:0;background:var(--ink);transition:width .15s linear}
-body.rd-night{--paper:#16171a;--paper-2:#1e2024;--ink:#d9d7d1;--ink-2:#9a9da2;--ink-3:#6c7075;--line:rgba(217,215,209,.12);--tint:#1e2024}
+body.rd-night{--paper:#16171a;--paper-2:#1e2024;--ink:#d9d7d1;--ink-2:#9a9da2;--ink-t:#b9bcc0;--ink-3:#6c7075;--line:rgba(217,215,209,.12);--tint:#1e2024}
 @media (max-width:640px){
   .rd-txt{--rd-fs:18px}
   .rd-top{margin-bottom:24px}
@@ -590,3 +587,6 @@ button.lnk{background:none;border:0;cursor:pointer;color:inherit}
   background:var(--ink);color:var(--paper);padding:14px 22px;font-size:15px;line-height:1.45;text-align:center;
   box-shadow:0 14px 34px -16px rgba(0,0,0,.5);transition:opacity .9s}
 .pismo.out{opacity:0}
+
+/* тексты под заголовками и описания книг — прежним шрифтом Golos, серым чуть темнее (09.11.2026: книжный шрифт владелица вернула обратно) */
+.lead,.series-h p,.sub-txt p,.about-txt p,.text-b p,.prose p,.card p{color:var(--ink-t)}
