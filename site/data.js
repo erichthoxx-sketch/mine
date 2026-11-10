@@ -68,3 +68,16 @@ export async function subscribe(c, email, src, name = '') {
   const j = await r.json().catch(() => ({}));
   return { confirm: !j.already };
 }
+
+// «Письмо автору»: через сервис писем владелице на почту (ответ — прямо из почты, Reply-To — адрес читательницы)
+export async function sendLetter(c, { name, email, text, hp, src }) {
+  const url = String(c?.mailUrl || '').trim();
+  if (!url) throw new Error('nomail');
+  const r = await fetch(`${url}${url.includes('?') ? '&' : '?'}a=msg`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: String(name || '').slice(0, 80), email, text: String(text || '').slice(0, 4000), site: hp || '', src, ok: true }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'mail ' + r.status);
+  return j;
+}

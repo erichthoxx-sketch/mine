@@ -22,3 +22,13 @@ test('страницы для поисковиков: главная и книг
   assert.match(files['robots.txt'], /Disallow: \/admin\/[\s\S]*Sitemap: https:\/\/lanafreitag\.ru\/sitemap\.xml/);
   assert.equal(seoLinks('<a href="./?kniga=abc">'), '<a href="/kniga/abc/">');
 });
+
+import { renderSite } from '../site/content.js';
+test('«Письмо автору» в «Об авторе»: только когда подключён сервис писем и форма не выключена', () => {
+  const about = { id: 'ka', type: 'about', label: 'Об авторе', title: 'Я', text: 'Текст', msgOn: true };
+  const base = { ...DEFAULT_CONTENT, blocks: [about] };
+  assert.ok(!renderSite(base).main.includes('data-letter'));
+  const on = renderSite({ ...base, mailUrl: 'https://functions.yandexcloud.net/x' }).main;
+  assert.match(on, /data-letter-form/); assert.match(on, /Написать мне/); assert.match(on, /name="site"/); // ловушка для ботов
+  assert.ok(!renderSite({ ...base, mailUrl: 'https://f/x', blocks: [{ ...about, msgOn: false }] }).main.includes('data-letter'));
+});

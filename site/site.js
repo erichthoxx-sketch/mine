@@ -1,6 +1,6 @@
 // Сайт автора: главная или страница книги (?kniga=адрес). Сначала — сохранённое в браузере (мгновенно), потом свежее.
 import { renderSite, renderBook, renderPrivacy, renderReader, DEFAULT_CONTENT, normalize, safeUrl, esc } from './content.js';
-import { loadPublic, subscribe, LOCAL } from './data.js';
+import { loadPublic, subscribe, sendLetter, LOCAL } from './data.js';
 
 const CACHE = 'lanaSite.cache';
 const $ = (id) => document.getElementById(id);
@@ -189,6 +189,38 @@ function giftHtml(c) {
   const u = safeUrl(c.giftUrl);
   return `${esc(c.subDone || 'Готово, спасибо!')}${u ? ` <a class="btn btn-dark" href="${esc(u)}" target="_blank" rel="noopener">Скачать «${esc(c.giftName || 'книгу')}»</a>` : ''}`;
 }
+// «Письмо автору»: раскрыть лист под «Об авторе» и отправить через сервис писем
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('.letter-open');
+  if (!b) return;
+  const f = b.parentElement.querySelector('[data-letter-form]'), open = f.hidden;
+  f.hidden = !open; b.setAttribute('aria-expanded', String(open));
+  b.classList.toggle('on', open);
+  if (open) setTimeout(() => (f.name.value ? f.text : f.name).focus({ preventScroll: true }), 60);
+});
+document.addEventListener('submit', async (e) => {
+  const f = e.target.closest('[data-letter-form]');
+  if (!f) return;
+  e.preventDefault();
+  const msg = f.querySelector('.letter-msg');
+  const say = (t, bad) => { msg.hidden = false; msg.classList.toggle('bad', !!bad); msg.textContent = t; };
+  const email = f.email.value.trim(), text = f.text.value.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return say('Проверьте почту — в адресе ошибка, а мне нужно куда-то ответить.', true);
+  if (text.length < 5) return say('Напишите хотя бы пару слов.', true);
+  if (!f.ok.checked) return say('Поставьте галочку — без неё не могу сохранить адрес для ответа.', true);
+  if (preview) return say('Так письмо и уйдёт (в предпросмотре не отправляется).');
+  const btn = f.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    await sendLetter(normalize(current), { name: f.name.value.trim(), email, text, hp: f.site.value, src: bookKey ? 'kniga:' + bookKey : 'glavnaya' });
+    goal('letter');
+    f.classList.add('sent');
+    f.innerHTML = `<div class="lbl">Письмо автору</div><p class="letter-done">Письмо у меня. Отвечу сама — на ${esc(email)}.</p>`;
+  } catch {
+    say('Не получилось отправить — проверьте интернет и нажмите ещё раз.', true);
+  } finally { btn.disabled = false; }
+});
+
 document.addEventListener('submit', async (e) => {
   const f = e.target.closest('[data-sub]');
   if (!f) return;

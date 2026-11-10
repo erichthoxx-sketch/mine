@@ -3,7 +3,7 @@
 // в её личных данных users/{uid}/meta/sitemail (тот же документ читает админка сайта); оформление писем — на сайте (content.letter).
 // Отложенные письма отправляет сам сервис по таймеру — компьютер и Мастерская для этого не нужны.
 import { ic } from '../../../js/icons.js';
-import { esc, acts, changes, toast, download, copyRich, ask } from '../../../js/ui.js';
+import { esc, acts, changes, toast, download, copyRich, ask, openSheet } from '../../../js/ui.js';
 import { fmtDate, plural } from '../../../js/format.js';
 import { loadSiteRaw, siteInfo, siteImg, patchSite, loadMailCfg, saveMailCfg, mailCall, loadSubs, SITE_URL } from '../../../js/sitepub.js';
 import { letterHtml, LETTER_DEFAULTS } from '../../../js/letter.js';
@@ -43,8 +43,41 @@ async function load(force) {
 }
 async function refresh(quiet) {
   M.at0 = Date.now();
-  try { M.info = await mailCall(mailUrl(), M.cfg.key, { op: 'list' }); M.err = ''; syncPlanner(); } catch (e) { M.info = null; M.err = e.message; }
+  try { M.info = await mailCall(mailUrl(), M.cfg.key, { op: 'list' }); M.err = ''; syncPlanner(); await autoReply(); } catch (e) { M.info = null; M.err = e.message; }
   if (!quiet) app().rerender();
+}
+// Адрес для ответов, который видят читательницы в письмах (10.11.2026, владелица: «заменить во всех письмах на lanafreitag8@gmail.com»):
+// с программой сервиса версии 3 ставится один раз сам; дальше меняется кнопкой «Изменить» в «Адресах»
+export const REPLY_DEFAULT = 'lanafreitag8@gmail.com';
+async function autoReply() {
+  const s = app().ctx().settings.site || {};
+  if (!(M.info?.v >= 3) || s.replyAutoAt || M.info.replyTo === REPLY_DEFAULT) return;
+  const r = await mailCall(mailUrl(), M.cfg.key, { op: 'reply', email: REPLY_DEFAULT });
+  M.info.replyTo = r.replyTo;
+  await app().store.saveSettings({ site: { ...s, replyAutoAt: new Date().toISOString() } });
+}
+acts['mail.reply'] = () => {
+  if (!(M.info?.v >= 3)) { toast('Сначала обновите программу сервиса писем — шаги в «Письма с сайта» ниже'); return false; }
+  openSheet('Адрес для ответов', `<p class="small">Его видят читательницы: «Ответить» в любом письме и письма с сайта приходят сюда.</p>
+    <label>Почта</label><input name="e" type="email" value="${esc(M.info.replyTo || '')}" required>`, async (fd) => {
+    const r = await mailCall(mailUrl(), M.cfg.key, { op: 'reply', email: String(fd.get('e') || '').trim() });
+    M.info.replyTo = r.replyTo; toast('Готово: ответы — на ' + r.replyTo); app().rerender();
+  }, { submitText: 'Сохранить' });
+  return false;
+};
+// «Письмо автору» с сайта: последние письма (сами письма приходят на почту для ответов)
+function lettersBox() {
+  if (!(M.info?.v >= 3)) return `<p class="small muted" style="margin:6px 0">Чтобы на сайте заработала форма «Написать мне», один раз обновите программу сервиса писем в Яндекс Облаке:</p>
+    <ol class="small" style="margin:0 0 10px;padding-left:20px;line-height:1.7"><li>Нажмите «Скопировать программу» ниже.</li>
+      <li>Яндекс Облако → <b>Cloud Functions</b> → функция <b>lana-mail</b> → <b>Редактор</b> → файл <b>index.js</b>.</li>
+      <li>Выделите весь текст (Ctrl+A), вставьте новый (Ctrl+V) → <b>Сохранить изменения</b>.</li>
+      <li>Вернитесь сюда — адрес для ответов сам станет ${esc(REPLY_DEFAULT)}, форма на сайте заработает.</li></ol>
+    <button class="small-btn" data-act="mail.fncopy">Скопировать программу</button>`;
+  const L = [...(M.info.msgs || [])].reverse();
+  return L.length ? `<div class="list">${L.slice(0, 20).map((m) => `<div class="item"><div class="row between"><b>${esc(m.name || m.email)}</b><span class="small muted">${dm(m.at)}</span></div>
+      <div class="small" style="white-space:pre-line;margin:4px 0">${esc(m.text.length > 400 ? m.text.slice(0, 400) + '…' : m.text)}</div>
+      <a class="small" href="mailto:${esc(m.email)}?subject=${encodeURIComponent('Re: письмо с сайта')}">Ответить · ${esc(m.email)}</a></div>`).join('')}</div>`
+    : `<p class="small muted" style="margin:6px 0">Писем пока не было. Каждое приходит вам на ${esc(M.info.replyTo || 'почту')} — «Ответить» в почте пишет сразу читательнице.</p>`;
 }
 // свежие данные сами: при открытии Почты, если прошло больше 2 минут, и когда время отложенного письма прошло
 // (сервис отправляет его по таймеру — список «уйдёт …» сам сменится на «отправлено»)
@@ -170,8 +203,9 @@ export function mailView(a) {
     ${pages > 1 ? `<div class="mail-pg"><button class="nav-arr" data-act="mail.page" data-v="-1"${pg ? '' : ' disabled'} aria-label="Назад">${ic('chevron')}</button>
       <span>${pg * PER + 1}–${Math.min(list.length, pg * PER + PER)} из ${list.length}</span>
       <button class="nav-arr next" data-act="mail.page" data-v="1"${pg < pages - 1 ? '' : ' disabled'} aria-label="Дальше">${ic('chevron')}</button></div>` : ''}
-    <p class="small muted" style="margin:12px 0 0">Адреса хранятся в вашем сервисе писем в Яндекс Облаке (в России), копия — каждую ночь там же и в архиве Мастерской. Письма уходят с ${esc(M.info.from || 'вашего адреса')}, ответы — на ${esc(M.info.replyTo || 'вашу почту')}.</p>
+    <p class="small muted" style="margin:12px 0 0">Адреса хранятся в вашем сервисе писем в Яндекс Облаке (в России), копия — каждую ночь там же и в архиве Мастерской. Письма уходят с ${esc(M.info.from || 'вашего адреса')}, ответы — на ${esc(M.info.replyTo || 'вашу почту')} · <button class="link small" data-act="mail.reply">Изменить</button></p>
   </div>
+  <details class="mail-more"${det('letters')}><summary>Письма с сайта${(M.info.msgs || []).length ? ` · ${(M.info.msgs || []).length}` : ''}</summary>${lettersBox()}</details>
   <details class="mail-more"${det('confirm')}><summary>Письмо «Подтвердите подписку»</summary>${confirmBox()}</details>
   <details class="mail-more"${det('arc')}><summary>Копия адресов в архив Мастерской</summary>
     <p class="small muted" style="margin:6px 0">Сервис сам каждую ночь сохраняет копию адресов у себя, в Яндекс Облаке. Чтобы копия была ещё и на Google Диске (папка «Архив Мастерской / Почта») и в GitHub — один раз:</p>

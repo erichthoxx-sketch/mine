@@ -66,6 +66,8 @@ export const BLOCKS = {
     { k: 'text', label: 'Текст', type: 'area', hint: 'Пустая строка — новый абзац' },
     { k: 'photo', label: 'Фото', type: 'img', hint: 'Небольшое круглое фото. Без фото — инициалы' },
     { k: 'facts', label: 'Цифры', type: 'area', hint: 'Каждая с новой строки: 12 — книг' },
+    { k: 'msgOn', label: 'Форма «Написать мне»', type: 'toggle', hint: 'Письмо приходит вам на почту, ответить можно прямо из почты' },
+    { k: 'msgLink', label: 'Текст ссылки на форму', hint: 'Пусто — «Написать мне»' },
     MENU,
   ] },
   tg: { name: 'Подписка', fields: [
@@ -914,6 +916,7 @@ export function renderSite(raw, imgs = {}) {
           ${k.title ? `<h2>${fmt(k.title)}</h2>` : ''}
           <div class="prose">${paras(k.text)}</div>
           ${facts.length ? `<div class="facts">${facts.map(([n, l]) => `<div><b>${esc(n)}</b>${l ? `<span>${esc(l)}</span>` : ''}</div>`).join('')}</div>` : ''}
+          ${k.msgOn !== false && String(c.mailUrl || '').trim() ? letterForm(c, k) : ''}
         </div></div></section>`;
     },
     tg: (k) => {
@@ -1079,6 +1082,26 @@ export function renderPrivacy(raw, imgs = {}) {
       <div class="prose doc-txt">${paras(c.privacy)}${c.metrika ? paras(METRIKA_NOTE) : ''}</div></div></section>`,
     colors: colors(c),
   };
+}
+
+// «Письмо автору» (10.11.2026, владелица: «изящная форма для связи со мной, пока нет кабинета»): тихая ссылка под текстом «Об авторе»,
+// по нажатию раскрывается лист — поля без рамок, письмо по линейкам, подпись; уходит через сервис писем (?a=msg) владелице на почту
+export function letterForm(c, k = {}) {
+  return `<div class="letter-w" data-letter>
+    <button type="button" class="lnk letter-open" aria-expanded="false" aria-controls="letter-${esc(k.id || 'a')}">${esc(k.msgLink || 'Написать мне')} <span class="arrow">→</span></button>
+    <form class="letter" id="letter-${esc(k.id || 'a')}" data-letter-form hidden novalidate>
+      <div class="lbl">Письмо автору</div>
+      <div class="letter-row">
+        <label><span>Как к вам обращаться</span><input name="name" maxlength="80" autocomplete="given-name"></label>
+        <label><span>Почта для ответа</span><input name="email" type="email" inputmode="email" autocomplete="email" required></label>
+      </div>
+      <label class="letter-body"><span>Письмо</span><textarea name="text" rows="6" maxlength="4000" required></textarea></label>
+      <input class="letter-hp" name="site" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <label class="consent"><input type="checkbox" name="ok"> <span>Соглашаюсь, что адрес нужен, чтобы ответить${c.privacy ? ' — <a href="./?privacy">политика конфиденциальности</a>' : ''}</span></label>
+      <div class="letter-act"><button class="btn btn-dark" type="submit">Отправить письмо</button><span class="letter-sign">${esc((c.name || '').split(/\s+/)[0] || '')}</span></div>
+      <p class="letter-msg" role="status" hidden></p>
+    </form>
+  </div>`;
 }
 
 const initials = (n) => String(n).split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase();

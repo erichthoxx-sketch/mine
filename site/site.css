@@ -622,3 +622,35 @@ button.lnk{background:none;border:0;cursor:pointer;color:inherit}
 .doc .lbl{margin-bottom:10px}
 .doc .bk-t{margin:0 0 clamp(22px,2.6vw,36px)}
 .doc-txt p{max-width:38em}
+
+/* «Письмо автору» (10.11.2026): тихая ссылка под «Об авторе» → лист письма: поля без рамок, только нижняя линия,
+   текст письма — по линейкам, как на бумаге; подпись курсивом; после отправки — одна строка курсивом */
+.letter-w{width:100%;max-width:38em;margin-top:6px}
+.letter-open .arrow{display:inline-block;transition:transform .25s ease}
+.letter-open.on .arrow{transform:rotate(90deg)}
+.letter{display:grid;gap:22px;margin-top:22px;padding-top:26px;border-top:1px solid var(--line);animation:letterIn .35s ease both}
+.letter[hidden]{display:none}
+@keyframes letterIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.letter .lbl{margin:0}
+.letter-row{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.letter label:not(.consent)>span{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.letter input:not([type=checkbox]),.letter textarea{width:100%;box-sizing:border-box;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;
+  color:var(--ink);font:400 16px/1.6 var(--f-body);padding:6px 0 8px;outline:0;transition:border-color .2s ease;-webkit-appearance:none;appearance:none}
+.letter input:not([type=checkbox]):focus,.letter textarea:focus{border-bottom-color:var(--ink)}
+.letter textarea{--ln:32px;resize:none;min-height:calc(var(--ln) * 6);line-height:var(--ln);padding:0;border-bottom:0;
+  background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--ln) - 1px),var(--line) calc(var(--ln) - 1px),var(--line) var(--ln));
+  background-attachment:local;font-family:var(--f-italic);font-style:italic;font-size:20px}
+.letter .consent{max-width:34em}
+.letter-hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.letter-act{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.letter-sign{font:italic 400 24px/1 var(--f-italic);color:var(--ink-2)}
+.letter-sign:not(:empty)::before{content:'— '}
+.letter-msg{margin:0;font-size:14px;color:var(--ink-2)}
+.letter-msg.bad{color:#9b3b3b}
+.letter-done{margin:0;font:italic 400 clamp(20px,2vw,24px)/1.45 var(--f-italic);color:var(--ink)}
+@media (max-width:640px){
+  .letter-row{grid-template-columns:1fr}
+  .letter textarea{font-size:19px}
+  .letter-act .btn{width:100%;justify-content:center}
+  .letter-sign{display:none}
+}
