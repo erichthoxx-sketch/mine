@@ -7,7 +7,6 @@ import { launchMetrics, PHASES } from '../launchcalc.js';
 import { resolvedLaunch, saveLaunch as saveL, goalSwitch } from './launchctx.js';
 import { actBtn } from './common.js';
 import { demo } from '../demo.js';
-import { creatorCard } from './creator.js';
 
 const app = () => window.__app;
 const saveLaunch = (patch) => saveL(app(), app().ui.launchId, patch); // план открытой книги
@@ -88,8 +87,7 @@ export function launchView(a, id = null) {
         <label>Ссылка на книгу на Литнете</label><input name="bookUrl" type="url" value="${esc(fl.bookUrl)}" placeholder="${esc(p.bookUrl || 'https://litnet.com/ru/book/...')}">
         <div class="row d-save"><button type="submit" class="primary">Сохранить</button></div>
       </form></details></div>
-    <div class="card fl-panel"><details class="d-more"${p.phase === 'prep' && !p.picked ? ' open' : ''}><summary>Черновик кампании${p.picked ? `: «${esc(p.picked.name)}»` : ''}</summary>
-      ${creatorCard(a, fl, null)}
+    <div class="card fl-panel"><details class="d-more"${p.phase === 'prep' && !p.picked ? ' open' : ''}><summary>Кампания${p.picked ? `: «${esc(p.picked.name)}»` : ''}</summary>
       <label for="flCampaign">Кампания этого запуска</label>
       <select id="flCampaign" data-chg="fl.campaign"><option value="">Не выбрана</option>${available.map((x) => opt(x.id, x.name + (x.state === 'ON' ? ' · включена' : ' · не запущена'), fl.campaignId)).join('')}</select>
       <p class="small"><a href="https://direct.yandex.ru/" target="_blank" rel="noopener">Открыть Яндекс Директ ↗</a> · <button class="link" data-act="d.reload">Обновить кампании</button></p>

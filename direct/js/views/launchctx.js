@@ -8,6 +8,7 @@ import { launchPlan, libraryGoal, buyGoal, launchesOf, budgetCheck } from '../la
 import { goalTotals30, royaltyPerSale } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { demo } from '../demo.js';
+import { bookOfCampaign } from '../pult.js';
 
 const site = { info: null, loading: false, at: 0 };
 function siteBooks(a) {
@@ -32,7 +33,10 @@ export function resolvedLaunches(a) {
   const st = demo.on ? null : a.snap('stats'), d30 = st?.daily ? totals(st.daily, addDays(t, -29), t) : null;
   const s = c.settings, goals = Object.fromEntries(buildPlan({ startMonth: s.goalStart, startAmount: Number(s.goalAmount) || undefined, growth: s.goalGrowth != null ? Number(s.goalGrowth) / 100 : undefined, count: Number(s.goalMonths) || 13, overrides: planOverridesOf(s) }).map((x) => [x.month, x.plan]));
   const bx = { cpc: d30 && d30.clicks >= 50 ? d30.cpc : null, cpcSrc: 'ваш Директ за 30 дней', crLib: tot?.visits && lib ? (tot.goals[lib.id] || 0) / tot.visits : null, goals };
-  return launchesOf(c.settings, c.data.w_books || []).map(({ id, cfg }) => { const plan = launchPlan(cfg, common); return { id, fl: cfg, m, plan, budget: budgetCheck(plan, bx) }; });
+  // кампания запуска не выбрана — сама: та, чьи объявления ведут на эту книгу (идущая — первой)
+  const main = demo.on ? null : a.snap('main'), camps = (main?.campaigns || []).filter((k) => k.state !== 'ARCHIVED').sort((x, y) => (y.state === 'ON') - (x.state === 'ON'));
+  const autoCamp = (id) => camps.find((k) => bookOfCampaign(k, main?.ads || [], c.data.w_books || [])?.id === id)?.id || '';
+  return launchesOf(c.settings, c.data.w_books || []).map(({ id, cfg }) => { const fl = cfg.campaignId ? cfg : { ...cfg, campaignId: autoCamp(id) }; const plan = launchPlan(fl, common); return { id, fl, m, plan, budget: budgetCheck(plan, bx) }; });
 }
 // Один запуск: по id книги, по открытому плану (ui.launchId) или первый
 export function resolvedLaunch(a, id = null) {

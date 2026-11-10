@@ -224,7 +224,7 @@ function loadSiteStats(force) {
   refreshSite(app()).catch((e) => { siteLoad.err = e.message || String(e); }).finally(() => { siteLoad.busy = false; app().rerender(); });
 }
 acts['site.refresh'] = () => { loadSiteStats(true); return false; };
-function siteTab(a) {
+export function siteTab(a) {
   const st = a.snap('site'), t = a.ctx().today, books = siteBooks();
   const st0 = a.snap('site');
   if (st0 && a.ctx().settings.directToken && Date.now() - new Date(st0.at || 0) > 30 * 60000) loadSiteStats();

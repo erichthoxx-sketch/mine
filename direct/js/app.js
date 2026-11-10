@@ -1,5 +1,5 @@
-// Приложение «Директ»: реклама книг в Яндекс Директе — кампании, расход, запросы, минус-фразы, ставки,
-// учебник и ИИ-помощник. Вход и база — общие с «Доходами» и «Мастерской».
+// Приложение «Директ»: контроль рекламы книг в Яндекс Директе — состояние кампаний, деньги и окупаемость,
+// запросы, минус-фразы, площадки, сайт. Вход и база — общие с «Доходами» и «Мастерской».
 import { createStore, authErrorText } from '../../js/store.js';
 import { syncDirectAccessQuiet, autoDirectAccess } from '../../js/aidirect.js';
 import { initAccent } from '../../js/accent.js';
@@ -10,18 +10,20 @@ import { ic } from '../../js/icons.js';
 import { takeTokenFromUrl, OUTAGE_TEXT } from './api.js';
 import { refresh, refreshMetrika, refreshSite } from './sync.js';
 import { demo, snap, demoLog } from './demo.js';
-import { homeView } from './views/home.js';
 import { navSide } from './views/navside.js';
 import { booksAdsView, bookAdView } from './views/bookads.js';
 import { launchView } from './views/launch.js';
 import { qualityView } from './views/quality.js';
-import { experimentsView } from './views/experiments.js';
 import { litnetView } from './views/litnet.js';
 import { keywordsView } from './views/keywords.js';
 import { competitorsView } from './views/competitors.js';
 import { autoSyncKeywordLibrary } from './key-sync.js';
 import { campaignView } from './views/campaign.js';
-import { learnView } from './views/learn.js';
+import './views/learn.js'; // «Разбор» кампании (auditItemsHtml) — сам раздел «Учёба» убран
+import { pultView, pultModel } from './views/pult.js';
+import { rub } from '../../js/format.js';
+import { moneyView } from './views/money.js';
+import { siteView } from './views/siteads.js';
 import { analyticsView } from './views/analytics.js';
 import { aiView } from './views/ai.js';
 import { logView } from './views/log.js';
@@ -80,17 +82,28 @@ export async function reload({ quiet = false } = {}) {
 app.reload = reload;
 acts['d.reload'] = () => { reload(); return false; };
 
-// Четыре раздела: Реклама (запуск, кампании, что сделать), Книги (у каждой — её реклама, читатели, метки, слова), Читатели, Учёба.
-// Остальные экраны открываются изнутри и подсвечивают свой раздел.
-const TABS = [['/', 'ads', 'Реклама'], ['/books', 'books', 'Книги'], ['/an', 'data', 'Читатели'], ['/learn', 'ideas', 'Учёба']];
-const TAB_OF = { launch: '/', quality: '/', ai: '/', log: '/', settings: '/', litnet: '/an', book: '/books', keywords: '/books', competitors: '/books', experiments: '/learn' };
+// Четыре раздела (10.11.2026, владелица: «максимум аналитики, полезных действий и контроля за кампаниями и их прибыльностью»):
+// Пульт (что требует внимания + карточка на кампанию), Кампания, Деньги, Сайт. Остальные экраны открываются изнутри.
+const TABS = [['/', 'ads', 'Пульт'], ['/c', 'data', 'Кампания'], ['/money', 'money', 'Деньги'], ['/site', 'globe', 'Сайт']];
+const TAB_OF = { launch: '/', quality: '/c', ai: '/', log: '/c', settings: '/', litnet: '/', an: '/', book: '/', books: '/', keywords: '/', competitors: '/' };
+// «Кампания» без номера: одна идущая — сразу она, несколько — выбор
+function campaignsView(x) {
+  const camps = (x.snap('main')?.campaigns || []).filter((k) => k.state !== 'ARCHIVED');
+  const on = camps.filter((k) => k.state === 'ON');
+  if (on.length === 1) return campaignView(x, on[0].id);
+  if (!camps.length) return pultView(x);
+  const rows = pultModel(x).rows;
+  return { html: `<div class="card"><h2>Кампании</h2><div class="list">${rows.map((r) => `<a class="item" href="#" data-act="go" data-to="/c/${r.camp.id}"><div class="row between"><b>${esc(r.book?.title ? `«${r.book.title}»` : r.camp.name)}</b><span class="small muted">${esc(r.st.text)}</span></div>
+    <div class="small muted">${[r.book?.title ? r.camp.name : '', r.econ.d30.cost ? `за 30 дней ${rub(r.econ.d30.cost, 0)}` : '', r.econ.lib30 ? `в библиотеку ${r.econ.lib30}` : ''].filter(Boolean).map(esc).join(' · ')}</div></a>`).join('')}</div></div>` };
+}
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
-  if (a === 'c' && b) return { tab: '/', view: (x) => campaignView(x, Number(decodeURIComponent(b))) };
-  if (a === 'book' && b) return { tab: '/books', view: (x) => bookAdView(x, decodeURIComponent(b)) };
+  if (a === 'c' && b) return { tab: '/c', view: (x) => campaignView(x, Number(decodeURIComponent(b))) };
+  if (a === 'book' && b) return { tab: '/', view: (x) => bookAdView(x, decodeURIComponent(b)) };
   if (a === 'launch' && b) return { tab: '/', view: (x) => launchView(x, decodeURIComponent(b)) };
-  const map = { books: booksAdsView, '': homeView, launch: launchView, quality: qualityView, experiments: experimentsView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, learn: learnView, ai: aiView, log: logView, settings: settingsView };
-  return { tab: TAB_OF[a] || '/' + (a || ''), view: map[a || ''] || homeView };
+  if (a === 'an' && b === 'site') return { tab: '/site', view: siteView }; // старая ссылка «Статистика» из Мастерской
+  const map = { books: booksAdsView, '': pultView, c: campaignsView, money: moneyView, site: siteView, launch: launchView, quality: qualityView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, ai: aiView, log: logView, settings: settingsView };
+  return { tab: TAB_OF[a] || '/' + (a || ''), view: map[a || ''] || pultView };
 }
 
 function authScreen() {
@@ -168,9 +181,12 @@ store.init().then(async () => {
   await savePendingToken();
   await syncDemo();
   render();
-  // при открытии подтягиваем свежие данные, если они старше 30 минут
-  const at = app.snap('main')?.at;
-  if (store.data.settings.directToken && (!at || Date.now() - Date.parse(at) > 30 * 60000)) reload({ quiet: true });
+  // свежие данные — сами: при открытии и раз в 15 минут, пока приложение открыто (и при возвращении во вкладку)
+  const stale = () => { const at = app.snap('main')?.at; return !at || Date.now() - Date.parse(at) > 15 * 60000; };
+  const tick = () => { if (store.data.settings.directToken && !demo.on && document.visibilityState === 'visible' && stale()) reload({ quiet: true }); };
+  tick();
+  setInterval(tick, 60000);
+  document.addEventListener('visibilitychange', tick);
 }).catch((e) => {
   console.error(e);
   document.getElementById('app').innerHTML = `<div class="auth"><h1>Не удалось запустить</h1><p>${esc(e.message || e)}</p></div>`;

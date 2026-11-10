@@ -41,6 +41,8 @@ export async function refresh(app, { onStep = () => {} } = {}) {
     }
     return null;
   };
+  // цена цели в стратегии с оплатой за конверсии / средней ценой конверсии (₽)
+  const cpaOf = (st) => { for (const side of [st.Search, st.Network]) for (const v of Object.values(side || {})) if (v && typeof v === 'object' && (v.Cpa || v.AverageCpa)) return rub(v.Cpa || v.AverageCpa); return null; };
   const campaigns = (cr.Campaigns || []).map((c) => {
     const x = c.TextCampaign || c.UnifiedCampaign || {}, st = x.BiddingStrategy || {};
     return {
@@ -48,6 +50,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
       daily: rub(c.DailyBudget?.Amount), negatives: c.NegativeKeywords?.Items || [],
       strategy: { search: st.Search?.BiddingStrategyType || '', network: st.Network?.BiddingStrategyType || '' },
       ...(goalOfStrategy(st) ? { goal: goalOfStrategy(st) } : {}),
+      ...(cpaOf(st) ? { cpa: cpaOf(st) } : {}),
       ...((budgetOf(st.Search) || budgetOf(st.Network)) ? { budget: budgetOf(st.Search) || budgetOf(st.Network) } : {}),
       ...(x.CounterIds !== undefined ? { counters: x.CounterIds?.Items || [] } : {}),
       ...(x.PriorityGoals !== undefined ? { priorityGoals: (x.PriorityGoals?.Items || []).map((g) => g.GoalId) } : {}),
@@ -112,7 +115,8 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   }
   // Цели Метрики: конверсии по дням и по фразам (Директ считает их сам) + поведение на странице книги.
   // Любая неудача здесь не ломает загрузку: остаются прошлые данные, причина — в mErr
-  const m = s.direct?.metrika || {}, goalIds = (m.goals || []).map((g) => String(g.id)).slice(0, 10);
+  // цели из настроек Метрики + цели стратегий кампаний (за них платим — их и считаем)
+  const m = s.direct?.metrika || {}, goalIds = [...new Set([...campaigns.map((c) => c.goal).filter(Boolean).map(String), ...(m.goals || []).map((g) => String(g.id))])].slice(0, 10);
   let conv = old?.conv || [], kwConv = old?.kwConv || {}, mrows = old?.mrows || [], mErr = '', mAt = old?.mAt || null;
   if (goalIds.length && cids.length) {
     try {
@@ -287,6 +291,9 @@ export async function refreshSite(app) {
   const sources = await get('ym:s:lastTrafficSource', d30, 20);
   const refs = await get('ym:s:lastSourceEngine', d30, 20);
   const pages = await get('ym:s:startURL', d30, 100);
+  // реклама на сайт: визиты и цели сайта по кампаниям Директа и по меткам UTM
+  const direct = await get('ym:s:lastsignDirectClickOrder', d30, 50);
+  const utm = await get('ym:s:lastUTMSource,ym:s:lastUTMCampaign', d30, 50);
   const old = snap(app, 'site') || {};
-  await putSnap(app, [{ id: 'site', at: new Date().toISOString(), counterId: id, goalIds, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], refs: refs ?? old.refs ?? [], pages: pages ?? old.pages ?? [], errors }]);
+  await putSnap(app, [{ id: 'site', at: new Date().toISOString(), counterId: id, goalIds, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], refs: refs ?? old.refs ?? [], pages: pages ?? old.pages ?? [], direct: direct ?? old.direct ?? [], utm: utm ?? old.utm ?? [], errors }]);
 }

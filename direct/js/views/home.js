@@ -61,7 +61,7 @@ function connectCard(c) {
 acts['d.demo'] = () => { app().ui.demo = true; app().store.emit(); };
 acts['d.demoOff'] = () => { app().ui.demo = false; app().store.emit(); };
 
-const lessonLink = (k) => `<button class="link" data-act="l.lesson" data-k="${k}" data-go="1">Почему так →</button>`;
+const lessonLink = () => ''; // раздела «Учёба» больше нет
 // Подсказки аналитика по целям Метрики (покупки): с объяснением и ссылкой на урок
 function goalTodo(main, stats, ctx) {
   const m = metrikaOf(ctx);
@@ -72,7 +72,7 @@ function goalTodo(main, stats, ctx) {
     const head = { counter: `Кампания «${esc(h.name)}»: привязать счётчик`, zero: `«${esc(h.name)}»: клики есть, покупок нет`, bounce: `«${esc(h.name)}»: много уходят сразу`, noconv: `«${esc(h.phrase)}» тратит без покупок`, winner: `«${esc(h.phrase)}» приводит покупателей` }[h.kind];
     const btn = h.kind === 'counter' ? actBtn({ do: 'counter', campaign: h.cid, counter: m.counterId, why: h.why }, 'Привязать', 'small-btn')
       : h.kind === 'noconv' ? actBtn({ do: 'pause', target: 'keyword', ids: [h.id], why: h.why }, 'Остановить фразу', 'small-btn') : '';
-    out.push(`<div class="item${h.kind === 'winner' ? ' d-good' : ''}"><div class="row between"><b>${head}</b>${btn}</div><div class="small muted">${esc(h.why)} · ${lessonLink(h.lesson)}</div></div>`);
+    out.push(`<div class="item${h.kind === 'winner' ? ' d-good' : ''}"><div class="row between"><b>${head}</b>${btn}</div><div class="small muted">${esc(h.why)}${lessonLink(h.lesson)}</div></div>`);
   }
   return out;
 }
@@ -90,12 +90,12 @@ export function todo(main, stats, ctx = null) {
     const value = Number(ctx.settings.direct?.econ?.rev) || royaltyPerSale(ctx.data.sales || [], ctx.today)?.perSale || null;
     for (const camp of (main.campaigns || []).filter((x) => x.state === 'ON')) {
       const h = spendHint(camp, spendAdvice({ camp, daily: stats.daily || [], conv: stats.conv || [], today: ctx.today, goals: mm.main, skip: outageSet(ctx.data.days || []), value }));
-      if (h?.status === 'fix') out.push(`<div class="item"><b>${esc(h.title)}</b><div class="small">${esc(h.why)}</div><div class="small muted">${esc(h.how)} · ${lessonLink(h.lesson)}</div></div>`);
+      if (h?.status === 'fix') out.push(`<div class="item"><b>${esc(h.title)}</b><div class="small">${esc(h.why)}</div><div class="small muted">${esc(h.how)}${lessonLink(h.lesson)}</div></div>`);
     }
   }
   // выгорание: сначала то, что уже выгорает, потом «пора готовить замену»
   if (ctx) for (const h of fatigueHints({ main, stats, today: ctx.today, goals: metrikaOf(ctx)?.main || null, skip: outageSet(ctx.data.days || []) }).slice(0, 2)) {
-    out.push(`<div class="item"><div class="row between"><b>${esc(h.title)}</b>${h.act ? actBtn(h.act, h.actLabel, 'small-btn') : ''}</div><div class="small muted">${esc(h.how)} · ${lessonLink(h.lesson)}</div></div>`);
+    out.push(`<div class="item"><div class="row between"><b>${esc(h.title)}</b>${h.act ? actBtn(h.act, h.actLabel, 'small-btn') : ''}</div><div class="small muted">${esc(h.how)}${lessonLink(h.lesson)}</div></div>`);
   }
   // старт подписки — сменить цель кампании запуска на покупку
   if (ctx && !demo.on) for (const L of resolvedLaunches(app())) { const g = goalSwitch(L.plan); if (g) out.unshift(`<div class="item"><div class="row between"><b>«${esc(L.plan.book)}»: началась подписка — цель на покупку</b>${actBtn(g, 'Сменить цель', 'small-btn')}</div><div class="small muted">Кампания «${esc(L.plan.picked.name)}» всё ещё учится на добавлениях в библиотеку. Бюджет и ставки не меняются.</div></div>`); }

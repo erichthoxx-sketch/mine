@@ -3353,3 +3353,8 @@ details.fold-more[open] > summary { align-self: flex-start; }
 .frag-t{flex:1;min-width:0}
 .frag-n{font-size:13px;color:var(--muted);white-space:nowrap}
 .frag-sum{margin:6px 0 10px;font-weight:600}
+
+/* Директ: раздела «Учёба» больше нет (10.11.2026) — ссылки «Почему так →» на уроки не показываем */
+button[data-act="l.lesson"] { display: none; }
+.pult-funnel { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 8px 0 4px; }
+.pult-c h2 { color: var(--text); }

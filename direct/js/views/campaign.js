@@ -11,6 +11,7 @@ import { auditItemsHtml } from './learn.js';
 import { logView } from './log.js';
 import { ic } from '../../../js/icons.js';
 import { stateDot, strategyText, manualBids, tiles, statLine, actBtn, runAction, q } from './common.js';
+import { pultModel } from './pult.js';
 
 const app = () => window.__app;
 const maxBid = () => Number(app().ctx().settings.direct?.maxBid) || DEFAULT_MAX_BID;
@@ -121,6 +122,20 @@ function goalLine(camp, c, daily, stats) {
     ${mr ? `<div class="small muted">На странице книги (Метрика): визитов ${num(mr.visits)} · отказы ${q('bounce')} ${Math.round(mr.bounce * 100)} % · ${String(mr.depth).replace('.', ',')} стр. · ${Math.floor(mr.dur / 60)} мин ${mr.dur % 60} с</div>` : ''}`;
 }
 
+// Итог кампании: состояние, вывод, воронка за 30 дней «показы → клики → в библиотеку → покупки» (расчёт — pult.js)
+const TONE = { good: 'up', bad: 'down', warn: 'warnc', even: '', wait: 'muted', muted: 'muted' };
+function verdictBlock(a, camp) {
+  const r = pultModel(a).rows.find((x) => x.camp.id === camp.id);
+  if (!r) return '';
+  const e = r.econ, d = e.d30, steps = [['Показы', d.impr], ['Клики', d.clicks], ['В библиотеку', e.lib30], ['Покупки', e.buy30]].filter(([, n]) => n != null);
+  const rate = (n, p) => (p ? `${String(Math.round(n / p * 1000) / 10).replace('.', ',')} %` : '');
+  const line = [r.st.key !== 'on' ? `<span class="${TONE[r.st.tone]}">● ${esc(r.st.text)}</span>` : '', r.book?.title ? `книга «${esc(r.book.title)}»` : ''].filter(Boolean).join(' · ');
+  return `${line ? `<p class="small" style="margin:6px 0 0">${line}</p>` : ''}
+    <p class="${TONE[e.verdict.kind]}" style="margin:6px 0 10px"><b>${esc(e.verdict.text.charAt(0).toUpperCase() + e.verdict.text.slice(1))}</b></p>
+    ${r.alerts.map((x) => `<p class="small ${TONE[x.tone]}">${esc(x.title.replace(/^«[^»]*»: /, ''))}. <span class="muted">${esc(x.how)}</span></p>`).join('')}
+    ${d.impr ? `<div class="pult-funnel small">${steps.map(([k, n], i) => `<span><b>${num(n)}</b> ${k.toLowerCase()}${i ? ` <span class="muted">(${rate(n, steps[i - 1][1])})</span>` : ''}</span>`).join(' → ')}<span class="muted"> · за 30 дней</span></div>` : ''}`;
+}
+
 export function campaignView(a, id) {
   const c = a.ctx(), main = a.snap('main'), stats = a.snap('stats');
   const camp = main?.campaigns?.find((x) => x.id === id);
@@ -128,9 +143,10 @@ export function campaignView(a, id) {
   const t = c.today, daily = stats?.daily || [], tab = TABS.some(([k]) => k === a.ui.cTab) ? a.ui.cTab : 'audit';
   const w = totals(daily, addDays(t, -6), t, id), m = totals(daily, addDays(t, -29), t, id);
   return {
-    html: `<p><button class="link" data-act="go" data-to="/">← Все кампании</button></p>
+    html: `<p><button class="link" data-act="go" data-to="/">← Пульт</button></p>
     <div class="card"><div class="row between"><h2 style="margin:0">${esc(camp.name)}</h2>${stateDot(camp)}</div>
       <div class="small muted">${[camp.start && 'старт ' + fmtDate(camp.start), camp.daily && `лимит ${rub(camp.daily, 0)} в день`, strategyText(camp.strategy)].filter(Boolean).join(' · ')}</div>
+      ${verdictBlock(a, camp)}
       ${tiles(w, 'за 7 дней')}
       <div class="small muted">За 30 дней: ${rub(m.cost, 0)} · кликов ${num(m.clicks)}${m.cpc != null ? ` · клик ${rub(m.cpc, 1)}` : ''}</div>
       ${goalLine(camp, c, daily, stats)}
