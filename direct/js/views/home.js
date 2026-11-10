@@ -69,7 +69,7 @@ function goalTodo(main, stats, ctx) {
   const hs = goalHints({ campaigns: main.campaigns, keywords: main.keywords, kw: stats.kw, kwConv: stats.kwConv, daily: stats.daily, conv: stats.conv, mrows: stats.mrows, m, today: ctx.today, skip: outageSet(ctx.data.days || []) });
   const out = [];
   for (const h of hs.slice(0, 4)) {
-    const head = { counter: `Кампания «${esc(h.name)}»: привязать счётчик`, zero: `«${esc(h.name)}»: клики есть, покупок нет`, bounce: `«${esc(h.name)}»: много уходят сразу`, noconv: `«${esc(h.phrase)}» тратит без покупок`, winner: `«${esc(h.phrase)}» приводит покупателей` }[h.kind];
+    const head = { counter: `Кампания «${esc(h.name)}»: привязать счётчик`, zero: `«${esc(h.name)}»: клики есть, конверсий нет`, bounce: `«${esc(h.name)}»: много уходят сразу`, noconv: `«${esc(h.phrase)}» тратит без покупок`, winner: `«${esc(h.phrase)}» приводит покупателей` }[h.kind];
     const btn = h.kind === 'counter' ? actBtn({ do: 'counter', campaign: h.cid, counter: m.counterId, why: h.why }, 'Привязать', 'small-btn')
       : h.kind === 'noconv' ? actBtn({ do: 'pause', target: 'keyword', ids: [h.id], why: h.why }, 'Остановить фразу', 'small-btn') : '';
     out.push(`<div class="item${h.kind === 'winner' ? ' d-good' : ''}"><div class="row between"><b>${head}</b>${btn}</div><div class="small muted">${esc(h.why)}${lessonLink(h.lesson)}</div></div>`);
@@ -77,6 +77,8 @@ function goalTodo(main, stats, ctx) {
   return out;
 }
 
+// Минус-фразы кампании вместе с минус-фразами её групп
+const negOf = (main, camp) => [...(camp.negatives || []), ...(main.groups || []).filter((g) => g.cid === camp.id).flatMap((g) => g.negatives || [])];
 // Подсказки «что сделать сейчас»: до 6 самых важных
 export function todo(main, stats, ctx = null) {
   const out = [];
@@ -101,10 +103,11 @@ export function todo(main, stats, ctx = null) {
   if (ctx && !demo.on) for (const L of resolvedLaunches(app())) { const g = goalSwitch(L.plan); if (g) out.unshift(`<div class="item"><div class="row between"><b>«${esc(L.plan.book)}»: началась подписка — цель на покупку</b>${actBtn(g, 'Сменить цель', 'small-btn')}</div><div class="small muted">Кампания «${esc(L.plan.picked.name)}» всё ещё учится на добавлениях в библиотеку. Бюджет и ставки не меняются.</div></div>`); }
   // у идущей кампании нет стартовых минус-слов (скачать, fb2, аудиокнига…) — добавить одной кнопкой
   for (const camp of (main.campaigns || []).filter((x) => x.state === 'ON')) {
-    const miss = starterMinusMissing(camp.negatives || []);
+    // минус-слова могут стоять и на кампании, и в группах — считаем вместе
+    const miss = starterMinusMissing(negOf(main, camp));
     if (miss.length >= 5) out.push(`<div class="item"><div class="row between"><b>«${esc(camp.name)}»: нет стартовых минус-слов</b>${actBtn({ do: 'minus', campaign: camp.id, phrases: miss, why: 'по таким запросам ищут файл, озвучку или экранизацию, а не книгу на Литнете' }, 'Добавить', 'small-btn')}</div><div class="small muted">${esc(miss.join(', '))} — деньги на такие запросы уходят впустую.</div></div>`);
   }
-  const neg = Object.fromEntries((main.campaigns || []).map((c) => [c.id, c.negatives || []]));
+  const neg = Object.fromEntries((main.campaigns || []).map((c) => [c.id, negOf(main, c)]));
   for (const h of queryHints(stats.queries, neg).slice(0, 3)) {
     out.push(`<div class="item"><div class="row between"><b>Минус-слово «${esc(h.word)}»</b>${actBtn({ do: 'minus', campaign: h.cid, phrases: [h.word], why: `${h.why}; ушло ${rub(h.cost, 0)} на ${h.queries.length} запр.` }, 'В минус', 'small-btn')}</div>
       <div class="small muted">${esc(h.why)} · ${rub(h.cost, 0)} за 30 дней · например: «${esc(h.queries[0])}»</div></div>`);

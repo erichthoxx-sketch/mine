@@ -73,3 +73,14 @@ test('Деньги: Директ по месяцам с отдачей рубл�
   assert.deepEqual(ch, { visits: 9, lib: 3, buy: 1 });
   assert.equal(siteCampaigns([camp], [{ cid: 7, href: 'https://lanafreitag.ru/?kniga=x' }]).length, 1);
 });
+
+import { goalHints } from '../direct/js/dcalc.js';
+test('«клики есть, конверсий нет» — по цели кампании (библиотека), не в первые 3 дня', () => {
+  const daily = Array.from({ length: 5 }, (_, i) => ({ date: `2026-11-1${i}`, cid: 7, impr: 1000, clicks: 100, cost: 10 }));
+  const base = { id: 7, name: 'ЕПК', state: 'ON', type: 'UNIFIED_CAMPAIGN', counters: [108714441], goal: 548467215 };
+  const m = { counterId: 108714441, main: ['548467220'] };
+  const conv = [{ date: '2026-11-12', cid: 7, conv: { 548467215: 8 } }];
+  assert.equal(goalHints({ campaigns: [{ ...base, start: '2026-11-01' }], daily, conv, m, today: '2026-11-14' }).filter((h) => h.kind === 'zero').length, 0);
+  assert.equal(goalHints({ campaigns: [{ ...base, start: '2026-11-13' }], daily, conv: [], m, today: '2026-11-14' }).filter((h) => h.kind === 'zero').length, 0);
+  assert.equal(goalHints({ campaigns: [{ ...base, start: '2026-11-01' }], daily, conv: [], m, today: '2026-11-14' }).filter((h) => h.kind === 'zero').length, 1);
+});

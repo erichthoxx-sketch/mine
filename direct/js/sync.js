@@ -60,8 +60,9 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   let groups = [], keywords = [], ads = [];
   if (cids.length) {
     onStep('Группы и фразы…');
-    groups = ((await call(s, 'adgroups', 'get', { SelectionCriteria: { CampaignIds: cids }, FieldNames: ['Id', 'Name', 'CampaignId'] }, 2, undefined, V)).AdGroups || [])
-      .map((g) => ({ id: g.Id, name: g.Name, cid: g.CampaignId }));
+    groups = ((await getSafe(s, 'adgroups', { SelectionCriteria: { CampaignIds: cids }, FieldNames: ['Id', 'Name', 'CampaignId', 'NegativeKeywords'] },
+      { SelectionCriteria: { CampaignIds: cids }, FieldNames: ['Id', 'Name', 'CampaignId'] })).AdGroups || [])
+      .map((g) => ({ id: g.Id, name: g.Name, cid: g.CampaignId, negatives: g.NegativeKeywords?.Items || [] }));
     const kr = await getSafe(s, 'keywords',
       { SelectionCriteria: { CampaignIds: cids }, FieldNames: ['Id', 'Keyword', 'AdGroupId', 'CampaignId', 'Bid', 'State', 'Status'] },
       { SelectionCriteria: { CampaignIds: cids }, FieldNames: ['Id', 'Keyword', 'AdGroupId', 'CampaignId', 'State', 'Status'] });

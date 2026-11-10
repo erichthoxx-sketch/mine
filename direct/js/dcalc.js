@@ -113,8 +113,11 @@ export function goalHints({ campaigns = [], keywords = [], kw = {}, kwConv = {},
       out.push({ kind: 'counter', cid: c.id, name: c.name, why: 'к кампании не привязан ваш счётчик Метрики — Директ не видит покупки и не может учиться на них', lesson: 'goals' });
       continue;
     }
-    const g = goalTotals(daily, conv, from, today, { cid: c.id, goals, skip });
-    if (!g.conv && g.clicks >= 50) out.push({ kind: 'zero', cid: c.id, name: c.name, ...g, why: `за 30 дней ${g.clicks} кликов и ни одной конверсии по выбранной цели — проверьте, та ли цель выбрана, и что страница книги убеждает`, lesson: 'goals' });
+    // цель стратегии кампании (например, «добавление в библиотеку») тоже считается — иначе кампания на библиотеку выглядит «без покупок»
+    const cg = c.goal ? [...new Set([String(c.goal), ...(goals || []).map(String)])] : goals;
+    const g = goalTotals(daily, conv, from, today, { cid: c.id, goals: cg, skip });
+    const young = c.start && Math.round((Date.parse(today) - Date.parse(c.start)) / 86400000) < 3; // конверсии Директ досчитывает с задержкой
+    if (!g.conv && g.clicks >= 50 && !young) out.push({ kind: 'zero', cid: c.id, name: c.name, ...g, why: `за 30 дней ${g.clicks} кликов и ни одной конверсии по целям кампании — проверьте, та ли цель выбрана, и что страница книги убеждает`, lesson: 'goals' });
     const mr = metrikaFor(mrows, c);
     if (mr && mr.visits >= 30 && mr.bounce >= 0.6) out.push({ kind: 'bounce', cid: c.id, name: c.name, ...mr, why: `${Math.round(mr.bounce * 100)} % посетителей уходят сразу: объявление обещает не то, что они видят на странице книги, или приходят не те люди`, lesson: 'goals' });
     if (g.conv < 3) continue; // средняя цена покупки ещё ненадёжна
