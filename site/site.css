@@ -617,3 +617,8 @@ button.lnk{background:none;border:0;cursor:pointer;color:inherit}
   .pop{left:0;right:0;bottom:0;width:auto;border-width:1px 0 0;padding:26px var(--gut-r) calc(20px + env(safe-area-inset-bottom,0px)) var(--gut);max-height:88vh;overflow:auto}
   .pop h2{font-size:25px}
 }
+
+/* Единый вид страниц (10.11.2026): политика — как страница книги (крошки, подпись, крупный заголовок, текст колонкой) */
+.doc .lbl{margin-bottom:10px}
+.doc .bk-t{margin:0 0 clamp(22px,2.6vw,36px)}
+.doc-txt p{max-width:38em}

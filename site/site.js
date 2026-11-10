@@ -5,8 +5,10 @@ import { loadPublic, subscribe, LOCAL } from './data.js';
 const CACHE = 'lanaSite.cache';
 const $ = (id) => document.getElementById(id);
 const preview = new URLSearchParams(location.search).has('preview');
-let bookKey = new URLSearchParams(location.search).get('kniga') || '';
+// страница книги: ./?kniga=адрес или «настоящий» адрес /kniga/адрес/ (его видят поисковики — scripts/site-seo.mjs)
+let bookKey = new URLSearchParams(location.search).get('kniga') || decodeURIComponent((/^\/kniga\/([^/]+)/.exec(location.pathname) || [])[1] || '');
 const privacyPage = new URLSearchParams(location.search).has('privacy');
+const seoPage = !!document.querySelector('script[type="application/ld+json"]');
 const readKey = new URLSearchParams(location.search).get('chitat') || '';
 // окно подписки: переменные — здесь, в самом начале (иначе show() из памяти браузера падал, и свежие тексты не загружались)
 const POP = 'lanaSite.pop', POP_T = 'lanaSite.popT', POP_DAYS = 14;
@@ -59,7 +61,9 @@ function show(content, imgs) {
   $('head').innerHTML = r.head;
   $('top').innerHTML = r.main;
   $('foot').innerHTML = r.foot;
-  document.title = r.title;
+  // заголовок вкладки, собранный для поисковиков (scripts/site-seo.mjs), не перебиваем — он полнее
+  if (!(seoPage && !readKey && !privacyPage && !cabPage)) document.title = r.title;
+  canonical(isBook ? '/kniga/' + encodeURIComponent(bookKey) + '/' : readKey || privacyPage || cabPage ? '' : '/');
   try { sessionStorage.removeItem('siteReload'); } catch { /* без хранилища */ }
   watchCta();
   if (cabOn) cab?.after(normalize(current), shownImgs, bookKey, () => show(current, shownImgs));
@@ -339,3 +343,21 @@ function popClose(byHand) {
   setTimeout(() => el.remove(), 500);
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && popEl) popClose(true); });
+
+// Один адрес страницы для поисковиков: ./?kniga=… и /kniga/…/ — одна и та же книга (на предпросмотре и в кабинете — не трогаем)
+function canonical(path) {
+  if (preview || !/lanafreitag\.ru$/.test(location.hostname)) return;
+  let l = document.querySelector('link[rel="canonical"]');
+  if (!path) { l?.remove(); return; }
+  if (!l) { l = document.createElement('link'); l.rel = 'canonical'; document.head.appendChild(l); }
+  l.href = location.origin + path;
+}
+// На страницах /kniga/…/ стоит <base href="/">: ссылки «#раздел» иначе уводили бы на главную — прокручиваем на месте
+document.addEventListener('click', (e) => {
+  const a = e.target.closest?.('a[href^="#"]');
+  if (!a || preview || !document.querySelector('base')) return;
+  const el = document.getElementById(a.getAttribute('href').slice(1));
+  if (!el) return; // раздела на этой странице нет (например, полка книг) — пусть ведёт на главную
+  e.preventDefault();
+  el.scrollIntoView({ behavior: 'smooth' });
+});

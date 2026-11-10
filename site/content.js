@@ -958,6 +958,7 @@ export function renderBook(raw, imgs = {}, key = '') {
   const ser = String(b.series || '').trim();
   const mates = ser ? seriesBooks(c, ser) : [];
   const no = ser ? (Number(b.seriesNo) || mates.indexOf(b) + 1) : 0;
+  const serBlock = ser ? c.blocks.find((x) => x.type === 'series' && String(x.series || '').trim() === ser) || null : null;
   const next = ser ? mates[mates.indexOf(b) + 1] : null;
   const others = ser ? mates : c.books.filter((x) => !x.hidden && x !== b).slice(0, 4);
   const tags = String(b.tags || '').split(/[,;]/).map((t) => t.trim()).filter(Boolean);
@@ -1003,7 +1004,7 @@ export function renderBook(raw, imgs = {}, key = '') {
   if (b.collageOn !== false && photos.length) P.collage = (`<section class="bk-sec collage n${photos.length}" aria-label="Атмосфера книги"><div class="wrap col-in">
       ${photos.map((src) => `<figure><img src="${esc(src)}" alt="" loading="lazy"></figure>`).join('')}</div></section>`);
   if (others.length > (ser ? 1 : 0)) P.cycle = (`<section class="bk-sec"><div class="wrap">
-      <div class="sec-h"><h2 class="bk-h">${ser ? `Цикл «${esc(ser)}»` : 'Другие книги'}</h2>
+      <div class="sec-h"><div>${lbl(ser ? 'Цикл' : 'Ещё книги')}<h2>${ser ? (serBlock?.title ? fmt(serBlock.title, false) : esc(ser)) : fmt('Другие *книги*', false)}</h2></div>
         ${next ? `<a class="lnk" href="${bookHref(next)}">Следующая книга <span class="arrow">→</span></a>` : ''}</div>
       <div class="mini">${others.map((x, i) => `<a class="mini-b${x === b ? ' here' : ''}" href="${bookHref(x)}">
         <div class="mini-c">${cover(x, imgs, name)}</div>
@@ -1071,7 +1072,11 @@ export function renderPrivacy(raw, imgs = {}) {
   return {
     title: `Политика конфиденциальности — ${c.name || 'Автор'}`,
     ...chrome(c, c.blocks.filter((x) => shown.has(x.id))),
-    main: `<section class="bk-sec text-b"><div class="wrap"><h1 class="bk-h">Политика конфиденциальности</h1><div class="prose">${paras(c.privacy)}${c.metrika ? paras(METRIKA_NOTE) : ''}</div></div></section>`,
+    // как страница книги: «крошки», подпись, крупный заголовок с курсивом, текст колонкой (единообразие страниц, 10.11.2026)
+    main: `<section class="bk-top doc"><div class="wrap">
+      <nav class="crumbs" aria-label="Где вы"><a href="./">Главная</a><span>/</span><span>Политика конфиденциальности</span></nav>
+      <div class="lbl">${esc(c.name || '')}</div><h1 class="bk-t">${fmt('Политика *конфиденциальности*', false)}</h1>
+      <div class="prose doc-txt">${paras(c.privacy)}${c.metrika ? paras(METRIKA_NOTE) : ''}</div></div></section>`,
     colors: colors(c),
   };
 }
