@@ -74,10 +74,13 @@ function lettersBox() {
       <li>Вернитесь сюда — адрес для ответов сам станет ${esc(REPLY_DEFAULT)}, форма на сайте заработает.</li></ol>
     <button class="small-btn" data-act="mail.fncopy">Скопировать программу</button>`;
   const L = [...(M.info.msgs || [])].reverse();
-  return L.length ? `<div class="list">${L.slice(0, 20).map((m) => `<div class="item"><div class="row between"><b>${esc(m.name || m.email)}</b><span class="small muted">${dm(m.at)}</span></div>
+  // версия 4: письмо с сайта приходит как обычное письмо от читательницы («Анна через сайт», тема — начало письма)
+  const up = M.info.v < 4 ? `<p class="small" style="margin:6px 0">Чтобы письма с сайта приходили как обычные письма от читательниц (от «Анна через сайт», тема — начало письма, без рамки), обновите программу сервиса: «Скопировать программу» → Яндекс Облако → Cloud Functions → <b>lana-mail</b> → Редактор → <b>index.js</b> → выделить всё, вставить → «Сохранить изменения».</p>
+    <button class="small-btn" data-act="mail.fncopy" style="margin-bottom:10px">Скопировать программу</button>` : '';
+  return up + (L.length ? `<div class="list">${L.slice(0, 20).map((m) => `<div class="item"><div class="row between"><b>${esc(m.name || m.email)}</b><span class="small muted">${dm(m.at)}</span></div>
       <div class="small" style="white-space:pre-line;margin:4px 0">${esc(m.text.length > 400 ? m.text.slice(0, 400) + '…' : m.text)}</div>
       <a class="small" href="mailto:${esc(m.email)}?subject=${encodeURIComponent('Re: письмо с сайта')}">Ответить · ${esc(m.email)}</a></div>`).join('')}</div>`
-    : `<p class="small muted" style="margin:6px 0">Писем пока не было. Каждое приходит вам на ${esc(M.info.replyTo || 'почту')} — «Ответить» в почте пишет сразу читательнице.</p>`;
+    : `<p class="small muted" style="margin:6px 0">Писем пока не было. Каждое приходит вам на ${esc(M.info.replyTo || 'почту')} — «Ответить» в почте пишет сразу читательнице.</p>`);
 }
 // свежие данные сами: при открытии Почты, если прошло больше 2 минут, и когда время отложенного письма прошло
 // (сервис отправляет его по таймеру — список «уйдёт …» сам сменится на «отправлено»)

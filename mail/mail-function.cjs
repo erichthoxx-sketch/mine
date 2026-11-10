@@ -39,10 +39,15 @@ const loadList = () => getObj('subs.json', { list: [] }).then((d) => { REPLY = i
 const saveList = (d) => putObj('subs.json', JSON.stringify(d));
 
 // ---------- отправка одного письма ----------
-async function send(to, subject, html, text, unsub, reply = '') {
+// «Имя через сайт <адрес сайта>»: имя по-русски — закодировано, как требует почта (RFC 2047)
+const fromAs = (name) => {
+  const addr = (/<([^>]+)>/.exec(ENV.FROM || '') || [])[1] || String(ENV.FROM || '').trim();
+  return name ? `=?UTF-8?B?${Buffer.from(String(name).replace(/["<>\r\n]/g, ''), 'utf8').toString('base64')}?= <${addr}>` : ENV.FROM;
+};
+async function send(to, subject, html, text, unsub, reply = '', fromName = '') {
   const rt = reply || replyTo();
   const body = {
-    FromEmailAddress: ENV.FROM, Destination: { ToAddresses: [to] }, ReplyToAddresses: rt ? [rt] : [],
+    FromEmailAddress: fromName ? fromAs(fromName) : ENV.FROM, Destination: { ToAddresses: [to] }, ReplyToAddresses: rt ? [rt] : [],
     Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Html: { Data: html, Charset: 'UTF-8' }, Text: { Data: text, Charset: 'UTF-8' } },
       ...(unsub ? { Headers: [{ Name: 'List-Unsubscribe', Value: `<${unsub}>` }, { Name: 'List-Unsubscribe-Post', Value: 'List-Unsubscribe=One-Click' }] } : {}) } },
   };
@@ -53,7 +58,7 @@ const link = (a, t) => `${ENV.SELF}?a=${a}&t=${t}`;
 const fill = (s, p) => String(s).replace(/\{unsub\}/g, link('unsub', p.token)).replace(/\{name\}/g, esc(p.name || ''));
 
 // письмо «подтвердите подписку» — короткое, в стиле сайта; тексты владелица меняет в Мастерской → Сайт → Почта (op: texts → d.texts)
-const FN_V = 3; // 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
+const FN_V = 4; // 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
 const TEXTS_DEF = { subj: 'Подтвердите подписку', head: 'Подтвердите подписку', text: 'Одно нажатие — и я напишу вам, когда выйдет мой новый роман. Только тогда.', btn: 'Подтвердить' };
 const textsOf = (d) => ({ ...TEXTS_DEF, ...Object.fromEntries(Object.entries(d?.texts || {}).filter(([k, v]) => k in TEXTS_DEF && String(v || '').trim())) });
 function confirmMail(p, t = TEXTS_DEF) {
@@ -141,12 +146,14 @@ module.exports.handler = async function (event, context) {
       if (recent.filter((m) => m.email === email).length >= 3 || recent.length >= 30) return json({ error: 'often' }, 429, C); // не чаще 3 писем в час от одного адреса
       const to = replyTo() || ENV.FROM;
       const who = name || email, src = String(body.src || '').slice(0, 80);
-      const html = `<!doctype html><html><body style="margin:0;background:#f6f6f4;font-family:Arial,sans-serif;color:#141517"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border:1px solid #e4e4e0"><tr><td style="padding:28px 32px 6px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#5c6167">Письмо с сайта</td></tr>
-<tr><td style="padding:6px 32px 4px;font-family:Georgia,serif;font-size:22px">${esc(who)}</td></tr><tr><td style="padding:0 32px 18px;font-size:13px;color:#5c6167">${esc(email)}${src ? ' · ' + esc(src) : ''}</td></tr>
-<tr><td style="padding:0 32px 28px;font-family:Georgia,serif;font-size:17px;line-height:1.6">${esc(text).replace(/\n/g, '<br>')}</td></tr>
-<tr><td style="padding:0 32px 26px;font-size:12px;color:#979ca1">Нажмите «Ответить» — письмо уйдёт читательнице.</td></tr></table></td></tr></table></body></html>`;
-      await send(to, `Письмо с сайта — ${who}`, html, `${who} <${email}>${src ? ' · ' + src : ''}\n\n${text}`, '', email);
+      // как обычное письмо от читательницы (владелица: «выглядит как внутренняя форма»): отправитель — «Анна через сайт»,
+      // тема — начало письма, внутри только её текст и тихая строка внизу; «Ответить» пишет ей (Reply-To)
+      const first = text.split(/\n/)[0].replace(/\s+/g, ' ').trim();
+      const subject = first.length > 60 ? first.slice(0, 60).replace(/\s+\S*$/, '') + '…' : first;
+      const page = src.startsWith('kniga:') ? 'со страницы книги ' + src.slice(6) : 'с сайта';
+      const html = `<!doctype html><html><body style="margin:0;padding:0"><div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.6;color:#141517;max-width:640px;padding:8px 4px">${esc(text).replace(/\n/g, '<br>')}${name ? `<br><br>${esc(name)}` : ''}</div>
+<div style="font-family:Arial,sans-serif;font-size:12px;line-height:1.5;color:#979ca1;padding:22px 4px 0">${esc(email)} · написала ${page} lanafreitag.ru</div></body></html>`;
+      await send(to, subject || 'Письмо с сайта', html, `${text}${name ? '\n\n' + name : ''}\n\n—\n${email} · написала ${page} lanafreitag.ru`, '', email, `${who} через сайт`);
       d.msgs = [...(d.msgs || []), { at: new Date().toISOString(), name, email, text, src }].slice(-200);
       await saveList(d);
       return json({ ok: true }, 200, C);

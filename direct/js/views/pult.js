@@ -12,6 +12,7 @@ import { todo } from './home.js';
 import { homeView } from './home.js';
 import { demo } from '../demo.js';
 import { ic } from '../../../js/icons.js';
+import { litTagInfo } from '../../../js/littag.js';
 
 const TONE = { good: 'up', bad: 'down', warn: 'warnc', even: '', wait: 'muted', muted: 'muted' };
 const ORDER = { idle: 0, rejected: 0, capped: 1, on: 2, soon: 3, moderation: 4, stopped: 5, draft: 6, ended: 7, archived: 8 };
@@ -62,7 +63,10 @@ export function pultView(a) {
   const flags = qualityAlerts(placementRows(stats.placements || [], main.campaigns || []), { maxItems: 3 })
     .map((x) => `<div class="item"><b>Площадка ${esc(x.place)}: отказы ${Math.round(x.bounce)} %</b><div class="small muted">${num(x.clicks)} кликов, ${rub(x.cost, 0)} за 30 дней. Если по ней нет добавлений — исключите её в кабинете Директа: настройки кампании → «Запрещённые площадки».</div></div>`);
   // «Требует внимания» — только то, где нужно действие; удачные фразы — не тревога
-  const tasks = [...alerts, ...flags, ...todo(main, stats, c).filter((x) => !x.includes('d-good'))];
+  // метка «Мой Литнет»: за 2 дня до конца срока (меняется одной кнопкой в Мастерской → Сайт — сразу и на сайте, и в Директе)
+  const lt = litTagInfo(c.settings, c.today);
+  const ltTask = lt?.soon ? [`<div class="item"><b class="${lt.late ? 'down' : 'warnc'}">${lt.late ? 'Метка Литнета истекла' : `Метка Литнета действует до ${lt.until.slice(8, 10)}.${lt.until.slice(5, 7)}`}</b><div class="small muted">Создайте новую ссылку в «Мой Литнет» и вставьте её в <a href="../workshop/#/site">Мастерской → Сайт → «Новая метка»</a> — она встанет и на сайт, и в кампании.</div></div>`] : [];
+  const tasks = [...ltTask, ...alerts, ...flags, ...todo(main, stats, c).filter((x) => !x.includes('d-good'))];
   const live = M.rows.filter((r) => !['draft', 'ended', 'stopped'].includes(r.st.key));
   const rest = M.rows.filter((r) => !live.includes(r));
   return {

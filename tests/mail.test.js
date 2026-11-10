@@ -193,3 +193,20 @@ test('сервис писем: свои тексты письма «Подтве
   r = await call(handler, { a: 'admin' }, { key: 'секрет', op: 'list' });
   assert.equal(JSON.parse(r.body).texts.subj, 'Подтвердите подписку'); // пустое — как было
 });
+
+test('письмо с сайта приходит как обычное письмо от читательницы', async () => {
+  const { sent } = stub();
+  delete require.cache[require.resolve('../mail/mail-function.cjs')];
+  const { handler } = require('../mail/mail-function.cjs');
+  const r = await call(handler, { a: 'msg' }, { name: 'Анна', email: 'Anna@ya.ru', text: 'Здравствуйте, Лана! Прочитала первую главу за один вечер и очень жду продолжения.\nСпасибо!', ok: true, src: 'kniga:razvod' });
+  assert.equal(r.statusCode, 200);
+  const m = sent.at(-1);
+  assert.deepEqual(m.Destination.ToAddresses, ['lana@mail.ru']);
+  assert.deepEqual(m.ReplyToAddresses, ['anna@ya.ru']); // «Ответить» — читательнице
+  assert.match(m.FromEmailAddress, /^=\?UTF-8\?B\?.+\?= <hello@lanafreitag\.ru>$/);
+  assert.equal(Buffer.from(m.FromEmailAddress.match(/B\?(.+)\?=/)[1], 'base64').toString(), 'Анна через сайт');
+  assert.equal(m.Content.Simple.Subject.Data, 'Здравствуйте, Лана! Прочитала первую главу за один вечер и…');
+  const h = m.Content.Simple.Body.Html.Data;
+  assert.doesNotMatch(h, /Письмо с сайта|Нажмите «Ответить»/);
+  assert.match(h, /Спасибо!<br><br>Анна/);
+});

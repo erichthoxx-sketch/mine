@@ -9,6 +9,7 @@ import { siteChecks, SITE_LINK, domainInfo } from '../sitecheck.js';
 import { addDays } from '../../../js/calc.js';
 import { addLinkedTask } from './links.js';
 import { siteTabs, mailCount } from './mail.js';
+import { litTagCard } from './littag.js';
 
 const app = () => window.__app;
 const st = { site: undefined, subs: null, busy: false, err: '' };
@@ -54,6 +55,7 @@ export function mySiteView(a) {
     <a href="${SITE_ADMIN}" target="_blank" rel="noopener">${ic('pen')}<span><b>Админка</b></span></a>
     <a href="../direct/#/an/site" target="_blank" rel="noopener">${ic('ads')}<span><b>Статистика</b></span></a>
   </div>
+  ${litTagCard(c)}
   <div class="card">
     <div class="tiles">
       <div><div class="k">Книг на сайте</div><div class="v">${shown == null ? '—' : shown}</div><div class="s">${st.site ? `из ${c.wbooks.filter((b) => b.status !== 'idea').length} в Мастерской` : st.busy ? 'загружаю…' : 'нет связи с сайтом'}</div></div>

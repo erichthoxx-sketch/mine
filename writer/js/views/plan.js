@@ -11,6 +11,7 @@ import { siteNow } from './mysite.js';
 import { mailQueue, mailSent } from './mail.js';
 import { localParts } from '../../../js/mailcalc.js';
 import { SITE_ADMIN } from '../../../js/sitepub.js';
+import { litTagTodo } from '../../../js/littag.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { fetchPageText } from '../pagetext.js';
@@ -105,9 +106,12 @@ export function planItems(c, from, to) {
   // Мой сайт: розыгрыш по пятницам (в админке сайта → «Розыгрыш»)
   const rf = typeof window !== 'undefined' ? raffleTodo(siteNow(), t) : null;
   if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Пятничный подарок: выбрать, кому', 'Админка сайта → Подарок', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
-  // Сайт: раз в месяц сменить метку для ссылок на площадки (админка → «Ещё»)
-  const ut = typeof window !== 'undefined' ? utmTodo(siteNow(), t) : null;
-  if (ut) add(ut.date < t ? t : ut.date, 'waitans', 'Сменить метку для ссылок на сайте', 'Админка сайта → Ещё → «Метка для ссылок на площадки»', { href: SITE_ADMIN, id: 'utm-' + ut.date, section: 'Сайт', dueRaw: ut.date, description: SITE_ADMIN });
+  // Метка «Мой Литнет» (сайт + Директ): за 2 дня до конца срока — обновить одной кнопкой в Мастерской → Сайт (js/littag.js).
+  // Пока общей метки не ставили — прежнее ежемесячное напоминание, но ведёт туда же.
+  const lt = litTagTodo(c.settings, t);
+  const ut = !c.settings.litTag && typeof window !== 'undefined' ? utmTodo(siteNow(), t) : null;
+  if (lt) add(lt.date, 'waitans', lt.text, 'Мастерская → Сайт → «Новая метка»: сайт и Директ сразу', { to: '/site', id: 'littag-' + lt.until, section: 'Сайт', dueRaw: lt.date });
+  else if (ut) add(ut.date < t ? t : ut.date, 'waitans', 'Поставить метку Литнета на сайт и в Директ', 'Мастерская → Сайт → «Новая метка»', { to: '/site', id: 'utm-' + ut.date, section: 'Сайт', dueRaw: ut.date });
   // Почта: отложенные письма подписчицам (отправит сам сервис писем; здесь — чтобы видеть в своём дне)
   // отложенные письма: впереди — «уйдёт», время прошло — сервис отправляет (Мастерская сама сверится), ушло — галочкой
   const sentIds = new Set(mailSent(c.settings).map((x) => x.id));

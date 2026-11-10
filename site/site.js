@@ -1,5 +1,5 @@
 // Сайт автора: главная или страница книги (?kniga=адрес). Сначала — сохранённое в браузере (мгновенно), потом свежее.
-import { renderSite, renderBook, renderPrivacy, renderReader, DEFAULT_CONTENT, normalize, safeUrl, esc } from './content.js';
+import { renderSite, renderBook, renderPrivacy, renderReader, DEFAULT_CONTENT, normalize, safeUrl, esc, MSG_DONE } from './content.js';
 import { loadPublic, subscribe, sendLetter, LOCAL } from './data.js';
 
 const CACHE = 'lanaSite.cache';
@@ -215,7 +215,8 @@ document.addEventListener('submit', async (e) => {
     await sendLetter(normalize(current), { name: f.name.value.trim(), email, text, hp: f.site.value, src: bookKey ? 'kniga:' + bookKey : 'glavnaya' });
     goal('letter');
     f.classList.add('sent');
-    f.innerHTML = `<div class="lbl">Письмо автору</div><p class="letter-done">Письмо у меня. Отвечу сама — на ${esc(email)}.</p>`;
+    const done = esc((f.dataset.done || '').trim() || MSG_DONE).split('{почта}').join(esc(email));
+    f.innerHTML = `<div class="lbl">Письмо автору</div><p class="letter-done">${done}</p>`;
   } catch {
     say('Не получилось отправить — проверьте интернет и нажмите ещё раз.', true);
   } finally { btn.disabled = false; }

@@ -68,6 +68,7 @@ export const BLOCKS = {
     { k: 'facts', label: 'Цифры', type: 'area', hint: 'Каждая с новой строки: 12 — книг' },
     { k: 'msgOn', label: 'Форма «Написать мне»', type: 'toggle', hint: 'Письмо приходит вам на почту, ответить можно прямо из почты' },
     { k: 'msgLink', label: 'Текст ссылки на форму', hint: 'Пусто — «Написать мне»' },
+    { k: 'msgDone', label: 'Текст после отправки письма', hint: '{почта} — адрес читательницы. Пусто — «Письмо у меня. Отвечу сама — на {почта}.»' },
     MENU,
   ] },
   tg: { name: 'Подписка', fields: [
@@ -716,7 +717,8 @@ export function withUtm(u, book, tag = UTM_TAG) {
   try {
     const x = new URL(u);
     if ([...x.searchParams.keys()].some((k) => /^utm_/.test(k))) return u; // у ссылки своя метка — её не трогаем
-    for (const [k, v] of ps) x.searchParams.set(k, v);
+    // метка «Мой Литнет» (utm_litref) нужна только ссылкам на Литнет — остальным площадкам её не дописываем
+    for (const [k, v] of ps) if (k !== 'utm_litref' || /(^|\.)litnet\.com$/i.test(x.hostname)) x.searchParams.set(k, v);
     // какая книга — отдельно, если в метке своей кампании нет (в Метрике автора видно, с какой страницы пришли)
     if (book && !ps.some(([k]) => k === 'utm_campaign')) x.searchParams.set('utm_campaign', book);
     return x.href;
@@ -727,7 +729,7 @@ const ctaText = (b, links) => (b.cta ? b.cta : links[0] ? (ON[links[0][0]] ? `Ч
 // Читателю — только статус и возраст (главы и авторские листы ему ни к чему)
 // жанр — тихой строкой: курсивом под названием на странице книги, мелкими заглавными в карточках
 export const genreOf = (b) => String(b?.genre || '').split(/\s*[·,;\n]\s*/).map((x) => x.trim()).filter(Boolean).slice(0, 2);
-const genreSub = (b) => { const g = genreOf(b); return g.length ? `<p class="genre">${esc(g.map((x, i) => (i ? x.charAt(0).toLowerCase() + x.slice(1) : x)).join('\u00a0· '))}</p>` : ''; };
+const genreSub = (b) => { const g = genreOf(b); return g.length ? `<p class="genre">${esc(g.map((x) => x.charAt(0).toUpperCase() + x.slice(1)).join('\u00a0· '))}</p>` : ''; };
 const statusLine = (b) => [STATUS[b.status], b.age ? esc(b.age) : ''].filter(Boolean);
 
 // Шапка и подвал — общие для главной и страниц книг
@@ -1085,11 +1087,13 @@ export function renderPrivacy(raw, imgs = {}) {
 }
 
 // «Письмо автору» (10.11.2026, владелица: «изящная форма для связи со мной, пока нет кабинета»): тихая ссылка под текстом «Об авторе»,
+// текст после отправки — поле msgDone блока ({почта} — адрес читательницы, MSG_DONE — по умолчанию)
+export const MSG_DONE = 'Письмо у меня. Отвечу сама — на {почта}.';
 // по нажатию раскрывается лист — поля без рамок, письмо по линейкам, подпись; уходит через сервис писем (?a=msg) владелице на почту
 export function letterForm(c, k = {}) {
   return `<div class="letter-w" data-letter>
     <button type="button" class="lnk letter-open" aria-expanded="false" aria-controls="letter-${esc(k.id || 'a')}">${esc(k.msgLink || 'Написать мне')} <span class="arrow">→</span></button>
-    <form class="letter" id="letter-${esc(k.id || 'a')}" data-letter-form hidden novalidate>
+    <form class="letter" id="letter-${esc(k.id || 'a')}" data-letter-form data-done="${esc(k.msgDone || '')}" hidden novalidate>
       <div class="lbl">Письмо автору</div>
       <div class="letter-row">
         <label><span>Как к вам обращаться</span><input name="name" maxlength="80" autocomplete="given-name"></label>

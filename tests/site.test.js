@@ -271,7 +271,7 @@ test('сайт: жанр книги — курсивом под название
   assert.deepEqual(genreOf({ genre: 'Остросюжетный любовный роман · Криминальный любовный роман' }), ['Остросюжетный любовный роман', 'Криминальный любовный роман']);
   const c = normalize(structuredClone(DEFAULT_CONTENT));
   const b = c.books[0]; b.genre = 'Остросюжетный любовный роман · Криминальный любовный роман';
-  assert.match(renderBook(c, {}, b.url).main, /<p class="genre">Остросюжетный любовный роман\u00a0· криминальный любовный роман<\/p>/);
+  assert.match(renderBook(c, {}, b.url).main, /<p class="genre">Остросюжетный любовный роман\u00a0· Криминальный любовный роман<\/p>/);
   assert.match(renderSite(c, {}).main, /<span class="genre-s">Остросюжетный любовный роман<\/span>/);
   b.genre = '';
   assert.doesNotMatch(renderBook(c, {}, b.url).main, /class="genre"/);
