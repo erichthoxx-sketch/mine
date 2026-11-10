@@ -57,9 +57,15 @@ export async function call(s, service, method, params, retry = 2, wait = sleep, 
     }
     throw e;
   }
+  // старый переходник (до версии 4) не знает адрес v501 — чтение повторяем через v5, чтобы обновление не вставало целиком
+  if (version === 'v501' && method === 'get' && (res.status === 404 || res.status === 400) && !data) {
+    return call(s, service, method, stripUnified(params), retry, wait, 'v5');
+  }
   if (!res.ok || !data) { const e = new Error(`Директ ответил ошибкой ${res.status}`); e.transient = res.status >= 500; throw e; }
   return data.result || {};
 }
+// v5 не принимает поля единых кампаний — убираем их при повторе
+const stripUnified = (p) => { const x = { ...p }; delete x.UnifiedCampaignFieldNames; return x; };
 
 // Отчёт (Reports API): Директ может готовить его в очереди — ждём и спрашиваем снова
 // goals — номера целей Метрики (до 10): тогда в отчёте поля вида Conversions_<цель>_LSC
