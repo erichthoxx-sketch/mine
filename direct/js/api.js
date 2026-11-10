@@ -68,13 +68,14 @@ export async function call(s, service, method, params, retry = 2, wait = sleep, 
 const stripUnified = (p) => { const x = { ...p }; delete x.UnifiedCampaignFieldNames; return x; };
 
 // Отчёт (Reports API): Директ может готовить его в очереди — ждём и спрашиваем снова
-// goals — номера целей Метрики (до 10): тогда в отчёте поля вида Conversions_<цель>_LSC
+// goals — номера целей Метрики (до 10): тогда в отчёте поля вида Conversions_<цель>_LSCCD
 export async function report(s, { name, type = 'CUSTOM_REPORT', fields, range = 'LAST_30_DAYS', from, to, filter, goals }, { wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
   const sel = {};
   if (from && to) { sel.DateFrom = from; sel.DateTo = to; }
   if (filter) sel.Filter = filter;
   const body = { params: { SelectionCriteria: sel, FieldNames: fields, ReportName: `${name}-${Date.now()}`, ReportType: type, DateRangeType: from && to ? 'CUSTOM_DATE' : range, Format: 'TSV', IncludeVAT: 'YES', IncludeDiscount: 'NO' } };
-  if (goals?.length) { body.params.Goals = goals.slice(0, 10).map(String); body.params.AttributionModels = ['LSC']; }
+  // LSC Яндекс с 25.06.2026 не считает — заменил на LSCCD (последний значимый переход кросс-девайс)
+  if (goals?.length) { body.params.Goals = goals.slice(0, 10).map(String); body.params.AttributionModels = ['LSCCD']; }
   const extra = { processingMode: 'auto', returnMoneyInMicros: 'false', skipReportHeader: 'true', skipReportSummary: 'true' };
   let rateRetries = 0;
   for (let i = 0; i < 20; i++) {

@@ -71,6 +71,14 @@ export function pultView(a) {
       ${tasks.length ? `<div class="list">${more('pult-todo', tasks, 5)}</div>` : '<p class="small muted" style="margin:8px 0 0">Ничего срочного. Приложение само проверяет кампании при каждом обновлении — раз в 15 минут, пока открыто.</p>'}</div>
     ${live.map(card).join('') || '<div class="card"><p class="muted">Сейчас нет идущих кампаний.</p></div>'}
     ${rest.length ? `<div class="card"><h2>Остальные кампании</h2><div class="list">${rest.map((r) => `<a class="item" href="#" data-act="go" data-to="/c/${r.camp.id}"><div class="row between"><b>${esc(r.camp.name)}</b><span class="small muted">${esc(r.st.text)}</span></div>${r.econ.d30.cost ? `<div class="small muted">за 30 дней ${money(r.econ.d30.cost)}${r.econ.lib30 ? ` · в библиотеку ${num(r.econ.lib30)}` : ''}</div>` : ''}</a>`).join('')}</div></div>` : ''}
-    <div class="row dl-row"><button class="dl" data-act="go" data-to="/an">Читатели (Метрика)</button><button class="dl" data-act="go" data-to="/books">Книги</button><button class="dl" data-act="go" data-to="/quality">Качество трафика</button><button class="dl" data-act="go" data-to="/log">Что меняли</button><button class="dl" data-act="ai.dl">${ic('download')} Для нейросети</button></div>`,
+    <div class="row dl-row"><button class="dl" data-act="go" data-to="/an">Читатели (Метрика)</button><button class="dl" data-act="go" data-to="/books">Книги</button><button class="dl" data-act="go" data-to="/quality">Качество трафика</button><button class="dl" data-act="go" data-to="/log">Что меняли</button><button class="dl" data-act="ai.dl">${ic('download')} Для нейросети</button></div>
+    ${cohortLine(c.settings.direct || {})}`,
   };
+}
+
+// Когорты для нейросети (Logs API Метрики, js/cohorts.js): когда обновились или почему нет
+function cohortLine(d) {
+  if (!d.cohortsAt) return '';
+  const when = new Date(d.cohortsAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  return `<p class="small ${d.cohortsErr ? 'warnc' : 'muted'}" style="margin:10px 0 0">${d.cohortsErr ? `Когорты для нейросети не выгрузились (${esc(when)}): ${esc(d.cohortsErr)}` : `Когорты для нейросети обновлены ${esc(when)}`}</p>`;
 }

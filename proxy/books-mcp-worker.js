@@ -112,7 +112,7 @@ const TOOLS = [
   }, ['book_id', 'query'])
 ];
 
-const SECTION_NAMES = ['marketing', 'income', 'direct'];
+const SECTION_NAMES = ['marketing', 'income', 'direct', 'cohorts'];
 const sectionKey = (name) => 'section:' + name;
 const contextTools = [
   tool('get_system_status', 'Состояние сохранённых источников: доступные книги, маркетинг, доходы, Директ и время их последней синхронизации.', {}),
@@ -128,6 +128,23 @@ const contextTools = [
   tool('get_direct_campaign', 'Одна кампания Директа (в т. ч. черновик): настройки, группы, объявления, фразы, расход — живые данные, если есть доступ.', { campaign_id: { type: 'string' } }, ['campaign_id'])
 ];
 TOOLS.push(...contextTools);
+const ATTR_D = { type: 'string', description: 'Модель атрибуции Директа: AUTO (по умолчанию), LSCCD, FCCD или LC' };
+const PERIOD = { from: { type: 'string', description: 'Дата от YYYY-MM-DD (по умолчанию 7 дней назад)' }, to: { type: 'string', description: 'Дата до YYYY-MM-DD (по умолчанию сегодня; сегодня — неполный день)' } };
+TOOLS.push(
+  tool('get_direct_report', 'Статистика Директа по дням и кампаниям с конверсиями по каждой цели Метрики (Reports API): показы, клики, расход, CTR, цена клика, конверсии, цена и доля конверсии. Можно разрез «поиск / сети». Только чтение.', {
+    campaign_id: { type: 'string', description: 'Номер кампании (по умолчанию все)' }, ...PERIOD, attribution: ATTR_D,
+    goals: { type: 'array', items: { type: 'string' }, description: 'Номера целей (по умолчанию все цели счётчика кампании, не больше 10)' },
+    split: { type: 'string', description: '"network" — разрез поиск / сети' }, counter_id: { type: 'string', description: 'Счётчик (по умолчанию — из кампании)' } }),
+  tool('get_direct_search_queries', 'Поисковые запросы кампании Директа с показами, кликами, расходом и конверсиями по целям — для минус-слов и чистки автотаргетинга (данные за последние 180 дней).', {
+    campaign_id: { type: 'string' }, ...PERIOD, attribution: ATTR_D, goals: { type: 'array', items: { type: 'string' } } }, ['campaign_id']),
+  tool('get_metrika_sources', 'Метрика по источникам до кампании (API отчётов): визиты, посетители, отказы, по каждой цели — достижения и посетители; итог и по дням.', {
+    ...PERIOD, attribution: { type: 'string', description: 'automatic (по умолчанию), cross_device_last_significant, cross_device_first или last' },
+    group_by: { type: 'string', description: 'source — тип источника; engine — рекламная система; direct — кампания Директа; utm — utm_source + utm_campaign + utm_content' },
+    goals: { type: 'array', items: { type: 'string' } }, counter_id: { type: 'string' }, by_day: { type: 'boolean' } }),
+  tool('get_cohorts', 'Когорты по Logs API Метрики: посетители, чей ПЕРВЫЙ визит пришёл из источника, — сколько начали читать, добавили в библиотеку, начали покупку, купили; медианы дней; покупки в поздних визитах и их источники; библиотека → покупка.', {
+    source_filter: { type: 'string', description: 'direct:<номер кампании> | utm_campaign:<…> | utm_source:<…> | utm_content:<…> | type:<тип источника> | engine:<рекламная система>' },
+    ...PERIOD, window_days: { type: 'integer', minimum: 1, maximum: 365, description: 'Сколько дней после первого визита считать (по умолчанию 30)' } }, ['source_filter']),
+);
 TOOLS.push(tool('get_direct_live', 'Живое чтение Яндекс.Директа прямо сейчас (только чтение): все кампании, включая черновики, группы с регионами и минус-фразами, объявления, фразы, параметры URL и расход за 30 дней. Без campaign_id — все кампании, с ним — одна.', {
   campaign_id: { type: 'string', description: 'Номер кампании Директа (необязательно)' },
   stats: { type: 'boolean', description: 'Расход по дням за 30 дней, по умолчанию да' }
@@ -170,7 +187,9 @@ const tsv = (text) => {
 async function directDaily(acc, cid) {
   const body = { params: { SelectionCriteria: cid ? { Filter: [{ Field: 'CampaignId', Operator: 'EQUALS', Values: [String(cid)] }] } : {},
     FieldNames: ['Date', 'CampaignId', 'CampaignName', 'Impressions', 'Clicks', 'Cost'], ReportName: 'mcp-days-' + Date.now(),
-    ReportType: 'CUSTOM_REPORT', DateRangeType: 'LAST_30_DAYS', Format: 'TSV', IncludeVAT: 'YES', IncludeDiscount: 'NO' } };
+    ReportType: 'CUSTOM_REPORT', DateRangeType: 'CUSTOM_DATE', Format: 'TSV', IncludeVAT: 'YES', IncludeDiscount: 'NO' } };
+  // LAST_30_DAYS у Директа — без текущего дня; берём 30 дней по сегодня включительно (сегодня — неполный день)
+  body.params.SelectionCriteria = { ...body.params.SelectionCriteria, DateFrom: addD(mskToday(), -29), DateTo: mskToday() };
   const extra = { processingMode: 'auto', returnMoneyInMicros: 'false', skipReportHeader: 'true', skipReportSummary: 'true' };
   for (let i = 0; i < 5; i++) {
     const res = await fetch(directBase(acc) + 'reports', { method: 'POST', headers: directHeaders(acc, extra), body: JSON.stringify(body) });
@@ -193,7 +212,7 @@ export async function directLive(acc, { campaign_id, stats = true } = {}) {
     const x = c.TextCampaign || c.UnifiedCampaign || {};
     return { id: c.Id, name: c.Name, type: c.Type || '', state: c.State, status: c.Status, note: c.StatusClarification || '',
       start: c.StartDate || '', end: c.EndDate || '', daily: rubOf(c.DailyBudget?.Amount),
-      negatives: c.NegativeKeywords?.Items || [], strategy: x.BiddingStrategy || null,
+      negatives: c.NegativeKeywords?.Items || [], strategy: x.BiddingStrategy ? moneyDeep(x.BiddingStrategy) : null,
       counters: x.CounterIds?.Items || [], priorityGoals: x.PriorityGoals?.Items || [], trackingParams: x.TrackingParams || '' };
   });
   if (only && !campaigns.length) return { error: 'Кампания ' + campaign_id + ' не найдена в Директе.' };
@@ -218,7 +237,8 @@ export async function directLive(acc, { campaign_id, stats = true } = {}) {
     try { daily = await directDaily(acc, only?.[0]); if (!daily) statsNote = 'Отчёт о расходе Директ ещё готовит — спросите ещё раз через минуту.'; }
     catch (e) { statsNote = e.message || String(e); }
   }
-  return { at: new Date().toISOString(), live: true, sandbox: !!acc.sandbox, note: 'Живые данные из Директа. Только чтение — изменить отсюда ничего нельзя.',
+  return { at: new Date().toISOString(), live: true, sandbox: !!acc.sandbox, note: 'Живые данные из Директа. Только чтение — изменить отсюда ничего нельзя. Деньги — в рублях.',
+    ...(stats ? { period: { from: addD(mskToday(), -29), to: mskToday() }, todayNote: mskToday() + ' — текущий день, данные за него неполные' } : {}),
     campaigns, groups, ads: ads.slice(0, 300), keywords: keywords.slice(0, 500), ...(stats ? { daily: daily || [], statsNote } : {}) };
 }
 async function directLiveTool(env, a) {
@@ -229,6 +249,201 @@ async function directLiveTool(env, a) {
     const out = await directLive(acc, { campaign_id: a.campaign_id, stats: a.stats !== false });
     return out.error ? msg(out.error, true) : msg(out);
   } catch (e) { return msg(e.message || 'Директ не ответил', true); }
+}
+// ── Аналитика для нейросети (10.11.2026): отчёты Директа с конверсиями, поисковые запросы, источники Метрики, когорты ──
+// Только чтение. Названия полей и моделей атрибуции — по документации Яндекса (Reports API Директа v5, API отчётов Метрики).
+// С 25.06.2026 старые модели (первый переход, последний значимый, последний переход из Директа) Яндекс заменил:
+// Директ — FCCD | LC | LSCCD | AUTO, Метрика — cross_device_first | last | cross_device_last_significant | automatic.
+const ATTR_DIRECT = { FCCD: 'первый переход (кросс-девайс)', LC: 'последний переход', LSCCD: 'последний значимый переход (кросс-девайс)', AUTO: 'автоматическая атрибуция' };
+const ATTR_METRIKA = { cross_device_first: 'первый переход (кросс-девайс)', last: 'последний переход', cross_device_last_significant: 'последний значимый переход (кросс-девайс)', automatic: 'автоматическая атрибуция' };
+const ATTR_ALIAS = { FCCD: 'cross_device_first', LC: 'last', LSCCD: 'cross_device_last_significant', AUTO: 'automatic' };
+const METRIKA = 'https://api-metrika.yandex.net/';
+// «Сегодня» — по Москве (так считают Директ и счётчик)
+export const mskToday = (now = Date.now()) => new Date(now + 3 * 3600000).toISOString().slice(0, 10);
+const addD = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
+function period(a, days = 7) {
+  const today = mskToday(), to = isDate(a.to) ? a.to : today, from = isDate(a.from) ? a.from : addD(to, -(days - 1));
+  if (from > to) throw Error('Дата «от» позже даты «до».');
+  return { from, to: to > today ? today : to, today };
+}
+const metaOf = ({ from, to, today }, attribution, extra = {}) => ({
+  fetchedAt: new Date().toISOString(), period: { from, to }, attribution,
+  ...(to >= today ? { todayNote: `${today} — текущий день, данные за него неполные` } : {}), ...extra,
+});
+// деньги в ответах — в рублях: поля стратегии в миллионных долях (Cpa 8000000 → 8)
+const MONEY_KEY = /(Cpa|Cpc|Bid|Amount|SpendLimit|Limit|Price|Budget)$/;
+export function moneyDeep(x) {
+  if (Array.isArray(x)) return x.map(moneyDeep);
+  if (!x || typeof x !== 'object') return x;
+  return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, typeof v === 'number' && MONEY_KEY.test(k) ? rubOf(v) : moneyDeep(v)]));
+}
+// Отчёт Reports API (TSV, деньги в рублях); 201/202 — ждём и спрашиваем снова
+async function directReport(acc, params) {
+  const body = { params: { ...params, ReportName: (params.ReportName || 'mcp') + '-' + Date.now(), Format: 'TSV', IncludeVAT: 'YES', IncludeDiscount: 'NO' } };
+  const extra = { processingMode: 'auto', returnMoneyInMicros: 'false', skipReportHeader: 'true', skipReportSummary: 'true' };
+  for (let i = 0; i < 8; i++) {
+    const res = await fetch(directBase(acc) + 'reports', { method: 'POST', headers: directHeaders(acc, extra), body: JSON.stringify(body) });
+    if (res.status === 200) return { rows: tsv(await res.text()), warning: res.headers.get('Warning') || '' };
+    if (res.status === 201 || res.status === 202) { await wait(Math.min(Number(res.headers.get('retryIn')) || 3, 8) * 1000); continue; }
+    let detail = ''; try { const j = await res.json(); detail = j?.error?.error_detail || j?.error?.error_string || ''; } catch { /* не JSON */ }
+    throw Error('Отчёт Директа не получен (' + res.status + ')' + (detail ? ': ' + detail : ''));
+  }
+  throw Error('Директ ещё готовит отчёт — спросите через минуту.');
+}
+const num = (v) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+// Цели счётчика из Метрики (название по номеру)
+async function metrikaGoals(acc, counter) {
+  const r = await fetch(METRIKA + 'management/v1/counter/' + counter + '/goals', { headers: { Authorization: 'OAuth ' + acc.token } });
+  if (!r.ok) throw Error('Метрика не отдала цели счётчика ' + counter + ' (' + r.status + ')');
+  return ((await r.json()).goals || []).map((g) => ({ id: String(g.id), name: g.name }));
+}
+// Счётчики кампаний Директа (из настроек кампании)
+async function directCounters(acc, cid) {
+  const cr = await directSafe(acc, 'campaigns', { SelectionCriteria: cid ? { Ids: [Number(cid)] } : {}, FieldNames: ['Id', 'Name', 'State'],
+    TextCampaignFieldNames: ['CounterIds'], UnifiedCampaignFieldNames: ['CounterIds'] }, null, 'v501');
+  return (cr.Campaigns || []).map((c) => ({ id: c.Id, name: c.Name, state: c.State, counters: (c.UnifiedCampaign || c.TextCampaign || {}).CounterIds?.Items || [] }));
+}
+const goalPick = (all, want) => (Array.isArray(want) && want.length ? all.filter((g) => want.map(String).includes(g.id)) : all).slice(0, 10);
+const attrDirect = (v) => { const k = String(v || 'AUTO').toUpperCase(); if (!ATTR_DIRECT[k]) throw Error('Модель атрибуции: FCCD, LC, LSCCD или AUTO (старые FC, LSC, LYDC Яндекс больше не считает).'); return k; };
+
+// Задача 1: статистика Директа с конверсиями по каждой цели
+export async function directReportTool(acc, a) {
+  const p = period(a), model = attrDirect(a.attribution);
+  if (a.campaign_id != null && !/^\d{1,20}$/.test(String(a.campaign_id))) throw Error('Номер кампании — только цифры.');
+  const camps = await directCounters(acc, a.campaign_id);
+  if (a.campaign_id && !camps.length) throw Error('Кампания ' + a.campaign_id + ' не найдена.');
+  const counter = String(a.counter_id || camps.flatMap((c) => c.counters)[0] || '');
+  const goals = counter ? goalPick(await metrikaGoals(acc, counter), a.goals) : [];
+  const split = a.split === 'network';
+  const fields = ['Date', 'CampaignId', 'CampaignName', ...(split ? ['AdNetworkType'] : []), 'Impressions', 'Clicks', 'Cost', 'Ctr', 'AvgCpc', ...(goals.length ? ['Conversions', 'CostPerConversion', 'ConversionRate'] : [])];
+  const r = await directReport(acc, { ReportName: 'mcp-goals', ReportType: 'CUSTOM_REPORT', DateRangeType: 'CUSTOM_DATE', FieldNames: fields,
+    SelectionCriteria: { DateFrom: p.from, DateTo: p.to, ...(a.campaign_id ? { Filter: [{ Field: 'CampaignId', Operator: 'EQUALS', Values: [String(a.campaign_id)] }] } : {}) },
+    ...(goals.length ? { Goals: goals.map((g) => g.id), AttributionModels: [model] } : {}) });
+  // колонки вида Conversions_<цель>_<модель>; модель в названии берём из ответа (Яндекс мог заменить устаревшую)
+  const col = (row, kind, g) => { const k = Object.keys(row).find((x) => x.startsWith(kind + '_' + g + '_')); return k ? row[k] : null; };
+  const rows = r.rows.map((row) => ({
+    date: row.Date, cid: Number(row.CampaignId), campaign: row.CampaignName, ...(split ? { network: row.AdNetworkType === 'AD_NETWORK' ? 'сети' : row.AdNetworkType === 'SEARCH' ? 'поиск' : row.AdNetworkType } : {}),
+    impressions: num(row.Impressions), clicks: num(row.Clicks), cost: num(row.Cost), ctr: num(row.Ctr), avgCpc: num(row.AvgCpc),
+    goals: Object.fromEntries(goals.map((g) => [g.id, { conversions: num(col(row, 'Conversions', g.id)), costPerConversion: num(col(row, 'CostPerConversion', g.id)) || null, conversionRate: num(col(row, 'ConversionRate', g.id)) || null }])),
+  }));
+  const sum = (list) => {
+    const t = { impressions: 0, clicks: 0, cost: 0, goals: {} };
+    for (const x of list) { t.impressions += x.impressions; t.clicks += x.clicks; t.cost += x.cost; for (const [g, v] of Object.entries(x.goals)) t.goals[g] = (t.goals[g] || 0) + v.conversions; }
+    t.cost = Math.round(t.cost * 100) / 100;
+    return { ...t, ctr: t.impressions ? Math.round(t.clicks / t.impressions * 10000) / 100 : null, avgCpc: t.clicks ? Math.round(t.cost / t.clicks * 100) / 100 : null,
+      goals: Object.fromEntries(goals.map((g) => [g.id, { name: g.name, conversions: t.goals[g.id] || 0, costPerConversion: t.goals[g.id] ? Math.round(t.cost / t.goals[g.id] * 100) / 100 : null, conversionRate: t.clicks ? Math.round((t.goals[g.id] || 0) / t.clicks * 10000) / 100 : null }])) };
+  };
+  const byCamp = {};
+  for (const x of rows) (byCamp[x.cid] ||= []).push(x);
+  return { ...metaOf(p, `${model} — ${ATTR_DIRECT[model]}`, { counter: counter || null, goals, currency: 'RUB, с НДС', units: 'ctr и conversionRate — в процентах', ...(r.warning ? { yandexWarning: r.warning } : {}) }),
+    total: sum(rows), campaigns: Object.entries(byCamp).map(([cid, list]) => ({ cid: Number(cid), name: list[0].campaign, ...sum(list) })), rows: rows.slice(0, 2000) };
+}
+
+// Задача 1: поисковые запросы с конверсиями (данные — за последние 180 дней)
+export async function directQueriesTool(acc, a) {
+  if (!/^\d{1,20}$/.test(String(a.campaign_id || ''))) throw Error('Нужен номер кампании (только цифры).');
+  const p = period(a, 30), model = attrDirect(a.attribution);
+  if (p.from < addD(p.today, -180)) throw Error('Поисковые запросы Директ отдаёт только за последние 180 дней.');
+  const camps = await directCounters(acc, a.campaign_id);
+  const counter = String(a.counter_id || camps.flatMap((c) => c.counters)[0] || '');
+  const goals = counter ? goalPick(await metrikaGoals(acc, counter), a.goals) : [];
+  const r = await directReport(acc, { ReportName: 'mcp-queries', ReportType: 'SEARCH_QUERY_PERFORMANCE_REPORT', DateRangeType: 'CUSTOM_DATE',
+    FieldNames: ['Query', 'Criterion', 'CriterionType', 'MatchType', 'Impressions', 'Clicks', 'Cost', ...(goals.length ? ['Conversions'] : [])],
+    SelectionCriteria: { DateFrom: p.from, DateTo: p.to, Filter: [{ Field: 'CampaignId', Operator: 'EQUALS', Values: [String(a.campaign_id)] }] },
+    ...(goals.length ? { Goals: goals.map((g) => g.id), AttributionModels: [model] } : {}) });
+  const col = (row, g) => { const k = Object.keys(row).find((x) => x.startsWith('Conversions_' + g + '_')); return k ? num(row[k]) : 0; };
+  const rows = r.rows.map((row) => ({ query: row.Query, condition: row.Criterion, conditionType: row.CriterionType, matchType: row.MatchType,
+    impressions: num(row.Impressions), clicks: num(row.Clicks), cost: num(row.Cost), goals: Object.fromEntries(goals.map((g) => [g.id, col(row, g.id)])) }))
+    .sort((x, y) => y.cost - x.cost || y.clicks - x.clicks);
+  return { ...metaOf(p, `${model} — ${ATTR_DIRECT[model]}`, { campaignId: Number(a.campaign_id), goals, currency: 'RUB, с НДС', note: 'Запросы с показами. Разреза «поиск / сети» в этом отчёте у Директа нет.' }),
+    count: rows.length, rows: rows.slice(0, 1000) };
+}
+
+// Задача 2: Метрика по источникам до кампании (API отчётов)
+const GROUPS = { source: ['ym:s:<attribution>TrafficSource'], engine: ['ym:s:<attribution>AdvEngine'], direct: ['ym:s:<attribution>DirectClickOrder'],
+  utm: ['ym:s:<attribution>UTMSource', 'ym:s:<attribution>UTMCampaign', 'ym:s:<attribution>UTMContent'] };
+export async function metrikaSourcesTool(acc, a) {
+  const p = period(a, 7), group = GROUPS[a.group_by || 'source'];
+  if (!group) throw Error('group_by: source, engine, direct или utm.');
+  const attr = ATTR_ALIAS[String(a.attribution || '').toUpperCase()] || String(a.attribution || 'automatic');
+  if (!ATTR_METRIKA[attr]) throw Error('Модель атрибуции: cross_device_first, last, cross_device_last_significant или automatic.');
+  let counter = String(a.counter_id || '');
+  if (!counter) counter = String((await directCounters(acc)).flatMap((c) => c.counters)[0] || '');
+  if (!/^\d+$/.test(counter)) throw Error('Не нашла счётчик Метрики: укажите counter_id.');
+  const goals = goalPick(await metrikaGoals(acc, counter), a.goals).slice(0, 8); // ≤ 3 + 2×8 метрик в запросе
+  const metrics = ['ym:s:visits', 'ym:s:users', 'ym:s:bounceRate', ...goals.flatMap((g) => [`ym:s:goal${g.id}reaches`, `ym:s:goal${g.id}users`])];
+  const get = async (dims, limit) => {
+    const q = new URLSearchParams({ ids: counter, metrics: metrics.join(','), dimensions: dims.join(','), date1: p.from, date2: p.to, attribution: attr, limit: String(limit), accuracy: 'full', lang: 'ru' });
+    const r = await fetch(METRIKA + 'stat/v1/data?' + q, { headers: { Authorization: 'OAuth ' + acc.token } });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw Error('Метрика: ' + (j?.message || r.status));
+    return (j.data || []).map((row) => {
+      const m = row.metrics || [], out = { key: (row.dimensions || []).map((d) => d?.name ?? d?.id ?? null), visits: Math.round(m[0] || 0), users: Math.round(m[1] || 0), bounceRate: Math.round((m[2] || 0) * 10) / 10, goals: {} };
+      goals.forEach((g, i) => { out.goals[g.id] = { reaches: Math.round(m[3 + i * 2] || 0), users: Math.round(m[4 + i * 2] || 0) }; });
+      return out;
+    });
+  };
+  const total = await get(group, 100);
+  const byDay = a.by_day === false ? null : await get(['ym:s:date', ...group], 1000);
+  return { ...metaOf(p, `${attr} — ${ATTR_METRIKA[attr]}`, { counter, groupBy: a.group_by || 'source', goals, units: 'bounceRate — в процентах' }),
+    total, ...(byDay ? { byDay: byDay.map((x) => ({ date: x.key[0], key: x.key.slice(1), visits: x.visits, users: x.users, bounceRate: x.bounceRate, goals: x.goals })) } : {}) };
+}
+
+// Задача 3: когорты. Логи Метрики выгружает и считает «Директ» в браузере владелицы (вариант А); сюда приходят только
+// обезличенные строки посетителей без ClientID (день первого визита, источник, дни до целей). Отдаём только итоги.
+export function cohortStats(data, a) {
+  const S = data.sources || [], src = String(a.source_filter || '').trim();
+  if (!src) throw Error('source_filter: например direct:715936525, utm_campaign:…, utm_source:…, type:ad.');
+  const [kind, ...rest] = src.split(':'), val = rest.join(':').toLowerCase();
+  const match = (s) => s && (kind === 'direct' ? String(s.d || '') === val : kind === 'utm_campaign' ? String(s.c || '').toLowerCase() === val
+    : kind === 'utm_source' ? String(s.s || '').toLowerCase() === val : kind === 'utm_content' ? String(s.n || '').toLowerCase() === val
+      : kind === 'type' ? String(s.t || '').toLowerCase() === val : kind === 'engine' ? String(s.e || '').toLowerCase() === val : false);
+  const from = isDate(a.from) ? a.from : data.from, to = isDate(a.to) ? a.to : data.to, win = Math.min(365, Math.max(1, Number(a.window_days) || 30));
+  const base = data.from, day = (d) => addD(base, d);
+  const people = (data.people || []).filter((p) => match(S[p[1]]) && day(p[0]) >= from && day(p[0]) <= to);
+  const within = (v) => v != null && v >= 0 && v <= win;
+  const med = (xs) => { if (!xs.length) return null; const s = [...xs].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const cnt = (i) => people.filter((p) => within(p[i])).length;
+  // p = [первый день, источник первого визита, чтение, библиотека, начало покупки, покупка (дни от первого визита), покупка не в первом визите, источник визита покупки]
+  const buyers = people.filter((p) => within(p[5])), late = buyers.filter((p) => p[6]);
+  const lateSrc = {};
+  for (const p of late) { const s = S[p[7]] || {}; const k = s.d ? 'Директ ' + s.d : s.c ? 'utm ' + [s.s, s.c].filter(Boolean).join(' / ') : s.t || 'неизвестно'; lateSrc[k] = (lateSrc[k] || 0) + 1; }
+  const lib = people.filter((p) => within(p[3])), libBuy = lib.filter((p) => within(p[5]) && p[5] >= p[3]);
+  return {
+    fetchedAt: data.at, period: { from, to }, logsPeriod: { from: data.from, to: data.to }, windowDays: win, source: src,
+    attribution: 'источник каждого визита — его собственный переход (last); когорта — по первому визиту посетителя в выгруженном периоде',
+    note: 'Данные Logs API — до вчерашнего дня. Посетитель, приходивший раньше начала выгрузки, считается новым. Для посетителей последних дней окно ещё не закрылось.',
+    size: people.length, incompleteWindow: people.filter((p) => day(p[0]) > addD(data.to, -win)).length,
+    startedReading: cnt(2), addedToLibrary: lib.length, startedPurchase: cnt(4), purchased: buyers.length,
+    medianDaysToLibrary: med(lib.map((p) => p[3])), medianDaysToPurchase: med(buyers.map((p) => p[5])),
+    purchasesInLaterVisits: late.length, laterVisitSources: lateSrc,
+    libraryToPurchase: { added: lib.length, thenPurchased: libBuy.length, rate: lib.length ? Math.round(libBuy.length / lib.length * 1000) / 10 : null },
+  };
+}
+
+// Logs API Метрики для «Директа» владелицы (вариант А): Worker только пересылает запрос с её ключом из KV и отдаёт ответ браузеру —
+// ничего не хранит и не разбирает. Только операции выгрузки логов: оценка, создание запроса, статус, скачивание части, очистка.
+// Счётчик и его цели не меняются. Вход — только владелица (Firebase).
+async function syncLogs(req, env) {
+  if (req.method !== 'POST') return error(req, 405, 'Метод не поддерживается');
+  if (!(await verifyOwner(req, env))) return error(req, 401, 'Требуется вход владельца');
+  const acc = await env.BOOKS.get(DIRECT_KEY, { type: 'json' });
+  if (!acc?.token) return error(req, 409, 'Нет ключа Яндекса — откройте «Директ»');
+  const b = await req.json().catch(() => null);
+  const counter = String(b?.counter || ''), id = String(b?.id || ''), part = String(b?.part ?? '');
+  if (!/^\d{1,12}$/.test(counter)) return error(req, 400, 'Неверный счётчик');
+  const base = METRIKA + 'management/v1/counter/' + counter + '/';
+  const q = (o) => new URLSearchParams(Object.fromEntries(Object.entries(o).filter(([, v]) => v != null && v !== ''))).toString();
+  const params = { date1: b.date1, date2: b.date2, fields: b.fields, source: 'visits', attribution: b.attribution };
+  if (['evaluate', 'create'].includes(b.op) && (!isDate(b.date1) || !isDate(b.date2) || !/^[\w:<>,]{5,3000}$/.test(String(b.fields || '')))) return error(req, 400, 'Неверные параметры');
+  if (['info', 'download', 'clean'].includes(b.op) && !/^\d{1,15}$/.test(id)) return error(req, 400, 'Неверный запрос логов');
+  const target = { evaluate: ['GET', base + 'logrequests/evaluate?' + q(params)], create: ['POST', base + 'logrequests?' + q(params)],
+    info: ['GET', base + 'logrequest/' + id], download: ['GET', base + 'logrequest/' + id + '/part/' + (/^\d{1,4}$/.test(part) ? part : '0') + '/download'],
+    clean: ['POST', base + 'logrequest/' + id + '/clean'] }[b.op];
+  if (!target) return error(req, 400, 'Неизвестная операция');
+  const r = await fetch(target[1], { method: target[0], headers: { Authorization: 'OAuth ' + acc.token } });
+  return new Response(r.body, { status: r.status, headers: { ...headersOf(req), 'Content-Type': r.headers.get('content-type') || 'text/plain; charset=utf-8' } });
 }
 async function syncDirectAccess(req, env) {
   if (!['PUT', 'DELETE'].includes(req.method)) return error(req, 405, 'Метод не поддерживается');
@@ -253,6 +468,17 @@ async function sectionTool(env, name, a = {}) {
     })), directLive: live?.token ? { on: true, since: live.at || null, tokenUntil: live.exp || null } : { on: false } });
   }
   if (name === 'get_direct_live') return directLiveTool(env, a);
+  const live = { get_direct_report: directReportTool, get_direct_search_queries: directQueriesTool, get_metrika_sources: metrikaSourcesTool }[name];
+  if (live) {
+    const acc = await env.BOOKS.get(DIRECT_KEY, { type: 'json' });
+    if (!acc?.token) return msg('Нет доступа к Яндексу: откройте «Мастерскую» или «Директ» — доступ передастся сам.', true);
+    try { return msg(await live(acc, a)); } catch (e) { return msg(e.message || 'Яндекс не ответил', true); }
+  }
+  if (name === 'get_cohorts') {
+    const item = await env.BOOKS.get(sectionKey('cohorts'), { type: 'json' });
+    if (!item?.data?.people) return msg('Когорт ещё нет: их считает «Директ» в браузере владелицы раз в сутки (Logs API Метрики). Откройте «Директ» — посчитает сам; ошибка, если была, видна в «Директе» → Настройки.', true);
+    try { return msg(cohortStats(item.data, a)); } catch (e) { return msg(e.message, true); }
+  }
   const section = keys[name];
   if (!section) return null;
   // Директ: если владелица дала живой доступ — отвечаем живыми данными, копия — только запасной вариант
@@ -386,7 +612,7 @@ async function mcp(req, env) {
   let result;
   try {
     switch (body.method) {
-      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.4.0' } }; break;
+      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.5.0' } }; break;
       case 'ping': result = {}; break;
       case 'tools/list': result = { tools: TOOLS }; break;
       case 'tools/call':
@@ -466,6 +692,7 @@ export default {
       if (url.pathname === '/sync/prune') return await manageSnapshots(req, env, 'prune');
       if (url.pathname === '/sync/all') return await manageSnapshots(req, env, 'all');
       if (url.pathname === '/sync/direct-access') return await syncDirectAccess(req, env);
+      if (url.pathname === '/sync/logs') return await syncLogs(req, env);
       const section = /^\/sync\/section\/([a-z]+)$/.exec(url.pathname);
       if (section) return await syncSection(req, env, section[1]);
       const match = /^\/sync\/([^/]+)$/.exec(url.pathname);

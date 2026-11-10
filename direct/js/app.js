@@ -2,6 +2,7 @@
 // запросы, минус-фразы, площадки, сайт. Вход и база — общие с «Доходами» и «Мастерской».
 import { createStore, authErrorText } from '../../js/store.js';
 import { syncDirectAccessQuiet, autoDirectAccess } from '../../js/aidirect.js';
+import { autoCohorts } from '../../js/cohorts.js';
 import { initAccent } from '../../js/accent.js';
 import { keepNavDown } from '../../js/vvfix.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from '../../js/ui.js';
@@ -176,7 +177,7 @@ async function savePendingToken() {
   } finally { saving = false; }
 }
 
-store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); });
+store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); autoCohorts(store).catch(console.warn); });
 store.init().then(async () => {
   await savePendingToken();
   await syncDemo();

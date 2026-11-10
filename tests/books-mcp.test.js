@@ -144,3 +144,92 @@ test('Direct live: key from owner only, never shown, only get methods, drafts vi
   assert.equal(status.directLive.on, true);
   assert.equal(JSON.stringify(status).includes('SECRET_TOKEN'), false);
 });
+
+import { moneyDeep, cohortStats, mskToday } from '../proxy/books-mcp-worker.js';
+import { buildCohortData, stageGoals } from '../js/cohorts.js';
+
+const GOALS = [{ id: 548467198, name: 'Начало чтения' }, { id: 548467215, name: 'Добавление книги в библиотеку' }, { id: 548467217, name: 'Начало покупки книги' }, { id: 548467220, name: 'Покупка книги' }];
+
+test('деньги стратегии — в рублях', () => {
+  const s = moneyDeep({ Search: { PayForConversion: { Cpa: 8000000, GoalId: 548467215, WeeklySpendLimit: 1700000000 } } });
+  assert.equal(s.Search.PayForConversion.Cpa, 8);
+  assert.equal(s.Search.PayForConversion.WeeklySpendLimit, 1700);
+  assert.equal(s.Search.PayForConversion.GoalId, 548467215);
+});
+
+test('get_direct_report: конверсии по каждой цели, модель атрибуции, пометка о неполном дне; только чтение', async () => {
+  const a = env();
+  await a.BOOKS.put('secret:direct-access', JSON.stringify({ token: 'y0_SECRET_TOKEN_1234567890' }));
+  const seen = [], real = globalThis.fetch, today = mskToday();
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url); seen.push({ u, method: init.method || 'GET', body: init.body });
+    if (u.includes('/goals')) return new Response(JSON.stringify({ goals: GOALS }), { status: 200 });
+    if (u.endsWith('/campaigns')) return new Response(JSON.stringify({ result: { Campaigns: [{ Id: 715936525, Name: 'ЕПК', State: 'ON', UnifiedCampaign: { CounterIds: { Items: [108714441] } } }] } }), { status: 200 });
+    if (u.endsWith('/reports')) {
+      const b = JSON.parse(init.body).params;
+      assert.deepEqual(b.AttributionModels, ['LSCCD']); assert.equal(b.Goals.length, 4);
+      const head = ['Date', 'CampaignId', 'CampaignName', 'Impressions', 'Clicks', 'Cost', 'Ctr', 'AvgCpc', ...b.Goals.flatMap((g) => [`Conversions_${g}_LSCCD`, `CostPerConversion_${g}_LSCCD`, `ConversionRate_${g}_LSCCD`])];
+      const row = [today, '715936525', 'ЕПК', '1000', '50', '400', '5', '8', ...b.Goals.flatMap((g) => g === '548467215' ? ['40', '10', '80'] : ['0', '--', '0'])];
+      return new Response(head.join('\t') + '\n' + row.join('\t') + '\n', { status: 200 });
+    }
+    return new Response('{}', { status: 404 });
+  };
+  let j;
+  try { j = await (await worker.fetch(call('tools/call', { name: 'get_direct_report', arguments: { campaign_id: '715936525', attribution: 'LSCCD' } }), a)).json(); }
+  finally { globalThis.fetch = real; }
+  const text = j.result.content[0].text, out = JSON.parse(text);
+  assert.equal(out.total.cost, 400);
+  assert.equal(out.total.goals['548467215'].conversions, 40);
+  assert.equal(out.total.goals['548467215'].costPerConversion, 10);
+  assert.match(out.attribution, /LSCCD/);
+  assert.ok(out.todayNote);
+  assert.equal(text.includes('SECRET_TOKEN'), false);
+  assert.ok(seen.filter((x) => x.u.includes('direct.yandex.com') && !x.u.endsWith('/reports')).every((x) => JSON.parse(x.body).method === 'get'));
+  // устаревшая модель — понятный отказ
+  globalThis.fetch = async () => new Response('{}');
+  try { j = await (await worker.fetch(call('tools/call', { name: 'get_direct_report', arguments: { attribution: 'LSC' } }), a)).json(); } finally { globalThis.fetch = real; }
+  assert.equal(j.result.isError, true);
+});
+
+test('когорты: первый визит из кампании, библиотека → покупка, покупки в поздних визитах', () => {
+  const head = 'ym:s:visitID\tym:s:clientID\tym:s:dateTime\tym:s:lastTrafficSource\tym:s:lastAdvEngine\tym:s:lastDirectClickOrder\tym:s:lastUTMSource\tym:s:lastUTMCampaign\tym:s:lastUTMContent\tym:s:goalsID\tym:s:goalsDateTime';
+  const L = (v, c, t, src, d, g = [], gt = []) => [v, c, t, src, src === 'ad' ? 'ya_direct' : '', d, '', '', '', `[${g.join(',')}]`, `[${gt.map((x) => `'${x}'`).join(',')}]`].join('\t');
+  const tsvText = [head,
+    L(1, 'A', '2026-11-10 10:00:00', 'ad', '715936525', [548467198, 548467215], ['2026-11-10 10:05:00', '2026-11-10 10:06:00']),
+    L(2, 'A', '2026-11-14 20:00:00', 'internal', '0', [548467220], ['2026-11-14 20:10:00']),        // купила позже, в другом визите
+    L(3, 'B', '2026-11-11 09:00:00', 'ad', '715936525', [548467215], ['2026-11-11 09:03:00']),     // только библиотека
+    L(4, 'C', '2026-11-11 09:00:00', 'direct', '0', [548467220], ['2026-11-11 09:30:00']),         // не из кампании
+  ].join('\n');
+  const data = buildCohortData([tsvText], { from: '2026-10-20', to: '2026-11-17', goals: GOALS });
+  assert.equal(JSON.stringify(data).includes('"A"'), false); // без ClientID
+  assert.equal(stageGoals(GOALS).buy, 548467220);
+  const r = cohortStats({ ...data, at: 'x' }, { source_filter: 'direct:715936525', window_days: 30 });
+  assert.equal(r.size, 2);
+  assert.equal(r.addedToLibrary, 2);
+  assert.equal(r.purchased, 1);
+  assert.equal(r.purchasesInLaterVisits, 1);
+  assert.equal(r.medianDaysToPurchase, 4);
+  assert.deepEqual(r.libraryToPurchase, { added: 2, thenPurchased: 1, rate: 50 });
+  assert.equal(r.laterVisitSources.internal, 1);
+});
+
+test('get_metrika_sources: разрез до кампании Директа, атрибуция по документации, цели — достижения и посетители', async () => {
+  const a = env();
+  await a.BOOKS.put('secret:direct-access', JSON.stringify({ token: 'y0_SECRET_TOKEN_1234567890' }));
+  const real = globalThis.fetch; let q = null;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('/goals')) return new Response(JSON.stringify({ goals: GOALS.slice(1, 2) }), { status: 200 });
+    if (u.includes('stat/v1/data')) { q = new globalThis.URL(u).searchParams; const day = q.get('dimensions').startsWith('ym:s:date');
+      return new Response(JSON.stringify({ data: [{ dimensions: day ? [{ name: '2026-11-10' }, { id: '715936525', name: 'ЕПК' }] : [{ id: '715936525', name: 'ЕПК' }], metrics: [100, 90, 12.5, 7, 6] }] }), { status: 200 }); }
+    return new Response('{}', { status: 404 });
+  };
+  let j;
+  try { j = await (await worker.fetch(call('tools/call', { name: 'get_metrika_sources', arguments: { group_by: 'direct', counter_id: '108714441', attribution: 'LSCCD' } }), a)).json(); }
+  finally { globalThis.fetch = real; }
+  const out = JSON.parse(j.result.content[0].text);
+  assert.equal(q.get('attribution'), 'cross_device_last_significant');
+  assert.ok(q.get('metrics').includes('ym:s:goal548467215users'));
+  assert.equal(out.total[0].goals['548467215'].reaches, 7);
+  assert.equal(out.byDay[0].date, '2026-11-10');
+});
