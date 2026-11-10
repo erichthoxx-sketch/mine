@@ -112,7 +112,7 @@ const TOOLS = [
   }, ['book_id', 'query'])
 ];
 
-const SECTION_NAMES = ['marketing', 'income', 'direct', 'cohorts'];
+const SECTION_NAMES = ['marketing', 'income', 'direct', 'cohorts', 'parts'];
 const sectionKey = (name) => 'section:' + name;
 const contextTools = [
   tool('get_system_status', 'Состояние сохранённых источников: доступные книги, маркетинг, доходы, Директ и время их последней синхронизации.', {}),
@@ -141,6 +141,8 @@ TOOLS.push(
     ...PERIOD, attribution: { type: 'string', description: 'automatic (по умолчанию), cross_device_last_significant, cross_device_first или last' },
     group_by: { type: 'string', description: 'source — тип источника; engine — рекламная система; direct — кампания Директа; utm — utm_source + utm_campaign + utm_content' },
     goals: { type: 'array', items: { type: 'string' } }, counter_id: { type: 'string' }, by_day: { type: 'boolean' } }),
+  tool('get_part_reads', 'Прочтения по каждой части книги по дням (таблица «Статистика по частям» Литнета) и удержание: прочтения части ÷ прочтения первой части, уход от предыдущей части, оценки.', {
+    book_id: BOOK_ID, ...PERIOD }, ['book_id']),
   tool('get_cohorts', 'Когорты по Logs API Метрики: посетители, чей ПЕРВЫЙ визит пришёл из источника, — сколько начали читать, добавили в библиотеку, начали покупку, купили; медианы дней; покупки в поздних визитах и их источники; библиотека → покупка.', {
     source_filter: { type: 'string', description: 'direct:<номер кампании> | utm_campaign:<…> | utm_source:<…> | utm_content:<…> | type:<тип источника> | engine:<рекламная система>' },
     ...PERIOD, window_days: { type: 'integer', minimum: 1, maximum: 365, description: 'Сколько дней после первого визита считать (по умолчанию 30)' } }, ['source_filter']),
@@ -390,6 +392,18 @@ export async function metrikaSourcesTool(acc, a) {
     total, ...(byDay ? { byDay: byDay.map((x) => ({ date: x.key[0], key: x.key.slice(1), visits: x.visits, users: x.users, bounceRate: x.bounceRate, goals: x.goals })) } : {}) };
 }
 
+// Задача 4: прочтения по частям (таблица «Статистика по частям» из кабинета Литнета, вставляет владелица в Мастерской)
+export function partReadsOut(b, a = {}, updatedAt = null) {
+  const days = Object.keys(b.days || {}).sort(), from = isDate(a.from) ? a.from : days[0], to = isDate(a.to) ? a.to : days[days.length - 1];
+  const parts = b.parts || [], sum = Object.fromEntries(parts.map((p) => [p, 0])), byDay = [];
+  for (const d of days) { if (d < from || d > to) continue; const row = b.days[d]; byDay.push({ date: d, reads: row }); for (const [p, n] of Object.entries(row)) if (p in sum) sum[p] += n; }
+  const first = sum[parts[0]] || 0;
+  return { fetchedAt: updatedAt, source: 'Литнет, кабинет автора → «Статистика по частям» (вставка владелицы)', period: { from, to }, book: b.title,
+    note: 'Прочтения — как считает Литнет. Удержание — прочтения части ÷ прочтения первой части за период; drop — сколько процентов ушло от предыдущей части. Последние 1–2 дня Литнет ещё пересчитывает.',
+    parts: parts.map((p, i) => ({ part: p, reads: sum[p], retention: first ? Math.round(sum[p] / first * 1000) / 10 : null, drop: i && sum[parts[i - 1]] ? Math.round((1 - sum[p] / sum[parts[i - 1]]) * 1000) / 10 : null, rating: b.ratings?.[p] || null })),
+    byDay };
+}
+
 // Задача 3: когорты. Логи Метрики выгружает и считает «Директ» в браузере владелицы (вариант А); сюда приходят только
 // обезличенные строки посетителей без ClientID (день первого визита, источник, дни до целей). Отдаём только итоги.
 export function cohortStats(data, a) {
@@ -473,6 +487,12 @@ async function sectionTool(env, name, a = {}) {
     const acc = await env.BOOKS.get(DIRECT_KEY, { type: 'json' });
     if (!acc?.token) return msg('Нет доступа к Яндексу: откройте «Мастерскую» или «Директ» — доступ передастся сам.', true);
     try { return msg(await live(acc, a)); } catch (e) { return msg(e.message || 'Яндекс не ответил', true); }
+  }
+  if (name === 'get_part_reads') {
+    const item = await env.BOOKS.get(sectionKey('parts'), { type: 'json' });
+    const b = (item?.data?.books || []).find((x) => x.id === a.book_id || String(x.title || '').toLowerCase() === String(a.book_id || '').toLowerCase());
+    if (!b) return msg('Для этой книги ещё нет статистики по частям: владелица вставляет таблицу Литнета в Мастерской → книга → «Прочтения».', true);
+    return msg(partReadsOut(b, a, item.updatedAt));
   }
   if (name === 'get_cohorts') {
     const item = await env.BOOKS.get(sectionKey('cohorts'), { type: 'json' });
@@ -612,7 +632,7 @@ async function mcp(req, env) {
   let result;
   try {
     switch (body.method) {
-      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.5.0' } }; break;
+      case 'initialize': result = { protocolVersion: '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'masterskaya-ai', version: '1.6.0' } }; break;
       case 'ping': result = {}; break;
       case 'tools/list': result = { tools: TOOLS }; break;
       case 'tools/call':

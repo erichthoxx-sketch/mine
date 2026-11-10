@@ -26,6 +26,7 @@ import * as drive from '../drive.js';
 import { loadArchive } from './archive.js';
 import { addDays } from '../../../js/calc.js';
 import { finishEvent, removeEvent, chapterEvent, chapterUnset, syncFinish } from '../sync.js';
+import { readsCard, readsSub } from './reads.js';
 
 const app = () => window.__app;
 export const STATUS = { idea: 'Идея', progress: 'В процессе', done: 'Завершена' };
@@ -252,6 +253,7 @@ export function bookPage(a, id) {
     ${(c.data.w_promolinks || []).some(x => x.bookId === b.id && x.status !== 'archived') ? promoLinksPanel(c, { bookId: b.id, compact: true }) : ''}
   </div>
 `, { icon: 'marketing', sub: `тексты ${mk.texts} из ${mk.textsAll}` }),
+    T('reads', 'Прочтения', readsCard(b, c.today), { icon: 'data', sub: readsSub(b) }),
     T('site', 'Сайт', siteCard(b), { icon: 'globe', sub: siteSub(b) }),
     T('pub', 'Издательство', publisherCard(b), { icon: 'doc', sub: !ms.ok ? 'нет рукописи' : syn.ok ? 'рукопись и синопсис' : 'нет синопсиса' }),
     T('ai', 'Нейросеть', bookAiCard(c, b), { icon: 'sparkle', sub: b.aiShared ? 'подключена' : 'не подключена' }),

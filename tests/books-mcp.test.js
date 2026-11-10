@@ -233,3 +233,14 @@ test('get_metrika_sources: разрез до кампании Директа, а
   assert.equal(out.total[0].goals['548467215'].reaches, 7);
   assert.equal(out.byDay[0].date, '2026-11-10');
 });
+
+import { partReadsOut } from '../proxy/books-mcp-worker.js';
+test('get_part_reads: удержание и уход от предыдущей части', async () => {
+  const b = { id: 'wja', title: 'Развод', parts: ['Пролог', 'Глава 1'], days: { '2026-11-09': { 'Пролог': 100, 'Глава 1': 40 }, '2026-11-10': { 'Пролог': 100, 'Глава 1': 20 } }, ratings: { 'Пролог': { avg: 4.6, n: 10 } } };
+  const r = partReadsOut(b, { from: '2026-11-09', to: '2026-11-10' });
+  assert.equal(r.parts[1].retention, 30); assert.equal(r.parts[1].drop, 70); assert.equal(r.byDay.length, 2);
+  const a = env();
+  await a.BOOKS.put('section:parts', JSON.stringify({ updatedAt: 'x', data: { books: [b] } }));
+  const j = await (await worker.fetch(call('tools/call', { name: 'get_part_reads', arguments: { book_id: 'wja' } }), a)).json();
+  assert.equal(JSON.parse(j.result.content[0].text).parts[0].reads, 200);
+});
