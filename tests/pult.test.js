@@ -128,3 +128,18 @@ test('Директ → «Доходы»: кампания создаётся с�
   const any = incomeCampaignFor(camp, [], [], []);
   assert.equal(any.name, 'Директ: ' + camp.name); assert.equal(any.scope, 'all');
 });
+
+test('когорты: сводка «когда покупают» — доли только по созревшим, Директ отдельно', async () => {
+  const { cohortSummary } = await import('../js/cohorts.js');
+  const sources = [{ t: 'ad', e: 'ya_direct', d: '715' }, { t: 'organic', e: '', d: '' }];
+  const people = [];
+  for (let i = 0; i < 30; i++) people.push([0, 0, 0, i < 15 ? 1 : null, null, i < 6 ? (i < 3 ? 2 : 20) : null, i < 2 ? 1 : 0, null]); // пришли 40 дней назад с Директа
+  for (let i = 0; i < 10; i++) people.push([38, 0, 0, null, null, null, 0, null]); // свежие — в «за 7/30 дней» не входят
+  people.push([0, 1, 0, null, null, 0, 0, null]);
+  const s = cohortSummary({ from: '2026-10-01', to: '2026-11-09', sources, people }, '2026-11-10');
+  const d = s.groups.direct;
+  assert.equal(d.n, 40); assert.equal(d.lib, 15); assert.equal(d.buy, 6);
+  assert.equal(d.by[7], 3 / 30); assert.equal(d.by[30], 6 / 30); assert.equal(d.by[60], null);
+  assert.equal(d.median, 20); assert.equal(d.lateShare, 2 / 6);
+  assert.equal(s.camps['715'].n, 40); assert.equal(s.groups.other.n, 1);
+});

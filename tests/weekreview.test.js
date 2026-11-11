@@ -51,3 +51,12 @@ test('что если: экономика при своей цене цели и
   const win = mk(80, 30, 2000); assert.equal(win.status, 'win'); assert.equal(win.best.title, 'А'); assert.equal(win.loser.title, 'Б');
   const wait = mk(3, 2, 60); assert.equal(wait.status, 'wait'); assert.ok(wait.need > 0); // мало показов — победителя не объявляем
 });
+
+test('реклама и главы: в дни выхода глав добавлений больше; где уходят читатели', async () => {
+  const { chapterEffect } = await import('../direct/js/weekreview.js');
+  const c = { ...camp, start: '2026-11-01' }, conv = [], pub = {};
+  for (let i = 1; i <= 12; i++) { const d = `2026-11-${String(i).padStart(2, '0')}`, rel = i % 3 === 0; conv.push({ date: d, cid: 7, conv: { 548467215: rel ? 12 : 6 } }); if (rel) pub['Глава ' + i] = { litnet: { date: d } }; }
+  const r = chapterEffect({ camp: c, conv, goals, book: { pub }, today: '2026-11-13', retention: [{ part: 'Пролог', reads: 100, drop: null }, { part: 'Глава 1', reads: 90, drop: 10 }, { part: 'Глава 2', reads: 50, drop: 44.4 }] });
+  assert.equal(r.release.k, 2); assert.match(r.notes[0], /в 2,0 раза больше/); assert.match(r.notes.at(-1), /уходят перед «Глава 2»/);
+  assert.equal(chapterEffect({ camp: c, conv: [], goals, book: null, today: '2026-11-03' }), null);
+});

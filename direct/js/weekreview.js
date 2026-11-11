@@ -82,3 +82,23 @@ export function whatIf({ cpa, perWeek, libValue = null, weekLimit = null }) {
   const cost = cpa * VAT * perWeek, royalty = libValue != null ? perWeek * libValue : null;
   return { cost, royalty, profit: royalty != null ? royalty - cost : null, ret: royalty != null && cost ? royalty / cost : null, maxCpa: libValue != null ? Math.floor(libValue / VAT) : null, over: weekLimit != null && cost > weekLimit, fits: weekLimit ? Math.floor(weekLimit / (cpa * VAT)) : null };
 }
+
+// «Реклама и главы» (её «да» на п. 22): в дни выхода глав добавлений с рекламы больше или нет; по дням недели; где уходят читатели (прочтения).
+// book — запись w_books (pub {глава: {площадка: {date}}}, reads). Выводы — только при 3+ днях в каждой группе.
+export function chapterEffect({ camp, conv = [], goals = {}, book = null, today, retention = [] }) {
+  if (!camp?.start || !goals.lib) return null;
+  const out = { notes: [] }, rel = new Set();
+  for (const ch of Object.values(book?.pub || {})) for (const p of Object.values(ch || {})) if (p?.date && !p.planned) rel.add(p.date);
+  const byDay = {};
+  for (const x of conv) if (x.cid === camp.id && x.date >= camp.start && x.date < today) byDay[x.date] = (byDay[x.date] || 0) + Number(x.conv?.[goals.lib] || 0);
+  const days = []; for (let d = camp.start; d < today; d = addDays(d, 1)) days.push({ d, n: byDay[d] || 0, rel: rel.has(d), wd: (new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7 });
+  const avg = (l) => (l.length ? l.reduce((s0, x) => s0 + x.n, 0) / l.length : null);
+  const A = days.filter((x) => x.rel), B = days.filter((x) => !x.rel);
+  if (A.length >= 3 && B.length >= 3 && avg(B) > 0) { const k = avg(A) / avg(B); out.release = { k, a: avg(A), b: avg(B), days: A.length };
+    out.notes.push(k >= 1.25 ? `В дни выхода глав добавлений с рекламы в ${k.toFixed(1).replace('.', ',')} раза больше (${avg(A).toFixed(1).replace('.', ',')} против ${avg(B).toFixed(1).replace('.', ',')} в день) — новая глава помогает рекламе, выкладывайте ровно по графику.` : k <= 0.8 ? 'В дни выхода глав добавлений с рекламы не больше, чем в обычные, — на рекламу график выкладки пока не влияет.' : 'Выход глав на число добавлений с рекламы заметно не влияет.'); }
+  if (days.length >= 21) { const WD = ['понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу', 'воскресенье'], by = WD.map((_, i) => avg(days.filter((x) => x.wd === i))), all = avg(days);
+    const best = by.indexOf(Math.max(...by)); if (all > 0 && by[best] >= all * 1.3) out.notes.push(`Больше всего добавлений — в ${WD[best]}: ${by[best].toFixed(1).replace('.', ',')} против ${all.toFixed(1).replace('.', ',')} в среднем.`); }
+  const worst = (retention || []).slice(1).filter((x) => x.drop != null && retention[0]?.reads >= 50).sort((x, y) => y.drop - x.drop)[0];
+  if (worst && worst.drop >= 25) out.notes.push(`Читатели чаще всего уходят перед «${worst.part}» (−${String(worst.drop).replace('.', ',')} % к предыдущей части) — посмотрите, чем заканчивается часть перед ней: здесь теряются и рекламные читательницы.`);
+  return out.notes.length ? out : null;
+}

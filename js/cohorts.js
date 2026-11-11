@@ -96,6 +96,8 @@ export async function autoCohorts(store, { days = 90 } = {}) {
     for (const p of info.parts || []) parts.push(await call('download', { id, part: p.part_number }));
     const data = buildCohortData(parts, { from, to, goals: m.goals || [] });
     await put(data);
+    // короткая сводка — и в сам «Директ» (Деньги → «Когда покупают»); без людей, только счётчики
+    await store.put('d_snap', { id: 'cohorts', at: new Date().toISOString(), ...cohortSummary(data, to) }).catch(() => {});
     await save({ cohortsAt: new Date().toISOString(), cohortsErr: '' });
   } catch (e) {
     console.warn('Когорты:', e);
@@ -104,4 +106,25 @@ export async function autoCohorts(store, { days = 90 } = {}) {
     if (id) await call('clean', { id }).catch(() => {}); // выгрузку в Метрике не храним
     busy = false;
   }
+}
+
+// Сводка по когортам для «Директа» (12.11.2026, её «да» на п. 21): кто пришёл впервые с Директа / с другой рекламы / сам —
+// сколько добавили в библиотеку и сколько купили за 7, 30, 60, 90 дней. Доля «за N дней» считается только по тем, кто пришёл
+// не позже чем N дней назад (иначе свежие читательницы занижают цифру). По кампаниям Директа — отдельно.
+export function cohortSummary(data, today) {
+  const span = data?.from && today ? Math.round((Date.parse(today) - Date.parse(data.from)) / 86400000) : 0;
+  const kind = (s) => (s?.d || /direct/i.test(s?.e || '') ? 'direct' : s?.t === 'ad' ? 'ads' : 'other');
+  const mk = () => ({ n: 0, lib: 0, buy: 0, late: 0, days: [], w: { 7: [0, 0], 30: [0, 0], 60: [0, 0], 90: [0, 0] } });
+  const groups = { direct: mk(), ads: mk(), other: mk() }, camps = {};
+  for (const [off, si, , lib, , buy, late] of data?.people || []) {
+    const src = data.sources[si], age = span - off;
+    for (const g of [groups[kind(src)], ...(src?.d ? [(camps[src.d] ||= mk())] : [])]) {
+      g.n++; if (lib != null) g.lib++;
+      if (buy != null) { g.buy++; g.days.push(buy); if (late) g.late++; }
+      for (const d of [7, 30, 60, 90]) if (age >= d) { g.w[d][0]++; if (buy != null && buy <= d) g.w[d][1]++; }
+    }
+  }
+  const fin = (g) => { const ds = g.days.sort((a, b) => a - b); return { n: g.n, lib: g.lib, buy: g.buy, lateShare: g.buy ? g.late / g.buy : null, median: ds.length ? ds[Math.floor(ds.length / 2)] : null,
+    by: Object.fromEntries(Object.entries(g.w).map(([d, [n, k]]) => [d, n >= 20 ? k / n : null])) }; };
+  return { from: data?.from || '', to: data?.to || '', groups: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, fin(g)])), camps: Object.fromEntries(Object.entries(camps).map(([k, g]) => [k, fin(g)])) };
 }

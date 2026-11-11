@@ -3,7 +3,9 @@
 import { esc, acts, changes, fold, toast } from '../../../js/ui.js';
 import { rub, num } from '../../../js/format.js';
 import { outageSet } from '../../../js/calc.js';
-import { weekReview, weekKeyOf, whatIf } from '../weekreview.js';
+import { weekReview, weekKeyOf, whatIf, chapterEffect } from '../weekreview.js';
+import { partRetention } from '../../../writer/js/partreads.js';
+import { addDays } from '../../../js/calc.js';
 import { actBtn } from './common.js';
 import { placementRows } from '../qualitycalc.js';
 import { pultModel } from './pult.js';
@@ -35,6 +37,8 @@ function campBlock(a, r, wk, done) {
     </div>
     <div class="list" style="margin-top:10px">${R.notes.map((x) => `<div class="item ${TONE[x.tone] || ''}" style="padding:8px 0">${esc(x.text)}</div>`).join('')}</div>
     ${todo ? `<h3 style="margin:16px 0 2px">Что сделать на этой неделе</h3>${todo}` : ''}
+    ${(() => { const wb = (c.data.w_books || []).find((x) => x.id === r.book?.id), ce = chapterEffect({ camp: r.camp, conv: stats.conv, goals: r.goals, book: wb, today: c.today, retention: wb?.reads?.parts?.length ? partRetention(wb.reads, addDays(c.today, -29), c.today) : [] });
+      return ce ? `<h3 style="margin:16px 0 2px">Реклама и главы</h3><div class="list">${ce.notes.map((t) => `<div class="item" style="padding:8px 0">${esc(t)}</div>`).join('')}</div>` : ''; })()}
     ${fold('wk-f-' + id, 'Воронка', table(['Шаг', 'Сколько', 'Доля'], [['Показы', num(n.impr), ''], ['Клики', num(n.clicks), `${p1(n.ctr)} от показов`], ['В библиотеку', n.lib == null ? '—' : num(n.lib), n.toLib == null ? '' : `${p1(n.toLib)} от кликов`], ['Покупки', n.buy == null ? '—' : num(n.buy), n.toBuy == null ? '' : `${p1(n.toBuy)} от добавивших`]])
       + how('Каждая строка — сколько людей дошло до шага. Узкое место там, где доля заметно упала к прошлой неделе: мало кликов — слабое объявление, мало добавлений — страница книги (обложка, аннотация, первая глава), мало покупок — цена или момент, где начинается платная часть. Покупки приходят позже добавлений, поэтому в первые недели их может не быть.'), { sub: n.toLib != null ? `в библиотеку ${p1(n.toLib)} кликов` : '' })}
     ${R.nets.length ? fold('wk-n-' + id, 'Поиск и сети', table(['Где', 'Показы', 'Клики', 'CTR', 'Расход'], R.nets.map((x) => [x.name, num(x.impr), num(x.clicks), p1(x.ctr), money(x.cost)]))
