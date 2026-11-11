@@ -58,7 +58,7 @@ const link = (a, t) => `${ENV.SELF}?a=${a}&t=${t}`;
 const fill = (s, p) => String(s).replace(/\{unsub\}/g, link('unsub', p.token)).replace(/\{name\}/g, esc(p.name || ''));
 
 // письмо «подтвердите подписку» — короткое, в стиле сайта; тексты владелица меняет в Мастерской → Сайт → Почта (op: texts → d.texts)
-const FN_V = 6; // 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
+const FN_V = 7; // 7 — сторож Директа (op: watch, таймер); 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
 const TEXTS_DEF = { subj: 'Подтвердите подписку', head: 'Подтвердите подписку', text: 'Одно нажатие — и я напишу вам, когда выйдет мой новый роман. Только тогда.', btn: 'Подтвердить' };
 const textsOf = (d) => ({ ...TEXTS_DEF, ...Object.fromEntries(Object.entries(d?.texts || {}).filter(([k, v]) => k in TEXTS_DEF && String(v || '').trim())) });
 function confirmMail(p, t = TEXTS_DEF) {
@@ -179,13 +179,67 @@ async function runPiracy() {
   return { step: p.i, of: steps.length, fresh: fresh.length };
 }
 
+// ---------- круглосуточный сторож Директа (12.11.2026, её «да» на п. 18) ----------
+// «Директ» (галочка «Сторож» на Пульте) присылает задание (op: watch): ключ Директа и список идущих кампаний. Ключ лежит только
+// в этом закрытом бакете (watch.json) и в ответах не возвращается. Раз в 3 часа сервис ТОЛЬКО ЧИТАЕТ кампании и объявления
+// и пишет владелице письмо, если: кампания остановилась или отклонена, объявление отклонено, показы не растут 6+ дневных часов.
+const WATCH_EVERY = 3 * 3600e3;
+async function directGet(w, service, params) {
+  const r = await fetch(`https://api.direct.yandex.com/json/v501/${service}`, { method: 'POST', headers: { Authorization: 'Bearer ' + w.token, 'Accept-Language': 'ru', 'Content-Type': 'application/json; charset=utf-8', ...(w.login ? { 'Client-Login': w.login } : {}) }, body: JSON.stringify({ method: 'get', params }) });
+  const j = await r.json();
+  if (j.error) throw new Error(`Директ: ${j.error.error_string || ''} ${j.error.error_detail || ''}`.trim());
+  return j.result || {};
+}
+function watchAlerts(w, camps, ads, now) {
+  const out = [], hour = new Date(now + 3 * 3600e3).getUTCHours(), prev = w.seen || {}, seen = {};
+  for (const c of w.campaigns || []) {
+    const k = camps.find((x) => String(x.Id) === String(c.id));
+    if (!k) continue;
+    const impr = Number(k.Statistics?.Impressions || 0);
+    if (k.State !== 'ON') out.push({ key: `state:${c.id}:${k.State}`, text: `«${c.name}» больше не идёт: ${k.StatusClarification || k.State}.` });
+    else if (k.Status === 'REJECTED') out.push({ key: `rej:${c.id}`, text: `«${c.name}» отклонена модерацией: ${k.StatusClarification || ''}` });
+    else {
+      // показы: счётчик за всё время не вырос с прошлой дневной проверки (ночью тишина — не тревога)
+      const p = prev[c.id];
+      if (p && impr <= p.impr && hour >= 12 && now - p.at >= 6 * 3600e3) out.push({ key: `idle:${c.id}:${new Date(now).toISOString().slice(0, 10)}`, text: `«${c.name}»: показов нет уже ${Math.round((now - p.at) / 3600e3)} ч. ${k.StatusClarification || 'Проверьте деньги на счёте и недельный бюджет.'}` });
+    }
+    seen[c.id] = prev[c.id] && impr <= prev[c.id].impr ? prev[c.id] : { impr, at: now };
+    for (const a of ads.filter((x) => String(x.CampaignId) === String(c.id) && x.Status === 'REJECTED' && x.State !== 'ARCHIVED')) out.push({ key: `ad:${a.Id}`, text: `«${c.name}»: объявление отклонено модерацией${a.StatusClarification ? ' — ' + a.StatusClarification : ''}.` });
+  }
+  return { out, seen };
+}
+async function runWatch() {
+  const w = await getObj('watch.json', null), now = Date.now();
+  if (!w?.on || !w.token || !(w.campaigns || []).length || now - (w.at || 0) < WATCH_EVERY) return null;
+  w.at = now;
+  let res;
+  try {
+    const ids = w.campaigns.map((c) => Number(c.id));
+    const camps = (await directGet(w, 'campaigns', { SelectionCriteria: { Ids: ids }, FieldNames: ['Id', 'Name', 'State', 'Status', 'StatusClarification', 'Statistics'] })).Campaigns || [];
+    const ads = (await directGet(w, 'ads', { SelectionCriteria: { CampaignIds: ids }, FieldNames: ['Id', 'CampaignId', 'State', 'Status', 'StatusClarification'] })).Ads || [];
+    const { out, seen } = watchAlerts(w, camps, ads, now);
+    const told = new Set(w.told || []), fresh = out.filter((x) => !told.has(x.key));
+    w.seen = seen; w.err = ''; w.told = [...(w.told || []), ...fresh.map((x) => x.key)].slice(-200);
+    const to = replyTo();
+    if (fresh.length && to) {
+      const text = `Сторож Директа:\n\n${fresh.map((x) => '• ' + x.text).join('\n')}\n\nОткройте «Директ» → Пульт.`;
+      await send(to, `Директ: ${fresh[0].text.slice(0, 80)}`, `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55">${esc(text).replace(/\n/g, '<br>')}</div>`, text, '', '');
+    }
+    w.last = fresh.map((x) => x.text).slice(0, 5); res = { alerts: fresh.length };
+  } catch (e) { w.err = String(e.message || e).slice(0, 200); res = { error: w.err }; }
+  await putObj('watch.json', JSON.stringify(w));
+  return res;
+}
+
+module.exports.watchAlerts = watchAlerts;
 module.exports.handler = async function (event, context) {
   TOKEN = context?.token?.access_token || '';
   if (Array.isArray(event?.messages)) { // вызов таймером (триггер Yandex Cloud)
     let out;
     try { out = await runQueue(); } catch (e) { return json({ error: String(e.message || e).slice(0, 300) }, 500); }
     // поиск пиратских копий — после писем: если вызов оборвётся по времени, отложенные письма уже ушли
-    try { await loadList(); out.piracy = await runPiracy(); } catch (e) { out.piracy = { error: String(e.message || e).slice(0, 200) }; }
+    try { await loadList(); out.watch = await runWatch(); } catch (e) { out.watch = { error: String(e.message || e).slice(0, 200) }; }
+    try { out.piracy = await runPiracy(); } catch (e) { out.piracy = { error: String(e.message || e).slice(0, 200) }; }
     return json(out);
   }
   const q = event.queryStringParameters || {}, h = event.headers || {}, origin = h.Origin || h.origin || '';
@@ -282,6 +336,11 @@ module.exports.handler = async function (event, context) {
           d.list.push({ email, name: String(x.name || '').slice(0, 80), src: 'firebase', at: x.at || new Date().toISOString(), token: rnd(), status: 'ok', okAt: new Date().toISOString() }); n++;
         }
         await saveList(d); return json({ ok: true, added: n }, 200, C);
+      }
+      if (body.op === 'watch') { // сторож Директа: задание от приложения «Директ» (ключ хранится здесь и наружу не отдаётся)
+        const w = (await getObj('watch.json', null)) || {};
+        if (body.cfg) { const c = body.cfg; Object.assign(w, { on: !!c.on, token: c.on ? String(c.token || w.token || '') : '', login: String(c.login || ''), campaigns: (c.campaigns || []).slice(0, 30).map((x) => ({ id: x.id, name: String(x.name || '').slice(0, 120) })) }); if (!w.on) { w.seen = {}; } await putObj('watch.json', JSON.stringify(w)); }
+        return json({ ok: true, on: !!w.on, at: w.at || 0, err: w.err || '', last: w.last || [], campaigns: (w.campaigns || []).length }, 200, C);
       }
       if (body.op === 'piracy') { // задание на круглосуточный поиск + забрать находки (Мастерская → Пираты)
         const p = (await getObj('piracy.json', null)) || {};

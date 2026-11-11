@@ -15,6 +15,7 @@ import { ic } from '../../../js/icons.js';
 import { litTagInfo } from '../../../js/littag.js';
 import { weekKeyOf } from '../weekreview.js';
 import { AUTO_RULES } from '../autorules.js';
+import { syncWatch } from '../watch.js';
 import { changes } from '../../../js/ui.js';
 
 const TONE = { good: 'up', bad: 'down', warn: 'warnc', even: '', wait: 'muted', muted: 'muted' };
@@ -104,6 +105,7 @@ function autoCard(c) {
   return `<div class="card"><div class="row between"><h2 style="margin:0">Автоправила</h2><span class="small muted">${Object.values(on).some(Boolean) ? (d.autoAt ? `последнее действие ${d.autoAt.slice(8, 10)}.${d.autoAt.slice(5, 7)}` : 'включены') : 'выключены'}</span></div>
     <p class="small muted" style="margin:6px 0 8px">Рутина таргетолога — сама, после каждого обновления данных. Всё записывается в «Что меняли». Цену цели и бюджет правила не трогают.</p>
     ${AUTO_RULES.map(([k, t, how]) => `<label class="d-check" style="display:flex;gap:10px;align-items:flex-start;margin:10px 0"><input type="checkbox" data-chg="ar.set" data-k="${k}"${on[k] ? ' checked' : ''}> <span><b>${esc(t)}</b><span class="small muted" style="display:block">${esc(how)}</span></span></label>`).join('')}
+    <label class="d-check" style="display:flex;gap:10px;align-items:flex-start;margin:10px 0"><input type="checkbox" data-chg="ar.set" data-k="watch"${on.watch ? ' checked' : ''}> <span><b>Круглосуточный сторож — письмо, если что-то сломалось</b><span class="small muted" style="display:block">${on.watch && d.watchInfo?.old ? 'Не включился: обновите программу сервиса писем (Мастерская → Сайт → Почта → «Скопировать программу») и поставьте галочку ещё раз.' : on.watch && d.watchInfo?.err ? esc('Сервис ответил: ' + d.watchInfo.err) : on.watch ? `Работает${d.watchInfo?.at ? ` · проверял ${new Date(d.watchInfo.at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}${(d.watchInfo?.last || []).length ? ` · ${esc(d.watchInfo.last[0])}` : ''}` : 'Раз в 3 часа ваш сервис писем проверяет кампании и пишет, если показы пропали, кампания остановилась или объявление отклонено. Ключ Директа для этого хранится в вашем Яндекс Облаке.'}</span></span></label>
     ${(d.autoLast || []).length && Object.values(on).some(Boolean) ? `<p class="small" style="margin:8px 0 0">Сделано в последний раз: ${esc(d.autoLast.join(' · '))}</p>` : ''}</div>`;
 }
-changes['ar.set'] = async (v, el) => { const a = window.__app, d = a.ctx().settings.direct || {}; await a.store.saveSettings({ direct: { ...d, auto: { ...(d.auto || {}), [el.dataset.k]: !!el.checked } } }); };
+changes['ar.set'] = async (v, el) => { const a = window.__app, d = a.ctx().settings.direct || {}; await a.store.saveSettings({ direct: { ...d, auto: { ...(d.auto || {}), [el.dataset.k]: !!el.checked } } }); if (el.dataset.k === 'watch') syncWatch(a, { force: true }).catch(() => {}); };

@@ -255,3 +255,16 @@ test('сервис писем: круглосуточный поиск пира�
   assert.deepEqual(JSON.parse((await tick()).body).piracy, { done: true }); // на сегодня всё
   globalThis.fetch = base;
 });
+
+test('сторож Директа: тревоги — кампания встала, объявление отклонено, показы не растут днём; ночью и при росте — тишина', () => {
+  const { watchAlerts } = require('../mail/mail-function.cjs');
+  const day = Date.parse('2026-11-12T12:00:00Z'), night = Date.parse('2026-11-12T00:30:00Z'); // 15:00 и 03:30 по Москве
+  const w = { campaigns: [{ id: 7, name: 'ЕПК' }], seen: { 7: { impr: 1000, at: day - 7 * 3600e3 } } };
+  const on = { Id: 7, State: 'ON', Status: 'ACCEPTED', Statistics: { Impressions: 1000 } };
+  assert.match(watchAlerts(w, [on], [], day).out[0].text, /показов нет уже 7 ч/);
+  assert.deepEqual(watchAlerts(w, [on], [], night).out, []);
+  const grow = watchAlerts(w, [{ ...on, Statistics: { Impressions: 1500 } }], [], day);
+  assert.deepEqual(grow.out, []); assert.equal(grow.seen[7].impr, 1500);
+  assert.match(watchAlerts(w, [{ ...on, State: 'SUSPENDED', StatusClarification: 'Кампания остановлена' }], [], day).out[0].text, /больше не идёт: Кампания остановлена/);
+  assert.match(watchAlerts(w, [{ ...on, Statistics: { Impressions: 2000 } }], [{ Id: 5, CampaignId: 7, Status: 'REJECTED', State: 'OFF', StatusClarification: 'Запрещённая тематика' }], day).out[0].text, /объявление отклонено модерацией — Запрещённая тематика/);
+});
