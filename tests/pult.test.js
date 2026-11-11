@@ -106,3 +106,13 @@ test('как заработать больше: рычаги по кампани
   // остановленной кампании советов нет
   assert.deepEqual(campaignLevers({ ...c, state: 'OFF' }, { key: 'stopped' }, econ, wk, { ads, daily, today }).levers, []);
 });
+
+test('окупаемость с начала кампании: вернулось + ждёт в библиотеках', async () => {
+  const { campaignPayback } = await import('../direct/js/pult.js');
+  const c = { ...camp, start: '2026-11-10' }, g = goalsOf(M, c);
+  const daily = [day('2026-11-10', 100), day('2026-11-11', 100)];
+  const conv = [{ date: '2026-11-10', cid: 7, conv: { 548467215: 10, 548467220: 1 } }, { date: '2026-11-11', cid: 7, conv: { 548467215: 10 } }];
+  const p = campaignPayback(c, { daily, conv, today: '2026-11-12', goals: g, perSale: 100, libValue: 30 });
+  assert.deepEqual([p.cost, p.lib, p.buy, p.back, p.expected, p.total, p.ret, p.days], [200, 20, 1, 100, 500, 600, 3, 3]);
+  assert.equal(campaignPayback(c, { daily: [], conv, today: '2026-11-12', goals: g }), null);
+});

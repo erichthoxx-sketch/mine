@@ -58,7 +58,7 @@ const link = (a, t) => `${ENV.SELF}?a=${a}&t=${t}`;
 const fill = (s, p) => String(s).replace(/\{unsub\}/g, link('unsub', p.token)).replace(/\{name\}/g, esc(p.name || ''));
 
 // письмо «подтвердите подписку» — короткое, в стиле сайта; тексты владелица меняет в Мастерской → Сайт → Почта (op: texts → d.texts)
-const FN_V = 4; // 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
+const FN_V = 5; // 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
 const TEXTS_DEF = { subj: 'Подтвердите подписку', head: 'Подтвердите подписку', text: 'Одно нажатие — и я напишу вам, когда выйдет мой новый роман. Только тогда.', btn: 'Подтвердить' };
 const textsOf = (d) => ({ ...TEXTS_DEF, ...Object.fromEntries(Object.entries(d?.texts || {}).filter(([k, v]) => k in TEXTS_DEF && String(v || '').trim())) });
 function confirmMail(p, t = TEXTS_DEF) {
@@ -210,6 +210,18 @@ module.exports.handler = async function (event, context) {
           d.list.push({ email, name: String(x.name || '').slice(0, 80), src: 'firebase', at: x.at || new Date().toISOString(), token: rnd(), status: 'ok', okAt: new Date().toISOString() }); n++;
         }
         await saveList(d); return json({ ok: true, added: n }, 200, C);
+      }
+      if (body.op === 'claim') { // претензия пирату (Мастерская → Маркетинг → Пираты): обычное текстовое письмо с адреса сайта, ответ — владелице
+        const to = [].concat(body.to || []).map((x) => String(x).trim().toLowerCase()).filter(isMail).slice(0, 4), subject = String(body.subject || '').slice(0, 200), text = String(body.text || '').slice(0, 8000);
+        if (!to.length || !subject || text.length < 50) return json({ error: 'form' }, 400, C);
+        const day = new Date().toISOString().slice(0, 10), log = (d.claims || []).filter((x) => x.at.slice(0, 10) === day);
+        if (log.length >= 40) return json({ error: 'often' }, 429, C); // не больше 40 претензий в день
+        const html = `<!doctype html><html><body><div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#141517;max-width:680px">${esc(text).replace(/\n/g, '<br>')}</div></body></html>`;
+        const done = [];
+        for (const a of to) { try { await send(a, subject, html, text, '', ''); done.push(a); } catch (e) { /* адрес не принял — остальные идут */ } }
+        d.claims = [...(d.claims || []), { at: new Date().toISOString(), to: done, subject }].slice(-300);
+        await saveList(d);
+        return json({ ok: done.length > 0, sent: done }, 200, C);
       }
       if (body.op === 'remove') { d.list = d.list.filter((x) => x.email !== body.email); await saveList(d); return json({ ok: true }, 200, C); }
       if (body.op === 'img') { // обложка для письма: в бакет, открытой для чтения

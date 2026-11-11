@@ -1,15 +1,51 @@
 // Маркетинг → «Пираты»: найденные копии книг и путь по каждой — письмо сайту → письмо хостингу → убрать из поиска.
 // Поиск идёт сам раз в сутки (piracyscan.js); расчёты и тексты писем — piracy.js.
 import { ic } from '../../../js/icons.js';
-import { esc, acts, toast, openSheet, fold, copyRich, ask } from '../../../js/ui.js';
+import { esc, acts, changes, toast, openSheet, fold, copyRich, ask } from '../../../js/ui.js';
 import { fmtDate, plural } from '../../../js/format.js';
 import { nextStep, piracySummary, letterSite, letterHost, letterFormal, mailto, SEARCH_FORMS, archiveUrl, CF_FORM, findId, hostOf, plainTitle, isLegit, WAIT_SITE } from '../piracy.js';
 import { scan, scanState, findContacts } from '../piracyscan.js';
+import { mailSvc } from './mail.js';
 
 const app = () => window.__app;
 const P = { contacts: {} }; // почты, которые сейчас ищутся: id → true
 const bookOf = (c, f) => { const b = (c.wbooks || []).find((x) => x.id === f.bookId); return { title: b?.title || f.title, link: b?.direct?.link || '' }; };
-const meOf = (c) => ({ pen: c.settings.pseudonym || '', ...(c.settings.piracy?.me || {}) });
+// подпись писем — псевдоним (без ФИО), почта для ответа — адрес для ответов сервиса писем
+const meOf = (c) => ({ pen: c.settings.pseudonym || '', email: mailSvc().replyTo || c.settings.piracy?.me?.email || '', name: c.settings.piracy?.me?.name || '' });
+const canSend = () => { const m = mailSvc(); return m.ready && m.v >= 5; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Отправить претензию по находке через сервис писем (с адреса сайта): новая → сайту (нет почты сайта — сразу хостингу), «сайт не ответил» → хостингу.
+// Возвращает 'site' | 'host' | '' (некому писать или рано)
+export async function sendClaim(a, id) {
+  let f = get(id); if (!f) return '';
+  const c = a.ctx(), st = nextStep(f, c.today);
+  if (!st || st.wait || !['site', 'host'].includes(st.k)) return '';
+  if (!f.contacts) { const ct = await findContacts(f); await patch(get(id) || f, { contacts: ct }); f = { ...(get(id) || f), contacts: ct }; }
+  const ct = f.contacts, hostTo = [...(ct.host || []), ...(ct.reg || [])].filter((x) => !/cloudflare/i.test(x));
+  const k = st.k === 'site' && (ct.site || []).length ? 'site' : hostTo.length ? 'host' : '';
+  if (!k) return '';
+  const L = (k === 'host' ? letterHost : letterSite)(f, bookOf(c, f), meOf(c), c.today);
+  const r = await mailSvc().call({ op: 'claim', to: k === 'host' ? hostTo : ct.site, subject: L.subject, text: L.body });
+  if (!r?.ok) return '';
+  const now = new Date().toISOString();
+  await patch(get(id) || f, k === 'host' ? { status: 'host', hostAt: now, goneMaybe: false, via: 'service' } : { status: 'sent', sentAt: now, via: 'service' });
+  return k;
+}
+// Всем, кому пора: новым уверенным находкам и тем, где сайт не ответил. only — только эти id
+export async function sendAllClaims(a, { onStep } = {}) {
+  const c = a.ctx(), list = (c.data.w_piracy || []).filter((f) => { const s = nextStep(f, c.today); return f.sure !== false && s && !s.wait && ['site', 'host'].includes(s.k) && !f.goneMaybe; });
+  let n = 0, miss = 0;
+  for (const f of list) { onStep?.(`Отправляю: ${f.host}…`); try { (await sendClaim(a, f.id)) ? n++ : miss++; } catch { miss++; } await sleep(1500); }
+  return { n, miss };
+}
+// Автопилот: после ежедневного поиска письма уходят сами (если включён и сервис писем готов)
+export async function autoSend(a) {
+  if (!a.ctx().settings.piracy?.auto) return;
+  for (let i = 0; i < 10 && !mailSvc().v; i++) await sleep(1000); // сервис писем подгружается
+  if (!canSend()) return;
+  const r = await sendAllClaims(a);
+  if (r.n) toast(`Пираты: отправлено претензий — ${r.n}`);
+}
 const when = (iso) => (iso ? fmtDate(iso.slice(0, 10)) : '');
 
 function row(c, f) {
@@ -37,7 +73,8 @@ export function piracyView(a) {
   const c = a.ctx(), all = (c.data.w_piracy || []).filter((f) => f.status !== 'skip'), cfg = c.settings.piracy || {}, sum = piracySummary(all);
   const by = (ks) => all.filter((f) => ks.includes(f.status || 'new')).sort((x, y) => (y.foundAt || '').localeCompare(x.foundAt || ''));
   const fresh = by(['new']), work = by(['sent', 'host', 'search']), gone = by(['gone']);
-  const me = cfg.me || {};
+  const svc = mailSvc(), send = svc.ready && svc.v >= 5;
+  const due = all.filter((f) => { const x = nextStep(f, c.today); return f.sure !== false && x && !x.wait && ['site', 'host'].includes(x.k) && !f.goneMaybe; }).length;
   const state = scanState.busy ? esc(scanState.step || 'Ищу…') : cfg.at ? `Проверено ${when(cfg.at)}: ${cfg.books || 0} ${plural(cfg.books || 0, ['книга', 'книги', 'книг'])}${cfg.engine ? ` · ${esc(cfg.engine)}` : ''}${cfg.err ? ` · ${esc(cfg.err)}` : ''}` : 'Ещё не проверяла — первая проверка начнётся сама';
   return `<div class="card" style="margin-top:14px">
     <div class="row between"><h2 style="margin:0">Пиратские копии</h2><button class="small-btn" data-act="pr.scan"${scanState.busy ? ' disabled' : ''}>${scanState.busy ? 'Ищу…' : 'Проверить сейчас'}</button></div>
@@ -45,7 +82,9 @@ export function piracyView(a) {
     <div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div><div class="k">Новые</div><div class="v">${sum.fresh}</div><div class="s">нужно письмо</div></div>
       <div><div class="k">В работе</div><div class="v">${sum.work}</div><div class="s">ждём ответа</div></div>
       <div><div class="k">Удалено</div><div class="v">${sum.gone}</div><div class="s">за всё время</div></div></div>
-    ${!me.name ? `<p class="small" style="margin:12px 0 0">Чтобы письма были готовы к отправке, один раз укажите <button class="link" data-act="pr.me">своё имя и почту для ответов</button>.</p>` : ''}
+    ${send ? `<div class="row between" style="margin-top:14px;gap:12px;flex-wrap:wrap"><label class="d-check small" style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" data-chg="pr.auto"${cfg.auto ? ' checked' : ''}> Автопилот: претензии уходят сами, как только копия найдена</label>
+      ${due ? `<button class="primary" data-act="pr.sendAll">Отправить все претензии · ${due}</button>` : ''}</div>`
+      : `<p class="small" style="margin:12px 0 0">Чтобы претензии уходили прямо отсюда одной кнопкой (с адреса вашего сайта), ${svc.ready ? 'обновите программу сервиса писем: Сайт → Почта → «Скопировать программу» → Яндекс Облако → lana-mail → index.js' : 'подключите сервис писем в разделе Сайт → Почта'}. Пока письма открываются в вашей почте.</p>`}
   </div>
   ${fresh.length ? `<div class="card"><h2 style="margin:0 0 4px">Новые</h2><div class="list">${fresh.map((f) => row(c, f)).join('')}</div></div>` : ''}
   ${work.length ? `<div class="card"><h2 style="margin:0 0 4px">В работе</h2><div class="list">${work.map((f) => row(c, f)).join('')}</div></div>` : ''}
@@ -53,11 +92,11 @@ export function piracyView(a) {
   ${gone.length ? fold('pr-gone', 'Удалено', `<div class="list">${gone.map((f) => row(c, f)).join('')}</div>`, { sub: String(gone.length) }) : ''}
   ${fold('pr-how', 'Как это работает', `<div class="small" style="line-height:1.7">
     <p style="margin:0 0 8px">Раз в сутки Мастерская ищет каждую книгу в поисковиках («читать онлайн бесплатно», «скачать fb2») и показывает чужие сайты с вашим текстом. Ваши площадки и магазины не считаются.</p>
-    <p style="margin:0 0 8px"><b>1. Письмо сайту.</b> Почту сайта и его хостинга нахожу сама. Требование удалить за 24 часа (ст. 15.7 закона № 149-ФЗ, ст. 1253.1 ГК РФ). Перед письмом нажмите «Сохранить доказательство» — копия страницы останется в веб-архиве.</p>
+    <p style="margin:0 0 8px"><b>1. Досудебная претензия сайту</b> — от имени автора (псевдоним), без ваших личных данных. Почту сайта и его хостинга нахожу сама. Срок — 24 часа (ст. 15.7 закона № 149-ФЗ, ст. 1253.1 ГК РФ). Перед письмом нажмите «Сохранить доказательство» — копия страницы останется в веб-архиве.</p>
     <p style="margin:0 0 8px"><b>2. Через ${WAIT_SITE} дня — хостингу.</b> Хостинг не хочет проблем и обычно закрывает страницу сам.</p>
     <p style="margin:0 0 8px"><b>3. Поисковики.</b> Если не помогло — заявка в Google и Яндекс, чтобы страницу убрали из поиска: без поиска её почти никто не найдёт.</p>
     <p style="margin:0">Дальше — только суд (блокировка сайта через Мосгорсуд и компенсация по ст. 1301 ГК РФ); тут нужен юрист. Письма — шаблоны, не юридическая консультация. Если книга на Литнете по эксклюзивному договору, спросите и поддержку Литнета: у них есть своя защита от пиратов.</p></div>`)}
-  <p class="small" style="margin:12px 0 0;display:flex;gap:16px;flex-wrap:wrap"><button class="link" data-act="pr.add">+ Добавить ссылку вручную</button><button class="link" data-act="pr.me">Мои данные для писем</button></p>`;
+  <p class="small" style="margin:12px 0 0;display:flex;gap:16px;flex-wrap:wrap"><button class="link" data-act="pr.add">+ Добавить ссылку вручную</button></p>`;
 }
 
 const patch = (f, p) => app().store.put('w_piracy', { ...f, ...p });
@@ -66,19 +105,17 @@ const get = (id) => (app().ctx().data.w_piracy || []).find((f) => f.id === id);
 acts['pr.scan'] = () => {
   const a = app();
   scan(a, { onStep: (t) => { const el = document.getElementById('pr-state'); if (el && t) el.textContent = t; } })
-    .then((r) => { if (r) toast(r.err && !r.added ? r.err : r.added ? `Найдено новых копий: ${r.added}` : 'Новых копий не найдено'); a.rerender(); });
+    .then((r) => { if (r) toast(r.err && !r.added ? r.err : r.added ? `Найдено новых копий: ${r.added}` : 'Новых копий не найдено'); a.rerender(); return autoSend(a); });
   setTimeout(() => a.rerender(), 50);
   return false;
 };
-acts['pr.me'] = () => {
-  const a = app(), me = a.ctx().settings.piracy?.me || {};
-  openSheet('Мои данные для писем', `<p class="small">Права на книги принадлежат вам как человеку, поэтому письмо подписывается настоящим именем; псевдоним в письме тоже указан. Хранится только в ваших данных.</p>
-    <label>Фамилия, имя, отчество</label><input name="name" value="${esc(me.name || '')}" autocomplete="name">
-    <label>Почта для ответов</label><input name="email" type="email" value="${esc(me.email || '')}" autocomplete="email">`, async (fd) => {
-    await a.store.saveSettings({ piracy: { ...(a.ctx().settings.piracy || {}), me: { name: String(fd.get('name') || '').trim(), email: String(fd.get('email') || '').trim() } } });
-  }, { submitText: 'Сохранить' });
+acts['pr.sendAll'] = () => {
+  const a = app();
+  sendAllClaims(a, { onStep: (t) => { const el = document.getElementById('pr-state'); if (el) el.textContent = t; } })
+    .then((r) => { toast(r.n ? `Отправлено претензий: ${r.n}${r.miss ? ` · без почты: ${r.miss} — откройте их вручную` : ''}` : 'Отправить не удалось: у этих сайтов не нашлось почты — откройте их вручную'); a.rerender(); });
   return false;
 };
+changes['pr.auto'] = async (v, el) => { const a = app(); await a.store.saveSettings({ piracy: { ...(a.ctx().settings.piracy || {}), auto: !!el.checked } }); if (el.checked) autoSend(a); };
 acts['pr.add'] = () => {
   const a = app(), c = a.ctx(), books = (c.wbooks || []).filter((b) => b.status !== 'idea');
   openSheet('Пиратская копия', `<label>Ссылка на страницу с книгой</label><input name="url" type="url" required placeholder="https://…">
@@ -111,8 +148,15 @@ acts['pr.write'] = (d) => {
     <label>Письмо</label><textarea id="pr-body" rows="12" style="font-size:14px;line-height:1.5">${esc(L.body)}</textarea>
     <p class="small" style="margin:8px 0 0"><button class="link" type="button" data-act="pr.copy">${ic('copy')} Скопировать письмо</button></p>
     ${k === 'formal' ? '<p class="small muted" style="margin:8px 0 0">По закону в заявлении указывают паспортные данные и телефон — впишите их сами вместо квадратных скобок. Первое письмо я отправляю без них: большинство сайтов удаляет и так.</p>' : ''}`,
-  k === 'formal' ? null : async () => { await patch(get(f.id) || f, k === 'host' ? { status: 'host', hostAt: new Date().toISOString(), goneMaybe: false } : { status: 'sent', sentAt: new Date().toISOString() }); toast(k === 'host' ? 'Отмечено. Через 5 дней напомню проверить' : `Отмечено. Через ${WAIT_SITE} дня проверю, удалили ли`); },
-  { submitText: 'Отправила' });
+  k === 'formal' ? null : async () => {
+    const ct = (get(f.id) || f).contacts, to = toOf(ct).filter((x) => !/cloudflare/i.test(x));
+    if (canSend() && to.length) {
+      const body = document.getElementById('pr-body')?.value || L.body;
+      let r; try { r = await mailSvc().call({ op: 'claim', to, subject: L.subject, text: body }); } catch (e) { toast('Не отправилось: ' + e.message); return false; }
+      if (!r?.ok) { toast('Письмо не принято почтой адресата — откройте в своей почте'); return false; }
+    }
+    await patch(get(f.id) || f, k === 'host' ? { status: 'host', hostAt: new Date().toISOString(), goneMaybe: false } : { status: 'sent', sentAt: new Date().toISOString() }); toast(k === 'host' ? 'Готово. Через 5 дней напомню проверить' : `Готово. Через ${WAIT_SITE} дня проверю, удалили ли`); },
+  { submitText: canSend() ? 'Отправить' : 'Отправила' });
   if (!f.contacts && !P.contacts[f.id]) {
     P.contacts[f.id] = true;
     findContacts(f).then(async (ct) => {

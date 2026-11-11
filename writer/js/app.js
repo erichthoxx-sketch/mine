@@ -5,6 +5,7 @@ import { createStore, authErrorText } from '../../js/store.js';
 import { autoDirectAccess } from '../../js/aidirect.js';
 import { runOneoffs } from './oneoff.js';
 import { autoPiracy } from './piracyscan.js';
+import { autoSend } from './views/piracy.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from '../../js/ui.js';
 import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
 import { writtenToday, writtenWeek } from './wcalc.js';
@@ -256,7 +257,7 @@ setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(
 setInterval(() => { if (document.visibilityState === 'visible') checkMailQueue(); }, 60e3);
 drive.preload().catch(() => {});
 let autoRefreshed = false;
-store.subscribe(() => { autoDirectAccess(store); runOneoffs(app); autoPiracy(app); });
+store.subscribe(() => { autoDirectAccess(store); runOneoffs(app); autoPiracy(app, autoSend); });
 store.init().then(() => {
   render();
   autoDirectAccess(store);

@@ -89,6 +89,18 @@ export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSal
   return { today: dToday, d7, d30, lib7, lib30, buy30, cpaLib, cpaBuy, revenue, libValue, target, ran, verdict };
 }
 
+// Окупаемость с начала кампании (как считает книжный таргетолог): потрачено → уже вернулось роялти с покупок → ещё «ждёт» в библиотеках
+// (добавившие покупают позже: ожидаем добавления × ценность добавления). Итог — сколько вернёт 1 ₽, когда добавившие докупят.
+export function campaignPayback(camp, { daily = [], conv = [], today, goals, perSale = null, libValue = null, skip = null }) {
+  const from = camp.start || '0000', cid = camp.id, t = totals(daily, from, today, cid);
+  if (!t.cost) return null;
+  const lib = goals.lib ? convTotal(conv, from, today, cid, [goals.lib], skip) : 0, buy = goals.buy?.length ? convTotal(conv, from, today, cid, goals.buy, skip) : 0;
+  const back = perSale != null ? buy * perSale : null;
+  const expected = libValue != null ? Math.max(0, lib * libValue - (back || 0)) : null; // что ещё принесут добавившие
+  const total = back != null || expected != null ? (back || 0) + (expected || 0) : null;
+  return { cost: t.cost, lib, buy, back, expected, total, ret: total != null ? total / t.cost : null, days: daysBetween(camp.start || today, today) + 1 };
+}
+
 // «Как заработать больше» (11.11.2026, владелица: «чтобы мне было максимально просто получать максимальную прибыль»):
 // рычаги по одной идущей кампании — от самого денежного. Только советы: цену цели и бюджет меняет владелица в кабинете Директа.
 // Расход в отчётах — с НДС, цена цели в стратегии — без: сравниваем через VAT.

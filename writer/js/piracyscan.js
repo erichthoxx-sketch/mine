@@ -108,7 +108,7 @@ const rank = (m, root) => (/abuse|dmca|copyright|prav|legal/.test(m) ? 3 : 0) + 
 
 // Раз в сутки сама (не на localhost и только когда книги пришли с сервера)
 let armed = false;
-export function autoPiracy(app) {
+export function autoPiracy(app, after) {
   if (armed || typeof window === 'undefined' || /^(localhost|127\.)/.test(location.hostname)) return;
   const st = app.store, s = st.settings || app.ctx().settings;
   if (st.mode !== 'firebase' || !(st.data?.w_books || []).length) return;
@@ -116,6 +116,6 @@ export function autoPiracy(app) {
   const last = Date.parse(s.piracy?.at || 0) || 0;
   armed = true;
   if (Date.now() - last < 22 * 3600e3) return;
-  setTimeout(() => scan(app).catch((e) => console.warn('Поиск пиратских копий:', e)), 20000); // не мешаем открытию приложения
+  setTimeout(() => scan(app).then(() => after?.(app)).catch((e) => console.warn('Поиск пиратских копий:', e)), 20000); // не мешаем открытию приложения
 }
 export { hostOf };

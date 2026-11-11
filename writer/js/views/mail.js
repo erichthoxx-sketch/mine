@@ -120,6 +120,8 @@ export function siteTabs(sub) {
   <div class="lg-tabs mk-tabs">${[['site', 'Обзор', '/site'], ['mail', 'Почта', '/site/mail']].map(([k, t, to]) => `<button class="${sub === k || (k === 'mail' && sub === 'letter') ? 'on' : ''}" data-act="go" data-to="${to}">${t}</button>`).join('')}</div>`;
 }
 // цифра для «Обзора»: подписчицы из сервиса писем
+// Сервис писем для других разделов (претензии пиратам): готов ли, версия программы, вызов
+export function mailSvc() { load(); return { ready: ready(), v: M.info?.v || 0, replyTo: M.info?.replyTo || '', call: (body) => mailCall(mailUrl(), M.cfg.key, body) }; }
 export function mailCount() { load(); return M.info?.list ? subsStats(M.info.list, app().ctx().today) : null; }
 
 // ---------- экран «Почта» ----------

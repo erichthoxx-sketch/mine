@@ -210,3 +210,18 @@ test('письмо с сайта приходит как обычное пись
   assert.doesNotMatch(h, /Письмо с сайта|Нажмите «Ответить»/);
   assert.match(h, /Спасибо!<br><br>Анна/);
 });
+
+test('сервис писем: претензия пирату — текстом, с адреса сайта, ответ владелице', async () => {
+  const { sent } = stub();
+  delete require.cache[require.resolve('../mail/mail-function.cjs')];
+  const { handler } = require('../mail/mail-function.cjs');
+  const text = 'ДОСУДЕБНАЯ ПРЕТЕНЗИЯ\nо нарушении исключительного права на произведение. Требую удалить в течение 24 часов.';
+  assert.equal((await call(handler, { a: 'admin' }, { key: 'не тот', op: 'claim', to: ['abuse@pirat.ru'], subject: 'Претензия', text })).statusCode, 403);
+  const r = await call(handler, { a: 'admin' }, { key: 'секрет', op: 'claim', to: ['Abuse@Pirat.ru', 'мусор'], subject: 'ДОСУДЕБНАЯ ПРЕТЕНЗИЯ', text });
+  assert.deepEqual(JSON.parse(r.body), { ok: true, sent: ['abuse@pirat.ru'] });
+  const m = sent.at(-1);
+  assert.deepEqual(m.Destination.ToAddresses, ['abuse@pirat.ru']);
+  assert.deepEqual(m.ReplyToAddresses, ['lana@mail.ru']);
+  assert.equal(m.Content.Simple.Body.Text.Data, text);
+  assert.equal((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'claim', to: [], subject: 'x', text })).statusCode, 400);
+});
