@@ -12,7 +12,7 @@ import { chartInputs, chartLegend } from './home.js';
 import { totals as dTotals } from '../../direct/js/dcalc.js';
 import { ic } from '../icons.js';
 import { linkedTargetologists, targetReminders } from '../target-partners.js';
-import { campaignVerdict, campaignBook, campaignLink, reportDue } from '../adroi.js';
+import { campaignVerdict, campaignBook, campaignLink, reportDue, partnerBoard, partnerOf } from '../adroi.js';
 import { linkCode } from '../../writer/js/promolinks.js';
 import { discountEffects, cycleTail } from '../insights.js';
 import { litrefRows } from '../../direct/js/mcalc.js';
@@ -139,16 +139,23 @@ function adMonths(c) {
   return monthsBetween(monthKey(starts[0]), cur).reverse();
 }
 
+// Таргетологи под контролем: по каждому — расход, что вернулось, отдача рубля, вывод и что делать (partnerBoard в adroi.js)
 function externalTargetSection(c) {
-  const partners = linkedTargetologists(c.data, 'income');
-  if (!partners.length) return '';
-  return `<div class="card"><div class="row between"><h2 style="margin:0">Внешние таргетологи</h2><span class="small muted">Связь с «Мастерской»</span></div>
-    <div class="list">${partners.map(x=>{
-      const tasks=targetReminders(x,c.today);
-      const sub=[x.campaignNote, x.partnerStatus==='paused'?'На паузе':x.partnerStatus==='done'?'Сотрудничество завершено':'В работе',tasks.length?`дел: ${tasks.length}`:''].filter(Boolean).map(esc).join(' · ');
-      return `<a class="item target-linked-item" href="workshop/#/link/${encodeURIComponent(x.id)}"><b>${esc(x.name)}</b>${sub?`<span class="sub">${sub}</span>`:''}${tasks.length?`<span class="small muted">${esc(tasks[0].text)}${tasks[0].date?' · '+fmtDate(tasks[0].date):''}</span>`:''}</a>`;
-    }).join('')}</div>
-    <p class="small muted" style="margin:8px 0 0">Контакты и договоренности — без добавления расходов. Бюджеты учитываются только через кампании и отчеты.</p>
+  const B = partnerBoard(c.data, c.settings, c.today);
+  const shown = new Set(linkedTargetologists(c.data, 'income').map((x) => x.id)); // показ в «Доходах» — по её галочке у контакта
+  B.partners = B.partners.filter((x) => shown.has(x.partner.id));
+  if (!B.partners.length) return '';
+  const tone = { good: 'up', bad: 'down', even: '', wait: 'muted' };
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Таргетологи</h2><span class="small muted">за ${B.days} дней</span></div>
+    ${B.verdict ? `<p style="margin:8px 0 4px">${esc(B.verdict)}</p>` : ''}
+    <div class="list">${B.partners.map((x) => { const tasks = targetReminders(x.partner, c.today);
+      return `<div class="item"><div class="row between"><a href="workshop/#/link/${encodeURIComponent(x.partner.id)}"><b>${esc(x.partner.name)}</b></a><span class="small muted">${x.partner.partnerStatus === 'paused' ? 'на паузе' : x.partner.partnerStatus === 'done' ? 'завершено' : x.live ? `идёт кампаний: ${x.live}` : 'сейчас не ведёт'}</span></div>
+        ${x.n ? `<div class="small" style="margin-top:2px">расход ${rub(x.spend, 0)}${x.est ? ' (оценка)' : ''}${x.returned != null ? ` · принёс ≈ ${rub(x.returned, 0)}` : ''}</div>` : ''}
+        <div class="small ${tone[x.kind]}" style="margin-top:2px">${esc(x.text.charAt(0).toUpperCase() + x.text.slice(1))}</div>
+        ${x.tips.map((t) => `<div class="small muted" style="margin-top:2px">→ ${esc(t.charAt(0).toUpperCase() + t.slice(1))}</div>`).join('')}
+        ${tasks.length ? `<div class="small" style="margin-top:4px">Дело: ${esc(tasks[0].text)}${tasks[0].date ? ' · ' + fmtDate(tasks[0].date) : ''}</div>` : ''}</div>`; }).join('')}</div>
+    ${B.own.n ? `<p class="small" style="margin:10px 0 0">Для сравнения — ваш Директ: расход ${rub(B.own.spend, 0)}${B.own.share != null ? `, на 1 ₽ — ${B.own.share.toFixed(2).replace('.', ',')} ₽` : ', выводы позже'}.</p>` : ''}
+    ${B.free ? `<p class="small muted" style="margin:6px 0 0">Кампаний без таргетолога: ${B.free} — если их ведёт кто-то из списка, выберите его в настройках кампании («Кто ведёт»).</p>` : ''}
   </div>`;
 }
 
@@ -300,6 +307,7 @@ export function adPage(a, id) {
     <label style="margin-top:0">Название</label><input name="name" value="${esc(k.name)}" required>
     <div class="f2"><div><label>Книга</label><select name="bookId"><option value="">Все книги</option>${c.books.filter((b) => b.status !== 'removed' || b.id === k.bookId).map((b) => opt(b.id, b.title, k.bookId)).join('')}</select></div>
     <div><label>Канал</label><select name="channel">${Object.entries(CHANNELS).map(([v, t]) => opt(v, t, k.channel)).join('')}</select></div></div>
+    ${(c.data.w_links || []).some((x) => x.kind === 'target') && k.src !== 'direct' ? `<label>Кто ведёт</label><select name="partnerId"><option value="">${partnerOf({ ...k, partnerId: '' }, (c.data.w_links || []).filter((x) => x.kind === 'target')) ? 'по названию: ' + esc(partnerOf({ ...k, partnerId: '' }, (c.data.w_links || []).filter((x) => x.kind === 'target')).name) : 'не указано'}</option>${(c.data.w_links || []).filter((x) => x.kind === 'target').map((x) => opt(x.id, x.name, k.partnerId || '')).join('')}</select>` : ''}
     <div class="f2"><div><label>Начало</label><input type="date" name="start" value="${k.start || ''}" required></div><div><label>Конец</label><input type="date" name="end" value="${k.end || ''}"></div></div>
     <div class="f2"><div><label>Бюджет (оплата), ₽</label><input name="budget" inputmode="decimal" value="${k.budget ?? ''}"></div><div><label>Дата оплаты</label><input type="date" name="paidAt" value="${k.paidAt || ''}"></div></div>
     <div class="f2">
@@ -334,7 +342,7 @@ acts['ad.new'] = (d) => {
     <div class="f2"><div><label>Бюджет (оплата таргетологам), ₽</label><input name="budget" inputmode="decimal"></div><div><label>Дата оплаты</label><input type="date" name="paidAt"></div></div>
     <div class="hint">Дата оплаты — для справки в таблице скидки. Скидка считается от расхода по дням кампании.</div>`, async (fd) => {
     const id = 'k' + uid();
-    await app().store.put('campaigns', { id, name: fd.get('name').trim(), bookId: fd.get('bookId') || '', scope: fd.get('bookId') ? 'book' : 'all', channel: fd.get('channel'), start: fd.get('start'), end: fd.get('end') || '', budget: N(fd.get('budget')), paidAt: fd.get('paidAt') || '', baseMode: 'auto' });
+    await app().store.put('campaigns', { id, name: fd.get('name').trim(), bookId: fd.get('bookId') || '', scope: fd.get('bookId') ? 'book' : 'all', channel: fd.get('channel'), ...(fd.has('partnerId') ? { partnerId: fd.get('partnerId') || '' } : {}), start: fd.get('start'), end: fd.get('end') || '', budget: N(fd.get('budget')), paidAt: fd.get('paidAt') || '', baseMode: 'auto' });
     app().go('/ad/' + id);
   });
 };

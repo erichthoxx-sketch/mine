@@ -149,3 +149,41 @@ export function channelVerdict(rows = []) {
   if (worst.perReader < best.perReader * 1.3) return { text: 'Читатель обходится примерно одинаково во всех каналах — решает окупаемость, а не цена читателя.' };
   return { best: best.key, text: `Читатель дешевле всего в «${best.name}»: ${Math.round(best.perReader)} ₽ против ${Math.round(worst.perReader)} ₽ в «${worst.name}». Если окупаемость там не хуже — часть бюджета стоит перенести туда.` };
 }
+
+// ---------- Таргетологи под контролем (12.11.2026, владелица: «мне нужна полнейшая аналитика по ним и советы») ----------
+// Кто ведёт кампанию «Доходов»: выбранный в настройках кампании (partnerId) или таргетолог, чьё имя стоит в названии кампании.
+// Свой Директ (src: 'direct') — отдельной строкой для сравнения.
+export function partnerOf(c, partners = []) {
+  if (c.src === 'direct') return null;
+  if (c.partnerId) return partners.find((p) => p.id === c.partnerId) || null;
+  const name = String(c.name || '').toLowerCase();
+  return partners.find((p) => { const w = String(p.name || '').toLowerCase().split(/\s+/).filter((x) => x.length >= 3)[0]; return w && name.includes(w); }) || null;
+}
+export function partnerBoard(data = {}, settings = {}, today, { days = 90 } = {}) {
+  const partners = (data.w_links || []).filter((x) => x.kind === 'target'), rows = adBoard(data, settings, today, { days });
+  const sum = (list) => {
+    const spend = list.reduce((a, r) => a + (r.m.spendTotal || 0), 0), known = list.filter((r) => r.v.share != null);
+    const kSpend = known.reduce((a, r) => a + (r.m.spendTotal || 0), 0), returned = known.reduce((a, r) => a + r.v.share * (r.m.spendTotal || 0), 0);
+    const share = kSpend > 0 ? returned / kSpend : null;
+    return { spend: Math.round(spend), returned: known.length ? Math.round(returned) : null, share, n: list.length, live: list.filter((r) => r.live).length, due: list.filter((r) => r.reportDue).length, est: list.some((r) => r.v.est),
+      kind: share == null ? 'wait' : share >= 1.2 ? 'good' : share >= 0.9 ? 'even' : 'bad' };
+  };
+  const out = partners.map((p) => ({ partner: p, rows: rows.filter((r) => partnerOf(r.c, partners)?.id === p.id) })).map((x) => ({ ...x, ...sum(x.rows) }));
+  const own = sum(rows.filter((r) => r.c.src === 'direct')), free = rows.filter((r) => r.c.src !== 'direct' && !partnerOf(r.c, partners));
+  const f2 = (v) => v.toFixed(2).replace('.', ',');
+  for (const x of out) {
+    x.text = !x.n ? `за ${days} дней кампаний нет — выберите таргетолога в настройках его кампании («Кто ведёт»)` : x.share == null ? 'идёт слишком мало или нет дней без рекламы для сравнения — выводы позже'
+      : x.kind === 'good' ? `окупается: на 1 ₽ — ${f2(x.share)} ₽ дохода` : x.kind === 'even' ? `примерно в ноль: на 1 ₽ — ${f2(x.share)} ₽` : `не окупается: на 1 ₽ — ${f2(x.share)} ₽`;
+    const tips = [];
+    if (x.due) tips.push('попросите отчёт о расходе за последнюю неделю — без него расход считается по бюджету');
+    if (x.kind === 'good') tips.push(own.share != null && x.share > own.share * 1.2 ? 'работает лучше вашего Директа — следующий свободный бюджет логичнее отдать сюда' : 'можно продлевать и понемногу добавлять бюджет');
+    if (x.kind === 'even') tips.push('продлевать — только с новым креативом, ссылкой или аудиторией; попросите у таргетолога разбор, что он меняет');
+    if (x.kind === 'bad') tips.push(own.share != null && own.share >= 1 ? 'ваш Директ отдаёт больше — бюджет этого таргетолога лучше урезать или перенести' : 'урезать бюджет или сменить подход; попросите объяснить, какие аудитории и объявления он тестировал');
+    if (x.est && x.n) tips.push('расход — оценка: вставьте его отчёты, и цифры станут точными');
+    x.tips = tips;
+  }
+  const ranked = out.filter((x) => x.share != null).sort((a, b) => b.share - a.share);
+  const verdict = ranked.length >= 2 && ranked[0].share >= ranked[ranked.length - 1].share * 1.25 ? `Лучше всех сейчас работает ${ranked[0].partner.name}: на 1 ₽ — ${f2(ranked[0].share)} ₽ против ${f2(ranked[ranked.length - 1].share)} ₽ у ${ranked[ranked.length - 1].partner.name}.`
+    : ranked.length === 1 && own.share != null ? `${ranked[0].partner.name}: на 1 ₽ — ${f2(ranked[0].share)} ₽, ваш Директ — ${f2(own.share)} ₽.` : '';
+  return { partners: out.sort((a, b) => (b.live - a.live) || (b.spend - a.spend)), own, free: free.length, verdict, days };
+}

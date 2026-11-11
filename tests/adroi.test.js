@@ -90,3 +90,14 @@ test('Метка Литнета — тот же код, что в ссылке',
   assert.equal(exactTag('https://litnet.com/ref/PZSWjdD9ctDTys9A'), 'utm_litref=PZSWjdD9ctDTys9A');
   assert.equal(exactTag({ url: 'https://litnet.com/ref/vkZDPLyk6BJ1S_JZ' }), 'utm_litref=vkZDPLyk6BJ1S_JZ');
 });
+
+test('таргетологи под контролем: кто ведёт кампанию, сводка и советы', async () => {
+  const { partnerOf, partnerBoard } = await import('../js/adroi.js');
+  const partners = [{ id: 'p1', kind: 'target', name: 'Ирина Смирнова' }, { id: 'p2', kind: 'target', name: 'Олег' }];
+  assert.equal(partnerOf({ name: 'Таргет ВК — Ирина, ноябрь' }, partners).id, 'p1');
+  assert.equal(partnerOf({ name: 'Таргет ВК — Ирина', partnerId: 'p2' }, partners).id, 'p2'); // выбранный вручную главнее
+  assert.equal(partnerOf({ name: 'Директ: «Книга»', src: 'direct' }, partners), null);
+  assert.equal(partnerOf({ name: 'Просто реклама' }, partners), null);
+  const B = partnerBoard({ w_links: partners, campaigns: [], reports: [], sales: [], days: [] }, {}, '2026-11-12');
+  assert.equal(B.partners.length, 2); assert.equal(B.partners[0].n, 0); assert.match(B.partners[0].text, /кампаний нет/); assert.equal(B.verdict, '');
+});
