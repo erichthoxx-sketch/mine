@@ -11,7 +11,7 @@ export const LEGIT = ['litnet.com', 'litres.ru', 'litgorod.ru', 'litmarket.ru', 
   'yandex.ru', 'ya.ru', 'google.com', 'google.ru', 'bing.com', 'microsoft.com', 'duckduckgo.com', 'mojeek.com', 'startpage.com', 'brave.com', 'jina.ai', 'wikipedia.org', 'github.io', 'github.com', 'apple.com', 'amazon.com', 'w3.org'];
 // известные пиратские библиотеки — подсказка (совпадение по началу имени сайта)
 export const PIRATE_HINT = /flibusta|coollib|litmir|readli|libking|topliba|knigogo|bookscafe|rulit|libcat|loveread|librebook|mir-?knig|litportal|royallib|ladylib|avidreaders|4italka|knizhnik|bookzip|e-reading|booksee|fb2|epub|litlife|aldebaran|bookfor|ruslib|libfox|libs\.ru|knigi-?online|romanbook|bookinbook|iknigi|kniga-?online|profilib|lit-?era|mybrary|chitat|read-?book|online-?knigi|booksonline|knigavuhe|akniga/i;
-const PIRATE_WORDS = /скачать|fb2|epub|бесплатно|читать\s+(?:книгу|онлайн|полностью)|полностью|без регистрации|торрент|полная версия/i;
+export const PIRATE_WORDS = /скачать|fb2|epub|бесплатно|читать\s+(?:книгу|онлайн|полностью)|полностью|без регистрации|торрент|полная версия/i;
 
 export const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim();
 export const plainTitle = (t) => String(t || '').replace(/\*/g, '').replace(/\s+/g, ' ').trim();

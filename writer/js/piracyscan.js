@@ -116,6 +116,7 @@ export function autoPiracy(app, after) {
   const last = Date.parse(s.piracy?.at || 0) || 0;
   armed = true;
   if (Date.now() - last < 22 * 3600e3) return;
-  setTimeout(() => scan(app).then(() => after?.(app)).catch((e) => console.warn('Поиск пиратских копий:', e)), 20000); // не мешаем открытию приложения
+  // не мешаем открытию приложения; если за это время круглосуточный поиск сервиса отчитался (piracy.at свежий) — сами не ищем
+  setTimeout(() => { if (Date.now() - (Date.parse(app.ctx().settings.piracy?.at || 0) || 0) < 22 * 3600e3) return; scan(app).then(() => after?.(app)).catch((e) => console.warn('Поиск пиратских копий:', e)); }, 30000);
 }
 export { hostOf };

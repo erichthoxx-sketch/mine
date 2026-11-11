@@ -3,7 +3,7 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, changes, toast, openSheet, fold, copyRich, ask } from '../../../js/ui.js';
 import { fmtDate, plural } from '../../../js/format.js';
-import { nextStep, piracySummary, letterSite, letterHost, letterFormal, mailto, SEARCH_FORMS, archiveUrl, CF_FORM, findId, hostOf, plainTitle, isLegit, WAIT_SITE } from '../piracy.js';
+import { searchQueries, ENGINES, LEGIT, PIRATE_HINT, PIRATE_WORDS, nextStep, piracySummary, letterSite, letterHost, letterFormal, mailto, SEARCH_FORMS, archiveUrl, CF_FORM, findId, hostOf, plainTitle, isLegit, WAIT_SITE } from '../piracy.js';
 import { scan, scanState, findContacts } from '../piracyscan.js';
 import { mailSvc } from './mail.js';
 
@@ -38,6 +38,37 @@ export async function sendAllClaims(a, { onStep } = {}) {
   for (const f of list) { onStep?.(`Отправляю: ${f.host}…`); try { (await sendClaim(a, f.id)) ? n++ : miss++; } catch { miss++; } await sleep(1500); }
   return { n, miss };
 }
+// Круглосуточный поиск: задание сервису писем (он ищет по таймеру, даже когда Мастерская закрыта) и его находки → w_piracy.
+// Вызывается при открытии Мастерской и раздела; сервис старее версии 6 — ищет сама Мастерская, как раньше.
+let srvBusy = false;
+export async function syncServer(a) {
+  if (srvBusy || typeof window === 'undefined' || /^(localhost|127\.)/.test(location.hostname)) return null;
+  for (let i = 0; i < 10 && !mailSvc().v; i++) await sleep(1000);
+  const m = mailSvc();
+  if (!m.ready || m.v < 6) return null;
+  srvBusy = true;
+  try {
+    const c = a.ctx(), cfg0 = c.settings.piracy || {}, mine = c.data.w_piracy || [];
+    const books = (c.wbooks || []).filter((b) => b.title && b.status !== 'idea').map((b) => ({ id: b.id, title: plainTitle(b.title), q: searchQueries(b.title, c.settings.pseudonym || '') }));
+    const cfg = { on: !cfg0.off, auto: !!cfg0.auto, author: c.settings.pseudonym || '', books, engines: ENGINES.slice(0, 2).map(([, mk]) => mk('')), legit: [...LEGIT, ...(cfg0.ignore || [])], hint: PIRATE_HINT.source, words: PIRATE_WORDS.source, known: mine.map((f) => f.host + '|' + f.bookId) };
+    const r = await m.call({ op: 'piracy', cfg });
+    let added = 0;
+    for (const f of r.finds || []) {
+      if ((a.ctx().data.w_piracy || []).some((x) => x.host === f.host && x.bookId === f.bookId) || (cfg0.ignore || []).includes(f.host)) continue;
+      await a.store.put('w_piracy', { ...f, id: findId(f.url), status: 'new', via: 'server' }); added++;
+    }
+    // сервис отчитался недавно — своя проверка в браузере сегодня не нужна
+    if (r.at && Date.now() - Date.parse(r.at) < 36 * 3600e3) await a.store.saveSettings({ piracy: { ...(a.ctx().settings.piracy || {}), at: r.at, engine: 'круглосуточно', books: books.length, err: r.err || '', srv: true } });
+    return { added };
+  } catch (e) { console.warn('Круглосуточный поиск:', e); return null; } finally { srvBusy = false; }
+}
+let srvArmed = false;
+export function autoServer(a) {
+  if (srvArmed || a.store.mode !== 'firebase' || !(a.store.data?.w_books || []).length) return;
+  srvArmed = true;
+  setTimeout(() => syncServer(a).then((r) => { if (r) autoSend(a); }), 4000);
+}
+
 // Автопилот: после ежедневного поиска письма уходят сами (если включён и сервис писем готов)
 export async function autoSend(a) {
   if (!a.ctx().settings.piracy?.auto) return;
@@ -75,7 +106,7 @@ export function piracyView(a) {
   const fresh = by(['new']), work = by(['sent', 'host', 'search']), gone = by(['gone']);
   const svc = mailSvc(), send = svc.ready && svc.v >= 5;
   const due = all.filter((f) => { const x = nextStep(f, c.today); return f.sure !== false && x && !x.wait && ['site', 'host'].includes(x.k) && !f.goneMaybe; }).length;
-  const state = scanState.busy ? esc(scanState.step || 'Ищу…') : cfg.at ? `Проверено ${when(cfg.at)}: ${cfg.books || 0} ${plural(cfg.books || 0, ['книга', 'книги', 'книг'])}${cfg.engine ? ` · ${esc(cfg.engine)}` : ''}${cfg.err ? ` · ${esc(cfg.err)}` : ''}` : 'Ещё не проверяла — первая проверка начнётся сама';
+  const state = scanState.busy ? esc(scanState.step || 'Ищу…') : cfg.at ? `${cfg.srv ? 'Ищу круглосуточно · последняя проверка' : 'Проверено'} ${when(cfg.at)}: ${cfg.books || 0} ${plural(cfg.books || 0, ['книга', 'книги', 'книг'])}${cfg.engine && !cfg.srv ? ` · ${esc(cfg.engine)}` : ''}${cfg.err ? ` · ${esc(cfg.err)}` : ''}` : 'Ещё не проверяла — первая проверка начнётся сама';
   return `<div class="card" style="margin-top:14px">
     <div class="row between"><h2 style="margin:0">Пиратские копии</h2><button class="small-btn" data-act="pr.scan"${scanState.busy ? ' disabled' : ''}>${scanState.busy ? 'Ищу…' : 'Проверить сейчас'}</button></div>
     <p class="small muted" style="margin:6px 0 12px" id="pr-state">${state}</p>
@@ -84,14 +115,15 @@ export function piracyView(a) {
       <div><div class="k">Удалено</div><div class="v">${sum.gone}</div><div class="s">за всё время</div></div></div>
     ${send ? `<div class="row between" style="margin-top:14px;gap:12px;flex-wrap:wrap"><label class="d-check small" style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" data-chg="pr.auto"${cfg.auto ? ' checked' : ''}> Автопилот: претензии уходят сами, как только копия найдена</label>
       ${due ? `<button class="primary" data-act="pr.sendAll">Отправить все претензии · ${due}</button>` : ''}</div>`
-      : `<p class="small" style="margin:12px 0 0">Чтобы претензии уходили прямо отсюда одной кнопкой (с адреса вашего сайта), ${svc.ready ? 'обновите программу сервиса писем: Сайт → Почта → «Скопировать программу» → Яндекс Облако → lana-mail → index.js' : 'подключите сервис писем в разделе Сайт → Почта'}. Пока письма открываются в вашей почте.</p>`}
+      : ''}
+    ${svc.ready && svc.v >= 6 ? '' : `<p class="small" style="margin:12px 0 0">${svc.ready ? `Чтобы поиск шёл круглосуточно, даже когда Мастерская закрыта, а претензии уходили отсюда одной кнопкой, обновите программу сервиса писем: Сайт → Почта → «Скопировать программу» → Яндекс Облако → Cloud Functions → lana-mail → Редактор → index.js → вставить → «Сохранить изменения». И там же в настройках функции поставьте «Таймаут» 60 секунд.` : 'Круглосуточный поиск и отправка одной кнопкой работают через сервис писем — подключите его в разделе Сайт → Почта.'} Пока ищу сама, когда Мастерская открыта${send ? '' : ', а письма открываются в вашей почте'}.</p>`}
   </div>
   ${fresh.length ? `<div class="card"><h2 style="margin:0 0 4px">Новые</h2><div class="list">${fresh.map((f) => row(c, f)).join('')}</div></div>` : ''}
   ${work.length ? `<div class="card"><h2 style="margin:0 0 4px">В работе</h2><div class="list">${work.map((f) => row(c, f)).join('')}</div></div>` : ''}
   ${!all.length && cfg.at ? `<div class="card"><p class="muted" style="margin:0">Копий не найдено. Проверяю сама каждый день, пока открыта Мастерская, — найду, появится дело в Планере.</p></div>` : ''}
   ${gone.length ? fold('pr-gone', 'Удалено', `<div class="list">${gone.map((f) => row(c, f)).join('')}</div>`, { sub: String(gone.length) }) : ''}
   ${fold('pr-how', 'Как это работает', `<div class="small" style="line-height:1.7">
-    <p style="margin:0 0 8px">Раз в сутки Мастерская ищет каждую книгу в поисковиках («читать онлайн бесплатно», «скачать fb2») и показывает чужие сайты с вашим текстом. Ваши площадки и магазины не считаются.</p>
+    <p style="margin:0 0 8px">Каждый день каждая книга ищется в поисковиках («читать онлайн бесплатно», «скачать fb2») и показывает чужие сайты с вашим текстом. Ваши площадки и магазины не считаются.</p>
     <p style="margin:0 0 8px"><b>1. Досудебная претензия сайту</b> — от имени автора (псевдоним), без ваших личных данных. Почту сайта и его хостинга нахожу сама. Срок — 24 часа (ст. 15.7 закона № 149-ФЗ, ст. 1253.1 ГК РФ). Перед письмом нажмите «Сохранить доказательство» — копия страницы останется в веб-архиве.</p>
     <p style="margin:0 0 8px"><b>2. Через ${WAIT_SITE} дня — хостингу.</b> Хостинг не хочет проблем и обычно закрывает страницу сам.</p>
     <p style="margin:0 0 8px"><b>3. Поисковики.</b> Если не помогло — заявка в Google и Яндекс, чтобы страницу убрали из поиска: без поиска её почти никто не найдёт.</p>

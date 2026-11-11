@@ -225,3 +225,33 @@ test('сервис писем: претензия пирату — тексто�
   assert.equal(m.Content.Simple.Body.Text.Data, text);
   assert.equal((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'claim', to: [], subject: 'x', text })).statusCode, 400);
 });
+
+test('сервис писем: круглосуточный поиск пиратских копий — задание, шаг по таймеру, находки и письмо владелице', async () => {
+  const { sent } = stub();
+  const { readFileSync } = await import('node:fs');
+  const page = readFileSync(new URL('./fixtures/piracy-ddg.txt', import.meta.url), 'utf8');
+  const base = globalThis.fetch, asked = [];
+  globalThis.fetch = async (url, o) => (String(url).startsWith('https://r.jina.ai/') ? (asked.push(String(url)), { ok: true, status: 200, text: async () => page }) : base(url, o));
+  delete require.cache[require.resolve('../mail/mail-function.cjs')];
+  const { handler } = require('../mail/mail-function.cjs');
+  const P = await import('../writer/js/piracy.js');
+  const T = 'Звериная тропа для двоих';
+  const cfg = { on: true, author: 'Лана Фрейтаг', books: [{ id: 'b1', title: T, q: P.searchQueries(T, 'Лана Фрейтаг') }], engines: ['https://lite.duckduckgo.com/lite/?q='], legit: P.LEGIT, hint: P.PIRATE_HINT.source, words: P.PIRATE_WORDS.source, known: ['missfantasy.ru|b1'] };
+  let r = JSON.parse((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy', cfg })).body);
+  assert.deepEqual(r.finds, []);
+  const tick = () => handler({ messages: [{}] }, { token: { access_token: 't' } });
+  const t1 = JSON.parse((await tick()).body);
+  assert.deepEqual(t1.piracy, { step: 1, of: 2, fresh: 2 });
+  assert.match(asked[0], /lite\.duckduckgo\.com\/lite\/\?q=%22/);
+  r = JSON.parse((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy' })).body);
+  // те же сайты, что находит Мастерская, кроме уже известного
+  const app = P.parseResults(page).map((x) => P.judge(x, T, 'Лана Фрейтаг')).filter(Boolean).map((x) => x.host).filter((h) => h !== 'missfantasy.ru').sort();
+  assert.deepEqual(r.finds.map((f) => f.host).sort(), app);
+  assert.match(sent.at(-1).Content.Simple.Subject.Data, /^Пираты: «Звериная тропа для двоих» на /);
+  assert.deepEqual(sent.at(-1).Destination.ToAddresses, ['lana@mail.ru']);
+  const n = sent.length;
+  assert.equal(JSON.parse((await tick()).body).piracy.fresh, 0); // второй запрос — те же сайты, повторно не сообщаем
+  assert.equal(sent.length, n);
+  assert.deepEqual(JSON.parse((await tick()).body).piracy, { done: true }); // на сегодня всё
+  globalThis.fetch = base;
+});

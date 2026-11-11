@@ -58,7 +58,7 @@ const link = (a, t) => `${ENV.SELF}?a=${a}&t=${t}`;
 const fill = (s, p) => String(s).replace(/\{unsub\}/g, link('unsub', p.token)).replace(/\{name\}/g, esc(p.name || ''));
 
 // письмо «подтвердите подписку» — короткое, в стиле сайта; тексты владелица меняет в Мастерской → Сайт → Почта (op: texts → d.texts)
-const FN_V = 5; // 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
+const FN_V = 6; // 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
 const TEXTS_DEF = { subj: 'Подтвердите подписку', head: 'Подтвердите подписку', text: 'Одно нажатие — и я напишу вам, когда выйдет мой новый роман. Только тогда.', btn: 'Подтвердить' };
 const textsOf = (d) => ({ ...TEXTS_DEF, ...Object.fromEntries(Object.entries(d?.texts || {}).filter(([k, v]) => k in TEXTS_DEF && String(v || '').trim())) });
 function confirmMail(p, t = TEXTS_DEF) {
@@ -111,10 +111,82 @@ async function runQueue() {
   return { due: due.length };
 }
 
+// ---------- круглосуточный поиск пиратских копий (12.11.2026, владелица: «да, нужен круглосуточный поиск») ----------
+// Мастерская раз в день присылает задание (op: piracy): запросы по книгам, поисковики, свои площадки, уже известные находки.
+// Таймер (каждые 5 минут) делает ОДИН запрос к поисковику за вызов — книги обходятся за несколько часов, каждый день заново.
+// Находки лежат в piracy.json, Мастерская забирает их при открытии; о новой уверенной находке — письмо владелице.
+// Разбор выдачи — тот же, что в Мастерской (writer/js/piracy.js: parseResults, judge); тест сверяет на одной выдаче.
+const pNorm = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim();
+const pHost = (u) => { try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
+function pUnwrap(url) {
+  let u = String(url || '').replace(/&amp;/g, '&').trim();
+  if (u.startsWith('//')) u = 'https:' + u;
+  try { const x = new URL(u); if (/duckduckgo\.com$/.test(x.hostname) && x.searchParams.get('uddg')) return x.searchParams.get('uddg'); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; }
+}
+function pParse(text) {
+  const src = String(text || ''), out = [], seen = new Set();
+  for (const m of src.matchAll(/\[([^\]]{0,300})\]\(\s*<?((?:https?:)?\/\/[^)\s>]+)>?[^)]*\)/g)) {
+    const url = pUnwrap(m[2]), host = pHost(url);
+    if (!host) continue;
+    const title = m[1].replace(/[*_]/g, '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (seen.has(url)) { const o = out.find((x) => x.url === url); if (o && title.length > o.title.length && !/^!\[|^https?:/.test(title)) o.title = title; continue; }
+    seen.add(url);
+    out.push({ url, host, title, snip: src.slice(Math.max(0, m.index - 120), m.index + 500).replace(/\]\([^)]*\)/g, ' ').replace(/[[\]*_#>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500) });
+  }
+  return out;
+}
+function pJudge(r, title, author, cfg) {
+  if ((cfg.legit || []).some((d) => r.host === d || r.host.endsWith('.' + d))) return null;
+  let dec = r.url; try { dec = decodeURIComponent(r.url); } catch { /* как есть */ }
+  const t = pNorm(title), hay = pNorm(r.title + ' ' + r.snip + ' ' + dec);
+  if (!t || !hay.includes(t)) return null;
+  const a = pNorm(String(author || '').split(/\s+/).pop() || '');
+  const known = new RegExp(cfg.hint || '$^', 'i').test(r.host), words = new RegExp(cfg.words || '$^', 'i').test(r.title + ' ' + r.snip), byAuthor = !!a && hay.includes(a);
+  if (!byAuthor && !words) return null;
+  return { ...r, sure: byAuthor || known, why: [known ? 'известная пиратская библиотека' : '', words ? 'предлагает читать или скачать бесплатно' : '', byAuthor ? 'автор указан' : 'автор не указан — проверьте, ваша ли книга'].filter(Boolean).join(' · ') };
+}
+async function runPiracy() {
+  const p = await getObj('piracy.json', null), cfg = p?.cfg;
+  if (!cfg?.on || !(cfg.books || []).length || !(cfg.engines || []).length) return null;
+  const day = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+  if (p.day !== day) { p.day = day; p.i = 0; }
+  const steps = cfg.books.flatMap((b) => (b.q || []).flatMap((q) => cfg.engines.map((e) => ({ b, q, e }))));
+  if (p.i >= steps.length) return { done: true };
+  const st = steps[p.i];
+  p.i++; p.at = new Date().toISOString();
+  let fresh = [];
+  try {
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 25000);
+    const r = await fetch('https://r.jina.ai/' + st.e + encodeURIComponent(st.q), { signal: ctl.signal }); clearTimeout(tm);
+    if (r.ok) {
+      const have = new Set([...(cfg.known || []), ...(p.finds || []).map((f) => f.host + '|' + f.bookId)]);
+      for (const x of pParse(await r.text())) {
+        const hit = pJudge(x, st.b.title, cfg.author, cfg);
+        if (!hit || have.has(hit.host + '|' + st.b.id)) continue;
+        have.add(hit.host + '|' + st.b.id);
+        fresh.push({ url: hit.url, host: hit.host, bookId: st.b.id, title: st.b.title, page: hit.title, why: hit.why, sure: hit.sure, foundAt: p.at });
+      }
+      p.err = '';
+    } else p.err = 'поиск ответил ' + r.status;
+  } catch (e) { p.err = String(e.message || e).slice(0, 120); }
+  p.finds = [...(p.finds || []), ...fresh].slice(-300);
+  await putObj('piracy.json', JSON.stringify(p));
+  const loud = fresh.filter((f) => f.sure), to = replyTo();
+  if (loud.length && to) {
+    const text = `Найдена пиратская копия:\n\n${loud.map((f) => `«${f.title}» — ${f.host}\n${f.url}`).join('\n\n')}\n\nОткройте Мастерскую → Маркетинг → «Пираты»: претензия уже готова${cfg.auto ? ' и уйдёт сама' : ''}.`;
+    try { await send(to, `Пираты: «${loud[0].title}» на ${loud[0].host}`, `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55">${esc(text).replace(/\n/g, '<br>')}</div>`, text, '', ''); } catch { /* письмо не ушло — находка всё равно сохранена */ }
+  }
+  return { step: p.i, of: steps.length, fresh: fresh.length };
+}
+
 module.exports.handler = async function (event, context) {
   TOKEN = context?.token?.access_token || '';
   if (Array.isArray(event?.messages)) { // вызов таймером (триггер Yandex Cloud)
-    try { return json(await runQueue()); } catch (e) { return json({ error: String(e.message || e).slice(0, 300) }, 500); }
+    let out;
+    try { out = await runQueue(); } catch (e) { return json({ error: String(e.message || e).slice(0, 300) }, 500); }
+    // поиск пиратских копий — после писем: если вызов оборвётся по времени, отложенные письма уже ушли
+    try { await loadList(); out.piracy = await runPiracy(); } catch (e) { out.piracy = { error: String(e.message || e).slice(0, 200) }; }
+    return json(out);
   }
   const q = event.queryStringParameters || {}, h = event.headers || {}, origin = h.Origin || h.origin || '';
   const C = cors(origin);
@@ -210,6 +282,12 @@ module.exports.handler = async function (event, context) {
           d.list.push({ email, name: String(x.name || '').slice(0, 80), src: 'firebase', at: x.at || new Date().toISOString(), token: rnd(), status: 'ok', okAt: new Date().toISOString() }); n++;
         }
         await saveList(d); return json({ ok: true, added: n }, 200, C);
+      }
+      if (body.op === 'piracy') { // задание на круглосуточный поиск + забрать находки (Мастерская → Пираты)
+        const p = (await getObj('piracy.json', null)) || {};
+        if (body.cfg) { p.cfg = body.cfg; await putObj('piracy.json', JSON.stringify(p)); }
+        if (body.clear) { p.finds = (p.finds || []).filter((f) => !body.clear.includes(f.url)); await putObj('piracy.json', JSON.stringify(p)); }
+        return json({ ok: true, finds: p.finds || [], at: p.at || '', day: p.day || '', i: p.i || 0, err: p.err || '', on: !!p.cfg?.on }, 200, C);
       }
       if (body.op === 'claim') { // претензия пирату (Мастерская → Маркетинг → Пираты): обычное текстовое письмо с адреса сайта, ответ — владелице
         const to = [].concat(body.to || []).map((x) => String(x).trim().toLowerCase()).filter(isMail).slice(0, 4), subject = String(body.subject || '').slice(0, 200), text = String(body.text || '').slice(0, 8000);
