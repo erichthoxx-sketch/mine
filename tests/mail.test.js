@@ -268,3 +268,10 @@ test('сторож Директа: тревоги — кампания вста�
   assert.match(watchAlerts(w, [{ ...on, State: 'SUSPENDED', StatusClarification: 'Кампания остановлена' }], [], day).out[0].text, /больше не идёт: Кампания остановлена/);
   assert.match(watchAlerts(w, [{ ...on, Statistics: { Impressions: 2000 } }], [{ Id: 5, CampaignId: 7, Status: 'REJECTED', State: 'OFF', StatusClarification: 'Запрещённая тематика' }], day).out[0].text, /объявление отклонено модерацией — Запрещённая тематика/);
 });
+
+test('Почта знает последнюю версию программы сервиса (карточка «Обновите программу»)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const fn = Number(/const FN_V = (\d+)/.exec(readFileSync(new URL('../mail/mail-function.cjs', import.meta.url), 'utf8'))[1]);
+  const view = Number(/export const FN_LATEST = (\d+)/.exec(readFileSync(new URL('../writer/js/views/mail.js', import.meta.url), 'utf8'))[1]);
+  assert.equal(view, fn);
+});

@@ -48,6 +48,7 @@ async function refresh(quiet) {
 }
 // Адрес для ответов, который видят читательницы в письмах (10.11.2026, владелица: «заменить во всех письмах на lanafreitag8@gmail.com»):
 // с программой сервиса версии 3 ставится один раз сам; дальше меняется кнопкой «Изменить» в «Адресах»
+export const FN_LATEST = 7; // = FN_V в mail/mail-function.cjs (тест следит)
 export const REPLY_DEFAULT = 'lanafreitag8@gmail.com';
 async function autoReply() {
   const s = app().ctx().settings.site || {};
@@ -171,7 +172,17 @@ export function mailView(a) {
   const list = filterSubs(L, { q: M.q, status: M.status });
   // адреса — страницами по 10: поиск и статус сверху, стрелки внизу (длинную простыню владелица не хочет)
   const pages = Math.max(1, Math.ceil(list.length / PER)), pg = Math.min(M.page, pages - 1);
+  // программа сервиса устарела — карточка обновления всегда сверху (12.11.2026: кнопка «Скопировать программу» пряталась и «пропала»)
+  const upd = (M.info.v || 0) < FN_LATEST ? `<div class="card"><div class="row between" style="gap:12px;align-items:flex-start"><div><h2 style="margin:0">Обновите программу сервиса писем</h2>
+      <p class="small muted" style="margin:6px 0 0">Новая версия включает: круглосуточный поиск пиратов, отправку претензий одной кнопкой, сторожа Директа, письма с сайта в обычном виде.</p></div>
+      <button class="primary" data-act="mail.fncopy">Скопировать программу</button></div>
+    <ol class="small" style="margin:10px 0 0;padding-left:20px;line-height:1.7"><li>Нажмите «Скопировать программу».</li>
+      <li>Яндекс Облако → <b>Cloud Functions</b> → функция <b>lana-mail</b> → <b>Редактор</b> → файл <b>index.js</b>.</li>
+      <li>Выделите весь текст (Ctrl+A), вставьте новый (Ctrl+V).</li>
+      <li>Ниже на той же странице поставьте <b>«Таймаут» 60</b> секунд → <b>Сохранить изменения</b>.</li>
+      <li>Вернитесь сюда и обновите страницу — эта карточка исчезнет.</li></ol></div>` : '';
   const html = `<section class="links-page mail-page">${head}
+  ${upd}
   <div class="tiles mail-tiles">
     <div><div class="k">Подписчицы</div><div class="v">${s.ok}</div><div class="s">${s.new30 ? `+${s.new30} за 30 дней` : 'новых за 30 дней нет'}</div></div>
     <div><div class="k">Ждут подтверждения</div><div class="v">${s.wait}</div><div class="s">письмо ушло, ссылку ещё не нажали</div></div>
@@ -216,7 +227,7 @@ export function mailView(a) {
     <p class="small muted" style="margin:6px 0">Сервис сам каждую ночь сохраняет копию адресов у себя, в Яндекс Облаке. Чтобы копия была ещё и на Google Диске (папка «Архив Мастерской / Почта») и в GitHub — один раз:</p>
     <ol class="small" style="margin:0 0 6px;padding-left:20px;line-height:1.6"><li>Настройки → «Архив книг» → «Скопировать программу» → на script.google.com заменить текст (Ctrl+A, Ctrl+V, Ctrl+S).</li>
       <li>Там же: шестерёнка «Настройки проекта» → «Свойства скрипта» → «Добавить»: <b>MAIL_KEY</b> — пароль сервиса писем → «Сохранить».</li></ol></details>
-  <details class="mail-more"${det('conn')}><summary>Подключение сервиса</summary>${connectForm()}</details>
+  <details class="mail-more"${det('conn')}><summary>Подключение сервиса</summary>${connectForm()}<p class="small" style="margin:10px 0 0"><button class="link" data-act="mail.fncopy">Скопировать программу сервиса</button> <span class="muted">· установлена версия ${M.info.v || 1}, последняя — ${FN_LATEST}</span></p></details>
   </section>`;
   return { html, after: drawChart };
 }
