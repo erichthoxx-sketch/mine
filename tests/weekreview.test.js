@@ -39,3 +39,15 @@ test('разбор недели: цифры, сравнение, выводы и
   // добавление дороже ценности — совет снизить цену цели
   assert.ok(weekReview({ camp, daily, conv, adDaily, ads, queries: [], places: [], goals, today: '2026-11-16', libValue: 6 }).todo.some((x) => x.k === 'cpaDown' && /до 4 ₽/.test(x.text)));
 });
+
+test('что если: экономика при своей цене цели и объёме; честный тест объявлений', async () => {
+  const { whatIf, weekReview } = await import('../direct/js/weekreview.js');
+  const w = whatIf({ cpa: 10, perWeek: 100, libValue: 30, weekLimit: 1000 });
+  assert.equal(Math.round(w.cost), 1220); assert.equal(w.royalty, 3000); assert.equal(Math.round(w.profit), 1780);
+  assert.equal(w.maxCpa, 24); assert.equal(w.over, true); assert.equal(w.fits, 81);
+  assert.equal(whatIf({ cpa: 10, perWeek: 5 }).profit, null);
+  const mk = (c1, c2, impr) => { const adDaily = []; for (let i = 9; i <= 15; i++) { const d = `2026-11-${String(i).padStart(2, '0')}`; adDaily.push({ date: d, cid: 7, aid: 1, net: 'n', impr, clicks: c1, cost: 1 }, { date: d, cid: 7, aid: 2, net: 'n', impr, clicks: c2, cost: 1 }); }
+    return weekReview({ camp, daily: [], conv: [], adDaily, ads: [{ id: 1, cid: 7, state: 'ON', title: 'А' }, { id: 2, cid: 7, state: 'ON', title: 'Б' }], goals, today: '2026-11-16' }).adTest; };
+  const win = mk(80, 30, 2000); assert.equal(win.status, 'win'); assert.equal(win.best.title, 'А'); assert.equal(win.loser.title, 'Б');
+  const wait = mk(3, 2, 60); assert.equal(wait.status, 'wait'); assert.ok(wait.need > 0); // мало показов — победителя не объявляем
+});

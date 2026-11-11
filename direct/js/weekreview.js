@@ -4,6 +4,7 @@
 import { addDays } from '../../js/calc.js';
 import { totals, convTotal, queryHints } from './dcalc.js';
 import { VAT } from './pult.js';
+import { twoProp, sampleSize } from './mcalc.js';
 
 const pct = (a, b) => (b ? a / b : null);
 const chg = (now, prev) => (prev ? (now - prev) / prev : null);
@@ -39,6 +40,14 @@ export function weekReview({ camp, daily = [], conv = [], adDaily = [], ads = []
   const adRows = Object.entries(ab).map(([aid, v]) => { const a = ads.find((x) => String(x.id) === String(aid)); return { aid, title: a?.title || 'Объявление ' + aid, state: a?.state || '', ...v, ctr: pct(v.clicks, v.impr) }; }).sort((x, y) => y.impr - x.impr);
   const fair = adRows.filter((x) => x.impr >= 500);
   const best = fair.length >= 2 ? [...fair].sort((x, y) => y.ctr - x.ctr)[0] : null, worst = fair.length >= 2 ? [...fair].sort((x, y) => x.ctr - y.ctr)[0] : null;
+  // честный тест объявлений (её «да» на п. 19): победитель — только когда разница в CTR не случайна (z-тест 95 %) и у обоих 1000+ показов
+  let adTest = null;
+  { const on = adRows.filter((x) => x.state === 'ON' || !x.state);
+    if (on.length >= 2) {
+      const top = [...on].sort((x, y) => (y.ctr || 0) - (x.ctr || 0)), a = top[0], b = top[top.length - 1], t = twoProp(a.clicks, a.impr, b.clicks, b.impr);
+      if (a.impr >= 1000 && b.impr >= 1000 && t.level !== 'low' && a.ctr > b.ctr) adTest = { status: 'win', best: a, loser: b, sure: t.level };
+      else { const need = sampleSize(Math.max(a.ctr || 0, 0.005), Math.abs((a.ctr || 0) - (b.ctr || 0))); adTest = { status: 'wait', best: a, loser: b, need: need ? Math.max(0, need - Math.min(a.impr, b.impr)) : null }; }
+    } }
   const liveAds = ads.filter((x) => x.cid === cid && x.state === 'ON' && x.status !== 'REJECTED').length;
   // запросы (отчёт за 30 дней) и площадки
   const q = queries.filter((x) => x.cid === cid), junk = queryHints(q, { [cid]: camp.negatives || [] });
@@ -64,5 +73,12 @@ export function weekReview({ camp, daily = [], conv = [], adDaily = [], ads = []
   if (badP.length) todo.push({ k: 'places', text: `Исключить площадки, с которых сразу уходят: ${badP.slice(0, 3).map((x) => x.place).join(', ')}`, to: '/quality' });
   if (libValue != null && camp.cpa && camp.cpa * VAT > libValue * 1.05) todo.push({ k: 'cpaDown', text: `Снизить цену цели до ${Math.max(1, Math.floor(libValue / VAT))} ₽ — добавление приносит меньше, чем стоит` });
   if (!todo.length && now.cost) notes.push({ tone: 'good', text: 'Менять на этой неделе ничего не нужно — пусть работает.' });
-  return { period: p, now, prev, delta, nets, adRows, best, worst, topQ, junk: junk.length, topP, badP, notes, todo, liveAds, payConv };
+  return { period: p, now, prev, delta, nets, adRows, adTest, best, worst, topQ, junk: junk.length, topP, badP, notes, todo, liveAds, payConv };
+}
+
+// «Что если» (её «да» на п. 23): цена цели и число добавлений в неделю → расход, ожидаемое роялти, прибыль.
+// Сколько добавлений даст Директ при другой цене, заранее не знает никто — калькулятор показывает, при каком объёме это выгодно.
+export function whatIf({ cpa, perWeek, libValue = null, weekLimit = null }) {
+  const cost = cpa * VAT * perWeek, royalty = libValue != null ? perWeek * libValue : null;
+  return { cost, royalty, profit: royalty != null ? royalty - cost : null, ret: royalty != null && cost ? royalty / cost : null, maxCpa: libValue != null ? Math.floor(libValue / VAT) : null, over: weekLimit != null && cost > weekLimit, fits: weekLimit ? Math.floor(weekLimit / (cpa * VAT)) : null };
 }

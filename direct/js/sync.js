@@ -320,3 +320,36 @@ export async function refreshSite(app) {
   const old = snap(app, 'site') || {};
   await putSnap(app, [{ id: 'site', at: new Date().toISOString(), counterId: id, goalIds, daily: daily ?? old.daily ?? [], sources: sources ?? old.sources ?? [], refs: refs ?? old.refs ?? [], pages: pages ?? old.pages ?? [], direct: direct ?? old.direct ?? [], utm: utm ?? old.utm ?? [], errors }]);
 }
+
+// ---------- автоправила: выполнить включённые (direct/js/autorules.js) ----------
+// Площадки: читаем «Запрещённые площадки» кампании прямо перед записью и дописываем новые (остальные настройки не трогаем).
+async function excludePlaces(app, cid, places) {
+  const s = app.ctx().settings;
+  const r = await call(s, 'campaigns', 'get', { SelectionCriteria: { Ids: [cid] }, FieldNames: ['Id', 'Name', 'ExcludedSites'] }, 2, undefined, 'v501');
+  const camp = (r.Campaigns || [])[0];
+  if (!camp) throw new Error('кампания не найдена');
+  const cur = camp.ExcludedSites?.Items || [], next = [...new Set([...cur, ...places])];
+  if (next.length === cur.length) return { name: camp.Name, errors: [] };
+  const u = await call(s, 'campaigns', 'update', { Campaigns: [{ Id: cid, ExcludedSites: { Items: next } }] }, 0, undefined, 'v501');
+  return { name: camp.Name, errors: (u.UpdateResults || []).flatMap((x) => (x.Errors || []).map((e) => e.Details || e.Message)) };
+}
+export async function runAutoRules(app, goalActs = []) {
+  const c = app.ctx(), d = c.settings.direct || {}, on = d.auto || {};
+  if (isDemo() || !Object.values(on).some(Boolean)) return [];
+  const { autoPlan } = await import('./autorules.js');
+  const plan = autoPlan({ main: snap(app, 'main') || {}, stats: snap(app, 'stats') || {}, on, today: c.today, goalActs, done: d.autoDone || [] });
+  const done = [];
+  for (const p of plan) {
+    try {
+      if (p.act) { const r = await apply(app, p.act, { by: 'auto' }); if (r?.errors?.length) continue; }
+      else if (p.rule === 'places') {
+        const r = await excludePlaces(app, p.cid, p.places);
+        await putLog(app, { id: 'l' + uid(), at: new Date().toISOString(), by: 'auto', do: 'exclude', cid: p.cid, text: `Кампания «${r.name}»: исключены площадки ${p.places.join(', ')}`, why: 'автоправило: 20+ кликов и больше половины отказов', ok: !r.errors.length, errors: r.errors, warnings: [] });
+        if (r.errors.length) continue;
+      }
+      done.push(p.key, ...(p.keys || []));
+    } catch (e) { console.warn('Автоправило', p.rule, e); }
+  }
+  if (done.length) await app.store.saveSettings({ direct: { ...(app.ctx().settings.direct || {}), autoDone: [...(d.autoDone || []), ...done].slice(-400), autoAt: new Date().toISOString(), autoLast: plan.filter((p) => done.includes(p.key)).map((p) => p.text).slice(0, 6) } });
+  return done;
+}
