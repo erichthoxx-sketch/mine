@@ -58,7 +58,7 @@ const link = (a, t) => `${ENV.SELF}?a=${a}&t=${t}`;
 const fill = (s, p) => String(s).replace(/\{unsub\}/g, link('unsub', p.token)).replace(/\{name\}/g, esc(p.name || ''));
 
 // письмо «подтвердите подписку» — короткое, в стиле сайта; тексты владелица меняет в Мастерской → Сайт → Почта (op: texts → d.texts)
-const FN_V = 7; // 7 — сторож Директа (op: watch, таймер); 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
+const FN_V = 8; // 8 — письмо «Разбор недели» по понедельникам и письма от приложений (op: note); 7 — сторож Директа (op: watch, таймер); 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
 const TEXTS_DEF = { subj: 'Подтвердите подписку', head: 'Подтвердите подписку', text: 'Одно нажатие — и я напишу вам, когда выйдет мой новый роман. Только тогда.', btn: 'Подтвердить' };
 const textsOf = (d) => ({ ...TEXTS_DEF, ...Object.fromEntries(Object.entries(d?.texts || {}).filter(([k, v]) => k in TEXTS_DEF && String(v || '').trim())) });
 function confirmMail(p, t = TEXTS_DEF) {
@@ -208,9 +208,49 @@ function watchAlerts(w, camps, ads, now) {
   }
   return { out, seen };
 }
+// Письмо «Разбор недели» по понедельникам (12.11.2026, идея «Е», её «да»): сервис сам берёт отчёт Директа за 14 дней (только чтение)
+// и сравнивает прошлую неделю с позапрошлой по каждой кампании. Отчёт ещё готовится (201/202) — вернёт null, попробуем в следующий вызов.
+const mskDay = (ms) => new Date(ms + 3 * 3600e3).toISOString().slice(0, 10);
+const addD = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+function weekDigest(rows, w, today) {
+  const to = addD(today, -1), mid = addD(today, -7), from = addD(today, -14), g = w.goals || {}, num = (v) => Number(String(v || '0').replace(',', '.')) || 0;
+  const conv = (r, ids) => ids.reduce((a, id) => a + num(r[`Conversions_${id}_LSCCD`]), 0);
+  const out = [];
+  for (const c of w.campaigns || []) {
+    const sum = (a, b) => rows.filter((r) => String(r.CampaignId) === String(c.id) && r.Date >= a && r.Date <= b).reduce((t, r) => ({ cost: t.cost + num(r.Cost), clicks: t.clicks + num(r.Clicks), lib: t.lib + (g.lib ? conv(r, [g.lib]) : 0), buy: t.buy + conv(r, g.buy || []) }), { cost: 0, clicks: 0, lib: 0, buy: 0 });
+    const now = sum(mid, to), prev = sum(from, addD(mid, -1));
+    if (!now.cost && !now.clicks) continue;
+    const ch = (a, b) => (b ? ` (${a >= b ? '+' : '−'}${Math.round(Math.abs(a - b) / b * 100)} %)` : '');
+    out.push(`«${c.name}»\n  расход ${Math.round(now.cost)} ₽${ch(now.cost, prev.cost)} · клики ${now.clicks}${ch(now.clicks, prev.clicks)}\n  в библиотеку ${now.lib}${ch(now.lib, prev.lib)}${now.lib ? ` по ${Math.round(now.cost / now.lib)} ₽` : ''} · покупки ${now.buy}${now.buy ? ` по ${Math.round(now.cost / now.buy)} ₽` : ''}`);
+  }
+  return out.length ? `Реклама за неделю ${mid.slice(8, 10)}.${mid.slice(5, 7)}–${to.slice(8, 10)}.${to.slice(5, 7)} (в скобках — к неделе до неё):\n\n${out.join('\n\n')}\n\nВыводы, тест объявлений и что поменять — «Директ» → «Разбор недели».` : '';
+}
+async function directReport(w, today) {
+  const g = w.goals || {}, goals = [g.lib, ...(g.buy || [])].filter(Boolean).map(String).slice(0, 10);
+  const params = { SelectionCriteria: { DateFrom: addD(today, -14), DateTo: addD(today, -1), Filter: [{ Field: 'CampaignId', Operator: 'IN', Values: w.campaigns.map((c) => String(c.id)) }] }, FieldNames: ['Date', 'CampaignId', 'Impressions', 'Clicks', 'Cost', ...(goals.length ? ['Conversions'] : [])],
+    ReportName: 'week-' + today, ReportType: 'CUSTOM_REPORT', DateRangeType: 'CUSTOM_DATE', Format: 'TSV', IncludeVAT: 'YES', IncludeDiscount: 'NO', ...(goals.length ? { Goals: goals, AttributionModels: ['LSCCD'] } : {}) };
+  const r = await fetch('https://api.direct.yandex.com/json/v5/reports', { method: 'POST', headers: { Authorization: 'Bearer ' + w.token, 'Accept-Language': 'ru', 'Content-Type': 'application/json; charset=utf-8', processingMode: 'auto', returnMoneyInMicros: 'false', skipReportHeader: 'true', skipReportSummary: 'true', ...(w.login ? { 'Client-Login': w.login } : {}) }, body: JSON.stringify({ params }) });
+  if (r.status === 201 || r.status === 202) return null;
+  if (r.status !== 200) throw new Error('отчёт Директа: ' + r.status);
+  const lines = (await r.text()).split('\n').filter(Boolean), head = (lines[0] || '').split('\t');
+  return lines.slice(1).map((l) => Object.fromEntries(l.split('\t').map((v, i) => [head[i], v])));
+}
+async function runWeekly(w, now) {
+  const today = mskDay(now), d = new Date(now + 3 * 3600e3);
+  if (!w.weekly || d.getUTCDay() !== 1 || d.getUTCHours() < 9 || w.weekSent === today) return false;
+  const rows = await directReport(w, today);
+  if (!rows) return 'wait';
+  const text = weekDigest(rows, w, today), to = replyTo();
+  if (text && to) await send(to, 'Реклама за неделю — разбор', `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55">${esc(text).replace(/\n/g, '<br>')}</div>`, text, '', '');
+  w.weekSent = today;
+  return true;
+}
 async function runWatch() {
   const w = await getObj('watch.json', null), now = Date.now();
-  if (!w?.on || !w.token || !(w.campaigns || []).length || now - (w.at || 0) < WATCH_EVERY) return null;
+  if (!w?.on || !w.token || !(w.campaigns || []).length) return null;
+  // письмо недели: по понедельникам с 9:00 по Москве, отдельно от трёхчасовых проверок (отчёт может готовиться несколько вызовов)
+  try { const wk = await runWeekly(w, now); if (wk === true) await putObj('watch.json', JSON.stringify(w)); } catch (e) { w.err = String(e.message || e).slice(0, 200); }
+  if (now - (w.at || 0) < WATCH_EVERY) return null;
   w.at = now;
   let res;
   try {
@@ -232,6 +272,7 @@ async function runWatch() {
 }
 
 module.exports.watchAlerts = watchAlerts;
+module.exports.weekDigest = weekDigest;
 module.exports.handler = async function (event, context) {
   TOKEN = context?.token?.access_token || '';
   if (Array.isArray(event?.messages)) { // вызов таймером (триггер Yandex Cloud)
@@ -337,9 +378,15 @@ module.exports.handler = async function (event, context) {
         }
         await saveList(d); return json({ ok: true, added: n }, 200, C);
       }
+      if (body.op === 'note') { // письмо самой владелице от её приложений (итог месяца из Мастерской)
+        const to = replyTo(), subject = String(body.subject || '').slice(0, 200), text = String(body.text || '').slice(0, 12000);
+        if (!to || !subject || text.length < 20) return json({ error: 'form' }, 400, C);
+        await send(to, subject, `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#141517;max-width:640px">${esc(text).replace(/\n/g, '<br>')}</div>`, text, '', '');
+        return json({ ok: true }, 200, C);
+      }
       if (body.op === 'watch') { // сторож Директа: задание от приложения «Директ» (ключ хранится здесь и наружу не отдаётся)
         const w = (await getObj('watch.json', null)) || {};
-        if (body.cfg) { const c = body.cfg; Object.assign(w, { on: !!c.on, token: c.on ? String(c.token || w.token || '') : '', login: String(c.login || ''), campaigns: (c.campaigns || []).slice(0, 30).map((x) => ({ id: x.id, name: String(x.name || '').slice(0, 120) })) }); if (!w.on) { w.seen = {}; } await putObj('watch.json', JSON.stringify(w)); }
+        if (body.cfg) { const c = body.cfg; Object.assign(w, { on: !!c.on, token: c.on ? String(c.token || w.token || '') : '', login: String(c.login || ''), campaigns: (c.campaigns || []).slice(0, 30).map((x) => ({ id: x.id, name: String(x.name || '').slice(0, 120) })), weekly: c.weekly !== false, goals: { lib: c.goals?.lib || '', buy: (c.goals?.buy || []).slice(0, 5) } }); if (!w.on) { w.seen = {}; } await putObj('watch.json', JSON.stringify(w)); }
         return json({ ok: true, on: !!w.on, at: w.at || 0, err: w.err || '', last: w.last || [], campaigns: (w.campaigns || []).length }, 200, C);
       }
       if (body.op === 'piracy') { // задание на круглосуточный поиск + забрать находки (Мастерская → Пираты)

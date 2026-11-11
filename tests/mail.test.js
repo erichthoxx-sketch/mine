@@ -275,3 +275,14 @@ test('Почта знает последнюю версию программы �
   const view = Number(/export const FN_LATEST = (\d+)/.exec(readFileSync(new URL('../writer/js/views/mail.js', import.meta.url), 'utf8'))[1]);
   assert.equal(view, fn);
 });
+
+test('письмо «Разбор недели»: прошлая неделя против позапрошлой по кампаниям', () => {
+  const { weekDigest } = require('../mail/mail-function.cjs');
+  const rows = [];
+  for (let i = 2; i <= 15; i++) rows.push({ Date: `2026-11-${String(i).padStart(2, '0')}`, CampaignId: '7', Clicks: i >= 9 ? '100' : '50', Cost: i >= 9 ? '100.00' : '50.00', Conversions_11_LSCCD: i >= 9 ? '10' : '5', Conversions_22_LSCCD: i === 15 ? '2' : '--' });
+  const t = weekDigest(rows, { campaigns: [{ id: 7, name: 'ЕПК' }, { id: 8, name: 'Пустая' }], goals: { lib: '11', buy: ['22'] } }, '2026-11-16');
+  assert.match(t, /за неделю 09\.11–15\.11/);
+  assert.match(t, /«ЕПК»\n  расход 700 ₽ \(\+100 %\) · клики 700 \(\+100 %\)\n  в библиотеку 70 \(\+100 %\) по 10 ₽ · покупки 2 по 350 ₽/);
+  assert.doesNotMatch(t, /Пустая/);
+  assert.equal(weekDigest([], { campaigns: [{ id: 7, name: 'ЕПК' }] }, '2026-11-16'), '');
+});
