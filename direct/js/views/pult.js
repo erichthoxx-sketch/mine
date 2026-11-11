@@ -82,8 +82,8 @@ export function pultView(a) {
   return {
     html: `${!M.m?.counterId ? `<div class="alert">Подключите Метрику автора (⚙ Настройки) — без неё не видно добавлений в библиотеку и покупок, а значит, и окупаемости.</div>` : ''}
     ${wkOpen ? `<div class="card"><div class="row between" style="gap:12px"><div><b>Разбор недели готов</b><div class="small muted">Итог против прошлой недели, воронка, объявления, запросы, площадки — и что поменять</div></div><button class="primary" data-act="go" data-to="/week">Открыть</button></div></div>` : ''}
-    <div class="card"><div class="row between"><h2 style="margin:0">Требует внимания</h2><span class="small muted">${tasks.length ? num(tasks.length) : 'всё спокойно'}</span></div>
-      ${tasks.length ? `<div class="list">${more('pult-todo', tasks, 5)}</div>` : '<p class="small muted" style="margin:8px 0 0">Ничего срочного. Приложение само проверяет кампании при каждом обновлении — раз в 15 минут, пока открыто.</p>'}</div>
+    <div class="card"><div class="row between"><h2 style="margin:0">Сегодня · кампании</h2><span class="small muted">${tasks.length ? num(tasks.length) : 'всё спокойно'}</span></div>
+      ${tasks.length ? `<div class="list">${more('pult-todo', tasks, 3)}</div>` : '<p class="small muted" style="margin:8px 0 0">Ничего срочного. Приложение само проверяет кампании при каждом обновлении — раз в 15 минут, пока открыто.</p>'}</div>
     ${live.map(card).join('') || '<div class="card"><p class="muted">Сейчас нет идущих кампаний.</p></div>'}
     ${rest.length ? `<div class="card"><h2>Остальные кампании</h2><div class="list">${rest.map((r) => `<a class="item" href="#" data-act="go" data-to="/c/${r.camp.id}"><div class="row between"><b>${esc(r.camp.name)}</b><span class="small muted">${esc(r.st.text)}</span></div>${r.econ.d30.cost ? `<div class="small muted">за 30 дней ${money(r.econ.d30.cost)}${r.econ.lib30 ? ` · в библиотеку ${num(r.econ.lib30)}` : ''}</div>` : ''}</a>`).join('')}</div></div>` : ''}
     ${autoCard(c)}

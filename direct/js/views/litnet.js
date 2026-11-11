@@ -1,6 +1,7 @@
 // "Мой Литнет" в Директе: ссылки общие с "Мастерской", статистика привязок — вручную.
 // Никогда не редактируем чужие кампании и не генерируем ссылки вместо самого Литнета.
 import { esc, acts, toast, openSheet, ask, opt, uid } from '../../../js/ui.js';
+import { litTagInfo } from '../../../js/littag.js';
 import { visibleLinks, exactTag, linkStatus, expiresFromCreated } from '../litnetcalc.js';
 import { isLitnetLink, promoReminderDate, promoChannel, promoChannelName } from '../../../writer/js/promolinks.js';
 import { fmtDate, plural } from '../../../js/format.js';
@@ -32,6 +33,7 @@ export function litnetView(a) {
   return {html:`
   <div class="card ln-head">
     <div class="row between"><h2 style="margin:0">Мой Литнет</h2><button class="primary" data-act="ln.new">+ Ссылка</button></div>
+    ${(() => { const i = litTagInfo(a.ctx().settings, a.ctx().today); return `<p class="small" style="margin:8px 0 0">${i ? `Общая метка для сайта и кампаний: <b>${esc(i.tag)}</b> · ${i.late ? 'истекла' : 'до'} ${i.until.slice(8, 10)}.${i.until.slice(5, 7)}. ` : 'Общая метка для сайта и кампаний ещё не задана. '}Меняется в одном месте — <a href="../workshop/#/site">Мастерская → Сайт → «Новая метка»</a>: сразу на сайте и в «Параметрах URL» кампаний.</p>`; })()}
     <div class="ln-stats"><div><b>${active}</b><span>действуют</span></div><div><b>${watch}</b><span>скоро заменить</span></div><div><b>${expired}</b><span>срок прошел</span></div></div>
     <p class="small muted">Ссылки создаются на Литнете. Здесь храним их, отслеживаем срок новых привязок и копируем точную метку для Директа.</p>
   </div>

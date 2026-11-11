@@ -47,10 +47,7 @@ export function data(a) {
     <label>Псевдоним (в шапке)</label><input name="pseudonym" value="${esc(s.pseudonym)}">
     <div style="margin-top:12px"><button class="primary" type="submit">Сохранить настройки</button></div>
   </form></div>`, { sub: `налог ${s.taxRate} %, «Литнет платит», цели` })}
-  ${fold('dt-look', 'Оформление и аккаунт', `  <div class="card"><h2>Оформление и аккаунт</h2>
-    <label style="margin-top:0">Тема</label><select data-chg="theme">${opt('auto', 'как в телефоне', a.theme)}${opt('light', 'светлая', a.theme)}${opt('dark', 'тёмная', a.theme)}</select>
-    <p class="small muted" style="margin-top:12px">${st.mode === 'firebase' ? `Вы вошли как <b>${esc(st.user.email)}</b>. Данные синхронизируются между устройствами.` : 'Пробный режим: данные хранятся только в этом браузере. Чтобы работать с телефона и компьютера, настройте Firebase по инструкции (docs/SETUP.md).'}</p>
-    ${st.mode === 'firebase' ? '<button data-act="auth.out">Выйти</button>' : ''}</div>`)}
+  <p class="small muted" style="margin:16px 0 0">Тема, цвет, аккаунт и общие настройки — в одном месте: <a href="workshop/#/settings">Настройки Мастерской</a>.${st.mode === 'firebase' ? ` Вы вошли как ${esc(st.user.email)}.` : ''}</p>
   </div>`;
   return { html };
 }
