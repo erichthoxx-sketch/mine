@@ -5,7 +5,7 @@ import { syncDirectAccessQuiet, autoDirectAccess } from '../../js/aidirect.js';
 import { autoCohorts } from '../../js/cohorts.js';
 import { initAccent } from '../../js/accent.js';
 import { keepNavDown } from '../../js/vvfix.js';
-import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from '../../js/ui.js';
+import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums, ecoSwitch } from '../../js/ui.js';
 import { todayISO } from '../../js/calc.js';
 import { ic } from '../../js/icons.js';
 import { takeTokenFromUrl, OUTAGE_TEXT } from './api.js';
@@ -134,7 +134,7 @@ function render() {
   const sub = demo.on ? 'пример данных' : ui.busy ? ui.busy : main?.at ? 'обновлено ' + new Date(main.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'не подключён';
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере.</div>' : ''}
   <div class="top"><div><h1>Директ</h1><small>${esc(c.settings.pseudonym)} · ${esc(sub)}${c.settings.direct?.sandbox && !demo.on ? ' · песочница' : ''}</small></div>
-  <div class="row">${!demo.on && c.settings.directToken ? `<button data-act="d.reload" aria-label="Обновить" title="Обновить данные"${ui.busy ? ' disabled' : ''}>${ic('refresh')}</button>` : ''}<button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">${ic('settings')}</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
+  <div class="row">${ecoSwitch('direct')}${!demo.on && c.settings.directToken ? `<button data-act="d.reload" aria-label="Обновить" title="Обновить данные"${ui.busy ? ' disabled' : ''}>${ic('refresh')}</button>` : ''}<button data-act="go" data-to="/settings" aria-label="Настройки" title="Настройки">${ic('settings')}</button><button data-act="theme.toggle" aria-label="Тема" title="Тема">${ic(theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'auto')}</button></div></div>
   <main>${tidyNums(r.html)}</main>
   <nav class="tabs">${TABS.map(([h, i, t]) => `<a href="#" data-act="go" data-to="${h}" class="${tab === h ? 'on' : ''}" title="${t}"><b>${ic(i)}</b><span class="nl">${t}</span></a>`).join('')}${navSide(app)}<button class="nav-toggle" data-act="nav.mini" aria-label="Свернуть или развернуть меню" title="Свернуть меню">${ic('chevron')}</button></nav>`;
   afterFn = r.after || null;

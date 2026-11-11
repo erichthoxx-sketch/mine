@@ -3358,3 +3358,10 @@ details.fold-more[open] > summary { align-self: flex-start; }
 button[data-act="l.lesson"] { display: none; }
 .pult-funnel { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 8px 0 4px; }
 .pult-c h2 { color: var(--text); }
+
+/* Переключатель приложений (12.11.2026): один вид во всех трёх — «таблетка» с выбранным графитовым */
+:root .eco { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--soft, var(--surface-2)); }
+:root .eco a, :root .eco span { padding: 7px 13px; border-radius: 999px; font: 500 14px/1.2 var(--font-display); color: var(--text-2); text-decoration: none; white-space: nowrap; }
+:root .eco a:hover { color: var(--text); }
+:root .eco .on { background: var(--text); color: var(--bg); }
+@media (max-width: 720px) { :root .eco a, :root .eco span { padding: 7px 9px; font-size: 12.5px; } :root .top .row { flex-wrap: wrap; } }

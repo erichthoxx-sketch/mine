@@ -251,3 +251,11 @@ acts['tile.open'] = (d) => {
   let open = ''; try { open = localStorage.getItem('tile:' + d.key) || ''; } catch { /* ок */ }
   try { localStorage.setItem('tile:' + d.key, open === d.k ? '' : d.k); } catch { /* ок */ }
 };
+
+// Переключатель приложений — один и тот же во всех трёх (12.11.2026, владелица: «чтобы всё в единую мою писательскую экосистему превратилось»):
+// Мастерская · Доходы · Директ и ссылка на сайт. cur — 'writer' | 'income' | 'direct'; пути — от папки текущего приложения.
+export function ecoSwitch(cur) {
+  const up = cur === 'income' ? '' : '../';
+  const items = [['writer', 'Мастерская', up + 'workshop/'], ['income', 'Доходы', up || './'], ['direct', 'Директ', up + 'direct/']];
+  return `<nav class="eco" aria-label="Мои приложения">${items.map(([k, t, href]) => (k === cur ? `<span class="on" aria-current="page">${t}</span>` : `<a href="${href}">${t}</a>`)).join('')}<a href="https://lanafreitag.ru/" target="_blank" rel="noopener" title="Открыть сайт lanafreitag.ru">Сайт</a></nav>`;
+}

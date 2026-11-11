@@ -116,3 +116,15 @@ test('окупаемость с начала кампании: вернулос�
   assert.deepEqual([p.cost, p.lib, p.buy, p.back, p.expected, p.total, p.ret, p.days], [200, 20, 1, 100, 500, 600, 3, 3]);
   assert.equal(campaignPayback(c, { daily: [], conv, today: '2026-11-12', goals: g }), null);
 });
+
+test('Директ → «Доходы»: кампания создаётся сама, с книгой по ссылке объявления', async () => {
+  const { incomeCampaignFor } = await import('../direct/js/sync.js');
+  const { bookIdFor } = await import('../js/calc.js');
+  const wbooks = [{ id: 'w1', title: 'Развод для черной вдовы', direct: { link: 'https://litnet.com/ru/book/razvod-b639097' } }];
+  const ads = [{ cid: 7, href: 'https://litnet.com/ru/book/razvod-b639097?utm_litref=x' }];
+  const k = incomeCampaignFor(camp, ads, wbooks, [{ book: 'Развод для черной вдовы (подписка)' }]);
+  assert.equal(k.name, 'Директ: «Развод для черной вдовы»');
+  assert.equal(k.bookId, bookIdFor('Развод для черной вдовы (подписка)')); assert.equal(k.scope, 'book'); assert.equal(k.channel, 'own');
+  const any = incomeCampaignFor(camp, [], [], []);
+  assert.equal(any.name, 'Директ: ' + camp.name); assert.equal(any.scope, 'all');
+});

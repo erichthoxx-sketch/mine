@@ -4,7 +4,8 @@
 import { call, report, metrika } from './api.js';
 import { MICRO, dailyRows, mergeDaily, adRows, mergeAdDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows, withGoal, moneyOf, withLitref } from './dcalc.js';
 import { demoSnapshot, demoMetrikaSnap, demoSiteSnap, isDemo, snap, putSnap, putLog } from './demo.js';
-import { todayISO, addDays, weekStart } from '../../js/calc.js';
+import { todayISO, addDays, weekStart, bookIdFor } from '../../js/calc.js';
+import { bookOfCampaign } from './pult.js';
 import { SESSION_METRICS, goalMetric, mkRows, SITE_COUNTER, siteGoalIds } from './mcalc.js';
 import { reportId } from '../../js/parse.js';
 import { uid } from '../../js/ui.js';
@@ -139,7 +140,28 @@ export async function refresh(app, { onStep = () => {} } = {}) {
     { id: 'main', at, sandbox: !!s.direct?.sandbox, campaigns, groups, keywords, ads },
     { id: 'stats', at, daily, adDaily, kw, queries, conv, kwConv, mrows, mErr, mAt, placements, placementAt, placementErr },
   ]);
+  await autoLinkIncome(app, campaigns, ads, daily);
   await pushToIncome(app, daily);
+}
+
+// Директ → «Доходы» сам (12.11.2026, «чтобы всё со всем синхронизировалось»): у кампании Директа с расходом появляется своя кампания
+// в «Доходах» (с книгой — по ссылке объявления), и расход по неделям уходит туда без ручной связи. Связь, которую владелица
+// сама убрала («не связана» — пустое значение в links), не возвращаем.
+export function incomeCampaignFor(camp, ads = [], wbooks = [], sales = []) {
+  const book = bookOfCampaign(camp, ads, wbooks);
+  const sold = book?.title ? sales.find((x) => String(x.book || '').toLowerCase().startsWith(book.title.toLowerCase()))?.book : null;
+  return { name: 'Директ: ' + (book?.title ? `«${book.title}»` : camp.name), bookId: sold ? bookIdFor(sold) : '', scope: sold ? 'book' : 'all', channel: 'own', start: camp.start || '', end: '', budget: null, paidAt: '', baseMode: 'auto', src: 'direct' };
+}
+async function autoLinkIncome(app, campaigns, ads, daily) {
+  const c = app.ctx(), d = c.settings.direct || {}, links = { ...(d.links || {}) };
+  let changed = false;
+  for (const camp of campaigns) {
+    if (String(camp.id) in links || !daily.some((x) => x.cid === camp.id && x.cost > 0)) continue;
+    const id = 'k' + uid();
+    await app.store.put('campaigns', { id, ...incomeCampaignFor(camp, ads, c.data.w_books || [], c.data.sales || []), start: camp.start || c.today });
+    links[camp.id] = id; changed = true;
+  }
+  if (changed) await app.store.saveSettings({ direct: { ...(app.ctx().settings.direct || {}), links } });
 }
 
 // Связанные кампании → недельные отчёты в «Доходах» (расход, показы, клики): там видно, окупается ли реклама
