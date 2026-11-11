@@ -4,6 +4,8 @@ import { num, fmtDate, plural } from '../../../js/format.js';
 import { releaseTiming, launchForecast } from '../../../js/insights.js';
 import { loadSite, patchSiteBook, sameTitle, SITE_ADMIN } from '../../../js/sitepub.js';
 import { siteState } from './mysite.js';
+import { launchChecklist } from '../launchlist.js';
+import { mailQueue, mailSent } from './mail.js';
 import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter, writtenMonth } from '../wcalc.js';
 import { goalTitle, goalToday, goalOver } from './goals.js';
 import { writtenChart } from '../wcharts.js';
@@ -244,7 +246,9 @@ export function bookPage(a, id) {
   const T = (k, title, html, o = {}) => ({ k, title, html, ...o });
   const cLeft = contests.map((x) => contestStatus(x, b, c.today).daysLeft).filter((d) => d != null && d >= 0).sort((x, y) => x - y)[0];
   const posts = blogBookCard(c, b.id), ms = manuscriptInfo(b), syn = svcInfo(b, 'synopsis'), genre = bookGenres(b)[0];
+  const LC = launchChecklist({ book: b, site: siteState() || null, settings: c.settings, campaigns: c.data.campaigns || [], contests, mailQueue: mailQueue(c.settings), mailSent: mailSent(c.settings), piracy: c.data.w_piracy || [], today: c.today });
   const more = tiles('book', [
+    ...((b.status || 'progress') === 'progress' ? [T('launch', 'Запуск', launchCard(c, b, LC), { icon: 'sparkle', sub: LC.next ? `${LC.done} из ${LC.total} · ${LC.next.text.toLowerCase()}` : `${LC.done} из ${LC.total} — всё готово` })] : []),
     T('contests', 'Конкурсы', bookContests(c, b, contests), { icon: 'plan', sub: contests.length ? `${contests.length} ${plural(contests.length, ['конкурс', 'конкурса', 'конкурсов'])}${cLeft != null ? ` · ${cLeft} дн.` : ''}` : 'отправить на конкурс' }),
     T('ideas', 'Идеи', `  <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(ideaTitle(x))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
@@ -733,4 +737,12 @@ function siteCard(b) {
       <a class="item row between" href="#" data-act="site.push" data-id="${b.id}"><span>Аннотация и крючок<span class="sub">${[s.ann ? 'аннотация есть' : 'аннотации нет', s.tagline ? 'крючок есть' : 'крючка нет'].join(' · ')}</span></span><span class="small-btn">Обновить</span></a>
       <a class="item row between" href="${esc(s.page)}" target="_blank" rel="noopener"><span>Страница книги на сайте<span class="sub">${esc(s.page.replace(/^https?:\/\//, ''))}</span></span><span>${ic('chevron')}</span></a>
     </div></div>`;
+}
+
+// «Запуск» — всё для старта книги одним списком; пункты отмечаются сами (writer/js/launchlist.js)
+function launchCard(c, b, L) {
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Запуск книги</h2><span class="small muted">${L.done} из ${L.total}</span></div>
+    <div class="progress" style="margin:10px 0 6px"><i style="width:${L.total ? (L.done / L.total * 100).toFixed(0) : 0}%"></i></div>
+    <div class="list">${L.items.map((x) => `<a class="item row between" ${x.href ? `href="${x.href}"` : `href="#" data-act="go" data-to="${x.to}"`} style="gap:12px"><span><span class="${x.ok ? 'up' : x.ok === null || x.soft ? 'muted' : 'warnc'}" style="display:inline-block;width:20px">${x.ok ? '✓' : '○'}</span><b style="font-weight:${x.ok ? 500 : 600}">${esc(x.text)}</b><span class="sub" style="margin-left:24px">${esc(x.hint)}</span></span></a>`).join('')}</div>
+    <p class="small muted" style="margin:10px 0 0">Пункты отмечаются сами — по данным книги, сайта, Почты, рекламы и поиска пиратов.</p></div>`;
 }
