@@ -13,6 +13,7 @@ import { homeView } from './home.js';
 import { demo } from '../demo.js';
 import { ic } from '../../../js/icons.js';
 import { litTagInfo } from '../../../js/littag.js';
+import { weekKeyOf } from '../weekreview.js';
 
 const TONE = { good: 'up', bad: 'down', warn: 'warnc', even: '', wait: 'muted', muted: 'muted' };
 const ORDER = { idle: 0, rejected: 0, capped: 1, on: 2, soon: 3, moderation: 4, stopped: 5, draft: 6, ended: 7, archived: 8 };
@@ -33,7 +34,7 @@ export function pultModel(a) {
     const st = campaignState(camp, { daily, ads, today: t });
     const econ = campaignEcon(camp, { daily, conv, today: t, goals, perSale, libShare: lv?.share ?? null, skip });
     const wk0 = weekBudget(camp, daily, t);
-    return { camp, goals, book, st, econ, wk: wk0, lev: campaignLevers(camp, st, econ, wk0, { ads, daily, today: t }), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
+    return { camp, goals, book, st, econ, perSale, wk: wk0, lev: campaignLevers(camp, st, econ, wk0, { ads, daily, today: t }), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
   }).sort((x, y) => (ORDER[x.st.key] ?? 9) - (ORDER[y.st.key] ?? 9));
   return { c, main, stats, m, rows, lv };
 }
@@ -69,16 +70,19 @@ export function pultView(a) {
   // метка «Мой Литнет»: за 2 дня до конца срока (меняется одной кнопкой в Мастерской → Сайт — сразу и на сайте, и в Директе)
   const lt = litTagInfo(c.settings, c.today);
   const ltTask = lt?.soon ? [`<div class="item"><b class="${lt.late ? 'down' : 'warnc'}">${lt.late ? 'Метка Литнета истекла' : `Метка Литнета действует до ${lt.until.slice(8, 10)}.${lt.until.slice(5, 7)}`}</b><div class="small muted">Создайте новую ссылку в «Мой Литнет» и вставьте её в <a href="../workshop/#/site">Мастерской → Сайт → «Новая метка»</a> — она встанет и на сайт, и в кампании.</div></div>`] : [];
+  // разбор недели: с понедельника, пока не нажала «Разобрала»
+  const wkOpen = (c.settings.direct?.weekDone || '') !== weekKeyOf(c.today) && M.rows.some((r) => ['on', 'capped'].includes(r.st.key) && r.econ.ran >= 2);
   const tasks = [...ltTask, ...alerts, ...flags, ...todo(main, stats, c).filter((x) => !x.includes('d-good'))];
   const live = M.rows.filter((r) => !['draft', 'ended', 'stopped'].includes(r.st.key));
   const rest = M.rows.filter((r) => !live.includes(r));
   return {
     html: `${!M.m?.counterId ? `<div class="alert">Подключите Метрику автора (⚙ Настройки) — без неё не видно добавлений в библиотеку и покупок, а значит, и окупаемости.</div>` : ''}
+    ${wkOpen ? `<div class="card"><div class="row between" style="gap:12px"><div><b>Разбор недели готов</b><div class="small muted">Итог против прошлой недели, воронка, объявления, запросы, площадки — и что поменять</div></div><button class="primary" data-act="go" data-to="/week">Открыть</button></div></div>` : ''}
     <div class="card"><div class="row between"><h2 style="margin:0">Требует внимания</h2><span class="small muted">${tasks.length ? num(tasks.length) : 'всё спокойно'}</span></div>
       ${tasks.length ? `<div class="list">${more('pult-todo', tasks, 5)}</div>` : '<p class="small muted" style="margin:8px 0 0">Ничего срочного. Приложение само проверяет кампании при каждом обновлении — раз в 15 минут, пока открыто.</p>'}</div>
     ${live.map(card).join('') || '<div class="card"><p class="muted">Сейчас нет идущих кампаний.</p></div>'}
     ${rest.length ? `<div class="card"><h2>Остальные кампании</h2><div class="list">${rest.map((r) => `<a class="item" href="#" data-act="go" data-to="/c/${r.camp.id}"><div class="row between"><b>${esc(r.camp.name)}</b><span class="small muted">${esc(r.st.text)}</span></div>${r.econ.d30.cost ? `<div class="small muted">за 30 дней ${money(r.econ.d30.cost)}${r.econ.lib30 ? ` · в библиотеку ${num(r.econ.lib30)}` : ''}</div>` : ''}</a>`).join('')}</div></div>` : ''}
-    <div class="row dl-row"><button class="dl" data-act="go" data-to="/an">Читатели (Метрика)</button><button class="dl" data-act="go" data-to="/books">Книги</button><button class="dl" data-act="go" data-to="/quality">Качество трафика</button><button class="dl" data-act="go" data-to="/log">Что меняли</button><button class="dl" data-act="ai.dl">${ic('download')} Для нейросети</button></div>
+    <div class="row dl-row"><button class="dl" data-act="go" data-to="/week">Разбор недели</button><button class="dl" data-act="go" data-to="/an">Читатели (Метрика)</button><button class="dl" data-act="go" data-to="/books">Книги</button><button class="dl" data-act="go" data-to="/quality">Качество трафика</button><button class="dl" data-act="go" data-to="/log">Что меняли</button><button class="dl" data-act="ai.dl">${ic('download')} Для нейросети</button></div>
     ${cohortLine(c.settings.direct || {})}`,
   };
 }

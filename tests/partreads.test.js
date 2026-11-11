@@ -27,3 +27,15 @@ test('удержание от главы к главе и провал на пл
   assert.equal(ret[4].retention, 14.5);
   assert.equal(ret[4].drop, 59.2); // от главы 3 (147) к главе 4 (60) ушли 59,2 %
 });
+
+test('прочтения: название части на отдельной строке, оценка и числа — на следующей (так копируется со страницы)', async () => {
+  const { parsePartReads, readsBroken } = await import('../writer/js/partreads.js');
+  const t = 'Части\tОценки читателей\t11.11\t10.11\t09.11\nПролог\n4.43 (7)\t150\t100\t30\nГлава 1\n5 (2)\t20\t10\t-\nГлава 2\n-\t5\t-\t-';
+  const r = parsePartReads(t, '2026-11-11');
+  assert.deepEqual(r.parts, ['Пролог', 'Глава 1', 'Глава 2']);
+  assert.deepEqual(r.days['2026-11-11'], { Пролог: 150, 'Глава 1': 20, 'Глава 2': 5 });
+  assert.deepEqual(r.ratings['Глава 1'], { avg: 5, n: 2 });
+  // то же без табуляции
+  assert.deepEqual(parsePartReads('Части Оценки читателей 11.11 10.11\nПролог\n4.43 (7) 150 100\nГлава 1\n5 (2) 20 10', '2026-11-11').parts, ['Пролог', 'Глава 1']);
+  assert.ok(readsBroken({ parts: ['4.43 (7)', 'Глава', '5 (2)'] })); assert.ok(!readsBroken(r));
+});

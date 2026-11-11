@@ -9,7 +9,7 @@ export function dayOf(dm, today) {
   const y = Number(today.slice(0, 4)), d = `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
   return d > today ? `${y - 1}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : d;
 }
-const cells = (line) => (line.includes('\t') ? line.split('\t') : line.trim().split(/\s{2,}|\s(?=[\d-]+(\s|$))/)).map((x) => x.trim());
+const cells = (line) => (line.includes('\t') ? line.split('\t') : line.trim().replace(/(\d+(?:[.,]\d+)?)\s+\((\d+)\)/g, '$1\u00a0($2)').split(/\s{2,}|\s(?=[\d.,-]+(\s|$))/)).map((x) => x.replace(/\u00a0/g, ' ').trim());
 
 // Текст таблицы → { days: { дата: { часть: прочтения } }, ratings: { часть: { avg, n } }, parts: [порядок частей] }
 export function parsePartReads(text, today) {
@@ -19,17 +19,28 @@ export function parsePartReads(text, today) {
   if (hi < 0) throw Error('Не нашла строку с датами (11.11, 10.11…). Скопируйте таблицу целиком, вместе с заголовком.');
   const dates = cells(lines[hi]).filter((x) => DM.test(x)).map((x) => dayOf(x, today));
   const days = {}, ratings = {}, parts = [];
-  for (const l of lines.slice(hi + 1)) {
-    const c = cells(l);
+  // При копировании со страницы название части часто уезжает на отдельную строку (оно ссылкой), а оценка и числа — на следующую:
+  //   «Глава 1» ⏎ «5 (2)  30  12 …». Строка, которая начинается с оценки или числа, — данные части из строки выше.
+  const RATE = /^(\d+(?:[.,]\d+)?)\s*\((\d+)\)$/, NUM = /^(\d+|-|—)$/;
+  const isData = (l) => { const c = cells(l); return RATE.test(c[0] || '') || (NUM.test(c[0] || '') && c.length > 1); };
+  const body = lines.slice(hi + 1);
+  let pending = '';
+  for (let i = 0; i < body.length; i++) {
+    const l = body[i];
+    let c;
+    if (isData(l)) { if (!pending) continue; c = [pending, ...cells(l)]; pending = ''; }
+    else if (!l.includes('\t') && body[i + 1] != null && isData(body[i + 1])) { pending = l.trim(); continue; }
+    else { c = cells(l); pending = ''; }
     const name = c[0];
-    if (!name || !/^(пролог|глава|эпилог|часть|от автора|бонус|\S)/i.test(name) || DM.test(name)) continue;
-    const rm = /^(\d+[.,]\d+)\s*\((\d+)\)$/.exec(c[1] || '');
-    const vals = c.slice(rm ? 2 : 1).filter((x) => x !== '');
-    if (!vals.length || !vals.every((x) => /^(\d+|-|—)$/.test(x))) continue; // не строка таблицы
+    if (!name || !/^(пролог|глава|эпилог|часть|от автора|бонус|\S)/i.test(name) || DM.test(name) || RATE.test(name)) continue;
+    const rm = RATE.exec(c[1] || '');
+    let vals = c.slice(rm ? 2 : 1).filter((x) => x !== '');
+    if (!rm && vals.length === dates.length + 1 && /^(-|—)$/.test(vals[0])) vals = vals.slice(1); // прочерк на месте оценки
+    if (!vals.length || !vals.every((x) => NUM.test(x))) continue; // не строка таблицы
     parts.push(name);
     if (rm) ratings[name] = { avg: Number(rm[1].replace(',', '.')), n: Number(rm[2]) };
     // значения стоят под датами по порядку; если в строке столбцов меньше — последние дни не скопировались
-    vals.slice(0, dates.length).forEach((v, i) => { if (/^\d+$/.test(v)) (days[dates[i]] ||= {})[name] = Number(v); });
+    vals.slice(0, dates.length).forEach((v, k) => { if (/^\d+$/.test(v)) (days[dates[k]] ||= {})[name] = Number(v); });
   }
   if (!parts.length) throw Error('Не нашла строк с частями книги.');
   return { days, ratings, parts, dates };
@@ -40,6 +51,9 @@ export function mergePartReads(old = {}, fresh) {
   return { days: { ...(old.days || {}), ...fresh.days }, ratings: { ...(old.ratings || {}), ...fresh.ratings },
     parts: fresh.parts.length >= (old.parts || []).length ? fresh.parts : old.parts, at: new Date().toISOString() };
 }
+
+// Сохранённое прежним разбором, где вместо названий частей оказались оценки («4.43 (7)»), — негодно: просим вставить заново
+export const readsBroken = (r) => (r?.parts || []).some((p) => /^\d+(?:[.,]\d+)?\s*\(\d+\)$/.test(p) || /^(глава|часть)$/i.test(p));
 
 // Удержание: прочтения каждой части за период ÷ прочтения первой части
 export function partRetention(r = {}, from = '', to = '9999') {

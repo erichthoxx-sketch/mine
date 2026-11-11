@@ -22,6 +22,7 @@ import { autoSyncKeywordLibrary } from './key-sync.js';
 import { campaignView } from './views/campaign.js';
 import './views/learn.js'; // «Разбор» кампании (auditItemsHtml) — сам раздел «Учёба» убран
 import { pultView, pultModel } from './views/pult.js';
+import { weekView } from './views/week.js';
 import { rub } from '../../js/format.js';
 import { moneyView } from './views/money.js';
 import { siteView } from './views/siteads.js';
@@ -66,6 +67,9 @@ export async function reload({ quiet = false } = {}) {
   try {
     await refresh(app, { onStep: (t) => { ui.busy = t; render(); } });
     if (d().lastError && !demo.on) await store.saveSettings({ direct: { ...d(), lastError: null } });
+    // идут ли кампании — чтобы Планер Мастерской по понедельникам звал на «Разбор недели»
+    const liveNow = (app.snap('main')?.campaigns || []).some((x) => x.state === 'ON' && x.status === 'ACCEPTED'), t0 = todayISO();
+    if (!demo.on && liveNow && d().liveOn !== t0) await store.saveSettings({ direct: { ...d(), liveOn: t0 } });
     if (!quiet) toast('Данные обновлены');
   } catch (e) {
     console.error(e);
@@ -103,7 +107,7 @@ function route() {
   if (a === 'book' && b) return { tab: '/', view: (x) => bookAdView(x, decodeURIComponent(b)) };
   if (a === 'launch' && b) return { tab: '/', view: (x) => launchView(x, decodeURIComponent(b)) };
   if (a === 'an' && b === 'site') return { tab: '/site', view: siteView }; // старая ссылка «Статистика» из Мастерской
-  const map = { books: booksAdsView, '': pultView, c: campaignsView, money: moneyView, site: siteView, launch: launchView, quality: qualityView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, ai: aiView, log: logView, settings: settingsView };
+  const map = { books: booksAdsView, '': pultView, c: campaignsView, money: moneyView, site: siteView, launch: launchView, quality: qualityView, week: weekView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, ai: aiView, log: logView, settings: settingsView };
   return { tab: TAB_OF[a] || '/' + (a || ''), view: map[a || ''] || pultView };
 }
 

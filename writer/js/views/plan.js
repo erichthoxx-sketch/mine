@@ -107,6 +107,9 @@ export function planItems(c, from, to) {
   // Мой сайт: розыгрыш по пятницам (в админке сайта → «Розыгрыш»)
   const rf = typeof window !== 'undefined' ? raffleTodo(siteNow(), t) : null;
   if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Пятничный подарок: выбрать, кому', 'Админка сайта → Подарок', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
+  // Директ: раз в неделю — «Разбор недели» (с понедельника, пока не нажала «Разобрала»; только если кампании идут)
+  { const dd = c.settings.direct || {}, mon = addDays(t, -((new Date(t + 'T00:00:00Z').getUTCDay() + 6) % 7));
+    if (dd.liveOn && dd.liveOn >= addDays(t, -8) && dd.weekDone !== mon) add(t, 'money', 'Разбор рекламы за неделю', 'Директ → «Разбор недели»: итог, узкое место, что поменять', { href: '../direct/#/week', id: 'dweek-' + mon, section: 'Деньги и реклама', dueRaw: mon }); }
   // Пираты: новые копии книг и «сайт не ответил» (Маркетинг → Пираты; поиск идёт сам раз в сутки)
   for (const x of piracyTodos(c.data.w_piracy || [], t)) add(x.date, 'waitans', x.text, x.sub, { to: '/marketing/piracy', id: x.id, section: 'Дела', dueRaw: x.date });
   // Метка «Мой Литнет» (сайт + Директ): за 2 дня до конца срока — обновить одной кнопкой в Мастерской → Сайт (js/littag.js).

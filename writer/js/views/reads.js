@@ -4,19 +4,19 @@
 import { esc, acts, openSheet, toast } from '../../../js/ui.js';
 import { num } from '../../../js/format.js';
 import { addDays } from '../../../js/calc.js';
-import { parsePartReads, mergePartReads, partRetention } from '../partreads.js';
+import { parsePartReads, mergePartReads, partRetention, readsBroken } from '../partreads.js';
 
 const app = () => window.__app;
 
 export function readsSub(b) {
   const r = b.reads;
-  if (!r?.parts?.length) return 'вставить с Литнета';
+  if (!r?.parts?.length || readsBroken(r)) return 'вставить с Литнета';
   const last = Object.keys(r.days || {}).sort().pop();
   return last ? `по ${last.slice(8, 10)}.${last.slice(5, 7)}` : 'нет данных';
 }
 
 export function readsCard(b, today) {
-  const r = b.reads;
+  const r = readsBroken(b.reads) ? null : b.reads;
   const head = `<div class="row between"><h2 style="margin:0">Прочтения по главам</h2><button data-act="reads.paste" data-id="${b.id}">Вставить таблицу</button></div>`;
   if (!r?.parts?.length) return `<div class="card">${head}<p class="small muted" style="margin:8px 0 0">Литнет → кабинет автора → «Статистика» → книга → «Последние 30 дней»: выделите таблицу целиком вместе с заголовком, скопируйте и вставьте сюда. Вставлять можно хоть каждый день — дни складываются.</p></div>`;
   const rows = partRetention(r, addDays(today, -29), today);
@@ -32,7 +32,7 @@ export function readsCard(b, today) {
 async function pushParts() {
   const a = app(), s = a.ctx().settings, base = String(s.bookAiWorker || '').replace(/\/+$/, ''), user = a.store.auth?.currentUser;
   if (!base || !user || a.store.mode !== 'firebase') return;
-  const books = (a.ctx().data.w_books || []).filter((x) => x.reads?.parts?.length).map((x) => ({ id: x.id, title: x.title, ...x.reads }));
+  const books = (a.ctx().data.w_books || []).filter((x) => x.reads?.parts?.length && !readsBroken(x.reads)).map((x) => ({ id: x.id, title: x.title, ...x.reads }));
   await fetch(base + '/sync/section/parts', { method: 'PUT', headers: { Authorization: 'Bearer ' + await user.getIdToken(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ section: 'parts', generatedAt: new Date().toISOString(), books }) });
 }
@@ -43,7 +43,7 @@ acts['reads.paste'] = (d) => {
     <textarea name="t" rows="10" required placeholder="Части	Оценки читателей	11.11	10.11…"></textarea>`, async (fd) => {
     let fresh;
     try { fresh = parsePartReads(fd.get('t'), a.ctx().today); } catch (e) { toast(e.message); return false; }
-    await a.store.patch('w_books', b.id, { reads: mergePartReads(b.reads, fresh) });
+    await a.store.patch('w_books', b.id, { reads: mergePartReads(readsBroken(b.reads) ? {} : b.reads, fresh) });
     pushParts().catch((e) => console.warn('Прочтения → нейросеть:', e));
     toast(`Сохранено: ${fresh.parts.length} частей, ${Object.keys(fresh.days).length} дн.`);
   }, { submitText: 'Сохранить' });

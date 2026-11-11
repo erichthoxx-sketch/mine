@@ -121,9 +121,11 @@ export function goalHints({ campaigns = [], keywords = [], kw = {}, kwConv = {},
     const mr = metrikaFor(mrows, c);
     if (mr && mr.visits >= 30 && mr.bounce >= 0.6) out.push({ kind: 'bounce', cid: c.id, name: c.name, ...mr, why: `${Math.round(mr.bounce * 100)} % посетителей уходят сразу: объявление обещает не то, что они видят на странице книги, или приходят не те люди`, lesson: 'goals' });
     if (g.conv < 3) continue; // средняя цена покупки ещё ненадёжна
+    // оплата за конверсии: деньги списываются только за достигнутую цель — фраза «тратить впустую» не может (11.11.2026: ложная тревога про автотаргетинг)
+    if (/PAY_FOR_CONVERSION/.test(`${c.strategy?.search || ''} ${c.strategy?.network || ''}`)) continue;
     for (const k of keywords) {
-      if (k.cid !== c.id || k.state === 'SUSPENDED' || k.state === 'OFF') continue;
-      const s = kw[k.id], n = sumGoals(kwConv[k.id], goals);
+      if (k.cid !== c.id || k.state === 'SUSPENDED' || k.state === 'OFF' || /^---autotargeting/i.test(k.phrase || '')) continue; // автотаргетинг — не фраза, останавливать его нельзя
+      const s = kw[k.id], n = sumGoals(kwConv[k.id], cg);
       if (!s) continue;
       if (!n && s.clicks >= 15 && s.cost >= 2 * g.cpa) out.push({ kind: 'noconv', cid: c.id, id: k.id, phrase: k.phrase, ...s, cpa: g.cpa, why: `потратила ${Math.round(s.cost)} ₽ (больше двух средних покупок по ${Math.round(g.cpa)} ₽) и ни одной покупки`, lesson: 'goals' });
       else if (n >= 2 && s.cost / n <= 0.6 * g.cpa) out.push({ kind: 'winner', cid: c.id, id: k.id, phrase: k.phrase, ...s, conv: n, cpa: r2(s.cost / n), avg: g.cpa, why: `покупка по ${Math.round(s.cost / n)} ₽ — заметно дешевле средней (${Math.round(g.cpa)} ₽): эта фраза приводит ваших читателей`, lesson: 'goals' });
