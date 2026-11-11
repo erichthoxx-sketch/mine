@@ -24,7 +24,7 @@ const WD = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const mmss = (s) => (s == null ? '—' : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
 const delta = (a, b) => (a != null && b ? `<span class="small ${a >= b ? 'up' : 'down'}">${a >= b ? '▲' : '▼'} ${pct(Math.abs(a - b) / b, 0)}</span>` : '');
 // Сводка (с воронкой) · Источники · Метки (свои UTM и ссылки Литнета — всё в одном месте) · Сайт. Книги по отдельности — в разделе «Книги»
-const TABS = [['sum', 'Сводка'], ['src', 'Источники'], ['links', 'Метки'], ['site', 'Сайт']];
+const TABS = [['sum', 'Сводка'], ['src', 'Источники'], ['links', 'Метки']]; // «Сайт» — отдельным разделом меню (12.11.2026), здесь не повторяется
 const cut = (html, from, to) => { const i = from ? html.indexOf(from) : 0, j = to ? html.indexOf(to, i + 1) : -1; return i < 0 ? '' : html.slice(i, j < 0 ? undefined : j); };
 const LBL = '<div class="card"><h2>Ссылки и метки</h2>', DEV = '<div class="grid2"><div class="card"><h2>Устройства', BOOKS = '<div class="card"><h2>Книги</h2>';
 

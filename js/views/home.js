@@ -47,7 +47,7 @@ export function home(app) {
   const vs = st.vsPrev;
   const html = `
   <div class="grid4">
-    <div class="stat"><div class="k">${dayLabel}</div><div class="v">${rub(last.royalty)}</div><div class="s">${last.qty} шт.: продажи ${last.saleQty}, подписки ${last.subQty}</div></div>
+    <a class="stat tap" href="#" data-act="go" data-to="/day" data-day="${c.dataEnd}" style="color:inherit;text-decoration:none" title="Открыть день: события, заметка, продажи по книгам"><div class="k">${dayLabel} →</div><div class="v">${rub(last.royalty)}</div><div class="s">${last.qty} шт.: продажи ${last.saleQty}, подписки ${last.subQty}</div></a>
     <div class="stat"><div class="k">Среднее за 7 дней</div><div class="v">${rub(st.avg7)}</div><div class="s">по ${fmtShort(addDays(st.dataEnd, -6))}–${fmtShort(st.dataEnd)}</div></div>
     <div class="stat"><div class="k">Этот месяц</div><div class="v">${rub(st.mtd)}</div><div class="s ${vs == null ? '' : vs >= 0 ? 'up' : 'down'}">${vs == null ? 'нет прошлого месяца' : (vs >= 0 ? '▲ ' : '▼ ') + pct(Math.abs(vs)) + ' к тому же сроку прошлого'}</div></div>
     <div class="stat"><div class="k">Прошлый месяц</div><div class="v">${rub(st.prevTotal)}</div><div class="s">за тот же срок: ${rub(st.prevSame)}</div></div>

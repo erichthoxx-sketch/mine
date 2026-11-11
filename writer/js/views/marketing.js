@@ -105,13 +105,13 @@ function synReadable(text) {
 export function bookMarketing(a, id) {
   const c = a.ctx(), b = c.wbooksById[id];
   if (!b) return { html: '<div class="card"><p>Книга не найдена.</p></div>' };
-  const t = a.ui.mTab || 'texts';
+  const t = a.ui.mTab === 'target' ? 'target' : 'texts'; // «Для издательства» — только на странице книги (плитка «Издательство»)
   const tab = (k, label) => `<button class="chip${t === k ? ' on' : ''}" data-act="mk.tab" data-v="${k}">${label}</button>`;
-  const body = t === 'target' ? targetBlock(c, b) : t === 'pub' ? pubBlock(c, b) : textsBlock(c, b);
+  const body = t === 'target' ? targetBlock(c, b) : textsBlock(c, b);
   const html = `<p><a class="btn back" href="#" data-act="go" data-to="/marketing">← Маркетинг</a></p>
   <div class="row" style="gap:12px;margin-bottom:10px"><span class="mk-cover big">${b.cover ? `<img src="${b.cover}" alt="">` : `<span>${esc(b.title.slice(0, 1))}</span>`}</span>
     <div><h2 style="margin:0">${esc(b.title)}</h2><div class="small muted">${STATUS[b.status] || STATUS.progress}</div></div></div>
-  <div class="chips">${tab('texts', 'Тексты и баннеры')}${tab('target', 'Для таргета')}${tab('pub', 'Для издательства')}</div>
+  <div class="chips">${tab('texts', 'Тексты и баннеры')}${tab('target', 'Для таргета')}</div>
   ${body}
   ${t === 'target' ? promoLinksPanel(c, { bookId: b.id, channel: 'direct' }) : ''}
   ${b.fileId ? `<div class="mk-auth"><button class="dl" data-act="mk.auth" data-id="${b.id}" title="Когда и как писалась книга: Документ, история версий, главы с отпечатками — в Word">${ic('download')}Справка об авторстве</button></div>` : ''}`;
@@ -179,7 +179,9 @@ function targetBlock(c, b) {
 }
 
 // Для издательства: рукопись, синопсис, аннотация — и всё одним архивом
-function pubBlock(c, b) {
+// для плитки «Издательство» на странице книги: свои файлы рукописи и синопсиса (кнопка пакета там уже есть сверху)
+export const pubFiles = (c, b) => pubBlock(c, b).split('<div class="card"><h2>Отправить в издательство</h2>')[0];
+export function pubBlock(c, b) {
   const man = mediaOf(c, b, ['manuscript']), syn = mediaOf(c, b, ['synopsis']);
   const fileRow = (m) => `<div class="item row between"><span>${ic('doc')} ${esc(m.name)}<span class="sub">${fmtDate((m.createdAt || '').slice(0, 10))}</span></span><span class="row">${m.webViewLink ? `<a class="btn" href="${esc(m.webViewLink)}" target="_blank" rel="noopener">Открыть</a>` : ''}<button class="link danger" data-act="mk.del" data-id="${m.id}">убрать</button></span></div>`;
   const ok = drive.isConnected() && c.settings.wMarketingFolder;
@@ -187,7 +189,7 @@ function pubBlock(c, b) {
     ${b.fileId ? `<div class="item row between"><span>${ic('doc')} Текст книги из Google Документа<span class="sub">в пакет — в формате Word, всегда свежая версия</span></span>${b.webViewLink ? `<a class="btn" href="${esc(b.webViewLink)}" target="_blank" rel="noopener">Открыть</a>` : ''}</div>` : ''}
     <div class="list">${man.map(fileRow).join('')}</div>
     <div class="row" style="margin-top:8px">${ok ? upBtn(b, 'manuscript', '+ Загрузить файл рукописи', '.doc,.docx,.pdf,.rtf,.odt,.txt') : ''}</div></div>
-  <div class="card"><div class="row between"><h2 style="margin:0">Синопсис</h2><button data-act="syn.edit" data-id="${b.id}" data-back="/mk/${b.id}">${synText(b) ? 'Изменить' : 'Написать'}</button></div>
+  <div class="card"><div class="row between"><h2 style="margin:0">Синопсис</h2><button data-act="syn.edit" data-id="${b.id}" data-back="/book/${b.id}">${synText(b) ? 'Изменить' : 'Написать'}</button></div>
     ${synText(b) ? `<div class="small muted" style="margin:4px 0 6px">${esc(synSource(b))}</div>${synReadable(synText(b))}` : '<p class="small muted" style="margin:6px 0 0">Можно написать здесь или загрузить готовый файл.</p>'}
     <div class="list">${syn.map(fileRow).join('')}</div>
     <div class="row" style="margin-top:8px">${ok ? upBtn(b, 'synopsis', '+ Загрузить файл синопсиса', '.doc,.docx,.pdf,.rtf,.odt,.txt') : ''}</div></div>

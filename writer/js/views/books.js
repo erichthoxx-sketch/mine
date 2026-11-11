@@ -8,7 +8,7 @@ import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate,
 import { goalTitle, goalToday, goalOver } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
-import { mkSummary } from './marketing.js';
+import { mkSummary, pubFiles } from './marketing.js';
 import { promoLinksPanel } from './promolinks.js';
 import { blogBookCard } from './blog.js';
 import { reviewsCard } from './reviews.js';
@@ -238,13 +238,13 @@ export function bookPage(a, id) {
   const posts = blogBookCard(c, b.id), ms = manuscriptInfo(b), syn = svcInfo(b, 'synopsis'), genre = bookGenres(b)[0];
   const more = tiles('book', [
     T('contests', 'Конкурсы', bookContests(c, b, contests), { icon: 'plan', sub: contests.length ? `${contests.length} ${plural(contests.length, ['конкурс', 'конкурса', 'конкурсов'])}${cLeft != null ? ` · ${cLeft} дн.` : ''}` : 'отправить на конкурс' }),
-    T('blog', 'Блог', posts, { icon: 'pen', sub: 'записи о книге' }),
     T('ideas', 'Идеи', `  <div class="card"><div class="row between"><h2 style="margin:0">Идеи к книге</h2><button data-act="idea.newFor" data-book="${b.id}">+ Идея</button></div>
     ${ideas.length ? `<div class="list" style="margin-top:6px">${ideas.slice(0, IDEAS_MAX).map((x) => `<a class="item row between" href="#" data-act="idea.open" data-id="${x.id}" data-book="${b.id}"><span>${ic('ideas')} ${esc(ideaTitle(x))}</span><span class="small muted">${(x.comments || []).length ? `${(x.comments || []).length} комм.` : ''}</span></a>`).join('')}</div>
       ${ideas.length > IDEAS_MAX ? `<div style="margin-top:10px"><button data-act="idea.open" data-book="${b.id}">Все идеи к книге (${ideas.length})</button></div>` : ''}` : '<p class="small muted" style="margin:8px 0 0">Идей к этой книге пока нет.</p>'}</div>
 `, { icon: 'ideas', sub: nIdeas ? `${nIdeas} ${plural(nIdeas, ['открытая', 'открытые', 'открытых'])}` : 'пока нет' }),
-    T('reviews', 'Отзывы', reviewsCard(c, b), { icon: 'eye', sub: nRev ? `${nRev} ${plural(nRev, ['отзыв', 'отзыва', 'отзывов'])}` : 'пока нет' }),
-    T('mk', 'Маркетинг', `  <div class="card"><h2>Маркетинг</h2>
+    // «Читатели» = отзывы + прочтения по главам; «Продвижение» = маркетинг + блог (12.11.2026: плиток стало слишком много, её «да»)
+    T('reviews', 'Читатели', reviewsCard(c, b) + readsCard(b, c.today), { icon: 'eye', sub: [nRev ? `${nRev} ${plural(nRev, ['отзыв', 'отзыва', 'отзывов'])}` : '', b.reads?.parts?.length ? `прочтения ${readsSub(b)}` : ''].filter(Boolean).join(' · ') || 'отзывы и прочтения' }),
+    T('mk', 'Продвижение', `  <div class="card"><h2>Маркетинг</h2>
     <div class="list">
       <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="texts"><span>Тексты и баннеры<span class="sub">тексты ${mk.texts} из ${mk.textsAll} · картинок ${mk.banners}</span></span><span>${mark(mk.texts === mk.textsAll)}</span></a>
       <a class="item row between" href="#" data-act="mk.go" data-id="${b.id}" data-tab="target"><span>Для таргета<span class="sub">креативов ${mk.creatives} · объявлений ${mk.ads}</span></span><span>${mark(mk.creatives && mk.ads)}</span></a>
@@ -252,10 +252,9 @@ export function bookPage(a, id) {
     ${mk.creatives || mk.ads ? `<div class="row" style="margin-top:10px"><button data-act="mk.targetZip" data-id="${b.id}">Скачать пакет для таргетолога</button></div>` : ''}
     ${(c.data.w_promolinks || []).some(x => x.bookId === b.id && x.status !== 'archived') ? promoLinksPanel(c, { bookId: b.id, compact: true }) : ''}
   </div>
-`, { icon: 'marketing', sub: `тексты ${mk.texts} из ${mk.textsAll}` }),
-    T('reads', 'Прочтения', readsCard(b, c.today), { icon: 'data', sub: readsSub(b) }),
+` + posts, { icon: 'marketing', sub: `тексты ${mk.texts} из ${mk.textsAll}` }),
     T('site', 'Сайт', siteCard(b), { icon: 'globe', sub: siteSub(b) }),
-    T('pub', 'Издательство', publisherCard(b), { icon: 'doc', sub: !ms.ok ? 'нет рукописи' : syn.ok ? 'рукопись и синопсис' : 'нет синопсиса' }),
+    T('pub', 'Издательство', publisherCard(b) + pubFiles(c, b), { icon: 'doc', sub: !ms.ok ? 'нет рукописи' : syn.ok ? 'рукопись и синопсис' : 'нет синопсиса' }),
     T('ai', 'Нейросеть', bookAiCard(c, b), { icon: 'sparkle', sub: b.aiShared ? 'подключена' : 'не подключена' }),
     T('about', 'О книге', `  <div class="card"><h2>О книге</h2>
   <form data-form="wbook.save" data-id="${b.id}">

@@ -92,7 +92,8 @@ function getCtx() {
 }
 
 // ---------- маршруты ----------
-const TABS = [['#/', 'home', 'Главная'], ['#/day', 'day', 'День'], ['#/books', 'books', 'Книги'], ['#/ads', 'ads', 'Реклама'], ['#/money', 'money', 'Финансы'], ['#/data', 'data', 'Данные']];
+// «День» из меню убран (12.11.2026, её «да»): открывается нажатием на плитку дня на Главной и из боковой колонки
+const TABS = [['#/', 'home', 'Главная'], ['#/books', 'books', 'Книги'], ['#/ads', 'ads', 'Реклама'], ['#/money', 'money', 'Финансы'], ['#/data', 'data', 'Данные']];
 function route() {
   const h = '#' + (ui.route || '/');
   const [, a, b] = h.split('/');
@@ -157,7 +158,7 @@ function setRoute(path) {
   if (path !== '/ads' && !path.startsWith('/ad/')) ui.adMonth = null;
   if (path !== '/books' && !path.startsWith('/book/')) ui.booksMonth = null;
 }
-acts.go = (d) => { if (d.mtab) ui.moneyTab = d.mtab; setRoute(d.to); window.scrollTo(0, 0); }; // data-mtab — сразу нужная вкладка «Финансов»
+acts.go = (d) => { if (d.mtab) ui.moneyTab = d.mtab; if (d.day) ui.day = d.day; setRoute(d.to); window.scrollTo(0, 0); }; // data-mtab — сразу нужная вкладка «Финансов»
 // широкий экран: меню слева, колонка «Сегодня» справа
 const wide = () => window.matchMedia('(min-width: 1180px)').matches;
 let rt, wasWide = wide();
