@@ -3,7 +3,7 @@
 import { esc, more } from '../../../js/ui.js';
 import { rub, num } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
-import { goalsOf, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget } from '../pult.js';
+import { goalsOf, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget, campaignLevers } from '../pult.js';
 import { royaltyPerSale, goalTotals30 } from '../mcalc.js';
 import { libraryValue } from '../launchcalc.js';
 import { placementRows, qualityAlerts } from '../qualitycalc.js';
@@ -32,14 +32,15 @@ export function pultModel(a) {
     const perSale = sold?.qty >= 5 ? sold.perSale : perAll;
     const st = campaignState(camp, { daily, ads, today: t });
     const econ = campaignEcon(camp, { daily, conv, today: t, goals, perSale, libShare: lv?.share ?? null, skip });
-    return { camp, goals, book, st, econ, wk: weekBudget(camp, daily, t), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
+    const wk0 = weekBudget(camp, daily, t);
+    return { camp, goals, book, st, econ, wk: wk0, lev: campaignLevers(camp, st, econ, wk0, { ads, daily, today: t }), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
   }).sort((x, y) => (ORDER[x.st.key] ?? 9) - (ORDER[y.st.key] ?? 9));
   return { c, main, stats, m, rows, lv };
 }
 
 const money = (v) => (v == null ? '—' : rub(v, 0));
 function card(r) {
-  const { camp, book, st, econ: e, wk } = r;
+  const { camp, book, st, econ: e, wk, lev } = r;
   const tile = (k, v, s = '') => `<div><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
   return `<div class="card pult-c"><div class="row between"><a href="#" data-act="go" data-to="/c/${camp.id}"><h2 style="margin:0">${esc(book?.title ? `«${book.title}»` : camp.name)}</h2></a><span class="small ${TONE[st.tone]}">● ${esc(st.text)}</span></div>
     ${book?.title ? `<div class="small muted">${esc(camp.name)}</div>` : ''}
@@ -51,6 +52,8 @@ function card(r) {
     </div>
     ${wk ? `<div class="progress ${wk.share >= 0.9 ? 'warn' : ''}"><i style="width:${Math.min(100, wk.share * 100).toFixed(1)}%"></i></div>` : ''}
     <p class="small ${TONE[e.verdict.kind]}" style="margin:10px 0 0">${esc(e.verdict.text.charAt(0).toUpperCase() + e.verdict.text.slice(1))}${e.revenue != null && e.buy30 ? ` · роялти с покупок ≈ ${money(e.revenue)}` : ''}</p>
+    ${lev?.forecast ? `<p class="small muted" style="margin:4px 0 0">При таком темпе за неделю: ≈ ${num(Math.round(lev.forecast.lib))} добавлений за ${money(lev.forecast.cost)}${lev.forecast.royalty != null ? ` → ожидаемое роялти ≈ ${money(lev.forecast.royalty)}` : ''}</p>` : ''}
+    ${lev?.levers.length ? `<div class="pult-lev"><div class="small muted" style="margin:12px 0 2px">Как заработать больше</div>${more('lev-' + camp.id, lev.levers.map((x, i) => `<div class="item"><b>${i + 1}. ${esc(x.title)}</b><div class="small muted">${esc(x.how)}</div></div>`), 2)}</div>` : ''}
     <div class="row dl-row"><button class="dl" data-act="go" data-to="/c/${camp.id}">Открыть кампанию</button>${book?.id ? `<button class="dl" data-act="go" data-to="/book/${esc(book.id)}">Книга</button>` : ''}</div></div>`;
 }
 

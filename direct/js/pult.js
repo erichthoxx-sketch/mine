@@ -89,6 +89,43 @@ export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSal
   return { today: dToday, d7, d30, lib7, lib30, buy30, cpaLib, cpaBuy, revenue, libValue, target, ran, verdict };
 }
 
+// «Как заработать больше» (11.11.2026, владелица: «чтобы мне было максимально просто получать максимальную прибыль»):
+// рычаги по одной идущей кампании — от самого денежного. Только советы: цену цели и бюджет меняет владелица в кабинете Директа.
+// Расход в отчётах — с НДС, цена цели в стратегии — без: сравниваем через VAT.
+export const VAT = 1.22, LEARN_DAYS = 7;
+export function campaignLevers(camp, st, econ, wk, { ads = [], daily = [], today }) {
+  if (!['on', 'capped'].includes(st.key)) return { levers: [], forecast: null };
+  const out = [], mine = ads.filter((x) => x.cid === camp.id && x.state === 'ON' && x.status !== 'REJECTED');
+  const learning = econ.ran < LEARN_DAYS, after = camp.start ? addDays(camp.start, LEARN_DAYS) : today;
+  const dm = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`, val = econ.libValue, target = econ.target, paid = target ? target * VAT : null;
+  // темп: полные дни с начала недели или старта → сколько уйдёт за неделю
+  const from = [weekStartOf(today), camp.start || '', addDays(today, -6)].sort().pop(), full = daysBetween(from, today);
+  const done = full >= 1 ? totals(daily, from, addDays(today, -1), camp.id) : null;
+  const perDay = done ? done.cost / full : null, weekPace = perDay != null ? perDay * 7 : null;
+  const cpa = econ.cpaLib || paid;
+  // 1. объявлений мало: Директу не из чего выбирать, одно приедается
+  if (mine.length && mine.length < 3) out.push({ k: 'ads', title: mine.length === 1 ? 'Одно объявление — добавьте ещё 2–3 варианта' : 'Два объявления — добавьте ещё одно-два', how: 'Директ сам показывает чаще то, что лучше работает, но ему нужно из чего выбирать: другая картинка, другой крючок, другой троп. С одним объявлением охват узкий, и оно быстрее приедается.' });
+  // 2. цена цели выше ценности добавления — переплата
+  if (val != null && paid != null && paid > val * 1.05) out.push({ k: 'cpaDown', title: `Добавление стоит ${r0(paid)} ₽, а приносит ≈ ${r0(val)} ₽ — снизьте цену цели до ${Math.max(1, Math.floor(val / VAT))} ₽`, how: `Столько роялти в среднем даёт одно добавление в библиотеку (часть добавивших потом покупает). Платить больше — работать в минус.${learning ? ` Менять лучше после ${dm(after)}, когда кампания доучится.` : ''}` });
+  // 3. бюджет недели не выбирается — упираемся в охват, а не в деньги
+  if (wk && weekPace != null && full >= 2 && weekPace < wk.limit * 0.6 && st.key === 'on') {
+    const room = val != null && paid != null && paid < val * 0.75;
+    const up = room ? Math.min(Math.floor(val * 0.75 / VAT), Math.ceil(target * 1.3)) : null;
+    out.push({ k: 'pace', title: `Бюджет недели используется на ${r0(weekPace / wk.limit * 100)} % — можно получать больше добавлений`,
+      how: up && up > target ? `Директ не добирает: за неделю уйдёт ≈ ${r0(weekPace)} ₽ из ${r0(wk.limit)} ₽. Добавление приносит ≈ ${r0(val)} ₽, а вы платите ${r0(paid)} ₽ — есть запас. ${learning ? `После ${dm(after)} поднимите` : 'Поднимите'} цену цели с ${r0(target)} до ${up} ₽ (понемногу, не больше чем на треть за раз) — Директ сможет чаще выигрывать показы.`
+        : `Директ не добирает: за неделю уйдёт ≈ ${r0(weekPace)} ₽ из ${r0(wk.limit)} ₽. Расширяйте охват: новые объявления и фразы${val == null ? '; поднимать цену цели — когда появятся покупки и станет ясно, сколько приносит добавление' : ''}.` });
+  }
+  // 4. бюджет кончается раньше недели, а добавление выгодное — деньги оставлены на столе
+  if (wk && st.key === 'capped' && val != null && cpa != null && cpa < val * 0.8) out.push({ k: 'budgetUp', title: 'Бюджет недели кончается раньше времени, а добавления выгодные', how: `Добавление стоит ${r0(cpa)} ₽ и приносит ≈ ${r0(val)} ₽. Если поднять недельный бюджет в кабинете Директа, таких добавлений будет больше.` });
+  // 5. кликов много, в библиотеку добавляют мало — теряем на странице книги
+  const cr = econ.d30.clicks >= 300 && econ.lib30 != null ? econ.lib30 / econ.d30.clicks : null;
+  if (cr != null && cr < 0.03) out.push({ k: 'page', title: `Из 100 кликов в библиотеку добавляют ${(cr * 100).toFixed(1).replace('.', ',')} — усильте страницу книги`, how: 'Реклама приводит людей, а решают обложка, первые строки аннотации и первая глава. Платите вы только за добавления, но чем их больше с тех же показов — тем охотнее Директ показывает объявление.' });
+  // прогноз недели при нынешнем темпе
+  const libWeek = weekPace != null && cpa ? weekPace / cpa : null;
+  const forecast = libWeek != null && libWeek >= 1 ? { cost: weekPace, lib: libWeek, royalty: val != null ? libWeek * val : null } : null;
+  return { levers: out, forecast, learning, after };
+}
+
 // Что требует внимания по одной кампании (кроме общих подсказок «Что сделать сейчас»)
 export function campaignAlerts(camp, st, econ, { daily = [], conv = [], today, goals }) {
   const out = [];

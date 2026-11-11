@@ -84,3 +84,25 @@ test('«клики есть, конверсий нет» — по цели ка�
   assert.equal(goalHints({ campaigns: [{ ...base, start: '2026-11-13' }], daily, conv: [], m, today: '2026-11-14' }).filter((h) => h.kind === 'zero').length, 0);
   assert.equal(goalHints({ campaigns: [{ ...base, start: '2026-11-01' }], daily, conv: [], m, today: '2026-11-14' }).filter((h) => h.kind === 'zero').length, 1);
 });
+
+test('как заработать больше: рычаги по кампании (её кампания на 3-й день)', async () => {
+  const { campaignLevers } = await import('../direct/js/pult.js');
+  const c = { ...camp, start: '2026-11-10' }, today = '2026-11-12', g = goalsOf(M, c);
+  const daily = [day('2026-11-10', 78.08, 14170, 494), day('2026-11-11', 58.56, 5176, 105), day('2026-11-12', 10, 900, 20)];
+  const conv = [{ date: '2026-11-10', cid: 7, conv: { 548467215: 8 } }, { date: '2026-11-11', cid: 7, conv: { 548467215: 6 } }];
+  const ads = [{ cid: 7, state: 'ON', status: 'ACCEPTED' }];
+  const st = campaignState(c, { daily, ads, today }), wk = weekBudget(c, daily, today);
+  // ценность добавления 30 ₽ (роялти 100 ₽ × 30 %)
+  const econ = campaignEcon(c, { daily, conv, today, goals: g, perSale: 100, libShare: 0.3 });
+  const L = campaignLevers(c, st, econ, wk, { ads, daily, today });
+  assert.deepEqual(L.levers.map((x) => x.k), ['ads', 'pace', 'page']);
+  assert.match(L.levers[1].title, /на 28 %/);
+  assert.match(L.levers[1].how, /После 17\.11 поднимите цену цели с 8 до 11 ₽/); // учится — менять после 7 дней, не больше трети
+  assert.equal(Math.round(L.forecast.cost), 478); assert.ok(L.forecast.royalty > L.forecast.cost);
+  // добавление приносит меньше, чем стоит, — совет снизить цену цели
+  const poor = campaignLevers(c, st, campaignEcon(c, { daily, conv, today, goals: g, perSale: 100, libShare: 0.06 }), wk, { ads, daily, today });
+  assert.ok(poor.levers.some((x) => x.k === 'cpaDown' && /до 4 ₽/.test(x.title)));
+  assert.ok(!/поднимите цену/i.test(poor.levers.find((x) => x.k === 'pace').how));
+  // остановленной кампании советов нет
+  assert.deepEqual(campaignLevers({ ...c, state: 'OFF' }, { key: 'stopped' }, econ, wk, { ads, daily, today }).levers, []);
+});
