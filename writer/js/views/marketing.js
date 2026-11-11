@@ -1,4 +1,5 @@
 import { spoilerList, spoilerHits } from '../../../js/spoilers.js';
+import { piracyView } from './piracy.js';
 import { contestCalendar } from './ccal.js';
 import { esc, acts, changes, openSheet, closeSheet, opt, toast, uid, ask, download, copyRich } from '../../../js/ui.js';
 import { fmtDate } from '../../../js/format.js';
@@ -31,9 +32,10 @@ const mediaOf = (c, b, types) => c.data.w_media.filter((m) => m.bookId === b.id 
 
 // ---------- список книг: по статусам, с поиском и готовностью материалов ----------
 // Маркетинг — три вкладки тонкой линией: Книги · Конкурсы · Связи (Связи переехали сюда из меню, на их месте — «Сайт»)
-const MK_TABS = [['books', 'Книги', '/marketing'], ['contests', 'Конкурсы', '/marketing/contests'], ['links', 'Связи', '/links']];
+const MK_TABS = [['books', 'Книги', '/marketing'], ['contests', 'Конкурсы', '/marketing/contests'], ['links', 'Связи', '/links'], ['piracy', 'Пираты', '/marketing/piracy']];
 export function marketingView(a, sub = 'books') {
   const tabs = `<div class="lg-tabs mk-tabs">${MK_TABS.map(([k, t, to]) => `<button class="${sub === k ? 'on' : ''}" data-act="go" data-to="${to}">${t}</button>`).join('')}</div>`;
+  if (sub === 'piracy') return { html: `<h2>Маркетинг</h2>${tabs}${piracyView(a)}` };
   if (sub === 'links') return { html: `<h2>Маркетинг</h2>${tabs}${linksView(a, { embedded: true }).html}` };
   if (sub === 'contests') {
     const c = a.ctx();

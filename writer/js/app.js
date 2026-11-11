@@ -4,6 +4,7 @@ import { keepNavDown } from '../../js/vvfix.js';
 import { createStore, authErrorText } from '../../js/store.js';
 import { autoDirectAccess } from '../../js/aidirect.js';
 import { runOneoffs } from './oneoff.js';
+import { autoPiracy } from './piracyscan.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums } from '../../js/ui.js';
 import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
 import { writtenToday, writtenWeek } from './wcalc.js';
@@ -31,7 +32,7 @@ import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
 import { cleanText, cleanedMsg } from '../../js/cleantext.js';
 
-export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews', 'w_promolinks', 'w_blog'];
+export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews', 'w_promolinks', 'w_blog', 'w_piracy'];
 const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 initAccent(store);
 keepNavDown(); // iPhone: нижнее меню не «повисает» посреди экрана
@@ -255,7 +256,7 @@ setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(
 setInterval(() => { if (document.visibilityState === 'visible') checkMailQueue(); }, 60e3);
 drive.preload().catch(() => {});
 let autoRefreshed = false;
-store.subscribe(() => { autoDirectAccess(store); runOneoffs(app); });
+store.subscribe(() => { autoDirectAccess(store); runOneoffs(app); autoPiracy(app); });
 store.init().then(() => {
   render();
   autoDirectAccess(store);

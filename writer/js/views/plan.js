@@ -12,6 +12,7 @@ import { mailQueue, mailSent } from './mail.js';
 import { localParts } from '../../../js/mailcalc.js';
 import { SITE_ADMIN } from '../../../js/sitepub.js';
 import { litTagTodo } from '../../../js/littag.js';
+import { piracyTodos } from '../piracy.js';
 import { mkSummary } from './marketing.js';
 import { goalsSection, goalTitle, goalToday, activeGoals } from './goals.js';
 import { fetchPageText } from '../pagetext.js';
@@ -106,6 +107,8 @@ export function planItems(c, from, to) {
   // Мой сайт: розыгрыш по пятницам (в админке сайта → «Розыгрыш»)
   const rf = typeof window !== 'undefined' ? raffleTodo(siteNow(), t) : null;
   if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Пятничный подарок: выбрать, кому', 'Админка сайта → Подарок', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
+  // Пираты: новые копии книг и «сайт не ответил» (Маркетинг → Пираты; поиск идёт сам раз в сутки)
+  for (const x of piracyTodos(c.data.w_piracy || [], t)) add(x.date, 'waitans', x.text, x.sub, { to: '/marketing/piracy', id: x.id, section: 'Дела', dueRaw: x.date });
   // Метка «Мой Литнет» (сайт + Директ): за 2 дня до конца срока — обновить одной кнопкой в Мастерской → Сайт (js/littag.js).
   // Пока общей метки не ставили — прежнее ежемесячное напоминание, но ведёт туда же.
   const lt = litTagTodo(c.settings, t);
