@@ -1,7 +1,7 @@
 import { ic, icx } from '../../../js/icons.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask, fold, tiles } from '../../../js/ui.js';
 import { num, fmtDate, plural } from '../../../js/format.js';
-import { releaseTiming } from '../../../js/insights.js';
+import { releaseTiming, launchForecast } from '../../../js/insights.js';
 import { loadSite, patchSiteBook, sameTitle, SITE_ADMIN } from '../../../js/sitepub.js';
 import { siteState } from './mysite.js';
 import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter, writtenMonth } from '../wcalc.js';
@@ -179,6 +179,14 @@ function releaseTip(c) {
   const t = rtCache.v?.tip;
   return t ? `<p class="small" style="margin:10px 0 0">${ic('sparkle')} ${esc(t.text)}</p>` : '';
 }
+// Сколько может принести книга: по первым 30 и 90 дням продаж прежних книг (js/insights.js launchForecast)
+function forecastTip(c, b) {
+  if (b.status === 'idea') return '';
+  const f = launchForecast(c.data, b, c.today);
+  if (!f || f.day > 90) return '';
+  const r = (v) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0') + '\u00a0₽';
+  return `<p class="small" style="margin:10px 0 0">${ic('ruble')} По ${f.n} прежним книгам: за первые 30 дней продаж книга обычно приносит ≈ <b>${r(f.r30)}</b> роялти, за 90 дней — ≈ <b>${r(f.r90)}</b>${f.best?.title ? ` (лучшая — «${esc(f.best.title)}»: ${r(f.best.r90)})` : ''}.${f.day ? ` Эта — ${r(f.now)} за ${f.day} дн.` : ''}</p>`;
+}
 
 export function bookPage(a, id) {
   const c = a.ctx();
@@ -295,7 +303,7 @@ export function bookPage(a, id) {
   ${headCard(c, b, p)}
   <div class="card"><div class="row between"><h2 style="margin:0">Главы и выкладка</h2><div class="row">${canEdit ? `<button data-act="ch.add" data-id="${b.id}" title="Отдельная вкладка в Google Документе">+ Глава</button>` : ''}<button class="primary" data-act="pub.mark" data-id="${b.id}">Отметить выкладку</button></div></div>
     ${chs.length ? chaptersBlock() : `<p class="small muted" style="margin:8px 0 0">${canEdit ? 'Глав пока нет. Нажмите «+ Глава» — в Google Документе появится новая вкладка.' : 'Глав пока нет. Когда отмечаете выкладку, просто впишите название главы.'}</p>`}
-    ${(b.status || 'progress') === 'progress' ? releaseTip(c) : ''}
+    ${(b.status || 'progress') === 'progress' ? releaseTip(c) : ''}${forecastTip(c, b)}
 </div>
   <div class="card"><div class="row between"><h2 style="margin:0">Прогресс и сроки</h2><button data-act="wb.dates" data-id="${b.id}">Сроки</button></div>
     <label class="inline-num">Глав в книге, примерно <input type="number" min="1" inputmode="numeric" value="${b.planChapters || ''}" placeholder="—" data-chg="wb.planCh" data-id="${b.id}"></label>

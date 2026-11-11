@@ -57,3 +57,12 @@ test('Успеть к конкурсу: сколько знаков в день 
   assert.ok(p.perDay > 2000 && p.perDay < 2500);
   assert.equal(finishPace(book, { end: '2026-10-31' }, today), null);
 });
+
+test('прогноз дохода новой книги — медиана первых 30 и 90 дней прежних книг', async () => {
+  const { launchForecast } = await import('../js/insights.js');
+  const mk = (bookId, start, per) => Array.from({ length: 100 }, (_, i) => ({ bookId, date: new Date(Date.parse(start) + i * 86400000).toISOString().slice(0, 10), royalty: per }));
+  const data = { books: [{ id: 'a', title: 'Первая' }, { id: 'b', title: 'Вторая' }, { id: 'n', title: 'Новая книга' }], sales: [...mk('a', '2026-01-01', 100), ...mk('b', '2026-03-01', 300), { bookId: 'n', date: '2026-11-10', royalty: 500 }] };
+  const f = launchForecast(data, { title: 'Новая книга' }, '2026-11-12');
+  assert.equal(f.n, 2); assert.equal(f.r30, 6000); assert.equal(f.r90, 18000); assert.equal(f.best.title, 'Вторая'); assert.equal(f.now, 500); assert.equal(f.day, 3);
+  assert.equal(launchForecast({ books: data.books, sales: mk('a', '2026-01-01', 100) }, { title: 'Новая книга' }, '2026-11-12'), null); // одной книги мало
+});

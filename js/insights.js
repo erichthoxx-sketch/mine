@@ -124,3 +124,23 @@ export function finishPace(book, contest, today) {
   const forecast = forecastDate(book.history || {}, today, target);
   return { plan, written, chars, target, left, daysLeft, perDay, forecast, onTrack: forecast != null && forecast <= contest.end };
 }
+
+// Прогноз дохода новой книги по прошлым (12.11.2026, идея «В», её «да»): сколько роялти каждая прежняя книга принесла за первые
+// 30 и 90 дней продаж; медиана — ориентир для новой. Только книги, у которых эти дни уже прошли; нужно 2+ книги.
+export function launchForecast(data = {}, wb, today) {
+  const sales = data.sales || [], books = data.books || [], me = incomeBookOf(wb, books);
+  const by = {};
+  for (const x of sales) { if (!x.bookId || !x.date || (me && x.bookId === me.id)) continue; (by[x.bookId] ||= []).push(x); }
+  const rows = [];
+  for (const [id, list] of Object.entries(by)) {
+    const first = list.reduce((m, x) => (x.date < m ? x.date : m), '9999');
+    const sum = (n) => list.reduce((a, x) => (x.date <= addDays(first, n - 1) ? a + (x.royalty || 0) : a), 0);
+    if (addDays(first, 89) > today) continue;
+    const r30 = sum(30), r90 = sum(90);
+    if (r90 >= 500) rows.push({ id, title: books.find((b) => b.id === id)?.title || '', first, r30: Math.round(r30), r90: Math.round(r90) });
+  }
+  if (rows.length < 2) return null;
+  const got = me ? sales.filter((x) => x.bookId === me.id) : [], start = got.length ? got.reduce((m, x) => (x.date < m ? x.date : m), '9999') : null;
+  const now = got.reduce((a, x) => a + (x.royalty || 0), 0), day = start ? Math.round((Date.parse(today) - Date.parse(start)) / 86400000) + 1 : 0;
+  return { n: rows.length, r30: Math.round(median(rows.map((x) => x.r30))), r90: Math.round(median(rows.map((x) => x.r90))), best: rows.sort((a, b) => b.r90 - a.r90)[0], now: Math.round(now), day };
+}
