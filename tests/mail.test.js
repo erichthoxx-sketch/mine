@@ -286,3 +286,24 @@ test('письмо «Разбор недели»: прошлая неделя п
   assert.doesNotMatch(t, /Пустая/);
   assert.equal(weekDigest([], { campaigns: [{ id: 7, name: 'ЕПК' }] }, '2026-11-16'), '');
 });
+
+test('поиск пиратов в сервисе: поисковик напрямую (обычная HTML-выдача), «Это не пират» — только по странице', async () => {
+  const { sent } = stub();
+  const html = `<table><tr><td><a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fpirat.ru%2Fbook%2F1">Звериная тропа для двоих — Лана Фрейтаг, читать онлайн бесплатно</a></td></tr>
+    <tr><td><a href="https://litnet.com/ru/book/x">Звериная тропа для двоих — Литнет</a></td></tr>
+    <tr><td><a href="https://pirat.ru/frag/1">Звериная тропа для двоих Фрейтаг ознакомительный фрагмент читать бесплатно</a></td></tr>
+    <tr><td><a href="https://other.ru/b">Другая книга</a></td></tr></table>`;
+  const base = globalThis.fetch;
+  globalThis.fetch = async (url, o) => (String(url).startsWith('https://lite.duckduckgo.com/') ? { ok: true, status: 200, text: async () => html } : String(url).startsWith('https://r.jina.ai/') ? { ok: false, status: 451 } : base(url, o));
+  delete require.cache[require.resolve('../mail/mail-function.cjs')];
+  const { handler } = require('../mail/mail-function.cjs');
+  const P = await import('../writer/js/piracy.js');
+  const T = 'Звериная тропа для двоих';
+  const cfg = { on: true, author: 'Лана Фрейтаг', books: [{ id: 'b1', title: T, q: ['q1'] }], engines: ['https://lite.duckduckgo.com/lite/?q='], legit: P.LEGIT, hint: P.PIRATE_HINT.source, words: P.PIRATE_WORDS.source, known: [], skipUrls: ['https://pirat.ru/book/1'] };
+  await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy', cfg });
+  await handler({ messages: [{}] }, { token: { access_token: 't' } });
+  const r = JSON.parse((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy' })).body);
+  assert.deepEqual(r.finds.map((f) => f.url), ['https://pirat.ru/frag/1']); // скрытая страница не вернулась, другая страница того же сайта — нашлась
+  assert.equal(r.err, ''); assert.ok(r.okAt);
+  globalThis.fetch = base;
+});

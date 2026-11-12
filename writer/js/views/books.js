@@ -265,7 +265,7 @@ export function bookPage(a, id) {
     ${(c.data.w_promolinks || []).some(x => x.bookId === b.id && x.status !== 'archived') ? promoLinksPanel(c, { bookId: b.id, compact: true }) : ''}
   </div>
 ` + posts, { icon: 'marketing', sub: `тексты ${mk.texts} из ${mk.textsAll}` }),
-    T('site', 'Сайт', siteCard(b), { icon: 'globe', sub: siteSub(b) }),
+    T('site', 'Сайт', siteCard(b), { icon: 'bear', sub: siteSub(b) }),
     T('pub', 'Издательство', publisherCard(b) + pubFiles(c, b), { icon: 'doc', sub: !ms.ok ? 'нет рукописи' : syn.ok ? 'рукопись и синопсис' : 'нет синопсиса' }),
     T('ai', 'Нейросеть', bookAiCard(c, b), { icon: 'sparkle', sub: b.aiShared ? 'подключена' : 'не подключена' }),
     T('about', 'О книге', `  <div class="card"><h2>О книге</h2>

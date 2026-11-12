@@ -3163,7 +3163,7 @@ main .rev-actions button.dl .ic { opacity: 1; }
 }
 :root .side-k, :root .nt-date { font-family: var(--font-display); font-size: 13px; font-weight: 500; letter-spacing: .01em; text-transform: none; }
 /* сумма в плитке сама чуть уменьшается, если плитка узкая, — никогда не вылезает за край */
-:root :is(.stat, .tiles > div) .v { font-size: min(24px, 13cqi) !important; }
+:root :is(.stat, .tiles > div) .v { font-size: min(24px, 16cqi) !important; line-height: 1.15; }
 /* «Доходы» на компьютере с правой колонкой: плитки по две в ряд, пока места мало для четырёх, — цифры остаются крупными */
 @media (min-width: 1180px) and (max-width: 1640px) { html:not(.app-writer) main .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
 /* iPhone: нижнее меню всегда у настоящего низа экрана (сдвиг считает js/vvfix.js) */
@@ -3359,9 +3359,26 @@ button[data-act="l.lesson"] { display: none; }
 .pult-funnel { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 8px 0 4px; }
 .pult-c h2 { color: var(--text); }
 
-/* Переключатель приложений (12.11.2026): один вид во всех трёх — «таблетка» с выбранным графитовым */
-:root .eco { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--soft, var(--surface-2)); }
+/* Переключатель приложений (12.11.2026): свёрнут в круглую кнопку, по нажатию «таблетка» плавно выезжает влево */
+:root .eco-w { display: inline-flex; align-items: center; gap: 6px; }
+:root .eco { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--soft, var(--surface-2)); max-width: 0; opacity: 0; overflow: hidden; padding: 3px 0; transition: max-width .35s ease, opacity .25s ease, padding .35s ease; white-space: nowrap; }
+:root .eco-w.open .eco { max-width: 420px; opacity: 1; padding: 3px; }
 :root .eco a, :root .eco span { padding: 7px 13px; border-radius: 999px; font: 500 14px/1.2 var(--font-display); color: var(--text-2); text-decoration: none; white-space: nowrap; }
 :root .eco a:hover { color: var(--text); }
 :root .eco .on { background: var(--text); color: var(--bg); }
-@media (max-width: 720px) { :root .eco a, :root .eco span { padding: 7px 9px; font-size: 12.5px; } :root .top .row { flex-wrap: wrap; } }
+:root button.eco-t { width: 38px; height: 38px; min-height: 38px; padding: 0 !important; border-radius: 50% !important; display: inline-grid; place-items: center; transition: transform .35s ease; }
+:root .eco-w.open button.eco-t { transform: rotate(45deg); }
+@media (max-width: 720px) {
+  /* телефон: выезжает вниз под кнопкой, ничего не сдвигая */
+  :root .top .row { position: relative; }
+  :root .eco { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; box-shadow: 0 6px 24px rgba(0,0,0,.10); background: var(--bg); }
+  :root .eco-w.open .eco { max-width: 340px; }
+  :root .eco a, :root .eco span { padding: 8px 11px; font-size: 13.5px; }
+}
+
+/* Единая шкала шрифтов во всех трёх приложениях — телефон и компьютер (12.11.2026, её просьба: «слишком мелкие и негармоничные цифры в первом блоке»):
+   заголовки разделов 22 px Jost, подписи плиток 12,5 px, цифры плиток 24 px (на узкой плитке чуть меньше, но не меньше 20 px), пояснения 13 px */
+:root main h2, :root .psec-h h2, :root .home-h h2 { font-size: 22px !important; }
+:root :is(.stat, .tiles > div) .k { font-size: 12.5px; }
+:root :is(.stat, .tiles > div) .s { font-size: 13px; }
+@media (max-width: 720px) { :root :is(.stat, .tiles > div) .v { font-size: max(20px, min(24px, 16cqi)) !important; } :root :is(.stat, .tiles > div) { padding: 14px 14px 12px; } }

@@ -48,7 +48,7 @@ async function refresh(quiet) {
 }
 // Адрес для ответов, который видят читательницы в письмах (10.11.2026, владелица: «заменить во всех письмах на lanafreitag8@gmail.com»):
 // с программой сервиса версии 3 ставится один раз сам; дальше меняется кнопкой «Изменить» в «Адресах»
-export const FN_LATEST = 8; // = FN_V в mail/mail-function.cjs (тест следит)
+export const FN_LATEST = 9; // = FN_V в mail/mail-function.cjs (тест следит)
 export const REPLY_DEFAULT = 'lanafreitag8@gmail.com';
 async function autoReply() {
   const s = app().ctx().settings.site || {};

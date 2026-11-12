@@ -93,7 +93,7 @@ export function planItems(c, from, to) {
   // заявка на приоритетные показы — на сегодня, пока актуально, и в день срока
   const wr = widgetReminder(c);
   if (wr) { add(t, 'money', esc(wr.title), esc(wr.sub), { to: wr.to }); if (wr.date !== t) add(wr.date, 'money', `Срок заявки на показы`, '19:00 МСК', { to: wr.to }); }
-  for (const x of incomeItems(c, from, to)) add(x.date, x.kind || 'money', x.title, x.sub, { href: '../' });
+  for (const x of incomeItems(c, from, to)) add(x.date, x.kind || 'money', x.title, x.sub, { href: '../', ...(x.doneKey ? { doneKey: x.doneKey } : {}) });
   // Блог Литнет: дата — напоминание выложить вручную, а не автопубликация.
   for (const p of (d.w_blog || [])) {
     if (p.status === 'published' || !p.planDate) continue;
@@ -109,7 +109,7 @@ export function planItems(c, from, to) {
   if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Пятничный подарок: выбрать, кому', 'Админка сайта → Подарок', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
   // Директ: раз в неделю — «Разбор недели» (с понедельника, пока не нажала «Разобрала»; только если кампании идут)
   { const dd = c.settings.direct || {}, mon = addDays(t, -((new Date(t + 'T00:00:00Z').getUTCDay() + 6) % 7));
-    if (dd.liveOn && dd.liveOn >= addDays(t, -8) && dd.weekDone !== mon) add(t, 'money', 'Разбор рекламы за неделю', 'Директ → «Разбор недели»: итог, узкое место, что поменять', { href: '../direct/#/week', id: 'dweek-' + mon, section: 'Деньги и реклама', dueRaw: mon }); }
+    if (dd.liveOn && dd.liveOn >= addDays(t, -8) && dd.weekDone !== mon) add(mon, 'money', 'Разбор рекламы за неделю', 'Директ → «Разбор недели»: итог, узкое место, что поменять', { href: '../direct/#/week', id: 'dweek-' + mon, section: 'Деньги и реклама', dueRaw: mon, doneKey: 'dweek-' + mon }); }
   // Пираты: новые копии книг и «сайт не ответил» (Маркетинг → Пираты; поиск идёт сам раз в сутки)
   for (const x of piracyTodos(c.data.w_piracy || [], t)) add(x.date, 'waitans', x.text, x.sub, { to: '/marketing/piracy', id: x.id, section: 'Дела', dueRaw: x.date });
   // Метка «Мой Литнет» (сайт + Директ): за 2 дня до конца срока — обновить одной кнопкой в Мастерской → Сайт (js/littag.js).
@@ -161,6 +161,7 @@ function launchSite() {
   return lsite.books || [];
 }
 // Важное из «Доходов» по датам: налог (до 28-го), цифры Rocket (с 20-го), старт и конец рекламы, события дней
+const mondayOf = (d) => addDays(d, -((new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7));
 function incomeItems(c, from, to) {
   const d = c.data, t = c.today, out = [];
   const add = (date, title, sub = '', kind = 'money') => { if (date >= from && date <= to) out.push({ date, title: esc(title), sub: esc(sub), kind }); };
@@ -189,14 +190,17 @@ function incomeItems(c, from, to) {
   }
   // реклама: старт и конец кампаний; к концу — вывод по окупаемости (js/adroi.js, как в «Доходах»);
   // идёт неделю без отчёта о расходе — попросить у таргетолога (на сегодня)
-  const board = Object.fromEntries(adBoard(d, c.settings, t, { days: 60 }).map((x) => [x.c.id, x]));
+  const board = Object.fromEntries(adBoard(d, c.settings, t, { days: 60 }).map((x) => [x.c.id, x])), due = [];
   for (const k of d.campaigns || []) {
     if (k.oneOff) continue;
     const x = board[k.id];
     if (k.start) add(k.start, `Старт рекламы «${k.name}»`);
     if (k.end) add(k.end, `Конец рекламы «${k.name}»`, x && x.v.kind !== 'wait' ? `${x.v.text}${x.v.est ? ' (расход — оценка)' : ''} — ${x.v.todo}` : 'решить, продлевать ли');
-    if (x?.reportDue) add(t, `Попросить отчёт о расходе: «${k.name}»`, 'у таргетолога за неделю — его сообщение вставить в «Доходах»: кампания → «Вставить отчёт»; без него окупаемость — оценка');
+    if (x?.reportDue) due.push(k.name);
   }
+  // отчёты о расходе — одним делом по понедельникам (12.11.2026, её просьба: не каждый день по каждой кампании); закрывается галочкой в Планере
+  if (due.length) { const mon = mondayOf(t), day = mon === t ? t : addDays(mon, 7), key = 'reports-' + day;
+    if (!c.settings.planDone?.[key] && day >= from && day <= to) out.push({ date: day, kind: 'money', title: esc(`Попросить отчёты о расходе: ${due.map((n) => `«${n}»`).join(', ')}`), sub: esc('расход за неделю — сообщение таргетолога вставить в «Доходах»: кампания → «Вставить отчёт»; без него окупаемость — оценка'), doneKey: key }); }
   // выгрузка Литнета старше 3 дней — доход, реклама и цели считаются по старым цифрам
   const de = adCtx(d, c.settings, t).dataEnd;
   if ((d.sales || []).length && de < addDays(t, -3)) add(t, 'Загрузить выгрузку Литнета', `данные только по ${fmtDate(de).slice(0, 5)} · «Доходы» → «Загрузить выгрузку» или перетащите файл в окно`);
@@ -275,6 +279,7 @@ function itemHtml(c, x) {
   if (x.kind === 'td') return `<div class="pitem" data-drag="td" data-id="${x.tdId}"><a href="#" class="pi-open tap" data-act="td.open" data-id="${x.tdId}">${body}</a><span class="pi-btns"><button class="td-ok" data-act="td.close" data-id="${x.tdId}" title="Сделано — закроется и в Todoist" aria-label="Сделано">${icx('check')}</button></span></div>`;
   if (x.linkId && x.todoK) return `<div class="pitem"><a href="#" class="pi-open tap" data-act="go" data-to="/link/${esc(x.linkId)}">${body}</a><span class="pi-btns"><button class="td-ok" data-act="link.todoDone" data-id="${esc(x.linkId)}" data-k="${esc(x.todoK)}" title="Готово — отметится и в Todoist" aria-label="Готово">${icx('check')}</button></span></div>`;
 
+  if (x.doneKey) return `<div class="pitem"><a href="${x.href || '#'}" class="pi-open tap"${x.to ? ` data-act="go" data-to="${x.to}"` : ''}>${body}</a><span class="pi-btns"><button class="td-ok" data-act="pl.done" data-k="${esc(x.doneKey)}" title="Сделано" aria-label="Сделано">${icx('check')}</button></span></div>`;
   if (x.href) return `<a class="pitem tap" href="${x.href}">${body}</a>`;
   if (x.to) return `<a class="pitem tap" href="#" data-act="go" data-to="${x.to}">${body}</a>`;
   return `<a class="pitem tap" href="#" data-act="${x.act}" data-id="${x.id}"${x.kind === 'queue' ? ` data-drag="queue"` : ''}>${body}</a>`;
@@ -855,3 +860,12 @@ acts['queue.move'] = async (d) => {
 };
 
 export { pct };
+
+// Галочка у дел, которые ставит само приложение (отчёты таргетологов, разбор недели): отмечается в настройках, дело исчезает
+acts['pl.done'] = async (d) => {
+  const a = window.__app, s0 = a.ctx().settings, t = a.ctx().today, keep = Object.fromEntries(Object.entries(s0.planDone || {}).filter(([, v]) => v >= addDays(t, -60)));
+  const patch = { planDone: { ...keep, [d.k]: t } };
+  if (d.k.startsWith('dweek-')) patch.direct = { ...(s0.direct || {}), weekDone: d.k.slice(6) }; // то же, что «Разобрала» в Директе
+  await a.store.saveSettings(patch);
+  toast('Отмечено', { undo: () => a.store.saveSettings({ planDone: keep, ...(d.k.startsWith('dweek-') ? { direct: { ...(a.ctx().settings.direct || {}), weekDone: s0.direct?.weekDone || '' } } : {}) }) });
+};

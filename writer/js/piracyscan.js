@@ -40,7 +40,7 @@ export async function scan(app, { onStep } = {}) {
   const c = app.ctx(), s = c.settings, cfg = s.piracy || {}, author = s.pseudonym || '';
   const books = (c.wbooks || c.data.w_books || []).filter((b) => b.title && b.status !== 'idea');
   const known = new Map((c.data.w_piracy || []).map((f) => [f.id, f]));
-  const ignore = cfg.ignore || [];
+  const ignore = []; // прежний список «не пиратов» по сайтам больше не используется — прячутся отдельные страницы (status: 'skip')
   let added = 0, engine = '', done = 0;
   try {
     for (const b of books) {
@@ -53,7 +53,7 @@ export async function scan(app, { onStep } = {}) {
           if (!hit) continue;
           const id = findId(hit.url);
           // тот же сайт с той же книгой — одна находка (читалка и «скачать» рядом — одно письмо)
-          if (known.has(id) || [...known.values()].some((f) => f.host === hit.host && f.bookId === b.id)) continue;
+          if (known.has(id) || [...known.values()].some((f) => f.status !== 'skip' && f.host === hit.host && f.bookId === b.id)) continue;
           const f = { id, url: hit.url, host: hit.host, bookId: b.id, title: plainTitle(b.title), page: hit.title, why: hit.why, sure: hit.sure, status: 'new', foundAt: new Date().toISOString() };
           known.set(id, f); await app.store.put('w_piracy', f); added++;
         }

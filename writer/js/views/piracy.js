@@ -50,15 +50,19 @@ export async function syncServer(a) {
   try {
     const c = a.ctx(), cfg0 = c.settings.piracy || {}, mine = c.data.w_piracy || [];
     const books = (c.wbooks || []).filter((b) => b.title && b.status !== 'idea').map((b) => ({ id: b.id, title: plainTitle(b.title), q: searchQueries(b.title, c.settings.pseudonym || '') }));
-    const cfg = { on: !cfg0.off, auto: !!cfg0.auto, author: c.settings.pseudonym || '', books, engines: ENGINES.slice(0, 2).map(([, mk]) => mk('')), legit: [...LEGIT, ...(cfg0.ignore || [])], hint: PIRATE_HINT.source, words: PIRATE_WORDS.source, known: mine.map((f) => f.host + '|' + f.bookId) };
+    const cfg = { on: !cfg0.off, auto: !!cfg0.auto, author: c.settings.pseudonym || '', books, engines: ENGINES.slice(0, 2).map(([, mk]) => mk('')), legit: LEGIT, hint: PIRATE_HINT.source, words: PIRATE_WORDS.source, known: mine.filter((f) => f.status !== 'skip').map((f) => f.host + '|' + f.bookId), skipUrls: mine.filter((f) => f.status === 'skip').map((f) => f.url) };
     const r = await m.call({ op: 'piracy', cfg });
     let added = 0;
     for (const f of r.finds || []) {
-      if ((a.ctx().data.w_piracy || []).some((x) => x.host === f.host && x.bookId === f.bookId) || (cfg0.ignore || []).includes(f.host)) continue;
+      const all = a.ctx().data.w_piracy || [];
+      if (all.some((x) => x.url === f.url || (x.status !== 'skip' && x.host === f.host && x.bookId === f.bookId))) continue;
       await a.store.put('w_piracy', { ...f, id: findId(f.url), status: 'new', via: 'server' }); added++;
     }
     // сервис отчитался недавно — своя проверка в браузере сегодня не нужна
-    if (r.at && Date.now() - Date.parse(r.at) < 36 * 3600e3) await a.store.saveSettings({ piracy: { ...(a.ctx().settings.piracy || {}), at: r.at, engine: 'круглосуточно', books: books.length, err: r.err || '', srv: true } });
+    // сервис нашёл что-то за 36 часов — своя проверка в браузере не нужна; сервис не может искать — ищет сам браузер, ошибку сервиса не показываем
+    const okAt = r.okAt || '';
+    if (okAt && Date.now() - Date.parse(okAt) < 36 * 3600e3) await a.store.saveSettings({ piracy: { ...(a.ctx().settings.piracy || {}), at: okAt, engine: 'круглосуточно', books: books.length, err: '', srv: true } });
+    else if (a.ctx().settings.piracy?.srv) await a.store.saveSettings({ piracy: { ...(a.ctx().settings.piracy || {}), srv: false, err: '', at: '' } });
     return { added };
   } catch (e) { console.warn('Круглосуточный поиск:', e); return null; } finally { srvBusy = false; }
 }
@@ -212,11 +216,10 @@ acts['pr.search'] = (d) => {
   return false;
 };
 acts['pr.gone'] = async (d) => { const f = get(d.id); if (f) { await patch(f, { status: 'gone', goneAt: new Date().toISOString(), goneMaybe: false }); toast('Отлично — убрала в «Удалено»', { undo: () => patch(get(d.id), { status: f.status, goneAt: null, goneMaybe: f.goneMaybe || false }) }); } };
+// «Это не пират» (не её книга или законный фрагмент): прячется только эта страница — другие страницы этого же сайта по-прежнему находятся
 acts['pr.skip'] = async (d) => {
-  const a = app(), f = get(d.id);
+  const f = get(d.id);
   if (!f) return;
-  const cfg = a.ctx().settings.piracy || {};
   await patch(f, { status: 'skip' });
-  await a.store.saveSettings({ piracy: { ...cfg, ignore: [...new Set([...(cfg.ignore || []), f.host])] } });
-  toast(`${f.host} больше не показываю`, { undo: async () => { await patch(get(d.id), { status: f.status || 'new' }); await a.store.saveSettings({ piracy: { ...(a.ctx().settings.piracy || {}), ignore: (a.ctx().settings.piracy?.ignore || []).filter((h) => h !== f.host) } }); } });
+  toast('Эту страницу больше не показываю. Другие страницы этого сайта буду находить, как обычно', { undo: () => patch(get(d.id), { status: f.status || 'new' }) });
 };

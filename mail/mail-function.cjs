@@ -58,7 +58,7 @@ const link = (a, t) => `${ENV.SELF}?a=${a}&t=${t}`;
 const fill = (s, p) => String(s).replace(/\{unsub\}/g, link('unsub', p.token)).replace(/\{name\}/g, esc(p.name || ''));
 
 // письмо «подтвердите подписку» — короткое, в стиле сайта; тексты владелица меняет в Мастерской → Сайт → Почта (op: texts → d.texts)
-const FN_V = 8; // 8 — письмо «Разбор недели» по понедельникам и письма от приложений (op: note); 7 — сторож Директа (op: watch, таймер); 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
+const FN_V = 9; // 9 — поиск пиратов напрямую в поисковике (читалка из России отвечает 451), «Это не пират» — по странице; 8 — 8 — письмо «Разбор недели» по понедельникам и письма от приложений (op: note); 7 — сторож Директа (op: watch, таймер); 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
 const TEXTS_DEF = { subj: 'Подтвердите подписку', head: 'Подтвердите подписку', text: 'Одно нажатие — и я напишу вам, когда выйдет мой новый роман. Только тогда.', btn: 'Подтвердить' };
 const textsOf = (d) => ({ ...TEXTS_DEF, ...Object.fromEntries(Object.entries(d?.texts || {}).filter(([k, v]) => k in TEXTS_DEF && String(v || '').trim())) });
 function confirmMail(p, t = TEXTS_DEF) {
@@ -133,6 +133,15 @@ function pParse(text) {
     seen.add(url);
     out.push({ url, host, title, snip: src.slice(Math.max(0, m.index - 120), m.index + 500).replace(/\]\([^)]*\)/g, ' ').replace(/[[\]*_#>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500) });
   }
+  // обычная страница выдачи (поисковик открыт напрямую, без «читалки»): <a href="…">заголовок</a>
+  for (const m of src.matchAll(/<a\b[^>]*\bhref=["']((?:https?:)?\/\/[^"']+)["'][^>]*>([\s\S]{0,400}?)<\/a>/gi)) {
+    const url = pUnwrap(m[1]), host = pHost(url);
+    if (!host || /duckduckgo\.com$|startpage\.com$|brave\.com$|bing\.com$|yandex\.|google\./.test(host)) continue;
+    const title = m[2].replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (seen.has(url)) { const o = out.find((x) => x.url === url); if (o && title.length > o.title.length) o.title = title; continue; }
+    seen.add(url);
+    out.push({ url, host, title, snip: src.slice(m.index, m.index + 1200).replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 500) });
+  }
   return out;
 }
 function pJudge(r, title, author, cfg) {
@@ -155,20 +164,30 @@ async function runPiracy() {
   const st = steps[p.i];
   p.i++; p.at = new Date().toISOString();
   let fresh = [];
-  try {
-    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 25000);
-    const r = await fetch('https://r.jina.ai/' + st.e + encodeURIComponent(st.q), { signal: ctl.signal }); clearTimeout(tm);
-    if (r.ok) {
-      const have = new Set([...(cfg.known || []), ...(p.finds || []).map((f) => f.host + '|' + f.bookId)]);
-      for (const x of pParse(await r.text())) {
-        const hit = pJudge(x, st.b.title, cfg.author, cfg);
-        if (!hit || have.has(hit.host + '|' + st.b.id)) continue;
-        have.add(hit.host + '|' + st.b.id);
-        fresh.push({ url: hit.url, host: hit.host, bookId: st.b.id, title: st.b.title, page: hit.title, why: hit.why, sure: hit.sure, foundAt: p.at });
-      }
-      p.err = '';
-    } else p.err = 'поиск ответил ' + r.status;
-  } catch (e) { p.err = String(e.message || e).slice(0, 120); }
+  // сначала поисковик напрямую (из России «читалка» r.jina.ai отвечает 451 — недоступно по закону), не вышло — через «читалку»
+  const tries = [st.e + encodeURIComponent(st.q), 'https://r.jina.ai/' + st.e + encodeURIComponent(st.q)], errs = [];
+  let res = null;
+  for (const u of tries) {
+    try {
+      const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 20000);
+      const r = await fetch(u, { signal: ctl.signal, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', 'Accept-Language': 'ru,en;q=0.8' } }); clearTimeout(tm);
+      if (!r.ok) { errs.push(r.status); continue; }
+      const list = pParse(await r.text());
+      if (list.length >= 3) { res = list; break; }
+      errs.push('пусто');
+    } catch (e) { errs.push(e.name === 'AbortError' ? 'нет ответа' : 'сеть'); }
+  }
+  if (res) {
+    const skip = new Set(cfg.skipUrls || []), have = new Set([...(cfg.known || []), ...(p.finds || []).map((f) => f.host + '|' + f.bookId)]);
+    for (const x of res) {
+      if (skip.has(x.url)) continue; // «Это не пират» — именно эта страница; другие страницы того же сайта приходят
+      const hit = pJudge(x, st.b.title, cfg.author, cfg);
+      if (!hit || have.has(hit.host + '|' + st.b.id)) continue;
+      have.add(hit.host + '|' + st.b.id);
+      fresh.push({ url: hit.url, host: hit.host, bookId: st.b.id, title: st.b.title, page: hit.title, why: hit.why, sure: hit.sure, foundAt: p.at });
+    }
+    p.err = ''; p.ok = p.at;
+  } else p.err = 'поисковик не ответил (' + errs.join(', ') + ')';
   p.finds = [...(p.finds || []), ...fresh].slice(-300);
   await putObj('piracy.json', JSON.stringify(p));
   const loud = fresh.filter((f) => f.sure), to = replyTo();
@@ -393,7 +412,7 @@ module.exports.handler = async function (event, context) {
         const p = (await getObj('piracy.json', null)) || {};
         if (body.cfg) { p.cfg = body.cfg; await putObj('piracy.json', JSON.stringify(p)); }
         if (body.clear) { p.finds = (p.finds || []).filter((f) => !body.clear.includes(f.url)); await putObj('piracy.json', JSON.stringify(p)); }
-        return json({ ok: true, finds: p.finds || [], at: p.at || '', day: p.day || '', i: p.i || 0, err: p.err || '', on: !!p.cfg?.on }, 200, C);
+        return json({ ok: true, finds: p.finds || [], at: p.at || '', okAt: p.ok || '', day: p.day || '', i: p.i || 0, err: p.err || '', on: !!p.cfg?.on }, 200, C);
       }
       if (body.op === 'claim') { // претензия пирату (Мастерская → Маркетинг → Пираты): обычное текстовое письмо с адреса сайта, ответ — владелице
         const to = [].concat(body.to || []).map((x) => String(x).trim().toLowerCase()).filter(isMail).slice(0, 4), subject = String(body.subject || '').slice(0, 200), text = String(body.text || '').slice(0, 8000);
