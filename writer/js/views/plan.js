@@ -163,7 +163,7 @@ function launchSite() {
 }
 // Важное из «Доходов» по датам: налог (до 28-го), цифры Rocket (с 20-го), старт и конец рекламы, события дней
 // ключ дела для галочки «Сделано»: свой у переносимых дел, иначе — номер дела или дата + текст
-const pkey = (x) => x.doneKey || x.id || ('i-' + x.date + '-' + [...String(x.title || '')].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) | 0, 7).toString(36));
+export const pkey = (x) => x.doneKey || x.id || ('i-' + x.date + '-' + [...String(x.title || '')].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) | 0, 7).toString(36));
 const mondayOf = (d) => addDays(d, -((new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7));
 function incomeItems(c, from, to) {
   const d = c.data, t = c.today, out = [];

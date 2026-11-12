@@ -2,7 +2,7 @@
 // если в планере ничего не поменялось — раз в 10 минут (узнать, что закрыто в самом Todoist).
 import { todoistTasks, syncTodoist, syncIdeas, fetchOwnTasks, moveDue, TD_DAYS } from './todoist.js';
 import { overdueToMove, linkTodosToMove, trimMoved } from './dayhist.js';
-import { planItems } from './views/plan.js';
+import { planItems, pkey } from './views/plan.js';
 import { addDays } from '../../js/calc.js';
 import { toast } from '../../js/ui.js';
 
@@ -58,6 +58,9 @@ export async function runTodoist(a, { force = false, pull = false } = {}) {
     const r = await syncTodoist(token, want, { ...(s.todoist || {}), books: c.wbooks.map((b) => ({ title: b.title })) });
     lastHash = hash;
     // закрыла в Todoist дело из очереди или по связям — отмечаем и здесь
+    // закрыла в Todoist дело, которое ставит само приложение (отчёты, разбор недели, домен…), — прячем и в Мастерской
+    const doneKeys = r.doneInTodoist.map((w) => w.item).filter((x) => x && x.kind !== 'queue' && !x.todoK).map(pkey);
+    if (doneKeys.length) { const pd = a.ctx().settings.planDone || {}; await a.store.saveSettings({ planDone: { ...pd, ...Object.fromEntries(doneKeys.map((k) => [k, c.today])) } }); }
     for (const w of r.doneInTodoist) {
       const x = w.item;
       if (x.kind === 'queue' && x.id) { const q = c.data.w_queue.find((y) => y.id === x.id); if (q && !q.done) await a.store.put('w_queue', { ...q, done: true, doneAt: c.today }); }
