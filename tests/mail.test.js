@@ -233,7 +233,8 @@ test('сервис писем: круглосуточный поиск пира�
   const base = globalThis.fetch, asked = [];
   globalThis.fetch = async (url, o) => (String(url).startsWith('https://r.jina.ai/') ? (asked.push(String(url)), { ok: true, status: 200, text: async () => page }) : base(url, o));
   delete require.cache[require.resolve('../mail/mail-function.cjs')];
-  const { handler } = require('../mail/mail-function.cjs');
+  const { handler, setYNow } = require('../mail/mail-function.cjs');
+  setYNow(() => Date.parse('2026-11-12T09:00:00Z')); // день по Москве: ночной шаг Яндекса проверяется отдельным тестом
   const P = await import('../writer/js/piracy.js');
   const T = 'Звериная тропа для двоих';
   const cfg = { on: true, author: 'Лана Фрейтаг', books: [{ id: 'b1', title: T, q: P.searchQueries(T, 'Лана Фрейтаг') }], engines: ['https://lite.duckduckgo.com/lite/?q='], legit: P.LEGIT, hint: P.PIRATE_HINT.source, words: P.PIRATE_WORDS.source, known: ['missfantasy.ru|b1'] };
