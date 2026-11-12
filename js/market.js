@@ -60,7 +60,7 @@ const median = (a) => { const s = a.filter((x) => x != null && !Number.isNaN(x))
 const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 
 // Выводы по срезам: { days: {дата: {подборка: [packDay]}}, books: {id: bookCard} }
-export function marketInsights(snap = {}, { src = null, mine = [] } = {}) {
+export function marketInsights(snap = {}, { src = null, mine = [], myPrices = [] } = {}) {
   const dates = Object.keys(snap.days || {}).sort(), books = snap.books || {};
   if (!dates.length) return null;
   const rowsOf = (d) => { const day = snap.days[d] || {}, seen = new Set(), out = []; for (const k of Object.keys(day)) if (!src || k === src) for (const r of day[k]) if (!seen.has(r.id)) { seen.add(r.id); out.push(r); } return out; };
@@ -83,6 +83,9 @@ export function marketInsights(snap = {}, { src = null, mine = [] } = {}) {
   // (свежесть, продажи за короткий срок, награды — снаружи не видно; просто отмечаем и следим, сколько дней продержится)
   const medLib = median(cur.map((r) => r.l));
   const odd = medLib ? cur.filter((r) => r.l < medLib * 0.05).map((r) => ({ ...card(r), days: dates.filter((d) => rowsOf(d).some((x) => x.id === r.id)).length })) : [];
+  // авторы с несколькими книгами в срезе — у кого сейчас «серия в топе»
+  const byA = {}; for (const r of cur) { const a = books[r.id]?.a; if (a) (byA[a] ||= []).push(card(r)); }
+  const authors = Object.entries(byA).filter(([, v]) => v.length >= 2).map(([name, list]) => ({ name, n: list.length, lib: list.reduce((s, b) => s + (b.lib || 0), 0), titles: list.map((b) => b.title) })).sort((a, b) => b.n - a.n || b.lib - a.lib).slice(0, 6);
   // выводы простыми словами — только на достаточных данных
   const notes = [];
   const up = tropes.filter((t) => t.delta != null && t.delta >= 0.1 && t.n >= 3)[0], down = tropes.filter((t) => t.delta != null && t.delta <= -0.1)[0];
@@ -91,13 +94,16 @@ export function marketInsights(snap = {}, { src = null, mine = [] } = {}) {
   if (down) notes.push(`Уходит «${down.name}»: было ${Math.round(down.was * 100)} %, стало ${Math.round(down.share * 100)} %.`);
   const mp = median(paid.map((r) => r.f ?? r.p));
   if (mp != null) notes.push(`Обычная цена в топе — ${Math.round(mp)} ₽${paid.some((r) => r.o) ? `, со скидкой сейчас ${Math.round(paid.filter((r) => r.o).length / paid.length * 100)} % платных книг` : ''}.`);
+  // её цены против обычной цены топа
+  const my = myPrices.filter((x) => x > 0);
+  if (mp != null && my.length) { const m0 = median(my), d = (m0 - mp) / mp; notes.push(Math.abs(d) < 0.07 ? `Ваши цены (${Math.round(m0)} ₽) — на уровне топа.` : d < 0 ? `Ваши цены (${Math.round(m0)} ₽) ниже обычной цены топа на ${Math.round(-d * 100)} % — есть запас поднять.` : `Ваши цены (${Math.round(m0)} ₽) выше обычной цены топа на ${Math.round(d * 100)} %.`); }
   const mineSet = new Set(mine.map((x) => String(x).toLowerCase()));
   const myT = tropes.filter((t) => mineSet.has(t.name.toLowerCase()));
   if (mineSet.size && myT.length) notes.push(`Ваши тропы в топе: ${myT.map((t) => `«${t.name}» — ${Math.round(t.share * 100)} %`).join(', ')}.`);
   if (odd.length) { const by = {}; for (const b of odd) by[b.author || 'без автора'] = (by[b.author || 'без автора'] || 0) + 1; const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0];
     notes.push(`В топе ${odd.length} ${odd.length === 1 ? 'книга' : odd.length < 5 ? 'книги' : 'книг'} с очень малым числом читателей${top[1] > 1 ? ` (из них ${top[1]} — ${top[0]})` : ''}: место держится не на библиотеках и просмотрах.`); }
   if (movers[0]) notes.push(`Быстрее всех набирает читателей «${movers[0].title}» (${movers[0].author}): +${movers[0].perDay} в библиотеки в день${movers[0].tropes.length ? ` — ${movers[0].tropes.slice(0, 3).join(', ').toLowerCase()}` : ''}.`);
-  return { date: last, prevDate, gap, n: cur.length, tropes, movers, fresh, gone, odd, medLib, notes, top: cur.slice(0, 16).map(card),
+  return { date: last, prevDate, gap, n: cur.length, tropes, movers, fresh, gone, odd, medLib, authors, notes, top: cur.slice(0, 16).map(card),
     price: { median: mp, free: cur.filter((r) => r.p === 0).length / cur.length, off: paid.length ? paid.filter((r) => r.o).length / paid.length : 0 },
     excl: cur.filter((r) => r.e).length / cur.length, progress: cur.filter((r) => !r.s).length / cur.length, pages: median(cur.map((r) => r.g)) };
 }

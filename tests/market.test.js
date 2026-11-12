@@ -58,3 +58,11 @@ test('рынок: письмо за неделю — только когда е�
   const t = marketDigest(marketInsights({ days: { '2026-11-05': { a: prev }, '2026-11-12': { a: cur } }, books }, { mine: ['Развод'] }), { myTropes: ['Развод'] });
   assert.match(t, /Топы Литнета: 05\.11 → 12\.11\./); assert.match(t, /Быстрее всех набирают читателей/); assert.match(t, /\+100 — «/); assert.match(t, /Новые в топе: «Плохой сводный»/);
 });
+test('рынок: авторы с серией в топе и сравнение её цен с обычной ценой', () => {
+  const r = parseLitnetList(readFileSync(new URL('./fixtures/market-litnet-odd.txt', import.meta.url), 'utf8'));
+  const snap = { days: { '2026-11-12': { a: packDay(r) } }, books: Object.fromEntries(r.map((x) => [x.id, bookCard(x)])) };
+  const M = marketInsights(snap, { myPrices: [99, 109] });
+  assert.equal(M.authors[0].name, 'Ася Коваль'); assert.equal(M.authors[0].n, 3);
+  assert.ok(M.notes.some((n) => /Ваши цены \(104 ₽\) ниже обычной цены топа/.test(n)));
+  assert.ok(!marketInsights(snap).notes.some((n) => n.includes('Ваши цены')));
+});

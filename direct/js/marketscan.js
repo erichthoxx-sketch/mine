@@ -5,6 +5,7 @@ import { parseLitnetList, packDay, bookCard, trimSnap } from '../../js/market.js
 export const MARKET_DEFAULT = [
   { name: 'Литнет · любовные романы', url: 'https://litnet.com/ru/top/lyubovnye-romany' },
   { name: 'Литнет · современный любовный роман', url: 'https://litnet.com/ru/top/sovremennyy-lyubovnyy-roman' },
+  { name: 'Литнет · остросюжетный любовный роман', url: 'https://litnet.com/ru/top/ostrosugetnyj-lyubovnyj-roman' },
   { name: 'Литнет · все жанры', url: 'https://litnet.com/ru/top/all' },
 ];
 export const srcsOf = (settings) => (settings.direct?.market?.srcs?.length ? settings.direct.market.srcs : MARKET_DEFAULT);
