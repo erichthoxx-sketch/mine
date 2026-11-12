@@ -199,7 +199,7 @@ export function auditItemsHtml(a, camp) {
   const L = live(a);
   const goalHs = L.m?.counterId ? goalHints({ campaigns: L.main.campaigns, keywords: L.main.keywords, kw: L.stats.kw, kwConv: L.stats.kwConv, daily: L.daily, conv: L.stats.conv, mrows: L.stats.mrows, m: L.m, today: L.t, skip: L.skip }) : [];
   const r = auditCampaign({ camp, main: L.main, stats: L.stats, log: logOf(a), today: L.t, econ: { ...(L.d.econ || {}), perSale: royaltyPerSale(a.ctx().data.sales || [], L.t)?.perSale }, m: L.m, goalHs, skip: L.skip });
-  return { r, html: `<div class="list">${r.items.map((x) => `<div class="item"><div class="row between"><span><span class="small ${ST[x.status][1]}">● ${ST[x.status][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b></span>${x.act ? actBtn(x.act, x.actLabel || 'Применить', 'small-btn') : ''}</div>
+  return { r, html: `<div class="list">${r.items.map((x) => `<div class="item"><div class="row between"><span><span class="small ${ST[x.status][1]}">● ${ST[x.status][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b></span>${x.act ? actBtn(x.act, x.actLabel || 'Применить', 'small-btn') : x.href ? `<a class="btn small-btn" href="${x.href}" target="_blank" rel="noopener" style="white-space:nowrap">${esc(x.hrefLabel || 'Открыть')} ↗</a>` : ''}</div>
       ${x.why ? `<div class="small">${esc(x.why)}</div>` : ''}${x.how ? `<div class="small muted">Как: ${esc(x.how)}</div>` : ''}
       ${x.lesson && MODULES.some((mm) => mm.id === x.lesson) ? `<div class="small"><button class="link l-why" data-act="l.lesson" data-k="${x.lesson}" title="${esc(MODULES.find((mm) => mm.id === x.lesson).t)}">Почему так →</button></div>` : ''}</div>`).join('')}</div>` };
 }

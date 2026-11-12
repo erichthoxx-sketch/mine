@@ -15,7 +15,7 @@ const S3 = 'https://storage.yandexcloud.net';
 const PB = 'https://postbox.cloud.yandex.net/v2/email/outbound-emails';
 const ORIGINS = [/^https:\/\/(www\.)?lanafreitag\.ru$/, /^https:\/\/erichthoxx-sketch\.github\.io$/, /^http:\/\/localhost(:\d+)?$/];
 
-let TOKEN = '';
+let TOKEN = '', FOLDER = '';
 const auth = () => ({ 'X-YaCloud-SubjectToken': TOKEN });
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const isMail = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || ''));
@@ -58,7 +58,7 @@ const link = (a, t) => `${ENV.SELF}?a=${a}&t=${t}`;
 const fill = (s, p) => String(s).replace(/\{unsub\}/g, link('unsub', p.token)).replace(/\{name\}/g, esc(p.name || ''));
 
 // письмо «подтвердите подписку» — короткое, в стиле сайта; тексты владелица меняет в Мастерской → Сайт → Почта (op: texts → d.texts)
-const FN_V = 9; // 9 — поиск пиратов напрямую в поисковике (читалка из России отвечает 451), «Это не пират» — по странице; 8 — 8 — письмо «Разбор недели» по понедельникам и письма от приложений (op: note); 7 — сторож Директа (op: watch, таймер); 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
+const FN_V = 10; // 9 — поиск пиратов напрямую в поисковике (читалка из России отвечает 451), «Это не пират» — по странице; 8 — 8 — письмо «Разбор недели» по понедельникам и письма от приложений (op: note); 7 — сторож Директа (op: watch, таймер); 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
 const TEXTS_DEF = { subj: 'Подтвердите подписку', head: 'Подтвердите подписку', text: 'Одно нажатие — и я напишу вам, когда выйдет мой новый роман. Только тогда.', btn: 'Подтвердить' };
 const textsOf = (d) => ({ ...TEXTS_DEF, ...Object.fromEntries(Object.entries(d?.texts || {}).filter(([k, v]) => k in TEXTS_DEF && String(v || '').trim())) });
 function confirmMail(p, t = TEXTS_DEF) {
@@ -154,16 +154,63 @@ function pJudge(r, title, author, cfg) {
   if (!byAuthor && !words) return null;
   return { ...r, sure: byAuthor || known, why: [known ? 'известная пиратская библиотека' : '', words ? 'предлагает читать или скачать бесплатно' : '', byAuthor ? 'автор указан' : 'автор не указан — проверьте, ваша ли книга'].filter(Boolean).join(' · ') };
 }
+// выдача → новые находки (общая для обычных поисковиков и Яндекса)
+function pTake(res, st, cfg, p) {
+  const fresh = [], skip = new Set(cfg.skipUrls || []), have = new Set([...(cfg.known || []), ...(p.finds || []).map((f) => f.host + '|' + f.bookId)]);
+  for (const x of res) {
+    if (skip.has(x.url)) continue; // «Это не пират» — именно эта страница; другие страницы того же сайта приходят
+    const hit = pJudge(x, st.b.title, cfg.author, cfg);
+    if (!hit || have.has(hit.host + '|' + st.b.id)) continue;
+    have.add(hit.host + '|' + st.b.id);
+    fresh.push({ url: hit.url, host: hit.host, bookId: st.b.id, title: st.b.title, page: hit.title, why: hit.why, sure: hit.sure, foundAt: p.at });
+  }
+  return fresh;
+}
+// Поиск Яндекса (12.11.2026, её просьба): официальный Yandex Search API v2 под сервисным аккаунтом функции (роль search-api.webSearch.user),
+// ключей нет. Только ночью 00:00–08:00 МСК (по тарифу — бесплатная тысяча запросов в месяц), не больше Y_NIGHT запросов за ночь.
+const Y_NIGHT = 30;
+let yNow = () => Date.now(); // для тестов
+module.exports.setYNow = (f) => { yNow = f || (() => Date.now()); };
+async function ySearch(q) {
+  const folderId = FOLDER || process.env.FOLDER_ID || '';
+  if (!folderId) { const e = new Error('нет каталога'); e.stop = true; throw e; }
+  const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const r = await fetch('https://searchapi.api.cloud.yandex.net/v2/web/search', { method: 'POST', signal: ctl.signal, headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: { searchType: 'SEARCH_TYPE_RU', queryText: q }, folderId, responseFormat: 'FORMAT_HTML' }) });
+    if (r.status === 401 || r.status === 403) { const e = new Error('нет разрешения на поиск'); e.stop = true; throw e; }
+    if (!r.ok) throw new Error('Яндекс ответил ' + r.status);
+    const t = await r.text();
+    let html = t;
+    try { const j = JSON.parse(t); if (j.rawData) html = Buffer.from(j.rawData, 'base64').toString('utf8'); } catch { /* пришла сама страница */ }
+    return pParse(html);
+  } finally { clearTimeout(tm); }
+}
+async function runYandex(p, cfg, day) {
+  const hour = new Date(yNow() + 3 * 3600e3).getUTCHours();
+  if (hour >= 8) return null;
+  if (p.yday !== day) { p.yday = day; p.yi = 0; }
+  const steps = cfg.books.flatMap((b) => (b.q || []).map((q) => ({ b, q }))).slice(0, Y_NIGHT);
+  if (p.yi >= steps.length) return null;
+  const st = steps[p.yi];
+  p.yi++; p.at = new Date().toISOString();
+  let fresh = [];
+  try { fresh = pTake(await ySearch(st.q), st, cfg, p); p.yok = p.at; p.yerr = ''; }
+  catch (e) { p.yerr = e.name === 'AbortError' ? 'нет ответа' : String(e.message || e).slice(0, 120); if (e.stop) p.yi = steps.length; } // нет разрешения — до завтра не пробуем
+  return { fresh, step: p.yi, of: steps.length };
+}
 async function runPiracy() {
   const p = await getObj('piracy.json', null), cfg = p?.cfg;
   if (!cfg?.on || !(cfg.books || []).length || !(cfg.engines || []).length) return null;
   const day = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
   if (p.day !== day) { p.day = day; p.i = 0; }
   const steps = cfg.books.flatMap((b) => (b.q || []).flatMap((q) => cfg.engines.map((e) => ({ b, q, e }))));
-  if (p.i >= steps.length) return { done: true };
-  const st = steps[p.i];
+  const y = await runYandex(p, cfg, day); // ночью — шаг Яндекса вместо обычного
+  if (!y && p.i >= steps.length) return { done: true };
+  let fresh = y ? y.fresh : [];
+  const st = y ? null : steps[p.i];
+  if (!y) {
   p.i++; p.at = new Date().toISOString();
-  let fresh = [];
   // сначала поисковик напрямую (из России «читалка» r.jina.ai отвечает 451 — недоступно по закону), не вышло — через «читалку»
   const tries = [st.e + encodeURIComponent(st.q), 'https://r.jina.ai/' + st.e + encodeURIComponent(st.q)], errs = [];
   let res = null;
@@ -178,16 +225,10 @@ async function runPiracy() {
     } catch (e) { errs.push(e.name === 'AbortError' ? 'нет ответа' : 'сеть'); }
   }
   if (res) {
-    const skip = new Set(cfg.skipUrls || []), have = new Set([...(cfg.known || []), ...(p.finds || []).map((f) => f.host + '|' + f.bookId)]);
-    for (const x of res) {
-      if (skip.has(x.url)) continue; // «Это не пират» — именно эта страница; другие страницы того же сайта приходят
-      const hit = pJudge(x, st.b.title, cfg.author, cfg);
-      if (!hit || have.has(hit.host + '|' + st.b.id)) continue;
-      have.add(hit.host + '|' + st.b.id);
-      fresh.push({ url: hit.url, host: hit.host, bookId: st.b.id, title: st.b.title, page: hit.title, why: hit.why, sure: hit.sure, foundAt: p.at });
-    }
+    fresh = pTake(res, st, cfg, p);
     p.err = ''; p.ok = p.at;
   } else p.err = 'поисковик не ответил (' + errs.join(', ') + ')';
+  }
   p.finds = [...(p.finds || []), ...fresh].slice(-300);
   await putObj('piracy.json', JSON.stringify(p));
   const loud = fresh.filter((f) => f.sure), to = replyTo();
@@ -195,7 +236,7 @@ async function runPiracy() {
     const text = `Найдена пиратская копия:\n\n${loud.map((f) => `«${f.title}» — ${f.host}\n${f.url}`).join('\n\n')}\n\nОткройте Мастерскую → Маркетинг → «Пираты»: претензия уже готова${cfg.auto ? ' и уйдёт сама' : ''}.`;
     try { await send(to, `Пираты: «${loud[0].title}» на ${loud[0].host}`, `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55">${esc(text).replace(/\n/g, '<br>')}</div>`, text, '', ''); } catch { /* письмо не ушло — находка всё равно сохранена */ }
   }
-  return { step: p.i, of: steps.length, fresh: fresh.length };
+  return y ? { yandex: y.step, of: y.of, fresh: fresh.length, err: p.yerr || '' } : { step: p.i, of: steps.length, fresh: fresh.length };
 }
 
 // ---------- круглосуточный сторож Директа (12.11.2026, её «да» на п. 18) ----------
@@ -294,6 +335,7 @@ module.exports.watchAlerts = watchAlerts;
 module.exports.weekDigest = weekDigest;
 module.exports.handler = async function (event, context) {
   TOKEN = context?.token?.access_token || '';
+  FOLDER = context?.functionFolderId || '';
   if (Array.isArray(event?.messages)) { // вызов таймером (триггер Yandex Cloud)
     let out;
     try { out = await runQueue(); } catch (e) { return json({ error: String(e.message || e).slice(0, 300) }, 500); }
@@ -412,7 +454,7 @@ module.exports.handler = async function (event, context) {
         const p = (await getObj('piracy.json', null)) || {};
         if (body.cfg) { p.cfg = body.cfg; await putObj('piracy.json', JSON.stringify(p)); }
         if (body.clear) { p.finds = (p.finds || []).filter((f) => !body.clear.includes(f.url)); await putObj('piracy.json', JSON.stringify(p)); }
-        return json({ ok: true, finds: p.finds || [], at: p.at || '', okAt: p.ok || '', day: p.day || '', i: p.i || 0, err: p.err || '', on: !!p.cfg?.on }, 200, C);
+        return json({ ok: true, finds: p.finds || [], at: p.at || '', okAt: p.ok || '', day: p.day || '', i: p.i || 0, err: p.err || '', on: !!p.cfg?.on, yOk: p.yok || '', yErr: p.yerr || '' }, 200, C);
       }
       if (body.op === 'claim') { // претензия пирату (Мастерская → Маркетинг → Пираты): обычное текстовое письмо с адреса сайта, ответ — владелице
         const to = [].concat(body.to || []).map((x) => String(x).trim().toLowerCase()).filter(isMail).slice(0, 4), subject = String(body.subject || '').slice(0, 200), text = String(body.text || '').slice(0, 8000);

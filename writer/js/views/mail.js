@@ -48,7 +48,7 @@ async function refresh(quiet) {
 }
 // Адрес для ответов, который видят читательницы в письмах (10.11.2026, владелица: «заменить во всех письмах на lanafreitag8@gmail.com»):
 // с программой сервиса версии 3 ставится один раз сам; дальше меняется кнопкой «Изменить» в «Адресах»
-export const FN_LATEST = 9; // = FN_V в mail/mail-function.cjs (тест следит)
+export const FN_LATEST = 10; // = FN_V в mail/mail-function.cjs (тест следит)
 export const REPLY_DEFAULT = 'lanafreitag8@gmail.com';
 async function autoReply() {
   const s = app().ctx().settings.site || {};
@@ -174,12 +174,13 @@ export function mailView(a) {
   const pages = Math.max(1, Math.ceil(list.length / PER)), pg = Math.min(M.page, pages - 1);
   // программа сервиса устарела — карточка обновления всегда сверху (12.11.2026: кнопка «Скопировать программу» пряталась и «пропала»)
   const upd = (M.info.v || 0) < FN_LATEST ? `<div class="card"><div class="row between" style="gap:12px;align-items:flex-start"><div><h2 style="margin:0">Обновите программу сервиса писем</h2>
-      <p class="small muted" style="margin:6px 0 0">Новая версия включает: письмо «Разбор недели» по понедельникам и итог месяца письмом (а также всё прежнее: поиск пиратов, претензии, сторож Директа).</p></div>
+      <p class="small muted" style="margin:6px 0 0">Новая версия включает: поиск пиратов ещё и в Яндексе (по ночам), а также всё прежнее: претензии, сторож Директа, «Разбор недели» и итог месяца письмом.</p></div>
       <button class="primary" data-act="mail.fncopy">Скопировать программу</button></div>
     <ol class="small" style="margin:10px 0 0;padding-left:20px;line-height:1.7"><li>Нажмите «Скопировать программу».</li>
       <li>Яндекс Облако → <b>Cloud Functions</b> → функция <b>lana-mail</b> → <b>Редактор</b> → файл <b>index.js</b>.</li>
       <li>Выделите весь текст (Ctrl+A), вставьте новый (Ctrl+V).</li>
       <li>Ниже на той же странице поставьте <b>«Таймаут» 60</b> секунд → <b>Сохранить изменения</b>.</li>
+      <li>Один раз, для поиска в Яндексе: Яндекс Облако → ваш каталог → <b>Права доступа</b> → <b>Назначить роли</b> → сервисный аккаунт функции (обычно <b>lana-mail</b>) → роль <b>search-api.webSearch.user</b> → Сохранить.</li>
       <li>Вернитесь сюда и обновите страницу — эта карточка исчезнет.</li></ol></div>` : '';
   const html = `<section class="links-page mail-page">${head}
   ${upd}

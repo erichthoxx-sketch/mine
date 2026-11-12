@@ -61,6 +61,9 @@ export async function syncServer(a) {
     // сервис отчитался недавно — своя проверка в браузере сегодня не нужна
     // сервис нашёл что-то за 36 часов — своя проверка в браузере не нужна; сервис не может искать — ищет сам браузер, ошибку сервиса не показываем
     const okAt = r.okAt || '';
+    // поиск Яндекса (сервис 10+, по ночам): работает / нет разрешения — строкой в «Пиратах»
+    const ya = r.yOk && Date.now() - Date.parse(r.yOk) < 48 * 3600e3 ? 'ok' : r.yErr ? 'err:' + r.yErr : '';
+    if (ya !== (a.ctx().settings.piracy?.ya || '')) await a.store.saveSettings({ piracy: { ...(a.ctx().settings.piracy || {}), ya } });
     if (okAt && Date.now() - Date.parse(okAt) < 36 * 3600e3) await a.store.saveSettings({ piracy: { ...(a.ctx().settings.piracy || {}), at: okAt, engine: 'круглосуточно', books: books.length, err: '', srv: true } });
     else if (a.ctx().settings.piracy?.srv) await a.store.saveSettings({ piracy: { ...(a.ctx().settings.piracy || {}), srv: false, err: '', at: '' } });
     return { added };
@@ -117,7 +120,7 @@ export function piracyView(a) {
   const fresh = by(['new']), work = by(['sent', 'host', 'search']), gone = by(['gone']);
   const svc = mailSvc(), send = svc.ready && svc.v >= 5;
   const due = all.filter((f) => { const x = nextStep(f, c.today); return f.sure !== false && x && !x.wait && ['site', 'host'].includes(x.k) && !f.goneMaybe; }).length;
-  const state = scanState.busy ? esc(scanState.step || 'Ищу…') : cfg.at ? `${cfg.srv ? 'Ищу круглосуточно · последняя проверка' : 'Проверено'} ${when(cfg.at)}: ${cfg.books || 0} ${plural(cfg.books || 0, ['книга', 'книги', 'книг'])}${cfg.engine && !cfg.srv ? ` · ${esc(cfg.engine)}` : ''}${cfg.err ? ` · ${esc(cfg.err)}` : ''}` : 'Ещё не проверяла — первая проверка начнётся сама';
+  const state = scanState.busy ? esc(scanState.step || 'Ищу…') : cfg.at ? `${cfg.srv ? 'Ищу круглосуточно · последняя проверка' : 'Проверено'} ${when(cfg.at)}: ${cfg.books || 0} ${plural(cfg.books || 0, ['книга', 'книги', 'книг'])}${cfg.engine && !cfg.srv ? ` · ${esc(cfg.engine)}` : ''}${cfg.err ? ` · ${esc(cfg.err)}` : ''}${cfg.ya === 'ok' ? ' · Яндекс — по ночам' : String(cfg.ya || '').startsWith('err:') ? ` · Яндекс: ${esc(cfg.ya.slice(4))}` : ''}` : 'Ещё не проверяла — первая проверка начнётся сама';
   return `<div class="card" style="margin-top:14px">
     <div class="row between"><h2 style="margin:0">Пиратские копии</h2><button class="small-btn" data-act="pr.scan"${scanState.busy ? ' disabled' : ''}>${scanState.busy ? 'Ищу…' : 'Проверить сейчас'}</button></div>
     <p class="small muted" style="margin:6px 0 12px" id="pr-state">${state}</p>

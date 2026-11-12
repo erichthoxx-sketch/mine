@@ -554,21 +554,22 @@ export function auditCampaign({ camp, main = {}, stats = {}, log = [], today, ec
   if (since != null && since < 7) add('wait', 'Правки', `После «${recent.text}» прошло ${since} дн.`, `Оценивайте через ${7 - since} дн.: одна правка за раз и неделя на эффект — иначе непонятно, что сработало.`, { lesson: 'rhythm' });
 
   // структура
-  if (search && net) add('fix', 'Структура', 'Поиск и сети в одной кампании', 'У них разная цена клика и конверсия: в одной кампании расход смешивается, и сильный поиск недополучает бюджет.', { how: 'Разделите на две кампании в кабинете или оставьте одну, если это единая кампания и вы смотрите отчёт по площадкам.', lesson: 'arch' });
+  const unified = /UNIFIED/.test(camp.type || ''); // единая кампания сама делит бюджет между поиском и сетями — совет «разделить» не для неё
+  if (search && net && !unified) add('fix', 'Структура', 'Поиск и сети в одной кампании', 'У них разная цена клика и конверсия: в одной кампании расход смешивается, и сильный поиск недополучает бюджет.', { how: 'Разделите на две кампании в кабинете или оставьте одну, если это единая кампания и вы смотрите отчёт по площадкам.', lesson: 'arch' });
   const wide = groups.filter((g) => kws.filter((k) => k.gid === g.id).length > 15);
   if (wide.length) add('fix', 'Структура', `Размытые группы: ${wide.map((g) => `«${g.name}»`).join(', ')}`, 'Больше 15 фраз — в группе несколько смыслов, и объявление не совпадает с частью запросов.', { how: 'Разбейте по тропам/аналогам — по 5–10 фраз в группе.', lesson: 'arch' });
   const oneAd = groups.filter((g) => ads.filter((a) => a.gid === g.id).length < 2);
-  if (oneAd.length) add('fix', 'Объявления', `Одно объявление в группах: ${oneAd.slice(0, 3).map((g) => `«${g.name}»`).join(', ')}`, 'Без второго варианта нечего сравнивать, и Директ не может выбрать лучшее.', { how: 'Добавьте 1–2 варианта с другим заголовком (троп/конфликт) — тексты подскажет ИИ.', lesson: 'creative' });
+  if (oneAd.length) add('fix', 'Объявления', `Одно объявление в группах: ${oneAd.slice(0, 3).map((g) => `«${g.name}»`).join(', ')}`, 'Без второго варианта нечего сравнивать, и Директ не может выбрать лучшее.', { href: 'https://direct.yandex.ru/', hrefLabel: 'Открыть Директ', how: 'Добавьте 1–2 варианта с другим заголовком (троп/конфликт) — тексты подскажет ИИ.', lesson: 'creative' });
   if (!wide.length && !oneAd.length && !(search && net) && groups.length) add('ok', 'Структура', 'Группы и объявления разложены аккуратно', '');
 
   // семантика и минус-слова
   if (search && kws.length) {
-    const short = kws.filter((k) => wc(k.phrase) <= 2), cost = (arr) => arr.reduce((s, k) => s + (kwS[k.id]?.cost || 0), 0), all = cost(kws);
+    const short = kws.filter((k) => !/autotargeting/i.test(k.phrase) && wc(k.phrase) <= 2), cost = (arr) => arr.reduce((s, k) => s + (kwS[k.id]?.cost || 0), 0), all = cost(kws);
     if (short.length && all && cost(short) / all > 0.3) add('fix', 'Семантика', `Короткие фразы съедают ${Math.round(cost(short) / all * 100)} % бюджета`, `Широкие фразы (${short.slice(0, 3).map((k) => `«${k.phrase}»`).join(', ')}) ловят случайные запросы.`, { how: 'Уточните тропом или действием («… читать», «… про истинную пару») или возьмите в кавычки.', lesson: 'sem' });
   }
   const junk = queryHints((stats.queries || []).filter((q) => q.cid === cid), { [cid]: camp.negatives || [] });
   for (const h of junk.slice(0, 2)) add('fix', 'Минус-слова', `«${h.word}» — ${Math.round(h.cost)} ₽ за 30 дней`, `${h.why}. Например: «${h.queries[0]}».`, { act: { do: 'minus', campaign: cid, phrases: [h.word], why: h.why }, actLabel: 'В минус', lesson: 'sem' });
-  if (search && !(camp.negatives || []).length && !junk.length) add('fix', 'Минус-слова', 'В кампании нет минус-слов', 'Без базового списка объявление показывается по «скачать», «fb2», «торрент» и т. п.', { how: 'Добавьте базовые минус-слова на вкладке кампании «Минус-фразы».', lesson: 'sem' });
+  if (search && !(camp.negatives || []).length && !junk.length) add('fix', 'Минус-слова', 'В кампании нет минус-слов', 'Без базового списка объявление показывается по «скачать», «fb2», «торрент» и т. п.', { act: { do: 'minus', campaign: cid, phrases: starterMinusMissing(camp.negatives || []), why: 'базовые минус-слова: без них объявление показывается по «скачать», «fb2» и т. п.' }, actLabel: 'Добавить базовые', lesson: 'sem' });
   else if (search && !junk.length) add('ok', 'Минус-слова', `Минус-слов ${(camp.negatives || []).length}, мусорных запросов не видно`, '');
 
   // фразы — только на достаточных данных
@@ -576,7 +577,7 @@ export function auditCampaign({ camp, main = {}, stats = {}, log = [], today, ec
     const h = keywordHints(withAvgCpc(kws, kwS), kwS);
     for (const x of h.slice(0, 2)) add('fix', 'Фразы', `«${x.phrase}»`, x.why + ` (показов ${x.impr}, кликов ${x.clicks}).`, { act: { do: 'pause', target: 'keyword', ids: [x.id], why: x.why }, actLabel: 'Остановить', lesson: 'sem' });
   }
-  for (const a of ads.filter((x) => x.status === 'REJECTED')) add('fix', 'Объявления', `Отклонено: «${a.title}»`, a.note || 'Причина — в кабинете Директа.', { how: 'Исправьте текст или картинку в кабинете — объявление снова уйдёт на модерацию.', lesson: 'creative' });
+  for (const a of ads.filter((x) => x.status === 'REJECTED')) add('fix', 'Объявления', `Отклонено: «${a.title}»`, a.note || 'Причина — в кабинете Директа.', { href: 'https://direct.yandex.ru/', hrefLabel: 'Открыть Директ', how: 'Исправьте текст или картинку в кабинете — объявление снова уйдёт на модерацию.', lesson: 'creative' });
 
   // Метрика и покупки
   if (m?.counterId) {
@@ -586,7 +587,7 @@ export function auditCampaign({ camp, main = {}, stats = {}, log = [], today, ec
     }
     const g = goalTotals(daily, stats.conv || [], addDays(today, -29), today, { cid, goals: m.main, skip });
     if (g.conv) add('info', 'Покупки', `За 30 дней ${g.conv} покупок по ${Math.round(g.cpa)} ₽`, g.conv < 5 ? 'Покупок пока мало — цена покупки ещё «плавает».' : '');
-    if (/CONVERSION|CPA/.test(camp.strategy?.search || '') && g.conv < 10) add('info', 'Стратегия', 'Стратегия на конверсии при малом числе покупок', 'Ей нужны данные, чтобы учиться. Если покупок мало, подумайте о ближней цели (например, добавление в библиотеку, если такая цель есть).', { lesson: 'strategy' });
+    if (/CONVERSION|CPA/.test(camp.strategy?.search || '') && g.conv < 10 && !(camp.goal && !(m.main || []).map(String).includes(String(camp.goal)))) add('info', 'Стратегия', 'Стратегия на конверсии при малом числе покупок', 'Ей нужны данные, чтобы учиться. Если покупок мало, подумайте о ближней цели (например, добавление в библиотеку, если такая цель есть).', { lesson: 'strategy' });
     // экономика
     const rev = Number(econ.rev) || null, cr = econ.cr ? econ.cr / 100 : g.cr;
     if (rev && cr && w.cpc != null) {

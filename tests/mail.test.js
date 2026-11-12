@@ -296,7 +296,8 @@ test('поиск пиратов в сервисе: поисковик напря
   const base = globalThis.fetch;
   globalThis.fetch = async (url, o) => (String(url).startsWith('https://lite.duckduckgo.com/') ? { ok: true, status: 200, text: async () => html } : String(url).startsWith('https://r.jina.ai/') ? { ok: false, status: 451 } : base(url, o));
   delete require.cache[require.resolve('../mail/mail-function.cjs')];
-  const { handler } = require('../mail/mail-function.cjs');
+  const { handler, setYNow } = require('../mail/mail-function.cjs');
+  setYNow(() => Date.parse('2026-11-12T09:00:00Z')); // день по Москве — шаг обычного поисковика
   const P = await import('../writer/js/piracy.js');
   const T = 'Звериная тропа для двоих';
   const cfg = { on: true, author: 'Лана Фрейтаг', books: [{ id: 'b1', title: T, q: ['q1'] }], engines: ['https://lite.duckduckgo.com/lite/?q='], legit: P.LEGIT, hint: P.PIRATE_HINT.source, words: P.PIRATE_WORDS.source, known: [], skipUrls: ['https://pirat.ru/book/1'] };
@@ -306,4 +307,37 @@ test('поиск пиратов в сервисе: поисковик напря
   assert.deepEqual(r.finds.map((f) => f.url), ['https://pirat.ru/frag/1']); // скрытая страница не вернулась, другая страница того же сайта — нашлась
   assert.equal(r.err, ''); assert.ok(r.okAt);
   globalThis.fetch = base;
+});
+
+test('поиск пиратов в Яндексе: только ночью, под аккаунтом функции; нет разрешения — до завтра не пробуем', async () => {
+  stub();
+  const html = '<ul><li><a href="https://ya-pirat.ru/b/1">Звериная тропа для двоих — Лана Фрейтаг, читать онлайн бесплатно</a></li><li><a href="https://litnet.com/x">Литнет</a></li><li><a href="https://a.ru/1">Другое</a></li></ul>';
+  const base = globalThis.fetch, calls = [];
+  let deny = false;
+  globalThis.fetch = async (url, o) => {
+    if (String(url) === 'https://searchapi.api.cloud.yandex.net/v2/web/search') {
+      calls.push({ auth: o.headers.Authorization, body: JSON.parse(o.body) });
+      return deny ? { ok: false, status: 403, text: async () => '' } : { ok: true, status: 200, text: async () => JSON.stringify({ rawData: Buffer.from(html).toString('base64') }) };
+    }
+    if (/duckduckgo|r\.jina\.ai/.test(String(url))) throw new Error('ночью обычный поисковик не зовём');
+    return base(url, o);
+  };
+  delete require.cache[require.resolve('../mail/mail-function.cjs')];
+  const { handler, setYNow } = require('../mail/mail-function.cjs');
+  const P = await import('../writer/js/piracy.js');
+  const cfg = { on: true, author: 'Лана Фрейтаг', books: [{ id: 'b1', title: 'Звериная тропа для двоих', q: ['q1', 'q2'] }], engines: ['https://lite.duckduckgo.com/lite/?q='], legit: P.LEGIT, hint: P.PIRATE_HINT.source, words: P.PIRATE_WORDS.source, known: [], skipUrls: [] };
+  await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy', cfg });
+  setYNow(() => Date.parse('2026-11-12T23:30:00Z')); // 02:30 по Москве
+  await handler({ messages: [{}] }, { token: { access_token: 'iam' }, functionFolderId: 'folder1' });
+  let r = JSON.parse((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy' })).body);
+  assert.deepEqual(r.finds.map((f) => f.url), ['https://ya-pirat.ru/b/1']);
+  assert.ok(r.yOk); assert.equal(r.okAt, ''); // обычные поисковики не отчитались — браузер продолжает искать сам
+  assert.equal(calls[0].auth, 'Bearer iam');
+  assert.deepEqual(calls[0].body, { query: { searchType: 'SEARCH_TYPE_RU', queryText: 'q1' }, folderId: 'folder1', responseFormat: 'FORMAT_HTML' });
+  deny = true;
+  await handler({ messages: [{}] }, { token: { access_token: 'iam' }, functionFolderId: 'folder1' });
+  r = JSON.parse((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy' })).body);
+  assert.match(r.yErr, /нет разрешения/);
+  assert.equal(calls.length, 2);
+  globalThis.fetch = base; setYNow(null);
 });
