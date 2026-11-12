@@ -174,7 +174,7 @@ export function editorView(a, bookId, title) {
     ${editorFindBar('ed')}
   </div>
   ${ed.draft ? `<div class="alert alert-thin ed-draft">На этом устройстве есть несохранённый черновик от ${fmtDate(ed.draft.at.slice(0, 10))} ${ed.draft.at.slice(11, 16)}. <button class="link" data-act="ed.useDraft">Открыть черновик</button> <button class="link" data-act="ed.dropDraft">Отбросить</button></div>` : ''}
-  <div class="ed-paper"><div class="ed-stats" id="edstats"></div><div class="ed-sel" id="edsel" hidden></div><div class="editor" id="ed" contenteditable="true" spellcheck="true" lang="ru" style="--ed-zoom:${zoom};${ed.font ? `font-family:'${esc(ed.font)}',Georgia,'Times New Roman',serif` : ''}">${ed.html}</div></div>`;
+  <div class="ed-paper"><div class="ed-stats" id="edstats"></div><div class="editor" id="ed" contenteditable="true" spellcheck="true" lang="ru" style="--ed-zoom:${zoom};${ed.font ? `font-family:'${esc(ed.font)}',Georgia,'Times New Roman',serif` : ''}">${ed.html}</div></div>`;
   return { html, after: wire };
 }
 function statusText() {
@@ -191,18 +191,20 @@ function stats(el) {
   if (!box) return;
   const diff = s.chars - (ed.startChars || 0);
   box.innerHTML = `<span><b>${num(s.words)}</b> <i>${plural(s.words, ['слово', 'слова', 'слов'])}</i></span><span><b>${num(s.chars)}</b> <i>зн.</i></span><span><b>${alNum(s.chars)}</b> <i>а.л.</i></span><span class="es-sess"><b class="${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '+' : '−'}${num(Math.abs(diff))}</b> <i>зн. за сессию</i></span>`;
+  selStats();
 }
-// Выделила текст — показываем, сколько в выделенном знаков и слов (как в Google Документах); сняла выделение — строка исчезает
+// Выделила текст — в колонке цифр справа (там же, где знаки главы) появляется «в выделенном»; сняла выделение — строка исчезает.
+// Отдельную плашку внизу она отвергла: «показываться должно там же, где обычные символы, справа».
 function selStats() {
-  const el = document.getElementById('ed'), box = document.getElementById('edsel');
+  const el = document.getElementById('ed'), box = document.getElementById('edstats');
   if (!el || !box) return;
   const sel = document.getSelection();
   const inside = sel && sel.rangeCount && !sel.isCollapsed && el.contains(sel.anchorNode) && el.contains(sel.focusNode);
   const t = inside ? sel.toString().replace(/\r?\n/g, '') : '';
-  if (!t.length) { box.hidden = true; return; }
-  const words = (t.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).length;
-  box.innerHTML = `<b>${num(t.length)}</b> <i>зн. в выделенном</i> · <b>${num(words)}</b> <i>${plural(words, ['слово', 'слова', 'слов'])}</i>`;
-  box.hidden = false;
+  let span = box.querySelector('.es-sel');
+  if (!t.length) { span?.remove(); return; }
+  if (!span) { span = document.createElement('span'); span.className = 'es-sel'; box.prepend(span); }
+  span.innerHTML = `<b>${num(t.length)}</b> <i>зн. выделено</i>`;
 }
 if (typeof document !== 'undefined') document.addEventListener('selectionchange', selStats);
 function wire() {

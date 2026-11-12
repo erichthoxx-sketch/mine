@@ -3415,7 +3415,7 @@ button[data-act="l.lesson"] { display: none; }
 }
 @media (min-width: 901px) and (max-width: 1100px) { html.ed-focus .ed-status { display: none; } }
 
-/* Знаки в выделенном тексте — тихая плашка внизу по центру */
-.ed-sel { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 19; padding: 7px 16px; border-radius: 999px; background: var(--text); color: var(--bg); font-size: 13px; white-space: nowrap; pointer-events: none; }
-.ed-sel b { font-weight: 600; } .ed-sel i { font-style: normal; opacity: .75; }
-@media (max-width: 900px) { .ed-sel { bottom: calc(52px + env(safe-area-inset-bottom)); } }
+/* Знаки в выделенном тексте — первой строкой в колонке цифр редактора */
+.ed-paper .ed-stats .es-sel b { color: var(--mark, var(--good)); }
+@media (min-width: 1180px) { .ed-paper .ed-stats .es-sel { padding-bottom: 14px; border-bottom: 1px solid var(--line); } }
+html.ed-focus .ed-paper .ed-stats:has(.es-sel) { opacity: 1; }
