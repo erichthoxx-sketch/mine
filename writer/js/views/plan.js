@@ -1,5 +1,5 @@
 import { ic, icx } from '../../../js/icons.js';
-import { adBoard, adCtx } from '../../../js/adroi.js';
+import { adBoard, adCtx, reportDue } from '../../../js/adroi.js';
 import { esc, acts, forms, changes, openSheet, closeSheet, opt, toast, N, uid, ask, fold } from '../../../js/ui.js';
 import { num, fmtDate, pct, plural } from '../../../js/format.js';
 import { contestStatus, waitingStatus, forecastDate, bookSchedule, DOW, pubMap } from '../wcalc.js';
@@ -109,7 +109,7 @@ export function planItems(c, from, to) {
   if (rf) add(rf.date < t ? t : rf.date, 'waitans', 'Пятничный подарок: выбрать, кому', 'Админка сайта → Подарок', { href: SITE_ADMIN, id: 'raf-' + rf.date, section: 'Сайт', dueRaw: rf.date, description: SITE_ADMIN });
   // Директ: раз в неделю — «Разбор недели» (с понедельника, пока не нажала «Разобрала»; только если кампании идут)
   { const dd = c.settings.direct || {}, mon = addDays(t, -((new Date(t + 'T00:00:00Z').getUTCDay() + 6) % 7));
-    if (dd.liveOn && dd.liveOn >= addDays(t, -8) && dd.weekDone !== mon) add(mon, 'money', 'Разбор рекламы за неделю', 'Директ → «Разбор недели»: итог, узкое место, что поменять', { href: '../direct/#/week', id: 'dweek-' + mon, section: 'Деньги и реклама', dueRaw: mon, doneKey: 'dweek-' + mon }); }
+    if (dd.liveOn && dd.liveOn >= addDays(t, -8) && dd.weekDone !== mon) add(t, 'money', 'Разбор рекламы за неделю', t > mon ? 'с понедельника · Директ → «Разбор недели»: итог, узкое место, что поменять' : 'Директ → «Разбор недели»: итог, узкое место, что поменять', { href: '../direct/#/week', id: 'dweek-' + mon, section: 'Деньги и реклама', dueRaw: mon, doneKey: 'dweek-' + mon }); }
   // Пираты: новые копии книг и «сайт не ответил» (Маркетинг → Пираты; поиск идёт сам раз в сутки)
   for (const x of piracyTodos(c.data.w_piracy || [], t)) add(x.date, 'waitans', x.text, x.sub, { to: '/marketing/piracy', id: x.id, section: 'Дела', dueRaw: x.date });
   // Метка «Мой Литнет» (сайт + Директ): за 2 дня до конца срока — обновить одной кнопкой в Мастерской → Сайт (js/littag.js).
@@ -152,7 +152,8 @@ export function planItems(c, from, to) {
   // Никаких общих «Посмотреть дела на выходные». Автовыкладка и сроки остаются в своих датах.
   // Отдельная подготовка заранее только там, где действительно нужна: UTM и осмысленные дедлайны.
   const ord = { goal: -1, mk: 5.5, pub: 0, blog: 0.5, wait: 1, done: 2, contest: 3, book: 4, queue: 5, waitans: 6, money: 7, td: 6.5, utm: 5.4, 'utm-expiry': 5.6, event: 8 };
-  return out.sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
+  const done = c.settings.planDone || {};
+  return out.filter((x) => !done[pkey(x)]).sort((x, y) => x.date.localeCompare(y.date) || ord[x.kind] - ord[y.kind]);
 }
 // Книги сайта (старт подписки) — для дат запуска рекламы; грузятся один раз в фоне
 const lsite = { books: null, busy: false };
@@ -161,6 +162,8 @@ function launchSite() {
   return lsite.books || [];
 }
 // Важное из «Доходов» по датам: налог (до 28-го), цифры Rocket (с 20-го), старт и конец рекламы, события дней
+// ключ дела для галочки «Сделано»: свой у переносимых дел, иначе — номер дела или дата + текст
+const pkey = (x) => x.doneKey || x.id || ('i-' + x.date + '-' + [...String(x.title || '')].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) | 0, 7).toString(36));
 const mondayOf = (d) => addDays(d, -((new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7));
 function incomeItems(c, from, to) {
   const d = c.data, t = c.today, out = [];
@@ -198,9 +201,13 @@ function incomeItems(c, from, to) {
     if (k.end) add(k.end, `Конец рекламы «${k.name}»`, x && x.v.kind !== 'wait' ? `${x.v.text}${x.v.est ? ' (расход — оценка)' : ''} — ${x.v.todo}` : 'решить, продлевать ли');
     if (x?.reportDue) due.push(k.name);
   }
-  // отчёты о расходе — одним делом по понедельникам (12.11.2026, её просьба: не каждый день по каждой кампании); закрывается галочкой в Планере
-  if (due.length) { const mon = mondayOf(t), day = mon === t ? t : addDays(mon, 7), key = 'reports-' + day;
-    if (!c.settings.planDone?.[key] && day >= from && day <= to) out.push({ date: day, kind: 'money', title: esc(`Попросить отчёты о расходе: ${due.map((n) => `«${n}»`).join(', ')}`), sub: esc('расход за неделю — сообщение таргетолога вставить в «Доходах»: кампания → «Вставить отчёт»; без него окупаемость — оценка'), doneKey: key }); }
+  // отчёты о расходе (12.11.2026, её правило): если приложение видит, что отчёта нет, — одно дело на понедельник; не отмечено — переносится на следующие дни
+  { const mon = mondayOf(t), key = 'reports-' + mon;
+    const dueMon = (d.campaigns || []).filter((k) => reportDue(k, d.reports || [], mon)).map((k) => k.name);
+    if (dueMon.length && !c.settings.planDone?.[key] && t >= from && t <= to) out.push({ date: t, kind: 'money', title: esc(`Попросить отчёты о расходе: ${dueMon.map((n) => `«${n}»`).join(', ')}`), sub: esc(`${t > mon ? 'с понедельника · ' : ''}расход за неделю — сообщение таргетолога вставить в «Доходах»: кампания → «Вставить отчёт»`), doneKey: key });
+    // проблема появилась после понедельника — дело будет в следующий понедельник
+    const next = addDays(mon, 7), late = due.filter((n) => !dueMon.includes(n));
+    if (late.length && next >= from && next <= to) out.push({ date: next, kind: 'money', title: esc(`Попросить отчёты о расходе: ${late.map((n) => `«${n}»`).join(', ')}`), sub: esc('расход за неделю — сообщение таргетолога вставить в «Доходах»'), doneKey: 'reports-' + next }); }
   // выгрузка Литнета старше 3 дней — доход, реклама и цели считаются по старым цифрам
   const de = adCtx(d, c.settings, t).dataEnd;
   if ((d.sales || []).length && de < addDays(t, -3)) add(t, 'Загрузить выгрузку Литнета', `данные только по ${fmtDate(de).slice(0, 5)} · «Доходы» → «Загрузить выгрузку» или перетащите файл в окно`);
@@ -280,8 +287,10 @@ function itemHtml(c, x) {
   if (x.linkId && x.todoK) return `<div class="pitem"><a href="#" class="pi-open tap" data-act="go" data-to="/link/${esc(x.linkId)}">${body}</a><span class="pi-btns"><button class="td-ok" data-act="link.todoDone" data-id="${esc(x.linkId)}" data-k="${esc(x.todoK)}" title="Готово — отметится и в Todoist" aria-label="Готово">${icx('check')}</button></span></div>`;
 
   if (x.doneKey) return `<div class="pitem"><a href="${x.href || '#'}" class="pi-open tap"${x.to ? ` data-act="go" data-to="${x.to}"` : ''}>${body}</a><span class="pi-btns"><button class="td-ok" data-act="pl.done" data-k="${esc(x.doneKey)}" title="Сделано" aria-label="Сделано">${icx('check')}</button></span></div>`;
-  if (x.href) return `<a class="pitem tap" href="${x.href}">${body}</a>`;
-  if (x.to) return `<a class="pitem tap" href="#" data-act="go" data-to="${x.to}">${body}</a>`;
+  // дела, которые ставит само приложение, — тоже с галочкой «Сделано» (12.11.2026, её просьба): отмеченное прячется
+  const ok = `<span class="pi-btns"><button class="td-ok" data-act="pl.done" data-k="${esc(pkey(x))}" title="Сделано" aria-label="Сделано">${icx('check')}</button></span>`;
+  if (x.href) return `<div class="pitem"><a class="pi-open tap" href="${x.href}">${body}</a>${ok}</div>`;
+  if (x.to) return `<div class="pitem"><a class="pi-open tap" href="#" data-act="go" data-to="${x.to}">${body}</a>${ok}</div>`;
   return `<a class="pitem tap" href="#" data-act="${x.act}" data-id="${x.id}"${x.kind === 'queue' ? ` data-drag="queue"` : ''}>${body}</a>`;
 }
 // «×2 — перенесено» у дня цели, куда перенесли норму
