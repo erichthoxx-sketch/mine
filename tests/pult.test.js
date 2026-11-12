@@ -143,3 +143,11 @@ test('когорты: сводка «когда покупают» — доли 
   assert.equal(d.median, 20); assert.equal(d.lateShare, 2 / 6);
   assert.equal(s.camps['715'].n, 40); assert.equal(s.groups.other.n, 1);
 });
+
+test('Директ по месяцам: месяц «на библиотеку» — с ожидаемым доходом от добавивших', async () => {
+  const { directMonths } = await import('../direct/js/pult.js');
+  const daily = [{ date: '2026-11-10', cid: 1, cost: 1000, clicks: 100 }], conv = [{ date: '2026-11-10', cid: 1, conv: { 5: 40 } }];
+  const [m] = directMonths({ daily, conv, goals: { lib: '5', buy: ['6'] }, perSale: 100, libValue: 30 });
+  assert.equal(m.lib, 40); assert.equal(m.buy, 0); assert.equal(m.ret, 0); assert.equal(m.exp, 1200); assert.equal(m.retExp, 1.2);
+  assert.equal(directMonths({ daily, conv, goals: { lib: '5', buy: ['6'] }, perSale: 100 })[0].exp, null);
+});

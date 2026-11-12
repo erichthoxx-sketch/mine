@@ -159,14 +159,16 @@ export function siteCampaigns(campaigns = [], ads = [], host = 'lanafreitag.ru')
 }
 
 // Директ по месяцам: последние 6 месяцев с расходом
-export function directMonths({ daily = [], conv = [], goals, perSale = null, n = 6 }) {
+// libValue — сколько в среднем приносит одно добавление в библиотеку: месяц, где реклама шла на добавления, по одним покупкам выглядел бы нулевым
+export function directMonths({ daily = [], conv = [], goals, perSale = null, libValue = null, n = 6 }) {
   const by = {};
   for (const x of daily) { const k = x.date.slice(0, 7); const m = (by[k] ||= { month: k, cost: 0, clicks: 0 }); m.cost += x.cost; m.clicks += x.clicks; }
   return Object.values(by).filter((m) => m.cost > 0).sort((a, b) => b.month.localeCompare(a.month)).slice(0, n).map((m) => {
     const from = m.month + '-01', to = m.month + '-31';
     const lib = goals.lib ? convTotal(conv, from, to, null, [goals.lib]) : null, buy = goals.buy?.length ? convTotal(conv, from, to, null, goals.buy) : null;
     const rev = perSale != null && buy != null ? buy * perSale : null;
-    return { ...m, cost: Math.round(m.cost), lib, buy, rev, ret: rev != null && m.cost ? rev / m.cost : null };
+    const exp = libValue != null && lib ? Math.max(0, lib * libValue - (rev || 0)) : null; // что ещё принесут добавившие
+    return { ...m, cost: Math.round(m.cost), lib, buy, rev, ret: rev != null && m.cost ? rev / m.cost : null, exp, retExp: exp != null && m.cost ? ((rev || 0) + exp) / m.cost : null };
   });
 }
 
