@@ -164,7 +164,7 @@ export function editorView(a, bookId, title) {
       <div class="ed-chapter">${prev ? `<button class="ed-ic" data-act="ed.goto" data-t="${esc(prev)}" title="${esc(prev)}" aria-label="Предыдущая глава">${ic('chevron')}</button>` : '<span class="ed-ic-gap"></span>'}
         <select data-chg="ed.pick" aria-label="Глава">${chs.map((t) => `<option${t === title ? ' selected' : ''}>${esc(t)}</option>`).join('')}${i < 0 ? `<option selected>${esc(title)}</option>` : ''}</select>
         ${next ? `<button class="ed-ic" data-act="ed.goto" data-t="${esc(next)}" title="${esc(next)}" aria-label="Следующая глава"><span class="flip">${ic('chevron')}</span></button>` : '<span class="ed-ic-gap"></span>'}
-        <button class="ed-ic ed-add" data-act="ch.add" data-id="${b.id}" title="Новая глава — отдельная вкладка в Google Документе" aria-label="Новая глава">+</button><button class="ed-ic ed-leg" data-act="leg.peek" data-id="${b.id}" data-t="${esc(title)}" title="Легенда: план этой главы и её персонажи" aria-label="Легенда главы">${ic('books')}<span class="ed-lbl">Легенда</span></button><button class="ed-ic ed-focus-btn" data-act="ed.focus" title="Режим фокуса: только текст. Выйти — Esc" aria-label="Режим фокуса">${ic('eye')}<span class="ed-lbl">Фокус</span></button></div>
+        <button class="ed-ic ed-add" data-act="ch.add" data-id="${b.id}" title="Новая глава — отдельная вкладка в Google Документе" aria-label="Новая глава">${ic('plus')}</button><button class="ed-ic ed-leg" data-act="leg.peek" data-id="${b.id}" data-t="${esc(title)}" title="Легенда: план этой главы и её персонажи" aria-label="Легенда главы">${ic('books')}</button><button class="ed-ic ed-focus-btn" data-act="ed.focus" title="Режим фокуса: только текст. Выйти — Esc" aria-label="Режим фокуса">${ic('eye')}</button></div>
       <span class="ed-status" id="edstat">${statusText()}</span>
       <label class="ed-auto" title="Сохранять в Google Документ само, через полминуты после правки"><input type="checkbox" data-chg="ed.auto"${auto ? ' checked' : ''}> автосохранение</label>
       <button class="primary" data-act="ed.save" title="Ctrl+S">Сохранить в Документ</button>
@@ -174,7 +174,6 @@ export function editorView(a, bookId, title) {
     ${editorFindBar('ed')}
   </div>
   ${ed.draft ? `<div class="alert alert-thin ed-draft">На этом устройстве есть несохранённый черновик от ${fmtDate(ed.draft.at.slice(0, 10))} ${ed.draft.at.slice(11, 16)}. <button class="link" data-act="ed.useDraft">Открыть черновик</button> <button class="link" data-act="ed.dropDraft">Отбросить</button></div>` : ''}
-  <button class="ed-focus-x" data-act="ed.focus" title="Выйти из режима фокуса (Esc)" aria-label="Выйти из режима фокуса">×</button>
   <div class="ed-paper"><div class="ed-stats" id="edstats"></div><div class="editor" id="ed" contenteditable="true" spellcheck="true" lang="ru" style="--ed-zoom:${zoom};${ed.font ? `font-family:'${esc(ed.font)}',Georgia,'Times New Roman',serif` : ''}">${ed.html}</div></div>`;
   return { html, after: wire };
 }

@@ -3383,21 +3383,31 @@ button[data-act="l.lesson"] { display: none; }
 :root :is(.stat, .tiles > div) .s { font-size: 13px; }
 @media (max-width: 720px) { :root :is(.stat, .tiles > div) .v { font-size: max(20px, min(24px, 16cqi)) !important; } :root :is(.stat, .tiles > div) { padding: 14px 14px 12px; } }
 
-/* Режим фокуса в редакторе главы (только компьютер): один текст на бумаге, панель выезжает от верхнего края */
-.ed-focus-btn, .ed-focus-x { display: none; }
+/* Режим фокуса в редакторе главы (только компьютер): текст на бумаге и одна тихая строка инструментов сверху */
+.ed-focus-btn { display: none !important; }
+.ed-chapter button.ed-ic.ed-leg { width: 34px; padding: 0 !important; margin-left: 2px; gap: 0; }
+.ed-chapter .ed-add .ic { width: 18px; height: 18px; }
 @media (min-width: 901px) {
-  .ed-focus-btn { display: inline-flex; }
+  .ed-focus-btn { display: inline-flex !important; }
   html.ed-focus, html.ed-focus body { background: var(--paper, var(--surface)); }
   html.ed-focus nav.tabs, html.ed-focus .top, html.ed-focus .demo, html.ed-focus .ed-draft { display: none !important; }
   html.ed-focus.app-writer #app { padding: 0 !important; }
   html.ed-focus.app-writer main { max-width: none; padding: 0; margin: 0; }
-  html.ed-focus .ed-bar { position: fixed; top: 0; left: 0; right: 0; margin: 0; padding: 10px 28px 12px; background: var(--paper, var(--surface)); border-bottom: 1px solid var(--line);
-    transform: translateY(calc(-100% + 10px)); opacity: 0; transition: transform .25s ease, opacity .2s ease; z-index: 22; }
-  html.ed-focus .ed-bar:hover, html.ed-focus .ed-bar:focus-within { transform: none; opacity: 1; }
-  html.ed-focus .ed-paper { border: 0; border-radius: 0; background: none; max-width: 740px; margin: 0 auto; padding: 14vh 20px 40vh; min-height: 100vh; }
+  /* панель: только инструменты текста по центру, справа — состояние и глазик (выход); бледная, пока не нужна */
+  html.ed-focus .ed-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 20; margin: 0; padding: 10px 24px; border: 0; background: var(--paper, var(--surface));
+    display: flex; align-items: center; justify-content: center; opacity: .5; transition: opacity .2s ease; }
+  html.ed-focus .ed-bar:hover, html.ed-focus .ed-bar:focus-within { opacity: 1; }
+  html.ed-focus .ed-tools { margin: 0; justify-content: center; flex-wrap: nowrap; }
+  html.ed-focus .ed-nav { position: absolute; right: 24px; top: 10px; flex-wrap: nowrap; gap: 12px; }
+  html.ed-focus .ed-nav .btn.back, html.ed-focus .ed-nav .ed-auto, html.ed-focus .ed-nav > button.primary,
+  html.ed-focus .ed-chapter > *:not(.ed-focus-btn) { display: none !important; }
+  html.ed-focus .ed-status { margin: 0; font-size: 12px; white-space: nowrap; }
+  html.ed-focus .ed-chapter { order: 2; }
+  html.ed-focus .ed-focus-btn { background: var(--soft, var(--surface-2)) !important; }
+  html.ed-focus .ed-wm-row { display: none; }
+  html.ed-focus .ed-find:not([hidden]) { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: var(--paper, var(--surface)); padding: 8px 12px; border-radius: 12px; }
+  html.ed-focus .ed-paper { border: 0; border-radius: 0; background: none; max-width: 740px; margin: 0 auto; padding: 120px 20px 40vh; min-height: 100vh; }
   html.ed-focus .ed-paper .ed-stats { opacity: .28; }
   html.ed-focus .ed-paper .ed-stats:hover { opacity: 1; }
-  html.ed-focus .ed-focus-x { display: block; position: fixed; top: 16px; right: 22px; z-index: 21; width: 34px; height: 34px; min-height: 0; padding: 0; border: 0; border-radius: 50%;
-    background: none; color: var(--muted); font-size: 22px; line-height: 1; opacity: .25; cursor: pointer; transition: opacity .2s; }
-  html.ed-focus .ed-focus-x:hover { opacity: 1; background: var(--soft, var(--surface-2)); }
 }
+@media (min-width: 901px) and (max-width: 1250px) { html.ed-focus .ed-status { display: none; } }
