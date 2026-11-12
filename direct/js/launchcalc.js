@@ -93,11 +93,11 @@ export function launchPlan(cfg, { today, wbooks = [], siteBooks = [], metrika = 
   const wb = wbooks.find((b) => sameBook(b.title, cfg.book)) || null;
   const sb = siteBooks.find((b) => sameBook(b.title, cfg.book)) || null;
   const pubDate = cfg.publicationDate && cfg.pubManual ? cfg.publicationDate : wb?.publishStart || cfg.publicationDate || '';
-  const subDate = cfg.subscriptionDate || sb?.startDate || '';
+  const subDate = cfg.subscriptionDate || sb?.startDate || wb?.subStart || '';
   // ссылка на книгу: вписанная в плане → с сайта → из Мастерской (Маркетинг → книга → «Для таргетолога»)
   const wbLink = /litnet\.com\//.test(wb?.direct?.link || '') ? wb.direct.link : '';
   const bookUrl = cfg.bookUrl || sb?.litnet || wbLink || '';
-  const src = { pub: cfg.pubManual ? 'plan' : wb?.publishStart ? 'workshop' : 'plan', sub: cfg.subscriptionDate ? 'plan' : sb?.startDate ? 'site' : '', url: cfg.bookUrl ? 'plan' : sb?.litnet ? 'site' : wbLink ? 'workshop' : '' };
+  const src = { pub: cfg.pubManual ? 'plan' : wb?.publishStart ? 'workshop' : 'plan', sub: cfg.subscriptionDate ? 'plan' : sb?.startDate ? 'site' : wb?.subStart ? 'workshop' : '', url: cfg.bookUrl ? 'plan' : sb?.litnet ? 'site' : wbLink ? 'workshop' : '' };
   const phase = !pubDate || today < pubDate ? 'prep' : subDate && today >= subDate ? 'paid' : 'free';
   const lib = libraryGoal(metrika), buy = buyGoal(metrika);
   const roy = Number(cfg.royalty) > 0 ? Number(cfg.royalty) : royalty > 0 ? royalty : null;

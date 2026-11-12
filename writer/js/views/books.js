@@ -295,6 +295,8 @@ export function bookPage(a, id) {
     <label for="bx">Другие площадки (через запятую)</label><input id="bx" name="pfx" value="${esc(extra)}">
     <label for="blu">Ссылка на книгу на Литнете</label><input id="blu" name="litnetUrl" type="url" inputmode="url" value="${esc(b.direct?.link || '')}" placeholder="https://litnet.com/ru/book/…">
     <span class="bm-hint">Одна ссылка на всё: сама попадёт в план рекламы Директа, в пакет для таргетолога и на сайт (если там ещё пусто).</span>
+    <label for="bss">Старт подписки</label><input id="bss" name="subStart" type="date" value="${esc(b.subStart || '')}">
+    <span class="bm-hint">День, когда книга становится платной. Сам встанет на сайте (отсчёт и календарь для читательниц) и в плане рекламы Директа — цель кампании сменится на покупку.</span>
     <div class="f2"><div><label for="bp">Глав в книге, примерно</label><input id="bp" name="planChapters" inputmode="numeric" value="${b.planChapters ?? ''}"></div>
     <div><label for="bi">Книга в приложении доходов</label><select id="bi" name="incomeBookId"><option value="">—</option>${c.incomeBooks.map((x) => opt(x.id, x.title, c.incomeIdOf(b))).join('')}</select></div></div>
     ${b.fileId ? '' : `<label for="bm">Объём сейчас, а.л. (книга без файла)</label><input id="bm" name="manualChars" inputmode="decimal" value="${b.chars != null ? alNum(b.chars) : ''}">`}
@@ -518,8 +520,12 @@ forms['wbook.save'] = async (fd, f) => {
   const lu = String(fd.get('litnetUrl') ?? b.direct?.link ?? '').trim();
   if (lu && !/^https:\/\/(www\.)?litnet\.com\//.test(lu)) { toast('Нужна ссылка на книгу на Литнете: https://litnet.com/…'); return false; }
   if (lu !== (b.direct?.link || '')) patch.direct = { ...(b.direct || { ads: [] }), link: lu };
+  const ss = String(fd.get('subStart') ?? b.subStart ?? '').trim();
+  if (ss !== (b.subStart || '')) patch.subStart = ss;
   await app().store.patch('w_books', b.id, patch);
   if (lu && patch.direct) siteLitnet(b.title, lu);
+  // старт подписки — на сайт (оттуда его берёт и план запуска Директа); нет книги на сайте — останется в Мастерской
+  if ('subStart' in patch) (async () => { try { const u = app().store.auth?.currentUser; await patchSiteBook(b.title, { startDate: ss }, u ? await u.getIdToken() : ''); } catch { /* книги на сайте ещё нет */ } })();
   toast(patch.status === 'done' && b.status !== 'done' ? `Сохранено — в «Доходах» книга завершится ${(releaseDate({ ...b, ...patch }) || c.today) > c.today ? 'в день выхода последней главы' : 'сегодня'}` : 'Книга, жанры и теги сохранены');
 };
 // ---------- выкладка глав: «выложила» / «запланировала» (отложенная) / «снять» — по главам и площадкам ----------
