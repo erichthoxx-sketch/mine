@@ -1,7 +1,7 @@
 // «Защита от пиратов»: работа с сетью. Всё бесплатно и без ключей: выдачу поисковиков и страницы читает общедоступная
 // «читалка» r.jina.ai (браузер сам чужой сайт открыть не может), почту хостинга дают открытые сведения RDAP и dns.google.
 // Раз в сутки при открытой Мастерской (autoPiracy) или по кнопке. Найденное — коллекция w_piracy, служебное — settings.piracy.
-import { searchQueries, ENGINES, parseResults, judge, findId, hostOf, emailsIn, rdapInfo, isCloudflare, CONTACT_PATHS, norm, plainTitle } from './piracy.js';
+import { searchQueries, ENGINES, parseResults, judge, findId, hostOf, emailsIn, rdapInfo, isCloudflare, CONTACT_PATHS, norm, plainTitle, fullTextBack, skipToRecheck } from './piracy.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const GAP = 3500; // читалка без ключа пускает ~20 запросов в минуту
@@ -80,6 +80,27 @@ export async function pageGone(f) {
   } catch { return null; }
 }
 
+// Объём текста страницы (знаков без пробелов, чтобы меню и отступы не мешали); null — страница не открылась
+export async function pageLen(url) {
+  try { return (await read(url, { timeout: 25000 })).replace(/\s+/g, '').length; } catch { return null; }
+}
+// Страницы «Это не пират»: раз в 3 дня — не появился ли там полный текст. Появился → снова «Новая» и письмо владелице
+export async function recheckSkipped(app, notify) {
+  const back = [];
+  for (const f of skipToRecheck(app.ctx().data.w_piracy || [])) {
+    const len = await pageLen(f.url), at = new Date().toISOString();
+    if (len === null) { await app.store.put('w_piracy', { ...f, skipCheckAt: at }); await sleep(GAP); continue; }
+    if (!f.skipLen) await app.store.put('w_piracy', { ...f, skipLen: len, skipCheckAt: at });
+    else if (fullTextBack(f.skipLen, len)) {
+      const g = { ...f, status: 'new', sure: true, back: true, why: `на странице появился полный текст: было ${f.skipLen.toLocaleString('ru-RU')} знаков, стало ${len.toLocaleString('ru-RU')}`, foundAt: at, skipLen: len, skipCheckAt: at };
+      await app.store.put('w_piracy', g); back.push(g);
+    } else await app.store.put('w_piracy', { ...f, skipLen: Math.min(f.skipLen, len) || len, skipCheckAt: at });
+    await sleep(GAP);
+  }
+  if (back.length) await notify?.(back);
+  return back;
+}
+
 // Почты сайта, хостинга и регистратора домена (для письма). Сохраняются в находке, чтобы не искать дважды
 async function json(url) {
   try { const r = await fetch(url); if (r.ok) return await r.json(); } catch { /* запасной путь ниже */ }
@@ -115,8 +136,13 @@ export function autoPiracy(app, after) {
   if (s.piracy?.off) { armed = true; return; }
   const last = Date.parse(s.piracy?.at || 0) || 0;
   armed = true;
+  // спрятанные страницы проверяются браузером всегда — и когда ищет сервис (он чужие страницы не открывает)
+  setTimeout(() => recheckSkipped(app, notifyBack).catch((e) => console.warn('Повторная проверка страниц:', e)), 90000);
   if (Date.now() - last < 22 * 3600e3) return;
   // не мешаем открытию приложения; если за это время круглосуточный поиск сервиса отчитался (piracy.at свежий) — сами не ищем
   setTimeout(() => { if (Date.now() - (Date.parse(app.ctx().settings.piracy?.at || 0) || 0) < 22 * 3600e3) return; scan(app).then(() => after?.(app)).catch((e) => console.warn('Поиск пиратских копий:', e)); }, 30000);
 }
 export { hostOf };
+// письмо владелице о вернувшихся находках — через сервис писем (если подключён); в Планере они и так появятся как «новые копии»
+let notifyBack = null;
+export function onSkipBack(fn) { notifyBack = fn; }

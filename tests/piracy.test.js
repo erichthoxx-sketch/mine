@@ -67,3 +67,19 @@ test('пираты: письма и следующий шаг', () => {
   assert.match(todos[1].text, /c\.ru: сайт не ответил/);
   assert.equal(piracyTodos([sent], '2026-11-12').length, 0); // ждём — дела нет
 });
+
+test('«Это не пират»: вернулся полный текст — находка снова новая; спрятанные проверяются раз в 3 дня', async () => {
+  const { fullTextBack, skipToRecheck } = await import('../writer/js/piracy.js');
+  assert.equal(fullTextBack(8000, 9000), false); // меню поменялось — не повод
+  assert.equal(fullTextBack(8000, 30000), true); // выложили главы
+  assert.equal(fullTextBack(40000, 52000), false); // мало прибавилось
+  assert.equal(fullTextBack(0, 300000), false); // нет запомненного объёма — сначала запоминаем
+  const now = Date.parse('2026-11-12T12:00:00Z');
+  const finds = [
+    { id: 'a', status: 'skip', url: 'https://x.ru/1', skipCheckAt: '2026-11-11T12:00:00Z' },
+    { id: 'b', status: 'skip', url: 'https://x.ru/2', skipCheckAt: '2026-11-01T12:00:00Z' },
+    { id: 'c', status: 'skip', url: 'https://x.ru/3' },
+    { id: 'd', status: 'new', url: 'https://x.ru/4' },
+  ];
+  assert.deepEqual(skipToRecheck(finds, now).map((f) => f.id), ['c', 'b']);
+});

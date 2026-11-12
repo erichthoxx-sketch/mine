@@ -214,3 +214,17 @@ export function piracySummary(finds = []) {
   const n = (k) => finds.filter((f) => (f.status || 'new') === k).length;
   return { fresh: n('new'), work: n('sent') + n('host') + n('search'), gone: n('gone'), all: finds.filter((f) => f.status !== 'skip').length };
 }
+
+// «Это не пират» не навсегда (12.11.2026, её правило: «даже если найдёт снова полный текст на той же странице — сообщать»):
+// у спрятанной страницы запоминается объём текста (skipLen); при повторной проверке текста стало вдвое больше и хотя бы
+// на 15 000 знаков (≈ несколько глав) — значит, выложили книгу, находка возвращается в «Новые».
+export const SKIP_RECHECK_DAYS = 3;
+export function fullTextBack(base, now) {
+  base = +base || 0; now = +now || 0;
+  return base > 0 && now >= base * 2 && now - base >= 15000;
+}
+// какие спрятанные страницы проверить сейчас: давно не проверяли (или ни разу), не больше n за раз
+export function skipToRecheck(finds = [], nowMs = Date.now(), n = 6) {
+  return finds.filter((f) => f.status === 'skip' && f.url && nowMs - (Date.parse(f.skipCheckAt || 0) || 0) >= SKIP_RECHECK_DAYS * 864e5)
+    .sort((a, b) => (Date.parse(a.skipCheckAt || 0) || 0) - (Date.parse(b.skipCheckAt || 0) || 0)).slice(0, n);
+}

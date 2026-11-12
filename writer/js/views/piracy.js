@@ -4,7 +4,7 @@ import { ic } from '../../../js/icons.js';
 import { esc, acts, changes, toast, openSheet, fold, copyRich, ask } from '../../../js/ui.js';
 import { fmtDate, plural } from '../../../js/format.js';
 import { searchQueries, ENGINES, LEGIT, PIRATE_HINT, PIRATE_WORDS, nextStep, piracySummary, letterSite, letterHost, letterFormal, mailto, SEARCH_FORMS, archiveUrl, CF_FORM, findId, hostOf, plainTitle, isLegit, WAIT_SITE } from '../piracy.js';
-import { scan, scanState, findContacts } from '../piracyscan.js';
+import { scan, scanState, findContacts, pageLen, onSkipBack } from '../piracyscan.js';
 import { mailSvc } from './mail.js';
 
 const app = () => window.__app;
@@ -66,6 +66,13 @@ export async function syncServer(a) {
     return { added };
   } catch (e) { console.warn('Круглосуточный поиск:', e); return null; } finally { srvBusy = false; }
 }
+// страница «Это не пират» снова с полным текстом — письмо владелице (сервис писем 8+), в Планере — «новые копии»
+onSkipBack(async (list) => {
+  const m = mailSvc();
+  if (!m.ready || m.v < 8) return;
+  const text = 'На страницах, которые вы отмечали «Это не пират», появился полный текст книги:\n\n' + list.map((f) => `«${f.title}» — ${f.url}\n${f.why}`).join('\n\n') + '\n\nНаходки снова в Мастерской → Маркетинг → Пираты, в «Новых».';
+  try { await m.call({ op: 'note', subject: `Пираты: снова полный текст (${list.length})`, text }); } catch (e) { console.warn('Письмо о пиратах:', e); }
+});
 let srvArmed = false;
 export function autoServer(a) {
   if (srvArmed || a.store.mode !== 'firebase' || !(a.store.data?.w_books || []).length) return;
@@ -220,6 +227,8 @@ acts['pr.gone'] = async (d) => { const f = get(d.id); if (f) { await patch(f, { 
 acts['pr.skip'] = async (d) => {
   const f = get(d.id);
   if (!f) return;
-  await patch(f, { status: 'skip' });
+  await patch(f, { status: 'skip', skipLen: 0, skipCheckAt: new Date().toISOString() });
+  // запомнить, сколько текста на странице сейчас: появится полный текст — находка вернётся (recheckSkipped)
+  pageLen(f.url).then((n) => { const g = get(d.id); if (n && g?.status === 'skip') patch(g, { skipLen: n }); });
   toast('Эту страницу больше не показываю. Другие страницы этого сайта буду находить, как обычно', { undo: () => patch(get(d.id), { status: f.status || 'new' }) });
 };
