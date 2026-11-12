@@ -44,3 +44,9 @@ test('рынок: подборка — только страница топа Л
   assert.ok(okSrc('https://litnet.com/ru/top/lyubovnye-romany'));
   assert.ok(!okSrc('https://litnet.com/ru/book/x-b1')); assert.ok(!okSrc('https://evil.ru/ru/top/all'));
 });
+test('рынок: «в топе при малом числе читателей» — библиотек меньше 5 % от обычного', () => {
+  const r = parseLitnetList(readFileSync(new URL('./fixtures/market-litnet-odd.txt', import.meta.url), 'utf8'));
+  const M = marketInsights({ days: { '2026-11-12': { a: packDay(r) } }, books: Object.fromEntries(r.map((x) => [x.id, bookCard(x)])) });
+  assert.deepEqual(M.odd.map((b) => b.title), ['Секретарша для большого босса', 'Пышка для босса', 'Мажор для училки', 'Горячая булочка для босса']);
+  assert.ok(M.notes.some((n) => n.includes('с очень малым числом читателей')));
+});

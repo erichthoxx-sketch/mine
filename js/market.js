@@ -79,6 +79,10 @@ export function marketInsights(snap = {}, { src = null, mine = [] } = {}) {
   const movers = prev.length ? cur.filter((r) => prevBy[r.id] && r.l > prevBy[r.id].l).map((r) => ({ ...card(r), perDay: Math.round((r.l - prevBy[r.id].l) / gap), was: prevBy[r.id].n })).sort((a, b) => b.perDay - a.perDay).slice(0, 8) : [];
   const fresh = prev.length ? cur.filter((r) => !prevBy[r.id]).map(card) : [];
   const curIds = new Set(cur.map((r) => r.id)), gone = prev.filter((r) => !curIds.has(r.id)).map(card);
+  // «в топе при малом числе читателей»: библиотек меньше 5 % от обычного для этого среза — место держится не на читателях
+  // (свежесть, продажи за короткий срок, награды — снаружи не видно; просто отмечаем и следим, сколько дней продержится)
+  const medLib = median(cur.map((r) => r.l));
+  const odd = medLib ? cur.filter((r) => r.l < medLib * 0.05).map((r) => ({ ...card(r), days: dates.filter((d) => rowsOf(d).some((x) => x.id === r.id)).length })) : [];
   // выводы простыми словами — только на достаточных данных
   const notes = [];
   const up = tropes.filter((t) => t.delta != null && t.delta >= 0.1 && t.n >= 3)[0], down = tropes.filter((t) => t.delta != null && t.delta <= -0.1)[0];
@@ -90,8 +94,10 @@ export function marketInsights(snap = {}, { src = null, mine = [] } = {}) {
   const mineSet = new Set(mine.map((x) => String(x).toLowerCase()));
   const myT = tropes.filter((t) => mineSet.has(t.name.toLowerCase()));
   if (mineSet.size && myT.length) notes.push(`Ваши тропы в топе: ${myT.map((t) => `«${t.name}» — ${Math.round(t.share * 100)} %`).join(', ')}.`);
+  if (odd.length) { const by = {}; for (const b of odd) by[b.author || 'без автора'] = (by[b.author || 'без автора'] || 0) + 1; const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0];
+    notes.push(`В топе ${odd.length} ${odd.length === 1 ? 'книга' : odd.length < 5 ? 'книги' : 'книг'} с очень малым числом читателей${top[1] > 1 ? ` (из них ${top[1]} — ${top[0]})` : ''}: место держится не на библиотеках и просмотрах.`); }
   if (movers[0]) notes.push(`Быстрее всех набирает читателей «${movers[0].title}» (${movers[0].author}): +${movers[0].perDay} в библиотеки в день${movers[0].tropes.length ? ` — ${movers[0].tropes.slice(0, 3).join(', ').toLowerCase()}` : ''}.`);
-  return { date: last, prevDate, gap, n: cur.length, tropes, movers, fresh, gone, notes, top: cur.slice(0, 16).map(card),
+  return { date: last, prevDate, gap, n: cur.length, tropes, movers, fresh, gone, odd, medLib, notes, top: cur.slice(0, 16).map(card),
     price: { median: mp, free: cur.filter((r) => r.p === 0).length / cur.length, off: paid.length ? paid.filter((r) => r.o).length / paid.length : 0 },
     excl: cur.filter((r) => r.e).length / cur.length, progress: cur.filter((r) => !r.s).length / cur.length, pages: median(cur.map((r) => r.g)) };
 }
