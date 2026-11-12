@@ -27,6 +27,8 @@ import { syncWatch } from './watch.js';
 import { pultView, pultModel } from './views/pult.js';
 import { weekView } from './views/week.js';
 import { hooksView } from './views/hooks.js';
+import { marketView } from './views/market.js';
+import { autoMarket } from './marketscan.js';
 import { rub } from '../../js/format.js';
 import { moneyView } from './views/money.js';
 import { siteView } from './views/siteads.js';
@@ -96,7 +98,7 @@ acts['d.reload'] = () => { reload(); return false; };
 
 // Четыре раздела (10.11.2026, владелица: «максимум аналитики, полезных действий и контроля за кампаниями и их прибыльностью»):
 // Пульт (что требует внимания + карточка на кампанию), Кампания, Деньги, Сайт. Остальные экраны открываются изнутри.
-const TABS = [['/', 'gauge', 'Пульт'], ['/c', 'trend', 'Кампания'], ['/money', 'coins', 'Деньги'], ['/site', 'bear', 'Сайт']];
+const TABS = [['/', 'gauge', 'Пульт'], ['/c', 'trend', 'Кампания'], ['/money', 'coins', 'Деньги'], ['/site', 'bear', 'Сайт'], ['/market', 'globe', 'Рынок']];
 const TAB_OF = { launch: '/', week: '/', hooks: '/', quality: '/c', ai: '/', log: '/c', settings: '/', litnet: '/', an: '/', book: '/', books: '/', keywords: '/', competitors: '/' };
 // «Кампания» без номера: одна идущая — сразу она, несколько — выбор
 function campaignsView(x) {
@@ -114,7 +116,7 @@ function route() {
   if (a === 'book' && b) return { tab: '/', view: (x) => bookAdView(x, decodeURIComponent(b)) };
   if (a === 'launch' && b) return { tab: '/', view: (x) => launchView(x, decodeURIComponent(b)) };
   if (a === 'an' && b === 'site') return { tab: '/site', view: siteView }; // старая ссылка «Статистика» из Мастерской
-  const map = { books: booksAdsView, '': pultView, c: campaignsView, money: moneyView, site: siteView, launch: launchView, quality: qualityView, week: weekView, hooks: hooksView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, ai: aiView, log: logView, settings: settingsView };
+  const map = { books: booksAdsView, '': pultView, c: campaignsView, money: moneyView, site: siteView, launch: launchView, quality: qualityView, week: weekView, hooks: hooksView, market: marketView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, ai: aiView, log: logView, settings: settingsView };
   return { tab: TAB_OF[a] || '/' + (a || ''), view: map[a || ''] || pultView };
 }
 
@@ -188,7 +190,7 @@ async function savePendingToken() {
   } finally { saving = false; }
 }
 
-store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); autoCohorts(store).catch(console.warn); });
+store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); autoCohorts(store).catch(console.warn); autoMarket(app); });
 store.init().then(async () => {
   await savePendingToken();
   await syncDemo();
