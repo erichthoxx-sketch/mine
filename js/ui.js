@@ -258,7 +258,14 @@ export function ecoSwitch(cur) {
   const up = cur === 'income' ? '' : '../';
   const items = [['writer', 'Мастерская', up + 'workshop/'], ['income', 'Доходы', up || './'], ['direct', 'Директ', up + 'direct/']];
   // свёрнут в одну круглую кнопку; по нажатию переключатель плавно выезжает влево (12.11.2026, её просьба: «чтобы вкладки были не всегда открыты, а выезжали аккуратно»)
-  return `<div class="eco-w"><nav class="eco" aria-label="Мои приложения">${items.map(([k, t, href]) => (k === cur ? `<span class="on" aria-current="page">${t}</span>` : `<a href="${href}">${t}</a>`)).join('')}<a href="https://lanafreitag.ru/" target="_blank" rel="noopener" title="Открыть сайт lanafreitag.ru">Сайт</a></nav>`
+  return `<div class="eco-w${ecoOpen() ? ' open' : ''}"><nav class="eco" aria-label="Мои приложения">${items.map(([k, t, href]) => (k === cur ? `<span class="on" aria-current="page">${t}</span>` : `<a href="${href}">${t}</a>`)).join('')}<a href="https://lanafreitag.ru/" target="_blank" rel="noopener" title="Открыть сайт lanafreitag.ru">Сайт</a></nav>`
     + `<button type="button" class="eco-t" data-act="eco.toggle" aria-label="Мои приложения" title="Мои приложения"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="7.5" cy="7.5" r="1.8"/><circle cx="16.5" cy="7.5" r="1.8"/><circle cx="7.5" cy="16.5" r="1.8"/><circle cx="16.5" cy="16.5" r="1.8"/></svg></button></div>`;
 }
-acts['eco.toggle'] = (d, el) => { el.closest('.eco-w')?.classList.toggle('open'); return false; };
+// открыт/закрыт — запоминается (перерисовка экрана раньше сбрасывала его и он сам сворачивался); закрывается только кнопкой
+const ecoOpen = () => { try { return localStorage.getItem('ecoOpen') === '1'; } catch { return false; } };
+acts['eco.toggle'] = (d, el) => {
+  const w = el.closest('.eco-w'), open = !w?.classList.contains('open');
+  try { localStorage.setItem('ecoOpen', open ? '1' : '0'); } catch { /* приватный режим */ }
+  document.querySelectorAll('.eco-w').forEach((x) => x.classList.toggle('open', open));
+  return false;
+};
