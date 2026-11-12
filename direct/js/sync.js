@@ -333,23 +333,28 @@ async function excludePlaces(app, cid, places) {
   const u = await call(s, 'campaigns', 'update', { Campaigns: [{ Id: cid, ExcludedSites: { Items: next } }] }, 0, undefined, 'v501');
   return { name: camp.Name, errors: (u.UpdateResults || []).flatMap((x) => (x.Errors || []).map((e) => e.Details || e.Message)) };
 }
-export async function runAutoRules(app, goalActs = []) {
-  const c = app.ctx(), d = c.settings.direct || {}, on = d.auto || {};
-  if (isDemo() || !Object.values(on).some(Boolean)) return [];
-  const { autoPlan } = await import('./autorules.js');
-  const plan = autoPlan({ main: snap(app, 'main') || {}, stats: snap(app, 'stats') || {}, on, today: c.today, goalActs, done: d.autoDone || [] });
+// Выполнить пункты плана (автоправила — by 'auto'; одобренное в очереди Пульта — by 'app'); возвращает ключи сделанного
+export async function execPlan(app, plan, by = 'auto') {
   const done = [];
   for (const p of plan) {
     try {
-      if (p.act) { const r = await apply(app, p.act, { by: 'auto' }); if (r?.errors?.length) continue; }
+      if (p.act) { const r = await apply(app, p.act, { by }); if (r?.errors?.length) continue; }
       else if (p.rule === 'places') {
         const r = await excludePlaces(app, p.cid, p.places);
-        await putLog(app, { id: 'l' + uid(), at: new Date().toISOString(), by: 'auto', do: 'exclude', cid: p.cid, text: `Кампания «${r.name}»: исключены площадки ${p.places.join(', ')}`, why: 'автоправило: 20+ кликов и больше половины отказов', ok: !r.errors.length, errors: r.errors, warnings: [] });
+        await putLog(app, { id: 'l' + uid(), at: new Date().toISOString(), by, do: 'exclude', cid: p.cid, text: `Кампания «${r.name}»: исключены площадки ${p.places.join(', ')}`, why: (by === 'auto' ? 'автоправило: ' : '') + '20+ кликов и больше половины отказов', ok: !r.errors.length, errors: r.errors, warnings: [] });
         if (r.errors.length) continue;
       }
       done.push(p.key, ...(p.keys || []));
     } catch (e) { console.warn('Автоправило', p.rule, e); }
   }
+  return done;
+}
+export async function runAutoRules(app, goalActs = []) {
+  const c = app.ctx(), d = c.settings.direct || {}, on = d.auto || {};
+  if (isDemo() || !Object.values(on).some(Boolean)) return [];
+  const { autoPlan } = await import('./autorules.js');
+  const plan = autoPlan({ main: snap(app, 'main') || {}, stats: snap(app, 'stats') || {}, on, today: c.today, goalActs, done: d.autoDone || [] });
+  const done = await execPlan(app, plan, 'auto');
   if (done.length) await app.store.saveSettings({ direct: { ...(app.ctx().settings.direct || {}), autoDone: [...(d.autoDone || []), ...done].slice(-400), autoAt: new Date().toISOString(), autoLast: plan.filter((p) => done.includes(p.key)).map((p) => p.text).slice(0, 6) } });
   return done;
 }

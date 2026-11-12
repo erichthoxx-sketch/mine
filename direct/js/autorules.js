@@ -29,3 +29,22 @@ export function autoPlan({ main = {}, stats = {}, on = {}, today, goalActs = [],
   }
   return out;
 }
+
+// Очередь предложений на Пульте (12.11.2026, её просьба: «одобрение одной кнопкой… выделить, что надо, что не надо»):
+// то же, что делают автоправила, но для правил, которые НЕ включены, — их действия ждут галочки. Плюс стартовые минус-слова.
+// no — ключи, на которые она ответила «Не надо» (settings.direct.queueNo); done — уже сделанное автоправилами.
+export function approvalQueue({ main = {}, stats = {}, on = {}, today, goalActs = [], done = [], no = [], starter = [] }) {
+  const hide = new Set(no), off = { minus: !on.minus, places: !on.places, fatigue: !on.fatigue, goal: !on.goal };
+  const names = Object.fromEntries((main.campaigns || []).map((c) => [c.id, c.name]));
+  const out = [];
+  for (const s of starter) out.push({ rule: 'starter', key: `starter:${s.campaign}`, act: s, text: `добавить базовые минус-слова (${s.phrases.length})`, cid: s.campaign });
+  // autoPlan режет до AUTO_MAX — для очереди берём пачками, пока есть новое
+  const seen = [...done];
+  for (let i = 0; i < 4; i++) {
+    const part = autoPlan({ main, stats, on: off, today, goalActs, done: seen });
+    if (!part.length) break;
+    out.push(...part); seen.push(...part.map((x) => x.key), ...part.flatMap((x) => x.keys || []));
+  }
+  const WHY = { starter: 'по «скачать», «fb2», «аудиокнига» ищут файл, а не книгу на Литнете', minus: 'по таким запросам приходят не читатели', places: 'с площадки сразу уходят: 20+ кликов и больше половины отказов', fatigue: 'объявление приелось: CTR заметно упал, в группе есть другие', goal: 'началась подписка — кампании пора учиться на покупках; цена цели и бюджет не меняются' };
+  return out.filter((x) => !hide.has(x.key)).map((x) => ({ ...x, text: x.rule === 'fatigue' ? 'остановить объявление: ' + x.text : x.text, cid: x.cid ?? x.act?.campaign ?? null, camp: names[x.cid ?? x.act?.campaign] || '', why: WHY[x.rule] || '' })).slice(0, 20);
+}

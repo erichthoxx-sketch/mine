@@ -23,3 +23,18 @@ test('автоправила: только включённые, только и
   assert.deepEqual(again, []);
   assert.ok(all.length <= AUTO_MAX);
 });
+
+test('очередь предложений: только выключенные правила, без «Не надо», со стартовыми минус-словами', async () => {
+  const { approvalQueue } = await import('../direct/js/autorules.js');
+  const main = { campaigns: [{ id: 1, name: 'ЕПК', state: 'ON', negatives: [] }], groups: [], ads: [], keywords: [] };
+  const stats = { queries: [{ cid: 1, query: 'черная вдова скачать fb2', clicks: 3, cost: 30, impr: 50 }, { cid: 1, query: 'скачать роман бесплатно', clicks: 2, cost: 20, impr: 40 }] };
+  const starter = [{ do: 'minus', campaign: 1, phrases: ['скачать', 'fb2', 'торрент', 'аудиокнига', 'фильм'] }];
+  const q = approvalQueue({ main, stats, on: {}, today: '2026-11-12', starter });
+  assert.equal(q[0].key, 'starter:1'); assert.equal(q[0].camp, 'ЕПК');
+  assert.ok(q.some((x) => x.rule === 'minus'));
+  // правило включено галочкой — его действия делаются сами и в очередь не идут
+  assert.ok(!approvalQueue({ main, stats, on: { minus: true }, today: '2026-11-12' }).some((x) => x.rule === 'minus'));
+  // «Не надо» — больше не предлагаем
+  const no = q.map((x) => x.key);
+  assert.equal(approvalQueue({ main, stats, on: {}, today: '2026-11-12', starter, no }).length, 0);
+});

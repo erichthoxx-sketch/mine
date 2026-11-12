@@ -14,7 +14,11 @@ import { demo } from '../demo.js';
 import { ic } from '../../../js/icons.js';
 import { litTagInfo } from '../../../js/littag.js';
 import { weekKeyOf } from '../weekreview.js';
-import { AUTO_RULES } from '../autorules.js';
+import { AUTO_RULES, approvalQueue } from '../autorules.js';
+import { execPlan } from '../sync.js';
+import { starterMinusMissing } from '../dcalc.js';
+import { resolvedLaunches, goalSwitch } from './launchctx.js';
+import { acts, toast } from '../../../js/ui.js';
 import { syncWatch } from '../watch.js';
 import { changes } from '../../../js/ui.js';
 
@@ -84,6 +88,7 @@ export function pultView(a) {
     ${wkOpen ? `<div class="card"><div class="row between" style="gap:12px"><div><b>Разбор недели готов</b><div class="small muted">Итог против прошлой недели, воронка, объявления, запросы, площадки — и что поменять</div></div><button class="primary" data-act="go" data-to="/week">Открыть</button></div></div>` : ''}
     <div class="card"><div class="row between"><h2 style="margin:0">Сегодня · кампании</h2><span class="small muted">${tasks.length ? num(tasks.length) : 'всё спокойно'}</span></div>
       ${tasks.length ? `<div class="list">${more('pult-todo', tasks, 3)}</div>` : '<p class="small muted" style="margin:8px 0 0">Ничего срочного. Приложение само проверяет кампании при каждом обновлении — раз в 15 минут, пока открыто.</p>'}</div>
+    ${queueCard(a)}
     ${live.map(card).join('') || '<div class="card"><p class="muted">Сейчас нет идущих кампаний.</p></div>'}
     ${rest.length ? `<div class="card"><h2>Остальные кампании</h2><div class="list">${rest.map((r) => `<a class="item" href="#" data-act="go" data-to="/c/${r.camp.id}"><div class="row between"><b>${esc(r.camp.name)}</b><span class="small muted">${esc(r.st.text)}</span></div>${r.econ.d30.cost ? `<div class="small muted">за 30 дней ${money(r.econ.d30.cost)}${r.econ.lib30 ? ` · в библиотеку ${num(r.econ.lib30)}` : ''}</div>` : ''}</a>`).join('')}</div></div>` : ''}
     ${autoCard(c)}
@@ -91,6 +96,46 @@ export function pultView(a) {
     ${cohortLine(c.settings.direct || {})}`,
   };
 }
+
+// Очередь предложений: всё, что приложение может сделать в кабинете само, — списком с галочками. Отмеченное — «Применить» или «Не надо».
+function queueOf(a) {
+  const c = a.ctx(), d = c.settings.direct || {}, main = a.snap('main') || {};
+  const negOf = (camp) => [...(camp.negatives || []), ...(main.groups || []).filter((g) => g.cid === camp.id).flatMap((g) => g.negatives || [])];
+  const starter = (main.campaigns || []).filter((x) => x.state === 'ON').map((camp) => ({ camp, miss: starterMinusMissing(negOf(camp)) })).filter((x) => x.miss.length >= 5)
+    .map((x) => ({ do: 'minus', campaign: x.camp.id, phrases: x.miss, why: 'по таким запросам ищут файл, озвучку или экранизацию, а не книгу на Литнете' }));
+  let goalActs = [];
+  if (!demo.on) try { goalActs = resolvedLaunches(a).map((L) => goalSwitch(L.plan)).filter(Boolean); } catch { /* плана запуска нет */ }
+  return approvalQueue({ main, stats: a.snap('stats') || {}, on: d.auto || {}, today: c.today, goalActs, done: d.autoDone || [], no: d.queueNo || [], starter });
+}
+function queueCard(a) {
+  const q = queueOf(a);
+  if (!q.length) return '';
+  return `<div class="card" id="pq"><div class="row between"><h2 style="margin:0">Предложения</h2><span class="small muted">${num(q.length)}</span></div>
+    <p class="small muted" style="margin:6px 0 4px">Что можно сделать в кабинете прямо отсюда. Оставьте галочки у нужного — и нажмите кнопку. Цену цели и бюджет ничто из этого не меняет.</p>
+    <div class="list">${q.map((x) => `<label class="item d-check" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer"><input type="checkbox" data-pq="${esc(x.key)}" checked style="margin-top:4px">
+      <span><b>${esc(x.text.charAt(0).toUpperCase() + x.text.slice(1))}</b><span class="small muted" style="display:block">${x.camp ? `«${esc(x.camp)}» · ` : ''}${esc(x.why)}</span></span></label>`).join('')}</div>
+    <div class="row" style="margin-top:12px;gap:10px"><button class="primary" data-act="pq.yes">Применить отмеченное</button><button class="small-btn" data-act="pq.no">Отмеченное — не надо</button></div></div>`;
+}
+const pqPicked = () => new Set([...document.querySelectorAll('#pq input[data-pq]:checked')].map((x) => x.dataset.pq));
+let pqBusy = false;
+acts['pq.yes'] = async () => {
+  const a = window.__app, pick = pqPicked(), plan = queueOf(a).filter((x) => pick.has(x.key));
+  if (!plan.length) { toast('Ничего не отмечено'); return false; }
+  if (demo.on) { toast('Это пример данных — в настоящем кабинете действия выполнятся'); return false; }
+  if (pqBusy) return false;
+  pqBusy = true;
+  try {
+    const done = await execPlan(a, plan, 'app'), n = plan.filter((x) => done.includes(x.key)).length, d = a.ctx().settings.direct || {};
+    if (done.length) await a.store.saveSettings({ direct: { ...d, autoDone: [...(d.autoDone || []), ...done].slice(-400) } });
+    toast(n === plan.length ? `Готово: сделано ${n} — всё записано в «Что меняли»` : `Сделано ${n} из ${plan.length}. Остальное Директ не принял — оно осталось в списке`);
+  } finally { pqBusy = false; }
+};
+acts['pq.no'] = async () => {
+  const a = window.__app, pick = [...pqPicked()], d = a.ctx().settings.direct || {}, was = d.queueNo || [];
+  if (!pick.length) { toast('Ничего не отмечено'); return false; }
+  await a.store.saveSettings({ direct: { ...d, queueNo: [...was, ...pick].slice(-400) } });
+  toast(`Убрала ${pick.length} — больше не предложу`, { undo: () => a.store.saveSettings({ direct: { ...(a.ctx().settings.direct || {}), queueNo: was } }) });
+};
 
 // Когорты для нейросети (Logs API Метрики, js/cohorts.js): когда обновились или почему нет
 function cohortLine(d) {
