@@ -354,7 +354,7 @@ export function setFocusMode(on) {
   const h = document.documentElement;
   if (h.classList.contains('ed-focus') === !!on) return;
   h.classList.toggle('ed-focus', !!on);
-  try { if (on) h.requestFullscreen?.().catch(() => {}); else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); } catch { /* без полного экрана — тоже фокус */ }
+  // полный экран браузера не включаем: Chrome рисует поверх свой круглый крестик у верхнего края (её жалоба 12.11.2026)
   if (on) document.getElementById('ed')?.focus();
 }
 acts['ed.focus'] = () => { setFocusMode(!document.documentElement.classList.contains('ed-focus')); return false; };
@@ -363,7 +363,6 @@ if (typeof document !== 'undefined') {
   // пока печатает — капсула с инструментами исчезает; движение мыши возвращает её
   document.addEventListener('keydown', (e) => { const h = document.documentElement; if (h.classList.contains('ed-focus') && e.target?.id === 'ed' && !e.ctrlKey && !e.metaKey && e.key.length === 1) h.classList.add('ed-typing'); }, true);
   document.addEventListener('mousemove', () => document.documentElement.classList.remove('ed-typing'));
-  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) document.documentElement.classList.remove('ed-focus'); });
 }
 acts['ed.undo'] = () => histGo(-1);
 acts['ed.redo'] = () => histGo(1);

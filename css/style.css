@@ -3404,7 +3404,7 @@ button[data-act="l.lesson"] { display: none; }
   html.ed-focus .ed-nav { position: static; flex-wrap: nowrap; gap: 6px; order: 2; padding-left: 10px; margin-left: 4px; border-left: 1px solid var(--line); }
   html.ed-focus .ed-nav .btn.back, html.ed-focus .ed-nav .ed-auto, html.ed-focus .ed-nav > button.primary,
   html.ed-focus .ed-chapter > *:not(.ed-focus-btn) { display: none !important; }
-  html.ed-focus .ed-status { margin: 0; font-size: 12px; white-space: nowrap; color: var(--muted); }
+  html.ed-focus .ed-status { margin: 0; font-size: 12px; white-space: nowrap; color: var(--muted); max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
   html.ed-focus .ed-chapter { order: 2; }
   html.ed-focus .ed-focus-btn { background: var(--soft, var(--surface-2)) !important; }
   html.ed-focus .ed-wm-row { display: none; }
