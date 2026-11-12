@@ -352,6 +352,16 @@ export async function execPlan(app, plan, by = 'auto') {
         await putLog(app, { id: 'l' + uid(), at: new Date().toISOString(), by, do: 'exclude', cid: p.cid, text: `Кампания «${r.name}»: исключены площадки ${p.places.join(', ')}`, why: (by === 'auto' ? 'автоправило: ' : '') + '20+ кликов и больше половины отказов', ok: !r.errors.length, errors: r.errors, warnings: [] });
         if (r.errors.length) continue;
       }
+      else if (p.rule === 'unretarget') {
+        const s0 = app.ctx().settings, d0 = s0.direct || {};
+        const g = await call(s0, 'audiencetargets', 'get', { SelectionCriteria: { AdGroupIds: [Number(p.gid)], RetargetingListIds: [Number(p.listId)] }, FieldNames: ['Id'] }, 1, undefined, 'v5');
+        const ids = (g?.AudienceTargets || []).map((x) => x.Id);
+        let errors = [];
+        if (ids.length) { const r = await call(s0, 'audiencetargets', 'delete', { SelectionCriteria: { Ids: ids } }, 0, undefined, 'v5'); errors = (r?.DeleteResults || []).flatMap((x) => (x.Errors || []).map((e) => e.Details || e.Message)); }
+        await putLog(app, { id: 'l' + uid(), at: new Date().toISOString(), by, do: 'unretarget', cid: p.cid || null, text: 'Аудитория «добавили, но не купили» убрана из группы', why: p.why || '', ok: !errors.length, errors, warnings: [] });
+        if (errors.length) { lastPlanErrors.push('Аудитория не убрана: ' + errors.join('; ')); continue; }
+        await app.store.saveSettings({ direct: { ...d0, retarget: { ...(d0.retarget || {}), groups: ((d0.retarget || {}).groups || []).filter((x) => String(x) !== String(p.gid)) } } });
+      }
       else if (p.rule === 'audience' || p.rule === 'retarget' || p.rule === 'newad') {
         const s0 = app.ctx().settings, d0 = s0.direct || {}, errOf = (r) => (r?.AddResults || []).flatMap((x) => (x.Errors || []).map((e) => e.Details || e.Message));
         let r, text;

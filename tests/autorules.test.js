@@ -45,12 +45,20 @@ test('очередь: аудитория «добавили, но не купи�
   const main = { campaigns: [{ id: 1, name: 'ЕПК', state: 'ON', strategy: { network: 'WB_MAXIMUM_CONVERSION_RATE' } }], groups: [{ id: 10, cid: 1, name: 'Группа' }],
     ads: [{ id: 100, gid: 10, cid: 1, state: 'ON', title: 'Развод для черной вдовы', href: 'https://litnet.com/ru/book/x-b1?utm_litref=a' }] };
   assert.deepEqual(retargetItems({ main, goals: { lib: null, buy: ['2'] } }), []);
-  const first = retargetItems({ main, goals: { lib: '1', buy: ['2', '3'] }, saved: {} });
+  // кампания учится на добавлениях в библиотеку — ретаргетинг не предлагаем вовсе
+  const libCamp = { ...main, campaigns: [{ ...main.campaigns[0], goal: 1 }] };
+  assert.deepEqual(retargetItems({ main: libCamp, goals: { lib: '1', buy: ['2', '3'] }, saved: {} }), []);
+  // подключили раньше времени — предлагаем убрать
+  const undo = retargetItems({ main: libCamp, goals: { lib: '1', buy: ['2'] }, saved: { listId: 77, groups: [10] } });
+  assert.deepEqual(undo.map((x) => [x.rule, x.gid, x.listId]), [['unretarget', 10, 77]]);
+  // цель кампании — покупка: сначала аудитория, потом подключение
+  const buyCamp = { ...main, campaigns: [{ ...main.campaigns[0], goal: 2 }] };
+  const first = retargetItems({ main: buyCamp, goals: { lib: '1', buy: ['2', '3'] }, saved: {} });
   assert.equal(first.length, 1); assert.equal(first[0].rule, 'audience');
   assert.deepEqual(retargetRules('1', ['2', '3']), [{ Operator: 'ALL', Arguments: [{ ExternalId: 1, MembershipLifeSpan: 90 }] }, { Operator: 'NONE', Arguments: [{ ExternalId: 2, MembershipLifeSpan: 540 }, { ExternalId: 3, MembershipLifeSpan: 540 }] }]);
-  const next = retargetItems({ main, goals: { lib: '1', buy: ['2'] }, saved: { listId: 77 } });
+  const next = retargetItems({ main: buyCamp, goals: { lib: '1', buy: ['2'] }, saved: { listId: 77 } });
   assert.deepEqual(next.map((x) => [x.rule, x.gid, x.listId]), [['retarget', 10, 77]]);
-  assert.equal(retargetItems({ main, goals: { lib: '1', buy: ['2'] }, saved: { listId: 77, groups: [10] } }).length, 0);
+  assert.equal(retargetItems({ main: buyCamp, goals: { lib: '1', buy: ['2'] }, saved: { listId: 77, groups: [10] } }).length, 0);
   const wb = { direct: { spoilers: 'муж жив', ads: [{ h1: 'Развод для черной вдовы', text: 'Уже было' }, { h1: 'Она похоронила мужа', h2: 'Живого', text: 'Спойлер' }, { h1: 'Вдова с характером', h2: 'Новый роман', text: 'Криминал, юмор и очень опасный мужчина. Читать на Литнете' }, { h1: 'x'.repeat(57), text: 'длинный заголовок' }] } };
   const ads = newAdItems({ main, bookOf: () => wb, hits: (t, b) => spoilerHits(t, spoilerList(b)) });
   assert.equal(ads.length, 1);

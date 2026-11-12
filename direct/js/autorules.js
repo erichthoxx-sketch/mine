@@ -56,13 +56,23 @@ export function approvalQueue({ main = {}, stats = {}, on = {}, today, goalActs 
 export function retargetRules(lib, buy = []) {
   return [{ Operator: 'ALL', Arguments: [{ ExternalId: Number(lib), MembershipLifeSpan: 90 }] }, { Operator: 'NONE', Arguments: buy.map((id) => ({ ExternalId: Number(id), MembershipLifeSpan: 540 })) }];
 }
+// Догонять «добавивших, но не купивших» имеет смысл, только когда кампания работает на ПОКУПКУ (подписка открыта):
+// пока цель кампании — добавление в библиотеку, эти люди цель уже выполнили, и показы им ничего не дают (её замечание 13.11.2026:
+// «она же на библиотеке настроена»). Поэтому: предлагаем только кампаниям с целью-покупкой, а подключённое раньше времени — предлагаем убрать.
 export function retargetItems({ main = {}, goals = {}, saved = {} }) {
   if (!goals.lib || !(goals.buy || []).length) return [];
-  if (!saved.listId) return [{ rule: 'audience', key: 'audience:lib-notbuy', lib: goals.lib, buy: goals.buy, text: 'создать аудиторию «добавили в библиотеку, но не купили»' }];
-  const out = [], has = new Set((saved.groups || []).map(String));
-  for (const c of (main.campaigns || []).filter((x) => x.state === 'ON' && x.strategy?.network && x.strategy.network !== 'SERVING_OFF'))
+  const buy = new Set(goals.buy.map(String)), onBuy = (c) => c.goal != null && buy.has(String(c.goal));
+  const live = (main.campaigns || []).filter((x) => x.state === 'ON' && x.strategy?.network && x.strategy.network !== 'SERVING_OFF');
+  const out = [], has = new Set((saved.groups || []).map(String)), campOf = Object.fromEntries((main.groups || []).map((g) => [String(g.id), g.cid]));
+  // подключено к кампании, которая ещё учится на добавлениях, — убрать (вернётся само, когда цель станет «покупка»)
+  for (const gid of has) { const c = (main.campaigns || []).find((x) => x.id === campOf[gid]); if (c && saved.listId && !onBuy(c)) { const g = (main.groups || []).find((x) => String(x.id) === gid);
+    out.push({ rule: 'unretarget', key: `unretarget:${gid}`, cid: c.id, gid: g.id, listId: saved.listId, text: `убрать аудиторию «добавили, но не купили» из группы «${g.name}»`, why: 'кампания пока работает на добавления в библиотеку, а эти люди книгу уже добавили — показы им сейчас ничего не дают. Когда цель сменится на покупку, предложу подключить снова' }); } }
+  const ready = live.filter(onBuy);
+  if (!ready.length) return out;
+  if (!saved.listId) return [...out, { rule: 'audience', key: 'audience:lib-notbuy', lib: goals.lib, buy: goals.buy, text: 'создать аудиторию «добавили в библиотеку, но не купили»' }];
+  for (const c of ready)
     for (const g of (main.groups || []).filter((x) => x.cid === c.id).slice(0, 3)) if (!has.has(String(g.id)))
-      out.push({ rule: 'retarget', key: `retarget:${g.id}`, cid: c.id, gid: g.id, listId: saved.listId, text: `догонять тех, кто добавил книгу, но не купил, — группа «${g.name}»` });
+      out.push({ rule: 'retarget', key: `retarget:${g.id}:buy`, cid: c.id, gid: g.id, listId: saved.listId, text: `догонять тех, кто добавил книгу, но не купил, — группа «${g.name}»` });
   return out;
 }
 // Новое объявление из Мастерской для групп, где их меньше трёх: заголовок ещё не используется, длины по правилам Директа, без спойлеров
