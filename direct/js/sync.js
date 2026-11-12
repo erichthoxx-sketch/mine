@@ -334,8 +334,10 @@ async function excludePlaces(app, cid, places) {
   return { name: camp.Name, errors: (u.UpdateResults || []).flatMap((x) => (x.Errors || []).map((e) => e.Details || e.Message)) };
 }
 // Выполнить пункты плана (автоправила — by 'auto'; одобренное в очереди Пульта — by 'app'); возвращает ключи сделанного
+export const lastPlanErrors = [];
 export async function execPlan(app, plan, by = 'auto') {
   const done = [];
+  lastPlanErrors.length = 0;
   for (const p of plan) {
     try {
       if (p.act) { const r = await apply(app, p.act, { by }); if (r?.errors?.length) continue; }
@@ -344,8 +346,29 @@ export async function execPlan(app, plan, by = 'auto') {
         await putLog(app, { id: 'l' + uid(), at: new Date().toISOString(), by, do: 'exclude', cid: p.cid, text: `Кампания «${r.name}»: исключены площадки ${p.places.join(', ')}`, why: (by === 'auto' ? 'автоправило: ' : '') + '20+ кликов и больше половины отказов', ok: !r.errors.length, errors: r.errors, warnings: [] });
         if (r.errors.length) continue;
       }
+      else if (p.rule === 'audience' || p.rule === 'retarget' || p.rule === 'newad') {
+        const s0 = app.ctx().settings, d0 = s0.direct || {}, errOf = (r) => (r?.AddResults || []).flatMap((x) => (x.Errors || []).map((e) => e.Details || e.Message));
+        let r, text;
+        if (p.rule === 'audience') {
+          const { retargetRules } = await import('./autorules.js');
+          r = await call(s0, 'retargetinglists', 'add', { RetargetingLists: [{ Type: 'RETARGETING', Name: 'Добавили в библиотеку, но не купили', Rules: retargetRules(p.lib, p.buy) }] }, 0, undefined, 'v5');
+          const id = r?.AddResults?.[0]?.Id; text = 'Создана аудитория «Добавили в библиотеку, но не купили»';
+          if (id) await app.store.saveSettings({ direct: { ...d0, retarget: { ...(d0.retarget || {}), listId: id, at: new Date().toISOString() } } });
+        } else if (p.rule === 'retarget') {
+          r = await call(s0, 'audiencetargets', 'add', { AudienceTargets: [{ AdGroupId: Number(p.gid), RetargetingListId: Number(p.listId), StrategyPriority: 'HIGH' }] }, 0, undefined, 'v5');
+          text = 'Группа получила аудиторию «добавили, но не купили»';
+          if (r?.AddResults?.[0]?.Id) await app.store.saveSettings({ direct: { ...d0, retarget: { ...(d0.retarget || {}), groups: [...((d0.retarget || {}).groups || []), p.gid] } } });
+        } else {
+          r = await call(s0, 'ads', 'add', { Ads: [{ AdGroupId: Number(p.gid), TextAd: p.ad }] }, 0, undefined, 'v501');
+          const id = r?.AddResults?.[0]?.Id; text = `Новое объявление «${p.ad.Title}»`;
+          if (id) { try { await call(s0, 'ads', 'moderate', { SelectionCriteria: { Ids: [id] } }, 0, undefined, 'v501'); } catch { /* отправит на модерацию сама в кабинете */ } }
+        }
+        const errors = errOf(r), ok = !errors.length && !!r?.AddResults?.[0]?.Id;
+        await putLog(app, { id: 'l' + uid(), at: new Date().toISOString(), by, do: p.rule, cid: p.cid || null, text, why: p.why || '', ok, errors: ok ? [] : (errors.length ? errors : ['Директ не вернул номер созданного']), warnings: [] });
+        if (!ok) { lastPlanErrors.push(`${text}: ${errors.join('; ') || 'Директ не вернул номер'}`); continue; }
+      }
       done.push(p.key, ...(p.keys || []));
-    } catch (e) { console.warn('Автоправило', p.rule, e); }
+    } catch (e) { console.warn('Автоправило', p.rule, e); lastPlanErrors.push(String(e.message || e)); }
   }
   return done;
 }

@@ -14,8 +14,9 @@ import { demo } from '../demo.js';
 import { ic } from '../../../js/icons.js';
 import { litTagInfo } from '../../../js/littag.js';
 import { weekKeyOf } from '../weekreview.js';
-import { AUTO_RULES, approvalQueue } from '../autorules.js';
-import { execPlan } from '../sync.js';
+import { AUTO_RULES, approvalQueue, retargetItems, newAdItems } from '../autorules.js';
+import { spoilerHits, spoilerList } from '../../../js/spoilers.js';
+import { execPlan, lastPlanErrors } from '../sync.js';
 import { starterMinusMissing } from '../dcalc.js';
 import { resolvedLaunches, goalSwitch } from './launchctx.js';
 import { acts, toast } from '../../../js/ui.js';
@@ -106,7 +107,11 @@ function queueOf(a) {
     .map((x) => ({ do: 'minus', campaign: x.camp.id, phrases: x.miss, why: 'по таким запросам ищут файл, озвучку или экранизацию, а не книгу на Литнете' }));
   let goalActs = [];
   if (!demo.on) try { goalActs = resolvedLaunches(a).map((L) => goalSwitch(L.plan)).filter(Boolean); } catch { /* плана запуска нет */ }
-  return approvalQueue({ main, stats: a.snap('stats') || {}, on: d.auto || {}, today: c.today, goalActs, done: d.autoDone || [], no: d.queueNo || [], starter });
+  const wbooks = c.data.w_books || [], extra = demo.on ? [] : [
+    ...retargetItems({ main, goals: goalsOf(metrikaOf(c) || {}), saved: d.retarget || {} }),
+    ...newAdItems({ main, bookOf: (camp) => { const b = bookOfCampaign(camp, main.ads || [], wbooks); return b ? wbooks.find((x) => x.id === b.id) : null; }, hits: (t, wb) => spoilerHits(t, spoilerList(wb)) }),
+  ];
+  return approvalQueue({ main, stats: a.snap('stats') || {}, on: d.auto || {}, today: c.today, goalActs, done: d.autoDone || [], no: d.queueNo || [], starter, extra });
 }
 function queueCard(a) {
   const q = queueOf(a);
@@ -128,7 +133,7 @@ acts['pq.yes'] = async () => {
   try {
     const done = await execPlan(a, plan, 'app'), n = plan.filter((x) => done.includes(x.key)).length, d = a.ctx().settings.direct || {};
     if (done.length) await a.store.saveSettings({ direct: { ...d, autoDone: [...(d.autoDone || []), ...done].slice(-400) } });
-    toast(n === plan.length ? `Готово: сделано ${n} — всё записано в «Что меняли»` : `Сделано ${n} из ${plan.length}. Остальное Директ не принял — оно осталось в списке`);
+    toast(n === plan.length ? `Готово: сделано ${n} — всё записано в «Что меняли»` : `Сделано ${n} из ${plan.length}. Остальное Директ не принял${lastPlanErrors[0] ? `: ${lastPlanErrors[0]}` : ''} — оно осталось в списке`);
   } finally { pqBusy = false; }
 };
 acts['pq.no'] = async () => {
