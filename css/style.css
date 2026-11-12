@@ -3382,3 +3382,22 @@ button[data-act="l.lesson"] { display: none; }
 :root :is(.stat, .tiles > div) .k { font-size: 12.5px; }
 :root :is(.stat, .tiles > div) .s { font-size: 13px; }
 @media (max-width: 720px) { :root :is(.stat, .tiles > div) .v { font-size: max(20px, min(24px, 16cqi)) !important; } :root :is(.stat, .tiles > div) { padding: 14px 14px 12px; } }
+
+/* Режим фокуса в редакторе главы (только компьютер): один текст на бумаге, панель выезжает от верхнего края */
+.ed-focus-btn, .ed-focus-x { display: none; }
+@media (min-width: 901px) {
+  .ed-focus-btn { display: inline-flex; }
+  html.ed-focus, html.ed-focus body { background: var(--paper, var(--surface)); }
+  html.ed-focus nav.tabs, html.ed-focus .top, html.ed-focus .demo, html.ed-focus .ed-draft { display: none !important; }
+  html.ed-focus.app-writer #app { padding: 0 !important; }
+  html.ed-focus.app-writer main { max-width: none; padding: 0; margin: 0; }
+  html.ed-focus .ed-bar { position: fixed; top: 0; left: 0; right: 0; margin: 0; padding: 10px 28px 12px; background: var(--paper, var(--surface)); border-bottom: 1px solid var(--line);
+    transform: translateY(calc(-100% + 10px)); opacity: 0; transition: transform .25s ease, opacity .2s ease; z-index: 22; }
+  html.ed-focus .ed-bar:hover, html.ed-focus .ed-bar:focus-within { transform: none; opacity: 1; }
+  html.ed-focus .ed-paper { border: 0; border-radius: 0; background: none; max-width: 740px; margin: 0 auto; padding: 14vh 20px 40vh; min-height: 100vh; }
+  html.ed-focus .ed-paper .ed-stats { opacity: .28; }
+  html.ed-focus .ed-paper .ed-stats:hover { opacity: 1; }
+  html.ed-focus .ed-focus-x { display: block; position: fixed; top: 16px; right: 22px; z-index: 21; width: 34px; height: 34px; min-height: 0; padding: 0; border: 0; border-radius: 50%;
+    background: none; color: var(--muted); font-size: 22px; line-height: 1; opacity: .25; cursor: pointer; transition: opacity .2s; }
+  html.ed-focus .ed-focus-x:hover { opacity: 1; background: var(--soft, var(--surface-2)); }
+}
