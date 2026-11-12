@@ -29,6 +29,7 @@ import { weekView } from './views/week.js';
 import { hooksView } from './views/hooks.js';
 import { marketView } from './views/market.js';
 import { autoMarket } from './marketscan.js';
+import { autoMarketMail } from './marketmail.js';
 import { rub } from '../../js/format.js';
 import { moneyView } from './views/money.js';
 import { siteView } from './views/siteads.js';
@@ -190,7 +191,7 @@ async function savePendingToken() {
   } finally { saving = false; }
 }
 
-store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); autoCohorts(store).catch(console.warn); autoMarket(app); });
+store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); autoCohorts(store).catch(console.warn); autoMarket(app); autoMarketMail(app); });
 store.init().then(async () => {
   await savePendingToken();
   await syncDemo();

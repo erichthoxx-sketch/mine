@@ -228,7 +228,9 @@ let genreKey = '';
 store.subscribe(async () => {
   const books = store.data.w_books;
   if (!books?.length) return;
-  const want = books.filter((b) => !b.archived && b.status !== 'idea' && bookGenres(b).length).map((b) => [b.title, bookGenres(b).join(' · ')]);
+  // вместе с жанром — то, что на сайте ещё пусто: тропы, аннотация (вкладка Документа) и крючок (Легенда). Заполненное на сайте не трогаем
+  const want = books.filter((b) => !b.archived && b.status !== 'idea' && (bookGenres(b).length || (b.tags || []).length || b.svc?.annotation || b.legend?.idea?.logline))
+    .map((b) => [b.title, bookGenres(b).join(' · '), (b.tags || []).join(', '), String(b.svc?.annotation || '').trim(), String(b.legend?.idea?.logline || '').trim()]);
   const key = JSON.stringify(want);
   if (!want.length || key === genreKey) return;
   const u = store.auth?.currentUser, local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
@@ -236,9 +238,15 @@ store.subscribe(async () => {
   genreKey = key;
   try {
     const site = await loadSiteRaw();
-    for (const [title, g] of want) {
+    for (const [title, g, tags, ann, hook] of want) {
       const sb = (site?.books || []).find((x) => sameTitle(x.title, title));
-      if (sb && String(sb.genre || '') !== g) await patchSiteBook(title, { genre: g }, u ? await u.getIdToken() : '');
+      if (!sb) continue;
+      const patch = {};
+      if (g && String(sb.genre || '') !== g) patch.genre = g;
+      if (tags && !String(sb.tags || '').trim()) patch.tags = tags;
+      if (ann && !String(sb.ann || '').trim()) patch.ann = ann;
+      if (hook && !String(sb.tagline || '').trim()) patch.tagline = hook;
+      if (Object.keys(patch).length) await patchSiteBook(title, patch, u ? await u.getIdToken() : '');
     }
   } catch { /* при следующем изменении */ }
 });

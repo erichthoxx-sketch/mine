@@ -107,3 +107,21 @@ export function trimSnap(snap, keep = 60) {
   const ids = new Set(Object.values(days).flatMap((d) => Object.values(d).flatMap((rows) => rows.map((r) => r.id))));
   return { ...snap, days, books: Object.fromEntries(Object.entries(snap.books || {}).filter(([id]) => ids.has(id))) };
 }
+
+// Письмо «Рынок за неделю» (обычным текстом): главное, кто растёт, новые и выпавшие, аномалии. Пусто — писать не о чем
+export function marketDigest(M, { myTropes = [] } = {}) {
+  if (!M || !M.prevDate) return '';
+  const fmt = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`, book = (b) => `«${b.title}»${b.author ? ` (${b.author})` : ''}`;
+  const L = [`Топы Литнета: ${fmt(M.prevDate)} → ${fmt(M.date)}.`, '', ...M.notes];
+  const up = M.tropes.filter((t) => t.delta != null && t.delta >= 0.05).slice(0, 4), down = M.tropes.filter((t) => t.delta != null && t.delta <= -0.05).slice(0, 4);
+  if (up.length || down.length) { L.push('', 'Тропы:'); for (const t of up) L.push(`  ▲ ${t.name}: ${Math.round(t.was * 100)} % → ${Math.round(t.share * 100)} %`); for (const t of down) L.push(`  ▼ ${t.name}: ${Math.round(t.was * 100)} % → ${Math.round(t.share * 100)} %`); }
+  if (M.movers.length) { L.push('', 'Быстрее всех набирают читателей (в библиотеки в день):'); for (const b of M.movers.slice(0, 5)) L.push(`  +${b.perDay} — ${book(b)}${b.tropes.length ? ' · ' + b.tropes.slice(0, 3).join(', ').toLowerCase() : ''}${b.price > 0 ? ` · ${Math.round(b.price)} ₽` : ''}`); }
+  if (M.fresh.length) L.push('', `Новые в топе: ${M.fresh.slice(0, 6).map(book).join('; ')}.`);
+  if (M.gone.length) L.push(`Выпали: ${M.gone.slice(0, 6).map(book).join('; ')}.`);
+  if (M.odd.length) L.push('', `В топе при малом числе читателей: ${M.odd.slice(0, 5).map((b) => `${book(b)} — место ${b.n}, ${b.lib} в библ., в топе ${b.days} дн.`).join('; ')}.`);
+  // что это значит для неё: её тропы против растущих
+  const mine = new Set(myTropes.map((x) => String(x).toLowerCase())), hot = up.filter((t) => !mine.has(t.name.toLowerCase())).map((t) => t.name), cold = down.filter((t) => mine.has(t.name.toLowerCase())).map((t) => t.name);
+  if (mine.size && (hot.length || cold.length)) { L.push('', 'Для вас:'); if (hot.length) L.push(`  растут тропы, которых у вас нет: ${hot.join(', ')} — стоит присмотреться к крючкам в объявлениях.`); if (cold.length) L.push(`  ваши тропы теряют место в топе: ${cold.join(', ')} — не повод менять книгу, но повод проверить CTR объявлений с ними (Директ → «Крючки»).`); }
+  L.push('', 'Подробно — Директ → «Рынок».');
+  return L.join('\n');
+}

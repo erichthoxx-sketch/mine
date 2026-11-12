@@ -50,3 +50,11 @@ test('рынок: «в топе при малом числе читателей�
   assert.deepEqual(M.odd.map((b) => b.title), ['Секретарша для большого босса', 'Пышка для босса', 'Мажор для училки', 'Горячая булочка для босса']);
   assert.ok(M.notes.some((n) => n.includes('с очень малым числом читателей')));
 });
+test('рынок: письмо за неделю — только когда есть с чем сравнить', async () => {
+  const { marketDigest } = await import('../js/market.js');
+  const books = Object.fromEntries(rows.map((r) => [r.id, bookCard(r)]));
+  const cur = packDay(rows.slice(0, 14)), prev = packDay(rows.slice(2, 16)).map((r) => ({ ...r, l: r.l - 700 }));
+  assert.equal(marketDigest(marketInsights({ days: { '2026-11-12': { a: cur } }, books })), '');
+  const t = marketDigest(marketInsights({ days: { '2026-11-05': { a: prev }, '2026-11-12': { a: cur } }, books }, { mine: ['Развод'] }), { myTropes: ['Развод'] });
+  assert.match(t, /Топы Литнета: 05\.11 → 12\.11\./); assert.match(t, /Быстрее всех набирают читателей/); assert.match(t, /\+100 — «/); assert.match(t, /Новые в топе: «Плохой сводный»/);
+});
