@@ -203,7 +203,10 @@ export function nextStep(f, today) {
 export function piracyTodos(finds = [], today) {
   const live = finds.filter((f) => f.status !== 'gone' && f.status !== 'skip'), out = [];
   const fresh = live.filter((f) => !f.status || f.status === 'new');
-  if (fresh.length) out.push({ id: 'piracy-new', date: today, text: `Пираты: ${fresh.length} ${fresh.length === 1 ? 'новая копия' : fresh.length < 5 ? 'новые копии' : 'новых копий'} — отправить письма`, sub: [...new Set(fresh.map((f) => f.host))].slice(0, 4).join(', ') });
+  const doubt = fresh.filter((f) => f.sure === false);
+  if (doubt.length) out.push({ id: 'piracy-ask', date: today, text: `Пираты: проверить, ваша ли книга, — ${doubt.length}`, sub: [...new Set(doubt.map((f) => f.host))].slice(0, 4).join(', ') });
+  const sureNew = fresh.filter((f) => f.sure !== false);
+  if (sureNew.length) out.push({ id: 'piracy-new', date: today, text: `Пираты: ${sureNew.length} ${sureNew.length === 1 ? 'новая копия' : sureNew.length < 5 ? 'новые копии' : 'новых копий'} — отправить письма`, sub: [...new Set(sureNew.map((f) => f.host))].slice(0, 4).join(', ') });
   for (const f of live) {
     const s = nextStep(f, today);
     if (s && !s.wait && (s.k === 'host' || s.k === 'search' || s.k === 'confirm')) out.push({ id: 'piracy-' + f.id + '-' + s.k, date: today, text: `Пираты, ${f.host}: ${s.text.charAt(0).toLowerCase() + s.text.slice(1)}`, sub: plainTitle(f.title || '') });

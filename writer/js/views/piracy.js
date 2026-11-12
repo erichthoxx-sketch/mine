@@ -95,7 +95,8 @@ const when = (iso) => (iso ? fmtDate(iso.slice(0, 10)) : '');
 
 function row(c, f) {
   const st = nextStep(f, c.today), done = f.status === 'gone';
-  const act = !st ? '' : st.k === 'site' ? `<button class="primary" data-act="pr.write" data-id="${f.id}" data-k="site">Написать сайту</button>`
+  const act = f.sure === false && (f.status || 'new') === 'new' ? `<button class="primary" data-act="pr.mine" data-id="${f.id}">Да, моя книга</button>`
+    : !st ? '' : st.k === 'site' ? `<button class="primary" data-act="pr.write" data-id="${f.id}" data-k="site">Написать сайту</button>`
     : st.k === 'host' && !st.wait ? `<button class="primary" data-act="pr.write" data-id="${f.id}" data-k="host">Написать хостингу</button>`
     : st.k === 'search' && !st.wait ? `<button class="primary" data-act="pr.search" data-id="${f.id}">Убрать из поиска</button>`
     : st.k === 'confirm' ? `<button class="primary" data-act="pr.gone" data-id="${f.id}">Да, удалили</button>` : '';
@@ -118,13 +119,14 @@ export function piracyView(a) {
   const c = a.ctx(), all = (c.data.w_piracy || []).filter((f) => f.status !== 'skip'), cfg = c.settings.piracy || {}, sum = piracySummary(all);
   const by = (ks) => all.filter((f) => ks.includes(f.status || 'new')).sort((x, y) => (y.foundAt || '').localeCompare(x.foundAt || ''));
   const fresh = by(['new']), work = by(['sent', 'host', 'search']), gone = by(['gone']);
+  const ask0 = fresh.filter((f) => f.sure === false), sureNew = fresh.filter((f) => f.sure !== false); // сомнительные — на её ручную проверку
   const svc = mailSvc(), send = svc.ready && svc.v >= 5;
   const due = all.filter((f) => { const x = nextStep(f, c.today); return f.sure !== false && x && !x.wait && ['site', 'host'].includes(x.k) && !f.goneMaybe; }).length;
   const state = scanState.busy ? esc(scanState.step || 'Ищу…') : cfg.at ? `${cfg.srv ? 'Ищу круглосуточно · последняя проверка' : 'Проверено'} ${when(cfg.at)}: ${cfg.books || 0} ${plural(cfg.books || 0, ['книга', 'книги', 'книг'])}${cfg.engine && !cfg.srv ? ` · ${esc(cfg.engine)}` : ''}${cfg.err ? ` · ${esc(cfg.err)}` : ''}${cfg.ya === 'ok' ? ' · Яндекс — по ночам' : String(cfg.ya || '').startsWith('err:') ? ` · Яндекс: ${esc(cfg.ya.slice(4))}` : ''}` : 'Ещё не проверяла — первая проверка начнётся сама';
   return `<div class="card" style="margin-top:14px">
     <div class="row between"><h2 style="margin:0">Пиратские копии</h2><button class="small-btn" data-act="pr.scan"${scanState.busy ? ' disabled' : ''}>${scanState.busy ? 'Ищу…' : 'Проверить сейчас'}</button></div>
     <p class="small muted" style="margin:6px 0 12px" id="pr-state">${state}</p>
-    <div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div><div class="k">Новые</div><div class="v">${sum.fresh}</div><div class="s">нужно письмо</div></div>
+    <div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div><div class="k">Новые</div><div class="v">${sum.fresh}</div><div class="s">${ask0.length ? `из них проверить: ${ask0.length}` : 'нужно письмо'}</div></div>
       <div><div class="k">В работе</div><div class="v">${sum.work}</div><div class="s">ждём ответа</div></div>
       <div><div class="k">Удалено</div><div class="v">${sum.gone}</div><div class="s">за всё время</div></div></div>
     ${send ? `<div class="row between" style="margin-top:14px;gap:12px;flex-wrap:wrap"><label class="d-check small" style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" data-chg="pr.auto"${cfg.auto ? ' checked' : ''}> Автопилот: претензии уходят сами, как только копия найдена</label>
@@ -132,7 +134,8 @@ export function piracyView(a) {
       : ''}
     ${svc.ready && svc.v >= 6 ? '' : `<p class="small" style="margin:12px 0 0">${svc.ready ? `Чтобы поиск шёл круглосуточно, даже когда Мастерская закрыта, а претензии уходили отсюда одной кнопкой, обновите программу сервиса писем: Сайт → Почта → «Скопировать программу» → Яндекс Облако → Cloud Functions → lana-mail → Редактор → index.js → вставить → «Сохранить изменения». И там же в настройках функции поставьте «Таймаут» 60 секунд.` : 'Круглосуточный поиск и отправка одной кнопкой работают через сервис писем — подключите его в разделе Сайт → Почта.'} Пока ищу сама, когда Мастерская открыта${send ? '' : ', а письма открываются в вашей почте'}.</p>`}
   </div>
-  ${fresh.length ? `<div class="card"><h2 style="margin:0 0 4px">Новые</h2><div class="list">${fresh.map((f) => row(c, f)).join('')}</div></div>` : ''}
+  ${ask0.length ? `<div class="card"><h2 style="margin:0 0 4px">Проверьте: ваша ли это книга</h2><p class="small muted" style="margin:0 0 6px">Название совпало, но вашей фамилии на странице не видно. Без вашего «да» претензия не уйдёт — ни с автопилотом, ни по кнопке «Отправить все».</p><div class="list">${ask0.map((f) => row(c, f)).join('')}</div></div>` : ''}
+  ${sureNew.length ? `<div class="card"><h2 style="margin:0 0 4px">Новые</h2><div class="list">${sureNew.map((f) => row(c, f)).join('')}</div></div>` : ''}
   ${work.length ? `<div class="card"><h2 style="margin:0 0 4px">В работе</h2><div class="list">${work.map((f) => row(c, f)).join('')}</div></div>` : ''}
   ${!all.length && cfg.at ? `<div class="card"><p class="muted" style="margin:0">Копий не найдено. Проверяю сама каждый день, пока открыта Мастерская, — найду, появится дело в Планере.</p></div>` : ''}
   ${gone.length ? fold('pr-gone', 'Удалено', `<div class="list">${gone.map((f) => row(c, f)).join('')}</div>`, { sub: String(gone.length) }) : ''}
@@ -224,6 +227,14 @@ acts['pr.search'] = (d) => {
     <p style="margin:12px 0 0;display:flex;gap:10px;flex-wrap:wrap">${SEARCH_FORMS.map(([t, u]) => `<a class="small-btn" href="${u}" target="_blank" rel="noopener">${esc(t)}</a>`).join('')}</p>`,
   async () => { await patch(get(f.id) || f, { status: 'search', searchAt: new Date().toISOString() }); }, { submitText: 'Подала заявки' });
   return false;
+};
+// «Да, моя книга»: сомнительная находка становится обычной; с автопилотом претензия уходит сразу
+acts['pr.mine'] = async (d) => {
+  const f = get(d.id); if (!f) return;
+  await patch(f, { sure: true, why: 'вы подтвердили, что книга ваша' });
+  const a = window.__app, auto = a.ctx().settings.piracy?.auto && canSend();
+  toast(auto ? 'Подтверждено — претензия уходит' : 'Подтверждено — находка в «Новых»', { undo: () => patch(get(d.id), { sure: false, why: f.why || '' }) });
+  if (auto) autoSend(a);
 };
 acts['pr.gone'] = async (d) => { const f = get(d.id); if (f) { await patch(f, { status: 'gone', goneAt: new Date().toISOString(), goneMaybe: false }); toast('Отлично — убрала в «Удалено»', { undo: () => patch(get(d.id), { status: f.status, goneAt: null, goneMaybe: f.goneMaybe || false }) }); } };
 // «Это не пират» (не её книга или законный фрагмент): прячется только эта страница — другие страницы этого же сайта по-прежнему находятся
