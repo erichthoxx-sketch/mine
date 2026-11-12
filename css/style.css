@@ -3414,3 +3414,8 @@ button[data-act="l.lesson"] { display: none; }
   html.ed-focus .ed-paper .ed-stats:hover { opacity: 1; }
 }
 @media (min-width: 901px) and (max-width: 1100px) { html.ed-focus .ed-status { display: none; } }
+
+/* Знаки в выделенном тексте — тихая плашка внизу по центру */
+.ed-sel { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 19; padding: 7px 16px; border-radius: 999px; background: var(--text); color: var(--bg); font-size: 13px; white-space: nowrap; pointer-events: none; }
+.ed-sel b { font-weight: 600; } .ed-sel i { font-style: normal; opacity: .75; }
+@media (max-width: 900px) { .ed-sel { bottom: calc(52px + env(safe-area-inset-bottom)); } }
