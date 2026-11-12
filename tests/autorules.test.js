@@ -73,3 +73,12 @@ test('очередь: запрос, который уже привёл чита�
   assert.deepEqual(r[0].act, { do: 'keywords', group: 10, phrases: ['роман про мафию читать'], why: 'запрос привёл 3 читательниц за 30 дней' });
   assert.equal(winnerQueryItems({ main, stats, goals: {} }).length, 0);
 });
+
+test('очередь: в кампании нет действующей метки Литнета — поставить', async () => {
+  const { litTagItems } = await import('../direct/js/autorules.js');
+  const main = { campaigns: [{ id: 1, state: 'ON', track: 'utm_source=yandex&utm_litref=old1' }, { id: 2, state: 'ON', track: '' }, { id: 3, state: 'ON', track: 'utm_litref=new9' }, { id: 4, state: 'ON', track: '' }, { id: 5, state: 'ON' }],
+    ads: [{ cid: 1, href: 'https://litnet.com/ru/book/a-b1' }, { cid: 2, href: 'https://litnet.com/ru/book/a-b1' }, { cid: 3, href: 'https://litnet.com/ru/book/a-b1' }, { cid: 4, href: 'https://lanafreitag.ru/' }, { cid: 5, href: 'https://litnet.com/ru/book/a-b1' }] };
+  const r = litTagItems({ main, code: 'new9' });
+  assert.deepEqual(r.map((x) => [x.cid, x.act.tag]), [[1, 'utm_litref=new9'], [2, 'utm_litref=new9']]);
+  assert.equal(litTagItems({ main, code: '' }).length, 0); assert.equal(litTagItems({ main, code: 'new9', late: true }).length, 0);
+});

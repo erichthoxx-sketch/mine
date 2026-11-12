@@ -27,7 +27,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   const BASE = ['Id', 'Name', 'State', 'Status', 'StartDate', 'DailyBudget', 'NegativeKeywords', 'Type'];
   // счётчики Метрики и приоритетные цели кампании; если Директ не примет — без них, потом совсем просто
   let cr;
-  try { cr = await call(s, 'campaigns', 'get', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'], UnifiedCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'] }, 2, undefined, V); } catch (e) {
+  try { cr = await call(s, 'campaigns', 'get', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'], UnifiedCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals', 'TrackingParams'] }, 2, undefined, V); } catch (e) {
     if (e.transient || [53, 58, 513].includes(e.code)) throw e;
     cr = await getSafe(s, 'campaigns', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy'], UnifiedCampaignFieldNames: ['BiddingStrategy'] }, { SelectionCriteria: {}, FieldNames: BASE.slice(0, 7) });
   }
@@ -54,6 +54,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
       ...(cpaOf(st) ? { cpa: cpaOf(st) } : {}),
       ...((budgetOf(st.Search) || budgetOf(st.Network)) ? { budget: budgetOf(st.Search) || budgetOf(st.Network) } : {}),
       ...(x.CounterIds !== undefined ? { counters: x.CounterIds?.Items || [] } : {}),
+      ...(c.UnifiedCampaign && x.TrackingParams !== undefined ? { track: x.TrackingParams || '' } : {}),
       ...(x.PriorityGoals !== undefined ? { priorityGoals: (x.PriorityGoals?.Items || []).map((g) => g.GoalId) } : {}),
     };
   });
