@@ -121,7 +121,7 @@ function render() {
   const c = getCtx();
   let r;
   document.documentElement.classList.toggle('on-ed', ui.route.startsWith('/ed/')); // в редакторе нижнее меню прячем
-  if (!ui.route.startsWith('/ed/') && document.documentElement.classList.contains('ed-focus')) { document.documentElement.classList.remove('ed-focus'); }
+  if (!ui.route.startsWith('/ed/') && document.documentElement.classList.contains('ed-focus')) { document.documentElement.classList.remove('ed-focus'); if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); }
   try { r = view(app) || { html: '' }; } catch (e) { console.error(e); r = { html: `<div class="card"><p>Ошибка экрана: ${esc(e.message)}</p></div>` }; }
   const sync = store.mode === 'local' ? '' : store.sync === 'pending' ? 'сохраняется…' : store.sync === 'error' ? 'ошибка синхронизации' : navigator.onLine ? 'всё сохранено' : 'нет сети';
   document.getElementById('app').innerHTML = `${store.mode === 'local' ? '<div class="demo">Пробный режим: данные только в этом браузере.</div>' : ''}
