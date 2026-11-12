@@ -347,6 +347,9 @@ export function setFocusMode(on) {
 acts['ed.focus'] = () => { setFocusMode(!document.documentElement.classList.contains('ed-focus')); return false; };
 if (typeof document !== 'undefined') {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.documentElement.classList.contains('ed-focus') && !document.querySelector('.sheet, .ed-find:not([hidden])')) setFocusMode(false); });
+  // пока печатает — капсула с инструментами исчезает; движение мыши возвращает её
+  document.addEventListener('keydown', (e) => { const h = document.documentElement; if (h.classList.contains('ed-focus') && e.target?.id === 'ed' && !e.ctrlKey && !e.metaKey && e.key.length === 1) h.classList.add('ed-typing'); }, true);
+  document.addEventListener('mousemove', () => document.documentElement.classList.remove('ed-typing'));
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) document.documentElement.classList.remove('ed-focus'); });
 }
 acts['ed.undo'] = () => histGo(-1);

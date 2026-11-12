@@ -3393,21 +3393,24 @@ button[data-act="l.lesson"] { display: none; }
   html.ed-focus nav.tabs, html.ed-focus .top, html.ed-focus .demo, html.ed-focus .ed-draft { display: none !important; }
   html.ed-focus.app-writer #app { padding: 0 !important; }
   html.ed-focus.app-writer main { max-width: none; padding: 0; margin: 0; }
-  /* панель: только инструменты текста по центру, справа — состояние и глазик (выход); бледная, пока не нужна */
-  html.ed-focus .ed-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 20; margin: 0; padding: 10px 24px; border: 0; background: var(--paper, var(--surface));
-    display: flex; align-items: center; justify-content: center; opacity: .5; transition: opacity .2s ease; }
-  html.ed-focus .ed-bar:hover, html.ed-focus .ed-bar:focus-within { opacity: 1; }
-  html.ed-focus .ed-tools { margin: 0; justify-content: center; flex-wrap: nowrap; }
-  html.ed-focus .ed-nav { position: absolute; right: 24px; top: 10px; flex-wrap: nowrap; gap: 12px; }
+  /* панель — отдельная «капсула» по центру, не прилеплена к краю; пока печатаешь — исчезает, шевельнула мышью — вернулась */
+  html.ed-focus .ed-bar { position: fixed; top: 22px; left: 50%; transform: translateX(-50%); z-index: 20; width: max-content; max-width: calc(100vw - 48px); margin: 0;
+    display: flex; align-items: center; gap: 4px; padding: 5px 8px 5px 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface, #fff);
+    transition: opacity .35s ease, transform .35s ease; }
+  html.ed-focus.ed-typing .ed-bar:not(:hover):not(:focus-within) { opacity: 0; transform: translate(-50%, -8px); pointer-events: none; }
+  html.ed-focus .ed-tools { margin: 0; flex-wrap: nowrap; gap: 2px; }
+  html.ed-focus .ed-tools .ed-style { border: 0 !important; background-color: transparent !important; box-shadow: none !important; padding-left: 14px; font-size: 13.5px; }
+  html.ed-focus .ed-bar button.ed-ic { border-radius: 999px !important; min-width: 32px; min-height: 32px; padding: 0 8px !important; }
+  html.ed-focus .ed-nav { position: static; flex-wrap: nowrap; gap: 6px; order: 2; padding-left: 10px; margin-left: 4px; border-left: 1px solid var(--line); }
   html.ed-focus .ed-nav .btn.back, html.ed-focus .ed-nav .ed-auto, html.ed-focus .ed-nav > button.primary,
   html.ed-focus .ed-chapter > *:not(.ed-focus-btn) { display: none !important; }
-  html.ed-focus .ed-status { margin: 0; font-size: 12px; white-space: nowrap; }
+  html.ed-focus .ed-status { margin: 0; font-size: 12px; white-space: nowrap; color: var(--muted); }
   html.ed-focus .ed-chapter { order: 2; }
   html.ed-focus .ed-focus-btn { background: var(--soft, var(--surface-2)) !important; }
   html.ed-focus .ed-wm-row { display: none; }
-  html.ed-focus .ed-find:not([hidden]) { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: var(--paper, var(--surface)); padding: 8px 12px; border-radius: 12px; }
-  html.ed-focus .ed-paper { border: 0; border-radius: 0; background: none; max-width: 740px; margin: 0 auto; padding: 120px 20px 40vh; min-height: 100vh; }
+  html.ed-focus .ed-find:not([hidden]) { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--surface, #fff); border: 1px solid var(--line); padding: 8px 12px; border-radius: 16px; width: max-content; }
+  html.ed-focus .ed-paper { border: 0; border-radius: 0; background: none; max-width: 740px; margin: 0 auto; padding: 132px 20px 40vh; min-height: 100vh; }
   html.ed-focus .ed-paper .ed-stats { opacity: .28; }
   html.ed-focus .ed-paper .ed-stats:hover { opacity: 1; }
 }
-@media (min-width: 901px) and (max-width: 1250px) { html.ed-focus .ed-status { display: none; } }
+@media (min-width: 901px) and (max-width: 1100px) { html.ed-focus .ed-status { display: none; } }
