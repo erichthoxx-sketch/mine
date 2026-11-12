@@ -73,6 +73,12 @@ export function convRows(rows) {
   return rows.map((r) => ({ date: r.Date, cid: r.CampaignId, conv: Object.fromEntries(convCols(r).map((k) => [goalIdOf(k), r[k] || 0]).filter(([, v]) => v > 0)) }))
     .filter((x) => Object.keys(x.conv).length);
 }
+// Строки отчёта по поисковым запросам с Goals → {«кампания|запрос»: {цель: число}}
+export function queryConvRows(rows) {
+  const out = {};
+  for (const r of rows) for (const k of convCols(r)) if (r[k] > 0) { const x = (out[`${r.CampaignId}|${String(r.Query || '').toLowerCase()}`] ||= {}); x[goalIdOf(k)] = (x[goalIdOf(k)] || 0) + r[k]; }
+  return out;
+}
 // Строки отчёта по фразам с Goals → {CriterionId: {цель: число}}
 export function kwConvRows(rows) {
   const out = {};

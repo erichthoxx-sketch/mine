@@ -47,7 +47,7 @@ export function approvalQueue({ main = {}, stats = {}, on = {}, today, goalActs 
     if (!part.length) break;
     out.push(...part); seen.push(...part.map((x) => x.key), ...part.flatMap((x) => x.keys || []));
   }
-  const WHY = { audience: 'самые тёплые читательницы; создание аудитории ничего не тратит и кампании не меняет', retarget: 'объявления группы увидят и те, кто добавил книгу, но не купил; бюджет и цена цели не меняются', newad: 'в группе мало объявлений — Директу не из чего выбирать; текст из Мастерской, без спойлеров, уйдёт на модерацию', starter: 'по «скачать», «fb2», «аудиокнига» ищут файл, а не книгу на Литнете', minus: 'по таким запросам приходят не читатели', places: 'с площадки сразу уходят: 20+ кликов и больше половины отказов', fatigue: 'объявление приелось: CTR заметно упал, в группе есть другие', goal: 'началась подписка — кампании пора учиться на покупках; цена цели и бюджет не меняются' };
+  const WHY = { kwadd: 'запрос уже приводит читательниц — закрепляем его отдельной фразой, чтобы Директ показывал по нему увереннее', audience: 'самые тёплые читательницы; создание аудитории ничего не тратит и кампании не меняет', retarget: 'объявления группы увидят и те, кто добавил книгу, но не купил; бюджет и цена цели не меняются', newad: 'в группе мало объявлений — Директу не из чего выбирать; текст из Мастерской, без спойлеров, уйдёт на модерацию', starter: 'по «скачать», «fb2», «аудиокнига» ищут файл, а не книгу на Литнете', minus: 'по таким запросам приходят не читатели', places: 'с площадки сразу уходят: 20+ кликов и больше половины отказов', fatigue: 'объявление приелось: CTR заметно упал, в группе есть другие', goal: 'началась подписка — кампании пора учиться на покупках; цена цели и бюджет не меняются' };
   return out.filter((x) => !hide.has(x.key)).map((x) => ({ ...x, text: x.rule === 'fatigue' ? 'остановить объявление: ' + x.text : x.text, cid: x.cid ?? x.act?.campaign ?? null, camp: names[x.cid ?? x.act?.campaign] || '', why: x.why || WHY[x.rule] || '' })).slice(0, 20);
 }
 
@@ -80,4 +80,22 @@ export function newAdItems({ main = {}, bookOf = () => null, hits = () => [] }) 
     }
   }
   return out;
+}
+
+// Запросы-победители: поисковый запрос уже принёс добавления/покупки, а фразы такой в кампании нет → добавить фразой (обычное действие keywords)
+export function winnerQueryItems({ main = {}, stats = {}, goals = {} }) {
+  const want = new Set([goals.lib, ...(goals.buy || [])].filter(Boolean).map(String));
+  if (!want.size) return [];
+  const live = new Set((main.campaigns || []).filter((c) => c.state === 'ON').map((c) => c.id));
+  const norm = (t) => String(t || '').toLowerCase().replace(/["!+\[\]]/g, '').replace(/\s-\S+/g, '').replace(/\s+/g, ' ').trim();
+  const have = new Set((main.keywords || []).filter((k) => k.state !== 'ARCHIVED').map((k) => `${k.cid}|${norm(k.phrase)}`));
+  const out = [];
+  for (const q of stats.queries || []) {
+    if (!live.has(q.cid) || !q.gid || !q.conv) continue;
+    const n = Object.entries(q.conv).reduce((s, [g, v]) => s + (want.has(String(g)) ? v : 0), 0), text = norm(q.query), words = text.split(' ').length;
+    if (n < 2 || words < 2 || words > 7 || have.has(`${q.cid}|${text}`)) continue;
+    have.add(`${q.cid}|${text}`);
+    out.push({ rule: 'kwadd', key: `kwadd:${q.gid}:${text}`, cid: q.cid, n, act: { do: 'keywords', group: q.gid, phrases: [text], why: `запрос привёл ${n} читательниц за 30 дней` }, text: `добавить фразу «${text}» — уже привела ${n}` });
+  }
+  return out.sort((a, b) => b.n - a.n).slice(0, 5);
 }

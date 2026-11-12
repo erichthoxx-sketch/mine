@@ -2,7 +2,7 @@
 // d_snap/main  — кампании, группы, фразы, объявления;  d_snap/stats — расход по дням, фразы и запросы за 30 дней.
 // Расход связанных кампаний уходит в «Доходы» недельными отчётами (там считается окупаемость).
 import { call, report, metrika } from './api.js';
-import { MICRO, dailyRows, mergeDaily, adRows, mergeAdDaily, toRequest, resultOf, describe, convRows, kwConvRows, metrikaRows, withGoal, moneyOf, withLitref } from './dcalc.js';
+import { MICRO, dailyRows, mergeDaily, adRows, mergeAdDaily, toRequest, resultOf, describe, convRows, kwConvRows, queryConvRows, metrikaRows, withGoal, moneyOf, withLitref } from './dcalc.js';
 import { demoSnapshot, demoMetrikaSnap, demoSiteSnap, isDemo, snap, putSnap, putLog } from './demo.js';
 import { todayISO, addDays, weekStart, bookIdFor } from '../../js/calc.js';
 import { bookOfCampaign } from './pult.js';
@@ -126,6 +126,11 @@ export async function refresh(app, { onStep = () => {} } = {}) {
       const cfrom = old?.conv?.length ? addDays(today, -14) : addDays(today, -89);
       conv = mergeDaily(conv, convRows(await report(s, { name: 'conv', fields: ['Date', 'CampaignId', 'Conversions'], from: cfrom, to: today, goals: goalIds })), 400, today);
       kwConv = kwConvRows(await report(s, { name: 'kwconv', fields: ['CriterionId', 'Conversions'], goals: goalIds }));
+      // какие поисковые запросы приводят к добавлениям и покупкам (отдельно: не вышло — остальное не страдает)
+      if (queries.length) try {
+        const qc = queryConvRows(await report(s, { name: 'qconv', type: 'SEARCH_QUERY_PERFORMANCE_REPORT', fields: ['Query', 'CampaignId', 'Conversions'], goals: goalIds }));
+        queries = queries.map((q) => { const c = qc[`${q.cid}|${String(q.query || '').toLowerCase()}`]; return c ? { ...q, conv: c } : q; });
+      } catch (e) { console.warn('конверсии по запросам', e); }
       mAt = new Date().toISOString();
     } catch (e) { mErr = e.transient ? 'Директ временно не отдал конверсии (сбой у Яндекса) — показаны прошлые.' : 'Конверсии по целям: ' + (e.message || e); }
   }

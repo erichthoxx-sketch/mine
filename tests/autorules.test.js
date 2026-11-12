@@ -59,3 +59,17 @@ test('очередь: аудитория «добавили, но не купи�
   assert.deepEqual(q.map((x) => x.rule), ['audience', 'newad']); assert.ok(q[0].why && q[1].why.includes('модерацию'));
   assert.equal(approvalQueue({ main, stats: {}, on: {}, today: '2026-11-12', extra: ads, done: [ads[0].key] }).length, 0);
 });
+
+test('очередь: запрос, который уже привёл читательниц, — добавить фразой', async () => {
+  const { winnerQueryItems } = await import('../direct/js/autorules.js');
+  const { queryConvRows } = await import('../direct/js/dcalc.js');
+  assert.deepEqual(queryConvRows([{ Query: 'Роман Про Мафию', CampaignId: 1, Conversions_5_LSCCD: 3 }, { Query: 'x', CampaignId: 1, Conversions_5_LSCCD: 0 }]), { '1|роман про мафию': { 5: 3 } });
+  const main = { campaigns: [{ id: 1, state: 'ON' }], keywords: [{ cid: 1, gid: 10, phrase: '"любовный роман" -скачать', state: 'ON' }] };
+  const stats = { queries: [
+    { cid: 1, gid: 10, query: 'роман про мафию читать', conv: { 5: 3 } }, { cid: 1, gid: 10, query: 'любовный роман', conv: { 5: 9 } },
+    { cid: 1, gid: 10, query: 'роман', conv: { 5: 4 } }, { cid: 1, gid: 10, query: 'криминальный роман онлайн', conv: { 5: 1 } }, { cid: 1, gid: 10, query: 'чужая цель тут', conv: { 9: 7 } }] };
+  const r = winnerQueryItems({ main, stats, goals: { lib: '5', buy: ['6'] } });
+  assert.deepEqual(r.map((x) => x.act.phrases[0]), ['роман про мафию читать']);
+  assert.deepEqual(r[0].act, { do: 'keywords', group: 10, phrases: ['роман про мафию читать'], why: 'запрос привёл 3 читательниц за 30 дней' });
+  assert.equal(winnerQueryItems({ main, stats, goals: {} }).length, 0);
+});

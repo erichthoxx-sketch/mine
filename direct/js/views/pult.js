@@ -14,7 +14,7 @@ import { demo } from '../demo.js';
 import { ic } from '../../../js/icons.js';
 import { litTagInfo } from '../../../js/littag.js';
 import { weekKeyOf } from '../weekreview.js';
-import { AUTO_RULES, approvalQueue, retargetItems, newAdItems } from '../autorules.js';
+import { AUTO_RULES, approvalQueue, retargetItems, newAdItems, winnerQueryItems } from '../autorules.js';
 import { spoilerHits, spoilerList } from '../../../js/spoilers.js';
 import { execPlan, lastPlanErrors } from '../sync.js';
 import { starterMinusMissing } from '../dcalc.js';
@@ -108,6 +108,7 @@ function queueOf(a) {
   let goalActs = [];
   if (!demo.on) try { goalActs = resolvedLaunches(a).map((L) => goalSwitch(L.plan)).filter(Boolean); } catch { /* плана запуска нет */ }
   const wbooks = c.data.w_books || [], extra = demo.on ? [] : [
+    ...winnerQueryItems({ main, stats: a.snap('stats') || {}, goals: goalsOf(metrikaOf(c) || {}) }),
     ...retargetItems({ main, goals: goalsOf(metrikaOf(c) || {}), saved: d.retarget || {} }),
     ...newAdItems({ main, bookOf: (camp) => { const b = bookOfCampaign(camp, main.ads || [], wbooks); return b ? wbooks.find((x) => x.id === b.id) : null; }, hits: (t, wb) => spoilerHits(t, spoilerList(wb)) }),
   ];
