@@ -3436,3 +3436,22 @@ select.mk-sel { width: auto; max-width: 220px; min-height: 34px; padding: 4px 30
 /* Пульт: этап кампании и следующий шаг */
 .pult-stage { margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: var(--soft, var(--surface-2)); }
 .pult-next { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+
+/* Главная Мастерской: рабочий стол — сегодняшний текст, дела, книги, ритм (13.11.2026) */
+.hm { display: grid; gap: 0 22px; grid-template-columns: minmax(0, 1fr); }
+.hm-main, .hm-side { min-width: 0; }
+@media (min-width: 1100px) { .hm { grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); align-items: start; } .hm-side { position: sticky; top: 16px; } }
+@media (max-width: 1099px) { .hm { display: flex; flex-direction: column; } .hm-main, .hm-side { display: contents; } .hm-hero { order: 1; } .hm-side > * { order: 2; } .hm-main > *:not(.hm-hero) { order: 3; } }
+.hm-hero { padding: 26px 28px 22px; }
+.hm-day { display: flex; justify-content: space-between; align-items: center; gap: 12px; font: 500 14px/1.2 var(--font-display); color: var(--muted); }
+.hm-now { margin-top: 14px; }
+.hm-big { font-size: 54px; font-weight: 600; line-height: 1; font-family: var(--font-num, inherit); letter-spacing: -.02em; color: var(--text); white-space: nowrap; }
+.hm-big span { font-size: 16px; font-weight: 400; letter-spacing: 0; color: var(--muted); margin-left: 8px; }
+.hm-goal { margin-top: 14px; } .hm-goal .progress { height: 6px; margin: 0 0 8px; }
+.hm-act { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 20px; }
+.hm-month { display: flex; gap: 8px 22px; flex-wrap: wrap; align-items: baseline; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 14px; }
+.hm-month button.link { font-size: 14px; font-weight: 400; text-decoration: none; }
+.hm-sub { margin: 16px 0 2px; font: 500 14px/1.3 var(--font-display); color: var(--muted); }
+.hm-todo .item .badge { white-space: nowrap; }
+.hm-week h3 { margin: 14px 0 4px; font-size: 14px; }
+@media (max-width: 700px) { .hm-hero { padding: 22px 20px 18px; } .hm-big { font-size: 44px; } .hm-act .primary { width: 100%; } }

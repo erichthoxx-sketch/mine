@@ -14,7 +14,7 @@ import { domainInfo } from '../sitecheck.js';
 import { marketingNeeds, planItems } from './plan.js';
 import { writtenChart } from '../wcharts.js';
 import { archiveWarn, loadArchive } from './archive.js';
-import { fold } from '../../../js/ui.js';
+import { fold, more } from '../../../js/ui.js';
 import { weekSummary, finishPace } from '../../../js/insights.js';
 
 const zn = (n) => al(n);
@@ -109,7 +109,7 @@ function weekCard(c) {
     ${w.reasons.length ? `<p class="small muted" style="margin:6px 0 0">${esc(w.reasons.join(' · '))}</p>` : ''}
     ${w.ads.length ? `<h3>Реклама</h3><div class="list">${w.ads.map((x) => `<div class="item"><b>${esc(x.name)}</b><div class="small ${KIND[x.kind]}">${esc(x.text.charAt(0).toUpperCase() + x.text.slice(1))}${x.est ? ' <span class="muted">(расход — оценка)</span>' : ''}</div></div>`).join('')}</div>` : ''}
     ${w.todo.length ? `<h3>На эту неделю</h3><div class="list">${w.todo.slice(0, 5).map((x) => `<div class="item small">${esc(x.text)}</div>`).join('')}</div>` : ''}`;
-  return `<div class="card folds">${fold('home-week', `Неделя ${fmtDate(w.from).slice(0, 5)}–${fmtDate(w.to).slice(0, 5)}`, body, { open: wd === 1 || wd === 2, sub: `${rub(w.income, 0)}${d != null ? ` · ${d >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(d * 100))} %` : ''}` })}</div>`;
+  return `<div class="card hm-week"><div class="row between"><h2 style="margin:0">Неделя</h2><span class="small muted">${fmtDate(w.from).slice(0, 5)}–${fmtDate(w.to).slice(0, 5)}</span></div><div style="margin-top:10px">${body}</div></div>`;
 }
 
 export function homeView(a) {
@@ -137,23 +137,38 @@ export function homeView(a) {
   const target = activeGoals(c).reduce((s2, g) => { const st = goalStatus(g, g.bookId ? c.wbooksById[g.bookId] : null, t); return s2 + (g.type === 'daily' && st.active && st.perDay ? st.perDay : 0); }, 0) || null;
   const known = series.filter((x) => x.known), avg7 = series.slice(-7).filter((x) => x.known);
   const best = known.reduce((m, x) => (x.value > (m?.value || 0) ? x : m), null);
-  const chartCard = known.length ? `<div class="card"><h2>Написано по дням, а.л.</h2><div class="chart" id="wchart"></div>
+  const chartCard = known.length ? `<div class="card"><h2>Ритм: написано по дням, а.л.</h2><div class="chart" id="wchart"></div>
     <div class="small muted chart-cap">${[avg7.length ? `в среднем ${zn(Math.round(avg7.reduce((a2, x) => a2 + x.value, 0) / avg7.length))} в день за неделю` : '', best && best.value ? `лучший день — ${fmtDate(best.date).slice(0, 5)}: ${zn(best.value)}` : '', target ? `пунктир — норма по целям (${zn(target)})` : ''].filter(Boolean).join(' · ')}</div></div>` : '';
-  const html = `
-  <div class="row between home-h"><h2 style="margin:0">${fmtMonthCap(mk)}</h2>${driveChip(c)}</div>
-  <div class="grid4">
-    ${stale ? `<button class="stat stat-btn" data-act="wbook.refresh" title="Пересчитать по Google Диску"><div class="k">Написано за месяц</div><div class="v">—</div><div class="s">${refreshing.on ? 'считаю…' : 'пересчитать'}</div></button>`
-      : `<div class="stat"><div class="k">Написано за месяц</div><div class="v">${alNum(sum('wrote'))}</div><div class="s">а.л. · сегодня +${alNum(sum('today'))}</div></div>`}
-    <button class="stat stat-btn" data-act="home.chapters" title="Какие главы и откуда"><div class="k">Глав в ${fmtMonthIn(mk).split(' ')[0]}</div><div class="v">${sum('chapters') + sum('timers')}</div><div class="s">${[`${sum('chapters')} ${plural(sum('chapters'), ['вышла', 'вышли', 'вышло'])}`, sum('timers') ? `${sum('timers')} на таймере` : ''].filter(Boolean).join(' · ')}</div></button>
-    <div class="stat"><div class="k">Доход за ${fmtMonth(mk).split(' ')[0]}</div><div class="v">${rub(sumSeries(incomeSeries(c.data.sales, [], from, t)), 0)}</div></div>
-    <div class="stat"><div class="k">В работе</div><div class="v">${inWork.length}</div><div class="s">${plural(inWork.length, ['книга', 'книги', 'книг'])}</div></div>
-  </div>
-  ${weekCard(c)}
-  ${archiveWarn(c)}
-  ${rem.length ? `<div class="card"><div class="row between"><h2 style="margin:0">Сегодня · напоминания</h2><button class="link small" data-act="go" data-to="/plan">Планер →</button></div><div class="list">${rem.map((r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}</span></a>`).join('')}</div></div>` : ''}
-  ${chartCard}
-  ${inWork.length ? `<h2 style="margin-top:18px">В работе</h2>${inWork.map((r) => workCard(c, r)).join('')}` : ''}
-  ${others.length ? `<div class="card"><h2>Другие книги в ${fmtMonthIn(mk)}</h2><div class="list">${others.map((r) => `<a class="item row between" href="#" data-act="go" data-to="/book/${r.b.id}"><span>${esc(r.b.title)}<span class="sub">${[r.wrote ? `+${zn(r.wrote)}` : '', r.chapters ? `глав ${r.chapters}` : '', STATUS[r.b.status] || ''].filter(Boolean).join(' · ')}</span></span><b>${r.income != null ? rub(r.income, 0) : ''}</b></a>`).join('')}</div></div>` : ''}`;
+  // ---- новая Главная (13.11.2026, её просьба: «красивую, функциональную, удобную… сейчас просто всё понапихано») ----
+  // Сверху одно главное — сегодняшний текст и кнопка «Продолжить писать»; месяц — тихой строкой; справа дела дня и неделя; ниже книги и ритм.
+  const main = inWork.slice().sort((x, y) => (y.today || 0) - (x.today || 0) || (y.wrote || 0) - (x.wrote || 0))[0]?.b || null;
+  const lastTab = main ? [...(main.tabs || [])].reverse().find((x) => x.counted !== false && /^(пролог|глава|эпилог)/i.test(x.title || '')) : null;
+  const goTo = main ? (main.fileId && lastTab ? `/ed/${main.id}/${encodeURIComponent(lastTab.title)}` : `/book/${main.id}`) : '/books';
+  const todayCh = sum('today'), share = target ? Math.min(1, todayCh / target) : 0, left = target ? Math.max(0, target - todayCh) : 0;
+  const wd = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'][new Date(t + 'T00:00:00Z').getUTCDay()];
+  const monthInc = sumSeries(incomeSeries(c.data.sales, [], from, t));
+  const hero = `<div class="card hm-hero">
+      <div class="hm-day"><span>${fmtDate(t).slice(0, 5)} · ${wd}</span>${driveChip(c)}</div>
+      <div class="hm-now"><div class="hm-big">${stale ? '—' : num(todayCh)}<span> зн. сегодня</span></div>
+        ${target ? `<div class="hm-goal"><div class="progress ${share >= 1 ? 'ok' : ''}"><i style="width:${(share * 100).toFixed(1)}%"></i></div><div class="small muted">${share >= 1 ? 'Норма на сегодня выполнена' : `до нормы ещё ${num(left)} из ${num(target)}`}${avg7.length ? ` · в среднем ${num(Math.round(avg7.reduce((a2, x) => a2 + x.value, 0) / avg7.length))} в день за неделю` : ''}</div></div>`
+          : `<div class="small muted">${avg7.length ? `в среднем ${num(Math.round(avg7.reduce((a2, x) => a2 + x.value, 0) / avg7.length))} зн. в день за неделю` : 'цели на день нет — поставьте её в Планере'}</div>`}
+      </div>
+      <div class="hm-act"><button class="primary" data-act="go" data-to="${esc(goTo)}">${main ? `Продолжить писать${lastTab && main.fileId ? ` · ${esc(lastTab.title)}` : ''}` : 'Добавить книгу'}</button>${main ? `<span class="small muted">«${esc(main.title)}»</span>` : ''}</div>
+      <div class="hm-month"><span class="small muted">${fmtMonthCap(mk).split(' ')[0]}</span>
+        ${stale ? `<button class="link" data-act="wbook.refresh" title="Пересчитать по Google Диску">${refreshing() ? 'считаю…' : 'пересчитать написанное'}</button>` : `<span><b>${alNum(sum('wrote'))}</b> а.л.</span>`}
+        <button class="link" data-act="home.chapters" title="Какие главы и откуда"><b>${sum('chapters') + sum('timers')}</b> ${plural(sum('chapters') + sum('timers'), ['глава', 'главы', 'глав'])}${sum('timers') ? ` <span class="muted">(${sum('timers')} на таймере)</span>` : ''}</button>
+        <span><b>${rub(monthInc, 0)}</b> доход</span></div></div>`;
+  const remRow = (r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${r.n === 0 ? 'сегодня' : `${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}`}</span></a>`;
+  const nowRem = rem.filter((r) => r.n <= 0), soonRem = rem.filter((r) => r.n > 0);
+  const todayCard = `<div class="card hm-todo"><div class="row between"><h2 style="margin:0">Сегодня</h2><button class="link small" data-act="go" data-to="/plan">Планер →</button></div>
+      ${nowRem.length ? `<div class="list">${more('home-now', nowRem.map(remRow), 5)}</div>` : '<p class="small muted" style="margin:10px 0 0">На сегодня дел нет.</p>'}
+      ${soonRem.length ? `<div class="hm-sub">Скоро</div><div class="list">${more('home-soon', soonRem.map(remRow), 3)}</div>` : ''}</div>`;
+  const html = `<section class="hm">
+    <div class="hm-main">${hero}
+      ${inWork.map((r) => workCard(c, r)).join('')}
+      ${chartCard}
+      ${others.length ? `<div class="card"><h2>Другие книги в ${fmtMonthIn(mk)}</h2><div class="list">${others.map((r) => `<a class="item row between" href="#" data-act="go" data-to="/book/${r.b.id}"><span>${esc(r.b.title)}<span class="sub">${[r.wrote ? `+${zn(r.wrote)}` : '', r.chapters ? `глав ${r.chapters}` : '', STATUS[r.b.status] || ''].filter(Boolean).join(' · ')}</span></span><b>${r.income != null ? rub(r.income, 0) : ''}</b></a>`).join('')}</div></div>` : ''}</div>
+    <div class="hm-side">${archiveWarn(c)}${todayCard}${weekCard(c)}</div></section>`;
   return { html, after: () => { writtenChart(document.getElementById('wchart'), { days: series, target }); loadArchive(false, true); } };
 }
 export { ic };
