@@ -3480,3 +3480,4 @@ svg.mk-rk .mk-rel { stroke: var(--good, #2e7d5b); stroke-width: 8; stroke-lineca
 .lt-day.now .lt-date span { color: var(--good); font-weight: 600; }
 .lt-ev > div { display: flex; gap: 8px; align-items: baseline; font-size: 14px; line-height: 1.45; padding: 1px 0; }
 .lt-ev i { flex: none; width: 7px; height: 7px; border-radius: 50%; transform: translateY(-1px); }
+.ch-leak { display: block; white-space: normal; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; color: var(--down, #b0413e); margin-top: 2px; }

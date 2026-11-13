@@ -5,6 +5,7 @@ import { releaseTiming, launchForecast } from '../../../js/insights.js';
 import { loadSite, patchSiteBook, sameTitle, SITE_ADMIN } from '../../../js/sitepub.js';
 import { siteState } from './mysite.js';
 import { launchChecklist, launchTimeline } from '../launchlist.js';
+import { leakParts, partKey } from '../partreads.js';
 import { bookIdFor } from '../../../js/calc.js';
 import { mailQueue, mailSent } from './mail.js';
 import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter, writtenMonth } from '../wcalc.js';
@@ -220,8 +221,8 @@ export function bookPage(a, id) {
       const tip = `${st === 'done' ? (v.past ? 'выложена' : 'выложена ' + dm(v.date)) : st === 'wait' ? 'выйдет ' + dm(v.date) : 'отметить выкладку'}`;
       return `<td class="pc"><button class="pm" title="${esc(tip)}" data-act="pub.mark" data-id="${b.id}" data-ch="${esc(ch)}" data-pf="${esc(pf)}">${st === 'done' ? icx('check') : st === 'wait' ? icx('timer') + `<span>${dm(v.date)}</span>` : '<span class="pl-none">—</span>'}</button></td>`;
     };
-    const rest = main.length - nDone - nPlan;
-    const row = (t) => `<tr${canEdit ? ` class="ch-row" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе"` : ''}><td><div class="ch-cell"><span class="ch-t">${esc(t.title)}</span>${t.lead ? `<span class="ch-lead">${esc(t.lead)}</span>` : ''}</div></td>
+    const rest = main.length - nDone - nPlan, leaks = b.reads ? leakParts(b.reads) : {};
+    const row = (t) => `<tr${canEdit ? ` class="ch-row" data-act="go" data-to="/ed/${b.id}/${encodeURIComponent(t.title)}" title="Открыть в редакторе"` : ''}><td><div class="ch-cell"><span class="ch-t">${esc(t.title)}</span>${t.lead ? `<span class="ch-lead">${esc(t.lead)}</span>` : ''}</div>${leaks[partKey(t.title)] ? `<span class="ch-leak" title="На этой главе уходит больше читателей, чем обычно (обычно ${leaks[partKey(t.title)].med} %) — по «Статистике по частям» Литнета">уходят ${Math.round(leaks[partKey(t.title)].drop)} %</span>` : ''}</td>
         <td class="r" title="${t.chars == null ? '' : alNum(t.chars) + ' а.л.'}">${t.chars == null ? '' : grp(t.chars)}</td>${pfs.map((x) => mark(t.title, x)).join('')}</tr>`;
     return `<div class="ch-sum">выложено <b>${nDone}</b>${nPlan ? ` · запланировано <b>${nPlan}</b>` : ''}${rest > 0 ? ` · ждут выкладки <b>${rest}</b>` : ''} · ${alNum(b.chars)} а.л.</div>
       <div class="scroll"><table class="pub-t pub-t2"><colgroup><col><col class="c-al">${pfs.map(() => '<col class="c-pf">').join('')}</colgroup>

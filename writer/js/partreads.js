@@ -62,3 +62,14 @@ export function partRetention(r = {}, from = '', to = '9999') {
   const first = sum[parts[0]] || 0;
   return parts.map((p, i) => ({ part: p, reads: sum[p], retention: first ? Math.round(sum[p] / first * 1000) / 10 : null, drop: i && sum[parts[i - 1]] ? Math.round((1 - sum[p] / sum[parts[i - 1]]) * 1000) / 10 : null }));
 }
+
+// Где уходят читатели (13.11.2026, её «да»): части, после которых уходит заметно больше обычного.
+// Ключ части — «пролог» / «эпилог» / «глава N», чтобы совпасть с главами Документа, как бы их ни назвали на Литнете.
+export const partKey = (name) => { const s = String(name || '').toLowerCase().replace(/ё/g, 'е'); if (/пролог/.test(s)) return 'пролог'; if (/эпилог/.test(s)) return 'эпилог'; const m = s.match(/глава\s*(\d+)/) || s.match(/^\s*(\d+)/); return m ? 'глава ' + Number(m[1]) : s.trim(); };
+export function leakParts(r = {}, { minReads = 30, top = 3 } = {}) {
+  const rows = partRetention(r), drops = rows.map((x) => x.drop).filter((x) => x != null && x > 0).sort((a, b) => a - b);
+  if (drops.length < 3) return {};
+  const med = drops[Math.floor(drops.length / 2)], prev = (i) => rows[i - 1]?.reads || 0;
+  const out = rows.map((x, i) => ({ ...x, i })).filter((x) => x.drop != null && prev(x.i) >= minReads && x.drop >= Math.max(10, med * 2)).sort((a, b) => b.drop - a.drop).slice(0, top);
+  return Object.fromEntries(out.map((x) => [partKey(x.part), { drop: x.drop, retention: x.retention, med, after: rows[x.i - 1].part }]));
+}

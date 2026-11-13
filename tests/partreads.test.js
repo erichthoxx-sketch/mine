@@ -39,3 +39,12 @@ test('прочтения: название части на отдельной с
   assert.deepEqual(parsePartReads('Части Оценки читателей 11.11 10.11\nПролог\n4.43 (7) 150 100\nГлава 1\n5 (2) 20 10', '2026-11-11').parts, ['Пролог', 'Глава 1']);
   assert.ok(readsBroken({ parts: ['4.43 (7)', 'Глава', '5 (2)'] })); assert.ok(!readsBroken(r));
 });
+
+test('где уходят читатели: части с потерей сильно выше обычной', async () => {
+  const { leakParts, partKey } = await import('../writer/js/partreads.js');
+  const parts = ['Пролог', 'Глава 1. Встреча', 'Глава 2', 'Глава 3', 'Глава 4', 'Глава 5'];
+  const r = { parts, days: { '2026-11-10': { 'Пролог': 1000, 'Глава 1. Встреча': 950, 'Глава 2': 900, 'Глава 3': 600, 'Глава 4': 570, 'Глава 5': 540 } } };
+  const L = leakParts(r);
+  assert.deepEqual(Object.keys(L), ['глава 3']); assert.equal(L['глава 3'].drop, 33.3);
+  assert.equal(partKey('Глава 1. Встреча'), 'глава 1'); assert.equal(partKey('ПРОЛОГ'), 'пролог');
+});
