@@ -472,3 +472,13 @@ test('Сколько тратить: кампанию «на библиотек�
   assert.equal(D.spendAdvice({ camp: { id: 7, daily: 600, goal: 2 }, daily, conv: [], today, goals: ['2'], value: 300 }).kind, 'cut');
   assert.equal(D.spendAdvice({ camp: { id: 7, daily: 600, goal: 1 }, daily, conv: [], today, goals: ['2'], value: 300 }), null);
 });
+
+test('дневник изменений: итог через 7 дней по цене добавления', async () => {
+  const { changeDiary } = await import('../direct/js/dcalc.js');
+  const daily = [], conv = [];
+  for (let i = 1; i <= 20; i++) { const d = `2026-11-${String(i).padStart(2, '0')}`; daily.push({ date: d, cid: 1, impr: 1000, clicks: 30, cost: 300 }); conv.push({ date: d, cid: 1, conv: { 7: i < 10 ? 2 : 4 } }); }
+  const log = [{ at: '2026-11-10T10:00:00Z', cid: 1, ok: true, text: 'минус-слова' }, { at: '2026-11-19T10:00:00Z', cid: 1, ok: true, text: 'пауза' }];
+  const r = changeDiary(daily, conv, log, '2026-11-20', { lib: '7' });
+  assert.equal(r[0].state, 'wait'); assert.equal(r[1].state, 'better'); assert.equal(r[1].by, 'cpa');
+  assert.ok(Math.abs(r[1].delta + 0.5) < 0.01);
+});

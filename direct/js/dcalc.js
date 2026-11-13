@@ -656,3 +656,27 @@ export function withLitref(current = '', tag = '') {
   const t = String(tag || '').trim(), rest = String(current || '').split('&').map((x) => x.trim()).filter((x) => x && !/^utm_litref=/i.test(x));
   return [...rest, t].filter(Boolean).join('&');
 }
+
+// Дневник кампании (13.11.2026, её «да»): каждая правка → что стало за 7 дней после против 7 дней до.
+// Главное мерило — цена добавления в библиотеку (или покупки), если таких событий хватает с обеих сторон; иначе клик и CTR.
+export function changeDiary(daily = [], conv = [], log = [], today, { lib = null, buy = [] } = {}) {
+  const sorted = (log || []).filter((x) => x.at).slice().sort((x, y) => y.at.localeCompare(x.at));
+  return sorted.map((x) => {
+    const d = x.at.slice(0, 10), after = daysBetween(d, today), cid = x.cid ?? null, ready = addDays(d, 8);
+    const near = sorted.filter((y) => y !== x && y.ok && (cid == null || y.cid == null || y.cid === cid) && Math.abs(daysBetween(y.at.slice(0, 10), d)) <= 3).length;
+    if (!x.ok) return { log: x, state: 'failed', near };
+    if (after < 3) return { log: x, state: 'wait', ready, near };
+    const n = Math.min(after - 1, 7), A = [addDays(d, -7), addDays(d, -1)], B = [addDays(d, 1), addDays(d, n)];
+    const tot = (r, goals) => goalTotals(daily, conv, r[0], r[1], { cid, goals });
+    const b0 = tot(A, lib ? [lib] : []), b1 = tot(B, lib ? [lib] : []), p0 = buy.length ? tot(A, buy) : null, p1 = buy.length ? tot(B, buy) : null;
+    const per = (t, days) => ({ cost: t.cost / days, clicks: t.clicks / days, conv: t.conv / days });
+    const before = { ...per(b0, 7), ctr: b0.impr ? b0.clicks / b0.impr : null, cpc: b0.clicks ? b0.cost / b0.clicks : null, cpa: lib ? b0.cpa : null, buy: p0 ? p0.conv / 7 : null };
+    const afterM = { ...per(b1, n), ctr: b1.impr ? b1.clicks / b1.impr : null, cpc: b1.clicks ? b1.cost / b1.clicks : null, cpa: lib ? b1.cpa : null, buy: p1 ? p1.conv / n : null };
+    const ch = (p, q) => (p != null && q != null && p > 0 ? (q - p) / p : null);
+    let by, delta, state;
+    if (lib && b0.conv >= 3 && b1.conv >= 3) { by = 'cpa'; delta = ch(before.cpa, afterM.cpa); state = delta <= -0.1 ? 'better' : delta >= 0.1 ? 'worse' : 'same'; }
+    else if (b0.clicks >= MIN_CLICKS && b1.clicks >= MIN_CLICKS) { by = 'cpc'; delta = ch(before.cpc, afterM.cpc); const dc = ch(before.ctr, afterM.ctr) || 0; state = delta <= -0.1 || dc >= 0.15 ? 'better' : delta >= 0.1 || dc <= -0.15 ? 'worse' : 'same'; }
+    else state = 'few';
+    return { log: x, state: after < 8 && state !== 'few' ? 'early' : state, by, delta, days: n, ready, before, after: afterM, near };
+  });
+}
