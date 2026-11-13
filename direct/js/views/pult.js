@@ -109,10 +109,7 @@ export function pultView(a) {
   const rest = M.rows.filter((r) => !live.includes(r));
   return {
     html: `${!M.m?.counterId ? `<div class="alert">Подключите Метрику автора (⚙ Настройки) — без неё не видно добавлений в библиотеку и покупок, а значит, и окупаемости.</div>` : ''}
-    ${wkOpen ? `<div class="card"><div class="row between" style="gap:12px"><div><b>Разбор недели готов</b><div class="small muted">Итог против прошлой недели, воронка, объявления, запросы, площадки — и что поменять</div></div><button class="primary" data-act="go" data-to="/week">Открыть</button></div></div>` : ''}
-    <div class="card"><div class="row between"><h2 style="margin:0">Сегодня · кампании</h2><span class="small muted">${tasks.length ? num(tasks.length) : 'всё спокойно'}</span></div>
-      ${tasks.length ? `<div class="list">${more('pult-todo', tasks, 3)}</div>` : '<p class="small muted" style="margin:8px 0 0">Ничего срочного. Приложение само проверяет кампании при каждом обновлении — раз в 15 минут, пока открыто.</p>'}</div>
-    ${queueCard(a)}
+    ${todayCard(a, M, tasks, wkOpen)}
     ${live.map(card).join('') || '<div class="card"><p class="muted">Сейчас нет идущих кампаний.</p></div>'}
     ${rest.length ? `<div class="card"><h2>Остальные кампании</h2><div class="list">${rest.map((r) => `<a class="item" href="#" data-act="go" data-to="/c/${r.camp.id}"><div class="row between"><b>${esc(r.camp.name)}</b><span class="small muted">${esc(r.st.text)}</span></div>${r.econ.d30.cost ? `<div class="small muted">за 30 дней ${money(r.econ.d30.cost)}${r.econ.lib30 ? ` · в библиотеку ${num(r.econ.lib30)}` : ''}</div>` : ''}</a>`).join('')}</div></div>` : ''}
     ${autoCard(c)}
@@ -121,6 +118,30 @@ export function pultView(a) {
   };
 }
 
+// «Что сделать сегодня» — одним списком (13.11.2026, её «да»): разбор недели, следующий шаг каждой кампании, тревоги и предложения с галочками
+function todayCard(a, M, tasks, wkOpen) {
+  const q = queueOf(a), ready = readyGoalActs(a);
+  // то, что есть в предложениях с галочкой, второй раз тревогой не показываем
+  const plain = (h) => h.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ');
+  const keys = q.map((x) => { const t = String(x.text || ''), i = t.indexOf(': '); return (i > 0 ? t.slice(i + 2) : t).slice(0, 40); }).filter((k) => k.length >= 12);
+  const starterQ = q.some((x) => /базовые минус-слова/i.test(x.text || ''));
+  tasks = tasks.filter((h) => { const t = plain(h); return !keys.some((k) => t.includes(k)) && !(starterQ && /нет стартовых минус-слов/i.test(t)); });
+  const steps = M.rows.filter((r) => r.stage?.next && !['draft', 'ended', 'stopped'].includes(r.st.key)).map((r) => {
+    const act = r.stage.next.act === 'goal' ? ready.find((x) => x.campaign === r.camp.id) : null;
+    return `<div class="item"><div class="row between" style="gap:12px;align-items:flex-start"><div style="min-width:0"><span class="small muted">${esc(r.book?.title ? `«${r.book.title}»` : r.camp.name)} · ${esc(r.stage.title.toLowerCase())}</span><div><b>${esc(r.stage.next.what)}</b></div><div class="small muted">${esc(r.stage.next.why)}</div></div>${act ? actBtn(act, 'Сменить цель', 'primary') : ''}</div></div>`;
+  });
+  const week = wkOpen ? [`<div class="item"><div class="row between" style="gap:12px"><div><b>Разобрать неделю</b><div class="small muted">Итог против прошлой недели, воронка, объявления, запросы, площадки — и что поменять</div></div><button class="small-btn" data-act="go" data-to="/week">Открыть</button></div></div>`] : [];
+  const n = week.length + steps.length + tasks.length + q.length;
+  const sec = (t) => `<div class="mk-sub">${t}</div>`;
+  return `<div class="card" id="pq"><div class="row between"><h2 style="margin:0">Что сделать сегодня</h2><span class="small muted">${n ? num(n) : 'всё спокойно'}</span></div>
+    ${!n ? '<p class="small muted" style="margin:8px 0 0">Ничего срочного. Приложение само проверяет кампании при каждом обновлении — раз в 15 минут, пока открыто.</p>' : ''}
+    ${week.length || steps.length ? sec('Шаги кампаний') + `<div class="list">${[...week, ...steps].join('')}</div>` : ''}
+    ${tasks.length ? sec('Требует внимания') + `<div class="list">${more('pult-todo', tasks, 4)}</div>` : ''}
+    ${q.length ? sec('Могу сделать сама — отметьте нужное') + `<div class="list">${q.map((x) => `<label class="item d-check" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer"><input type="checkbox" data-pq="${esc(x.key)}" checked style="margin-top:4px">
+      <span><b>${esc(x.text.charAt(0).toUpperCase() + x.text.slice(1))}</b><span class="small muted" style="display:block">${x.camp ? `«${esc(x.camp)}» · ` : ''}${esc(x.why)}</span></span></label>`).join('')}</div>
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap"><button class="primary" data-act="pq.yes">Применить отмеченное</button><button class="small-btn" data-act="pq.no">Отмеченное — не надо</button></div>
+      <p class="small muted" style="margin:8px 0 0">Цену цели и бюджет ничто из этого не меняет; всё записывается в «Что меняли».</p>` : ''}</div>`;
+}
 // Очередь предложений: всё, что приложение может сделать в кабинете само, — списком с галочками. Отмеченное — «Применить» или «Не надо».
 function queueOf(a) {
   const c = a.ctx(), d = c.settings.direct || {}, main = a.snap('main') || {};
@@ -136,15 +157,6 @@ function queueOf(a) {
     ...newAdItems({ main, bookOf: (camp) => { const b = bookOfCampaign(camp, main.ads || [], wbooks); return b ? wbooks.find((x) => x.id === b.id) : null; }, hits: (t, wb) => spoilerHits(t, spoilerList(wb)) }),
   ];
   return approvalQueue({ main, stats: a.snap('stats') || {}, on: d.auto || {}, today: c.today, goalActs, done: d.autoDone || [], no: d.queueNo || [], starter, extra });
-}
-function queueCard(a) {
-  const q = queueOf(a);
-  if (!q.length) return '';
-  return `<div class="card" id="pq"><div class="row between"><h2 style="margin:0">Предложения</h2><span class="small muted">${num(q.length)}</span></div>
-    <p class="small muted" style="margin:6px 0 4px">Что можно сделать в кабинете прямо отсюда. Оставьте галочки у нужного — и нажмите кнопку. Цену цели и бюджет ничто из этого не меняет.</p>
-    <div class="list">${q.map((x) => `<label class="item d-check" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer"><input type="checkbox" data-pq="${esc(x.key)}" checked style="margin-top:4px">
-      <span><b>${esc(x.text.charAt(0).toUpperCase() + x.text.slice(1))}</b><span class="small muted" style="display:block">${x.camp ? `«${esc(x.camp)}» · ` : ''}${esc(x.why)}</span></span></label>`).join('')}</div>
-    <div class="row" style="margin-top:12px;gap:10px"><button class="primary" data-act="pq.yes">Применить отмеченное</button><button class="small-btn" data-act="pq.no">Отмеченное — не надо</button></div></div>`;
 }
 const pqPicked = () => new Set([...document.querySelectorAll('#pq input[data-pq]:checked')].map((x) => x.dataset.pq));
 let pqBusy = false;
