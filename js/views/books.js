@@ -2,6 +2,8 @@ import { esc, acts, forms, changes, openSheet, opt, toast, N, ask } from '../ui.
 import { rub, pct, num, fmtDate, fmtShort, fmtMonth, fmtMonthShort } from '../format.js';
 import { priceAt, bookIdFor, inferPriceChanges, bookMonthStats, bookInsights, monthKey, monthEnd, monthsBetween, movingAverage, daysInMonth } from '../calc.js';
 import { dailyChart, EVENT_TYPES } from '../charts.js';
+import { cyclePath } from '../insights.js';
+import { loadSite, sameTitle } from '../sitepub.js';
 
 const app = () => window.__app;
 const STATUS = { progress: 'В процессе', done: 'Завершена', removed: 'Снята с продажи' };
@@ -57,8 +59,23 @@ export function books(a) {
       <label for="bkm">Месяц</label>
       <select id="bkm" data-chg="books.month">${months.map((k) => opt(k, fmtMonth(k) + (k === cur ? ' (текущий)' : ''), mk)).join('')}</select>
       <button class="link" data-act="report.dl" data-from="${mk}-01" data-to="${monthEnd(mk)}">Скачать отчёт за ${fmtMonth(mk)}</button>
-    </div>` : ''}`;
+    </div>` : ''}${cycleCard(c)}`;
   return { html };
+}
+
+// Путь читателя по циклу: книги цикла — с сайта (поля «Цикл» и «Номер в цикле»), продажи — из выгрузки
+let siteBooks = null, siteAsked = false;
+function cycleCard(c) {
+  if (!siteAsked && typeof window !== 'undefined') { siteAsked = true; loadSite().then((s) => { siteBooks = s?.books || []; window.__app?.rerender?.(); }).catch(() => { siteBooks = []; }); }
+  if (!siteBooks?.length) return '';
+  const groups = {};
+  for (const sb of siteBooks) { if (!sb.series || !sb.seriesNo) continue; const b = c.books.find((x) => sameTitle(x.title, sb.title)); if (b) (groups[sb.series] ||= []).push({ bookId: b.id, title: b.title, no: sb.seriesNo }); }
+  const cards = Object.entries(groups).map(([name, cyc]) => ({ name, P: cyclePath(c.sales, cyc, c.dataEnd) })).filter((x) => x.P);
+  return cards.map(({ name, P }) => `<div class="card" style="margin-top:16px"><h2 style="margin:0 0 4px">Путь читателя · ${esc(name)}</h2>
+    <p class="small muted" style="margin:0 0 8px">Покупки каждой книги против предыдущей за всё время. Кто именно купил, Литнет не показывает — это доля, а не люди.</p>
+    <div class="list">${P.books.map((b, i) => { const st = P.steps[i - 1]; return `<div class="item"><div class="row between" style="gap:12px"><b style="min-width:0">${b.no}. ${esc(b.title)}</b><span style="white-space:nowrap">${num(b.qty)} покупок</span></div>
+      ${st ? `<div class="small"><span class="${st.young ? '' : st.ratio >= 0.6 ? 'up' : st.ratio < 0.35 ? 'down' : ''}">на 100 покупок книги ${st.from.no} — ${Math.round(st.ratio * 100)}</span>${st.young ? ` <span class="muted">· продаётся ${b.days} дн., цифра ещё вырастет</span>` : ''}</div><div class="progress"><i style="width:${Math.min(100, st.ratio * 100).toFixed(1)}%"></i></div>` : '<div class="small muted">начало цикла</div>'}</div>`; }).join('')}</div>
+    <p style="margin:10px 0 0">До последней книги доходит ≈ ${Math.round(P.through * 100)} из 100.${P.worst && P.worst.ratio < 0.6 ? ` Больше всего теряется между книгами ${P.worst.from.no} и ${P.worst.to.no}: туда ведёт конец книги ${P.worst.from.no} и «От автора» — там стоит позвать в следующую книгу.` : ''}</p></div>`).join('');
 }
 acts['books.month'] = (d) => { if (d.v) app().ui.booksMonth = d.v; window.scrollTo(0, 0); };
 changes['books.month'] = (v) => { app().ui.booksMonth = v; app().rerender(); window.scrollTo(0, 0); };

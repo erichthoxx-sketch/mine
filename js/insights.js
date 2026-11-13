@@ -144,3 +144,16 @@ export function launchForecast(data = {}, wb, today) {
   const now = got.reduce((a, x) => a + (x.royalty || 0), 0), day = start ? Math.round((Date.parse(today) - Date.parse(start)) / 86400000) + 1 : 0;
   return { n: rows.length, r30: Math.round(median(rows.map((x) => x.r30))), r90: Math.round(median(rows.map((x) => x.r90))), best: rows.sort((a, b) => b.r90 - a.r90)[0], now: Math.round(now), day };
 }
+
+// Путь читателя по циклу (13.11.2026, её «да»): покупки каждой следующей книги против предыдущей.
+// Кто именно купил, Литнет не отдаёт — поэтому это доля, а не люди: «на 100 покупок книги 1 — N покупок книги 2».
+// Следующая книга продаётся меньше времени — цифра по ней ещё растёт (`young`).
+export function cyclePath(sales = [], cycle = [], today) {
+  const by = {};
+  for (const s of sales) { if (!s.bookId) continue; const b = (by[s.bookId] ||= { qty: 0, royalty: 0, first: s.date }); b.qty += s.qty || 0; b.royalty += s.royalty || 0; if (s.date < b.first) b.first = s.date; }
+  const list = cycle.filter((x) => by[x.bookId]?.qty).sort((a, b) => a.no - b.no).map((x) => ({ ...x, ...by[x.bookId], days: today ? Math.round((Date.parse(today) - Date.parse(by[x.bookId].first)) / 864e5) + 1 : null }));
+  if (list.length < 2) return null;
+  const steps = list.slice(1).map((b, i) => { const p = list[i]; return { from: p, to: b, ratio: b.qty / p.qty, young: b.days != null && b.days < 60 }; });
+  const worst = steps.filter((x) => !x.young).sort((a, b) => a.ratio - b.ratio)[0] || null;
+  return { books: list, steps, through: list[list.length - 1].qty / list[0].qty, worst };
+}

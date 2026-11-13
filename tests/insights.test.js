@@ -66,3 +66,10 @@ test('прогноз дохода новой книги — медиана пе�
   assert.equal(f.n, 2); assert.equal(f.r30, 6000); assert.equal(f.r90, 18000); assert.equal(f.best.title, 'Вторая'); assert.equal(f.now, 500); assert.equal(f.day, 3);
   assert.equal(launchForecast({ books: data.books, sales: mk('a', '2026-01-01', 100) }, { title: 'Новая книга' }, '2026-11-12'), null); // одной книги мало
 });
+
+test('путь читателя по циклу', async () => {
+  const { cyclePath } = await import('../js/insights.js');
+  const sales = [{ bookId: 'a', date: '2026-01-01', qty: 100 }, { bookId: 'b', date: '2026-03-01', qty: 50 }, { bookId: 'c', date: '2026-11-01', qty: 40 }];
+  const P = cyclePath(sales, [{ bookId: 'c', no: 3 }, { bookId: 'a', no: 1 }, { bookId: 'b', no: 2 }], '2026-11-13');
+  assert.equal(P.steps[0].ratio, 0.5); assert.ok(P.steps[1].young); assert.equal(P.worst.to.no, 2); assert.equal(P.through, 0.4);
+});
