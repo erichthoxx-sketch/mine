@@ -11,6 +11,8 @@ import { linkCode } from '../../../writer/js/promolinks.js';
 import { litrefRows, royaltyPerSale } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { demo } from '../demo.js';
+import { pultModel } from './pult.js';
+import { goalsOf } from '../pult.js';
 
 const KIND = { good: 'up', bad: 'down', even: '', wait: 'muted' };
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -47,14 +49,18 @@ export function channelCard(a) {
   const refs = Object.fromEntries(litrefRows(mk?.litref || [], main).map((r) => [r.code.toLowerCase(), r]));
   const direct = stats?.daily?.length ? goalTotals(stats.daily, stats.conv || [], addDays(t, -89), t, { goals: main }) : null;
   const perSale = royaltyPerSale(c.data.sales || [], t)?.perSale ?? null;
-  const rows = channelCompare(c.data, c.settings, t, { refs, direct: direct && { cost: direct.cost, clicks: direct.clicks, conv: main.length ? direct.conv : null }, perSale });
+  // добавления в библиотеку с Директа за те же 90 дней × ценность добавления − уже купленное = что ещё принесут добавившие
+  const M = pultModel(a), libGoal = goalsOf(metrikaOf(c) || {}).lib;
+  const libN = direct && libGoal ? goalTotals(stats.daily, stats.conv || [], addDays(t, -89), t, { goals: [libGoal] }).conv : 0;
+  const exp = M.lv?.value != null && libN ? Math.max(0, libN * M.lv.value - (perSale != null ? (direct.conv || 0) * perSale : 0)) : 0;
+  const rows = channelCompare(c.data, c.settings, t, { refs, direct: direct && { cost: direct.cost, clicks: direct.clicks, conv: main.length ? direct.conv : null, exp }, perSale });
   if (!rows.length) return '';
   const v = channelVerdict(rows);
   const cell = (r) => {
     const parts = [r.spend ? `расход ${rub(r.spend, 0)}${r.est ? ' (оценка)' : ''}` : 'без расхода',
       r.readers != null ? `${r.clicksAsReaders ? 'кликов' : 'читателей'} ${num(r.readers)}${r.perReader != null ? ` по ${rub(r.perReader, 0)}` : ''}` : '',
       r.buys != null && main.length ? `покупок ${num(r.buys)}${r.perBuy != null ? ` по ${rub(r.perBuy, 0)}` : ''}` : ''].filter(Boolean);
-    const ret = r.ret != null ? `<div class="small ${r.ret >= 1.2 ? 'up' : r.ret < 0.9 ? 'down' : ''}">на 1 ₽ — ${r.ret.toFixed(2).replace('.', ',')} ₽ ${r.retByBuys ? 'с покупок по рекламе' : 'дохода сверх обычного'}</div>` : '';
+    const ret = r.ret != null ? `<div class="small ${r.ret >= 1.2 ? 'up' : r.ret < 0.9 ? 'down' : ''}">на 1 ₽ — ${r.ret.toFixed(2).replace('.', ',')} ₽ ${r.retExp ? 'с покупок и ожидаемых от добавивших в библиотеку (оценка)' : r.retByBuys ? 'с покупок по рекламе' : 'дохода сверх обычного'}</div>` : '';
     return `<div class="item"><div class="row between"><b>${esc(r.name)}</b>${r.camps ? `<span class="small muted">кампаний ${num(r.camps)}</span>` : ''}</div><div class="small">${parts.join(' · ')}</div>${ret}</div>`;
   };
   const b = budgetPlan({ ...adCtx(c.data, c.settings, t), settings: c.settings });

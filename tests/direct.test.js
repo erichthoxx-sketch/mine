@@ -463,3 +463,12 @@ test('Метка Литнета: в «Параметрах URL» меняетс�
   assert.equal(withLitref('utm_source=direct&utm_litref=OLD&utm_campaign={campaign_id}', 'utm_litref=NEW'), 'utm_source=direct&utm_campaign={campaign_id}&utm_litref=NEW');
   assert.match(describe({ do: 'tracking', campaign: 1, tag: 'utm_litref=NEW' }, { campaigns: {} }), /объявления не меняются/);
 });
+
+test('Сколько тратить: кампанию «на библиотеку» по покупкам не судим', async () => {
+  const D = await import('../direct/js/dcalc.js');
+  const today = '2026-10-18', day = (i) => new Date(Date.parse(today) - i * 864e5).toISOString().slice(0, 10);
+  const daily = []; for (let i = 28; i >= 1; i--) daily.push({ date: day(i), cid: 7, impr: 1000, clicks: 50, cost: 500 });
+  // покупок нет, потрачено много: кампании с целью-покупкой — «урезать», кампании с целью «библиотека» — совета нет
+  assert.equal(D.spendAdvice({ camp: { id: 7, daily: 600, goal: 2 }, daily, conv: [], today, goals: ['2'], value: 300 }).kind, 'cut');
+  assert.equal(D.spendAdvice({ camp: { id: 7, daily: 600, goal: 1 }, daily, conv: [], today, goals: ['2'], value: 300 }), null);
+});

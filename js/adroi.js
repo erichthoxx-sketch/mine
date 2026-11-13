@@ -124,13 +124,15 @@ export function channelCompare(data = {}, settings = {}, today, { refs = {}, dir
     const r = row('direct');
     r.spend = direct.cost; r.readers = direct.clicks; r.buys = direct.conv || 0; r.hasReaders = true; r.clicksAsReaders = true;
     if (perSale != null && direct.conv != null) { r.returned = direct.conv * perSale; r.hasRet = true; r.retByBuys = true; }
+    // реклама шла на добавления в библиотеку: покупки придут позже — добавляем ожидаемое от добавивших (оценка), иначе канал выглядит нулевым
+    if (direct.exp > 0) { r.returned = (r.returned || 0) + direct.exp; r.hasRet = true; r.retByBuys = true; r.retExp = true; }
   }
   return Object.values(rows).filter((r) => r.spend > 0 || r.readers > 0).map((r) => ({
     key: r.key, name: r.name, spend: Math.round(r.spend), est: r.est, camps: r.camps,
     readers: r.hasReaders ? r.readers : null, buys: r.hasReaders ? r.buys : null, clicksAsReaders: !!r.clicksAsReaders,
     perReader: r.hasReaders && r.readers && r.spend ? r.spend / r.readers : null,
     perBuy: r.hasReaders && r.buys && r.spend ? r.spend / r.buys : null,
-    ret: r.hasRet && r.spend ? r.returned / r.spend : null, retByBuys: !!r.retByBuys,
+    ret: r.hasRet && r.spend ? r.returned / r.spend : null, retByBuys: !!r.retByBuys, retExp: !!r.retExp,
   })).sort((a, b) => b.spend - a.spend);
 }
 // Вывод по сравнению — только когда у двух каналов достаточно данных (30+ читателей и расход)

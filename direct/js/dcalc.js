@@ -503,6 +503,9 @@ export function fatigueHints({ main = {}, stats = {}, today, cid = null, goals =
 // Последние 14 полных дней против 14 до них; дни сбоя не считаются. Бюджет приложение не меняет — только советует.
 export function spendAdvice({ camp, daily = [], conv = [], today, goals = null, skip = null, value = null }) {
   if (!camp || !(value > 0)) return null;
+  // кампания учится на добавлениях в библиотеку (цель стратегии — не покупка): по покупкам её расход не судим —
+  // иначе до открытия подписки выходил совет «урежьте вдвое: потрачено три цены покупки без покупок» (13.11.2026). Её экономику считает Пульт по ценности добавления.
+  if (camp.goal != null && goals?.length && !goals.map(String).includes(String(camp.goal))) return null;
   const y = addDays(today, -1), cid = camp.id;
   const b = goalTotals(daily, conv, addDays(y, -13), y, { cid, goals, skip }), a = goalTotals(daily, conv, addDays(y, -27), addDays(y, -14), { cid, goals, skip });
   if (!b.cost) return null;

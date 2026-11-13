@@ -101,3 +101,12 @@ test('таргетологи под контролем: кто ведёт кам
   const B = partnerBoard({ w_links: partners, campaigns: [], reports: [], sales: [], days: [] }, {}, '2026-11-12');
   assert.equal(B.partners.length, 2); assert.equal(B.partners[0].n, 0); assert.match(B.partners[0].text, /кампаний нет/); assert.equal(B.verdict, '');
 });
+
+test('сравнение каналов: Директ «на библиотеку» — с ожидаемым доходом от добавивших', async () => {
+  const { channelCompare } = await import('../js/adroi.js');
+  const rows = channelCompare({}, {}, '2026-11-13', { direct: { cost: 1000, clicks: 100, conv: 0, exp: 1200 }, perSale: 100 });
+  const d = rows.find((r) => r.key === 'direct');
+  assert.equal(d.ret, 1.2); assert.equal(d.retExp, true);
+  const d0 = channelCompare({}, {}, '2026-11-13', { direct: { cost: 1000, clicks: 100, conv: 0, exp: 0 }, perSale: 100 }).find((r) => r.key === 'direct');
+  assert.equal(d0.ret, 0); assert.equal(d0.retExp, false);
+});
