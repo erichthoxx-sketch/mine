@@ -126,6 +126,12 @@ export function planItems(c, from, to) {
     const p = localParts(q.at), due = Date.parse(q.at) <= Date.now();
     if (p.date >= t || due) add(due ? t : p.date, 'mk', due ? `Письмо подписчицам отправляется` : `Письмо подписчицам уйдёт в ${p.time}`, `«${esc(q.subject || 'Без темы')}» · ${due ? `по плану в ${p.time}` : 'отправится само'}`, { to: '/site/mail', id: 'mail-' + q.id });
   }
+  // черновик письма о новом романе положила сама Мастерская (newbookmail.js) — напомнить проверить и отправить, пока письма нет в очереди
+  for (const [bid, first] of Object.entries(c.settings.site?.autoDraft || {})) {
+    const b = (c.wbooks || []).find((x) => x.id === bid), key = String(b?.title || '').toLowerCase().slice(0, 12);
+    if (!b || first < t || [...mailQueue(c.settings), ...mailSent(c.settings)].some((m) => String(m.subject || '').toLowerCase().includes(key))) continue;
+    add(t, 'mk', `Письмо о новом романе готово`, `«${esc(b.title)}» · первая глава ${first.slice(8, 10)}.${first.slice(5, 7)} — проверьте и отправьте или поставьте на этот день`, { to: '/site/letter', id: 'newmail-' + bid });
+  }
   for (const x of mailSent(c.settings)) { const p = localParts(x.at); add(p.date, 'done', `✓ Письмо подписчицам отправлено в ${p.time}`, `«${esc(x.subject || 'Без темы')}» · ${x.n} ${plural(x.n, ['письмо', 'письма', 'писем'])}`, { to: '/site/mail' }); }
   // Связи: напоминания по контактам (просроченные — на сегодня)
   for (const x of linkTodos(c)) add(x.date < t ? t : x.date, 'waitans', esc(x.text), esc(x.name) + ((mf) => (mf ? ` · перенесено с ${mf.slice(8, 10)}.${mf.slice(5, 7)}` : ''))(movedFrom(c.settings.todoist?.moved, x.k, x.date)) + (x.date < t ? ' · просрочено' : ''), { to: '/link/' + x.linkId, linkId: x.linkId, todoK: x.k, section: x.section || 'Связи', ...(x.bookId ? { bookId: x.bookId } : {}), ...(x.detail ? { description: x.detail } : {}) });

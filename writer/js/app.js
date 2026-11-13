@@ -6,6 +6,7 @@ import { autoDirectAccess } from '../../js/aidirect.js';
 import { runOneoffs } from './oneoff.js';
 import { autoPiracy } from './piracyscan.js';
 import { autoMonthMail } from './monthmail.js';
+import { autoNewBookDraft } from './newbookmail.js';
 import { autoSend, autoServer } from './views/piracy.js';
 import { installHandlers, esc, toast, acts, forms, watchForUpdates, keepPlace, tidyNums, ecoSwitch } from '../../js/ui.js';
 import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
@@ -267,7 +268,7 @@ setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(
 setInterval(() => { if (document.visibilityState === 'visible') checkMailQueue(); }, 60e3);
 drive.preload().catch(() => {});
 let autoRefreshed = false;
-store.subscribe(() => { autoDirectAccess(store); runOneoffs(app); autoPiracy(app, autoSend); autoServer(app); autoMonthMail(app); });
+store.subscribe(() => { autoDirectAccess(store); runOneoffs(app); autoPiracy(app, autoSend); autoServer(app); autoMonthMail(app); autoNewBookDraft(app); });
 store.init().then(() => {
   render();
   autoDirectAccess(store);
