@@ -94,3 +94,16 @@ test('её книга против топа: тропы, соседи и лин�
   assert.deepEqual(M.tropeMap.find((t) => t.name === 'Развод').hist.map((x) => +x.toFixed(2)), [0, 0.4, 0.5]);
   assert.equal(M.all.length, 6);
 });
+
+test('рынок: место её книг, соперницы и рост тропов', async () => {
+  const m = await import('../js/market.js');
+  const snap = { books: { a: { t: 'Моя книга', a: 'Лана Фрейтаг' }, b: { t: 'Чужая', a: 'Анна', u: 'u' }, c: { t: 'Новая', a: 'Анна', u: 'u2' } },
+    my: { '2026-11-01': { s: [{ id: 'a', n: 90, l: 10 }] }, '2026-11-08': { s: [{ id: 'a', n: 60, l: 30 }] }, '2026-11-09': { s: [{ id: 'a', n: 55, l: 40 }] } },
+    days: { '2026-11-08': { s: [{ id: 'b', n: 1, p: 149, f: 149, o: 0, l: 10 }] }, '2026-11-09': { s: [{ id: 'b', n: 2, p: 119, f: 149, o: 20, l: 20 }, { id: 'c', n: 5, p: 159, f: 159, o: 0, l: 5 }] } } };
+  const r = m.myRanks(snap, { names: { s: 'Любовные романы' } });
+  assert.equal(r[0].now, 55); assert.equal(r[0].was, 90); assert.equal(r[0].best, 55); assert.equal(r[0].hist.length, 3);
+  const w = m.watchReport(snap, ['Анна'])[0];
+  assert.deepEqual(w.events.map((e) => e.kind).sort(), ['new', 'sale']);
+  assert.equal(w.books[0].n, 2);
+  const t = m.trimSnap(snap, 1); assert.deepEqual(Object.keys(t.my), ['2026-11-09']); assert.ok(t.books.a);
+});

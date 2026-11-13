@@ -19,7 +19,8 @@ export async function scanMarket(app) {
   if (marketState.busy) return null;
   marketState.busy = true; marketState.err = '';
   const c = app.ctx(), today = c.today, snap = { days: {}, books: {}, ...(marketSnap(app) || {}) };
-  const day = { ...(snap.days[today] || {}) };
+  const day = { ...(snap.days[today] || {}) }, myDay = {};
+  const me = String(c.settings.pseudonym || '').toLowerCase().trim(), isMe = (r) => me && String(r.author || '').toLowerCase().trim() === me;
   let got = 0;
   try {
     const list = srcsOf(c.settings);
@@ -36,11 +37,27 @@ export async function scanMarket(app) {
           rows.push(...part);
           await sleep(3500);
         }
+        // её книги: у двух первых подборок листаем глубже (до 12 страниц), пока не найдём — чтобы видеть её место и когда она не в первой полусотне
+        if (me && i < 2 && !rows.some(isMe)) {
+          for (let pg = pages + 1; pg <= 12; pg++) {
+            const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 45000);
+            const r = await fetch('https://r.jina.ai/' + s.url + '?page=' + pg, { signal: ctl.signal }).catch(() => null); clearTimeout(t);
+            if (!r?.ok) break;
+            const part = parseLitnetList(await r.text()).filter((x) => !seen.has(x.id) && seen.add(x.id)); if (!part.length) break;
+            const base = rows.length + (myDay.__n?.[s.url] || 0);
+            const hits = part.map((x, j) => ({ x, n: base + j + 1 })).filter((h) => isMe(h.x));
+            (myDay.__n ||= {})[s.url] = (myDay.__n[s.url] || 0) + part.length;
+            await sleep(3500);
+            if (hits.length) { myDay[s.url] = hits.map((h) => ({ id: h.x.id, n: h.n, l: h.x.lib, v: h.x.views })); for (const h of hits) snap.books[h.x.id] = bookCard(h.x); break; }
+          }
+        }
+        if (me && rows.some(isMe)) myDay[s.url] = rows.map((x, j) => ({ x, n: j + 1 })).filter((h) => isMe(h.x)).map((h) => ({ id: h.x.id, n: h.n, l: h.x.lib, v: h.x.views }));
         day[s.url] = packDay(rows); got++;
         for (const x of rows) snap.books[x.id] = bookCard(x);
       } catch (e) { marketState.err = `${s.name}: ${e.name === 'AbortError' ? 'нет ответа' : e.message}`; if (rows.length) { day[s.url] = packDay(rows); got++; for (const x of rows) snap.books[x.id] = bookCard(x); } }
     }
-    if (got) { snap.days = { ...snap.days, [today]: day }; await app.store.put('d_snap', { ...trimSnap(snap), id: 'market', at: new Date().toISOString(), err: marketState.err }); }
+    delete myDay.__n;
+    if (got) { snap.days = { ...snap.days, [today]: day }; snap.my = { ...(snap.my || {}), [today]: myDay }; await app.store.put('d_snap', { ...trimSnap(snap), id: 'market', at: new Date().toISOString(), err: marketState.err }); }
   } finally { marketState.busy = false; }
   return { got, err: marketState.err };
 }

@@ -98,6 +98,9 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
     return { ...t, interest: idx, price: median(rows.filter((r) => r.p > 0).map((r) => r.f ?? r.p)), lib: median(rows.map((r) => r.l)),
       verdict: hot && !crowded ? 'niche' : hot ? 'hot' : cold && crowded ? 'tired' : cold ? 'weak' : 'even' };
   }).sort((a, b) => (b.interest ?? 0) - (a.interest ?? 0));
+  // рост по тропам: как быстро книги с этим тропом набирают библиотеки (в день) против обычного роста по срезу
+  const growOf = (r) => (prevBy[r.id] && gap ? Math.max(0, (r.l - prevBy[r.id].l) / gap) : null), medGrow = median(cur.map(growOf));
+  for (const t of tropeMap) { const g = median(cur.filter((r) => (books[r.id]?.tr || []).includes(t.name)).map(growOf)); t.grow = g != null && medGrow ? g / medGrow : null; t.growDay = g; }
   // как менялась доля тропа по срезам (до 14 последних) — для линии в карте тропов
   const histDates = dates.slice(-14), histRows = histDates.map(rowsOf);
   for (const t of tropeMap) t.hist = histRows.map((rows) => (rows.length ? rows.filter((r) => (books[r.id]?.tr || []).includes(t.name)).length / rows.length : 0));
@@ -139,6 +142,8 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
   const up = tropes.filter((t) => t.delta != null && t.delta >= 0.1 && t.n >= 3)[0], down = tropes.filter((t) => t.delta != null && t.delta <= -0.1)[0];
   const niche = tropeMap.filter((t) => t.verdict === 'niche')[0], tired = tropeMap.filter((t) => t.verdict === 'tired')[0];
   if (niche) notes.push(`Свободнее всего сейчас «${niche.name}»: таких книг в топе ${Math.round(niche.share * 100)} %, а добавляют их в библиотеку в ${niche.interest.toFixed(1).replace('.', ',')} раза охотнее обычного.`);
+  const fast = tropeMap.filter((t) => t.grow != null && t.grow >= 1.3 && t.n >= 3).sort((a, b) => b.grow - a.grow)[0];
+  if (fast) notes.push(`Быстрее всех сейчас набирают читателей книги с тропом «${fast.name}»: в ${fast.grow.toFixed(1).replace('.', ',')} раза быстрее обычного для топа.`);
   if (tired) notes.push(`Перегрето «${tired.name}»: ${Math.round(tired.share * 100)} % книг топа, а интерес ниже обычного — выделиться труднее.`);
   if (tropes[0]) notes.push(`Чаще всего в топе: ${tropes.slice(0, 3).map((t) => `«${t.name}» (${Math.round(t.share * 100)} %)`).join(', ')}.`);
   if (up) notes.push(`Растёт «${up.name}»: было ${Math.round(up.was * 100)} % книг топа, стало ${Math.round(up.share * 100)} %.`);
@@ -154,7 +159,7 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
   if (odd.length) { const by = {}; for (const b of odd) by[b.author || 'без автора'] = (by[b.author || 'без автора'] || 0) + 1; const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0];
     notes.push(`В топе ${odd.length} ${odd.length === 1 ? 'книга' : odd.length < 5 ? 'книги' : 'книг'} с очень малым числом читателей${top[1] > 1 ? ` (из них ${top[1]} — ${top[0]})` : ''}: место держится не на библиотеках и просмотрах.`); }
   if (movers[0]) notes.push(`Быстрее всех набирает читателей «${movers[0].title}» (${movers[0].author}): +${movers[0].perDay} в библиотеки в день${movers[0].tropes.length ? ` — ${movers[0].tropes.slice(0, 3).join(', ').toLowerCase()}` : ''}.`);
-  return { date: last, prevDate, gap, n: cur.length, tropes, tropeMap, pairs, prices, sizes, pitch, formula, movers, fresh, gone, odd, medLib, authors, notes, fit, all: cur.map(card), top: cur.slice(0, 16).map(card),
+  return { date: last, prevDate, gap, medGrow, n: cur.length, tropes, tropeMap, pairs, prices, sizes, pitch, formula, movers, fresh, gone, odd, medLib, authors, notes, fit, all: cur.map(card), top: cur.slice(0, 16).map(card),
     price: { median: mp, free: cur.filter((r) => r.p === 0).length / cur.length, off: paid.length ? paid.filter((r) => r.o).length / paid.length : 0 },
     excl: cur.filter((r) => r.e).length / cur.length, progress: cur.filter((r) => !r.s).length / cur.length, pages: median(cur.map((r) => r.g)) };
 }
@@ -162,16 +167,21 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
 export function trimSnap(snap, keep = 45) {
   const dates = Object.keys(snap.days || {}).sort().slice(-keep), days = Object.fromEntries(dates.map((d) => [d, snap.days[d]]));
   const ids = new Set(Object.values(days).flatMap((d) => Object.values(d).flatMap((rows) => rows.map((r) => r.id))));
-  return { ...snap, days, books: Object.fromEntries(Object.entries(snap.books || {}).filter(([id]) => ids.has(id))) };
+  const my = Object.fromEntries(Object.entries(snap.my || {}).filter(([d]) => d >= (dates[0] || '')));
+  for (const d of Object.values(my)) for (const rows of Object.values(d)) for (const r of rows) ids.add(r.id);
+  return { ...snap, days, my, books: Object.fromEntries(Object.entries(snap.books || {}).filter(([id]) => ids.has(id))) };
 }
 
 // Письмо «Рынок за неделю» (обычным текстом): главное, кто растёт, новые и выпавшие, аномалии. Пусто — писать не о чем
-export function marketDigest(M, { myTropes = [] } = {}) {
+export function marketDigest(M, { myTropes = [], ranks = [], watched = [] } = {}) {
   if (!M || !M.prevDate) return '';
   const fmt = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`, book = (b) => `«${b.title}»${b.author ? ` (${b.author})` : ''}`;
   const L = [`Топы Литнета: ${fmt(M.prevDate)} → ${fmt(M.date)}.`, '', ...M.notes];
   const up = M.tropes.filter((t) => t.delta != null && t.delta >= 0.05).slice(0, 4), down = M.tropes.filter((t) => t.delta != null && t.delta <= -0.05).slice(0, 4);
   if (up.length || down.length) { L.push('', 'Тропы:'); for (const t of up) L.push(`  ▲ ${t.name}: ${Math.round(t.was * 100)} % → ${Math.round(t.share * 100)} %`); for (const t of down) L.push(`  ▼ ${t.name}: ${Math.round(t.was * 100)} % → ${Math.round(t.share * 100)} %`); }
+  if (ranks.length) { L.push('', 'Ваши книги в топах:'); for (const r of ranks) L.push(`  «${r.title}» — ${r.now} место${r.was != null ? ` (неделю назад ${r.was})` : ''}`); }
+  const evs = watched.filter((w) => w.events.length);
+  if (evs.length) { L.push('', 'Соперницы:'); for (const w of evs) for (const e of w.events) L.push(`  ${w.name}: «${e.title}» — ${e.text}`); }
   if (M.movers.length) { L.push('', 'Быстрее всех набирают читателей (в библиотеки в день):'); for (const b of M.movers.slice(0, 5)) L.push(`  +${b.perDay} — ${book(b)}${b.tropes.length ? ' · ' + b.tropes.slice(0, 3).join(', ').toLowerCase() : ''}${b.price > 0 ? ` · ${Math.round(b.price)} ₽` : ''}`); }
   if (M.fresh.length) L.push('', `Новые в топе: ${M.fresh.slice(0, 6).map(book).join('; ')}.`);
   if (M.gone.length) L.push(`Выпали: ${M.gone.slice(0, 6).map(book).join('; ')}.`);
@@ -181,4 +191,37 @@ export function marketDigest(M, { myTropes = [] } = {}) {
   if (mine.size && (hot.length || cold.length)) { L.push('', 'Для вас:'); if (hot.length) L.push(`  растут тропы, которых у вас нет: ${hot.join(', ')} — стоит присмотреться к крючкам в объявлениях.`); if (cold.length) L.push(`  ваши тропы теряют место в топе: ${cold.join(', ')} — не повод менять книгу, но повод проверить CTR объявлений с ними (Директ → «Крючки»).`); }
   L.push('', 'Подробно — Директ → «Рынок».');
   return L.join('\n');
+}
+
+// Место её книг в топах по дням: { my: {дата: {подборка: [{id, n, l, v}]}} } (сканер ищет её книги и глубже трёх страниц)
+export function myRanks(snap = {}, { names = {} } = {}) {
+  const dates = Object.keys(snap.my || {}).sort(), out = {};
+  for (const d of dates) for (const [src, rows] of Object.entries(snap.my[d] || {})) for (const r of rows) {
+    const k = r.id + '|' + src; (out[k] ||= { id: r.id, src, title: snap.books?.[r.id]?.t || '', srcName: names[src] || src, hist: [] }).hist.push({ d, n: r.n, l: r.l });
+  }
+  return Object.values(out).map((x) => {
+    const last = x.hist[x.hist.length - 1], wk = [...x.hist].reverse().find((h) => daysBetween(h.d, last.d) >= 6) || null, best = Math.min(...x.hist.map((h) => h.n));
+    return { ...x, now: last.n, at: last.d, lib: last.l, was: wk ? wk.n : null, wasDate: wk?.d || null, best };
+  }).sort((a, b) => a.now - b.now);
+}
+
+// Соперницы: что изменилось у выбранных авторов между двумя последними срезами (по всем подборкам)
+export function watchReport(snap = {}, names = []) {
+  const dates = Object.keys(snap.days || {}).sort(), books = snap.books || {};
+  if (!dates.length || !names.length) return [];
+  const flat = (d) => { const m = {}; for (const rows of Object.values(snap.days[d] || {})) for (const r of rows) if (!m[r.id] || r.n < m[r.id].n) m[r.id] = r; return m; };
+  const last = flat(dates[dates.length - 1]), prev = dates.length > 1 ? flat(dates[dates.length - 2]) : null;
+  const seenBefore = new Set(dates.slice(0, -1).flatMap((d) => Object.values(snap.days[d] || {}).flatMap((rows) => rows.map((r) => r.id))));
+  const low = (x) => String(x || '').toLowerCase().trim();
+  return names.map((name) => {
+    const mine = Object.values(last).filter((r) => low(books[r.id]?.a) === low(name)), ev = [];
+    for (const r of mine) {
+      const b = books[r.id] || {}, p0 = prev?.[r.id];
+      if (prev && !seenBefore.has(r.id)) ev.push({ kind: 'new', id: r.id, title: b.t, url: b.u, text: `новая книга в топе — место ${r.n}` });
+      if (p0 && r.o > 0 && !(p0.o > 0)) ev.push({ kind: 'sale', id: r.id, title: b.t, url: b.u, text: `скидка ${r.o} % (${Math.round(r.p)} ₽ вместо ${Math.round(r.f ?? r.p)} ₽)` });
+      else if (p0 && p0.o > 0 && !(r.o > 0)) ev.push({ kind: 'saleEnd', id: r.id, title: b.t, url: b.u, text: 'скидка закончилась' });
+      if (p0 && (r.f ?? r.p) != null && (p0.f ?? p0.p) != null && (r.f ?? r.p) !== (p0.f ?? p0.p)) ev.push({ kind: 'price', id: r.id, title: b.t, url: b.u, text: `цена ${Math.round(p0.f ?? p0.p)} → ${Math.round(r.f ?? r.p)} ₽` });
+    }
+    return { name, books: mine.map((r) => ({ id: r.id, title: books[r.id]?.t || '', url: books[r.id]?.u || '', n: r.n, lib: r.l, price: r.p, off: r.o })).sort((a, b) => a.n - b.n), events: ev };
+  });
 }

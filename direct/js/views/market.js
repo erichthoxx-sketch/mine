@@ -2,7 +2,7 @@
 // Порядок сверху вниз: выводы → портрет книги топа → карта тропов → цена и объём → подача → движение за неделю → сам топ. Расчёты — js/market.js.
 import { esc, acts, changes, toast, openSheet, more } from '../../../js/ui.js';
 import { num, fmtDate } from '../../../js/format.js';
-import { marketInsights } from '../../../js/market.js';
+import { marketInsights, myRanks, watchReport } from '../../../js/market.js';
 import { scanMarket, marketSnap, marketState, srcsOf, okSrc, MARKET_DEFAULT } from '../marketscan.js';
 
 const pc = (v) => Math.round(v * 100) + ' %';
@@ -13,6 +13,11 @@ const bookRow = (b, right) => `<div class="item"><div class="row between" style=
   <span class="small" style="white-space:nowrap">${right}</span></div></div>`;
 const VERD = { niche: ['ниша: читают охотно, книг мало', 'up'], hot: ['читают охотно, но тесно', ''], tired: ['перегрето', 'down'], weak: ['интерес ниже обычного', 'muted'], even: ['как в среднем', 'muted'] };
 let lastM = null;
+// место по дням: чем выше линия — тем ближе к первому месту; точки — дни выхода глав
+const rankChart = (hist, rel) => { if (hist.length < 2) return ''; const w = 320, h = 54, mx = Math.max(...hist.map((x) => x.n)), mn = Math.min(...hist.map((x) => x.n)), span = Math.max(1, mx - mn);
+  const t0 = Date.parse(hist[0].d), t1 = Math.max(t0 + 864e5, Date.parse(hist[hist.length - 1].d)), X = (d) => 4 + (Date.parse(d) - t0) / (t1 - t0) * (w - 8), Y = (n) => 6 + (n - mn) / span * (h - 12);
+  const dots = hist.filter((x) => rel.has(x.d)).map((x) => `<path d="M${X(x.d).toFixed(1)} ${Y(x.n).toFixed(1)}h0" class="mk-rel" vector-effect="non-scaling-stroke"><title>вышла глава</title></path>`).join('');
+  return `<svg class="mk-rk" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${hist.map((x) => `${X(x.d).toFixed(1)},${Y(x.n).toFixed(1)}`).join(' ')}"/>${dots}</svg>`; };
 const spark = (h) => { if (!h || h.length < 3) return ''; const mx = Math.max(...h, 0.01), w = 56, hh = 14; return `<svg class="mk-sp" viewBox="0 0 ${w} ${hh}" width="${w}" height="${hh}" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" points="${h.map((v, i) => `${(i / (h.length - 1) * (w - 2) + 1).toFixed(1)},${(hh - 1 - v / mx * (hh - 2)).toFixed(1)}`).join(' ')}"/></svg>`; };
 const sub = (t) => `<div class="mk-sub">${t}</div>`;
 
@@ -24,6 +29,11 @@ export function marketView(a) {
   const myBooks = (c.data.w_books || []).filter((b) => b.status === 'progress').map((b) => ({ id: b.id, title: b.title, tags: b.tags || [], ann: b.svc?.annotation || '', price: priceOf(b.title) }));
   const M = snap ? marketInsights(snap, { src, mine, myPrices, myBooks }) : null;
   lastM = M;
+  const ranks = snap ? myRanks(snap, { names: Object.fromEntries(srcs.map((x) => [x.url, x.name.replace(/^Литнет · /, '')])) }).filter((r) => !src || r.src === src) : [];
+  const watchList = c.settings.direct?.market?.watch || [], watched = snap ? watchReport(snap, watchList) : [];
+  // дни выхода глав её книг — точками на линии места
+  const relOf = (title) => { const b = (c.data.w_books || []).find((x) => String(x.title || '').toLowerCase() === String(title || '').toLowerCase()); const out = new Set();
+    for (const ch of Object.values(b?.pub || {})) for (const v of Object.values(ch || {})) if (v?.date && !v.planned) out.add(String(v.date).slice(0, 10)); return out; };
   const head = `<div class="row between" style="gap:12px;flex-wrap:wrap;margin-bottom:4px"><h2 style="margin:0">Рынок</h2>
       <div class="row" style="gap:8px"><select data-chg="mk.src" aria-label="Подборка" class="mk-sel"><option value="">Все подборки</option>${srcs.map((s) => `<option value="${esc(s.url)}"${src === s.url ? ' selected' : ''}>${esc(s.name.replace(/^Литнет · /, ''))}</option>`).join('')}<option value="+">+ Добавить подборку…</option></select>
       <button class="small-btn" data-act="mk.scan"${marketState.busy ? ' disabled' : ''}>${marketState.busy ? 'Читаю…' : 'Обновить'}</button></div></div>
@@ -44,6 +54,16 @@ export function marketView(a) {
       ${few ? '<p class="small muted" style="margin:10px 0 0">Книг в срезе пока мало — выводы осторожные. После следующего обновления их станет больше.</p>' : ''}
       <p class="small muted" style="margin:10px 0 0">${M.prevDate ? `Изменения — против ${fmtDate(M.prevDate)} (${M.gap} дн. назад).` : 'Это первый срез: изменения за неделю появятся, когда будет с чем сравнить.'}</p></div>
 
+    ${ranks.length ? `<div class="card"><h2 style="margin:0 0 4px">Ваши книги в топах</h2><p class="small muted" style="margin:0 0 6px">Место каждый день. Точки — дни выхода глав. Ищу книги до 12-й страницы топа.</p>
+      ${ranks.map((r) => { const d = r.was != null ? r.was - r.now : null; return `<div class="mk-rank"><div class="row between" style="gap:10px;align-items:baseline"><div style="min-width:0"><b>${esc(r.title)}</b> <span class="small muted">· ${esc(r.srcName)}</span></div>
+        <div style="white-space:nowrap"><span class="mk-place">${r.now}</span><span class="small muted"> место</span>${d ? ` <span class="small ${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'}${Math.abs(d)}</span>` : ''}</div></div>
+        ${rankChart(r.hist, relOf(r.title))}<div class="small muted">${[r.was != null ? `неделю назад — ${r.was}` : 'неделю назад — ещё не было среза', `лучшее — ${r.best}`, r.lib ? `${short(r.lib)} в библ.` : ''].filter(Boolean).join(' · ')}</div></div>`; }).join('')}</div>`
+      : (c.settings.pseudonym ? '' : '')}
+    ${watched.length || M.authors.length ? `<div class="card"><div class="row between" style="gap:10px"><h2 style="margin:0">Соперницы</h2><button class="link small" data-act="mk.watchAdd">+ Следить за автором</button></div>
+      ${watched.length ? `<p class="small muted" style="margin:4px 0 6px">Новые книги, скидки и цены — по срезам топов (вижу только книги, что сейчас в топе).</p><div class="list">${watched.map((w) => `<div class="item"><div class="row between" style="gap:10px"><b>${esc(w.name)}</b><button class="link small" data-act="mk.watch" data-n="${esc(w.name)}">Не следить</button></div>
+        ${w.events.length ? w.events.map((e) => `<div class="small"><span class="${e.kind === 'new' ? 'up' : e.kind === 'sale' ? 'down' : ''}">●</span> «${esc(e.title)}» — ${esc(e.text)}</div>`).join('') : ''}
+        <div class="small muted">${w.books.length ? w.books.map((b) => `${esc(b.title)} — место ${b.n}${b.off ? `, скидка ${b.off} %` : ''}`).join(' · ') : 'сейчас в топе нет'}</div></div>`).join('')}</div>`
+        : `<p class="small muted" style="margin:4px 0 0">Выберите до 10 авторов — приложение будет отмечать их новые книги, скидки и смену цены. Можно нажать «Следить» у автора в блоке «Как подают книгу».</p>`}</div>` : ''}
     ${M.fit.map((f) => `<div class="card"><div class="mk-cap">Ваша книга и рынок</div><h2 style="margin:0 0 10px">${esc(f.title)}</h2>
       <div class="mk-chips">${f.tropes.map((t) => `<button class="mk-chip" data-act="mk.trope" data-t="${esc(t.name)}"><b>${esc(t.name)}</b><span class="${(VERD[t.verdict] || [])[1] || 'muted'}">${t.verdict === 'few' || t.verdict === 'none' ? 'в топе редкость' : VERD[t.verdict][0]}</span><span class="muted">${t.n ? `${pc(t.share)} топа${t.interest != null ? ` · интерес ${x1(t.interest)}` : ''}` : 'в топе нет'}</span></button>`).join('')}</div>
       ${f.lines.map((n) => `<p style="margin:8px 0 0">${esc(n)}</p>`).join('')}
@@ -55,8 +75,8 @@ export function marketView(a) {
         <div><div class="k">В библиотеках</div><div class="v">${short(M.formula.lib)}</div><div class="s">эксклюзив ${pc(M.excl)}</div></div>
         <div><div class="k">Добавляют из 100 открывших</div><div class="v">${M.formula.conv != null ? (M.formula.conv * 100).toFixed(1).replace('.', ',') : '—'}</div><div class="s">лайк ставит каждая ${M.formula.likes ? Math.round(1 / M.formula.likes) + '-я' : '—'}</div></div></div></div>
 
-    ${M.tropeMap.length ? `<div class="card"><h2 style="margin:0 0 4px">Карта тропов</h2><p class="small muted" style="margin:0 0 12px">Полоса — сколько книг топа с этим тропом (конкуренция). «Интерес» — насколько охотнее обычного такие книги добавляют в библиотеку. Сверху — где интерес выше. Нажмите на троп — откроются его книги.</p>
-      ${more('mk-tr', M.tropeMap.map((t) => `<div class="mk-b mk-tr" data-act="mk.trope" data-t="${esc(t.name)}" role="button" tabindex="0"><div class="row between small" style="gap:4px 10px;flex-wrap:wrap"><span><b>${esc(t.name)}</b>${isMine(t.name) ? ' <span class="mk-me">ваш</span>' : ''} <span class="${VERD[t.verdict][1]}">· ${VERD[t.verdict][0]}</span></span><span style="white-space:nowrap">${spark(t.hist)}${pc(t.share)}${arrow(t)}${t.interest != null ? ` · интерес <b>${x1(t.interest)}</b>` : ''}</span></div><div class="progress"><i style="width:${(t.share / maxT * 100).toFixed(1)}%"></i></div></div>`), 8)}
+    ${M.tropeMap.length ? `<div class="card"><h2 style="margin:0 0 4px">Карта тропов</h2><p class="small muted" style="margin:0 0 12px">Полоса — сколько книг топа с этим тропом (конкуренция). «Интерес» — насколько охотнее обычного такие книги добавляют в библиотеку. «Рост» — насколько быстрее обычного книги с тропом набирают библиотеки за неделю. Сверху — где интерес выше. Нажмите на троп — откроются его книги.</p>
+      ${more('mk-tr', M.tropeMap.map((t) => `<div class="mk-b mk-tr" data-act="mk.trope" data-t="${esc(t.name)}" role="button" tabindex="0"><div class="row between small" style="gap:4px 10px;flex-wrap:wrap"><span><b>${esc(t.name)}</b>${isMine(t.name) ? ' <span class="mk-me">ваш</span>' : ''} <span class="${VERD[t.verdict][1]}">· ${VERD[t.verdict][0]}</span></span><span style="white-space:nowrap">${spark(t.hist)}${pc(t.share)}${arrow(t)}${t.interest != null ? ` · интерес <b>${x1(t.interest)}</b>` : ''}${t.grow != null ? ` · рост <b class="${t.grow >= 1.3 ? 'up' : t.grow <= 0.7 ? 'down' : ''}">${x1(t.grow)}</b>` : ''}</span></div><div class="progress"><i style="width:${(t.share / maxT * 100).toFixed(1)}%"></i></div></div>`), 8)}
       ${M.pairs.length ? sub('Чаще всего вместе') + `<p class="small" style="margin:0">${M.pairs.map((p) => `${esc(p.name.toLowerCase())} <span class="muted">(${p.n})</span>`).join(' · ')}</p>` : ''}</div>` : ''}
 
     <div class="card"><h2 style="margin:0 0 4px">Цена и объём</h2><p class="small muted" style="margin:0 0 6px">Сколько книг топа в каждой вилке и как их читают.</p>
@@ -65,7 +85,7 @@ export function marketView(a) {
     <div class="card"><h2 style="margin:0 0 8px">Как подают книгу</h2>
       <p style="margin:6px 0">Аннотация начинается с реплики героя у <b>${pc(M.pitch.dialogue)}</b> книг топа${M.pitch.emoji >= 0.1 ? `, со значками-эмодзи — у ${pc(M.pitch.emoji)}` : ''}.</p>
       ${M.pitch.titleWords.length ? `<p style="margin:6px 0">Слова, которые повторяются в названиях: ${M.pitch.titleWords.map((w) => `«${esc(w.word)}» <span class="muted">(${w.n})</span>`).join(', ')}.</p>` : ''}
-      ${M.authors.length ? sub('Авторы с несколькими книгами в топе') + `<div class="list">${more('mk-au', M.authors.map((x) => `<div class="item"><div class="row between" style="gap:12px"><b>${esc(x.name)}</b><span class="small" style="white-space:nowrap">${x.n} ${x.n < 5 ? 'книги' : 'книг'} · ${short(x.lib)} в библ.</span></div><div class="small muted">${x.titles.map(esc).join(' · ')}</div></div>`), 3)}</div>` : ''}</div>
+      ${M.authors.length ? sub('Авторы с несколькими книгами в топе') + `<div class="list">${more('mk-au', M.authors.map((x) => `<div class="item"><div class="row between" style="gap:12px"><b>${esc(x.name)}</b><span class="small" style="white-space:nowrap">${x.n} ${x.n < 5 ? 'книги' : 'книг'} · ${short(x.lib)} в библ. · <button class="link small" data-act="mk.watch" data-n="${esc(x.name)}">${watchList.includes(x.name) ? 'Не следить' : 'Следить'}</button></span></div><div class="small muted">${x.titles.map(esc).join(' · ')}</div></div>`), 3)}</div>` : ''}</div>
 
     ${moves ? `<div class="card"><h2 style="margin:0 0 2px">Движение за неделю</h2>${moves}</div>` : ''}
 
@@ -93,6 +113,14 @@ acts['mk.trope'] = (d) => { const M = lastM; if (!M) return false;
       ${b.ann ? `<div class="small mk-ann">${esc(b.ann.slice(0, 150))}${b.ann.length > 150 ? '…' : ''}</div>` : ''}</div>
       <span class="small" style="white-space:nowrap">${short(b.lib)}${b.conv != null ? `<br><span class="muted">${(b.conv * 100).toFixed(1).replace('.', ',')} из 100</span>` : ''}</span></div></div>`).join('')}</div>`, null);
   return false; };
+const saveWatch = async (list) => { const a = window.__app, d = a.ctx().settings.direct || {}; await a.store.saveSettings({ direct: { ...d, market: { ...(d.market || {}), watch: list } } }); };
+acts['mk.watch'] = async (d) => { const a = window.__app, list = a.ctx().settings.direct?.market?.watch || [];
+  if (list.includes(d.n)) { await saveWatch(list.filter((x) => x !== d.n)); toast(`Больше не слежу: ${d.n}`, { undo: () => saveWatch(list) }); return; }
+  if (list.length >= 10) { toast('Следить можно за 10 авторами — уберите кого-нибудь'); return false; }
+  await saveWatch([...list, d.n]); toast(`Слежу: ${d.n}`); };
+acts['mk.watchAdd'] = () => { openSheet('Следить за автором', `<p class="small">Имя — как на Литнете. Приложение отметит её новые книги, скидки и смену цены, когда они в топах.</p><label>Автор</label><input name="n" required list="mk-au" autocomplete="off">
+  <datalist id="mk-au">${[...new Set((lastM?.all || []).map((b) => b.author).filter(Boolean))].sort().map((n) => `<option value="${esc(n)}">`).join('')}</datalist>`, async (fd) => {
+  const n = String(fd.get('n') || '').trim(), list = window.__app.ctx().settings.direct?.market?.watch || []; if (!n || list.includes(n)) return; if (list.length >= 10) { toast('Следить можно за 10 авторами'); return false; } await saveWatch([...list, n]); }, { submitText: 'Следить' }); return false; };
 changes['mk.src'] = (v) => { if (v === '+') { addSrc(); return; } window.__app.ui.mkSrc = v || ''; window.__app.rerender(); };
 function addSrc() {
   openSheet('Добавить подборку Литнета', `<p class="small">Откройте на Литнете нужный топ (жанр или поджанр) и вставьте сюда адрес страницы — например, https://litnet.com/ru/top/lyubovnye-romany.</p>
