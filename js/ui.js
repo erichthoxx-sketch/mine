@@ -262,10 +262,17 @@ export function ecoSwitch(cur) {
     + `<button type="button" class="eco-t" data-act="eco.toggle" aria-label="Мои приложения" title="Мои приложения"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="7.5" cy="7.5" r="1.8"/><circle cx="16.5" cy="7.5" r="1.8"/><circle cx="7.5" cy="16.5" r="1.8"/><circle cx="16.5" cy="16.5" r="1.8"/></svg></button></div>`;
 }
 // открыт/закрыт — запоминается (перерисовка экрана раньше сбрасывала его и он сам сворачивался); закрывается только кнопкой
-const ecoOpen = () => { try { return localStorage.getItem('ecoOpen') === '1'; } catch { return false; } };
+// на телефоне это выпадающее меню: открывается по нажатию и закрывается само (выбор, нажатие мимо); на компьютере — «таблетка», её состояние помним
+const ecoPhone = () => typeof matchMedia !== 'undefined' && matchMedia('(max-width: 720px)').matches;
+let ecoNow = false; // открыто ли меню на телефоне (до перезагрузки страницы)
+const ecoOpen = () => { if (ecoPhone()) return ecoNow; try { return localStorage.getItem('ecoOpen') === '1'; } catch { return false; } };
+if (typeof document !== 'undefined') document.addEventListener('click', (e) => {
+  if (!ecoPhone() || !ecoNow || e.target.closest?.('.eco-t')) return;
+  ecoNow = false; document.querySelectorAll('.eco-w').forEach((x) => x.classList.remove('open'));
+}, true);
 acts['eco.toggle'] = (d, el) => {
   const w = el.closest('.eco-w'), open = !w?.classList.contains('open');
-  try { localStorage.setItem('ecoOpen', open ? '1' : '0'); } catch { /* приватный режим */ }
+  if (ecoPhone()) ecoNow = open; else try { localStorage.setItem('ecoOpen', open ? '1' : '0'); } catch { /* приватный режим */ }
   document.querySelectorAll('.eco-w').forEach((x) => x.classList.toggle('open', open));
   return false;
 };

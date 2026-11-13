@@ -3369,12 +3369,18 @@ button[data-act="l.lesson"] { display: none; }
 :root button.eco-t { width: 34px; height: 34px; min-height: 34px; padding: 0 !important; border-radius: 50% !important; display: inline-grid; place-items: center; transition: transform .35s ease; }
 :root .eco-w.open button.eco-t { transform: rotate(45deg); }
 @media (max-width: 720px) {
-  /* телефон: выезжает вниз под кнопкой, ничего не сдвигая */
+  /* телефон: аккуратное выпадающее меню под кнопкой — столбиком, поверх содержимого, закрывается само (13.11.2026: «плохо работают в моб. версии») */
   :root .top .row { position: relative; }
-  :root .eco { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; box-shadow: 0 6px 24px rgba(0,0,0,.10); background: var(--bg); }
-  :root .eco-w.open .eco { max-width: 340px; }
-  :root .eco a, :root .eco span { padding: 8px 11px; font-size: 13.5px; }
+  :root .eco { position: absolute; right: 0; top: calc(100% + 10px); z-index: 40; display: none; flex-direction: column; gap: 2px; min-width: 200px; max-width: none; opacity: 1;
+    padding: 6px; border-radius: 18px; background: var(--surface, #fff); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.12); overflow: visible; transition: none; }
+  :root .eco-w.open .eco { display: flex; max-width: none; padding: 6px; animation: eco-in .16s ease; }
+  :root .eco a, :root .eco span { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 12px; font-size: 16px; color: var(--text); }
+  :root .eco a:active { background: var(--soft, var(--surface-2)); }
+  :root .eco .on { background: var(--soft, var(--surface-2)); color: var(--text); }
+  :root .eco .on::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--text); }
+  :root .eco-w.open button.eco-t { transform: none; background: var(--text) !important; color: var(--bg) !important; }
 }
+@keyframes eco-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
 /* Единая шкала шрифтов во всех трёх приложениях — телефон и компьютер (12.11.2026, её просьба: «слишком мелкие и негармоничные цифры в первом блоке»):
    заголовки разделов 22 px Jost, подписи плиток 12,5 px, цифры плиток 24 px (на узкой плитке чуть меньше, но не меньше 20 px), пояснения 13 px */
