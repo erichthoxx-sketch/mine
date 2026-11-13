@@ -22,17 +22,23 @@ export async function scanMarket(app) {
   const day = { ...(snap.days[today] || {}) };
   let got = 0;
   try {
-    for (const s of srcsOf(c.settings)) {
+    const list = srcsOf(c.settings);
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i], pages = i < 2 ? 3 : 1, rows = [], seen = new Set(); // у двух первых подборок берём 3 страницы (≈ 50 книг): на 16 книгах аналитики не построить
       try {
-        const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 45000);
-        const r = await fetch('https://r.jina.ai/' + s.url, { signal: ctl.signal }); clearTimeout(t);
-        if (!r.ok) throw new Error('страница не открылась (' + r.status + ')');
-        const rows = parseLitnetList(await r.text());
-        if (rows.length < 5) throw new Error('не вижу списка книг');
+        for (let pg = 1; pg <= pages; pg++) {
+          const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 45000);
+          const r = await fetch('https://r.jina.ai/' + s.url + (pg > 1 ? '?page=' + pg : ''), { signal: ctl.signal }); clearTimeout(t);
+          if (!r.ok) { if (pg === 1) throw new Error('страница не открылась (' + r.status + ')'); break; }
+          const part = parseLitnetList(await r.text()).filter((x) => !seen.has(x.id) && seen.add(x.id));
+          if (pg === 1 && part.length < 5) throw new Error('не вижу списка книг');
+          if (!part.length) break;
+          rows.push(...part);
+          await sleep(3500);
+        }
         day[s.url] = packDay(rows); got++;
         for (const x of rows) snap.books[x.id] = bookCard(x);
-      } catch (e) { marketState.err = `${s.name}: ${e.name === 'AbortError' ? 'нет ответа' : e.message}`; }
-      await sleep(3500);
+      } catch (e) { marketState.err = `${s.name}: ${e.name === 'AbortError' ? 'нет ответа' : e.message}`; if (rows.length) { day[s.url] = packDay(rows); got++; for (const x of rows) snap.books[x.id] = bookCard(x); } }
     }
     if (got) { snap.days = { ...snap.days, [today]: day }; await app.store.put('d_snap', { ...trimSnap(snap), id: 'market', at: new Date().toISOString(), err: marketState.err }); }
   } finally { marketState.busy = false; }

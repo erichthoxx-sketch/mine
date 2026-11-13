@@ -66,3 +66,14 @@ test('рынок: авторы с серией в топе и сравнение
   assert.ok(M.notes.some((n) => /Ваши цены \(104 ₽\) ниже обычной цены топа/.test(n)));
   assert.ok(!marketInsights(snap).notes.some((n) => n.includes('Ваши цены')));
 });
+test('рынок: карта тропов, цены, объём и подача — аналитика поверх топа', () => {
+  const r = parseLitnetList(readFileSync(new URL('./fixtures/market-litnet-odd.txt', import.meta.url), 'utf8'));
+  const all = [...rows, ...r.filter((x) => !rows.some((y) => y.id === x.id))];
+  const M = marketInsights({ days: { '2026-11-12': { a: packDay(all) } }, books: Object.fromEntries(all.map((x) => [x.id, bookCard(x)])) });
+  assert.ok(M.tropeMap.length >= 5 && M.tropeMap.every((t) => t.n >= 3 && ['niche', 'hot', 'tired', 'weak', 'even'].includes(t.verdict)));
+  assert.ok(M.tropeMap[0].interest >= M.tropeMap[M.tropeMap.length - 1].interest);
+  assert.equal(M.prices.reduce((s, b) => s + b.n, 0), all.filter((x) => x.price != null).length);
+  assert.ok(M.sizes.length >= 2 && M.pairs.every((p) => p.n >= 3));
+  assert.ok(M.pitch.dialogue > 0.3 && M.pitch.dialogue < 0.8);
+  assert.ok(M.formula.pages > 50 && M.formula.conv > 0);
+});

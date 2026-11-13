@@ -56,6 +56,7 @@ export function packDay(rows) {
 }
 export const bookCard = (r) => ({ t: r.title, a: r.author, u: r.url, tr: r.tropes, an: r.annot.slice(0, 220) });
 
+const medLib0 = (rows) => { const s = rows.map((r) => r.l).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
 const median = (a) => { const s = a.filter((x) => x != null && !Number.isNaN(x)).sort((x, y) => x - y); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : null; };
 const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 
@@ -86,9 +87,37 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
   // авторы с несколькими книгами в срезе — у кого сейчас «серия в топе»
   const byA = {}; for (const r of cur) { const a = books[r.id]?.a; if (a) (byA[a] ||= []).push(card(r)); }
   const authors = Object.entries(byA).filter(([, v]) => v.length >= 2).map(([name, list]) => ({ name, n: list.length, lib: list.reduce((s, b) => s + (b.lib || 0), 0), titles: list.map((b) => b.title) })).sort((a, b) => b.n - a.n || b.lib - a.lib).slice(0, 6);
+  // ---- глубже витрины: что отличает книги топа друг от друга ----
+  // «интерес» = сколько из открывших книгу добавили её в библиотеку (библиотеки ÷ просмотры): не зависит от возраста книги и размера рекламы
+  const conv = (r) => (r.v >= 500 ? r.l / r.v : null), medConv = median(cur.map(conv));
+  // карта тропов: конкуренция (доля книг топа) × интерес читателей (относительно обычного по срезу)
+  const tropeMap = tropes.filter((t) => t.n >= 3).map((t) => {
+    const rows = cur.filter((r) => (books[r.id]?.tr || []).includes(t.name)), c = median(rows.map(conv)), idx = c != null && medConv ? c / medConv : null;
+    const hot = idx != null && idx >= 1.15, cold = idx != null && idx <= 0.85, crowded = t.share >= 0.2;
+    return { ...t, interest: idx, price: median(rows.filter((r) => r.p > 0).map((r) => r.f ?? r.p)), lib: median(rows.map((r) => r.l)),
+      verdict: hot && !crowded ? 'niche' : hot ? 'hot' : cold && crowded ? 'tired' : cold ? 'weak' : 'even' };
+  }).sort((a, b) => (b.interest ?? 0) - (a.interest ?? 0));
+  // пары тропов, которые чаще всего стоят вместе
+  const pairN = {}; for (const r of cur) { const tr = books[r.id]?.tr || []; for (let i = 0; i < tr.length; i++) for (let j = i + 1; j < tr.length; j++) { const k = [tr[i], tr[j]].sort().join(' + '); pairN[k] = (pairN[k] || 0) + 1; } }
+  const pairs = Object.entries(pairN).filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, n]) => ({ name, n }));
+  // цена: сколько книг в каждой вилке и как их читают
+  const bucket = (name, f) => { const rows = cur.filter(f); return { name, n: rows.length, share: rows.length / cur.length, lib: median(rows.map((r) => r.l)), interest: medConv ? (median(rows.map(conv)) ?? 0) / medConv || null : null }; };
+  const full = (r) => r.f ?? r.p;
+  const prices = [bucket('Бесплатно', (r) => r.p === 0), bucket('до 129 ₽', (r) => r.p > 0 && full(r) < 130), bucket('130–149 ₽', (r) => r.p > 0 && full(r) >= 130 && full(r) < 150), bucket('150–169 ₽', (r) => r.p > 0 && full(r) >= 150 && full(r) < 170), bucket('170 ₽ и выше', (r) => r.p > 0 && full(r) >= 170)].filter((b) => b.n);
+  const sizes = [bucket('до 100 стр.', (r) => r.g > 0 && r.g < 100), bucket('100–199 стр.', (r) => r.g >= 100 && r.g < 200), bucket('200–299 стр.', (r) => r.g >= 200 && r.g < 300), bucket('300 стр. и больше', (r) => r.g >= 300)].filter((b) => b.n);
+  // как подают книгу: первая строка аннотации и слова в названиях
+  const anns = cur.map((r) => books[r.id]?.an || '').filter(Boolean), sh = (re) => (anns.length ? anns.filter((a) => re.test(a)).length / anns.length : 0);
+  const STOP = new Set(['для', 'его', 'мой', 'моя', 'мое', 'моей', 'меня', 'или', 'как', 'что', 'это', 'при', 'под', 'над', 'без', 'после', 'перед', 'книга', 'любовь', 'тебя', 'тебе', 'твой', 'твоя', 'нам', 'нами', 'ним', 'она', 'они']);
+  const wordN = {}; for (const r of cur) for (const w of new Set(String(books[r.id]?.t || '').toLowerCase().replace(/ё/g, 'е').split(/[^а-яa-z]+/).filter((x) => x.length >= 4 && !STOP.has(x)).map((x) => x.slice(0, 5)))) wordN[w] = (wordN[w] || 0) + 1;
+  const titleWords = Object.entries(wordN).filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([stem, n]) => ({ word: (cur.map((r) => String(books[r.id]?.t || '').toLowerCase().replace(/ё/g, 'е').split(/[^а-яa-z]+/).find((x) => x.startsWith(stem))).find(Boolean)) || stem, n }));
+  const pitch = { dialogue: sh(/^\s*[—–-]\s*\S/), warn: sh(/18\+|откровенн|горяч|мат\b|хэ\b|хэппи/i), emoji: sh(/[\u{1F300}-\u{1FAFF}\u2764\u2705\u2728]/u), titleWords };
+  const formula = { pages: median(cur.map((r) => r.g || null)), conv: medConv, likes: median(cur.map((r) => (r.l >= 100 ? r.k / r.l : null))), lib: medLib0(cur) };
   // выводы простыми словами — только на достаточных данных
   const notes = [];
   const up = tropes.filter((t) => t.delta != null && t.delta >= 0.1 && t.n >= 3)[0], down = tropes.filter((t) => t.delta != null && t.delta <= -0.1)[0];
+  const niche = tropeMap.filter((t) => t.verdict === 'niche')[0], tired = tropeMap.filter((t) => t.verdict === 'tired')[0];
+  if (niche) notes.push(`Свободнее всего сейчас «${niche.name}»: таких книг в топе ${Math.round(niche.share * 100)} %, а добавляют их в библиотеку в ${niche.interest.toFixed(1).replace('.', ',')} раза охотнее обычного.`);
+  if (tired) notes.push(`Перегрето «${tired.name}»: ${Math.round(tired.share * 100)} % книг топа, а интерес ниже обычного — выделиться труднее.`);
   if (tropes[0]) notes.push(`Чаще всего в топе: ${tropes.slice(0, 3).map((t) => `«${t.name}» (${Math.round(t.share * 100)} %)`).join(', ')}.`);
   if (up) notes.push(`Растёт «${up.name}»: было ${Math.round(up.was * 100)} % книг топа, стало ${Math.round(up.share * 100)} %.`);
   if (down) notes.push(`Уходит «${down.name}»: было ${Math.round(down.was * 100)} %, стало ${Math.round(down.share * 100)} %.`);
@@ -103,12 +132,12 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
   if (odd.length) { const by = {}; for (const b of odd) by[b.author || 'без автора'] = (by[b.author || 'без автора'] || 0) + 1; const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0];
     notes.push(`В топе ${odd.length} ${odd.length === 1 ? 'книга' : odd.length < 5 ? 'книги' : 'книг'} с очень малым числом читателей${top[1] > 1 ? ` (из них ${top[1]} — ${top[0]})` : ''}: место держится не на библиотеках и просмотрах.`); }
   if (movers[0]) notes.push(`Быстрее всех набирает читателей «${movers[0].title}» (${movers[0].author}): +${movers[0].perDay} в библиотеки в день${movers[0].tropes.length ? ` — ${movers[0].tropes.slice(0, 3).join(', ').toLowerCase()}` : ''}.`);
-  return { date: last, prevDate, gap, n: cur.length, tropes, movers, fresh, gone, odd, medLib, authors, notes, top: cur.slice(0, 16).map(card),
+  return { date: last, prevDate, gap, n: cur.length, tropes, tropeMap, pairs, prices, sizes, pitch, formula, movers, fresh, gone, odd, medLib, authors, notes, top: cur.slice(0, 16).map(card),
     price: { median: mp, free: cur.filter((r) => r.p === 0).length / cur.length, off: paid.length ? paid.filter((r) => r.o).length / paid.length : 0 },
     excl: cur.filter((r) => r.e).length / cur.length, progress: cur.filter((r) => !r.s).length / cur.length, pages: median(cur.map((r) => r.g)) };
 }
 // хранить не больше keep дней; карточки книг, которых нет ни в одном срезе, убрать
-export function trimSnap(snap, keep = 60) {
+export function trimSnap(snap, keep = 45) {
   const dates = Object.keys(snap.days || {}).sort().slice(-keep), days = Object.fromEntries(dates.map((d) => [d, snap.days[d]]));
   const ids = new Set(Object.values(days).flatMap((d) => Object.values(d).flatMap((rows) => rows.map((r) => r.id))));
   return { ...snap, days, books: Object.fromEntries(Object.entries(snap.books || {}).filter(([id]) => ids.has(id))) };

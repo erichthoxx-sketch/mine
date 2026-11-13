@@ -3425,3 +3425,10 @@ button[data-act="l.lesson"] { display: none; }
 .ed-paper .ed-stats .es-sel b { color: var(--mark, var(--good)); }
 @media (min-width: 1180px) { .ed-paper .ed-stats .es-sel { padding-bottom: 14px; border-bottom: 1px solid var(--line); } }
 html.ed-focus .ed-paper .ed-stats:has(.es-sel) { opacity: 1; }
+
+/* «Рынок»: подзаголовки внутри карточки, строки с полосой, пометка «ваш», выбор подборки */
+.mk-sub { margin: 18px 0 6px; font: 500 15px/1.3 var(--font-display); color: var(--text); }
+.mk-b { margin-top: 12px; } .mk-b .progress { height: 6px; margin: 6px 0 0; }
+.mk-me { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--text); color: var(--bg); font-size: 11px; vertical-align: 1px; }
+select.mk-sel { width: auto; max-width: 220px; min-height: 34px; padding: 4px 30px 4px 12px; font-size: 14px; }
+.mk-page .card h2 { font-size: 20px; }
