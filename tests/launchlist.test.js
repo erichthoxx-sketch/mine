@@ -12,3 +12,12 @@ test('запуск книги: пункты отмечаются сами, сл�
   const empty = launchChecklist({ book: { id: 'b2', title: 'Новая' }, site: null, settings: {}, today: '2026-11-12' });
   assert.equal(empty.next.k, 'plan'); assert.equal(empty.items.find((x) => x.k === 'site').ok, null); // сайт ещё не загрузился — не считаем
 });
+
+test('календарь запуска: главы по дням, подписка, реклама, конкурсы, скидки', async () => {
+  const { launchTimeline } = await import('../writer/js/launchlist.js');
+  const b = { id: 'b', title: 'Развод для черной вдовы', subStart: '2026-11-25', pub: { 'Пролог': { 'Литнет': { date: '2026-11-09' } }, 'Глава 1': { 'Литнет': { date: '2026-11-09' } }, 'Глава 2': { 'Литнет': { date: '2026-11-16', planned: true } }, 'Глава 0': { 'Литнет': { date: '2026-01-01' } } } };
+  const ev = launchTimeline({ book: b, today: '2026-11-13', campaigns: [{ name: 'Директ: «Развод для черной вдовы»', start: '2026-11-10', end: '2026-12-10' }], contests: [{ name: 'Дерзкие', end: '2026-11-30' }],
+    days: [{ date: '2026-11-20', events: [{ type: 'discount', bookId: 'x', text: '-30 %' }, { type: 'discount', bookId: 'y' }] }], discountId: 'x' });
+  assert.deepEqual(ev.map((e) => e.date + ' ' + e.kind), ['2026-11-09 chapter', '2026-11-10 ad', '2026-11-16 chapter', '2026-11-20 discount', '2026-11-25 sub', '2026-11-30 contest', '2026-12-10 ad']);
+  assert.equal(ev[0].text, 'Пролог и Глава 1');
+});

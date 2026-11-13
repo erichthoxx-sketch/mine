@@ -3472,3 +3472,11 @@ button.mk-chip { border-radius: 14px !important; height: auto !important; paddin
 .mk-place { font-family: var(--font-num, inherit); font-weight: 600; font-size: 22px; }
 svg.mk-rk { display: block; width: 100%; height: 54px; margin: 6px 0 4px; color: var(--text); }
 svg.mk-rk .mk-rel { stroke: var(--good, #2e7d5b); stroke-width: 8; stroke-linecap: round; fill: none; }
+/* Календарь запуска книги (Мастерская → книга → «Запуск») */
+.lt-day { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.lt-day.past { opacity: .55; }
+.lt-day.now .lt-date b, .lt-day.next .lt-date b { color: var(--text); }
+.lt-date { display: flex; flex-direction: column; line-height: 1.2; } .lt-date b { font-family: var(--font-num, inherit); font-weight: 600; font-size: 15px; } .lt-date span { font-size: 12.5px; color: var(--muted); }
+.lt-day.now .lt-date span { color: var(--good); font-weight: 600; }
+.lt-ev > div { display: flex; gap: 8px; align-items: baseline; font-size: 14px; line-height: 1.45; padding: 1px 0; }
+.lt-ev i { flex: none; width: 7px; height: 7px; border-radius: 50%; transform: translateY(-1px); }

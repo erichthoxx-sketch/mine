@@ -30,3 +30,23 @@ export function launchChecklist({ book: b, site = null, settings = {}, campaigns
   const main = items.filter((x) => !x.soft && x.ok !== null);
   return { items, done: main.filter((x) => x.ok).length, total: main.length, next: items.find((x) => x.ok === false && !x.soft) || null };
 }
+
+// Календарь запуска (13.11.2026, её «да»): главы, старт подписки, письма, реклама, конкурсы и скидки книги — одной лентой по дням.
+// Окно: неделя назад и 60 дней вперёд от сегодня. Чистая функция.
+export function launchTimeline({ book: b, site = null, campaigns = [], contests = [], mailQueue = [], days = [], today, discountId = null, back = 7, ahead = 60 }) {
+  const add = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+  const from = add(today, -back), to = add(today, ahead), ev = [], put = (date, kind, text, extra = {}) => { if (date && date >= from && date <= to) ev.push({ date, kind, text, ...extra }); };
+  // главы: по дню — один пункт («Пролог и Глава 1»), площадки — через запятую
+  const ch = {};
+  for (const [name, plats] of Object.entries(b.pub || {})) for (const [pl, p] of Object.entries(plats || {})) { if (!p?.date) continue; const d = String(p.date).slice(0, 10); (ch[d] ||= { names: new Set(), plats: new Set(), planned: false }); ch[d].names.add(name); ch[d].plats.add(pl); if (p.planned) ch[d].planned = true; }
+  for (const [d, x] of Object.entries(ch)) { const n = [...x.names]; put(d, 'chapter', n.length > 2 ? `${n[0]} … ${n[n.length - 1]} (${n.length})` : n.join(' и '), { sub: [...x.plats].join(', '), planned: x.planned }); }
+  const sb = site ? (site.books || []).find((x) => same(x.title, b.title)) : null, sub = b.subStart || sb?.startDate || '';
+  put(sub, 'sub', 'Старт подписки', { sub: sb?.startPrice ? `цена на старте ${sb.startPrice} ₽` : '' });
+  const key = String(b.title || '').toLowerCase().slice(0, 12);
+  for (const m of mailQueue) if (m.at && String(m.subject || m.title || '').toLowerCase().includes(key)) put(String(m.at).slice(0, 10), 'mail', 'Письмо подписчицам', { sub: m.subject || '' });
+  for (const k of campaigns) { if (k.oneOff || !String(k.name || '').toLowerCase().includes(key)) continue; put(k.start, 'ad', `Реклама: старт`, { sub: k.name }); put(k.end, 'ad', `Реклама: конец`, { sub: k.name }); }
+  for (const x of contests) { put(x.end, 'contest', `Конкурс: конец приёма`, { sub: x.name }); put(x.results, 'contest', `Конкурс: итоги`, { sub: x.name }); }
+  for (const d of days) for (const e of d.events || []) if (e.type === 'discount' && (!e.bookId || e.bookId === discountId)) put(d.date, 'discount', 'Скидка', { sub: e.text || '' });
+  ev.sort((x, y) => x.date.localeCompare(y.date) || x.kind.localeCompare(y.kind));
+  return ev;
+}
