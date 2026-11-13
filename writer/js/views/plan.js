@@ -393,7 +393,7 @@ export function planView(a) {
       <button class="nav-arr next" data-act="plan.week" data-v="1" aria-label="Следующая неделя">${ic('chevron')}</button></div>
     <div class="wstrip">${strip}</div>
   </div>
-  <div class="card" data-day="${sel}"><div class="row between plan-dayh"><h2 style="margin:0">${dayName(sel, t)}</h2><button class="plus-btn" data-act="td.addPlan" data-d="${sel}" title="Добавить дело" aria-label="Добавить дело">${ic('plus')}</button></div>
+  <div class="card" data-day="${sel}"><div class="row between plan-dayh"><h2 style="margin:0">${((x) => { const i = x.indexOf(' · '); return i > 0 ? `${x.slice(0, i)}<span class="dn-d"><span class="dn-dot"> · </span>${x.slice(i + 3)}</span>` : x; })(dayName(sel, t))}</h2><button class="plus-btn" data-act="td.addPlan" data-d="${sel}" title="Добавить дело" aria-label="Добавить дело">${ic('plus')}</button></div>
     ${c.settings.todoistToken && !c.settings.todoistOff && c.settings.todoist?.err ? `<p class="td-warn">Todoist не обновился: ${esc(String(c.settings.todoist.err).slice(0, 120))} · <button class="link" data-act="td.syncNow">Обновить</button></p>` : ''}
     ${dayList.length || goalHtml || hist.length ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}${hist.map(histHtml).join('')}</div>` : `<p class="small muted" style="margin:0">${histWait ? 'Смотрю, что было сделано…' : 'Дел на этот день нет.'}</p>`}</div>
   ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 4px">Дальше</h2><div class="agenda">${nextDays.map((k) => `<div class="arow"><span class="ad">${DOW[dowI(k)]} ${Number(k.slice(8, 10))}</span><span class="ai">${by[k].map((x) => shortItem(c, x, multi)).join('')}</span></div>`).join('')}</div></div>` : ''}

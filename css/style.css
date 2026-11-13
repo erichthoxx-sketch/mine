@@ -3481,3 +3481,8 @@ svg.mk-rk .mk-rel { stroke: var(--good, #2e7d5b); stroke-width: 8; stroke-lineca
 .lt-ev > div { display: flex; gap: 8px; align-items: baseline; font-size: 14px; line-height: 1.45; padding: 1px 0; }
 .lt-ev i { flex: none; width: 7px; height: 7px; border-radius: 50%; transform: translateY(-1px); }
 .ch-leak { display: block; white-space: normal; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; color: var(--down, #b0413e); margin-top: 2px; }
+/* Единая шкала — мелкие подписи не меньше 12 px (13.11.2026, проверка всех экранов на телефоне) */
+:root button.wday .wk-d, :root .wd small, :root .nl-date i, :root .cc-months span, :root .tag { font-size: 12px; }
+@media (max-width: 720px) { :root .bh-cover-edit { font-size: 12px; } }
+/* Планер на телефоне: «Сегодня» отдельно, дата — строкой ниже (без висящей точки) */
+@media (max-width: 720px) { .plan-dayh .dn-d { display: block; font: 400 15px/1.3 var(--font-body, inherit); color: var(--text-2); margin-top: 4px; } .plan-dayh .dn-dot { display: none; } }
