@@ -77,3 +77,20 @@ test('рынок: карта тропов, цены, объём и подача 
   assert.ok(M.pitch.dialogue > 0.3 && M.pitch.dialogue < 0.8);
   assert.ok(M.formula.pages > 50 && M.formula.conv > 0);
 });
+
+test('её книга против топа: тропы, соседи и линия доли тропа', async () => {
+  const m = await import('../js/market.js');
+  const mk = (id, t, an, l, v, p) => [{ id, n: Number(id), l, v, p, g: 150, k: 10 }, { t, a: 'А' + id, u: 'https://litnet.com/ru/book/x-b' + id, tr: m.tropesOf(t + '. ' + an), an }];
+  const src = [mk('1', 'Развод. Вернуть жену', '— Ты уйдешь', 9000, 90000, 149), mk('2', 'Развод по-взрослому', 'Он изменил', 8000, 60000, 149), mk('3', 'После развода', 'Бандит и криминал', 7000, 50000, 159),
+    mk('4', 'Босс', 'Мой начальник', 1000, 50000, 149), mk('5', 'Мой босс', 'шеф', 1200, 60000, 0), mk('6', 'Босс и я', 'начальник', 900, 45000, 139)];
+  const snap = { days: { '2026-11-01': { x: src.slice(3).map((x) => x[0]) }, '2026-11-07': { x: src.slice(1).map((x) => x[0]) }, '2026-11-13': { x: src.map((x) => x[0]) } }, books: Object.fromEntries(src.map((x) => [x[0].id, x[1]])) };
+  const M = m.marketInsights(snap, { myBooks: [{ id: 'b', title: 'Развод для черной вдовы', tags: ['криминал'], ann: 'Описание', price: 129 }] });
+  const f = M.fit[0];
+  assert.deepEqual(f.tropes.map((t) => t.name).sort(), ['Криминал', 'Развод']);
+  assert.equal(f.tropes.find((t) => t.name === 'Развод').verdict, 'hot');
+  assert.equal(f.near[0].id, '3'); // оба тропа сразу
+  assert.ok(f.lines.some((l) => /«Развод» сейчас читают охотнее/.test(l)));
+  assert.ok(f.lines.some((l) => /«Криминал» в топе почти нет/.test(l)));
+  assert.deepEqual(M.tropeMap.find((t) => t.name === 'Развод').hist.map((x) => +x.toFixed(2)), [0, 0.4, 0.5]);
+  assert.equal(M.all.length, 6);
+});
