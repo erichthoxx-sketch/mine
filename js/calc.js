@@ -1045,3 +1045,26 @@ export function bigGoalPlan({ target, byMonth, startMonth, base }) {
   const miles = path.filter((p) => p.month.endsWith('-12') || p.month === byMonth);
   return { n, base: b, growth, yearly: (1 + growth) ** 12 - 1, path, miles };
 }
+
+// Прогноз месяца по книгам (13.11.2026, её «да»): заработано с 1-го числа + темп последних 14 дней × оставшиеся дни.
+// Темп по 14 дням, а не по месяцу: так видно и свежий взлёт новой книги, и спад старой.
+export function bookMonthForecast(sales = [], dataEnd, { titles = {}, plan = null, days = 14 } = {}) {
+  if (!dataEnd) return null;
+  const m = dataEnd.slice(0, 7), dim = daysInMonth(m), dom = Number(dataEnd.slice(8, 10)), rem = dim - dom;
+  const from14 = new Date(Date.parse(dataEnd + 'T00:00:00Z') - (days - 1) * 864e5).toISOString().slice(0, 10);
+  const by = {};
+  for (const s of sales) {
+    if (!s.bookId || s.date > dataEnd) continue;
+    const b = (by[s.bookId] ||= { id: s.bookId, title: titles[s.bookId] || s.bookId, fact: 0, last: 0, first: s.date });
+    if (s.date < b.first) b.first = s.date;
+    if (s.date.slice(0, 7) === m) b.fact += s.royalty || 0;
+    if (s.date >= from14) b.last += s.royalty || 0;
+  }
+  // книга продаётся меньше 14 дней (новая) — темп по её дням, а не по 14
+  const span = (b) => Math.max(1, Math.min(days, Math.round((Date.parse(dataEnd) - Date.parse(b.first)) / 864e5) + 1));
+  const rows = Object.values(by).map(({ first, ...b }) => ({ ...b, fact: r2(b.fact), pace: r2(b.last / span({ first })), forecast: r2(b.fact + (b.last / span({ first })) * rem), fresh: span({ first }) < days })).filter((b) => b.forecast > 0).sort((a, b) => b.forecast - a.forecast);
+  const fact = r2(rows.reduce((s, b) => s + b.fact, 0)), total = r2(rows.reduce((s, b) => s + b.forecast, 0)), pace = rows.reduce((s, b) => s + b.pace, 0);
+  for (const b of rows) b.share = total ? b.forecast / total : 0;
+  const gap = plan != null ? r2(plan - total) : null;
+  return { month: m, dom, dim, rem, fact, total, pace: r2(pace), plan, gap, rows, needPerDay: gap > 0 && rem ? r2((plan - fact) / rem) : null };
+}

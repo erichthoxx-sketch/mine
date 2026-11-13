@@ -699,3 +699,18 @@ test('чек налога по площадкам: Литнет первым, о
   assert.deepEqual(taxByPlatform(sales.slice(0, 1), '2026-10', 1000), [{ name: 'Литнет', sum: 1000 }]);
   assert.deepEqual(taxByPlatform(sales, '2026-10', 1035, 'royalty'), [{ name: 'Литнет', sum: 735 }, { name: 'Литмаркет', sum: 300 }]);
 });
+
+test('прогноз месяца по книгам: факт + темп 14 дней', async () => {
+  const { bookMonthForecast } = await import('../js/calc.js');
+  const sales = [];
+  for (let d = 1; d <= 20; d++) { const date = `2026-11-${String(d).padStart(2, '0')}`; sales.push({ bookId: 'a', date, royalty: 100 }); if (d > 6) sales.push({ bookId: 'b', date, royalty: 50 }); }
+  const F = bookMonthForecast(sales, '2026-11-20', { titles: { a: 'А' }, plan: 5000 });
+  assert.equal(F.rem, 10); assert.equal(F.rows[0].title, 'А'); assert.equal(F.rows[0].forecast, 3000);
+  assert.equal(F.rows[1].forecast, 700 + 500); assert.equal(F.total, 4200); assert.equal(F.gap, 800);
+});
+test('прогноз месяца: новая книга — темп по её дням', async () => {
+  const { bookMonthForecast } = await import('../js/calc.js');
+  const sales = [16, 17, 18, 19, 20].map((d) => ({ bookId: 'n', date: `2026-11-${d}`, royalty: 200 }));
+  const F = bookMonthForecast(sales, '2026-11-20');
+  assert.equal(F.rows[0].pace, 200); assert.equal(F.rows[0].forecast, 1000 + 2000); assert.ok(F.rows[0].fresh);
+});

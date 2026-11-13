@@ -1,7 +1,7 @@
 import { esc, acts, forms, openSheet, opt, toast, N, changes, copyRich } from '../ui.js';
 import { npdStatusOf, npdBlock } from '../npd.js';
 import { rub, fmtMonth, fmtMonthCap, fmtMonthShort, fmtMonthIn, pct, num } from '../format.js';
-import { monthOutages, paceForecast, monthFinance, monthKey, monthsBetween, byMonth, buildPlan, planOverridesOf, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline, rocketRows, monthCash, addMonths, DISCOUNT_NOTE, taxByPlatform } from '../calc.js';
+import { monthOutages, paceForecast, monthFinance, monthKey, monthsBetween, byMonth, buildPlan, planOverridesOf, goalRows, daysInMonth, taxRows, monthEnd, npdDeadline, rocketRows, monthCash, addMonths, DISCOUNT_NOTE, taxByPlatform, bookMonthForecast } from '../calc.js';
 import { fmtDate } from '../format.js';
 import { goalChart } from '../charts.js';
 import { budgetCard } from './ads.js';
@@ -43,7 +43,7 @@ export function money(a) {
     ${rows.map((r) => `<tr><td>${fmtMonthShort(r.month)}</td><td>${rub(r.plan, 0)}${s.planOverrides?.[r.month] != null && s.planOverrides[r.month] !== '' ? '*' : ''}</td><td>${r.fact == null ? '—' : rub(r.fact, 0)}</td><td class="${r.diff == null ? '' : r.diff >= 0 ? 'up' : 'down'}">${r.diff == null ? '' : rub(r.diff, 0)}</td><td>${r.ma3 == null ? '—' : rub(r.ma3, 0)}</td><td><button class="link" data-act="goal.edit" data-m="${r.month}">✎</button></td></tr>`).join('')}</table></div>
     <div class="hint">* план изменён вручную. Среднее за 3 месяца считается по полным и текущему месяцам.</div></div>
   ${bigGoalCard(bigGoalOf(c))}
-  ${budgetCard(c)}` : `
+  ${budgetCard(c)}` : `${sel === cur ? bookForecastCard(c, curRow) : ''}
   <div class="card"><div class="row between"><h2 style="margin:0">Итоги месяца</h2><select id="mSel" data-chg="money.month" style="width:auto">${keys.map((k) => opt(k, fmtMonth(k), sel)).join('')}</select></div>
     <table style="margin-top:8px">
       <tr><td><b>Доход до вычетов</b> <span class="muted small">(роялти)</span></td><td><b>${rub(f.royalty)}</b></td></tr>
@@ -226,3 +226,17 @@ acts['rocket.clear'] = async (d) => {
   document.getElementById('sheet').close();
   toast(`Цифры Rocket за ${fmtMonth(d.m)} очищены`);
 };
+
+// Прогноз месяца по книгам: кто сколько принесёт к концу месяца и хватает ли до цели
+function bookForecastCard(c, curRow) {
+  const F = bookMonthForecast(c.sales, c.dataEnd, { titles: Object.fromEntries((c.books || []).map((b) => [b.id, b.title])), plan: curRow?.plan ?? null });
+  if (!F || !F.rows.length || F.rem <= 0) return '';
+  const goal = F.plan == null ? '' : F.gap <= 0
+    ? `<p class="up" style="margin:10px 0 0">Цель ${rub(F.plan, 0)} будет выполнена с запасом ≈ ${rub(-F.gap, 0)}.</p>`
+    : `<p style="margin:10px 0 0">До цели ${rub(F.plan, 0)} не хватает ≈ <b>${rub(F.gap, 0)}</b>: нужно ${rub(F.needPerDay, 0)} в день вместо нынешних ${rub(F.pace, 0)} — на ${Math.round((F.needPerDay / Math.max(1, F.pace) - 1) * 100)} % больше.</p>`;
+  return `<div class="card"><div class="row between"><h2 style="margin:0">К концу месяца</h2><span class="small muted">осталось ${F.rem} ${F.rem % 10 === 1 && F.rem !== 11 ? 'день' : [2, 3, 4].includes(F.rem % 10) && ![12, 13, 14].includes(F.rem) ? 'дня' : 'дней'}</span></div>
+    <p class="small muted" style="margin:6px 0 4px">Заработано с 1-го числа + темп последних 14 дней на оставшиеся дни. Роялти.</p>
+    <div class="list">${F.rows.slice(0, 8).map((b) => `<div class="item"><div class="row between" style="gap:12px"><b style="min-width:0">${esc(b.title)}</b><span style="white-space:nowrap">≈ <b>${rub(b.forecast, 0)}</b></span></div>
+      <div class="small muted">сейчас ${rub(b.fact, 0)} · в день ${rub(b.pace, 0)}${b.fresh ? ' (продаётся недавно)' : ''} · ${Math.round(b.share * 100)} % месяца</div><div class="progress"><i style="width:${(b.share * 100).toFixed(1)}%"></i></div></div>`).join('')}</div>
+    <div class="row between" style="margin-top:10px"><b>Всего к концу месяца</b><b>≈ ${rub(F.total, 0)}</b></div>${goal}</div>`;
+}
