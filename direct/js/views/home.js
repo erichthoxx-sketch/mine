@@ -10,6 +10,7 @@ import { stateDot, tiles, actBtn, q } from './common.js';
 import { demo } from '../demo.js';
 import { OUTAGE_TEXT } from '../api.js';
 import { resolvedLaunches, goalSwitch } from './launchctx.js';
+import { readyGoalActs } from './pult.js';
 import { outageNotice } from '../adcontext.js';
 import { launchStrip, phaseSteps } from './launch.js';
 import { ic } from '../../../js/icons.js';
@@ -100,7 +101,7 @@ export function todo(main, stats, ctx = null) {
     out.push(`<div class="item"><div class="row between"><b>${esc(h.title)}</b>${h.act ? actBtn(h.act, h.actLabel, 'small-btn') : ''}</div><div class="small muted">${esc(h.how)}${lessonLink(h.lesson)}</div></div>`);
   }
   // старт подписки — сменить цель кампании запуска на покупку
-  if (ctx && !demo.on) for (const L of resolvedLaunches(app())) { const g = goalSwitch(L.plan); if (g) out.unshift(`<div class="item"><div class="row between"><b>«${esc(L.plan.book)}»: началась подписка — цель на покупку</b>${actBtn(g, 'Сменить цель', 'small-btn')}</div><div class="small muted">Кампания «${esc(L.plan.picked.name)}» всё ещё учится на добавлениях в библиотеку. Бюджет и ставки не меняются.</div></div>`); }
+  if (ctx && !demo.on) for (const L of resolvedLaunches(app())) { const g0 = goalSwitch(L.plan), g = g0 && readyGoalActs(app()).find((x) => x.campaign === g0.campaign); if (g) out.unshift(`<div class="item"><div class="row between"><b>«${esc(L.plan.book)}»: покупок с рекламы хватает — цель на покупку</b>${actBtn(g, 'Сменить цель', 'small-btn')}</div><div class="small muted">Кампания «${esc(L.plan.picked.name)}» всё ещё учится на добавлениях в библиотеку. Бюджет и ставки не меняются.</div></div>`); }
   // у идущей кампании нет стартовых минус-слов (скачать, fb2, аудиокнига…) — добавить одной кнопкой
   for (const camp of (main.campaigns || []).filter((x) => x.state === 'ON')) {
     // минус-слова могут стоять и на кампании, и в группах — считаем вместе

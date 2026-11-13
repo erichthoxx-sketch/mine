@@ -89,6 +89,53 @@ export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSal
   return { today: dToday, d7, d30, lib7, lib30, buy30, cpaLib, cpaBuy, revenue, libValue, target, ran, verdict };
 }
 
+// Этап кампании и следующий шаг (13.11.2026, её просьба: «понимать, когда переключить цель, когда создать другую кампанию»).
+// Логика книжного таргетолога: 1) первые 7 дней стратегия учится — не трогаем; 2) до открытия подписки цель — добавления в библиотеку;
+// 3) подписка открыта: цель на «покупку» меняем, когда реклама даёт хотя бы NEED_BUYS покупок за 7 дней — меньшего стратегии мало,
+//    и она «ослепнет»; до этого остаёмся на библиотеке; 4) на покупках судим по отдаче рубля.
+// Вторая кампания нужна редко: одна учится быстрее. Поводы — другая книга; ретаргетинг на добавивших, когда их набралось RETARGET_MIN и открыта подписка.
+export const NEED_BUYS = 10, RETARGET_MIN = 300;
+export function campaignStage(camp, { econ, st, goals, conv = [], today, subStart = '', perSale = null, skip = null }) {
+  if (!['on', 'capped', 'idle'].includes(st?.key)) return null;
+  const buySet = (goals.buy || []).map(String), onBuy = camp.goal != null && buySet.includes(String(camp.goal));
+  const open = !!subStart && subStart <= today, dm = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+  const buy7 = buySet.length ? convTotal(conv, addDays(today, -6), today, camp.id, buySet, skip) : 0;
+  const lib7 = econ.lib7 || 0, libAll = econ.lib30 || 0, checks = [];
+  const learnTill = camp.start ? addDays(camp.start, LEARN_DAYS) : null, learning = econ.ran < LEARN_DAYS;
+  let key, title, text, next;
+  if (onBuy) {
+    key = 'buy'; title = 'Работает на покупки';
+    const ret = perSale != null && econ.buy30 ? econ.buy30 * perSale / (econ.d30.cost || 1) : null;
+    text = ret == null ? 'Покупок пока мало, чтобы судить об отдаче.' : `За 30 дней на 1 ₽ рекламы — ${ret.toFixed(2).replace('.', ',')} ₽ роялти с покупок.`;
+    checks.push({ ok: buy7 >= NEED_BUYS, text: `покупок за 7 дней: ${buy7} (стратегии нужно от ${NEED_BUYS})` });
+    next = buy7 < NEED_BUYS / 2 && econ.ran >= 14 ? { what: 'Покупок слишком мало для обучения — верните цель «добавление в библиотеку»', why: 'на редких покупках стратегия теряет аудиторию; добавлений больше, и они ведут к тем же покупкам' }
+      : ret != null && ret < 0.9 && econ.buy30 >= NEED_BUYS ? { what: 'Снизьте цену цели: покупка обходится дороже, чем приносит', why: 'расход превышает роялти с покупок по рекламе' }
+        : { what: 'Ничего не менять — следить за отдачей раз в неделю', why: 'цель верная, данных стратегии хватает' };
+  } else if (learning) {
+    key = 'learn'; title = `Обучение — день ${econ.ran} из ${LEARN_DAYS}`;
+    text = 'Директ подбирает аудиторию. Любая правка стратегии сейчас сбрасывает обучение.';
+    next = { what: `Не трогать стратегию до ${learnTill ? dm(learnTill) : 'конца недели'}`, why: 'можно только минус-слова и новые объявления' };
+  } else if (!open) {
+    key = 'collect'; title = 'Набирает библиотеку';
+    text = subStart ? `Подписка откроется ${dm(subStart)} — до неё цель «добавление в библиотеку» верная: покупать ещё нечего.` : 'Цель «добавление в библиотеку» верная, пока книга бесплатная. Дата открытия подписки не указана — поставьте её в Мастерской (книга → «О книге»), и я подскажу, когда менять цель.';
+    checks.push({ ok: lib7 >= 10, text: `добавлений за 7 дней: ${lib7} (для устойчивой работы нужно от 10)` });
+    if (econ.cpaLib != null && econ.libValue != null) checks.push({ ok: econ.cpaLib <= econ.libValue, text: `добавление стоит ${r0(econ.cpaLib)} ₽, приносит ≈ ${r0(econ.libValue)} ₽` });
+    next = subStart ? { what: `${dm(subStart)} — открыть подписку; цель пока не менять`, why: `на покупки переключим, когда их станет от ${NEED_BUYS} в неделю` } : { what: 'Продолжать: цель менять рано', why: 'переключение на покупку — после открытия подписки' };
+  } else {
+    key = 'switch'; title = buy7 >= NEED_BUYS ? 'Пора переключить цель на покупку' : 'Подписка открыта — цель пока «библиотека»';
+    text = buy7 >= NEED_BUYS ? `Реклама даёт ${buy7} покупок за 7 дней — этого хватает, чтобы стратегия училась прямо на покупках.` : `Покупок с рекламы за 7 дней: ${buy7}. Стратегии нужно от ${NEED_BUYS} в неделю, иначе она потеряет аудиторию.`;
+    checks.push({ ok: true, text: `подписка открыта с ${dm(subStart)}` }, { ok: buy7 >= NEED_BUYS, text: `покупок за 7 дней: ${buy7} из ${NEED_BUYS}` });
+    next = buy7 >= NEED_BUYS ? { what: 'Сменить цель кампании на «покупку»', why: 'бюджет и цена цели останутся прежними; первые 7 дней после смены — снова обучение', act: 'goal' }
+      : { what: 'Оставить цель «библиотека» и ждать покупок', why: `проверяю каждый день; как наберётся ${NEED_BUYS} за неделю — предложу сменить` };
+  }
+  // нужна ли вторая кампания
+  const second = st.key === 'capped' && econ.cpaLib != null && econ.libValue != null && econ.cpaLib < econ.libValue * 0.8 ? 'Не нужна: кампания упирается в бюджет при выгодных добавлениях — выгоднее поднять недельный бюджет этой, чем заводить новую.'
+    : open && libAll >= RETARGET_MIN ? `Имеет смысл: за 30 дней ${libAll} добавлений — отдельная кампания-напоминание тем, кто добавил, но не купил (аудиторию создам в «Предложениях»).`
+      : open ? `Пока не нужна: для кампании-напоминания добавивших мало (${libAll} из ${RETARGET_MIN}).`
+        : 'Пока не нужна: одна кампания учится быстрее, а дробить бюджет до открытия подписки рано. Новая понадобится для следующей книги.';
+  return { key, title, text, next, checks, second, buy7, open, onBuy };
+}
+
 // Окупаемость с начала кампании (как считает книжный таргетолог): потрачено → уже вернулось роялти с покупок → ещё «ждёт» в библиотеках
 // (добавившие покупают позже: ожидаем добавления × ценность добавления). Итог — сколько вернёт 1 ₽, когда добавившие докупят.
 export function campaignPayback(camp, { daily = [], conv = [], today, goals, perSale = null, libValue = null, skip = null }) {

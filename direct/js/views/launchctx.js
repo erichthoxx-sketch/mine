@@ -11,7 +11,7 @@ import { demo } from '../demo.js';
 import { bookOfCampaign } from '../pult.js';
 
 const site = { info: null, loading: false, at: 0 };
-function siteBooks(a) {
+export function siteBooks(a) {
   if (!site.loading && (!site.info || Date.now() - site.at > 30 * 60000)) {
     site.loading = true;
     loadSite().then((x) => { site.info = x; site.at = Date.now(); a.rerender(); }).catch(() => {}).finally(() => { site.loading = false; });

@@ -3,7 +3,7 @@
 import { esc, more } from '../../../js/ui.js';
 import { rub, num } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
-import { goalsOf, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget, campaignLevers, campaignPayback } from '../pult.js';
+import { goalsOf, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget, campaignLevers, campaignPayback, campaignStage, NEED_BUYS } from '../pult.js';
 import { royaltyPerSale, goalTotals30 } from '../mcalc.js';
 import { libraryValue } from '../launchcalc.js';
 import { placementRows, qualityAlerts } from '../qualitycalc.js';
@@ -11,6 +11,7 @@ import { metrikaOf } from './metrika.js';
 import { todo } from './home.js';
 import { homeView } from './home.js';
 import { demo } from '../demo.js';
+import { actBtn } from './common.js';
 import { ic } from '../../../js/icons.js';
 import { litTagInfo } from '../../../js/littag.js';
 import { weekKeyOf } from '../weekreview.js';
@@ -18,7 +19,7 @@ import { AUTO_RULES, approvalQueue, retargetItems, newAdItems, winnerQueryItems,
 import { spoilerHits, spoilerList } from '../../../js/spoilers.js';
 import { execPlan, lastPlanErrors } from '../sync.js';
 import { starterMinusMissing } from '../dcalc.js';
-import { resolvedLaunches, goalSwitch } from './launchctx.js';
+import { resolvedLaunches, goalSwitch, siteBooks } from './launchctx.js';
 import { acts, toast } from '../../../js/ui.js';
 import { syncWatch } from '../watch.js';
 import { changes } from '../../../js/ui.js';
@@ -42,12 +43,32 @@ export function pultModel(a) {
     const st = campaignState(camp, { daily, ads, today: t });
     const econ = campaignEcon(camp, { daily, conv, today: t, goals, perSale, libShare: lv?.share ?? null, skip });
     const wk0 = weekBudget(camp, daily, t);
-    return { camp, goals, book, st, econ, perSale, ownSales: sold?.qty >= 5, libMeasured: !!lv?.measured, pay: campaignPayback(camp, { daily, conv, today: t, goals, perSale, libValue: econ.libValue, skip }), wk: wk0, lev: campaignLevers(camp, st, econ, wk0, { ads, daily, today: t }), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
+    // старт подписки книги: Мастерская («О книге») или сайт
+    const wb = book ? (c.data.w_books || []).find((x) => x.id === book.id) : null, sbk = book && !demo.on ? siteBooks(a).find((x) => String(x.title || '').toLowerCase() === String(book.title || '').toLowerCase()) : null;
+    const subStart = wb?.subStart || sbk?.startDate || '';
+    const stage = campaignStage(camp, { econ, st, goals, conv, today: t, subStart, perSale, skip });
+    return { camp, goals, book, st, econ, perSale, stage, subStart, ownSales: sold?.qty >= 5, libMeasured: !!lv?.measured, pay: campaignPayback(camp, { daily, conv, today: t, goals, perSale, libValue: econ.libValue, skip }), wk: wk0, lev: campaignLevers(camp, st, econ, wk0, { ads, daily, today: t }), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
   }).sort((x, y) => (ORDER[x.st.key] ?? 9) - (ORDER[y.st.key] ?? 9));
   return { c, main, stats, m, rows, lv };
 }
 
 const money = (v) => (v == null ? '—' : rub(v, 0));
+// «Этап и следующий шаг»: одна мысль, одно действие, условия — галочками; вторая кампания — одной строкой
+function stageHtml(r) {
+  const g = r.stage, act = g.next?.act === 'goal' ? readyGoalActs(window.__app).find((x) => x.campaign === r.camp.id) : null;
+  return `<div class="pult-stage"><div class="small muted">Этап</div><b>${esc(g.title)}</b><div class="small" style="margin-top:2px">${esc(g.text)}</div>
+    ${g.checks.length ? `<div class="small" style="margin-top:6px">${g.checks.map((x) => `<div class="${x.ok ? '' : 'muted'}">${x.ok ? '✓' : '○'} ${esc(x.text)}</div>`).join('')}</div>` : ''}
+    <div class="pult-next"><div style="min-width:0"><span class="small muted">Следующий шаг</span><div><b>${esc(g.next.what)}</b></div><div class="small muted">${esc(g.next.why)}</div></div>${act ? actBtn(act, 'Сменить цель', 'primary') : ''}</div>
+    <div class="small muted" style="margin-top:8px"><b>Вторая кампания.</b> ${esc(g.second)}</div></div>`;
+}
+// Смену цели предлагаем, только когда покупок с рекламы хватает для обучения (этап «switch» с NEED_BUYS за 7 дней)
+export function readyGoalActs(a) {
+  if (demo.on) return [];
+  let acts0 = []; try { acts0 = resolvedLaunches(a).map((L) => goalSwitch(L.plan)).filter(Boolean); } catch { return []; }
+  if (!acts0.length) return [];
+  const rows = pultModel(a).rows;
+  return acts0.filter((x) => { const r = rows.find((y) => y.camp.id === x.campaign); return r?.stage?.key === 'switch' && r.stage.buy7 >= NEED_BUYS; });
+}
 function card(r) {
   const { camp, book, st, econ: e, wk, lev, pay } = r;
   const tile = (k, v, s = '') => `<div><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
@@ -63,6 +84,7 @@ function card(r) {
     <p class="small ${TONE[e.verdict.kind]}" style="margin:10px 0 0">${esc(e.verdict.text.charAt(0).toUpperCase() + e.verdict.text.slice(1))}${e.revenue != null && e.buy30 ? ` · роялти с покупок ≈ ${money(e.revenue)}` : ''}</p>
     ${e.libValue != null && r.perSale ? `<p class="small muted" style="margin:4px 0 0">≈ ${money(e.libValue)} за добавление — это оценка, а не деньги этой кампании: средний доход с одной покупки (${money(r.perSale)}${r.ownSales ? ', по этой книге' : ', по вашим книгам за 60 дней'}) × доля добавивших, которые потом покупают (${Math.round(e.libValue / r.perSale * 100)} %${r.libMeasured ? ', по Метрике за 90 дней' : ' — осторожная оценка, данных пока мало'}). Настоящие покупки появятся в плитке «Покупки», когда откроется подписка.</p>` : ''}
     ${pay && pay.total != null ? `<p class="small" style="margin:6px 0 0"><b>С начала (${pay.days} дн.):</b> потрачено ${money(pay.cost)} · вернулось с покупок ${money(pay.back || 0)} · ещё принесут добавившие ≈ ${money(pay.expected || 0)} → <span class="${pay.ret >= 1 ? 'up' : 'warnc'}">на 1 ₽ ≈ ${pay.ret.toFixed(2).replace('.', ',')} ₽</span></p>` : ''}
+    ${r.stage ? stageHtml(r) : ''}
     ${lev?.forecast ? `<p class="small muted" style="margin:4px 0 0">При таком темпе за неделю: ≈ ${num(Math.round(lev.forecast.lib))} добавлений за ${money(lev.forecast.cost)}${lev.forecast.royalty != null ? ` → ожидаемое роялти ≈ ${money(lev.forecast.royalty)}` : ''}</p>` : ''}
     ${lev?.levers.length ? `<div class="pult-lev"><div class="small muted" style="margin:12px 0 2px">Как заработать больше</div>${more('lev-' + camp.id, lev.levers.map((x, i) => `<div class="item"><b>${i + 1}. ${esc(x.title)}</b><div class="small muted">${esc(x.how)}</div></div>`), 2)}</div>` : ''}
     <div class="row dl-row"><button class="dl" data-act="go" data-to="/c/${camp.id}">Открыть кампанию</button>${book?.id ? `<button class="dl" data-act="go" data-to="/book/${esc(book.id)}">Книга</button>` : ''}</div></div>`;
@@ -106,7 +128,7 @@ function queueOf(a) {
   const starter = (main.campaigns || []).filter((x) => x.state === 'ON').map((camp) => ({ camp, miss: starterMinusMissing(negOf(camp)) })).filter((x) => x.miss.length >= 5)
     .map((x) => ({ do: 'minus', campaign: x.camp.id, phrases: x.miss, why: 'по таким запросам ищут файл, озвучку или экранизацию, а не книгу на Литнете' }));
   let goalActs = [];
-  if (!demo.on) try { goalActs = resolvedLaunches(a).map((L) => goalSwitch(L.plan)).filter(Boolean); } catch { /* плана запуска нет */ }
+  goalActs = readyGoalActs(a);
   const wbooks = c.data.w_books || [], extra = demo.on ? [] : [
     ...litTagItems({ main, code: c.settings.litTag?.code || '', late: !!litTagInfo(c.settings, c.today)?.late }),
     ...winnerQueryItems({ main, stats: a.snap('stats') || {}, goals: goalsOf(metrikaOf(c) || {}) }),

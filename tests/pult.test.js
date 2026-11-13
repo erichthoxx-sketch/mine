@@ -151,3 +151,23 @@ test('Директ по месяцам: месяц «на библиотеку»
   assert.equal(m.lib, 40); assert.equal(m.buy, 0); assert.equal(m.ret, 0); assert.equal(m.exp, 1200); assert.equal(m.retExp, 1.2);
   assert.equal(directMonths({ daily, conv, goals: { lib: '5', buy: ['6'] }, perSale: 100 })[0].exp, null);
 });
+
+test('этап кампании: обучение → библиотека → «пора менять цель» только при 10 покупках за неделю → покупки', async () => {
+  const { campaignStage } = await import('../direct/js/pult.js');
+  const today = '2026-11-20', st = { key: 'on' }, goals = { lib: '1', buy: ['2'] };
+  const econ = (o = {}) => ({ ran: 20, lib7: 14, lib30: 60, buy30: 0, cpaLib: 30, libValue: 45, d30: { cost: 1800 }, ...o });
+  const convN = (n) => (n ? [{ date: '2026-11-18', cid: 7, conv: { 2: n } }] : []);
+  let g = campaignStage({ id: 7, goal: 1, start: '2026-11-16' }, { econ: econ({ ran: 5 }), st, goals, today });
+  assert.equal(g.key, 'learn'); assert.match(g.next.what, /Не трогать стратегию до 23\.11/);
+  g = campaignStage({ id: 7, goal: 1, start: '2026-11-01' }, { econ: econ(), st, goals, today, subStart: '2026-11-27' });
+  assert.equal(g.key, 'collect'); assert.match(g.text, /Подписка откроется 27\.11/); assert.ok(g.checks[0].ok && g.checks[1].ok); assert.match(g.second, /Пока не нужна/);
+  g = campaignStage({ id: 7, goal: 1, start: '2026-11-01' }, { econ: econ(), st, goals, conv: convN(4), today, subStart: '2026-11-15' });
+  assert.equal(g.key, 'switch'); assert.equal(g.buy7, 4); assert.equal(g.next.act, undefined); assert.match(g.next.what, /Оставить цель «библиотека»/);
+  g = campaignStage({ id: 7, goal: 1, start: '2026-11-01' }, { econ: econ({ lib30: 320 }), st, goals, conv: convN(12), today, subStart: '2026-11-15' });
+  assert.equal(g.next.act, 'goal'); assert.match(g.title, /Пора переключить цель/); assert.match(g.second, /Имеет смысл: за 30 дней 320 добавлений/);
+  g = campaignStage({ id: 7, goal: 2, start: '2026-10-01' }, { econ: econ({ ran: 50, buy30: 40 }), st, goals, conv: convN(11), today, subStart: '2026-11-01', perSale: 90 });
+  assert.equal(g.key, 'buy'); assert.match(g.text, /на 1 ₽ рекламы — 2,00 ₽/);
+  g = campaignStage({ id: 7, goal: 2, start: '2026-10-01' }, { econ: econ({ ran: 50, buy30: 6 }), st, goals, conv: convN(2), today, subStart: '2026-11-01', perSale: 90 });
+  assert.match(g.next.what, /верните цель «добавление в библиотеку»/);
+  assert.equal(campaignStage({ id: 7 }, { econ: econ(), st: { key: 'draft' }, goals, today }), null);
+});

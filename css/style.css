@@ -3432,3 +3432,7 @@ html.ed-focus .ed-paper .ed-stats:has(.es-sel) { opacity: 1; }
 .mk-me { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--text); color: var(--bg); font-size: 11px; vertical-align: 1px; }
 select.mk-sel { width: auto; max-width: 220px; min-height: 34px; padding: 4px 30px 4px 12px; font-size: 14px; }
 .mk-page .card h2 { font-size: 20px; }
+
+/* Пульт: этап кампании и следующий шаг */
+.pult-stage { margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: var(--soft, var(--surface-2)); }
+.pult-next { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap; }
