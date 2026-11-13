@@ -251,3 +251,22 @@ export function siteToLitnet(mkUtm = [], goals) {
   return { visits, lib: goals.lib ? rows.reduce((s, r) => s + reach(r, [goals.lib]), 0) : null, buy: goals.buy?.length ? rows.reduce((s, r) => s + reach(r, goals.buy), 0) : null };
 }
 
+
+// Страницы книг сайта: заходы на страницу книги и в читалку → «Читать» → что сделали на Литнете (13.11.2026, её «да»).
+// Сайт — Метрика сайта, визиты по странице входа (`site.pages`); Литнет — Метрика автора по метке utm_source=lanafreitag.ru, utm_campaign=адрес книги.
+export function siteBookFunnel({ pages = [], goalIds = {}, mkUtm = [], goals = {}, books = [] } = {}) {
+  const slugOf = (u) => { const s = String(u || ''); return (s.match(/\/kniga\/([a-z0-9-]+)/i) || s.match(/[?&](?:kniga|chitat)=([a-z0-9-]+)/i) || [])[1]?.toLowerCase() || null; };
+  const out = Object.fromEntries(books.filter((b) => b.url && !b.hidden).map((b) => [b.url, { slug: b.url, title: b.title, visits: 0, reader: 0, read: g0(goalIds.read), sub: g0(goalIds.subscribe), lit: 0, lib: goals.lib ? 0 : null, buy: goals.buy?.length ? 0 : null }]));
+  function g0(x) { return x ? 0 : null; }
+  for (const r of pages) {
+    const s = slugOf(r.name || r.key), b = s && out[s]; if (!b) continue;
+    b.visits += r.visits; if (/chitat=/.test(r.name || r.key)) b.reader += r.visits;
+    if (goalIds.read) b.read += r.goals?.[goalIds.read] || 0; if (goalIds.subscribe) b.sub += r.goals?.[goalIds.subscribe] || 0;
+  }
+  for (const r of mkUtm) {
+    if (!String(r.dims?.[0] || '').toLowerCase().includes(SITE_HOST)) continue;
+    const b = out[String(r.dims?.[2] || '').toLowerCase()]; if (!b) continue;
+    b.lit += r.visits; if (goals.lib) b.lib += reach(r, [goals.lib]); if (goals.buy?.length) b.buy += reach(r, goals.buy);
+  }
+  return Object.values(out).map((b) => ({ ...b, readRate: b.read != null && b.visits ? b.read / b.visits : null })).filter((b) => b.visits || b.lit).sort((a, b) => b.visits - a.visits || b.lit - a.lit);
+}

@@ -171,3 +171,12 @@ test('этап кампании: обучение → библиотека → �
   assert.match(g.next.what, /верните цель «добавление в библиотеку»/);
   assert.equal(campaignStage({ id: 7 }, { econ: econ(), st: { key: 'draft' }, goals, today }), null);
 });
+
+test('страницы книг сайта: заходы, «Читать», Литнет по метке', async () => {
+  const { siteBookFunnel } = await import('../direct/js/pult.js');
+  const books = [{ title: 'Вдова', url: 'vdova' }, { title: 'Медведь', url: 'medved' }];
+  const pages = [{ name: 'https://lanafreitag.ru/kniga/vdova/', visits: 100, goals: { 9: 30 } }, { name: 'https://lanafreitag.ru/?chitat=vdova', visits: 20, goals: { 9: 10 } }, { name: 'https://lanafreitag.ru/', visits: 500, goals: {} }];
+  const mkUtm = [{ dims: ['lanafreitag.ru', 'site', 'vdova', null], visits: 35, goals: { 7: 12, 8: 3 } }];
+  const r = siteBookFunnel({ pages, goalIds: { read: 9 }, mkUtm, goals: { lib: '7', buy: ['8'] }, books });
+  assert.equal(r.length, 1); assert.equal(r[0].visits, 120); assert.equal(r[0].reader, 20); assert.equal(r[0].read, 40); assert.equal(r[0].lit, 35);
+});
