@@ -245,6 +245,32 @@ async function upload(meta, body, mime) {
   const { blob, type } = multipart(meta, body, mime);
   return (await gfetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=${FIELDS}&supportsAllDrives=true`, { method: 'POST', headers: { 'Content-Type': type }, body: blob })).json();
 }
+// Отдельный закрытый Markdown-снимок для ChatGPT / Google Drive.
+// Обновляем только файл с ожидаемыми именем и MIME, чтобы не затронуть рукописи.
+export async function upsertMarkdown(name, markdown, existingId = '') {
+  const mime = 'text/markdown';
+  const blob = new Blob([markdown], { type: mime + ';charset=UTF-8' });
+  if (isLocalDev) return mock.create({ name, mimeType: mime });
+  let file = null;
+  if (existingId) {
+    try {
+      const found = await fileMeta(existingId);
+      if (found.name === name && found.mimeType === mime) file = found;
+    } catch (e) {
+      if (!String(e.message || '').includes('404')) throw e;
+    }
+  }
+  if (!file) {
+    const found = await listQuery("name='" + q(name) + "' and mimeType='" + mime + "' and trashed=false");
+    file = found.find((f) => f.name === name && f.mimeType === mime) || null;
+  }
+  if (!file) return upload({ name, mimeType: mime }, blob, mime + ';charset=UTF-8');
+  return (await gfetch('https://www.googleapis.com/upload/drive/v3/files/' + encodeURIComponent(file.id) +
+    '?uploadType=media&fields=' + encodeURIComponent(FIELDS), {
+    method: 'PATCH', headers: { 'Content-Type': mime + ';charset=UTF-8' }, body: blob
+  })).json();
+}
+
 // Новый Google Документ (текст можно передать сразу)
 export const createDoc = (name, folderId, text = '') => upload({ name, mimeType: MIME.doc, parents: folderId ? [folderId] : [] }, text || ' ', 'text/plain; charset=UTF-8');
 export const uploadFile = (blob, name, folderId) => upload({ name, parents: folderId ? [folderId] : [] }, blob, blob.type || 'application/octet-stream');
