@@ -17,7 +17,7 @@ let lastM = null;
 function forecastCard(snap, src, isMine) {
   const F = tropeForecast(snap, { src });
   const head = `<h2 style="margin:0 0 4px">Сценарий тропов на 4 недели</h2>`;
-  if (!F.ready) return `<div class="card">${head}<p class="small muted" style="margin:0">Прогноз строится по ходу топа день за днём. ${F.needDays ? `Нужно ещё ${F.needDays} ${F.needDays === 1 ? 'день' : F.needDays < 5 ? 'дня' : 'дней'} срезов` : `Нужно ещё ${F.need} ${F.need === 1 ? 'среза' : 'среза'}`} — приложение снимает их само раз в сутки.</p></div>`;
+  if (!F.ready) return `<div class="card">${head}<p class="small muted" style="margin:0">Прогноз строится по ходу топа день за днём. ${F.needDays ? `Нужно ещё ${F.needDays} ${F.needDays === 1 ? 'день' : F.needDays < 5 ? 'дня' : 'дней'} срезов` : `Нужно ещё ${F.need} ${F.need === 1 ? 'срез' : F.need >= 2 && F.need <= 4 ? 'среза' : 'срезов'}`} — приложение снимает их само раз в сутки.</p></div>`;
   const row = (x, right) => `<div class="mk-fc" data-act="mk.trope" data-t="${esc(x.name)}" role="button" tabindex="0"><div class="row between" style="gap:10px;align-items:baseline"><b>${esc(x.name)}${isMine(x.name) ? ' <span class="mk-me">ваш</span>' : ''}</b><span class="small" style="white-space:nowrap">${right}</span></div>
     ${x.why.length ? `<div class="small muted">${x.why.slice(0, 3).map(esc).join(' · ')}</div>` : ''}</div>`;
   const pp = (v) => Math.round(v * 100) + ' %';
