@@ -276,7 +276,7 @@ const ecoPlace = (btn) => {
   const left = Math.max(pad, Math.min(vw - pad - W, r.left + r.width / 2 < vw / 2 ? r.left : vw - pad - W));
   const st = document.documentElement.style; st.setProperty('--eco-top', Math.round(r.bottom + 8) + 'px'); st.setProperty('--eco-left', Math.round(left) + 'px');
 };
-if (typeof window !== 'undefined') window.addEventListener('scroll', () => { if (ecoPhone() && ecoNow) { ecoNow = false; document.querySelectorAll('.eco-w').forEach((x) => x.classList.remove('open')); } }, { passive: true });
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('scroll', () => { if (ecoPhone() && ecoNow) { ecoNow = false; document.querySelectorAll('.eco-w').forEach((x) => x.classList.remove('open')); } }, { passive: true });
 acts['eco.toggle'] = (d, el) => {
   const w = el.closest('.eco-w'), open = !w?.classList.contains('open');
   if (ecoPhone()) { ecoNow = open; if (open) ecoPlace(el.closest('.eco-t') || el); } else try { localStorage.setItem('ecoOpen', open ? '1' : '0'); } catch { /* приватный режим */ }
