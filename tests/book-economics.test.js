@@ -17,16 +17,17 @@ test('Логи Метрики: выгружаем страницу входа и
     goals:[{id:215,name:'Добавление в библиотеку'}, {id:220,name:'Покупка книги'}]});
   assert.equal(data.people.length, 1);
   assert.equal(data.people[0][8], '639097');
+  assert.equal(data.people[0][9], 2);
   assert.equal(JSON.stringify(data).includes('utm_source'), false);
   assert.equal(JSON.stringify(data).includes('PERSON_1'), false);
 });
 
 test('Когорты: библиотека -> ПОСЛЕДУЮЩАЯ покупка; только наблюдавшиеся все окно', () => {
   const sources=[{t:'ad', e:'ya_direct', d:'715'}], people=[];
-  for(let i=0;i<25;i++) people.push([0,0,0,1,null,i<7?3:null,0,null,'639097']);
-  for(let i=0;i<9;i++) people.push([37,0,0,1,null, i<5?2:null,0,null,'639097']);
+  for(let i=0;i<25;i++) people.push([0,0,0,1,null,i<7?3:null,0,null,'639097',i<7?3:null]);
+  for(let i=0;i<9;i++) people.push([37,0,0,1,null, i<5?2:null,0,null,'639097',i<5?2:null]);
   // покупка ДО добавления не должна считаться покупкой после добавления
-  people.push([0,0,0,10,null,2,0,null,'639097']);
+  people.push([0,0,0,10,null,2,0,null,'639097',null]);
   const s=cohortSummary({from:'2026-10-01',to:'2026-11-09',sources,people},'2026-11-10');
   const g=s.campBooks['715']['639097'];
   assert.equal(g.lib,35);
