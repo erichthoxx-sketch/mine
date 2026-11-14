@@ -4,7 +4,7 @@
 import { marketingSnapshot, incomeSnapshot, directSnapshot } from '../writer/js/ai-system.js';
 
 const DELAY = 12000;
-const MIN_GAP = 60000;
+const MIN_GAP = 5 * 60000;
 const RETRY = 5 * 60000;
 const fnv = (value) => {
   let h = 2166136261;
