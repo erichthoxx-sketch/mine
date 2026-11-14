@@ -48,7 +48,7 @@ test('рынок: «в топе при малом числе читателей�
   const r = parseLitnetList(readFileSync(new URL('./fixtures/market-litnet-odd.txt', import.meta.url), 'utf8'));
   const M = marketInsights({ days: { '2026-11-12': { a: packDay(r) } }, books: Object.fromEntries(r.map((x) => [x.id, bookCard(x)])) });
   assert.deepEqual(M.odd.map((b) => b.title), ['Секретарша для большого босса', 'Пышка для босса', 'Мажор для училки', 'Горячая булочка для босса']);
-  assert.ok(M.notes.some((n) => n.includes('с очень малым числом читателей')));
+  assert.ok(M.notes.some((n) => n.includes('с очень малым числом накопленных библиотек')));
 });
 test('рынок: письмо за неделю — только когда есть с чем сравнить', async () => {
   const { marketDigest } = await import('../js/market.js');
@@ -56,7 +56,7 @@ test('рынок: письмо за неделю — только когда е�
   const cur = packDay(rows.slice(0, 14)), prev = packDay(rows.slice(2, 16)).map((r) => ({ ...r, l: r.l - 700 }));
   assert.equal(marketDigest(marketInsights({ days: { '2026-11-12': { a: cur } }, books })), '');
   const t = marketDigest(marketInsights({ days: { '2026-11-05': { a: prev }, '2026-11-12': { a: cur } }, books }, { mine: ['Развод'] }), { myTropes: ['Развод'] });
-  assert.match(t, /Топы Литнета: 05\.11 → 12\.11\./); assert.match(t, /Быстрее всех набирают читателей/); assert.match(t, /\+100 — «/); assert.match(t, /Новые в топе: «Плохой сводный»/);
+  assert.match(t, /Топы Литнета: 05\.11 → 12\.11\./); assert.match(t, /Быстрее всех растут библиотеки/); assert.match(t, /\+100 — «/); assert.match(t, /Новые в топе: «Плохой сводный»/);
 });
 test('рынок: авторы с серией в топе и сравнение её цен с обычной ценой', () => {
   const r = parseLitnetList(readFileSync(new URL('./fixtures/market-litnet-odd.txt', import.meta.url), 'utf8'));
@@ -89,7 +89,7 @@ test('её книга против топа: тропы, соседи и лин�
   assert.deepEqual(f.tropes.map((t) => t.name).sort(), ['Криминал', 'Развод']);
   assert.equal(f.tropes.find((t) => t.name === 'Развод').verdict, 'hot');
   assert.equal(f.near[0].id, '3'); // оба тропа сразу
-  assert.ok(f.lines.some((l) => /«Развод» сейчас читают охотнее/.test(l)));
+  assert.ok(f.lines.some((l) => /«Развод» в наблюдаемых топах имеют повышенное отношение библиотек/.test(l)));
   assert.ok(f.lines.some((l) => /«Криминал» в топе почти нет/.test(l)));
   assert.deepEqual(M.tropeMap.find((t) => t.name === 'Развод').hist.map((x) => +x.toFixed(2)), [0, 0.4, 0.5]);
   assert.equal(M.all.length, 6);
