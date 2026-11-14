@@ -3493,3 +3493,12 @@ svg.mk-rk .mk-rel { stroke: var(--good, #2e7d5b); stroke-width: 8; stroke-lineca
 :root button.plus-btn.hm-plus:hover { background: var(--text) !important; color: var(--bg) !important; }
 :root button.plus-btn.hm-plus .ic { width: 18px; height: 18px; stroke-width: 1.9; }
 .hm-more { margin-top: 12px; text-align: right; }
+/* Планер: строка «Новое дело» внизу дня — без рамки, тонкая линия сверху, Enter добавляет */
+.pq-add { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
+.pq-add .pq-plus { flex: none; display: inline-grid; place-items: center; width: 22px; color: var(--muted); }
+.pq-add .pq-plus .ic { width: 18px; height: 18px; stroke-width: 1.8; }
+:root .pq-add input { flex: 1; min-width: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 8px 0 !important; font: inherit; font-size: 15px; color: var(--text); outline: none; min-height: 0; }
+:root .pq-add input::placeholder { color: var(--muted); }
+.pq-add:focus-within .pq-plus { color: var(--text); }
+.pq-add { flex-wrap: wrap; } .pq-add .pq-hint { display: none; flex-basis: 100%; padding-left: 32px; font-size: 12.5px; color: var(--muted); margin-top: -2px; }
+.pq-add:focus-within .pq-hint { display: block; }

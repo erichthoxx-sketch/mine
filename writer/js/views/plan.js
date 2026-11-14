@@ -22,6 +22,7 @@ import { npdStatusOf, npdAlert } from '../../../js/npd.js';
 import { ownTasks, bookOfTask, moveOwnTask, tdText, addOwnTask } from '../../../js/tdtasks.js';
 import { bookGuess } from '../ideacalc.js';
 import { dayHistory, movedFrom } from '../dayhist.js';
+import { parseQuick } from '../quickadd.js';
 import { MONEY_RE } from '../todoist.js';
 import { launchesOf, launchPlan, launchMilestones } from '../../../direct/js/launchcalc.js';
 import { loadSite } from '../../../js/sitepub.js';
@@ -395,16 +396,15 @@ export function planView(a) {
   </div>
   <div class="card" data-day="${sel}"><div class="row between plan-dayh"><h2 style="margin:0">${((x) => { const i = x.indexOf(' · '); return i > 0 ? `${x.slice(0, i)}<span class="dn-d"><span class="dn-dot"> · </span>${x.slice(i + 3)}</span>` : x; })(dayName(sel, t))}</h2><button class="plus-btn" data-act="td.addPlan" data-d="${sel}" title="Добавить дело" aria-label="Добавить дело">${ic('plus')}</button></div>
     ${c.settings.todoistToken && !c.settings.todoistOff && c.settings.todoist?.err ? `<p class="td-warn">Todoist не обновился: ${esc(String(c.settings.todoist.err).slice(0, 120))} · <button class="link" data-act="td.syncNow">Обновить</button></p>` : ''}
-    ${dayList.length || goalHtml || hist.length ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}${hist.map(histHtml).join('')}</div>` : `<p class="small muted" style="margin:0">${histWait ? 'Смотрю, что было сделано…' : 'Дел на этот день нет.'}</p>`}</div>
-  ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 4px">Дальше</h2><div class="agenda">${nextDays.map((k) => `<div class="arow"><span class="ad">${DOW[dowI(k)]} ${Number(k.slice(8, 10))}</span><span class="ai">${by[k].map((x) => shortItem(c, x, multi)).join('')}</span></div>`).join('')}</div></div>` : ''}
+    ${dayList.length || goalHtml || hist.length ? `<div class="plist">${goalHtml}${dayList.map((x) => itemHtml(c, x)).join('')}${hist.map(histHtml).join('')}</div>` : `<p class="small muted" style="margin:0">${histWait ? 'Смотрю, что было сделано…' : 'Дел на этот день нет.'}</p>`}
+    ${sel >= t ? `<form class="pq-add" data-form="plan.quick" data-d="${sel}"><span class="pq-plus" aria-hidden="true">${ic('plus')}</span><input name="t" autocomplete="off" enterkeyhint="done" placeholder="Новое дело" aria-label="Новое дело"><span class="pq-hint">Enter — добавить. Дату можно словами: «завтра», «в пятницу», «20.11»</span></form>` : ''}</div>
+  ${nextDays.length ? `<div class="card"><h2 style="margin:0 0 4px">Дальше</h2><div class="agenda">${nextDays.map((k) => `<div class="arow"><span class="ad">${DOW[dowI(k)]} ${Number(k.slice(8, 10))}${k.slice(5, 7) !== sel.slice(5, 7) ? `.${k.slice(5, 7)}` : ''}</span><span class="ai">${by[k].map((x) => shortItem(c, x, multi)).join('')}</span></div>`).join('')}</div></div>` : ''}
   <div class="psec-h"><h2>Цели <span class="muted">${activeGoals(c).length || ''}</span></h2><button class="small-btn" data-act="goal.new">+ Цель</button></div>
   ${goalsSection(c)}
   <div class="psec-h"><h2>Что пишу дальше <span class="muted">${qTodo.length || ''}</span></h2><button class="small-btn" data-act="queue.new">+ В очередь</button></div>
   ${queue(c)}
-  ${(() => { // книги в работе (они же на Главной) и конкурсы — строками, раскрываются по нажатию
-    const f = fold('pl-books', 'Книги в работе', inWork.length ? booksPlan(c, inWork) : '', { sub: inWork.length ? String(inWork.length) : '' })
-      + fold('pl-contests', 'Конкурсы', live.length ? live.map((x) => contestCard(c, x)).join('') + '<p style="margin:10px 0 0"><button class="link" data-act="go" data-to="/marketing/contests">все конкурсы →</button></p>' : '', { sub: String(live.length) });
-    return f ? `<div class="card folds">${f}</div>` : ''; })()}`;
+  ${inWork.length ? `<div class="psec-h"><h2>Книги в работе <span class="muted">${inWork.length}</span></h2></div>${booksPlan(c, inWork)}` : ''}
+  ${live.length ? `<div class="psec-h"><h2>Конкурсы <span class="muted">${live.length}</span></h2><button class="link small" data-act="go" data-to="/marketing/contests">Все конкурсы →</button></div>${live.map((x) => contestCard(c, x)).join('')}` : ''}`;
   return { html };
 }
 acts['plan.day'] = (d) => { app().ui.planDay = d.v; };
@@ -491,6 +491,38 @@ if (!window.__planDrag) {
 acts['day.pick'] = (d) => { app().ui.planDay = d.v; window.scrollTo(0, 0); };
 // «+ Дело» в Планере: задача сразу в Todoist — к книге (проект «Книги», раздел книги) или в «Мастерскую»
 // («Деньги и реклама», если по тексту про деньги/рекламу, иначе «Дела»); книга подставляется сама, пока пишешь
+// раздел «Мастерской» по смыслу: деньги/реклама/таргетолог → «Деньги и реклама», переписка → «Связи», остальное → «Дела»
+const autoSecOf = (text, ct) => (ct?.kind === 'target' || MONEY_RE.test(text) ? 'Деньги и реклама'
+  : ct || /написать|ответить|сообщени|позвонить|связаться|письмо/i.test(text) ? 'Связи' : 'Дела');
+const shortT = (t) => String(t).split(/[.!?:]/)[0].trim();
+async function addPlanTask({ content, date, b, section, contact, quiet = false }) {
+  const c = app().ctx(), dd = `${date.slice(8, 10)}.${date.slice(5, 7)}`;
+  try {
+    if (contact) {
+      await addLinkedTask(contact.id, { text: content, date, section: b ? 'book:' + b.id : section });
+      toast(`Добавлено на ${dd} и к контакту` + (c.settings.todoistToken ? ' · Todoist синхронизируется' : ''));
+      return true;
+    }
+    const project = b ? 'Книги' : 'Мастерская';
+    const task = await addOwnTask(app().ctx().settings, { project, section, content, date });
+    const td = app().ctx().settings.todoist || {};
+    await app().store.saveSettings({ todoist: { ...td, own: [...(td.own || []), task] } });
+    toast(`${quiet ? `На ${dd}` : 'Добавлено в Todoist'} · ${project} → ${section}`);
+    return true;
+  } catch (e) { toast(`Не получилось добавить «${content}»: ${e.message}`); return false; }
+}
+// строка «Новое дело» в дне: Enter — и дело в Планере; дата из слов («завтра», «в пятницу», «20.11»), книга, контакт и раздел — сами
+forms['plan.quick'] = async (fd, f) => {
+  const c = app().ctx(), raw = String(fd.get('t') || '').trim(); if (!raw) return false;
+  const q = parseQuick(raw, c.today), content = q.text || raw, date = q.date || f.dataset.d || c.today;
+  const b = bookGuess(content, c.wbooks) || null, low = content.toLocaleLowerCase('ru');
+  const contacts = (c.data.w_links || []).filter((x) => x.kind === 'target' || x.kind === 'people');
+  const contact = contacts.find((x) => x.name && low.includes(String(x.name).toLocaleLowerCase('ru'))) || null;
+  const section = b ? shortT(b.title) : autoSecOf(content, contact);
+  const inp = f.querySelector('input'); if (inp) { inp.value = ''; inp.focus(); }
+  await addPlanTask({ content, date, b, section, contact, quiet: true });
+  return false;
+};
 acts['td.addPlan'] = (d) => {
   const c = app().ctx(), short = t => String(t).split(/[.!?:]/)[0].trim();
   const order = { progress: 0, idea: 1, done: 2 };
@@ -517,18 +549,7 @@ acts['td.addPlan'] = (d) => {
     const contact = contacts.find(x=>x.id===fd.get('contact'));
     // окно закрывается сразу, задача уходит в Todoist в фоне — без ожидания и без повторного нажатия
     closeSheet();
-    try {
-      if (contact) {
-        await addLinkedTask(contact.id, { text:content, date, section:b ? 'book:'+b.id : section });
-        toast('Добавлено в Планер и к контакту' + (c.settings.todoistToken ? ' · Todoist синхронизируется' : ''));
-        return;
-      }
-      const project = b ? 'Книги' : 'Мастерская';
-      const task = await addOwnTask(app().ctx().settings, { project, section, content, date });
-      const td = app().ctx().settings.todoist || {};
-      await app().store.saveSettings({ todoist: { ...td, own: [...(td.own || []), task] } });
-      toast('Добавлено в Todoist · '+project+' → '+section);
-    } catch (e) { toast(`Не получилось добавить «${content}»: ${e.message}`); }
+    await addPlanTask({ content, date, b, section, contact });
   }, { submitText: 'Добавить' });
   const inp = document.getElementById('pdc'), book = document.getElementById('pdbook'), contact = document.getElementById('pcontact');
   const sec = document.getElementById('pdsec'), proj = document.getElementById('pdproj'), bsec = document.getElementById('pdbsec');
