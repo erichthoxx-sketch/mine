@@ -107,3 +107,20 @@ test('рынок: место её книг, соперницы и рост тр�
   assert.equal(w.books[0].n, 2);
   const t = m.trimSnap(snap, 1); assert.deepEqual(Object.keys(t.my), ['2026-11-09']); assert.ok(t.books.a);
 });
+
+test('прогноз тропов: растущий по новым книгам и тренду — «вверх», уходящий — «вниз»', async () => {
+  const m = await import('../js/market.js');
+  const books = {}, days = {};
+  for (let i = 1; i <= 40; i++) books['b' + i] = { t: 'Книга ' + i, a: 'А', tr: i > 30 ? ['Сводные'] : i <= 12 ? ['Измена'] : ['Босс'] };
+  const dates = ['2026-10-25', '2026-10-28', '2026-11-01', '2026-11-04', '2026-11-08'];
+  dates.forEach((d, k) => {
+    // каждый срез: «Измена» вытесняется, «Сводные» входят новыми книгами
+    const ids = [...Array.from({ length: 12 - k * 2 }, (_, i) => 'b' + (i + 1)), ...Array.from({ length: 14 }, (_, i) => 'b' + (13 + i)), ...Array.from({ length: k * 2 }, (_, i) => 'b' + (31 + i))];
+    days[d] = { x: ids.map((id, n) => ({ id, n: n + 1, l: 1000 + (id > 'b30' ? k * 300 : 0), v: 20000 })) };
+  });
+  const F = m.tropeForecast({ days, books });
+  assert.ok(F.ready); assert.equal(F.span, 14);
+  assert.ok(F.up.some((x) => x.name === 'Сводные'), JSON.stringify(F.items.map((x) => [x.name, x.verdict, x.score])));
+  assert.ok(F.down.some((x) => x.name === 'Измена'));
+  assert.equal(m.tropeForecast({ days: { '2026-11-01': days['2026-11-01'] }, books }).ready, false);
+});

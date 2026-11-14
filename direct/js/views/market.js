@@ -2,7 +2,7 @@
 // Порядок сверху вниз: выводы → портрет книги топа → карта тропов → цена и объём → подача → движение за неделю → сам топ. Расчёты — js/market.js.
 import { esc, acts, changes, toast, openSheet, more } from '../../../js/ui.js';
 import { num, fmtDate } from '../../../js/format.js';
-import { marketInsights, myRanks, watchReport } from '../../../js/market.js';
+import { marketInsights, myRanks, watchReport, tropeForecast } from '../../../js/market.js';
 import { scanMarket, marketSnap, marketState, srcsOf, okSrc, MARKET_DEFAULT } from '../marketscan.js';
 
 const pc = (v) => Math.round(v * 100) + ' %';
@@ -13,6 +13,21 @@ const bookRow = (b, right) => `<div class="item"><div class="row between" style=
   <span class="small" style="white-space:nowrap">${right}</span></div></div>`;
 const VERD = { niche: ['ниша: читают охотно, книг мало', 'up'], hot: ['читают охотно, но тесно', ''], tired: ['перегрето', 'down'], weak: ['интерес ниже обычного', 'muted'], even: ['как в среднем', 'muted'] };
 let lastM = null;
+// Прогноз тропов на 4 недели: что поднимется, что на пике, что уходит — и почему
+function forecastCard(snap, src, isMine) {
+  const F = tropeForecast(snap, { src });
+  const head = `<h2 style="margin:0 0 4px">Прогноз тропов на месяц</h2>`;
+  if (!F.ready) return `<div class="card">${head}<p class="small muted" style="margin:0">Прогноз строится по ходу топа день за днём. ${F.needDays ? `Нужно ещё ${F.needDays} ${F.needDays === 1 ? 'день' : F.needDays < 5 ? 'дня' : 'дней'} срезов` : `Нужно ещё ${F.need} ${F.need === 1 ? 'среза' : 'среза'}`} — приложение снимает их само раз в сутки.</p></div>`;
+  const row = (x, right) => `<div class="mk-fc" data-act="mk.trope" data-t="${esc(x.name)}" role="button" tabindex="0"><div class="row between" style="gap:10px;align-items:baseline"><b>${esc(x.name)}${isMine(x.name) ? ' <span class="mk-me">ваш</span>' : ''}</b><span class="small" style="white-space:nowrap">${right}</span></div>
+    ${x.why.length ? `<div class="small muted">${x.why.slice(0, 3).map(esc).join(' · ')}</div>` : ''}</div>`;
+  const pp = (v) => Math.round(v * 100) + ' %';
+  const grp = (t, list, fn) => (list.length ? sub(t) + list.map((x) => row(x, fn(x))).join('') : '');
+  return `<div class="card">${head}<p class="small muted" style="margin:0 0 6px">Что, вероятно, будет в топе через 4 недели. Основа: ход доли тропа по ${F.slices} срезам за ${F.span} дн., какие тропы у книг, только что вошедших в топ (${F.fresh}), как быстро такие книги набирают читателей и насколько охотно их добавляют. Уверенность — ${F.conf}. Это прогноз, а не гарантия.</p>
+    ${grp('Поднимутся', F.up, (x) => `${pp(x.share)} → <b class="up">≈ ${pp(x.proj)}</b>`)}
+    ${grp('На пике — тесно', F.peak, (x) => `${pp(x.share)} топа`)}
+    ${grp('Уходят', F.down, (x) => `${pp(x.share)} → <b class="down">≈ ${pp(x.proj)}</b>`)}
+    ${!F.up.length && !F.down.length ? '<p class="small muted" style="margin:8px 0 0">Пока ровно: ни один троп заметно не растёт и не уходит.</p>' : ''}</div>`;
+}
 // место по дням: чем выше линия — тем ближе к первому месту; точки — дни выхода глав
 const rankChart = (hist, rel) => { if (hist.length < 2) return ''; const w = 320, h = 54, mx = Math.max(...hist.map((x) => x.n)), mn = Math.min(...hist.map((x) => x.n)), span = Math.max(1, mx - mn);
   const t0 = Date.parse(hist[0].d), t1 = Math.max(t0 + 864e5, Date.parse(hist[hist.length - 1].d)), X = (d) => 4 + (Date.parse(d) - t0) / (t1 - t0) * (w - 8), Y = (n) => 6 + (n - mn) / span * (h - 12);
@@ -79,6 +94,7 @@ export function marketView(a) {
       ${more('mk-tr', M.tropeMap.map((t) => `<div class="mk-b mk-tr" data-act="mk.trope" data-t="${esc(t.name)}" role="button" tabindex="0"><div class="row between small" style="gap:4px 10px;flex-wrap:wrap"><span><b>${esc(t.name)}</b>${isMine(t.name) ? ' <span class="mk-me">ваш</span>' : ''} <span class="${VERD[t.verdict][1]}">· ${VERD[t.verdict][0]}</span></span><span style="white-space:nowrap">${spark(t.hist)}${pc(t.share)}${arrow(t)}${t.interest != null ? ` · интерес <b>${x1(t.interest)}</b>` : ''}${t.grow != null ? ` · рост <b class="${t.grow >= 1.3 ? 'up' : t.grow <= 0.7 ? 'down' : ''}">${x1(t.grow)}</b>` : ''}</span></div><div class="progress"><i style="width:${(t.share / maxT * 100).toFixed(1)}%"></i></div></div>`), 8)}
       ${M.pairs.length ? sub('Чаще всего вместе') + `<p class="small" style="margin:0">${M.pairs.map((p) => `${esc(p.name.toLowerCase())} <span class="muted">(${p.n})</span>`).join(' · ')}</p>` : ''}</div>` : ''}
 
+    ${forecastCard(snap, src, isMine)}
     <div class="card"><h2 style="margin:0 0 4px">Цена и объём</h2><p class="small muted" style="margin:0 0 6px">Сколько книг топа в каждой вилке и как их читают.</p>
       ${sub('Цена')}${M.prices.map(bRow).join('')}${sub('Объём сейчас')}${M.sizes.map(bRow).join('')}</div>
 

@@ -225,3 +225,53 @@ export function watchReport(snap = {}, names = []) {
     return { name, books: mine.map((r) => ({ id: r.id, title: books[r.id]?.t || '', url: books[r.id]?.u || '', n: r.n, lib: r.l, price: r.p, off: r.o })).sort((a, b) => a.n - b.n), events: ev };
   });
 }
+
+// Прогноз тропов на 4 недели (14.11.2026, её вопрос: «предсказание популярных тропов на будущее, опираясь на глубокую аналитику»).
+// Четыре признака: (1) ход доли тропа в топе по всем срезам — наклон в неделю; (2) доля тропа среди книг, впервые вошедших в топ за 14 дней,
+// против его доли во всём топе — новые книги показывают, каким топ станет; (3) скорость набора библиотек книгами тропа против обычной;
+// (4) интерес (библиотеки ÷ просмотры) против обычного. Это прогноз на 2–4 недели, не гарантия; мало срезов — «рано судить».
+export function tropeForecast(snap = {}, { src = null, weeks = 4 } = {}) {
+  const dates = Object.keys(snap.days || {}).sort(), books = snap.books || {};
+  const rowsOf = (d) => { const day = snap.days[d] || {}, seen = new Set(), out = []; for (const k of Object.keys(day)) if (!src || k === src) for (const r of day[k]) if (!seen.has(r.id)) { seen.add(r.id); out.push(r); } return out; };
+  const series = dates.map((d) => ({ d, rows: rowsOf(d) })).filter((x) => x.rows.length);
+  if (series.length < 3) return { ready: false, need: 3 - series.length, slices: series.length, span: 0, items: [] };
+  const last = series[series.length - 1], span = daysBetween(series[0].d, last.d);
+  if (span < 7) return { ready: false, needDays: 7 - span, slices: series.length, span, items: [] };
+  const trOf = (id) => books[id]?.tr || [];
+  // первое появление книги в топе
+  const first = {}; for (const s of series) for (const r of s.rows) if (!first[r.id]) first[r.id] = s.d;
+  const freshCut = addDaysIso(last.d, -14), fresh = last.rows.filter((r) => first[r.id] > series[0].d && first[r.id] >= freshCut);
+  const prevS = [...series].reverse().find((s) => daysBetween(s.d, last.d) >= 5) || series[0], prevBy = Object.fromEntries(prevS.rows.map((r) => [r.id, r])), gap = Math.max(1, daysBetween(prevS.d, last.d));
+  const growOf = (r) => (prevBy[r.id] ? Math.max(0, (r.l - prevBy[r.id].l) / gap) : null), conv = (r) => (r.v >= 500 ? r.l / r.v : null);
+  const medGrow = median(last.rows.map(growOf)), medConv = median(last.rows.map(conv));
+  const names = [...new Set(last.rows.flatMap((r) => trOf(r.id)))];
+  const items = names.map((name) => {
+    const pts = series.map((s) => ({ x: daysBetween(series[0].d, s.d), y: s.rows.filter((r) => trOf(r.id).includes(name)).length / s.rows.length }));
+    const n = pts.length, mx = pts.reduce((a, p) => a + p.x, 0) / n, my = pts.reduce((a, p) => a + p.y, 0) / n;
+    const den = pts.reduce((a, p) => a + (p.x - mx) ** 2, 0), slope = den ? pts.reduce((a, p) => a + (p.x - mx) * (p.y - my), 0) / den : 0; // доля в день
+    const rows = last.rows.filter((r) => trOf(r.id).includes(name)), share = rows.length / last.rows.length;
+    const freshShare = fresh.length >= 5 ? fresh.filter((r) => trOf(r.id).includes(name)).length / fresh.length : null;
+    const g = median(rows.map(growOf)), grow = g != null && medGrow ? g / medGrow : null, c = median(rows.map(conv)), interest = c != null && medConv ? c / medConv : null;
+    // сводный балл: каждый признак — «выше обычного» (+) или «ниже» (−), с весами
+    const parts = [];
+    const week = slope * 7;
+    if (Math.abs(week) >= 0.01) parts.push({ k: 'trend', v: Math.max(-1, Math.min(1, week / 0.03)), text: week > 0 ? `доля в топе растёт: +${(week * 100).toFixed(1).replace('.', ',')} п. в неделю` : `доля в топе падает: −${(-week * 100).toFixed(1).replace('.', ',')} п. в неделю` });
+    if (freshShare != null && share > 0) { const lift = freshShare / share; if (lift >= 1.3 || lift <= 0.7) parts.push({ k: 'fresh', v: Math.max(-1, Math.min(1, (lift - 1) / 1)), text: lift > 1 ? `среди новых книг топа его в ${lift.toFixed(1).replace('.', ',')} раза больше, чем в среднем` : `среди новых книг топа его почти нет` }); }
+    else if (freshShare != null && share === 0 && freshShare > 0) parts.push({ k: 'fresh', v: 1, text: 'появляется у новых книг топа' });
+    if (grow != null && (grow >= 1.25 || grow <= 0.75)) parts.push({ k: 'grow', v: Math.max(-1, Math.min(1, grow - 1)), text: grow > 1 ? `книги набирают читателей в ${grow.toFixed(1).replace('.', ',')} раза быстрее обычного` : 'книги набирают читателей медленнее обычного' });
+    if (interest != null && (interest >= 1.15 || interest <= 0.85)) parts.push({ k: 'interest', v: Math.max(-1, Math.min(1, (interest - 1) * 1.5)), text: interest > 1 ? 'открывшие добавляют охотнее обычного' : 'открывшие добавляют реже обычного' });
+    const W = { trend: 0.3, fresh: 0.35, grow: 0.2, interest: 0.15 }, score = parts.reduce((a, p) => a + W[p.k] * p.v, 0);
+    // сдвиг к концу срока — осторожный: мало срезов — вдвое меньше, и не больше самой доли (и не меньше 5 п.)
+    const damp = span >= 28 && series.length >= 14 ? 1 : span >= 14 && series.length >= 7 ? 0.75 : 0.5;
+    const raw = (slope * 7 * weeks + (freshShare != null ? (freshShare - share) * 0.3 : 0)) * damp, cap = Math.max(0.05, share);
+    const proj = Math.max(0, Math.min(1, share + Math.max(-cap, Math.min(cap, raw))));
+    const verdict = rows.length < 3 && !(freshShare > 0) ? 'few' : score >= 0.15 ? 'up' : score <= -0.15 ? 'down' : share >= 0.2 ? 'peak' : 'flat';
+    return { name, share, proj, slope, freshShare, grow, interest, score, verdict, why: parts.sort((a, b) => Math.abs(b.v * W[b.k]) - Math.abs(a.v * W[a.k])).map((p) => p.text), n: rows.length };
+  }).filter((x) => x.verdict !== 'few');
+  const conf = span >= 28 && series.length >= 14 ? 'выше средней' : span >= 14 && series.length >= 7 ? 'средняя' : 'низкая';
+  return { ready: true, slices: series.length, span, conf, fresh: fresh.length, weeks,
+    up: items.filter((x) => x.verdict === 'up').sort((a, b) => b.score - a.score).slice(0, 6),
+    peak: items.filter((x) => x.verdict === 'peak').sort((a, b) => b.share - a.share).slice(0, 4),
+    down: items.filter((x) => x.verdict === 'down').sort((a, b) => a.score - b.score).slice(0, 5), items };
+}
+const addDaysIso = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);

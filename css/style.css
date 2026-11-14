@@ -3502,3 +3502,4 @@ svg.mk-rk .mk-rel { stroke: var(--good, #2e7d5b); stroke-width: 8; stroke-lineca
 .pq-add:focus-within .pq-plus { color: var(--text); }
 .pq-add { flex-wrap: wrap; } .pq-add .pq-hint { display: none; flex-basis: 100%; padding-left: 32px; font-size: 12.5px; color: var(--muted); margin-top: -2px; }
 .pq-add:focus-within .pq-hint { display: block; }
+.mk-fc { padding: 10px 8px; margin: 0 -8px; border-radius: 10px; cursor: pointer; border-top: 1px solid var(--line); } .mk-fc:hover { background: var(--soft, var(--surface-2)); }
