@@ -20,13 +20,13 @@ export function reviewPeriod(camp, today) {
   return { from: start, to, days, prevFrom, prevTo, hasPrev: !camp?.start || camp.start <= prevFrom };
 }
 
-export function weekReview({ camp, daily = [], conv = [], adDaily = [], ads = [], queries = [], places = [], goals = {}, today, libValue = null, perSale = null, skip = null }) {
+export function weekReview({ camp, daily = [], conv = [], adDaily = [], ads = [], queries = [], places = [], goals = {}, today, libValue = null, perSale = null, skip = null, convReady = true }) {
   const p = reviewPeriod(camp, today);
   if (!p) return null;
   const cid = camp.id;
   const part = (from, to) => {
     const t = totals(daily, from, to, cid);
-    const lib = goals.lib ? convTotal(conv, from, to, cid, [goals.lib], skip) : null, buy = goals.buy?.length ? convTotal(conv, from, to, cid, goals.buy, skip) : null;
+    const lib = convReady && goals.lib ? convTotal(conv, from, to, cid, [goals.lib], skip) : null, buy = convReady && goals.buy?.length ? convTotal(conv, from, to, cid, goals.buy, skip) : null;
     return { impr: t.impr, clicks: t.clicks, cost: t.cost, ctr: pct(t.clicks, t.impr), lib, buy, cpaLib: lib ? t.cost / lib : null, cpaBuy: buy ? t.cost / buy : null, toLib: lib != null ? pct(lib, t.clicks) : null, toBuy: buy != null && lib ? buy / lib : null };
   };
   const now = part(p.from, p.to), prev = p.hasPrev ? part(p.prevFrom, p.prevTo) : null;
@@ -53,15 +53,16 @@ export function weekReview({ camp, daily = [], conv = [], adDaily = [], ads = []
   const q = queries.filter((x) => x.cid === cid), junk = queryHints(q, { [cid]: camp.negatives || [] });
   const topQ = [...q].sort((x, y) => y.clicks - x.clicks).slice(0, 8);
   const pl = places.filter((x) => x.cid === cid), topP = [...pl].sort((x, y) => y.clicks - x.clicks).slice(0, 8);
-  const badP = pl.filter((x) => x.clicks >= 20 && x.bounce != null && x.bounce >= 50);
+  const badP = pl.filter((x) => x.clicks >= 30 && x.bounce != null && x.bounce >= 75);
 
   // ---- выводы простыми словами ----
   const notes = [], todo = [], r0 = Math.round, p1 = (v) => (v * 100).toFixed(1).replace('.', ',');
   const payConv = /PAY_FOR_CONVERSION/.test(`${camp.strategy?.search || ''} ${camp.strategy?.network || ''}`);
+  if (!convReady) notes.push({ tone: 'warn', text: 'Конверсии устарели или неполны — стоимость покупки и выводы об окупаемости не рассчитываем.' });
   if (!now.cost && !now.clicks) notes.push({ tone: 'wait', text: 'За этот период показов и расхода не было.' });
   if (now.lib != null && now.clicks >= 50) {
-    notes.push({ tone: now.lib ? 'good' : 'warn', text: now.lib ? `Из 100 кликов в библиотеку добавляют ${p1(now.toLib)}. ${payConv ? 'Вы платите только за добавления, поэтому клики без добавления бесплатны.' : ''}` : 'Клики есть, добавлений в библиотеку нет — проверьте цель и счётчик в кампании.' });
-    if (now.cpaLib != null && libValue != null) notes.push({ tone: now.cpaLib <= libValue ? 'good' : 'bad', text: now.cpaLib <= libValue ? `Добавление стоит ${r0(now.cpaLib)} ₽, а приносит в среднем ≈ ${r0(libValue)} ₽ роялти — реклама в плюсе.` : `Добавление стоит ${r0(now.cpaLib)} ₽, а приносит в среднем ≈ ${r0(libValue)} ₽ роялти — пока в минус.` });
+    notes.push({ tone: now.lib ? 'good' : 'warn', text: now.lib ? `Из 100 кликов в библиотеку добавляют ${p1(now.toLib)}. ${payConv ? 'При оплате за конверсии оплачиваются предусмотренные стратегией целевые действия, а не обязательно клики.' : ''}` : 'Клики есть, добавлений в библиотеку нет — проверьте цель и счётчик в кампании.' });
+    if (now.cpaLib != null && libValue != null) notes.push({ tone: now.cpaLib <= libValue ? 'good' : 'bad', text: now.cpaLib <= libValue ? `Добавление стоит ${r0(now.cpaLib)} ₽, а приносит в среднем ≈ ${r0(libValue)} ₽ роялти — модель допускает окупаемость, но это не факт продаж этой кампании.` : `Добавление стоит ${r0(now.cpaLib)} ₽, а приносит в среднем ≈ ${r0(libValue)} ₽ роялти — модель предполагает риск неокупаемости, нужно проверить когорты.` });
   }
   if (now.buy && perSale != null) { const ret = now.buy * perSale / (now.cost || 1); notes.push({ tone: ret >= 1 ? 'good' : 'warn', text: `Покупок ${now.buy}: на 1 ₽ рекламы — ${ret.toFixed(2).replace('.', ',')} ₽ роялти с покупок за эти же дни (часть покупок придёт позже).` }); }
   if (delta?.cpaLib != null && Math.abs(delta.cpaLib) >= 0.2 && (now.lib || 0) >= 5 && (prev.lib || 0) >= 5) notes.push({ tone: delta.cpaLib > 0 ? 'warn' : 'good', text: `Добавление ${delta.cpaLib > 0 ? 'подорожало' : 'подешевело'} на ${r0(Math.abs(delta.cpaLib) * 100)} % к прошлому периоду.` });
@@ -70,7 +71,7 @@ export function weekReview({ camp, daily = [], conv = [], adDaily = [], ads = []
   if (liveAds && liveAds < 3) todo.push({ k: 'ads', text: liveAds === 1 ? 'Добавить ещё 2–3 объявления — Директу не из чего выбирать' : 'Добавить ещё одно-два объявления' });
   if (best && worst && best.aid !== worst.aid && worst.ctr < best.ctr * 0.6) { notes.push({ tone: 'info', text: `Лучше кликают на «${best.title}» (CTR ${p1(best.ctr)} %), хуже — на «${worst.title}» (${p1(worst.ctr)} %).` }); todo.push({ k: 'weak-' + worst.aid, text: `Заменить слабое объявление «${worst.title}» новым вариантом` }); }
   if (junk.length) todo.push({ k: 'minus', text: `Добавить минус-слова: ${junk.length} мусорных ${junk.length === 1 ? 'запрос' : 'запросов'}`, to: `/c/${cid}`, tab: 'queries' });
-  if (badP.length) todo.push({ k: 'places', text: `Исключить площадки, с которых сразу уходят: ${badP.slice(0, 3).map((x) => x.place).join(', ')}`, to: '/quality' });
+  if (badP.length) todo.push({ k: 'places', text: `Проверить площадки с высокими отказами и конверсиями: ${badP.slice(0, 3).map((x) => x.place).join(', ')}`, to: '/quality' });
   if (libValue != null && camp.cpa && camp.cpa * VAT > libValue * 1.05) todo.push({ k: 'cpaDown', text: `Снизить цену цели до ${Math.max(1, Math.floor(libValue / VAT))} ₽ — добавление приносит меньше, чем стоит` });
   if (!todo.length && now.cost) notes.push({ tone: 'good', text: 'Менять на этой неделе ничего не нужно — пусть работает.' });
   return { period: p, now, prev, delta, nets, adRows, adTest, best, worst, topQ, junk: junk.length, topP, badP, notes, todo, liveAds, payConv };
