@@ -59,6 +59,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
     };
   });
   const cids = campaigns.filter((c) => c.state !== 'ARCHIVED').map((c) => c.id);
+  const m = s.direct?.metrika || {}, goalIds = [...new Set([...campaigns.map((c) => c.goal).filter(Boolean).map(String), ...(m.goals || []).map((g) => String(g.id))])].slice(0, 10);
   let groups = [], keywords = [], ads = [];
   if (cids.length) {
     onStep('Группы и фразы…');
@@ -86,7 +87,13 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   try {
     onStep('Объявления по дням…');
     const afrom = adDaily.length ? addDays(today, -14) : addDays(today, -89);
-    adDaily = mergeAdDaily(adDaily, adRows(await report(s, { name: 'ads', fields: ['Date', 'CampaignId', 'AdId', 'AdNetworkType', 'Impressions', 'Clicks', 'Cost'], from: afrom, to: today })), 120, today);
+    const adFields = ['Date', 'CampaignId', 'AdId', 'AdNetworkType', 'Impressions', 'Clicks', 'Cost'];
+    let adReport;
+    if (goalIds.length) {
+      try { adReport = await report(s, { name: 'ads-goals', fields: [...adFields, 'Conversions'], goals: goalIds, from: afrom, to: today }); }
+      catch (e) { if (e.transient) throw e; adReport = await report(s, { name: 'ads', fields: adFields, from: afrom, to: today }); }
+    } else adReport = await report(s, { name: 'ads', fields: adFields, from: afrom, to: today });
+    adDaily = mergeAdDaily(adDaily, adRows(adReport), 120, today);
   } catch (e) { if (e.transient) throw e; console.warn('объявления', e); }
   onStep('Фразы и поисковые запросы…');
   const kwRows = await report(s, { name: 'kw', fields: ['CampaignId', 'CriterionId', 'Criterion', 'Impressions', 'Clicks', 'Cost'] });
@@ -105,11 +112,20 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   if (cids.length && (!placementAt || Date.now() - Date.parse(placementAt) > 6 * 3600000)) {
     try {
       onStep('Качество трафика: площадки…');
-      placements = await report(s, {
-        name: 'traffic-placements',
-        fields: ['CampaignId', 'Placement', 'AdNetworkType', 'Impressions', 'Clicks', 'Cost', 'BounceRate'],
-        from: addDays(today, -29), to: today,
-      });
+      const baseFields = ['CampaignId', 'Placement', 'AdNetworkType', 'Impressions', 'Clicks', 'Cost', 'BounceRate'];
+      // Сначала пытаемся получить конверсии по каждой площадке; если API их не даёт,
+      // показываем старый отчёт, но НЕ разрешаем автоматическое исключение.
+      if (goalIds.length) {
+        try { placements = await report(s, { name: 'traffic-placements-goals', fields: [...baseFields, 'Conversions'], goals: goalIds, from: addDays(today, -29), to: today }); }
+        catch (e) {
+          if (e.transient) throw e;
+          placements = await report(s, { name: 'traffic-placements', fields: baseFields, from: addDays(today, -29), to: today });
+          placementErr = 'Яндекс не отдал конверсии по площадкам: автоисключение приостановлено.';
+        }
+      } else {
+        placements = await report(s, { name: 'traffic-placements', fields: baseFields, from: addDays(today, -29), to: today });
+        placementErr = 'В Метрике не выбраны цели: автоисключение площадок недоступно.';
+      }
       placementAt = new Date().toISOString();
     } catch (e) {
       placementErr = 'Директ не отдал отчет по площадкам: ' + (e.message || String(e));
@@ -119,7 +135,6 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   // Цели Метрики: конверсии по дням и по фразам (Директ считает их сам) + поведение на странице книги.
   // Любая неудача здесь не ломает загрузку: остаются прошлые данные, причина — в mErr
   // цели из настроек Метрики + цели стратегий кампаний (за них платим — их и считаем)
-  const m = s.direct?.metrika || {}, goalIds = [...new Set([...campaigns.map((c) => c.goal).filter(Boolean).map(String), ...(m.goals || []).map((g) => String(g.id))])].slice(0, 10);
   let conv = old?.conv || [], kwConv = old?.kwConv || {}, mrows = old?.mrows || [], mErr = '', mAt = old?.mAt || null;
   if (goalIds.length && cids.length) {
     try {
