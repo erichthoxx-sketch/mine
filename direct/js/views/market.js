@@ -4,6 +4,7 @@ import { esc, acts, changes, toast, openSheet, more } from '../../../js/ui.js';
 import { num, fmtDate } from '../../../js/format.js';
 import { marketInsights, myRanks, watchReport, tropeForecast } from '../../../js/market.js';
 import { scanMarket, marketSnap, marketState, srcsOf, okSrc, MARKET_DEFAULT } from '../marketscan.js';
+import { marketWorldView } from './marketworld.js';
 
 const pc = (v) => Math.round(v * 100) + ' %';
 const short = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' млн' : n >= 1e3 ? (n / 1e3).toFixed(1).replace('.', ',') + ' тыс.' : String(Math.round(n)));
@@ -37,6 +38,7 @@ const spark = (h) => { if (!h || h.length < 3) return ''; const mx = Math.max(..
 const sub = (t) => `<div class="mk-sub">${t}</div>`;
 
 export function marketView(a) {
+  const worldHtml = marketWorldView(a);
   const c = a.ctx(), snap = marketSnap(a), srcs = srcsOf(c.settings), ui = a.ui, src = srcs.some((s) => s.url === ui.mkSrc) ? ui.mkSrc : null;
   const mine = [...new Set((c.data.w_books || []).flatMap((b) => b.tags || []))], isMine = (t) => mine.some((x) => x.toLowerCase() === t.toLowerCase());
   const myPrices = (c.data.books || []).map((b) => Number((b.priceHistory || []).slice(-1)[0]?.price) || 0).filter(Boolean);
@@ -53,7 +55,7 @@ export function marketView(a) {
       <div class="row" style="gap:8px"><select data-chg="mk.src" aria-label="Подборка" class="mk-sel"><option value="">Все подборки</option>${srcs.map((s) => `<option value="${esc(s.url)}"${src === s.url ? ' selected' : ''}>${esc(s.name.replace(/^Литнет · /, ''))}</option>`).join('')}<option value="+">+ Добавить подборку…</option></select>
       <button class="small-btn" data-act="mk.scan"${marketState.busy ? ' disabled' : ''}>${marketState.busy ? 'Читаю…' : 'Обновить'}</button></div></div>
     <p class="small muted" style="margin:0 0 16px">Топы Литнета${M ? ` · ${M.n} книг · срез ${fmtDate(M.date)}` : ''}${snap?.err ? ` · ${esc(snap.err)}` : ''}</p>`;
-  if (!M) return { html: head + `<div class="card"><p class="muted" style="margin:0">${marketState.busy ? 'Читаю топы — это около двух минут.' : 'Срезов пока нет. Нажмите «Обновить» — первый снимется за пару минут, дальше приложение делает это само раз в сутки.'}</p></div>` };
+  if (!M) return { html: worldHtml + head + `<div class="card"><p class="muted" style="margin:0">${marketState.busy ? 'Читаю топы — это около двух минут.' : 'Срезов пока нет. Нажмите «Обновить» — первый снимется за пару минут, дальше приложение делает это само раз в сутки.'}</p></div>` };
   const report = snap?.coverage?.[M.date] || null;
   const covered = report ? `<div class="card"><h2 style="margin:0 0 6px">Полнота источников</h2>
     <p class="small">Собрано ${report.collected || 0} из ${report.requested || 0} подборок Литнета, ${report.pages || 0} страниц. Это открытые топы, не весь книжный рынок.</p>
@@ -71,7 +73,7 @@ export function marketView(a) {
     M.gone.length ? sub('Выпали') + `<div class="list">${more('mk-gone', M.gone.map((b) => bookRow(b, `было место ${b.n}`)), 3)}</div>` : '',
     M.odd.length ? sub('В топе при малом числе читателей') + `<p class="small muted" style="margin:0 0 4px">Библиотек в десятки раз меньше, чем у соседей (обычно ${short(M.medLib)}). Слежу, сколько дней продержатся.</p><div class="list">${more('mk-odd', M.odd.map((b) => bookRow(b, `место ${b.n} · ${short(b.lib)}${b.days > 1 ? ` · ${b.days} дн.` : ''}`)), 4)}</div>` : '',
   ].filter(Boolean).join('');
-  return { html: `<section class="mk-page">${head}
+  return { html: worldHtml + `<section class="mk-page">${head}
     ${covered}
     <div class="card"><h2 style="margin:0 0 8px">Главное</h2>${M.notes.slice(0, 6).map((n) => `<p style="margin:6px 0">${esc(n)}</p>`).join('')}
       ${few ? '<p class="small muted" style="margin:10px 0 0">Книг в срезе пока мало — выводы осторожные. После следующего обновления их станет больше.</p>' : ''}
