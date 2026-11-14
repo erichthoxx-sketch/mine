@@ -56,6 +56,9 @@ test('В Планере «Новое дело»: книга и контакт �
   assert.doesNotMatch(dialog,/type="checkbox" name="contact"/);
   assert.match(dialog,/В Todoist: <span id="pdproj">/);
   assert.match(dialog,/ct\?\.kind === 'target' \|\| MONEY_RE\.test\(text\) \? 'Деньги и реклама'/);
-  assert.match(dialog,/await addLinkedTask\(contact\.id/);
-  assert.match(dialog,/await addOwnTask\(app\(\)\.ctx\(\)\.settings/);
+  // запись — общая с быстрой строкой «Новое дело» (addPlanTask)
+  assert.match(dialog,/await addPlanTask\(\{ content, date, b, section, contact \}\)/);
+  const add=s.slice(s.indexOf('async function addPlanTask'),s.indexOf("forms['plan.quick']"));
+  assert.match(add,/await addLinkedTask\(contact\.id/);
+  assert.match(add,/await addOwnTask\(app\(\)\.ctx\(\)\.settings/);
 });
