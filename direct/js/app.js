@@ -31,6 +31,7 @@ import { hooksView } from './views/hooks.js';
 import { marketView } from './views/market.js';
 import { readyGoalActs } from './views/pult.js';
 import { autoMarket } from './marketscan.js';
+import { autoMarketIntel } from './marketnews.js';
 import { autoMarketMail } from './marketmail.js';
 import { rub } from '../../js/format.js';
 import { moneyView } from './views/money.js';
@@ -193,7 +194,7 @@ async function savePendingToken() {
   } finally { saving = false; }
 }
 
-store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); autoCohorts(store).catch(console.warn); autoMarket(app); autoMarketMail(app); });
+store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); autoCohorts(store).catch(console.warn); autoMarket(app); autoMarketIntel(app); autoMarketMail(app); });
 startAiAutoSync(store, ['income', 'direct']);
 store.init().then(async () => {
   await savePendingToken();
