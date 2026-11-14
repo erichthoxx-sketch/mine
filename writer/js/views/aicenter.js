@@ -5,6 +5,8 @@ import { ic } from '../../../js/icons.js';
 import { bookSnapshot, snapshotMarkdown } from '../bookai.js';
 import { marketingSnapshot, incomeSnapshot, directSnapshot, readDirectDocs } from '../ai-system.js';
 import { syncDirectAccess } from '../../../js/aidirect.js';
+import * as drive from '../drive.js';
+import { syncDriveAnalytics, AI_DRIVE_FILENAME } from '../ai-drive-report.js';
 
 const app = () => window.__app;
 const worker = () => String(app().ctx().settings.bookAiWorker || '').replace(/\/+$/, '');
@@ -26,6 +28,8 @@ export function aiCenterCard(c) {
     '<div class="row" style="gap:8px;flex-wrap:wrap">' +
     '<button class="primary" data-act="ai.all"' + (running ? ' disabled' : '') + '>' + ic('link') + (when ? 'Обновить весь контекст' : 'Подключить весь контекст') + '</button>' +
     '<button data-act="ai.export"' + (running ? ' disabled' : '') + '>' + ic('download') + 'Скачать для любой нейросети</button>' +
+    '<button data-act="ai.drive"' + (running ? ' disabled' : '') + '>' + ic('refresh') + (s.aiDriveEnabled ? 'Обновить файл Google Drive' : 'Включить файл Google Drive') + '</button>' +
+    (s.aiDriveEnabled ? '<button data-act="ai.drive.off"' + (running ? ' disabled' : '') + '>Остановить обновление Drive</button>' : '') +
     '<button data-act="bai.settings">Настроить</button>' +
     (when ? '<button class="link" data-act="ai.clear">Отключить всё</button>' : '') +
     '</div>' +
@@ -33,7 +37,10 @@ export function aiCenterCard(c) {
       (s.aiLastCount != null ? ' · Книг: ' + Number(s.aiLastCount) : '') +
       (s.aiLastError ? ' · ' + esc(s.aiLastError) : '') +
       (s.aiDirectLive === true ? ' · Директ — вживую, только чтение' : '') + '</p>' : '') +
-    '<p class="hint">Прямой доступ работает в совместимых с MCP нейросетях после добавления адреса /mcp. Для остальных скачайте универсальный файл .md. Обновление данных выполняется отдельно; добавить коннектор в чужой чат автоматически нельзя.</p>' +
+    (s.aiDriveEnabled ? '<p class="small muted">Google Drive: последний снимок ' + esc(dateLabel(s.aiDriveAt) || 'не подтвержден') +
+      (drive.hasFreshToken() ? ' · вход Google действует' : ' · вход Google истек, нужно обновить вручную') +
+      '. Файл: ' + esc(AI_DRIVE_FILENAME) + '</p>' : '') +
+    '<p class="hint">Аналитические снимки MCP обновляются при работе приложений после первого согласия. Рукописи по-прежнему обновляются только кнопкой «Обновить весь контекст». Для ChatGPT отдельный закрытый файл Google Drive обновляется автоматически, пока открытa Мастерская и действует вход Google (примерно час). Это не постоянный серверный доступ к Firebase; устаревшие даты надо проверять.</p>' +
     '</div>';
 }
 async function request(method, path, data) {
@@ -143,6 +150,28 @@ acts['ai.clear'] = async () => {
   return false;
 };
 
+
+// Google Drive — только аналитика, никаких полных рукописей или API-ключей.
+// Обновление по кнопке сначала продлевает OAuth (браузер разрешает popup лишь после клика).
+acts['ai.drive'] = async () => {
+  if (running) return false;
+  try { await drive.ensureToken(); }
+  catch (e) { toast('Google Drive: ' + (e.message || e)); return false; }
+  running = true; app().rerender();
+  try {
+    const r = await syncDriveAnalytics(app().store, { force: true });
+    if (r?.ok) toast('Аналитический файл Google Drive обновлён. Снимок: ' + dateLabel(r.at));
+  } catch (e) {
+    toast('Google Drive не обновлён: ' + (e.message || e));
+  } finally { running = false; app().rerender(); }
+  return false;
+};
+acts['ai.drive.off'] = async () => {
+  if (running) return false;
+  await app().store.saveSettings({ aiDriveEnabled: false });
+  toast('Автообновление остановлено. Уже созданный файл остаётся в вашем Google Drive.');
+  return false;
+};
 
 // Экспорт в единый Markdown, который можно вручную прикрепить к любому ИИ с поддержкой файлов.
 // Данные собираются на устройстве и не передаются в новую облачную систему из этого действия.
