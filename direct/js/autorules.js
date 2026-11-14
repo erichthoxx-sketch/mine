@@ -16,7 +16,8 @@ export const AUTO_MAX = 6;
 export function autoPlan({ main = {}, stats = {}, on = {}, today, goalActs = [], done = [] }) {
   const out = [], live = new Set((main.campaigns || []).filter((c) => c.state === 'ON').map((c) => c.id)), was = new Set(done);
   const push = (x) => { if (!was.has(x.key) && out.length < AUTO_MAX) out.push(x); };
-  if (on.goal) for (const g of goalActs) push({ rule: 'goal', key: `goal:${g.campaign}:${g.goal}`, act: g, text: `цель кампании → «${g.goalName}»` });
+  // Смена цели требует проверки её цены и ручного решения. В автоисполнении запрещена.
+  // Готовые goalActs остаются предложениями в approvalQueue.
   if (on.minus) {
     const neg = Object.fromEntries((main.campaigns || []).map((c) => [c.id, [...(c.negatives || []), ...(main.groups || []).filter((g) => g.cid === c.id).flatMap((g) => g.negatives || [])]]));
     for (const h of queryHints((stats.queries || []).filter((q) => live.has(q.cid) &&
@@ -37,10 +38,11 @@ export function autoPlan({ main = {}, stats = {}, on = {}, today, goalActs = [],
 // то же, что делают автоправила, но для правил, которые НЕ включены, — их действия ждут галочки. Плюс стартовые минус-слова.
 // no — ключи, на которые она ответила «Не надо» (settings.direct.queueNo); done — уже сделанное автоправилами.
 export function approvalQueue({ main = {}, stats = {}, on = {}, today, goalActs = [], done = [], no = [], starter = [], extra = [] }) {
-  const hide = new Set(no), off = { minus: !on.minus, places: !on.places, fatigue: !on.fatigue, goal: !on.goal };
+  const hide = new Set(no), off = { minus: !on.minus, places: !on.places, fatigue: !on.fatigue, goal: false };
   const names = Object.fromEntries((main.campaigns || []).map((c) => [c.id, c.name]));
   const out = [];
   for (const s of starter) out.push({ rule: 'starter', key: `starter:${s.campaign}`, act: s, text: `добавить базовые минус-слова (${s.phrases.length})`, cid: s.campaign });
+  for (const g of goalActs) out.push({ rule: 'goal', key: `goal:${g.campaign}:${g.goal}`, act: g, text: `Подтвердить вручную новую цель «${g.goalName}» — сверить цену и недельный бюджет` });
   const was0 = new Set(done);
   for (const x of extra) if (!was0.has(x.key)) out.push(x);
   // autoPlan режет до AUTO_MAX — для очереди берём пачками, пока есть новое
@@ -50,7 +52,7 @@ export function approvalQueue({ main = {}, stats = {}, on = {}, today, goalActs 
     if (!part.length) break;
     out.push(...part); seen.push(...part.map((x) => x.key), ...part.flatMap((x) => x.keys || []));
   }
-  const WHY = { littag: 'без действующей метки Литнет не привяжет к вам читательниц из рекламы; меняется только метка, кампания не переобучается', kwadd: 'запрос уже приводит читательниц — закрепляем его отдельной фразой, чтобы Директ показывал по нему увереннее', audience: 'самые тёплые читательницы; создание аудитории ничего не тратит и кампании не меняет', retarget: 'объявления группы увидят и те, кто добавил книгу, но не купил; бюджет и цена цели не меняются', newad: 'в группе мало объявлений — Директу не из чего выбирать; текст из Мастерской, без спойлеров, уйдёт на модерацию', starter: 'по «скачать», «fb2», «аудиокнига» ищут файл, а не книгу на Литнете', minus: 'по таким запросам приходят не читатели', places: '150+ кликов, 85%+ отказов, ноль конверсий по целям и свежий отчет', fatigue: 'объявление приелось: CTR заметно упал, в группе есть другие', goal: 'началась подписка — кампании пора учиться на покупках; цена цели и бюджет не меняются' };
+  const WHY = { littag: 'без действующей метки Литнет не привяжет к вам читательниц из рекламы; меняется только метка, кампания не переобучается', kwadd: 'запрос уже приводит читательниц — закрепляем его отдельной фразой, чтобы Директ показывал по нему увереннее', audience: 'самые тёплые читательницы; создание аудитории ничего не тратит и кампании не меняет', retarget: 'объявления группы увидят и те, кто добавил книгу, но не купил; бюджет и цена цели не меняются', newad: 'в группе мало объявлений — Директу не из чего выбирать; текст из Мастерской, без спойлеров, уйдёт на модерацию', starter: 'по «скачать», «fb2», «аудиокнига» ищут файл, а не книгу на Литнете', minus: 'по таким запросам приходят не читатели', places: '150+ кликов, 85%+ отказов, ноль конверсий по целям и свежий отчет', fatigue: 'объявление приелось: CTR заметно упал, в группе есть другие', goal: 'достигнуто 10 рекламных покупок в неделю: перед сменой цели проверь её цену и бюджет; автоматическое переключение запрещено' };
   return out.filter((x) => !hide.has(x.key)).map((x) => ({ ...x, text: x.rule === 'fatigue' ? 'остановить объявление: ' + x.text : x.text, cid: x.cid ?? x.act?.campaign ?? null, camp: names[x.cid ?? x.act?.campaign] || '', why: x.why || WHY[x.rule] || '' })).slice(0, 20);
 }
 
