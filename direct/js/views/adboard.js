@@ -11,8 +11,6 @@ import { linkCode } from '../../../writer/js/promolinks.js';
 import { litrefRows, royaltyPerSale } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { demo } from '../demo.js';
-import { pultModel } from './pult.js';
-import { goalsOf } from '../pult.js';
 
 const KIND = { good: 'up', bad: 'down', even: '', wait: 'muted' };
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -49,10 +47,9 @@ export function channelCard(a) {
   const refs = Object.fromEntries(litrefRows(mk?.litref || [], main).map((r) => [r.code.toLowerCase(), r]));
   const direct = stats?.daily?.length ? goalTotals(stats.daily, stats.conv || [], addDays(t, -89), t, { goals: main }) : null;
   const perSale = royaltyPerSale(c.data.sales || [], t)?.perSale ?? null;
-  // добавления в библиотеку с Директа за те же 90 дней × ценность добавления − уже купленное = что ещё принесут добавившие
-  const M = pultModel(a), libGoal = goalsOf(metrikaOf(c) || {}).lib;
-  const libN = direct && libGoal ? goalTotals(stats.daily, stats.conv || [], addDays(t, -89), t, { goals: [libGoal] }).conv : 0;
-  const exp = M.lv?.value != null && libN ? Math.max(0, libN * M.lv.value - (perSale != null ? (direct.conv || 0) * perSale : 0)) : 0;
+  // Общие счетчики библиотеки и покупки — не одна когорта.
+  // Нельзя учитывать их как гарантированную дополнительную рекламную выручку.
+  const exp = 0;
   const rows = channelCompare(c.data, c.settings, t, { refs, direct: direct && { cost: direct.cost, clicks: direct.clicks, conv: main.length ? direct.conv : null, exp }, perSale });
   if (!rows.length) return '';
   const v = channelVerdict(rows);
@@ -74,5 +71,5 @@ export function channelCard(a) {
     ${v ? `<p class="small"><b>${esc(v.text)}</b></p>` : '<p class="small muted">Вывод появится, когда хотя бы у двух каналов будет расход и 30+ читателей.</p>'}
     <div class="list">${rows.map(cell).join('')}</div>
     ${plan ? `<div class="item"><b>Бюджет на ${fmtMonth(b.month)}</b><div class="small">${plan}</div><div class="small muted">Как считается — «Доходы» → Финансы → Цели.</div></div>` : ''}
-    <p class="small muted">Читатели и покупки — по ссылкам Литнета в Метрике (у Директа — клики и покупки из его отчётов). «Дохода сверх обычного» — как в «Доходах».</p></div>`;
+    <p class="small muted">Сравнение каналов и бюджетные рекомендации — статистические модели по кампаниям из «Доходов» и целям Метрики, не доказанная прибыль конкретных рекламных переходов. Для книжной экономики и зрелых когорт смотри отдельный блок выше. Прогнозы дополнительных денег из библиотек к полученным роялти не прибавляются.</p></div>`;
 }
