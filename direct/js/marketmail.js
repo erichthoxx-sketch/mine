@@ -1,5 +1,5 @@
 // Письмо «Рынок за неделю»: раз в неделю (с понедельника), когда открыт Директ и есть срезы за 5+ дней. Уходит через сервис писем (op: note, версия 8+).
-import { marketInsights, marketDigest, myRanks, watchReport } from '../../js/market.js';
+import { marketInsights, marketDigest, myRanks, watchReport, tropeForecast } from '../../js/market.js';
 import { marketSnap } from './marketscan.js';
 import { weekKeyOf } from './weekreview.js';
 import { loadSiteRaw, loadMailCfg, mailCall } from '../../js/sitepub.js';
@@ -14,7 +14,7 @@ export function autoMarketMail(app) {
       if (d.market?.mailedWeek === week || d.market?.mailOff) return;
       const mine = [...new Set((c.data.w_books || []).flatMap((b) => b.tags || []))];
       const snap = marketSnap(app);
-      const text = marketDigest(marketInsights(snap, { mine }), { myTropes: mine, ranks: myRanks(snap), watched: watchReport(snap, d.market?.watch || []) });
+      const text = marketDigest(marketInsights(snap, { mine }), { myTropes: mine, ranks: myRanks(snap), watched: watchReport(snap, d.market?.watch || []), forecast: tropeForecast(snap) });
       if (!text) return; // сравнивать пока не с чем
       const u = app.store.auth?.currentUser; if (!u) return;
       const [cfg, raw] = await Promise.all([loadMailCfg(u.uid, await u.getIdToken()), loadSiteRaw()]);

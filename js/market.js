@@ -173,12 +173,18 @@ export function trimSnap(snap, keep = 45) {
 }
 
 // Письмо «Рынок за неделю» (обычным текстом): главное, кто растёт, новые и выпавшие, аномалии. Пусто — писать не о чем
-export function marketDigest(M, { myTropes = [], ranks = [], watched = [] } = {}) {
+export function marketDigest(M, { myTropes = [], ranks = [], watched = [], forecast = null } = {}) {
   if (!M || !M.prevDate) return '';
   const fmt = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`, book = (b) => `«${b.title}»${b.author ? ` (${b.author})` : ''}`;
   const L = [`Топы Литнета: ${fmt(M.prevDate)} → ${fmt(M.date)}.`, '', ...M.notes];
   const up = M.tropes.filter((t) => t.delta != null && t.delta >= 0.05).slice(0, 4), down = M.tropes.filter((t) => t.delta != null && t.delta <= -0.05).slice(0, 4);
   if (up.length || down.length) { L.push('', 'Тропы:'); for (const t of up) L.push(`  ▲ ${t.name}: ${Math.round(t.was * 100)} % → ${Math.round(t.share * 100)} %`); for (const t of down) L.push(`  ▼ ${t.name}: ${Math.round(t.was * 100)} % → ${Math.round(t.share * 100)} %`); }
+  if (forecast?.ready && (forecast.up.length || forecast.down.length)) {
+    const pp = (v) => Math.round(v * 100) + ' %';
+    L.push('', `Прогноз тропов на месяц (уверенность — ${forecast.conf}):`);
+    for (const x of forecast.up.slice(0, 4)) L.push(`  ▲ ${x.name}: ${pp(x.share)} → ≈ ${pp(x.proj)}${x.why[0] ? ' — ' + x.why[0] : ''}`);
+    for (const x of forecast.down.slice(0, 3)) L.push(`  ▼ ${x.name}: ${pp(x.share)} → ≈ ${pp(x.proj)}${x.why[0] ? ' — ' + x.why[0] : ''}`);
+  }
   if (ranks.length) { L.push('', 'Ваши книги в топах:'); for (const r of ranks) L.push(`  «${r.title}» — ${r.now} место${r.was != null ? ` (неделю назад ${r.was})` : ''}`); }
   const evs = watched.filter((w) => w.events.length);
   if (evs.length) { L.push('', 'Соперницы:'); for (const w of evs) for (const e of w.events) L.push(`  ${w.name}: «${e.title}» — ${e.text}`); }
