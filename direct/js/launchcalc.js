@@ -123,11 +123,11 @@ export function launchPlan(cfg, { today, wbooks = [], siteBooks = [], metrika = 
       step('limit', cfg.limitVerified, `Недельный бюджет ≈ ${money.freeWeek} ₽`),
     ],
     paid: [
-      step('switch', cfg.buySwitched || (picked?.goal && buy && Number(picked.goal) === Number(buy.id)), `Главная цель — «${buy?.name || 'Покупка книги'}»`, 'В день старта подписки: стратегия → целевые действия → покупка главной (библиотеку можно оставить второй).'),
+      step('switch', cfg.buySwitched || (picked?.goal && buy && Number(picked.goal) === Number(buy.id)), `Цель «${buy?.name || 'Покупка книги'}» — только когда накопится хотя бы 10 покупок с рекламы за неделю`, 'Открытие подписки само по себе НЕ повод менять цель стратегии. До подтверждения частоты покупок оставьте «Добавление в библиотеку». Изменение цели — с ручным подтверждением.'),
       step('limit2', cfg.limit2Verified, `Недельный бюджет ≈ ${money.paidWeek} ₽ на подписку`),
     ],
   };
-  const next = phase === 'prep' ? { date: pubDate, text: 'первая глава — включаем рекламу' } : phase === 'free' ? { date: subDate, text: subDate ? 'старт подписки — меняем цель на покупку' : 'дата старта подписки ещё не известна' } : { date: subDate ? addD(subDate, 14) : '', text: 'две недели подписки — подводим итоги' };
+  const next = phase === 'prep' ? { date: pubDate, text: 'первая глава — включаем рекламу' } : phase === 'free' ? { date: subDate, text: subDate ? 'старт подписки — проверяем первые покупки, цель пока не меняем' : 'дата старта подписки ещё не известна' } : { date: subDate ? addD(subDate, 14) : '', text: 'две недели подписки — подводим итоги' };
   return { book: cfg.book, wb, sb, pubDate, subDate, bookUrl, src, phase, lib, buy, royalty: roy, libValue: lv, money, picked, steps, next, mk: mkTotals, daysToNext: next.date ? dayDiff(today, next.date) : null };
 }
 
@@ -136,7 +136,7 @@ export function launchMilestones(p) {
   const out = [], add = (date, title, sub) => { if (date) out.push({ date, title, sub }); };
   const b = `«${p.book}»`;
   if (p.pubDate) { add(addD(p.pubDate, -3), `Реклама ${b}: проверить черновик кампании`, 'Директ → Реклама → план запуска'); add(p.pubDate, `Включить рекламу ${b}`, 'цель — добавление в библиотеку'); }
-  if (p.subDate) { add(p.subDate, `Реклама ${b}: цель — покупка`, 'старт подписки: сменить главную цель в Директе'); add(addD(p.subDate, 14), `Итоги рекламы ${b}`, 'Директ → Реклама: окупаемость и что дальше'); }
+  if (p.subDate) { add(p.subDate, `Реклама ${b}: проверить покупки, не менять цель автоматически`, 'старт подписки: сохранить библиотеку до 10 рекламных покупок за неделю'); add(addD(p.subDate, 14), `Итоги рекламы ${b}`, 'Директ → Реклама: окупаемость и что дальше'); }
   return out;
 }
 
