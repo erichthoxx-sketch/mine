@@ -202,7 +202,8 @@ export function campaignLevers(camp, st, econ, wk, { ads = [], daily = [], today
 export function campaignAlerts(camp, st, econ, { daily = [], conv = [], today, goals }) {
   const out = [];
   if (st.key === 'idle') out.push({ tone: 'bad', title: `«${camp.name}»: нет показов со вчерашнего дня`, how: 'Частые причины — кончились деньги на счёте, недельный бюджет исчерпан, ставка/цена цели слишком низкие для аукциона. Проверьте баланс в кабинете Директа.' });
-  if (st.key === 'capped') out.push({ tone: 'warn', title: `«${camp.name}»: недельный бюджет почти потрачен`, how: 'До понедельника показов почти не будет. Если добавление дешевле его ценности — бюджет стоит поднять в кабинете.' });
+  if (st.key === 'capped') out.push({ tone: 'warn', title: `«${camp.name}»: недельный бюджет почти потрачен`, how: 'До понедельника показов почти не будет. Перед увеличением бюджета проверьте подтвержденные покупки и актуальность целей.' });
+  if (econ.usable === false) return out;
   // цена добавления за 3 последних дня — против цели
   if (econ.target && goals.lib) {
     const from = addDays(today, -2), g = goalTotals(daily, conv, from, today, { cid: camp.id, goals: [goals.lib] });
