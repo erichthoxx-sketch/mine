@@ -53,7 +53,7 @@ export function parseLitnetList(text) {
 // Срез дня — компактно (в базу): книги отдельно (название, автор, тропы — не меняются), цифры — по дням
 export function packDay(rows) {
   return rows.map((r, i) => ({ id: r.id, n: i + 1, v: r.views, l: r.lib, k: r.likes, c: r.comments, p: r.price, f: r.full, o: r.off, g: r.pages, s: r.status === 'done' ? 1 : 0, e: r.excl ? 1 : 0,
-    tr: (r.tropes || []).map((t) => TROPES.findIndex(([name]) => name === t)).filter((i) => i >= 0) }));
+    ...(Array.isArray(r.tropes) ? { tr: r.tropes.map((t) => TROPES.findIndex(([name]) => name === t)).filter((i) => i >= 0) } : {}) }));
 }
 export const bookCard = (r) => ({ t: r.title, a: r.author, u: r.url, tr: r.tropes, an: r.annot.slice(0, 220) });
 
