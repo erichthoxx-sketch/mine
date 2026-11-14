@@ -3,6 +3,7 @@
 // каждое пишется в «Что меняли» (by: 'auto'). Цену цели и бюджет правила не трогают никогда.
 import { queryHints, fatigueHints } from './dcalc.js';
 import { placementRows, autoPlacementCandidates } from './qualitycalc.js';
+import { conversionEvidence } from './evidence.js';
 
 export const AUTO_RULES = [
   ['minus', 'Мусорные запросы — в минус-слова', '«скачать», «аудиокнига», «фильм» и подобные: слово добавляется к минус-словам кампании'],
@@ -25,7 +26,7 @@ export function autoPlan({ main = {}, stats = {}, on = {}, today, goalActs = [],
       !Object.values(q.conv || {}).some((n) => Number(n) > 0)), neg)) if (h.clicks >= 2 || h.queries.length >= 2) push({ rule: 'minus', key: `minus:${h.cid}:${h.word}`, act: { do: 'minus', campaign: h.cid, phrases: [h.word], why: `автоправило: запросы вроде «${h.queries[0]}»` }, text: `минус-слово «${h.word}»` });
   }
   if (on.fatigue) for (const h of fatigueHints({ main, stats, today })) if (h.act && live.has(h.cid)) push({ rule: 'fatigue', key: `fatigue:${h.aid}`, act: { ...h.act, why: 'автоправило: ' + h.act.why }, text: h.title });
-  if (on.places) {
+  if (on.places && !stats.placementErr && conversionEvidence(stats, today).ready) {
     const by = {};
     for (const p of autoPlacementCandidates(placementRows(stats.placements || [], main.campaigns || []),
       { reportAt: stats.placementAt, today })) if (live.has(p.cid)) (by[p.cid] ||= []).push(p.place);
