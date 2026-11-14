@@ -4,6 +4,7 @@ import { keepNavDown } from '../../js/vvfix.js';
 import { createStore, authErrorText } from '../../js/store.js';
 import { autoDirectAccess } from '../../js/aidirect.js';
 import { startAiAutoSync } from '../../js/ai-autosync.js';
+import { startDriveMirror } from './ai-drive-report.js';
 import { runOneoffs } from './oneoff.js';
 import { autoPiracy } from './piracyscan.js';
 import { autoMonthMail } from './monthmail.js';
@@ -37,7 +38,7 @@ import { legendPage } from './views/legend.js';
 import { cleanText, cleanedMsg } from '../../js/cleantext.js';
 
 export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews', 'w_promolinks', 'w_blog', 'w_piracy'];
-const store = createStore({ colls: [...WCOLLS, 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
+const store = createStore({ colls: [...WCOLLS, 'd_snap', 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 initAccent(store);
 keepNavDown(); // iPhone: нижнее меню не «повисает» посреди экрана
 const ui = { route: '/', planTab: 'books', ideaQ: '', ideaBook: '', ideaSt: 'open', ideaKind: '', ideaN: 50, openIdea: null, mSt: 'progress', mQ: '', mTab: 'texts', linkQ: '' };
@@ -169,6 +170,7 @@ try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem
 acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
 store.subscribe(() => { safeRender(); scheduleTodoist(app); });
 startAiAutoSync(store, ['marketing', 'income']);
+startDriveMirror(store);
 // конкурсы, разобранные старой версией: один раз разбираем условия заново (даты, объём, имя файла); название не трогаем, если оно не «Литнет» и т. п.
 const CONTEST_PV = 3;
 let reparsing = false;
