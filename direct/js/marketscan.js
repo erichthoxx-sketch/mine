@@ -7,6 +7,8 @@ export const MARKET_DEFAULT = [
   { name: 'Литнет · современный любовный роман', url: 'https://litnet.com/ru/top/sovremennyy-lyubovnyy-roman' },
   { name: 'Литнет · остросюжетный любовный роман', url: 'https://litnet.com/ru/top/ostrosugetnyj-lyubovnyj-roman' },
   { name: 'Литнет · все жанры', url: 'https://litnet.com/ru/top/all' },
+  { name: 'Литнет · бестселлеры', url: 'https://litnet.com/ru/top/best' },
+  { name: 'Литнет · молодежная проза', url: 'https://litnet.com/ru/top/sovremennyy-lyubovnyy-roman-i-molodejnaya-proza' },
 ];
 export const srcsOf = (settings) => (settings.direct?.market?.srcs?.length ? settings.direct.market.srcs : MARKET_DEFAULT);
 export const okSrc = (url) => /^https:\/\/litnet\.com\/ru\/top\/[a-z0-9-]+\/?$/i.test(String(url || '').trim().split('?')[0]);
@@ -22,10 +24,12 @@ export async function scanMarket(app) {
   const day = { ...(snap.days[today] || {}) }, myDay = {};
   const me = String(c.settings.pseudonym || '').toLowerCase().trim(), isMe = (r) => me && String(r.author || '').toLowerCase().trim() === me;
   let got = 0;
+  const coverage = { requested: srcsOf(c.settings).length, collected: 0, pages: 0, bySource: {}, errors: [] };
   try {
     const list = srcsOf(c.settings);
     for (let i = 0; i < list.length; i++) {
-      const s = list[i], pages = i < 2 ? 3 : 1, rows = [], seen = new Set(); // у двух первых подборок берём 3 страницы (≈ 50 книг): на 16 книгах аналитики не построить
+      const s = list[i], pages = i < 2 ? 3 : 1, rows = [], seen = new Set();
+      let pagesRead = 0; // у двух первых подборок берём 3 страницы (≈ 50 книг): на 16 книгах аналитики не построить
       try {
         for (let pg = 1; pg <= pages; pg++) {
           const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 45000);
@@ -35,6 +39,7 @@ export async function scanMarket(app) {
           if (pg === 1 && part.length < 5) throw new Error('не вижу списка книг');
           if (!part.length) break;
           rows.push(...part);
+          pagesRead++;
           await sleep(3500);
         }
         // её книги: у двух первых подборок листаем глубже (до 12 страниц), пока не найдём — чтобы видеть её место и когда она не в первой полусотне
@@ -53,11 +58,20 @@ export async function scanMarket(app) {
         }
         if (me && rows.some(isMe)) myDay[s.url] = rows.map((x, j) => ({ x, n: j + 1 })).filter((h) => isMe(h.x)).map((h) => ({ id: h.x.id, n: h.n, l: h.x.lib, v: h.x.views }));
         day[s.url] = packDay(rows); got++;
+        coverage.bySource[s.url] = { name: s.name, books: rows.length, pages: pagesRead, ok: true };
+        coverage.pages += pagesRead;
         for (const x of rows) snap.books[x.id] = bookCard(x);
-      } catch (e) { marketState.err = `${s.name}: ${e.name === 'AbortError' ? 'нет ответа' : e.message}`; if (rows.length) { day[s.url] = packDay(rows); got++; for (const x of rows) snap.books[x.id] = bookCard(x); } }
+      } catch (e) {
+        const message = `${s.name}: ${e.name === 'AbortError' ? 'нет ответа' : e.message}`;
+        coverage.errors.push(message);
+        coverage.bySource[s.url] = { name: s.name, books: rows.length, pages: pagesRead, ok: false, error: message };
+        if (rows.length) { day[s.url] = packDay(rows); got++; coverage.pages += pagesRead; for (const x of rows) snap.books[x.id] = bookCard(x); }
+      }
     }
     delete myDay.__n;
-    if (got) { snap.days = { ...snap.days, [today]: day }; snap.my = { ...(snap.my || {}), [today]: myDay }; await app.store.put('d_snap', { ...trimSnap(snap), id: 'market', at: new Date().toISOString(), err: marketState.err }); }
+    coverage.collected = got;
+    marketState.err = coverage.errors.join(' · ');
+    if (got) { snap.coverage = { ...(snap.coverage || {}), [today]: coverage }; snap.days = { ...snap.days, [today]: day }; snap.my = { ...(snap.my || {}), [today]: myDay }; await app.store.put('d_snap', { ...trimSnap(snap), id: 'market', at: new Date().toISOString(), err: marketState.err }); }
   } finally { marketState.busy = false; }
   return { got, err: marketState.err };
 }
