@@ -57,7 +57,7 @@ export function incomeSnapshot(data, generatedAt = new Date().toISOString()) {
     sales, campaigns, reports };
 }
 export function directSnapshot(docs, generatedAt = new Date().toISOString(), goalList = []) {
-  const main = docs?.main || {}, stats = docs?.stats || {}, mk = docs?.mk || {}, market = docs?.market || {}, world = docs?.marketintel || {};
+  const main = docs?.main || {}, stats = docs?.stats || {}, mk = docs?.mk || {}, market = docs?.market || {}, world = docs?.marketintel || {}, cohorts = docs?.cohorts || {};
   const campaigns = (main.campaigns || []).slice(0, 200).map((x) => pick(x, ['id', 'name', 'state', 'status', 'type', 'start', 'daily', 'budget', 'strategy', 'counters']));
   const daily = (stats.daily || []).slice(-4000).map((x) => pick(x, ['date', 'cid', 'name', 'impr', 'clicks', 'cost', 'conversions', 'orders']));
   const queries = (stats.queries || []).slice(0, 250).map((x) => pick(x, ['cid', 'query', 'text', 'phrase', 'clicks', 'impr', 'cost', 'conversions']));
@@ -88,6 +88,11 @@ export function directSnapshot(docs, generatedAt = new Date().toISOString(), goa
     conversionAt: stats.mAt || null, conversionError: text(stats.mErr || '', 400),
     placementAt: stats.placementAt || null, placementError: text(stats.placementErr || '', 400),
     campaigns, daily, keywords, queries, adDaily, conversions: conv, placements, market: marketContext,
+    cohorts: { at: cohorts.at || null, from: cohorts.from || null, to: cohorts.to || null,
+      schema: cohorts.schema || null, note: cohorts.note || 'Покупки любой книги, не подтвержденный доход по книге.',
+      groups: cohorts.groups || {},
+      camps: Object.fromEntries(Object.entries(cohorts.camps || {}).slice(0, 75)),
+      campBooks: Object.fromEntries(Object.entries(cohorts.campBooks || {}).slice(0, 75)) },
     world: { fetchedAt: world.at || null, attemptedAt: world.attemptedAt || null,
       sourceStatus: (world.statuses || []).slice(0, 12).map((s) => pick(s, ['name', 'ok', 'count', 'checkedAt', 'error'])),
       headlines: (world.items || []).slice(0, 35).map((x) => pick(x, ['title', 'url', 'date', 'source', 'lang'])),
@@ -104,5 +109,5 @@ export async function readDirectDocs(store) {
   const { collection, getDocsFromServer } = store.F;
   const result = await getDocsFromServer(collection(store.db, 'users', store.user.uid, 'd_snap'));
   const docs = Object.fromEntries(result.docs.map((d) => [d.id, d.data()]));
-  return { main: docs.main || {}, stats: docs.stats || {}, mk: docs.mk || {}, market: docs.market || {}, marketintel: docs.marketintel || {} };
+  return { main: docs.main || {}, stats: docs.stats || {}, mk: docs.mk || {}, market: docs.market || {}, marketintel: docs.marketintel || {}, cohorts: docs.cohorts || {} };
 }
