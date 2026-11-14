@@ -26,7 +26,7 @@ export const MARKET_INTEL_SOURCES = Object.freeze([
 
 export const MARKET_INTEL_FEEDS = FEEDS;
 const relevant = /\b(romance|romantasy|dark romance|sports romance|contemporary romance|romantic suspense|young adult|new adult|booktok|bookstagram|book publishing|book industry|publishing|publisher|self.publishing|indie author|ebook|audiobook|book sales|book market|readers|fiction|bestseller|kindle|kobo|rights|translation)\b|любовн|роман|самиздат|издатель|книг|читател|аудиокниг|подписк|продаж|тр(о|ё)п/i;
-export const relevance = (entry) => relevant.test((entry.title || '') + ' ' + (entry.description || '') + ' ' + (entry.source || ''));
+export const relevance = (entry) => relevant.test((entry.title || '') + ' ' + (entry.description || ''));
 const decode = (v) => String(v || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 const clean = (s) => decode(String(s || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, 260);
 const safeLink = (s) => { try { const u = new URL(decode(String(s || '').trim())); return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : ''; } catch { return ''; } };
