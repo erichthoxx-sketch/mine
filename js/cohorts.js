@@ -5,11 +5,16 @@
 
 export const LOG_FIELDS = ['ym:s:visitID', 'ym:s:clientID', 'ym:s:dateTime', 'ym:s:<attribution>TrafficSource', 'ym:s:<attribution>AdvEngine',
   'ym:s:<attribution>DirectClickOrder', 'ym:s:<attribution>UTMSource', 'ym:s:<attribution>UTMCampaign', 'ym:s:<attribution>UTMContent',
-  'ym:s:goalsID', 'ym:s:goalsDateTime'];
+  'ym:s:goalsID', 'ym:s:goalsDateTime', 'ym:s:startURL'];
 const DAY = 86400000;
 const dayOf = (s) => String(s || '').slice(0, 10);
 const diffDays = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / DAY);
 const addD = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * DAY).toISOString().slice(0, 10);
+// Из URL сохраняем ТОЛЬКО публичный номер книги: ни адреса, ни UTM, ни персональные параметры.
+export const landingBookId = (raw) => {
+  const m = /(?:^|\/)litnet\.com\/(?:ru|en)\/(?:book|reader)\/[^/?#]+-b(\d{2,15})(?:[?#]|$)/i.exec(String(raw || '').replace(/^https?:\/\//i, '/'));
+  return m?.[1] || null;
+};
 // «[1,2]» / «['2026-11-10 12:00:00','…']» → массив строк
 const arr = (v) => String(v || '').replace(/^\[|\]$/g, '').split(',').map((x) => x.trim().replace(/^'|'$/g, '')).filter(Boolean);
 
@@ -30,12 +35,12 @@ export function buildCohortData(tsvParts = [], { from, to, goals }) {
     if (!lines.length) continue;
     const head = lines[0].split('\t').map((h) => h.replace(/^ym:s:/, '').replace(/^(<attribution>|last)/, ''));
     const at = (k) => head.indexOf(k);
-    const iC = at('clientID'), iT = at('dateTime'), iS = at('TrafficSource'), iE = at('AdvEngine'), iD = at('DirectClickOrder'),
+    const iC = at('clientID'), iT = at('dateTime'), iS = at('TrafficSource'), iE = at('AdvEngine'), iD = at('DirectClickOrder'), iB = at('startURL'),
       iUs = at('UTMSource'), iUc = at('UTMCampaign'), iUn = at('UTMContent'), iG = at('goalsID'), iGt = at('goalsDateTime');
     for (const l of lines.slice(1)) {
       const c = l.split('\t');
       if (!c[iC] || c[iC] === '0') continue;
-      const v = { t: c[iT], src: { t: c[iS] || '', e: c[iE] || '', d: c[iD] && c[iD] !== '0' ? c[iD] : '', s: c[iUs] || '', c: c[iUc] || '', n: c[iUn] || '' }, goals: [] };
+      const v = { t: c[iT], b: iB >= 0 ? landingBookId(c[iB]) : null, src: { t: c[iS] || '', e: c[iE] || '', d: c[iD] && c[iD] !== '0' ? c[iD] : '', s: c[iUs] || '', c: c[iUc] || '', n: c[iUn] || '' }, goals: [] };
       const ids = arr(c[iG]), ts = arr(c[iGt]);
       ids.forEach((g, i) => { if (G[g]) v.goals.push([G[g], ts[i] || c[iT]]); });
       (byClient.get(c[iC]) || byClient.set(c[iC], []).get(c[iC])).push(v);
@@ -52,7 +57,7 @@ export function buildCohortData(tsvParts = [], { from, to, goals }) {
     const days = (k) => { const b = firstDay(k); return b ? Math.max(0, diffDays(d0, dayOf(b.t))) : null; };
     const buy = firstDay('buy');
     people.push([diffDays(from, d0), idx(first.src), days('read'), days('lib'), days('buyStart'), buy ? Math.max(0, diffDays(d0, dayOf(buy.t))) : null,
-      buy && buy.v !== first ? 1 : 0, buy ? idx(buy.v.src) : null]);
+      buy && buy.v !== first ? 1 : 0, buy ? idx(buy.v.src) : null, first.b || null]);
   }
   return { from, to, sources, people };
 }
@@ -114,17 +119,33 @@ export async function autoCohorts(store, { days = 90 } = {}) {
 export function cohortSummary(data, today) {
   const span = data?.from && today ? Math.round((Date.parse(today) - Date.parse(data.from)) / 86400000) : 0;
   const kind = (s) => (s?.d || /direct/i.test(s?.e || '') ? 'direct' : s?.t === 'ad' ? 'ads' : 'other');
-  const mk = () => ({ n: 0, lib: 0, buy: 0, late: 0, days: [], w: { 7: [0, 0], 30: [0, 0], 60: [0, 0], 90: [0, 0] } });
-  const groups = { direct: mk(), ads: mk(), other: mk() }, camps = {};
-  for (const [off, si, , lib, , buy, late] of data?.people || []) {
+  const mk = () => ({ n: 0, lib: 0, buy: 0, late: 0, days: [],
+    w: { 7: [0, 0], 30: [0, 0], 60: [0, 0], 90: [0, 0] },
+    // Среди читательниц, добавивших в библиотеку, измеряем ПОСЛЕДУЮЩУЮ покупку.
+    // Покупка — любой книги автора: у цели пока нет ID приобретенного произведения.
+    libToBuy: { 7: [0, 0], 14: [0, 0], 30: [0, 0] } });
+  const groups = { direct: mk(), ads: mk(), other: mk() }, camps = {}, campBooks = {};
+  for (const [off, si, , lib, , buy, late, , landingBook] of data?.people || []) {
     const src = data.sources[si], age = span - off;
-    for (const g of [groups[kind(src)], ...(src?.d ? [(camps[src.d] ||= mk())] : [])]) {
+    for (const g of [groups[kind(src)],
+      ...(src?.d ? [(camps[src.d] ||= mk())] : []),
+      ...(src?.d && landingBook ? [((campBooks[src.d] ||= {})[String(landingBook)] ||= mk())] : [])]) {
       g.n++; if (lib != null) g.lib++;
       if (buy != null) { g.buy++; g.days.push(buy); if (late) g.late++; }
       for (const d of [7, 30, 60, 90]) if (age >= d) { g.w[d][0]++; if (buy != null && buy <= d) g.w[d][1]++; }
+      for (const d of [7, 14, 30]) if (lib != null && lib >= 0 && age - lib >= d) {
+        g.libToBuy[d][0]++;
+        if (buy != null && buy >= lib && buy - lib <= d) g.libToBuy[d][1]++;
+      }
     }
   }
   const fin = (g) => { const ds = g.days.sort((a, b) => a - b); return { n: g.n, lib: g.lib, buy: g.buy, lateShare: g.buy ? g.late / g.buy : null, median: ds.length ? ds[Math.floor(ds.length / 2)] : null,
-    by: Object.fromEntries(Object.entries(g.w).map(([d, [n, k]]) => [d, n >= 20 ? k / n : null])) }; };
-  return { from: data?.from || '', to: data?.to || '', groups: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, fin(g)])), camps: Object.fromEntries(Object.entries(camps).map(([k, g]) => [k, fin(g)])) };
+    by: Object.fromEntries(Object.entries(g.w).map(([d, [n, k]]) => [d, n >= 20 ? k / n : null])),
+    libToBuy: Object.fromEntries(Object.entries(g.libToBuy).map(([d, [n, k]]) =>
+      [d, { eligible: n, buyers: k, rate: n >= 20 ? k / n : null }])) }; };
+  return { from: data?.from || '', to: data?.to || '', groups: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, fin(g)])), camps: Object.fromEntries(Object.entries(camps).map(([k, g]) => [k, fin(g)])),
+    campBooks: Object.fromEntries(Object.entries(campBooks).map(([cid, byBook]) =>
+      [cid, Object.fromEntries(Object.entries(byBook).map(([bid, g]) => [bid, fin(g)]))])),
+    note: 'Когорта — первый наблюдаемый визит за 90 дней. Покупка любой книги автора; ID купленной книги в цели не передается.',
+    schema: 2 };
 }
