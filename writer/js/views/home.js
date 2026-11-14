@@ -160,9 +160,11 @@ export function homeView(a) {
         <span><b>${rub(monthInc, 0)}</b> доход</span></div></div>`;
   const remRow = (r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${r.n === 0 ? 'сегодня' : `${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}`}</span></a>`;
   const nowRem = rem.filter((r) => r.n <= 0), soonRem = rem.filter((r) => r.n > 0);
-  const todayCard = `<div class="card hm-todo"><div class="row between"><h2 style="margin:0">Сегодня</h2><button class="link small" data-act="go" data-to="/plan">Планер →</button></div>
+  // «+» — новое дело в Планер прямо с Главной (13.11.2026, её просьба: «кнопку, можно плюсик, но гармоничный»)
+  const todayCard = `<div class="card hm-todo"><div class="row between"><h2 style="margin:0">Сегодня</h2><button class="plus-btn hm-plus" data-act="td.addPlan" data-d="${c.today}" title="Новое дело" aria-label="Новое дело">${ic('plus')}</button></div>
       ${nowRem.length ? `<div class="list">${more('home-now', nowRem.map(remRow), 5)}</div>` : '<p class="small muted" style="margin:10px 0 0">На сегодня дел нет.</p>'}
-      ${soonRem.length ? `<div class="hm-sub">Скоро</div><div class="list">${more('home-soon', soonRem.map(remRow), 3)}</div>` : ''}</div>`;
+      ${soonRem.length ? `<div class="hm-sub">Скоро</div><div class="list">${more('home-soon', soonRem.map(remRow), 3)}</div>` : ''}
+      <div class="hm-more"><button class="link small" data-act="go" data-to="/plan">Весь Планер →</button></div></div>`;
   const html = `<section class="hm">
     <div class="hm-main">${hero}
       ${inWork.map((r) => workCard(c, r)).join('')}

@@ -3488,3 +3488,8 @@ svg.mk-rk .mk-rel { stroke: var(--good, #2e7d5b); stroke-width: 8; stroke-lineca
 @media (max-width: 720px) { .plan-dayh .dn-d { display: block; font: 400 15px/1.3 var(--font-body, inherit); color: var(--text-2); margin-top: 4px; } .plan-dayh .dn-dot { display: none; } }
 /* Меню приложений на телефоне: под кнопкой, в пределах экрана (место считает ecoPlace в ui.js) */
 @media (max-width: 720px) { :root .eco { position: fixed; top: var(--eco-top, 120px); left: var(--eco-left, 16px); right: auto; width: 220px; min-width: 0; z-index: 60; } }
+/* Главная Мастерской: «+» нового дела — мягкий круг, как у кнопок шапки */
+:root button.plus-btn.hm-plus { width: 34px; height: 34px; min-width: 34px; min-height: 34px; background: var(--soft, var(--surface-2)) !important; color: var(--text) !important; }
+:root button.plus-btn.hm-plus:hover { background: var(--text) !important; color: var(--bg) !important; }
+:root button.plus-btn.hm-plus .ic { width: 18px; height: 18px; stroke-width: 1.9; }
+.hm-more { margin-top: 12px; text-align: right; }
