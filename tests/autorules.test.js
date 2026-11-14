@@ -5,7 +5,8 @@ import { autoPlan, AUTO_MAX } from '../direct/js/autorules.js';
 const main = { campaigns: [{ id: 7, name: 'ЕПК', state: 'ON', negatives: ['фильм'] }, { id: 8, name: 'Стоит', state: 'OFF', negatives: [] }], groups: [{ cid: 7, negatives: ['аудиокнига'] }], ads: [], keywords: [] };
 const stats = {
   queries: [{ query: 'развод роман скачать fb2', cid: 7, impr: 40, clicks: 4, cost: 3 }, { query: 'роман слушать аудиокнига', cid: 7, impr: 30, clicks: 5, cost: 2 }, { query: 'роман скачать', cid: 8, impr: 30, clicks: 5, cost: 2 }, { query: 'любовный роман фильм', cid: 7, impr: 9, clicks: 3, cost: 1 }],
-  placements: [{ CampaignId: 7, Placement: 'game.app.com', AdNetworkType: 'AD_NETWORK', Impressions: 900, Clicks: 40, Cost: 5, BounceRate: 80 }, { CampaignId: 7, Placement: 'dzen.ru', AdNetworkType: 'AD_NETWORK', Impressions: 900, Clicks: 60, Cost: 9, BounceRate: 12 }],
+  placementAt: '2026-11-12T09:00:00Z',
+  placements: [{ CampaignId: 7, Placement: 'game.app.com', AdNetworkType: 'AD_NETWORK', Impressions: 900, Clicks: 180, Cost: 5, BounceRate: 91, Conversions_548467215_LSCCD: 0 }, { CampaignId: 7, Placement: 'dzen.ru', AdNetworkType: 'AD_NETWORK', Impressions: 900, Clicks: 60, Cost: 9, BounceRate: 12 }],
 };
 const goal = { do: 'goal', campaign: 7, goal: 548467220, goalName: 'Покупка книги', why: 'началась подписка' };
 
