@@ -13,7 +13,7 @@ const goal = { do: 'goal', campaign: 7, goal: 548467220, goalName: 'Покупк
 test('автоправила: только включённые, только идущие кампании, без повторов', () => {
   assert.deepEqual(autoPlan({ main, stats, on: {}, today: '2026-11-12', goalActs: [goal] }), []);
   const all = autoPlan({ main, stats, on: { minus: true, places: true, fatigue: true, goal: true }, today: '2026-11-12', goalActs: [goal] });
-  assert.equal(all[0].rule, 'goal');
+  assert.ok(!all.some((x) => x.rule === 'goal')); // опасное переключение только вручную
   const minus = all.filter((x) => x.rule === 'minus');
   assert.ok(minus.length >= 1 && minus.every((x) => x.act.campaign === 7 && x.act.do === 'minus')); // остановленная кампания не трогается
   assert.ok(!minus.some((x) => ['фильм', 'аудиокнига'].includes(x.act.phrases[0]))); // уже в минус-словах кампании или группы
