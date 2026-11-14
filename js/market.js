@@ -69,7 +69,13 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
   const last = dates[dates.length - 1], cur = rowsOf(last);
   if (!cur.length) return null;
   // с чем сравнить: срез 5–9 дней назад, иначе самый ранний
-  const prevDate = [...dates].reverse().find((d) => { const n = daysBetween(d, last); return n >= 5 && n <= 9; }) || (dates.length > 1 ? dates[0] : null);
+  // Сравниваем только одинаковый набор источников: при падении парсера
+  // и частичном срезе доли тропов не должны «расти» из-за пропавшей подборки.
+  const sourceKey = (d) => (src ? (snap.days[d]?.[src]?.length ? [src] : []) :
+    Object.entries(snap.days[d] || {}).filter(([, rows]) => rows?.length).map(([u]) => u).sort());
+  const compareable = (d) => JSON.stringify(sourceKey(d)) === JSON.stringify(sourceKey(last));
+  const oldDates = dates.filter((d) => d !== last && compareable(d));
+  const prevDate = [...oldDates].reverse().find((d) => { const n = daysBetween(d, last); return n >= 5 && n <= 9; }) || (oldDates.length ? oldDates[0] : null);
   const prev = prevDate ? rowsOf(prevDate) : [], gap = prevDate ? Math.max(1, daysBetween(prevDate, last)) : 0, prevBy = Object.fromEntries(prev.map((r) => [r.id, r]));
   const share = (rows) => { const m = {}; for (const r of rows) for (const t of books[r.id]?.tr || []) m[t] = (m[t] || 0) + 1; return m; };
   const sc = share(cur), sp = share(prev);
@@ -89,7 +95,9 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
   const byA = {}; for (const r of cur) { const a = books[r.id]?.a; if (a) (byA[a] ||= []).push(card(r)); }
   const authors = Object.entries(byA).filter(([, v]) => v.length >= 2).map(([name, list]) => ({ name, n: list.length, lib: list.reduce((s, b) => s + (b.lib || 0), 0), titles: list.map((b) => b.title) })).sort((a, b) => b.n - a.n || b.lib - a.lib).slice(0, 6);
   // ---- глубже витрины: что отличает книги топа друг от друга ----
-  // «интерес» = сколько из открывших книгу добавили её в библиотеку (библиотеки ÷ просмотры): не зависит от возраста книги и размера рекламы
+  // Индикатор интереса — накопленные библиотеки / накопленные просмотры.
+  // Это НЕ конверсия посетителя в читателя: разные знаменатели, повторные открытия,
+  // возраст книг, реклама и методика счетчиков влияют на показатель.
   const conv = (r) => (r.v >= 500 ? r.l / r.v : null), medConv = median(cur.map(conv));
   // карта тропов: конкуренция (доля книг топа) × интерес читателей (относительно обычного по срезу)
   const tropeMap = tropes.filter((t) => t.n >= 3).map((t) => {
@@ -168,8 +176,9 @@ export function trimSnap(snap, keep = 45) {
   const dates = Object.keys(snap.days || {}).sort().slice(-keep), days = Object.fromEntries(dates.map((d) => [d, snap.days[d]]));
   const ids = new Set(Object.values(days).flatMap((d) => Object.values(d).flatMap((rows) => rows.map((r) => r.id))));
   const my = Object.fromEntries(Object.entries(snap.my || {}).filter(([d]) => d >= (dates[0] || '')));
+  const coverage = Object.fromEntries(Object.entries(snap.coverage || {}).filter(([d]) => d >= (dates[0] || '')));
   for (const d of Object.values(my)) for (const rows of Object.values(d)) for (const r of rows) ids.add(r.id);
-  return { ...snap, days, my, books: Object.fromEntries(Object.entries(snap.books || {}).filter(([id]) => ids.has(id))) };
+  return { ...snap, days, my, coverage, books: Object.fromEntries(Object.entries(snap.books || {}).filter(([id]) => ids.has(id))) };
 }
 
 // Письмо «Рынок за неделю» (обычным текстом): главное, кто растёт, новые и выпавшие, аномалии. Пусто — писать не о чем
@@ -239,7 +248,11 @@ export function watchReport(snap = {}, names = []) {
 export function tropeForecast(snap = {}, { src = null, weeks = 4 } = {}) {
   const dates = Object.keys(snap.days || {}).sort(), books = snap.books || {};
   const rowsOf = (d) => { const day = snap.days[d] || {}, seen = new Set(), out = []; for (const k of Object.keys(day)) if (!src || k === src) for (const r of day[k]) if (!seen.has(r.id)) { seen.add(r.id); out.push(r); } return out; };
-  const series = dates.map((d) => ({ d, rows: rowsOf(d) })).filter((x) => x.rows.length);
+  const latestSources = Object.entries(snap.days[dates[dates.length - 1]] || {}).filter(([, rows]) => rows?.length).map(([k]) => k).sort().join('|');
+  const series = dates.filter((d) => src
+    ? (snap.days[d]?.[src] || []).length > 0
+    : Object.entries(snap.days[d] || {}).filter(([, rows]) => rows?.length).map(([k]) => k).sort().join('|') === latestSources)
+    .map((d) => ({ d, rows: rowsOf(d) })).filter((x) => x.rows.length);
   if (series.length < 3) return { ready: false, need: 3 - series.length, slices: series.length, span: 0, items: [] };
   const last = series[series.length - 1], span = daysBetween(series[0].d, last.d);
   if (span < 7) return { ready: false, needDays: 7 - span, slices: series.length, span, items: [] };
