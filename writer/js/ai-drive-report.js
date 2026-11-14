@@ -2,6 +2,8 @@
 // Google OAuth в браузере живёт ограниченное время: автообновление не открывает окна входа.
 import * as drive from './drive.js';
 import { marketingSnapshot, incomeSnapshot, directSnapshot } from './ai-system.js';
+import { campaignBookEconomics } from '../../direct/js/bookeconomics.js';
+import { outageSet } from '../../js/calc.js';
 
 export const AI_DRIVE_FILENAME = 'Лана Фрейтаг — маркетинг и продажи для ChatGPT.md';
 const LIMIT_MS = 60000;
@@ -44,7 +46,16 @@ function reportOf(data, now) {
   const fullAds = (direct.main || direct.stats)
     ? directSnapshot(direct, now, data.settings?.direct?.metrika?.goals)
     : { section: 'direct', generatedAt: now, note: 'Директ не выгружен. Нельзя делать выводы по рекламным расходам.', campaigns: [], daily: [] };
+  const reportDate = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10); // отчётная дата по Москве
+  const linkedBooks = (direct.main || direct.stats) ? campaignBookEconomics({
+    campaigns: direct.main?.campaigns || [], ads: direct.main?.ads || [],
+    books: data.w_books || [], sales: data.sales || [], daily: direct.stats?.daily || [],
+    conv: direct.stats?.conv || [], stats: direct.stats || {}, cohorts: direct.cohorts || null,
+    metrika: data.settings?.direct?.metrika || {}, today: reportDate,
+    outageDays: outageSet(data.days || []), cohortError: data.settings?.direct?.cohortsErr || ''
+  }) : [];
   const ads = { ...fullAds, detailFrom: cutoff,
+    bookCampaignEconomics: linkedBooks,
     daily: (fullAds.daily || []).filter((x) => x.date >= cutoff),
     adDaily: (fullAds.adDaily || []).filter((x) => x.date >= cutoff),
     keywords: (fullAds.keywords || []).slice(0, 100),
@@ -60,6 +71,7 @@ function reportOf(data, now) {
     'Детальные строки ограничены последними 120 днями; помесячные итоги сохранены за весь доступный период.',
     'Продажи актуальны не позднее lastSaleDate. Директ актуален не позднее direct.snapshotAt.',
     'Рекламные расходы, продажи, посещения и конверсии имеют разные источники и могут расходиться.',
+    'bookCampaignEconomics: только связанные расходы, роялти книги со ВСЕХ каналов и когорты покупок ЛЮБОЙ книги. attributedBookROI=null означает, что прибыль от рекламы конкретной книги по имеющимся данным не доказана.',
     'Валюта: рубли. Специальные поля с паролями и токенами не экспортируются, полные тексты глав не включены. Свободный текст маркетинговых заметок может содержать личные сведения.',
     '',
     '## Маркетинг',
