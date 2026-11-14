@@ -157,6 +157,6 @@ export function cohortSummary(data, today) {
   return { from: data?.from || '', to: data?.to || '', groups: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, fin(g)])), camps: Object.fromEntries(Object.entries(camps).map(([k, g]) => [k, fin(g)])),
     campBooks: Object.fromEntries(Object.entries(campBooks).map(([cid, byBook]) =>
       [cid, Object.fromEntries(Object.entries(byBook).map(([bid, g]) => [bid, fin(g)]))])),
-    note: 'Когорта — первый наблюдаемый визит за 90 дней. Покупка любой книги автора; ID купленной книги в цели не передается.',
+    note: 'Когорта — первый наблюдаемый визит за 90 дней. Цели библиотеки и покупки относятся к любой книге автора. Книга входа известна лишь по первой странице; ID добавленной и купленной книги в цели не передается.',
     schema: 2 };
 }
