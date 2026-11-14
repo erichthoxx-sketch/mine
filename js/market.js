@@ -197,7 +197,7 @@ export function marketDigest(M, { myTropes = [], ranks = [], watched = [], forec
   if (ranks.length) { L.push('', 'Ваши книги в топах:'); for (const r of ranks) L.push(`  «${r.title}» — ${r.now} место${r.was != null ? ` (неделю назад ${r.was})` : ''}`); }
   const evs = watched.filter((w) => w.events.length);
   if (evs.length) { L.push('', 'Соперницы:'); for (const w of evs) for (const e of w.events) L.push(`  ${w.name}: «${e.title}» — ${e.text}`); }
-  if (M.movers.length) { L.push('', 'Быстрее всех набирают читателей (в библиотеки в день):'); for (const b of M.movers.slice(0, 5)) L.push(`  +${b.perDay} — ${book(b)}${b.tropes.length ? ' · ' + b.tropes.slice(0, 3).join(', ').toLowerCase() : ''}${b.price > 0 ? ` · ${Math.round(b.price)} ₽` : ''}`); }
+  if (M.movers.length) { L.push('', 'Быстрее всего растут библиотеки (в день):'); for (const b of M.movers.slice(0, 5)) L.push(`  +${b.perDay} — ${book(b)}${b.tropes.length ? ' · ' + b.tropes.slice(0, 3).join(', ').toLowerCase() : ''}${b.price > 0 ? ` · ${Math.round(b.price)} ₽` : ''}`); }
   if (M.fresh.length) L.push('', `Новые в топе: ${M.fresh.slice(0, 6).map(book).join('; ')}.`);
   if (M.gone.length) L.push(`Выпали: ${M.gone.slice(0, 6).map(book).join('; ')}.`);
   if (M.odd.length) L.push('', `В топе при малом числе читателей: ${M.odd.slice(0, 5).map((b) => `${book(b)} — место ${b.n}, ${b.lib} в библ., в топе ${b.days} дн.`).join('; ')}.`);
