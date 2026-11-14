@@ -12,8 +12,11 @@ const diffDays = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse
 const addD = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * DAY).toISOString().slice(0, 10);
 // Из URL сохраняем ТОЛЬКО публичный номер книги: ни адреса, ни UTM, ни персональные параметры.
 export const landingBookId = (raw) => {
-  const m = /(?:^|\/)litnet\.com\/(?:ru|en)\/(?:book|reader)\/[^/?#]+-b(\d{2,15})(?:[?#]|$)/i.exec(String(raw || '').replace(/^https?:\/\//i, '/'));
-  return m?.[1] || null;
+  try {
+    const url = new URL(String(raw || ''));
+    if (!['https:', 'http:'].includes(url.protocol) || !/(^|\.)litnet\.com$/i.test(url.hostname)) return null;
+    return /^\/(?:ru|en)\/(?:book|reader)\/[^/?#]+-b(\d{2,15})\/?$/i.exec(url.pathname)?.[1] || null;
+  } catch { return null; }
 };
 // «[1,2]» / «['2026-11-10 12:00:00','…']» → массив строк
 const arr = (v) => String(v || '').replace(/^\[|\]$/g, '').split(',').map((x) => x.trim().replace(/^'|'$/g, '')).filter(Boolean);
