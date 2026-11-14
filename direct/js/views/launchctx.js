@@ -3,7 +3,8 @@
 // «Доходы» (доход с покупки). Общий для Рекламы, плана, конструктора и файла для нейросети.
 import { loadSite } from '../../../js/sitepub.js';
 import { addDays, buildPlan, planOverridesOf } from '../../../js/calc.js';
-import { totals } from '../dcalc.js';
+import { totals, convTotal } from '../dcalc.js';
+import { conversionEvidence } from '../evidence.js';
 import { launchPlan, libraryGoal, buyGoal, launchesOf, budgetCheck } from '../launchcalc.js';
 import { goalTotals30, royaltyPerSale } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
@@ -36,7 +37,15 @@ export function resolvedLaunches(a) {
   // кампания запуска не выбрана — сама: та, чьи объявления ведут на эту книгу (идущая — первой)
   const main = demo.on ? null : a.snap('main'), camps = (main?.campaigns || []).filter((k) => k.state !== 'ARCHIVED').sort((x, y) => (y.state === 'ON') - (x.state === 'ON'));
   const autoCamp = (id) => camps.find((k) => bookOfCampaign(k, main?.ads || [], c.data.w_books || [])?.id === id)?.id || '';
-  return launchesOf(c.settings, c.data.w_books || []).map(({ id, cfg }) => { const fl = cfg.campaignId ? cfg : { ...cfg, campaignId: autoCamp(id) }; const plan = launchPlan(fl, common); return { id, fl, m, plan, budget: budgetCheck(plan, bx) }; });
+  return launchesOf(c.settings, c.data.w_books || []).map(({ id, cfg }) => {
+    const fl = cfg.campaignId ? cfg : { ...cfg, campaignId: autoCamp(id) };
+    const base = launchPlan(fl, common);
+    const dataValid = st && conversionEvidence(st, t).ready;
+    const buy7 = dataValid && base.picked && base.buy
+      ? convTotal(st.conv || [], addDays(t, -6), t, base.picked.id, [String(base.buy.id)]) : null;
+    const plan = { ...base, buy7, purchaseDataReady: !!dataValid };
+    return { id, fl, m, plan, budget: budgetCheck(plan, bx) };
+  });
 }
 // Один запуск: по id книги, по открытому плану (ui.launchId) или первый
 export function resolvedLaunch(a, id = null) {
@@ -48,12 +57,12 @@ export async function saveLaunch(a, id, patch) {
   if (!cur) return;
   await a.store.saveSettings({ direct: { ...d, launches: { ...(d.launches || {}), [cur.id]: { ...cur.fl, ...patch } } } });
 }
-// Цель для стратегии «на конверсии»: до подписки — библиотека, с подпиской — покупка
-export const launchGoal = (plan) => (plan.phase === 'paid' ? plan.buy : plan.lib || plan.buy) || null;
+// Цель не переключаем только из-за даты подписки: требуется 10 рекламных покупок за 7 дней.
+export const launchGoal = (plan) => (plan.phase === 'paid' && plan.purchaseDataReady && plan.buy7 >= 10 ? plan.buy : plan.lib || plan.buy) || null;
 
-// Старт подписки: стратегия кампании запуска всё ещё на цели «библиотека» — смена на «покупку» одной кнопкой (с подтверждением)
+// Смена цели допускается только после достоверных 10 покупок за 7 дней; кнопка ручная.
 export function goalSwitch(plan) {
   const k = plan?.picked, buy = plan?.buy;
-  if (!plan || plan.phase !== 'paid' || !k || !buy || !k.goal || Number(k.goal) === Number(buy.id)) return null;
-  return { do: 'goal', campaign: k.id, goal: Number(buy.id), goalName: buy.name, why: 'началась подписка — теперь главное покупки, а не добавления в библиотеку' };
+  if (!plan || plan.phase !== 'paid' || !plan.purchaseDataReady || plan.buy7 < 10 || !k || !buy || !k.goal || Number(k.goal) === Number(buy.id)) return null;
+  return { do: 'goal', campaign: k.id, goal: Number(buy.id), goalName: buy.name, why: 'достигнуто 10+ подтвержденных покупок за неделю; перед сменой вручную проверить цену цели и бюджет' };
 }
