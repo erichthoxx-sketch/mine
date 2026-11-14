@@ -26,12 +26,30 @@ const saveMark = (uid, obj) => {
 export const driveMirrorAvailable = (store) => validStore(store) && drive.hasFreshToken();
 
 function reportOf(data, now) {
-  const marketing = marketingSnapshot(data, now);
-  const income = incomeSnapshot(data, now);
+  // Компактный аналитический файл читается в ChatGPT надёжнее огромного архива.
+  // Подробные строки — за последние 120 дней; месячные итоги остаются за весь период.
+  const cutoff = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
+  const fullMarketing = marketingSnapshot(data, now);
+  const marketing = { ...fullMarketing,
+    ideas: (fullMarketing.ideas || []).map((x) => ({ bookId: x.bookId, title: x.title, status: x.status, tags: x.tags })),
+    blogs: (fullMarketing.blogs || []).map((x) => ({ bookId: x.bookId, title: x.title, status: x.status, modifiedAt: x.modifiedAt })),
+    reviews: (fullMarketing.reviews || []).slice(0, 40),
+  };
+  const fullIncome = incomeSnapshot(data, now);
+  const income = { ...fullIncome, detailFrom: cutoff,
+    sales: (fullIncome.sales || []).filter((x) => x.date >= cutoff),
+    reports: (fullIncome.reports || []).filter((x) => (x.date || x.end || x.start || '') >= cutoff),
+  };
   const direct = Object.fromEntries((data.d_snap || []).map((d) => [d.id, d]));
-  const ads = (direct.main || direct.stats)
+  const fullAds = (direct.main || direct.stats)
     ? directSnapshot(direct, now, data.settings?.direct?.metrika?.goals)
     : { section: 'direct', generatedAt: now, note: 'Директ не выгружен. Нельзя делать выводы по рекламным расходам.', campaigns: [], daily: [] };
+  const ads = { ...fullAds, detailFrom: cutoff,
+    daily: (fullAds.daily || []).filter((x) => x.date >= cutoff),
+    adDaily: (fullAds.adDaily || []).filter((x) => x.date >= cutoff),
+    keywords: (fullAds.keywords || []).slice(0, 100),
+    queries: (fullAds.queries || []).slice(0, 100),
+  };
   // Имя документа намеренно не зависит от даты: один файл обновляется, а не создаются дубликаты.
   const doc = [
     '# Лана Фрейтаг — аналитический контекст для ChatGPT',
@@ -39,6 +57,7 @@ function reportOf(data, now) {
     'Сформировано: ' + now,
     'Источник: Firebase Firestore (Мастерская, Доходы, сохранённый снимок Яндекс.Директа).',
     'Важно: это снимок, а НЕ живое подключение к Яндексу или Литнету.',
+    'Детальные строки ограничены последними 120 днями; помесячные итоги сохранены за весь доступный период.',
     'Продажи актуальны не позднее lastSaleDate. Директ актуален не позднее direct.snapshotAt.',
     'Рекламные расходы, продажи, посещения и конверсии имеют разные источники и могут расходиться.',
     'Валюта: рубли. Специальные поля с паролями и токенами не экспортируются, полные тексты глав не включены. Свободный текст маркетинговых заметок может содержать личные сведения.',
