@@ -33,7 +33,7 @@ test('Когорты: библиотека -> ПОСЛЕДУЮЩАЯ покуп�
   assert.equal(g.libToBuy[7].eligible, 26);
   assert.equal(g.libToBuy[7].buyers, 7);
   assert.equal(g.libToBuy[7].rate, 7/26);
-  assert.equal(s.camps['715'].libToBuy[30].eligible,25); // 10 дней от старта недостаточно для ряда лиц
+  assert.equal(s.camps['715'].libToBuy[30].eligible,26); // покупка до добавления не в числителе
   assert.match(s.note,/любой книги/);
 });
 
