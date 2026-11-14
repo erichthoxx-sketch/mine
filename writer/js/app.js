@@ -3,6 +3,7 @@ import { initAccent } from '../../js/accent.js';
 import { keepNavDown } from '../../js/vvfix.js';
 import { createStore, authErrorText } from '../../js/store.js';
 import { autoDirectAccess } from '../../js/aidirect.js';
+import { startAiAutoSync } from '../../js/ai-autosync.js';
 import { runOneoffs } from './oneoff.js';
 import { autoPiracy } from './piracyscan.js';
 import { autoMonthMail } from './monthmail.js';
@@ -167,6 +168,7 @@ applyTheme();
 try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem('navMini') === '1'); } catch { /* ок */ }
 acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
 store.subscribe(() => { safeRender(); scheduleTodoist(app); });
+startAiAutoSync(store, ['marketing', 'income']);
 // конкурсы, разобранные старой версией: один раз разбираем условия заново (даты, объём, имя файла); название не трогаем, если оно не «Литнет» и т. п.
 const CONTEST_PV = 3;
 let reparsing = false;
