@@ -52,7 +52,8 @@ export function parseLitnetList(text) {
 
 // Срез дня — компактно (в базу): книги отдельно (название, автор, тропы — не меняются), цифры — по дням
 export function packDay(rows) {
-  return rows.map((r, i) => ({ id: r.id, n: i + 1, v: r.views, l: r.lib, k: r.likes, c: r.comments, p: r.price, f: r.full, o: r.off, g: r.pages, s: r.status === 'done' ? 1 : 0, e: r.excl ? 1 : 0 }));
+  return rows.map((r, i) => ({ id: r.id, n: i + 1, v: r.views, l: r.lib, k: r.likes, c: r.comments, p: r.price, f: r.full, o: r.off, g: r.pages, s: r.status === 'done' ? 1 : 0, e: r.excl ? 1 : 0,
+    tr: (r.tropes || []).map((t) => TROPES.findIndex(([name]) => name === t)).filter((i) => i >= 0) }));
 }
 export const bookCard = (r) => ({ t: r.title, a: r.author, u: r.url, tr: r.tropes, an: r.annot.slice(0, 220) });
 
@@ -77,12 +78,17 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
   const oldDates = dates.filter((d) => d !== last && compareable(d));
   const prevDate = [...oldDates].reverse().find((d) => { const n = daysBetween(d, last); return n >= 5 && n <= 9; }) || (oldDates.length ? oldDates[0] : null);
   const prev = prevDate ? rowsOf(prevDate) : [], gap = prevDate ? Math.max(1, daysBetween(prevDate, last)) : 0, prevBy = Object.fromEntries(prev.map((r) => [r.id, r]));
-  const share = (rows) => { const m = {}; for (const r of rows) for (const t of books[r.id]?.tr || []) m[t] = (m[t] || 0) + 1; return m; };
+  // Исторические тропы берем из СВОЕГО снимка дня. Иначе изменение
+  // аннотации сегодня переписывало бы историю тренда за все 45 дней.
+  const tagsOf = (r) => Array.isArray(r.tr)
+    ? r.tr.map((i) => TROPES[i]?.[0]).filter(Boolean)
+    : books[r.id]?.tr || [];
+  const share = (rows) => { const m = {}; for (const r of rows) for (const t of tagsOf(r)) m[t] = (m[t] || 0) + 1; return m; };
   const sc = share(cur), sp = share(prev);
   const tropes = Object.entries(sc).map(([name, n]) => ({ name, n, share: n / cur.length, was: prev.length ? (sp[name] || 0) / prev.length : null }))
     .map((x) => ({ ...x, delta: x.was == null ? null : x.share - x.was })).sort((a, b) => b.n - a.n);
   const paid = cur.filter((r) => r.p > 0);
-  const card = (r) => ({ id: r.id, title: books[r.id]?.t || '', author: books[r.id]?.a || '', url: books[r.id]?.u || '', tropes: books[r.id]?.tr || [], n: r.n, lib: r.l, views: r.v, price: r.p, pages: r.g, done: !!r.s, excl: !!r.e, ann: books[r.id]?.an || '', conv: r.v >= 500 ? r.l / r.v : null });
+  const card = (r) => ({ id: r.id, title: books[r.id]?.t || '', author: books[r.id]?.a || '', url: books[r.id]?.u || '', tropes: tagsOf(r), n: r.n, lib: r.l, views: r.v, price: r.p, pages: r.g, done: !!r.s, excl: !!r.e, ann: books[r.id]?.an || '', conv: r.v >= 500 ? r.l / r.v : null });
   // взлёты: прирост «в библиотеках» в день между срезами
   const movers = prev.length ? cur.filter((r) => prevBy[r.id] && r.l > prevBy[r.id].l).map((r) => ({ ...card(r), perDay: Math.round((r.l - prevBy[r.id].l) / gap), was: prevBy[r.id].n })).sort((a, b) => b.perDay - a.perDay).slice(0, 8) : [];
   const fresh = prev.length ? cur.filter((r) => !prevBy[r.id]).map(card) : [];
@@ -101,24 +107,24 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
   const conv = (r) => (r.v >= 500 ? r.l / r.v : null), medConv = median(cur.map(conv));
   // карта тропов: конкуренция (доля книг топа) × интерес читателей (относительно обычного по срезу)
   const tropeMap = tropes.filter((t) => t.n >= 3).map((t) => {
-    const rows = cur.filter((r) => (books[r.id]?.tr || []).includes(t.name)), c = median(rows.map(conv)), idx = c != null && medConv ? c / medConv : null;
+    const rows = cur.filter((r) => tagsOf(r).includes(t.name)), c = median(rows.map(conv)), idx = c != null && medConv ? c / medConv : null;
     const hot = idx != null && idx >= 1.15, cold = idx != null && idx <= 0.85, crowded = t.share >= 0.2;
     return { ...t, interest: idx, price: median(rows.filter((r) => r.p > 0).map((r) => r.f ?? r.p)), lib: median(rows.map((r) => r.l)),
       verdict: hot && !crowded ? 'niche' : hot ? 'hot' : cold && crowded ? 'tired' : cold ? 'weak' : 'even' };
   }).sort((a, b) => (b.interest ?? 0) - (a.interest ?? 0));
   // рост по тропам: как быстро книги с этим тропом набирают библиотеки (в день) против обычного роста по срезу
   const growOf = (r) => (prevBy[r.id] && gap ? Math.max(0, (r.l - prevBy[r.id].l) / gap) : null), medGrow = median(cur.map(growOf));
-  for (const t of tropeMap) { const g = median(cur.filter((r) => (books[r.id]?.tr || []).includes(t.name)).map(growOf)); t.grow = g != null && medGrow ? g / medGrow : null; t.growDay = g; }
+  for (const t of tropeMap) { const g = median(cur.filter((r) => tagsOf(r).includes(t.name)).map(growOf)); t.grow = g != null && medGrow ? g / medGrow : null; t.growDay = g; }
   // как менялась доля тропа по срезам (до 14 последних) — для линии в карте тропов
   const histDates = dates.slice(-14), histRows = histDates.map(rowsOf);
-  for (const t of tropeMap) t.hist = histRows.map((rows) => (rows.length ? rows.filter((r) => (books[r.id]?.tr || []).includes(t.name)).length / rows.length : 0));
+  for (const t of tropeMap) t.hist = histRows.map((rows) => (rows.length ? rows.filter((r) => tagsOf(r).includes(t.name)).length / rows.length : 0));
   // её книга против топа: как рынок относится к её тропам и кто ближайшие соседи
   const tmBy = Object.fromEntries(tropeMap.map((t) => [t.name.toLowerCase(), t])), allBy = Object.fromEntries(tropes.map((t) => [t.name.toLowerCase(), t]));
   const fit = myBooks.map((b) => {
     const names = [...new Set([...(b.tags || []).map((x) => TROPES.find(([n]) => n.toLowerCase() === String(x).toLowerCase().replace(/ё/g, 'е') || n.toLowerCase() === String(x).toLowerCase())?.[0]).filter(Boolean), ...tropesOf([b.title, ...(b.tags || [])].join('. '))])];
     if (!names.length) return null;
     const tr = names.map((n) => { const m = tmBy[n.toLowerCase()], a = allBy[n.toLowerCase()]; return { name: n, n: a?.n || 0, share: a?.share || 0, interest: m?.interest ?? null, verdict: m?.verdict || (a ? 'few' : 'none') }; });
-    const near = cur.map((r) => ({ r, common: (books[r.id]?.tr || []).filter((x) => names.includes(x)) })).filter((x) => x.common.length >= Math.min(2, names.length) && (books[x.r.id]?.t || '').toLowerCase() !== String(b.title || '').toLowerCase())
+    const near = cur.map((r) => ({ r, common: tagsOf(r).filter((x) => names.includes(x)) })).filter((x) => x.common.length >= Math.min(2, names.length) && (books[x.r.id]?.t || '').toLowerCase() !== String(b.title || '').toLowerCase())
       .sort((x, y) => y.common.length - x.common.length || y.r.l - x.r.l).slice(0, 5).map((x) => ({ ...card(x.r), common: x.common }));
     const lines = [], q = (t) => `«${t.name}»`, xi = (t) => t.interest.toFixed(1).replace('.', ',');
     const good = tr.filter((t) => t.verdict === 'niche' || t.verdict === 'hot').sort((x, y) => y.interest - x.interest), bad = tr.filter((t) => t.verdict === 'tired' || t.verdict === 'weak'), rare = tr.filter((t) => t.verdict === 'few' || t.verdict === 'none');
@@ -131,7 +137,7 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
     return { id: b.id, title: b.title, tropes: tr, near, lines };
   }).filter(Boolean);
   // пары тропов, которые чаще всего стоят вместе
-  const pairN = {}; for (const r of cur) { const tr = books[r.id]?.tr || []; for (let i = 0; i < tr.length; i++) for (let j = i + 1; j < tr.length; j++) { const k = [tr[i], tr[j]].sort().join(' + '); pairN[k] = (pairN[k] || 0) + 1; } }
+  const pairN = {}; for (const r of cur) { const tr = tagsOf(r); for (let i = 0; i < tr.length; i++) for (let j = i + 1; j < tr.length; j++) { const k = [tr[i], tr[j]].sort().join(' + '); pairN[k] = (pairN[k] || 0) + 1; } }
   const pairs = Object.entries(pairN).filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, n]) => ({ name, n }));
   // цена: сколько книг в каждой вилке и как их читают
   const bucket = (name, f) => { const rows = cur.filter(f); return { name, n: rows.length, share: rows.length / cur.length, lib: median(rows.map((r) => r.l)), interest: medConv ? (median(rows.map(conv)) ?? 0) / medConv || null : null }; };
@@ -256,20 +262,20 @@ export function tropeForecast(snap = {}, { src = null, weeks = 4 } = {}) {
   if (series.length < 3) return { ready: false, need: 3 - series.length, slices: series.length, span: 0, items: [] };
   const last = series[series.length - 1], span = daysBetween(series[0].d, last.d);
   if (span < 7) return { ready: false, needDays: 7 - span, slices: series.length, span, items: [] };
-  const trOf = (id) => books[id]?.tr || [];
+  const trOf = (row) => Array.isArray(row.tr) ? row.tr.map((i) => TROPES[i]?.[0]).filter(Boolean) : books[row.id]?.tr || [];
   // первое появление книги в топе
   const first = {}; for (const s of series) for (const r of s.rows) if (!first[r.id]) first[r.id] = s.d;
   const freshCut = addDaysIso(last.d, -14), fresh = last.rows.filter((r) => first[r.id] > series[0].d && first[r.id] >= freshCut);
   const prevS = [...series].reverse().find((s) => daysBetween(s.d, last.d) >= 5) || series[0], prevBy = Object.fromEntries(prevS.rows.map((r) => [r.id, r])), gap = Math.max(1, daysBetween(prevS.d, last.d));
   const growOf = (r) => (prevBy[r.id] ? Math.max(0, (r.l - prevBy[r.id].l) / gap) : null), conv = (r) => (r.v >= 500 ? r.l / r.v : null);
   const medGrow = median(last.rows.map(growOf)), medConv = median(last.rows.map(conv));
-  const names = [...new Set(last.rows.flatMap((r) => trOf(r.id)))];
+  const names = [...new Set(last.rows.flatMap(trOf))];
   const items = names.map((name) => {
-    const pts = series.map((s) => ({ x: daysBetween(series[0].d, s.d), y: s.rows.filter((r) => trOf(r.id).includes(name)).length / s.rows.length }));
+    const pts = series.map((s) => ({ x: daysBetween(series[0].d, s.d), y: s.rows.filter((r) => trOf(r).includes(name)).length / s.rows.length }));
     const n = pts.length, mx = pts.reduce((a, p) => a + p.x, 0) / n, my = pts.reduce((a, p) => a + p.y, 0) / n;
     const den = pts.reduce((a, p) => a + (p.x - mx) ** 2, 0), slope = den ? pts.reduce((a, p) => a + (p.x - mx) * (p.y - my), 0) / den : 0; // доля в день
-    const rows = last.rows.filter((r) => trOf(r.id).includes(name)), share = rows.length / last.rows.length;
-    const freshShare = fresh.length >= 5 ? fresh.filter((r) => trOf(r.id).includes(name)).length / fresh.length : null;
+    const rows = last.rows.filter((r) => trOf(r).includes(name)), share = rows.length / last.rows.length;
+    const freshShare = fresh.length >= 5 ? fresh.filter((r) => trOf(r).includes(name)).length / fresh.length : null;
     const g = median(rows.map(growOf)), grow = g != null && medGrow ? g / medGrow : null, c = median(rows.map(conv)), interest = c != null && medConv ? c / medConv : null;
     // сводный балл: каждый признак — «выше обычного» (+) или «ниже» (−), с весами
     const parts = [];
