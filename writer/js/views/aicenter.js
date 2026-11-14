@@ -33,7 +33,7 @@ export function aiCenterCard(c) {
     '<button data-act="bai.settings">Настроить</button>' +
     (when ? '<button class="link" data-act="ai.clear">Отключить всё</button>' : '') +
     '</div>' +
-    (when ? '<p class="small muted" style="margin:10px 0 0">Последняя передача: ' + esc(when) +
+    (when ? '<p class="small muted" style="margin:10px 0 0">Рукописи: последняя ручная передача ' + esc(when) +
       (s.aiLastCount != null ? ' · Книг: ' + Number(s.aiLastCount) : '') +
       (s.aiLastError ? ' · ' + esc(s.aiLastError) : '') +
       (s.aiDirectLive === true ? ' · Директ — вживую, только чтение' : '') + '</p>' : '') +
