@@ -270,9 +270,16 @@ if (typeof document !== 'undefined') document.addEventListener('click', (e) => {
   if (!ecoPhone() || !ecoNow || e.target.closest?.('.eco-t')) return;
   ecoNow = false; document.querySelectorAll('.eco-w').forEach((x) => x.classList.remove('open'));
 }, true);
+// на телефоне меню встаёт под кнопкой и не выходит за край экрана, где бы ни стояла кнопка (13.11.2026: «на мобильном криво»)
+const ecoPlace = (btn) => {
+  const r = btn.getBoundingClientRect(), W = 220, pad = 16, vw = document.documentElement.clientWidth;
+  const left = Math.max(pad, Math.min(vw - pad - W, r.left + r.width / 2 < vw / 2 ? r.left : vw - pad - W));
+  const st = document.documentElement.style; st.setProperty('--eco-top', Math.round(r.bottom + 8) + 'px'); st.setProperty('--eco-left', Math.round(left) + 'px');
+};
+if (typeof window !== 'undefined') window.addEventListener('scroll', () => { if (ecoPhone() && ecoNow) { ecoNow = false; document.querySelectorAll('.eco-w').forEach((x) => x.classList.remove('open')); } }, { passive: true });
 acts['eco.toggle'] = (d, el) => {
   const w = el.closest('.eco-w'), open = !w?.classList.contains('open');
-  if (ecoPhone()) ecoNow = open; else try { localStorage.setItem('ecoOpen', open ? '1' : '0'); } catch { /* приватный режим */ }
+  if (ecoPhone()) { ecoNow = open; if (open) ecoPlace(el.closest('.eco-t') || el); } else try { localStorage.setItem('ecoOpen', open ? '1' : '0'); } catch { /* приватный режим */ }
   document.querySelectorAll('.eco-w').forEach((x) => x.classList.toggle('open', open));
   return false;
 };
