@@ -56,8 +56,11 @@ export function buildCohortData(tsvParts = [], { from, to, goals }) {
     const firstDay = (k) => { let best = null; for (const v of visits) for (const [g, t] of v.goals) if (g === k && (best == null || t < best.t)) best = { t, v }; return best; };
     const days = (k) => { const b = firstDay(k); return b ? Math.max(0, diffDays(d0, dayOf(b.t))) : null; };
     const buy = firstDay('buy');
+    const firstLib = firstDay('lib');
+    const buysAfterLibrary = firstLib ? visits.flatMap((v) => v.goals.filter(([g, t]) => g === 'buy' && t >= firstLib.t).map(([, t]) => t)).sort() : [];
+    const buyAfterLibDays = buysAfterLibrary.length ? Math.max(0, diffDays(d0, dayOf(buysAfterLibrary[0]))) : null;
     people.push([diffDays(from, d0), idx(first.src), days('read'), days('lib'), days('buyStart'), buy ? Math.max(0, diffDays(d0, dayOf(buy.t))) : null,
-      buy && buy.v !== first ? 1 : 0, buy ? idx(buy.v.src) : null, first.b || null]);
+      buy && buy.v !== first ? 1 : 0, buy ? idx(buy.v.src) : null, first.b || null, buyAfterLibDays]);
   }
   return { from, to, sources, people };
 }
@@ -130,7 +133,7 @@ export function cohortSummary(data, today) {
     // Покупка — любой книги автора: у цели пока нет ID приобретенного произведения.
     libToBuy: { 7: [0, 0], 14: [0, 0], 30: [0, 0] } });
   const groups = { direct: mk(), ads: mk(), other: mk() }, camps = {}, campBooks = {};
-  for (const [off, si, , lib, , buy, late, , landingBook] of data?.people || []) {
+  for (const [off, si, , lib, , buy, late, , landingBook, buyAfterLib] of data?.people || []) {
     const src = data.sources[si], age = span - off;
     for (const g of [groups[kind(src)],
       ...(src?.d ? [(camps[src.d] ||= mk())] : []),
@@ -140,7 +143,7 @@ export function cohortSummary(data, today) {
       for (const d of [7, 30, 60, 90]) if (age >= d) { g.w[d][0]++; if (buy != null && buy <= d) g.w[d][1]++; }
       for (const d of [7, 14, 30]) if (lib != null && lib >= 0 && age - lib >= d) {
         g.libToBuy[d][0]++;
-        if (buy != null && buy >= lib && buy - lib <= d) g.libToBuy[d][1]++;
+        if (buyAfterLib != null && buyAfterLib >= lib && buyAfterLib - lib <= d) g.libToBuy[d][1]++;
       }
     }
   }
