@@ -77,8 +77,13 @@ export async function autoCohorts(store, { days = 90 } = {}) {
     if (!r.ok) { let t = ''; try { t = (await r.json()).message || ''; } catch { /* не JSON */ } throw Error(`Logs API (${op}): ${r.status}${t ? ' — ' + t : ''}`); }
     return op === 'download' ? r.text() : r.json();
   };
-  const put = (data) => user.getIdToken().then((tok) => fetch(base + '/sync/section/cohorts', { method: 'PUT', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ section: 'cohorts', generatedAt: new Date().toISOString(), at: new Date().toISOString(), ...data }) }));
+  const put = async (data) => {
+    const tok = await user.getIdToken();
+    const res = await fetch(base + '/sync/section/cohorts', { method: 'PUT',
+      headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ section: 'cohorts', generatedAt: new Date().toISOString(), at: new Date().toISOString(), ...data }) });
+    if (!res.ok) throw Error('Когорты не сохранены для нейросети (HTTP ' + res.status + ')');
+  };
   const save = (patch) => store.saveSettings({ direct: { ...(store.data.settings.direct || {}), ...patch } });
   let id = null;
   try {
