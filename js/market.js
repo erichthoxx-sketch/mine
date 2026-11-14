@@ -122,8 +122,8 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
       .sort((x, y) => y.common.length - x.common.length || y.r.l - x.r.l).slice(0, 5).map((x) => ({ ...card(x.r), common: x.common }));
     const lines = [], q = (t) => `«${t.name}»`, xi = (t) => t.interest.toFixed(1).replace('.', ',');
     const good = tr.filter((t) => t.verdict === 'niche' || t.verdict === 'hot').sort((x, y) => y.interest - x.interest), bad = tr.filter((t) => t.verdict === 'tired' || t.verdict === 'weak'), rare = tr.filter((t) => t.verdict === 'few' || t.verdict === 'none');
-    if (good.length) lines.push(`${good.map(q).join(' и ')} сейчас читают охотнее обычного (интерес ×${xi(good[0])}) — это стоит показывать первым: в крючке, начале аннотации и объявлениях.`);
-    if (bad.length) lines.push(`${bad.map(q).join(' и ')} — интерес ниже обычного${bad.some((t) => t.verdict === 'tired') ? ', а книг много' : ''}: на одном этом тропе выделиться трудно, нужен второй.`);
+    if (good.length) lines.push(`${good.map(q).join(' и ')} в наблюдаемых топах имеют повышенное отношение библиотек к просмотрам (индекс ×${xi(good[0])}) — это стоит показывать первым: в крючке, начале аннотации и объявлениях.`);
+    if (bad.length) lines.push(`${bad.map(q).join(' и ')} — отношение библиотек к просмотрам ниже медианы${bad.some((t) => t.verdict === 'tired') ? ', а книг много' : ''}: на одном этом тропе выделиться трудно, нужен второй.`);
     if (rare.length) lines.push(`${rare.map(q).join(' и ')} в топе почти нет (${rare.map((t) => t.n).join(' и ')} из ${cur.length} книг): соперников мало, но и спрос по топу не виден.`);
     const np = median(near.filter((x) => x.price > 0).map((x) => x.price));
     if (near.length >= 3 && np != null) lines.push(`У ближайших по тропам книг обычная цена — ${Math.round(np)} ₽${b.price > 0 ? `, у вас ${Math.round(b.price)} ₽` : ''}.`);
@@ -165,8 +165,8 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
   const myT = tropes.filter((t) => mineSet.has(t.name.toLowerCase()));
   if (mineSet.size && myT.length) notes.push(`Ваши тропы в топе: ${myT.map((t) => `«${t.name}» — ${Math.round(t.share * 100)} %`).join(', ')}.`);
   if (odd.length) { const by = {}; for (const b of odd) by[b.author || 'без автора'] = (by[b.author || 'без автора'] || 0) + 1; const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0];
-    notes.push(`В топе ${odd.length} ${odd.length === 1 ? 'книга' : odd.length < 5 ? 'книги' : 'книг'} с очень малым числом читателей${top[1] > 1 ? ` (из них ${top[1]} — ${top[0]})` : ''}: место держится не на библиотеках и просмотрах.`); }
-  if (movers[0]) notes.push(`Быстрее всех набирает читателей «${movers[0].title}» (${movers[0].author}): +${movers[0].perDay} в библиотеки в день${movers[0].tropes.length ? ` — ${movers[0].tropes.slice(0, 3).join(', ').toLowerCase()}` : ''}.`);
+    notes.push(`В топе ${odd.length} ${odd.length === 1 ? 'книга' : odd.length < 5 ? 'книги' : 'книг'} с очень малым числом накопленных библиотек${top[1] > 1 ? ` (из них ${top[1]} — ${top[0]})` : ''}: причину места в топе нельзя определить по открытым счетчикам.`); }
+  if (movers[0]) notes.push(`Быстрее всех растут накопленные библиотеки у «${movers[0].title}» (${movers[0].author}): +${movers[0].perDay} в библиотеки в день${movers[0].tropes.length ? ` — ${movers[0].tropes.slice(0, 3).join(', ').toLowerCase()}` : ''}.`);
   return { date: last, prevDate, gap, medGrow, n: cur.length, tropes, tropeMap, pairs, prices, sizes, pitch, formula, movers, fresh, gone, odd, medLib, authors, notes, fit, all: cur.map(card), top: cur.slice(0, 16).map(card),
     price: { median: mp, free: cur.filter((r) => r.p === 0).length / cur.length, off: paid.length ? paid.filter((r) => r.o).length / paid.length : 0 },
     excl: cur.filter((r) => r.e).length / cur.length, progress: cur.filter((r) => !r.s).length / cur.length, pages: median(cur.map((r) => r.g)) };
