@@ -56,7 +56,7 @@ test('рынок: письмо за неделю — только когда е�
   const cur = packDay(rows.slice(0, 14)), prev = packDay(rows.slice(2, 16)).map((r) => ({ ...r, l: r.l - 700 }));
   assert.equal(marketDigest(marketInsights({ days: { '2026-11-12': { a: cur } }, books })), '');
   const t = marketDigest(marketInsights({ days: { '2026-11-05': { a: prev }, '2026-11-12': { a: cur } }, books }, { mine: ['Развод'] }), { myTropes: ['Развод'] });
-  assert.match(t, /Топы Литнета: 05\.11 → 12\.11\./); assert.match(t, /Быстрее всех растут библиотеки/); assert.match(t, /\+100 — «/); assert.match(t, /Новые в топе: «Плохой сводный»/);
+  assert.match(t, /Топы Литнета: 05\.11 → 12\.11\./); assert.match(t, /Быстрее всего растут библиотеки/); assert.match(t, /\+100 — «/); assert.match(t, /Новые в топе: «Плохой сводный»/);
 });
 test('рынок: авторы с серией в топе и сравнение её цен с обычной ценой', () => {
   const r = parseLitnetList(readFileSync(new URL('./fixtures/market-litnet-odd.txt', import.meta.url), 'utf8'));
