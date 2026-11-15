@@ -2,6 +2,7 @@
 // сверху — что требует внимания. Только чистые функции (тесты — tests/pult.test.js). Бюджеты приложение не меняет.
 import { addDays } from '../../js/calc.js';
 import { totals, goalTotals, convTotal } from './dcalc.js';
+import { missingConversionsDuringSpend } from './evidence.js';
 import { litnetPage, matchBook, reach } from './mcalc.js';
 
 const r0 = (v) => Math.round(v);
@@ -60,12 +61,13 @@ export function weekBudget(camp, daily, today) {
 
 // Деньги и цели кампании за 7 и 30 дней + вывод.
 // perSale — роялти с одной покупки (из «Доходов»), libShare — доля «библиотека → покупка» по Метрике автора.
-export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSale = null, libShare = null, skip = null }) {
+export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSale = null, libShare = null, skip = null, convVerified = true }) {
   const from7 = addDays(today, -6), from30 = addDays(today, -29), cid = camp.id;
   const d7 = totals(daily, from7, today, cid), d30 = totals(daily, from30, today, cid), dToday = totals(daily, today, today, cid);
-  const lib7 = goals.lib ? convTotal(conv, from7, today, cid, [goals.lib], skip) : null;
-  const lib30 = goals.lib ? convTotal(conv, from30, today, cid, [goals.lib], skip) : null;
-  const buy30 = goals.buy?.length ? convTotal(conv, from30, today, cid, goals.buy, skip) : null;
+  const usable = convVerified && !missingConversionsDuringSpend(daily, from30, today, skip, cid);
+  const lib7 = usable && goals.lib ? convTotal(conv, from7, today, cid, [goals.lib], skip) : null;
+  const lib30 = usable && goals.lib ? convTotal(conv, from30, today, cid, [goals.lib], skip) : null;
+  const buy30 = usable && goals.buy?.length ? convTotal(conv, from30, today, cid, goals.buy, skip) : null;
   const cpaLib = lib30 ? d30.cost / lib30 : null, cpaBuy = buy30 ? d30.cost / buy30 : null;
   const revenue = perSale != null && buy30 != null ? buy30 * perSale : null;
   // ценность добавления: часть читательниц из библиотеки потом покупает
@@ -73,7 +75,8 @@ export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSal
   const target = camp.cpa || null; // цена цели в стратегии
   const ran = camp.start ? daysBetween(camp.start, today) + 1 : 30;
   let verdict;
-  if (!d30.cost) verdict = { kind: 'wait', text: 'расхода пока нет' };
+  if (!usable) verdict = { kind: 'wait', text: 'Конверсии неполные или устарели: окупаемость пока неизвестна. Расход показан полностью.' };
+  else if (!d30.cost) verdict = { kind: 'wait', text: 'расхода пока нет' };
   else if (buy30 >= 3 && revenue != null) {
     const ret = revenue / d30.cost;
     verdict = ret >= 1.2 ? { kind: 'good', text: `окупается: на 1 ₽ — ${ret.toFixed(2).replace('.', ',')} ₽ роялти с покупок`, ret }
@@ -84,9 +87,9 @@ export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSal
     const worth = libValue != null ? cpaLib <= libValue : null;
     verdict = over != null && over > 1.5 ? { kind: 'bad', text: `добавление по ${r0(cpaLib)} ₽ — дороже вашей цены ${r0(target)} ₽ в ${over.toFixed(1).replace('.', ',')} раза` }
       : worth === false ? { kind: 'warn', text: `добавление по ${r0(cpaLib)} ₽, а приносит в среднем ≈ ${r0(libValue)} ₽ — пока дороже, чем окупается` }
-        : { kind: 'good', text: `добавление по ${r0(cpaLib)} ₽${target ? ` при цели ${r0(target)} ₽` : ''}${libValue != null ? `, приносит ≈ ${r0(libValue)} ₽` : ''}` };
+        : { kind: 'even', text: `добавление по ${r0(cpaLib)} ₽${target ? ` при цене цели ${r0(target)} ₽` : ''}; будущая окупаемость требует проверки по когортам` };
   } else verdict = { kind: 'wait', text: ran < 7 ? `учится (день ${ran}) — выводы после 7 дней и 5 добавлений` : 'мало добавлений для выводов — нужно хотя бы 5 за 30 дней' };
-  return { today: dToday, d7, d30, lib7, lib30, buy30, cpaLib, cpaBuy, revenue, libValue, target, ran, verdict };
+  return { today: dToday, d7, d30, usable, lib7, lib30, buy30, cpaLib, cpaBuy, revenue, libValue, target, ran, verdict };
 }
 
 // Этап кампании и следующий шаг (13.11.2026, её просьба: «понимать, когда переключить цель, когда создать другую кампанию»).
@@ -95,8 +98,12 @@ export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSal
 //    и она «ослепнет»; до этого остаёмся на библиотеке; 4) на покупках судим по отдаче рубля.
 // Вторая кампания нужна редко: одна учится быстрее. Поводы — другая книга; ретаргетинг на добавивших, когда их набралось RETARGET_MIN и открыта подписка.
 export const NEED_BUYS = 10, RETARGET_MIN = 300;
-export function campaignStage(camp, { econ, st, goals, conv = [], today, subStart = '', perSale = null, skip = null }) {
+export function campaignStage(camp, { econ, st, goals, conv = [], today, subStart = '', perSale = null, skip = null, convVerified = true }) {
   if (!['on', 'capped', 'idle'].includes(st?.key)) return null;
+  if (!convVerified || econ?.usable === false) return { key: 'data', title: 'Сначала восстановить аналитику',
+    text: 'Недостаточно надежных конверсий: менять цель и масштабировать рекламу по этому периоду нельзя.',
+    checks: [], next: { what: 'Проверить цели и обновить Директ', why: 'Расход и цели могли обновиться в разное время.' },
+    second: 'Не принимать решение о новой кампании по неполным данным.', buy7: 0, open: false, onBuy: false };
   const buySet = (goals.buy || []).map(String), onBuy = camp.goal != null && buySet.includes(String(camp.goal));
   const open = !!subStart && subStart <= today, dm = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
   const buy7 = buySet.length ? convTotal(conv, addDays(today, -6), today, camp.id, buySet, skip) : 0;
@@ -138,14 +145,20 @@ export function campaignStage(camp, { econ, st, goals, conv = [], today, subStar
 
 // Окупаемость с начала кампании (как считает книжный таргетолог): потрачено → уже вернулось роялти с покупок → ещё «ждёт» в библиотеках
 // (добавившие покупают позже: ожидаем добавления × ценность добавления). Итог — сколько вернёт 1 ₽, когда добавившие докупят.
-export function campaignPayback(camp, { daily = [], conv = [], today, goals, perSale = null, libValue = null, skip = null }) {
+export function campaignPayback(camp, { daily = [], conv = [], today, goals, perSale = null, libValue = null, skip = null, convVerified = true }) {
   const from = camp.start || '0000', cid = camp.id, t = totals(daily, from, today, cid);
   if (!t.cost) return null;
-  const lib = goals.lib ? convTotal(conv, from, today, cid, [goals.lib], skip) : 0, buy = goals.buy?.length ? convTotal(conv, from, today, cid, goals.buy, skip) : 0;
-  const back = perSale != null ? buy * perSale : null;
-  const expected = libValue != null ? Math.max(0, lib * libValue - (back || 0)) : null; // что ещё принесут добавившие
-  const total = back != null || expected != null ? (back || 0) + (expected || 0) : null;
-  return { cost: t.cost, lib, buy, back, expected, total, ret: total != null ? total / t.cost : null, days: daysBetween(camp.start || today, today) + 1 };
+  const usable = convVerified && !missingConversionsDuringSpend(daily, from, today, skip, cid);
+  const lib = usable && goals.lib ? convTotal(conv, from, today, cid, [goals.lib], skip) : null;
+  const buy = usable && goals.buy?.length ? convTotal(conv, from, today, cid, goals.buy, skip) : null;
+  // Только деньги по атрибутированным покупкам, оценка роялти из «Доходов».
+  // Библиотеки нельзя добавлять как доказанные деньги — это ведёт к двойному счету.
+  const back = buy != null && perSale != null ? buy * perSale : null;
+  const expected = null;
+  const total = back;
+  return { cost: t.cost, lib, buy, back, expected, total, ret: total != null ? total / t.cost : null,
+    projected: usable && lib != null && libValue != null ? lib * libValue : null,
+    days: daysBetween(camp.start || today, today) + 1 };
 }
 
 // «Как заработать больше» (11.11.2026, владелица: «чтобы мне было максимально просто получать максимальную прибыль»):
@@ -189,7 +202,8 @@ export function campaignLevers(camp, st, econ, wk, { ads = [], daily = [], today
 export function campaignAlerts(camp, st, econ, { daily = [], conv = [], today, goals }) {
   const out = [];
   if (st.key === 'idle') out.push({ tone: 'bad', title: `«${camp.name}»: нет показов со вчерашнего дня`, how: 'Частые причины — кончились деньги на счёте, недельный бюджет исчерпан, ставка/цена цели слишком низкие для аукциона. Проверьте баланс в кабинете Директа.' });
-  if (st.key === 'capped') out.push({ tone: 'warn', title: `«${camp.name}»: недельный бюджет почти потрачен`, how: 'До понедельника показов почти не будет. Если добавление дешевле его ценности — бюджет стоит поднять в кабинете.' });
+  if (st.key === 'capped') out.push({ tone: 'warn', title: `«${camp.name}»: недельный бюджет почти потрачен`, how: 'До понедельника показов почти не будет. Перед увеличением бюджета проверьте подтвержденные покупки и актуальность целей.' });
+  if (econ.usable === false) return out;
   // цена добавления за 3 последних дня — против цели
   if (econ.target && goals.lib) {
     const from = addDays(today, -2), g = goalTotals(daily, conv, from, today, { cid: camp.id, goals: [goals.lib] });

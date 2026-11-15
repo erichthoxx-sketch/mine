@@ -2,6 +2,7 @@
 import { initAccent } from './accent.js';
 import { keepNavDown } from './vvfix.js';
 import { createStore, authErrorText, firebaseConfigured } from './store.js';
+import { startAiAutoSync } from './ai-autosync.js';
 import { installHandlers, esc, toast, acts, forms, changes, watchForUpdates, keepPlace, tidyNums, ecoSwitch } from './ui.js';
 import {
   todayISO, incomeSeries, firstKnownDate, lastSaleDate, movingAverage, spendByMonthChannel, litnetDiscounts, monthFinance, monthSpendForecast, litnetPaymentsByMonth, litnetMoneyByMonth, litnetDiscountBase, monthKey,
@@ -212,6 +213,7 @@ acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle(
 // изменения базы — одной перерисовкой за кадр: при импорте продажи пишутся кусками, и раньше экран пересчитывался после каждого
 let renderQueued = false;
 store.subscribe(() => { if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; safeRender(); }); });
+startAiAutoSync(store, ['income', 'direct']);
 store.init().then(() => {
   render();
   // Разовое исправление: раньше по умолчанию стояло 6 %, для самозанятой при агентском договоре с Литнетом — 4 % с полной цены

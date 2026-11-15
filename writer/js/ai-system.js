@@ -57,14 +57,46 @@ export function incomeSnapshot(data, generatedAt = new Date().toISOString()) {
     sales, campaigns, reports };
 }
 export function directSnapshot(docs, generatedAt = new Date().toISOString(), goalList = []) {
-  const main = docs?.main || {}, stats = docs?.stats || {}, mk = docs?.mk || {};
+  const main = docs?.main || {}, stats = docs?.stats || {}, mk = docs?.mk || {}, market = docs?.market || {}, world = docs?.marketintel || {}, cohorts = docs?.cohorts || {};
   const campaigns = (main.campaigns || []).slice(0, 200).map((x) => pick(x, ['id', 'name', 'state', 'status', 'type', 'start', 'daily', 'budget', 'strategy', 'counters']));
   const daily = (stats.daily || []).slice(-4000).map((x) => pick(x, ['date', 'cid', 'name', 'impr', 'clicks', 'cost', 'conversions', 'orders']));
   const queries = (stats.queries || []).slice(0, 250).map((x) => pick(x, ['cid', 'query', 'text', 'phrase', 'clicks', 'impr', 'cost', 'conversions']));
   const keywords = (main.keywords || []).slice(0, 300).map((x) => pick(x, ['id', 'cid', 'text', 'kw', 'bid', 'status', 'state']));
-  const adDaily = (stats.adDaily || []).slice(-2000).map((x) => pick(x, ['date', 'cid', 'aid', 'net', 'impr', 'clicks', 'cost']));
+  const adDaily = (stats.adDaily || []).slice(-2000).map((x) => pick(x, ['date', 'cid', 'aid', 'net', 'impr', 'clicks', 'cost', 'goalMeasured', 'goals']));
+  const conv = (stats.conv || []).slice(-1200).map((x) => pick(x, ['date', 'cid', 'conv']));
+  const placements = (stats.placements || []).slice(0, 150).map((x) => pick(x,
+    ['CampaignId', 'Placement', 'AdNetworkType', 'Impressions', 'Clicks', 'Cost', 'BounceRate',
+     ...Object.keys(x || {}).filter((k) => /^Conversions_\d+_/.test(k)).slice(0, 10)]));
+  // Рынок: только последние открытые топы, с покрытием. Нельзя приписывать им реальные продажи конкурентов.
+  const marketDates = Object.keys(market.days || {}).sort();
+  const marketDate = marketDates.at(-1) || null;
+  const marketSources = marketDate ? Object.entries(market.days[marketDate] || {}) : [];
+  const marketContext = marketDate ? { date: marketDate, at: market.at || null,
+    coverage: market.coverage?.[marketDate] || null,
+    sources: marketSources.map(([url, rows]) => ({
+      url, books: (rows || []).slice(0, 60).map((row) => ({
+        rank: row.n, id: row.id, title: market.books?.[row.id]?.t || '',
+        author: market.books?.[row.id]?.a || '', tagsByText: market.books?.[row.id]?.tr || [],
+        viewsTotal: row.v, librariesTotal: row.l, likesTotal: row.k,
+        price: row.p, pages: row.g, finished: !!row.s,
+      })),
+    })),
+    note: 'Только наблюдаемая выдача топов Литнета. Библиотеки/просмотры — накопленные счетчики, а не конверсия или чужие продажи.'
+  } : null;
   return { section: 'direct', generatedAt, note: 'Сохранённый снимок статистики Яндекс.Директа из приложения; не является запросом в рекламный кабинет в реальном времени. Ключи и параметры доступа не включены.',
-    snapshotAt: main.syncedAt || main.at || stats.at || null, campaigns, daily, keywords, queries, adDaily,
+        snapshotAt: main.syncedAt || main.at || stats.at || null,
+    conversionAt: stats.mAt || null, conversionError: text(stats.mErr || '', 400),
+    placementAt: stats.placementAt || null, placementError: text(stats.placementErr || '', 400),
+    campaigns, daily, keywords, queries, adDaily, conversions: conv, placements, market: marketContext,
+    cohorts: { at: cohorts.at || null, from: cohorts.from || null, to: cohorts.to || null,
+      schema: cohorts.schema || null, note: cohorts.note || 'Покупки любой книги, не подтвержденный доход по книге.',
+      groups: cohorts.groups || {},
+      camps: Object.fromEntries(Object.entries(cohorts.camps || {}).slice(0, 75)),
+      campBooks: Object.fromEntries(Object.entries(cohorts.campBooks || {}).slice(0, 75)) },
+    world: { fetchedAt: world.at || null, attemptedAt: world.attemptedAt || null,
+      sourceStatus: (world.statuses || []).slice(0, 12).map((s) => pick(s, ['name', 'ok', 'count', 'checkedAt', 'error'])),
+      headlines: (world.items || []).slice(0, 35).map((x) => pick(x, ['title', 'url', 'date', 'source', 'lang'])),
+      note: 'Мировые новости — публичные RSS-заголовки с возможными пропусками. Amazon и Reddit не выгружаются автоматически.' },
     metrika: { goalNames: Object.fromEntries((goalList || []).filter((g) => g?.id).map((g) => [String(g.id), text(g.name, 120)])),
       daily: (mk.daily || []).slice(-100).map((x) => pick(x, ['key', 'visits', 'bounce', 'goals'])),
       sources: (mk.sources || []).slice(0, 40).map((x) => pick(x, ['name', 'source', 'visits', 'bounce', 'goals'])) } };
@@ -77,5 +109,5 @@ export async function readDirectDocs(store) {
   const { collection, getDocsFromServer } = store.F;
   const result = await getDocsFromServer(collection(store.db, 'users', store.user.uid, 'd_snap'));
   const docs = Object.fromEntries(result.docs.map((d) => [d.id, d.data()]));
-  return { main: docs.main || {}, stats: docs.stats || {}, mk: docs.mk || {} };
+  return { main: docs.main || {}, stats: docs.stats || {}, mk: docs.mk || {}, market: docs.market || {}, marketintel: docs.marketintel || {}, cohorts: docs.cohorts || {} };
 }

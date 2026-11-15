@@ -23,6 +23,7 @@ import { resolvedLaunches, goalSwitch, siteBooks } from './launchctx.js';
 import { acts, toast } from '../../../js/ui.js';
 import { syncWatch } from '../watch.js';
 import { changes } from '../../../js/ui.js';
+import { conversionEvidence } from '../evidence.js';
 
 const TONE = { good: 'up', bad: 'down', warn: 'warnc', even: '', wait: 'muted', muted: 'muted' };
 const ORDER = { idle: 0, rejected: 0, capped: 1, on: 2, soon: 3, moderation: 4, stopped: 5, draft: 6, ended: 7, archived: 8 };
@@ -32,6 +33,7 @@ export function pultModel(a) {
   const c = a.ctx(), main = a.snap('main') || {}, stats = a.snap('stats') || {}, mk = a.snap('mk');
   const t = c.today, m = metrikaOf(c) || {}, skip = outageSet(c.data.days || []);
   const daily = stats.daily || [], conv = stats.conv || [], ads = main.ads || [];
+  const ev = conversionEvidence(stats, t);
   const perAll = royaltyPerSale(c.data.sales || [], t)?.perSale ?? null;
   // доля «библиотека → покупка» по Метрике автора за 90 дней — сколько стоит одно добавление
   const g0 = goalsOf(m), tot = mk?.daily ? goalTotals30(mk.daily, addDays(t, -89), t) : null;
@@ -41,15 +43,15 @@ export function pultModel(a) {
     const sold = book?.title ? royaltyPerSale(c.data.sales || [], t, { book: (c.data.sales || []).find((x) => String(x.book || '').toLowerCase().startsWith(book.title.toLowerCase()))?.book || null }) : null;
     const perSale = sold?.qty >= 5 ? sold.perSale : perAll;
     const st = campaignState(camp, { daily, ads, today: t });
-    const econ = campaignEcon(camp, { daily, conv, today: t, goals, perSale, libShare: lv?.share ?? null, skip });
+    const econ = campaignEcon(camp, { daily, conv, today: t, goals, perSale, libShare: lv?.share ?? null, skip, convVerified: ev.ready });
     const wk0 = weekBudget(camp, daily, t);
     // старт подписки книги: Мастерская («О книге») или сайт
     const wb = book ? (c.data.w_books || []).find((x) => x.id === book.id) : null, sbk = book && !demo.on ? siteBooks(a).find((x) => String(x.title || '').toLowerCase() === String(book.title || '').toLowerCase()) : null;
     const subStart = wb?.subStart || sbk?.startDate || '';
-    const stage = campaignStage(camp, { econ, st, goals, conv, today: t, subStart, perSale, skip });
-    return { camp, goals, book, st, econ, perSale, stage, subStart, ownSales: sold?.qty >= 5, libMeasured: !!lv?.measured, pay: campaignPayback(camp, { daily, conv, today: t, goals, perSale, libValue: econ.libValue, skip }), wk: wk0, lev: campaignLevers(camp, st, econ, wk0, { ads, daily, today: t }), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
+    const stage = campaignStage(camp, { econ, st, goals, conv, today: t, subStart, perSale, skip, convVerified: ev.ready });
+    return { camp, goals, book, st, econ, perSale, stage, subStart, ownSales: sold?.qty >= 5, libMeasured: false, convReady: ev.ready && econ.usable, pay: campaignPayback(camp, { daily, conv, today: t, goals, perSale, libValue: econ.libValue, skip, convVerified: ev.ready }), wk: wk0, lev: campaignLevers(camp, st, { ...econ, libValue: null }, wk0, { ads, daily, today: t }), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
   }).sort((x, y) => (ORDER[x.st.key] ?? 9) - (ORDER[y.st.key] ?? 9));
-  return { c, main, stats, m, rows, lv };
+  return { c, main, stats, m, rows, lv, conversionEvidence: ev };
 }
 
 const money = (v) => (v == null ? '—' : rub(v, 0));
@@ -82,8 +84,8 @@ function card(r) {
     </div>
     ${wk ? `<div class="progress ${wk.share >= 0.9 ? 'warn' : ''}"><i style="width:${Math.min(100, wk.share * 100).toFixed(1)}%"></i></div>` : ''}
     <p class="small ${TONE[e.verdict.kind]}" style="margin:10px 0 0">${esc(e.verdict.text.charAt(0).toUpperCase() + e.verdict.text.slice(1))}${e.revenue != null && e.buy30 ? ` · роялти с покупок ≈ ${money(e.revenue)}` : ''}</p>
-    ${e.libValue != null && r.perSale ? `<p class="small muted" style="margin:4px 0 0">≈ ${money(e.libValue)} за добавление — это оценка, а не деньги этой кампании: средний доход с одной покупки (${money(r.perSale)}${r.ownSales ? ', по этой книге' : ', по вашим книгам за 60 дней'}) × доля добавивших, которые потом покупают (${Math.round(e.libValue / r.perSale * 100)} %${r.libMeasured ? ', по Метрике за 90 дней' : ' — осторожная оценка, данных пока мало'}). Настоящие покупки появятся в плитке «Покупки», когда откроется подписка.</p>` : ''}
-    ${pay && pay.total != null ? `<p class="small" style="margin:6px 0 0"><b>С начала (${pay.days} дн.):</b> потрачено ${money(pay.cost)} · вернулось с покупок ${money(pay.back || 0)} · ещё принесут добавившие ≈ ${money(pay.expected || 0)} → <span class="${pay.ret >= 1 ? 'up' : 'warnc'}">на 1 ₽ ≈ ${pay.ret.toFixed(2).replace('.', ',')} ₽</span></p>` : ''}
+    ${e.libValue != null && r.perSale ? `<p class="small muted" style="margin:4px 0 0">≈ ${money(e.libValue)} за добавление — это оценка, а не деньги этой кампании: средний доход с одной покупки (${money(r.perSale)}${r.ownSales ? ', по этой книге' : ', по вашим книгам за 60 дней'}) × доля добавивших, которые потом покупают (${Math.round(e.libValue / r.perSale * 100)} %${r.libMeasured ? ', общая статистика целей за 90 дней, не когорта' : ' — предварительное допущение, не проверенная когорта'}). Настоящие покупки появятся в плитке «Покупки», когда откроется подписка.</p>` : ''}
+    ${pay && pay.total != null ? `<p class="small" style="margin:6px 0 0"><b>С начала (${pay.days} дн.):</b> потрачено ${money(pay.cost)} · вернулось с покупок ${money(pay.back || 0)} → <span class="${pay.ret >= 1 ? 'up' : 'warnc'}">атрибутированные покупки: на 1 ₽ ≈ ${pay.ret.toFixed(2).replace('.', ',')} ₽ (оценка по средней цене продажи, не прибыль)</span></p>` : ''}
     ${r.stage ? stageHtml(r) : ''}
     ${lev?.forecast ? `<p class="small muted" style="margin:4px 0 0">При таком темпе за неделю: ≈ ${num(Math.round(lev.forecast.lib))} добавлений за ${money(lev.forecast.cost)}${lev.forecast.royalty != null ? ` → ожидаемое роялти ≈ ${money(lev.forecast.royalty)}` : ''}</p>` : ''}
     ${lev?.levers.length ? `<div class="pult-lev"><div class="small muted" style="margin:12px 0 2px">Как заработать больше</div>${more('lev-' + camp.id, lev.levers.map((x, i) => `<div class="item"><b>${i + 1}. ${esc(x.title)}</b><div class="small muted">${esc(x.how)}</div></div>`), 2)}</div>` : ''}

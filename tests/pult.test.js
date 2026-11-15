@@ -38,7 +38,7 @@ test('экономика: цена добавления против цели, �
   const g = goalsOf(M, camp);
   // 1000 ₽, 100 добавлений → 10 ₽ при цели 8: в рамках (не дороже 1,5 раза)
   let e = campaignEcon(camp, { daily, conv: lib(100), today: T, goals: g });
-  assert.equal(Math.round(e.cpaLib), 10); assert.equal(e.verdict.kind, 'good');
+  assert.equal(Math.round(e.cpaLib), 10); assert.equal(e.verdict.kind, 'even');
   // 1000 ₽, 50 добавлений → 20 ₽ при цели 8 — дорого
   e = campaignEcon(camp, { daily, conv: lib(50), today: T, goals: g });
   assert.equal(e.verdict.kind, 'bad');
@@ -113,7 +113,7 @@ test('окупаемость с начала кампании: вернулос�
   const daily = [day('2026-11-10', 100), day('2026-11-11', 100)];
   const conv = [{ date: '2026-11-10', cid: 7, conv: { 548467215: 10, 548467220: 1 } }, { date: '2026-11-11', cid: 7, conv: { 548467215: 10 } }];
   const p = campaignPayback(c, { daily, conv, today: '2026-11-12', goals: g, perSale: 100, libValue: 30 });
-  assert.deepEqual([p.cost, p.lib, p.buy, p.back, p.expected, p.total, p.ret, p.days], [200, 20, 1, 100, 500, 600, 3, 3]);
+  assert.deepEqual([p.cost, p.lib, p.buy, p.back, p.expected, p.total, p.ret, p.days, p.projected], [200, 20, 1, 100, null, 100, 0.5, 3, 600]);
   assert.equal(campaignPayback(c, { daily: [], conv, today: '2026-11-12', goals: g }), null);
 });
 

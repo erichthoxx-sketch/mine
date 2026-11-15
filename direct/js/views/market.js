@@ -4,6 +4,7 @@ import { esc, acts, changes, toast, openSheet, more } from '../../../js/ui.js';
 import { num, fmtDate } from '../../../js/format.js';
 import { marketInsights, myRanks, watchReport, tropeForecast } from '../../../js/market.js';
 import { scanMarket, marketSnap, marketState, srcsOf, okSrc, MARKET_DEFAULT } from '../marketscan.js';
+import { marketWorldView } from './marketworld.js';
 
 const pc = (v) => Math.round(v * 100) + ' %';
 const short = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' млн' : n >= 1e3 ? (n / 1e3).toFixed(1).replace('.', ',') + ' тыс.' : String(Math.round(n)));
@@ -16,13 +17,13 @@ let lastM = null;
 // Прогноз тропов на 4 недели: что поднимется, что на пике, что уходит — и почему
 function forecastCard(snap, src, isMine) {
   const F = tropeForecast(snap, { src });
-  const head = `<h2 style="margin:0 0 4px">Прогноз тропов на месяц</h2>`;
-  if (!F.ready) return `<div class="card">${head}<p class="small muted" style="margin:0">Прогноз строится по ходу топа день за днём. ${F.needDays ? `Нужно ещё ${F.needDays} ${F.needDays === 1 ? 'день' : F.needDays < 5 ? 'дня' : 'дней'} срезов` : `Нужно ещё ${F.need} ${F.need === 1 ? 'среза' : 'среза'}`} — приложение снимает их само раз в сутки.</p></div>`;
+  const head = `<h2 style="margin:0 0 4px">Сценарий тропов на 4 недели</h2>`;
+  if (!F.ready) return `<div class="card">${head}<p class="small muted" style="margin:0">Прогноз строится по ходу топа день за днём. ${F.needDays ? `Нужно ещё ${F.needDays} ${F.needDays === 1 ? 'день' : F.needDays < 5 ? 'дня' : 'дней'} срезов` : `Нужно ещё ${F.need} ${F.need === 1 ? 'срез' : F.need >= 2 && F.need <= 4 ? 'среза' : 'срезов'}`} — приложение снимает их само раз в сутки.</p></div>`;
   const row = (x, right) => `<div class="mk-fc" data-act="mk.trope" data-t="${esc(x.name)}" role="button" tabindex="0"><div class="row between" style="gap:10px;align-items:baseline"><b>${esc(x.name)}${isMine(x.name) ? ' <span class="mk-me">ваш</span>' : ''}</b><span class="small" style="white-space:nowrap">${right}</span></div>
     ${x.why.length ? `<div class="small muted">${x.why.slice(0, 3).map(esc).join(' · ')}</div>` : ''}</div>`;
   const pp = (v) => Math.round(v * 100) + ' %';
   const grp = (t, list, fn) => (list.length ? sub(t) + list.map((x) => row(x, fn(x))).join('') : '');
-  return `<div class="card">${head}<p class="small muted" style="margin:0 0 6px">Что, вероятно, будет в топе через 4 недели. Основа: ход доли тропа по ${F.slices} срезам за ${F.span} дн., какие тропы у книг, только что вошедших в топ (${F.fresh}), как быстро такие книги набирают читателей и насколько охотно их добавляют. Уверенность — ${F.conf}. Это прогноз, а не гарантия.</p>
+  return `<div class="card">${head}<p class="small muted" style="margin:0 0 6px">Математический сценарий доли тропов в наблюдаемых топах через 4 недели (не прогноз реальных продаж). Основа: ход доли тропа по ${F.slices} срезам за ${F.span} дн., какие тропы у книг, только что вошедших в топ (${F.fresh}), как быстро такие книги набирают читателей и насколько охотно их добавляют. Уверенность — ${F.conf}. Это экстраполяция небольшого числа открытых подборок, а не гарантированный прогноз.</p>
     ${grp('Поднимутся', F.up, (x) => `${pp(x.share)} → <b class="up">≈ ${pp(x.proj)}</b>`)}
     ${grp('На пике — тесно', F.peak, (x) => `${pp(x.share)} топа`)}
     ${grp('Уходят', F.down, (x) => `${pp(x.share)} → <b class="down">≈ ${pp(x.proj)}</b>`)}
@@ -37,6 +38,7 @@ const spark = (h) => { if (!h || h.length < 3) return ''; const mx = Math.max(..
 const sub = (t) => `<div class="mk-sub">${t}</div>`;
 
 export function marketView(a) {
+  const worldHtml = marketWorldView(a);
   const c = a.ctx(), snap = marketSnap(a), srcs = srcsOf(c.settings), ui = a.ui, src = srcs.some((s) => s.url === ui.mkSrc) ? ui.mkSrc : null;
   const mine = [...new Set((c.data.w_books || []).flatMap((b) => b.tags || []))], isMine = (t) => mine.some((x) => x.toLowerCase() === t.toLowerCase());
   const myPrices = (c.data.books || []).map((b) => Number((b.priceHistory || []).slice(-1)[0]?.price) || 0).filter(Boolean);
@@ -53,18 +55,26 @@ export function marketView(a) {
       <div class="row" style="gap:8px"><select data-chg="mk.src" aria-label="Подборка" class="mk-sel"><option value="">Все подборки</option>${srcs.map((s) => `<option value="${esc(s.url)}"${src === s.url ? ' selected' : ''}>${esc(s.name.replace(/^Литнет · /, ''))}</option>`).join('')}<option value="+">+ Добавить подборку…</option></select>
       <button class="small-btn" data-act="mk.scan"${marketState.busy ? ' disabled' : ''}>${marketState.busy ? 'Читаю…' : 'Обновить'}</button></div></div>
     <p class="small muted" style="margin:0 0 16px">Топы Литнета${M ? ` · ${M.n} книг · срез ${fmtDate(M.date)}` : ''}${snap?.err ? ` · ${esc(snap.err)}` : ''}</p>`;
-  if (!M) return { html: head + `<div class="card"><p class="muted" style="margin:0">${marketState.busy ? 'Читаю топы — это около двух минут.' : 'Срезов пока нет. Нажмите «Обновить» — первый снимется за пару минут, дальше приложение делает это само раз в сутки.'}</p></div>` };
+  if (!M) return { html: worldHtml + head + `<div class="card"><p class="muted" style="margin:0">${marketState.busy ? 'Читаю топы — это около двух минут.' : 'Срезов пока нет. Нажмите «Обновить» — первый снимется за пару минут, дальше приложение делает это само раз в сутки.'}</p></div>` };
+  const report = snap?.coverage?.[M.date] || null;
+  const covered = report ? `<div class="card"><h2 style="margin:0 0 6px">Полнота источников</h2>
+    <p class="small">Собрано ${report.collected || 0} из ${report.requested || 0} подборок Литнета, ${report.pages || 0} страниц. Это открытые топы, не весь книжный рынок.</p>
+    ${Object.values(report.bySource || {}).map((x) => `<div class="small">${esc(x.name)} — ${num(x.books)} книг, ${x.pages} стр. ${x.ok ? '✓' : '⚠ данные неполные'}</div>`).join('')}
+    ${report.errors?.length ? '<p class="small warnc">Часть источников не ответила: не делайте вывод о росте тропов по неполному срезу.</p>' : ''}
+    <p class="small muted">* Библиотеки и просмотры — накопленные счетчики платформы; 100 просмотров могут включать повторные открытия. Условная «конверсия» не является долей уникальных людей.</p>
+  </div>` : '<p class="small muted">Старые снимки не хранят статус всех источников. Сравнивайте выводы осторожно.</p>';
   const few = M.n < 30;
   const maxT = Math.max(...M.tropeMap.map((t) => t.share), 0.01);
   const arrow = (t) => (t.delta == null || Math.abs(t.delta) < 0.05 ? '' : t.delta > 0 ? ` <span class="up">▲${Math.round(t.delta * 100)}</span>` : ` <span class="down">▼${Math.round(-t.delta * 100)}</span>`);
-  const bRow = (b) => `<div class="mk-b"><div class="row between small"><span><b>${esc(b.name)}</b></span><span class="muted">${b.n} ${b.n === 1 ? 'книга' : b.n < 5 ? 'книги' : 'книг'} · в библ. обычно ${short(b.lib)}${b.interest ? ` · интерес ${x1(b.interest)}` : ''}</span></div><div class="progress"><i style="width:${(b.share * 100).toFixed(1)}%"></i></div></div>`;
+  const bRow = (b) => `<div class="mk-b"><div class="row between small"><span><b>${esc(b.name)}</b></span><span class="muted">${b.n} ${b.n === 1 ? 'книга' : b.n < 5 ? 'книги' : 'книг'} · в библ. обычно ${short(b.lib)}${b.interest ? ` · относительный индекс ${x1(b.interest)}` : ''}</span></div><div class="progress"><i style="width:${(b.share * 100).toFixed(1)}%"></i></div></div>`;
   const moves = [
-    M.movers.length ? sub('Быстрее всех набирают читателей') + `<div class="list">${more('mk-mv', M.movers.map((b) => bookRow(b, `<b class="up">+${num(b.perDay)}</b> в день`)), 4)}</div>` : '',
+    M.movers.length ? sub('Быстрее всех растут библиотеки') + `<div class="list">${more('mk-mv', M.movers.map((b) => bookRow(b, `<b class="up">+${num(b.perDay)}</b> в день`)), 4)}</div>` : '',
     M.fresh.length ? sub('Новые в топе') + `<div class="list">${more('mk-new', M.fresh.map((b) => bookRow(b, `${short(b.lib)} в библ.`)), 4)}</div>` : '',
     M.gone.length ? sub('Выпали') + `<div class="list">${more('mk-gone', M.gone.map((b) => bookRow(b, `было место ${b.n}`)), 3)}</div>` : '',
     M.odd.length ? sub('В топе при малом числе читателей') + `<p class="small muted" style="margin:0 0 4px">Библиотек в десятки раз меньше, чем у соседей (обычно ${short(M.medLib)}). Слежу, сколько дней продержатся.</p><div class="list">${more('mk-odd', M.odd.map((b) => bookRow(b, `место ${b.n} · ${short(b.lib)}${b.days > 1 ? ` · ${b.days} дн.` : ''}`)), 4)}</div>` : '',
   ].filter(Boolean).join('');
-  return { html: `<section class="mk-page">${head}
+  return { html: worldHtml + `<section class="mk-page">${head}
+    ${covered}
     <div class="card"><h2 style="margin:0 0 8px">Главное</h2>${M.notes.slice(0, 6).map((n) => `<p style="margin:6px 0">${esc(n)}</p>`).join('')}
       ${few ? '<p class="small muted" style="margin:10px 0 0">Книг в срезе пока мало — выводы осторожные. После следующего обновления их станет больше.</p>' : ''}
       <p class="small muted" style="margin:10px 0 0">${M.prevDate ? `Изменения — против ${fmtDate(M.prevDate)} (${M.gap} дн. назад).` : 'Это первый срез: изменения за неделю появятся, когда будет с чем сравнить.'}</p></div>
@@ -88,9 +98,9 @@ export function marketView(a) {
       <div class="tiles"><div><div class="k">Цена</div><div class="v">${M.price.median != null ? Math.round(M.price.median) + ' ₽' : '—'}</div><div class="s">со скидкой ${pc(M.price.off)}</div></div>
         <div><div class="k">Объём</div><div class="v">${M.formula.pages ? Math.round(M.formula.pages) + ' стр.' : '—'}</div><div class="s">пишутся ${pc(M.progress)}</div></div>
         <div><div class="k">В библиотеках</div><div class="v">${short(M.formula.lib)}</div><div class="s">эксклюзив ${pc(M.excl)}</div></div>
-        <div><div class="k">Добавляют из 100 открывших</div><div class="v">${M.formula.conv != null ? (M.formula.conv * 100).toFixed(1).replace('.', ',') : '—'}</div><div class="s">лайк ставит каждая ${M.formula.likes ? Math.round(1 / M.formula.likes) + '-я' : '—'}</div></div></div></div>
+        <div><div class="k">Библиотек на 100 просмотров*</div><div class="v">${M.formula.conv != null ? (M.formula.conv * 100).toFixed(1).replace('.', ',') : '—'}</div><div class="s">лайк ставит каждая ${M.formula.likes ? Math.round(1 / M.formula.likes) + '-я' : '—'}</div></div></div></div>
 
-    ${M.tropeMap.length ? `<div class="card"><h2 style="margin:0 0 4px">Карта тропов</h2><p class="small muted" style="margin:0 0 12px">Полоса — сколько книг топа с этим тропом (конкуренция). «Интерес» — насколько охотнее обычного такие книги добавляют в библиотеку. «Рост» — насколько быстрее обычного книги с тропом набирают библиотеки за неделю. Сверху — где интерес выше. Нажмите на троп — откроются его книги.</p>
+    ${M.tropeMap.length ? `<div class="card"><h2 style="margin:0 0 4px">Карта тропов</h2><p class="small muted" style="margin:0 0 12px">Полоса — доля тропа в наблюдаемой выдаче, не число всех конкурентов. «Индекс» — отношение накопленных библиотек к просмотрам относительно медианы выборки, не конверсия и не доказанный спрос. «Рост» — отношение наблюдаемого прироста библиотек к типичному приросту между сопоставимыми срезами. Сверху — где интерес выше. Нажмите на троп — откроются его книги.</p>
       ${more('mk-tr', M.tropeMap.map((t) => `<div class="mk-b mk-tr" data-act="mk.trope" data-t="${esc(t.name)}" role="button" tabindex="0"><div class="row between small" style="gap:4px 10px;flex-wrap:wrap"><span><b>${esc(t.name)}</b>${isMine(t.name) ? ' <span class="mk-me">ваш</span>' : ''} <span class="${VERD[t.verdict][1]}">· ${VERD[t.verdict][0]}</span></span><span style="white-space:nowrap">${spark(t.hist)}${pc(t.share)}${arrow(t)}${t.interest != null ? ` · интерес <b>${x1(t.interest)}</b>` : ''}${t.grow != null ? ` · рост <b class="${t.grow >= 1.3 ? 'up' : t.grow <= 0.7 ? 'down' : ''}">${x1(t.grow)}</b>` : ''}</span></div><div class="progress"><i style="width:${(t.share / maxT * 100).toFixed(1)}%"></i></div></div>`), 8)}
       ${M.pairs.length ? sub('Чаще всего вместе') + `<p class="small" style="margin:0">${M.pairs.map((p) => `${esc(p.name.toLowerCase())} <span class="muted">(${p.n})</span>`).join(' · ')}</p>` : ''}</div>` : ''}
 
@@ -106,10 +116,10 @@ export function marketView(a) {
     ${moves ? `<div class="card"><h2 style="margin:0 0 2px">Движение за неделю</h2>${moves}</div>` : ''}
 
     <div class="card"><h2 style="margin:0 0 6px">Топ сейчас</h2><div class="list">${more('mk-top', M.top.map((b) => bookRow(b, `${short(b.lib)} в библ.`)), 5)}</div></div>
-    <p class="small muted" style="margin:14px 0 0">Источник — открытые страницы топов Литнета, раз в сутки. Чужие продажи и рекламные бюджеты не видит никто — здесь только то, что видит любой читатель.${c.settings.direct?.market?.srcs?.length ? ' <button class="link" data-act="mk.reset">Вернуть подборки по умолчанию</button>' : ''}</p></section>` };
+    <p class="small muted" style="margin:14px 0 0">Источник — открытые страницы топов Литнета, раз в сутки. Чужие продажи, рекламные бюджеты и реальную конверсию посетителя в оплату здесь не видно. Данные только по открытым страницам наблюдаемых топов; популярность зависит от возраста книги и ее продвижения.${c.settings.direct?.market?.srcs?.length ? ' <button class="link" data-act="mk.reset">Вернуть подборки по умолчанию</button>' : ''}</p></section>` };
 }
 acts['mk.scan'] = async () => { const a = window.__app; const p = scanMarket(a); a.rerender(); const r = await p; if (r) toast(r.got ? `Срез снят: подборок ${r.got}${r.err ? ' · ' + r.err : ''}` : 'Не получилось прочитать топы: ' + (r.err || 'нет ответа')); };
-// книги одного тропа: чем они отличаются от топа и как себя подают
+// книги одного тропа: чем они отличаются от топа и как оформлены карточки
 acts['mk.trope'] = (d) => { const M = lastM; if (!M) return false;
   const list = M.all.filter((b) => b.tropes.includes(d.t)).sort((x, y) => (y.conv ?? 0) - (x.conv ?? 0)); if (!list.length) { toast(`Книг с тропом «${d.t}» в топе сейчас нет`); return false; }
   const med = (a) => { const s = a.filter((x) => x != null).sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
@@ -123,11 +133,11 @@ acts['mk.trope'] = (d) => { const M = lastM; if (!M) return false;
       <div><div class="k">Объём</div><div class="v">${pg ? pg + ' стр.' : '—'}</div><div class="s">пишутся ${list.filter((b) => !b.done).length}</div></div>
       <div><div class="k">В библиотеках</div><div class="v">${short(med(list.map((b) => b.lib)) || 0)}</div><div class="s">с реплики начинают ${dlg}</div></div></div>
     ${pals.length ? `<p class="small" style="margin:0 0 10px"><span class="muted">Чаще всего вместе с:</span> ${pals.map(([n, k]) => `${esc(n.toLowerCase())} <span class="muted">(${k})</span>`).join(' · ')}</p>` : ''}
-    <div class="mk-sub" style="margin-top:0">Книги — сверху те, что добавляют охотнее</div>
+    <div class="mk-sub" style="margin-top:0">Книги по накопленному отношению библиотек к просмотрам</div>
     <div class="list">${list.map((b) => `<div class="item"><div class="row between" style="gap:12px;align-items:flex-start"><div style="min-width:0"><a href="${esc(b.url)}" target="_blank" rel="noopener"><b>${esc(b.title)}</b></a>
       <div class="small muted">${[b.author, b.price > 0 ? Math.round(b.price) + ' ₽' : 'бесплатно', b.pages ? b.pages + ' стр.' : '', 'место ' + b.n].filter(Boolean).map(esc).join(' · ')}</div>
       ${b.ann ? `<div class="small mk-ann">${esc(b.ann.slice(0, 150))}${b.ann.length > 150 ? '…' : ''}</div>` : ''}</div>
-      <span class="small" style="white-space:nowrap">${short(b.lib)}${b.conv != null ? `<br><span class="muted">${(b.conv * 100).toFixed(1).replace('.', ',')} из 100</span>` : ''}</span></div></div>`).join('')}</div>`, null);
+      <span class="small" style="white-space:nowrap">${short(b.lib)}${b.conv != null ? `<br><span class="muted">${(b.conv * 100).toFixed(1).replace('.', ',')} на 100 просмотров</span>` : ''}</span></div></div>`).join('')}</div>`, null);
   return false; };
 const saveWatch = async (list) => { const a = window.__app, d = a.ctx().settings.direct || {}; await a.store.saveSettings({ direct: { ...d, market: { ...(d.market || {}), watch: list } } }); };
 acts['mk.watch'] = async (d) => { const a = window.__app, list = a.ctx().settings.direct?.market?.watch || [];

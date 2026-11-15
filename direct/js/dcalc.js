@@ -419,7 +419,12 @@ export function weekInsights(daily, today, cid = null) {
 // ---------- выгорание: объявление приелось, аудитория «кончилась» ----------
 // Отчёт по объявлениям по дням → [{date, cid, aid, net: s (поиск) | n (сети), impr, clicks, cost}]
 export function adRows(rows) {
-  return rows.map((r) => ({ date: r.Date, cid: r.CampaignId, aid: r.AdId, net: r.AdNetworkType === 'AD_NETWORK' ? 'n' : 's', impr: r.Impressions, clicks: r.Clicks, cost: r2(r.Cost) }));
+  return rows.map((r) => {
+    const cols = convCols(r);
+    return { date: r.Date, cid: r.CampaignId, aid: r.AdId, net: r.AdNetworkType === 'AD_NETWORK' ? 'n' : 's',
+      impr: r.Impressions, clicks: r.Clicks, cost: r2(r.Cost),
+      ...(cols.length ? { goalMeasured: true, goals: Object.fromEntries(cols.map((k) => [goalIdOf(k), r[k] || 0])) } : {}) };
+  });
 }
 export function mergeAdDaily(old = [], fresh = [], keep = 120, today = null) {
   const k = (x) => `${x.date}_${x.aid}_${x.net}`, m = new Map(old.map((x) => [k(x), x]));
@@ -441,7 +446,13 @@ export function adFatigue(rows = [], today, { skip = null } = {}) {
     if (!on.length || on[on.length - 1] < addDays(y, -6)) continue; // сейчас не крутится
     const first = on[0], age = daysBetween(first, y) + 1, { aid, cid, net } = list[0];
     const base = sum(list, addDays(first, 2), addDays(first, 15)), rec = sum(list, addDays(y, -6), y);
-    const f = { aid, cid, net, first, age, base, rec, drop: null, cpcUp: null, state: 'fresh' };
+    const goalWindow = (a, b) => {
+      const xs = list.filter((x) => x.date >= a && x.date <= b && x.impr > 0);
+      return { measured: xs.length > 0 && xs.every((x) => x.goalMeasured === true),
+        count: xs.reduce((acc, x) => acc + sumGoals(x.goals), 0) };
+    };
+    const f = { aid, cid, net, first, age, base, rec, baseGoals: goalWindow(addDays(first, 2), addDays(first, 15)),
+      recGoals: goalWindow(addDays(y, -6), y), drop: null, cpcUp: null, state: 'fresh' };
     const enough = age >= 23 && base.impr >= FATIGUE.minImpr && rec.impr >= FATIGUE.minImpr && base.clicks >= FATIGUE.minClicks;
     if (enough && base.ctr) {
       f.drop = 1 - (rec.ctr || 0) / base.ctr;
@@ -482,7 +493,11 @@ export function fatigueHints({ main = {}, stats = {}, today, cid = null, goals =
         why: `${facts} Люди видели его много раз — оно стало «фоном», а при низком CTR клик в аукционе обычно дорожает.`,
         how: burnt ? (mates.length ? 'Остановите его — показы перейдут к другим вариантам в группе. И добавьте в кабинете новый вариант (другая картинка или заголовок с другим тропом), чтобы в группе снова было 2–3.' : 'В группе это единственный рабочий вариант: сначала добавьте в кабинете новый (другая картинка или заголовок), потом остановите это — иначе реклама встанет.')
           : 'Подготовьте замену сейчас, пока оно ещё работает: другой троп в заголовке или другая картинка. Добавьте её в группу — Директ сам разделит показы.',
-        ...(burnt && mates.length ? { act: { do: 'pause', target: 'ad', ids: [f.aid], why: `выгорело: CTR упал на ${Math.round(f.drop * 100)} %` }, actLabel: 'Остановить' } : {}), lesson: 'fatigue' });
+        // Пауза безопаснее только при доказанном падении целевых действий на уровне объявления:
+        // в базовом периоде были конверсии, в свежем их нет, данных достаточно.
+        ...(burnt && mates.length && f.baseGoals.measured && f.recGoals.measured &&
+          f.baseGoals.count >= 2 && f.recGoals.count === 0 && f.rec.clicks >= 30
+          ? { act: { do: 'pause', target: 'ad', ids: [f.aid], why: 'CTR ухудшился и за неделю при 30+ кликах нет целевых действий, хотя раньше они были' }, actLabel: 'Остановить' } : {}), lesson: 'fatigue' });
     } else if (f.state === 'soon') {
       out.push({ status: 'info', area: 'Выгорание', aid: f.aid, cid: f.cid, title: `${nm} крутится ${where} ${f.age} дн. — пора готовить замену`,
         why: `${facts || 'Цифры пока держатся.'} ${f.net === 'n' ? 'В сетях объявления приедаются быстрее: одни и те же люди видят их на разных сайтах.' : 'На поиске объявления устают медленнее, но конкуренты обновляют свои.'}`.trim(),

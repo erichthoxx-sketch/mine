@@ -3,7 +3,7 @@ import { esc, changes } from '../../../js/ui.js';
 import { rub, num } from '../../../js/format.js';
 import { addDays } from '../../../js/calc.js';
 import { goalTotals } from '../dcalc.js';
-import { qualitySummary, MIN_PLACEMENT_CLICKS, HIGH_BOUNCE_PCT } from '../qualitycalc.js';
+import { qualitySummary, MIN_PLACEMENT_CLICKS, HIGH_BOUNCE_PCT, AUTO_PLACEMENT_MIN_CLICKS, AUTO_PLACEMENT_BOUNCE } from '../qualitycalc.js';
 import { purchaseGoal } from '../launchcalc.js';
 import { metrikaOf } from './metrika.js';
 
@@ -58,15 +58,15 @@ export function qualityView(a) {
   </div>
   <div class="card tq">
     <h2>Что проверить в РСЯ</h2>
-    <p class="small muted">Ориентир для ручной проверки: от ${MIN_PLACEMENT_CLICKS} оплаченных кликов и ${HIGH_BOUNCE_PCT}% отказов. Это не «детектор ботов» и не автоматическое решение об исключении площадки.</p>
+    <p class="small muted">Ориентир для ручной проверки: от ${MIN_PLACEMENT_CLICKS} оплаченных кликов и ${HIGH_BOUNCE_PCT}% отказов. Это не «детектор ботов». Автоисключение возможно только при ${AUTO_PLACEMENT_MIN_CLICKS}+ кликах, ${AUTO_PLACEMENT_BOUNCE}%+ отказов, нуле целей в свежем отчете и отсутствии технических ошибок.</p>
     ${summary.flags.length ? `<div class="tq-flags">
       ${summary.flags.map(x => `<div class="tq-flag"><b>${esc(x.place)}</b>
-        <span>${num(x.clicks)} кликов · ${money(x.cost)} · отказы ${x.bounce}%</span>
-        <p class="small">Проверь аудиторию и соответствие объявления книге. Пока ничего не блокируем.</p>
+        <span>${num(x.clicks)} кликов · ${money(x.cost)} · отказы ${x.bounce}% · ${x.goalsMeasured ? `целей ${num(x.conv)}` : 'цели не получены'}</span>
+        <p class="small">Проверь целевые действия и соответствие объявления книге. Даже при высоких отказах площадка может приносить покупки.</p>
       </div>`).join('')}</div>` : '<p class="muted">Нет площадок, превысивших ориентир проверки. Это не гарантия отсутствия некачественного трафика.</p>'}
     ${places.length ? `<details><summary>Все площадки РСЯ (${places.length})</summary><div class="scroll">
-      <table class="tq-table"><thead><tr><th>Площадка</th><th>Клики</th><th>Расход</th><th>Отказы</th><th>Проверка</th></tr></thead><tbody>
-      ${places.slice(0, 80).map(x => `<tr><td>${esc(x.place)}</td><td>${num(x.clicks)}</td><td>${money(x.cost)}</td><td>${x.bounce == null ? '—' : x.bounce + '%'}</td>
+      <table class="tq-table"><thead><tr><th>Площадка</th><th>Клики</th><th>Расход</th><th>Отказы</th><th>Цели</th><th>Проверка</th></tr></thead><tbody>
+      ${places.slice(0, 80).map(x => `<tr><td>${esc(x.place)}</td><td>${num(x.clicks)}</td><td>${money(x.cost)}</td><td>${x.bounce == null ? '—' : x.bounce + '%'}</td><td>${x.goalsMeasured ? num(x.conv) : 'не получены'}</td>
         <td>${x.clicks < MIN_PLACEMENT_CLICKS ? 'Мало данных' : x.bounce != null && x.bounce >= HIGH_BOUNCE_PCT ? 'Посмотреть' : 'Нет сигнала'}</td></tr>`).join('')}
       </tbody></table></div></details>` : '<p class="small muted">Пока нет площадок с расходами РСЯ в этом отчете.</p>'}
   </div>
@@ -78,7 +78,7 @@ export function qualityView(a) {
         ${money(t.cost)} · ${num(t.clicks)} кликов · ${goalFresh ? num(t.conv) + ' целевых визитов' : 'покупки пока не проверены'}
       </div></div>`;
     }).join('')}</div>`}
-    <p class="small muted">Никаких автоматических остановок, запретов площадок или правок бюджета.</p>
+    <p class="small muted">Этот экран только анализирует. Автоправила с отдельными условиями выполняются на Пульте, если вы их включили; бюджет автоматически не меняется.</p>
   </div>` };
 }
 changes['tq.select'] = value => { window.__app.ui.qualityCid = String(value || ''); window.__app.rerender(); };

@@ -24,7 +24,7 @@ test('разбор недели: цифры, сравнение, выводы и
   }
   const ads = [{ id: 1, cid: 7, state: 'ON', status: 'ACCEPTED', title: 'Крючок А' }, { id: 2, cid: 7, state: 'ON', status: 'ACCEPTED', title: 'Крючок Б' }];
   const queries = [{ query: 'любовный роман скачать fb2', cid: 7, impr: 50, clicks: 5, cost: 3 }, { query: 'любовные романы про развод', cid: 7, impr: 90, clicks: 9, cost: 9 }];
-  const places = [{ cid: 7, place: 'game.app', clicks: 40, bounce: 70, cost: 5, impr: 900 }, { cid: 7, place: 'dzen.ru', clicks: 60, bounce: 15, cost: 9, impr: 2000 }];
+  const places = [{ cid: 7, place: 'game.app', clicks: 120, bounce: 85, cost: 5, impr: 900 }, { cid: 7, place: 'dzen.ru', clicks: 60, bounce: 15, cost: 9, impr: 2000 }];
   const R = weekReview({ camp, daily, conv, adDaily, ads, queries, places, goals, today: '2026-11-16', libValue: 30, perSale: 100 });
   assert.equal(R.now.cost, 700); assert.equal(R.now.lib, 70); assert.equal(R.now.cpaLib, 10);
   assert.ok(Math.abs(R.delta.cpaLib - (10 - 6) / 6) < 1e-9); assert.equal(R.delta.clicks, -0.5);
@@ -32,7 +32,7 @@ test('разбор недели: цифры, сравнение, выводы и
   assert.equal(R.best.title, 'Крючок А'); assert.equal(R.worst.title, 'Крючок Б');
   const notes = R.notes.map((x) => x.text).join(' | ');
   assert.match(notes, /Из 100 кликов в библиотеку добавляют 10,0/);
-  assert.match(notes, /стоит 10 ₽, а приносит в среднем ≈ 30 ₽ роялти — реклама в плюсе/);
+  assert.match(notes, /стоит 10 ₽, а приносит в среднем ≈ 30 ₽ роялти — модель допускает окупаемость/);
   assert.match(notes, /подорожало на 67 %/); assert.match(notes, /CTR упал на 50 %/);
   assert.deepEqual(R.todo.map((x) => x.k), ['fresh', 'ads', 'weak-2', 'minus', 'places']);
   assert.match(R.todo.at(-1).text, /game\.app/);

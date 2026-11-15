@@ -371,7 +371,7 @@ test('Выгорание: CTR объявления падает значимо �
   assert.deepEqual(D.adRows([{ Date: today, CampaignId: 7, AdId: 1, AdNetworkType: 'AD_NETWORK', Impressions: 10, Clicks: 1, Cost: 6 }])[0], { date: today, cid: 7, aid: 1, net: 'n', impr: 10, clicks: 1, cost: 6 });
   const rows = [];
   // 1: поиск, 40 дней, CTR 6 % → 2,4 % в последнюю неделю; 2: сети, 25 дней, ровный CTR; 3: поиск, ровный, но мало показов
-  for (let i = 40; i >= 1; i--) rows.push({ date: day(i), cid: 7, aid: 1, net: 's', impr: 300, clicks: i <= 7 ? 7 : 18, cost: (i <= 7 ? 7 : 18) * 9 });
+  for (let i = 40; i >= 1; i--) rows.push({ date: day(i), cid: 7, aid: 1, net: 's', impr: 300, clicks: i <= 7 ? 7 : 18, cost: (i <= 7 ? 7 : 18) * 9, goalMeasured: true, goals: { 100: i > 20 && i <= 35 ? 1 : 0 } });
   for (let i = 25; i >= 1; i--) rows.push({ date: day(i), cid: 8, aid: 2, net: 'n', impr: 2000, clicks: 14, cost: 84 });
   for (let i = 30; i >= 1; i--) rows.push({ date: day(i), cid: 7, aid: 3, net: 's', impr: 20, clicks: 1, cost: 9 });
   const fs = D.adFatigue(rows, today);

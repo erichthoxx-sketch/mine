@@ -2,6 +2,7 @@
 // запросы, минус-фразы, площадки, сайт. Вход и база — общие с «Доходами» и «Мастерской».
 import { createStore, authErrorText } from '../../js/store.js';
 import { syncDirectAccessQuiet, autoDirectAccess } from '../../js/aidirect.js';
+import { startAiAutoSync } from '../../js/ai-autosync.js';
 import { autoCohorts } from '../../js/cohorts.js';
 import { initAccent } from '../../js/accent.js';
 import { keepNavDown } from '../../js/vvfix.js';
@@ -30,6 +31,7 @@ import { hooksView } from './views/hooks.js';
 import { marketView } from './views/market.js';
 import { readyGoalActs } from './views/pult.js';
 import { autoMarket } from './marketscan.js';
+import { autoMarketIntel } from './marketnews.js';
 import { autoMarketMail } from './marketmail.js';
 import { rub } from '../../js/format.js';
 import { moneyView } from './views/money.js';
@@ -192,7 +194,8 @@ async function savePendingToken() {
   } finally { saving = false; }
 }
 
-store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); autoCohorts(store).catch(console.warn); autoMarket(app); autoMarketMail(app); });
+store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); autoCohorts(store).catch(console.warn); autoMarket(app); autoMarketIntel(app); autoMarketMail(app); });
+startAiAutoSync(store, ['income', 'direct']);
 store.init().then(async () => {
   await savePendingToken();
   await syncDemo();
