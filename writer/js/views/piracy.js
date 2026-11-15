@@ -92,15 +92,6 @@ export async function autoSend(a) {
   if (r.n) toast(`Пираты: отправлено претензий — ${r.n}`);
 }
 const when = (iso) => (iso ? fmtDate(iso.slice(0, 10)) : '');
-// Яндекс не ищет — что нажать (15.11.2026: «что делать, чтобы шёл»). Ищет только сервис писем, ночью, официальным поиском Яндекса
-function yaHelp(ya) {
-  const e = String(ya || '');
-  if (!e.startsWith('err:')) return '';
-  const steps = /каталог/.test(e)
-    ? ['Yandex Cloud → Cloud Functions → ваша функция писем → «Редактор».', 'Внизу, в «Переменных окружения», добавьте: имя <b>FOLDER_ID</b>, значение — идентификатор каталога (он виден вверху консоли, рядом с названием каталога, вида b1g…).', '«Сохранить изменения». Яндекс попробует снова следующей ночью.']
-    : ['Yandex Cloud → Cloud Functions → функция писем (lana-mail) → «Редактор» (Editor): прокрутите вниз до поля «Сервисный аккаунт» (Service account) и запомните имя.', 'Вверху страницы нажмите на имя папки — <b>default</b> (справа от названия облака).', 'Слева «Права доступа» (Access bindings) → справа вверху «Назначить роли» (Assign bindings).', 'Вкладка «Сервисные аккаунты» (Service accounts) → аккаунт из шага 1 → «Добавить роль» (+ Add role) → <b>search-api.webSearch.user</b> → «Сохранить» (Save).', 'Яндекс попробует снова следующей ночью — после этого здесь появится «Яндекс ищет по ночам».'];
-  return `<div class="pr-ya"><b>Чтобы искал Яндекс</b><ol>${steps.map((x) => `<li>${x}</li>`).join('')}</ol><p class="small muted" style="margin:6px 0 0">Яндекс — самый важный поиск по русским пиратским сайтам, и единственный, который сервис может делать из облака круглые сутки.</p></div>`;
-}
 
 function row(c, f) {
   const st = nextStep(f, c.today), done = f.status === 'gone';
@@ -134,7 +125,7 @@ export function piracyView(a) {
   const state = scanState.busy ? esc(scanState.step || 'Ищу…') : cfg.at ? `${cfg.srv ? 'Ищу круглосуточно · последняя проверка' : 'Проверено'} ${when(cfg.at)}: ${cfg.books || 0} ${plural(cfg.books || 0, ['книга', 'книги', 'книг'])}${cfg.engine && !cfg.srv ? ` · ${esc(cfg.engine)}` : ''}${cfg.err ? ` · ${esc(cfg.err)}` : ''}${String(cfg.ya || '').startsWith('ok') ? ` · Яндекс ищет по ночам${cfg.ya.length > 3 ? ` (последний раз ${when(cfg.ya.slice(3))})` : ''}` : String(cfg.ya || '').startsWith('err:') ? ` · Яндекс: ${esc(cfg.ya.slice(4))}` : ''}` : 'Ещё не проверяла — первая проверка начнётся сама';
   return `<div class="card" style="margin-top:14px">
     <div class="row between"><h2 style="margin:0">Пиратские копии</h2><button class="small-btn" data-act="pr.scan"${scanState.busy ? ' disabled' : ''}>${scanState.busy ? 'Ищу…' : 'Проверить сейчас'}</button></div>
-    <p class="small muted" style="margin:6px 0 12px" id="pr-state">${state}</p>${yaHelp(cfg.ya)}
+    <p class="small muted" style="margin:6px 0 12px" id="pr-state">${state}</p>
     <div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div><div class="k">Новые</div><div class="v">${sum.fresh}</div><div class="s">${ask0.length ? `из них проверить: ${ask0.length}` : 'нужно письмо'}</div></div>
       <div><div class="k">В работе</div><div class="v">${sum.work}</div><div class="s">ждём ответа</div></div>
       <div><div class="k">Удалено</div><div class="v">${sum.gone}</div><div class="s">за всё время</div></div></div>
