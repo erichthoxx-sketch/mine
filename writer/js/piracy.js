@@ -18,10 +18,11 @@ export const plainTitle = (t) => String(t || '').replace(/\*/g, '').replace(/\s+
 export function hostOf(url) { try { return new URL(url).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } }
 export const isLegit = (host, extra = []) => [...LEGIT, ...extra].some((d) => host === d || host.endsWith('.' + d));
 
-// два запроса на книгу: «читать онлайн бесплатно» и «скачать fb2» — так находятся и читалки, и файлы
+// запросы на книгу: «читать онлайн бесплатно» и «скачать fb2» — читалки и файлы; с 15.11.2026 (её просьба: «максимально полный поиск везде»)
+// ещё «читать полностью», форматы файлов и просто название с фамилией — так находятся сайты-сборники, которые не пишут «бесплатно»
 export function searchQueries(title, author = '') {
   const t = plainTitle(title), a = String(author || '').trim().split(/\s+/).pop() || '';
-  return [`"${t}" ${a} читать онлайн бесплатно`, `"${t}" ${a} скачать fb2`].map((q) => q.replace(/\s+/g, ' ').trim());
+  return [`"${t}" ${a} читать онлайн бесплатно`, `"${t}" ${a} скачать fb2`, `"${t}" ${a} читать полностью`, `"${t}" ${a} epub txt pdf`, `"${t}" ${a}`].map((q) => q.replace(/\s+/g, ' ').trim());
 }
 // поисковики (бесплатно, без ключей) — по очереди, пока один не ответит
 export const ENGINES = [

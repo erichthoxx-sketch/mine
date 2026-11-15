@@ -31,7 +31,7 @@ test('пираты: ссылки-обёртки поисковиков и зап
   assert.equal(unwrap('//duckduckgo.com/l/?uddg=https%3A%2F%2Fpirat.ru%2Fbook%2F1&rut=abc'), 'https://pirat.ru/book/1');
   assert.equal(unwrap('https://www.bing.com/ck/a?p=1&u=a1' + Buffer.from('https://pirat.ru/b').toString('base64') + '&ntb=1'), 'https://pirat.ru/b');
   assert.equal(unwrap('javascript:alert(1)'), '');
-  assert.deepEqual(searchQueries('Развод *для черной вдовы*', A), ['"Развод для черной вдовы" Фрейтаг читать онлайн бесплатно', '"Развод для черной вдовы" Фрейтаг скачать fb2']);
+  assert.deepEqual(searchQueries('Развод *для черной вдовы*', A), ['"Развод для черной вдовы" Фрейтаг читать онлайн бесплатно', '"Развод для черной вдовы" Фрейтаг скачать fb2', '"Развод для черной вдовы" Фрейтаг читать полностью', '"Развод для черной вдовы" Фрейтаг epub txt pdf', '"Развод для черной вдовы" Фрейтаг']);
   const html = parseResults('<a class="r" href="https://pirat.ru/b/2"><b>Книга</b> скачать</a>');
   assert.equal(html[0].host, 'pirat.ru'); assert.equal(html[0].title, 'Книга скачать');
 });

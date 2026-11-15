@@ -237,7 +237,7 @@ test('сервис писем: круглосуточный поиск пира�
   setYNow(() => Date.parse('2026-11-12T09:00:00Z')); // день по Москве: ночной шаг Яндекса проверяется отдельным тестом
   const P = await import('../writer/js/piracy.js');
   const T = 'Звериная тропа для двоих';
-  const cfg = { on: true, author: 'Лана Фрейтаг', books: [{ id: 'b1', title: T, q: P.searchQueries(T, 'Лана Фрейтаг') }], engines: ['https://lite.duckduckgo.com/lite/?q='], legit: P.LEGIT, hint: P.PIRATE_HINT.source, words: P.PIRATE_WORDS.source, known: ['missfantasy.ru|b1'] };
+  const cfg = { on: true, author: 'Лана Фрейтаг', books: [{ id: 'b1', title: T, q: P.searchQueries(T, 'Лана Фрейтаг').slice(0, 2) }], engines: ['https://lite.duckduckgo.com/lite/?q='], legit: P.LEGIT, hint: P.PIRATE_HINT.source, words: P.PIRATE_WORDS.source, known: ['missfantasy.ru|b1'] };
   let r = JSON.parse((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy', cfg })).body);
   assert.deepEqual(r.finds, []);
   const tick = () => handler({ messages: [{}] }, { token: { access_token: 't' } });
