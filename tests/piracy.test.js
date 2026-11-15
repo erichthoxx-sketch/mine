@@ -49,7 +49,7 @@ test('пираты: письма и следующий шаг', () => {
   const book = { title: T, link: 'https://litnet.com/ru/book/x-b1' }, me = { name: 'Иванова Анна Петровна', email: 'a@ya.ru', pen: A };
   const L = letterSite(f, book, me, '2026-11-11');
   assert.match(L.subject, /^ДОСУДЕБНАЯ ПРЕТЕНЗИЯ: .*Звериная тропа/);
-  for (const w of ['Я, Лана Фрейтаг, — автор и правообладатель', 'https://pirat.ru/b/1', 'https://litnet.com/ru/book/x-b1', '24 часов', '149-ФЗ', 'ст. 1301', 'ст. 146 УК РФ', 'ст. 15.2', 'досудебного порядка']) assert.ok(L.body.includes(w), w);
+  for (const w of ['Я, Лана Фрейтаг, — автор и правообладатель', 'https://pirat.ru/b/1', 'https://litnet.com/ru/book/x-b1', '24 часов', '149-ФЗ', 'ст. 1301', 'ст. 146 УК РФ', 'ст. 15.2', 'досудебного порядка', 'ознакомительные фрагменты', 'ст. 1274', 'моим именем (псевдонимом)']) assert.ok(L.body.includes(w), w);
   assert.ok(!L.body.includes('Иванова') && !/ФИО/.test(L.body)); // без настоящего имени — только псевдоним
   const H = letterHost({ ...f, sentAt: '2026-11-11T10:00:00Z' }, book, me, '2026-11-15').body;
   assert.match(H, /11\.11\.2026 владельцу сайта направлена досудебная претензия[\s\S]*Infringing URL: https:\/\/pirat\.ru\/b\/1/);
