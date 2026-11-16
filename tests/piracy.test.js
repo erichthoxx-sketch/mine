@@ -83,3 +83,21 @@ test('«Это не пират»: вернулся полный текст — �
   ];
   assert.deepEqual(skipToRecheck(finds, now).map((f) => f.id), ['c', 'b']);
 });
+
+test('пираты: шаг «Литнет» после поисковиков, «Нет, висит», ссылка на форму и ID автора', async () => {
+  const { nextStep, litnetFormUrl, authorIdOf } = await import('../writer/js/piracy.js');
+  const T = '2026-11-16';
+  assert.equal(nextStep({ status: 'search', searchAt: '2026-11-10' }, T).k, 'litnet');
+  assert.equal(nextStep({ status: 'search', litnetAt: '2026-11-12' }, T).k, 'done');
+  assert.equal(nextStep({ status: 'sent', sentAt: '2026-11-13', goneMaybe: true }, T).k, 'confirm');
+  assert.equal(nextStep({ status: 'sent', sentAt: '2026-11-10', goneMaybe: true, stillAt: '2026-11-15' }, T).k, 'host'); // сказала «висит» — дальше по цепочке
+  assert.equal(nextStep({ status: 'sent', sentAt: '2026-11-01', goneMaybe: true, stillAt: '2026-11-05' }, T).k, 'confirm'); // через неделю снова спросим
+  const u = new URL(litnetFormUrl({ authorId: 'u123456', title: 'Развод *для* вдовы', pen: 'Лана Фрейтаг', urls: ['https://a.ru/1', 'https://b.ru/2'] }));
+  assert.equal(u.searchParams.get('entry.1095341742'), '123456');
+  assert.equal(u.searchParams.get('entry.147382409'), 'Развод для вдовы');
+  assert.equal(u.searchParams.get('entry.1437517371'), 'https://a.ru/1\nhttps://b.ru/2');
+  const page = 'Title: Пышка — автора Ася Коваль\n[чужой](https://litnet.com/ru/other-u111)\n[![Аватар](x.png) Ася Коваль Автор • 11 книг](https://litnet.com/ru/asya-koval-u13021984)';
+  assert.equal(authorIdOf(page, 'Ася Коваль'), '13021984');
+  assert.equal(authorIdOf('https://litnet.com/ru/lana-freitag-u987654', ''), '987654');
+  assert.equal(authorIdOf(' 555777 '), '555777');
+});

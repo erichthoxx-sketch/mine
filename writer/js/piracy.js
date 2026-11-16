@@ -194,11 +194,37 @@ export const WAIT_SITE = 3, WAIT_HOST = 5; // дней ждём ответа с�
 // status: new → sent (написала сайту) → host (написала хостингу) → search (подала в поисковики) | gone (удалено) | skip (не пират)
 export function nextStep(f, today) {
   if (f.status === 'gone' || f.status === 'skip') return null;
-  if (f.goneMaybe && f.status !== 'new') return { k: 'confirm', text: 'Похоже, удалили — проверьте и отметьте', due: today };
+  // «Нет, висит» — неделю не спрашиваем снова, даже если проверка опять решит, что страница пропала
+  const still = f.stillAt && addDays(f.stillAt.slice(0, 10), 7) > today;
+  if (f.goneMaybe && f.status !== 'new' && !still) return { k: 'confirm', text: 'Похоже, удалили — проверьте и отметьте', due: today };
   if (!f.status || f.status === 'new') return { k: 'site', text: 'Написать сайту', due: (f.foundAt || today).slice(0, 10) };
   if (f.status === 'sent') { const d = addDays((f.sentAt || today).slice(0, 10), WAIT_SITE); return { k: 'host', text: d <= today ? 'Сайт не ответил — написать хостингу' : `Ждём ответа сайта до ${dmy(d).slice(0, 5)}`, due: d, wait: d > today }; }
   if (f.status === 'host') { const d = addDays((f.hostAt || today).slice(0, 10), WAIT_HOST); return { k: 'search', text: d <= today ? 'Хостинг не ответил — убрать из поиска' : `Ждём хостинг до ${dmy(d).slice(0, 5)}`, due: d, wait: d > today }; }
+  // после поисковиков — Литнет: у него соглашение с ассоциацией правообладателей, он добивается удаления сам (16.11.2026, её просьба)
+  if (!f.litnetAt) return { k: 'litnet', text: 'Пожаловаться Литнету', due: today };
   return { k: 'done', text: 'Жалобы поданы — ждём', due: '', wait: true };
+}
+
+// Форма Литнета «Пиратские ресурсы» (litnet.com/ru/info/spravka-avtoram → «Защита от пиратства»): поля — ID автора (только цифры), название книги,
+// псевдоним на сайте, ссылки на пиратские страницы. Ссылка открывает форму уже заполненной (поля Google-формы, проверено 16.11.2026).
+export const LITNET_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSeL4CUsTRw71HUKIGE_KcX27GiYvLLastqg3CIfZJNbWdXgkg/viewform';
+export function litnetFormUrl({ authorId = '', title = '', pen = '', urls = [] }) {
+  const q = new URLSearchParams({ usp: 'pp_url' });
+  if (authorId) q.set('entry.1095341742', String(authorId).replace(/\D/g, ''));
+  if (title) q.set('entry.147382409', plainTitle(title));
+  if (pen) q.set('entry.1824436130', pen);
+  if (urls.length) q.set('entry.1437517371', urls.join('\n'));
+  return LITNET_FORM + '?' + q.toString();
+}
+// ID автора — цифры после «-u» в адресе его страницы; со страницы книги — из карточки автора («Имя Автор • N книг»)
+export function authorIdOf(text, pen = '') {
+  const t = String(text || ''), direct = t.match(/litnet\.com\/[a-z]{2}\/[a-z0-9-]+-u(\d{3,})/i);
+  if (/^\s*https?:\/\//.test(t) && direct) return direct[1];
+  if (/^\s*\d{3,}\s*$/.test(t)) return t.trim();
+  const lines = t.split('\n').filter((l) => /-u\d{3,}\)/.test(l));
+  const p = norm(pen), byName = p && lines.find((l) => norm(l).includes(p)), card = lines.find((l) => /Автор\s*•/.test(l));
+  const m = (byName || card || '').match(/-u(\d{3,})\)/);
+  return m ? m[1] : '';
 }
 // Дела в Планер: одно на «новые копии», по одному на «сайт не ответил»
 export function piracyTodos(finds = [], today) {
@@ -210,7 +236,7 @@ export function piracyTodos(finds = [], today) {
   if (sureNew.length) out.push({ id: 'piracy-new', date: today, text: `Пираты: ${sureNew.length} ${sureNew.length === 1 ? 'новая копия' : sureNew.length < 5 ? 'новые копии' : 'новых копий'} — отправить письма`, sub: [...new Set(sureNew.map((f) => f.host))].slice(0, 4).join(', ') });
   for (const f of live) {
     const s = nextStep(f, today);
-    if (s && !s.wait && (s.k === 'host' || s.k === 'search' || s.k === 'confirm')) out.push({ id: 'piracy-' + f.id + '-' + s.k, date: today, text: `Пираты, ${f.host}: ${s.text.charAt(0).toLowerCase() + s.text.slice(1)}`, sub: plainTitle(f.title || '') });
+    if (s && !s.wait && (s.k === 'host' || s.k === 'search' || s.k === 'confirm' || s.k === 'litnet')) out.push({ id: 'piracy-' + f.id + '-' + s.k, date: today, text: `Пираты, ${f.host}: ${s.text.charAt(0).toLowerCase() + s.text.slice(1)}`, sub: plainTitle(f.title || '') });
   }
   return out.slice(0, 6);
 }

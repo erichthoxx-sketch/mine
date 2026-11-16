@@ -3,7 +3,7 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, changes, toast, openSheet, fold, copyRich, ask } from '../../../js/ui.js';
 import { fmtDate, plural } from '../../../js/format.js';
-import { searchQueries, ENGINES, LEGIT, PIRATE_HINT, PIRATE_WORDS, nextStep, piracySummary, letterSite, letterHost, letterFormal, mailto, SEARCH_FORMS, archiveUrl, CF_FORM, findId, hostOf, plainTitle, isLegit, WAIT_SITE } from '../piracy.js';
+import { searchQueries, ENGINES, LEGIT, PIRATE_HINT, PIRATE_WORDS, nextStep, piracySummary, letterSite, letterHost, letterFormal, mailto, SEARCH_FORMS, archiveUrl, CF_FORM, findId, hostOf, plainTitle, isLegit, WAIT_SITE, litnetFormUrl, authorIdOf } from '../piracy.js';
 import { scan, scanState, findContacts, pageLen, onSkipBack } from '../piracyscan.js';
 import { mailSvc } from './mail.js';
 
@@ -99,18 +99,21 @@ function row(c, f) {
     : !st ? '' : st.k === 'site' ? `<button class="primary" data-act="pr.write" data-id="${f.id}" data-k="site">Написать сайту</button>`
     : st.k === 'host' && !st.wait ? `<button class="primary" data-act="pr.write" data-id="${f.id}" data-k="host">Написать хостингу</button>`
     : st.k === 'search' && !st.wait ? `<button class="primary" data-act="pr.search" data-id="${f.id}">Убрать из поиска</button>`
-    : st.k === 'confirm' ? `<button class="primary" data-act="pr.gone" data-id="${f.id}">Да, удалили</button>` : '';
-  const trail = [f.sentAt ? `сайту — ${when(f.sentAt)}` : '', f.hostAt ? `хостингу — ${when(f.hostAt)}` : '', f.searchAt ? `в поисковики — ${when(f.searchAt)}` : ''].filter(Boolean).join(' · ');
+    : st.k === 'litnet' ? `<button class="primary" data-act="pr.litnet" data-id="${f.id}">В Литнет</button>`
+    : st.k === 'confirm' ? `<div class="pr-yn"><button class="primary" data-act="pr.gone" data-id="${f.id}">Да, удалили</button><button class="small-btn" data-act="pr.still" data-id="${f.id}">Нет, висит</button></div>` : '';
+  const trail = [f.sentAt ? `сайту — ${when(f.sentAt)}` : '', f.hostAt ? `хостингу — ${when(f.hostAt)}` : '', f.searchAt ? `в поисковики — ${when(f.searchAt)}` : '', f.litnetAt ? `Литнету — ${when(f.litnetAt)}` : ''].filter(Boolean).join(' · ');
   return `<div class="item pr-item">
     <div class="row between" style="gap:12px;align-items:flex-start">
       <div style="min-width:0"><b>${esc(f.host)}</b> <span class="small muted">· ${esc(f.title)}</span>
-        <div class="small muted" style="margin-top:2px">${done ? `удалено ${when(f.goneAt)}` : esc(st?.wait || st?.k === 'confirm' ? st.text : f.why || '')}${!done && trail ? ` · писала: ${esc(trail)}` : ''}</div></div>
+        <div class="small muted" style="margin-top:2px">${done ? `удалено ${when(f.goneAt)}` : [esc(st?.wait || st?.k === 'confirm' ? st.text : f.why || ''), trail ? `писала: ${esc(trail)}` : ''].filter(Boolean).join(' · ')}</div></div>
       ${act}
     </div>
     <div class="row small" style="gap:14px;margin-top:6px;flex-wrap:wrap">
       <a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer">Открыть страницу</a>
       ${done ? '' : `<a href="${esc(archiveUrl(f.url))}" target="_blank" rel="noopener noreferrer">Сохранить доказательство</a>
-      ${f.status && f.status !== 'new' ? `<button class="link" data-act="pr.write" data-id="${f.id}" data-k="formal">Официальное заявление</button><button class="link" data-act="pr.gone" data-id="${f.id}">Удалили</button>` : ''}
+      ${st?.k !== 'litnet' && !f.litnetAt && f.sure !== false ? `<button class="link" data-act="pr.litnet" data-id="${f.id}">В Литнет</button>` : ''}
+      ${f.status && f.status !== 'new' ? `<button class="link" data-act="pr.write" data-id="${f.id}" data-k="formal">Официальное заявление</button>${st?.k !== 'confirm' ? `<button class="link" data-act="pr.gone" data-id="${f.id}">Удалили</button>` : ''}` : ''}
+      ${st?.k === 'done' ? `<button class="link" data-act="pr.more" data-id="${f.id}">Что ещё можно</button>` : ''}
       <button class="link" data-act="pr.skip" data-id="${f.id}">Это не пират</button>`}
     </div></div>`;
 }
@@ -235,6 +238,54 @@ acts['pr.mine'] = async (d) => {
   const a = window.__app, auto = a.ctx().settings.piracy?.auto && canSend();
   toast(auto ? 'Подтверждено — претензия уходит' : 'Подтверждено — находка в «Новых»', { undo: () => patch(get(d.id), { sure: false, why: f.why || '' }) });
   if (auto) autoSend(a);
+};
+// «Нет, висит»: проверка ошиблась — цепочка идёт дальше, неделю не спрашиваем снова
+acts['pr.still'] = async (d) => { const f = get(d.id); if (!f) return false; await patch(f, { goneMaybe: false, stillAt: new Date().toISOString() });
+  const s = nextStep({ ...f, goneMaybe: false, stillAt: new Date().toISOString() }, app().ctx().today); toast(`Поняла — давим дальше${s && !s.wait ? `: ${s.text.charAt(0).toLowerCase() + s.text.slice(1)}` : ''}`); };
+// Литнет: форма «Пиратские ресурсы» уже заполнена — ID автора, книга, псевдоним, все живые пиратские ссылки на эту книгу
+acts['pr.litnet'] = (d) => {
+  const a = app(), c = a.ctx(), f = get(d.id); if (!f) return false;
+  const live = (c.data.w_piracy || []).filter((x) => x.bookId === f.bookId && !['gone', 'skip'].includes(x.status) && x.sure !== false);
+  const urls = [...new Set(live.map((x) => x.url))], pen = c.settings.pseudonym || '', title = bookOf(c, f).title;
+  let id = c.settings.piracy?.litnetId || '';
+  const href = () => litnetFormUrl({ authorId: id, title, pen, urls });
+  openSheet(`Литнету · «${plainTitle(title)}»`, `<p class="small" style="margin-top:0">Литнет сам добивается удаления копий своих книг — у него соглашение с ассоциацией правообладателей. Форма откроется уже заполненной: ваш ID, книга, псевдоним и ${urls.length} ${plural(urls.length, ['ссылка', 'ссылки', 'ссылок'])} на пиратские страницы — останется нажать «Отправить».</p>
+    <label for="pr-lid">Ваш ID на Литнете</label><input id="pr-lid" inputmode="numeric" autocomplete="off" value="${esc(id)}" placeholder="${id ? '' : 'ищу на странице вашей книги…'}">
+    <p class="small muted" style="margin:4px 0 0" id="pr-lid-h">${id ? 'Цифры после «-u» в адресе вашей страницы на Литнете.' : 'Если не найду сама: Литнет → «Моя страница» → цифры после «-u» в адресе (можно вставить весь адрес).'}</p>
+    <p style="margin:14px 0 0"><a class="small-btn" id="pr-lform" href="${esc(href())}" target="_blank" rel="noopener">Открыть форму Литнета</a></p>
+    <p class="small muted" style="margin:10px 0 0">Литнет принимает жалобы на платные книги, выложенные целиком.</p>`,
+  async () => {
+    if (!id) { toast('Нужен ваш ID на Литнете'); return false; }
+    const now = new Date().toISOString(), st = a.ctx().settings.piracy || {};
+    if (st.litnetId !== id) await a.store.saveSettings({ piracy: { ...st, litnetId: id } });
+    for (const x of live) await patch(get(x.id) || x, { litnetAt: now });
+    toast('Отмечено: Литнету отправлено');
+  }, { submitText: 'Отправила' });
+  const inp = document.getElementById('pr-lid'), link = document.getElementById('pr-lform');
+  const upd = () => { id = authorIdOf(inp.value, pen); link.href = href(); };
+  inp?.addEventListener('input', upd);
+  // ID нет — ищу на странице книги на Литнете (карточка автора «Имя Автор • N книг» → …-u12345678)
+  if (!id) {
+    const links = [bookOf(c, f).link, ...(c.wbooks || []).map((b) => b.direct?.link)].filter((u) => /litnet\.com\/[a-z]{2}\/book\//.test(u || ''));
+    (async () => {
+      for (const u of [...new Set(links)].slice(0, 3)) {
+        try { const r = await fetch('https://r.jina.ai/' + u); if (!r.ok) continue; const got = authorIdOf(await r.text(), pen);
+          if (got && inp && !inp.value) { inp.value = got; upd(); document.getElementById('pr-lid-h').textContent = 'Нашла на странице вашей книги. Проверьте: цифры после «-u» в адресе вашей страницы.'; return; } } catch { /* следующая книга */ }
+      }
+      if (inp) inp.placeholder = 'например, 12345678';
+    })();
+  }
+  return false;
+};
+// Всё отправлено, а копия висит: последние рычаги
+acts['pr.more'] = (d) => {
+  const f = get(d.id); if (!f) return false;
+  openSheet(`Если ${f.host} не удаляет`, `<div class="pr-more">
+    <p><b>Литнет.</b> ${f.litnetAt ? `Жалоба подана ${when(f.litnetAt)}. Если с тех пор прошло больше двух недель — подайте ещё раз.` : 'Жалоба ещё не подана.'} <button class="link" data-act="pr.litnet" data-id="${f.id}">Открыть форму</button></p>
+    <p><b>Cloudflare.</b> Если сайт за Cloudflare, жалоба через <a href="${CF_FORM}" target="_blank" rel="noopener">abuse.cloudflare.com</a> — Cloudflare передаёт её настоящему хостингу.</p>
+    <p><b>Поисковики — повторно.</b> Если страница снова в выдаче, подайте заявки ещё раз: ${SEARCH_FORMS.map(([t, u]) => `<a href="${u}" target="_blank" rel="noopener">${esc(t.split(' — ')[0])}</a>`).join(', ')}.</p>
+    <p><b>Блокировка сайта.</b> По заявлению правообладателя Московский городской суд принимает предварительные обеспечительные меры (ст. 144.1 ГПК РФ), и доступ к сайту ограничивают; при повторном нарушении — навсегда (ст. 15.6 закона № 149-ФЗ). Это делают через юриста; сохранённые доказательства и отправленные претензии пригодятся.</p></div>`, null);
+  return false;
 };
 acts['pr.gone'] = async (d) => { const f = get(d.id); if (f) { await patch(f, { status: 'gone', goneAt: new Date().toISOString(), goneMaybe: false }); toast('Отлично — убрала в «Удалено»', { undo: () => patch(get(d.id), { status: f.status, goneAt: null, goneMaybe: f.goneMaybe || false }) }); } };
 // «Это не пират» (не её книга или законный фрагмент): прячется только эта страница — другие страницы этого же сайта по-прежнему находятся
