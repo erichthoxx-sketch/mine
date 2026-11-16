@@ -48,7 +48,7 @@ async function refresh(quiet) {
 }
 // Адрес для ответов, который видят читательницы в письмах (10.11.2026, владелица: «заменить во всех письмах на lanafreitag8@gmail.com»):
 // с программой сервиса версии 3 ставится один раз сам; дальше меняется кнопкой «Изменить» в «Адресах»
-export const FN_LATEST = 10; // = FN_V в mail/mail-function.cjs (тест следит)
+export const FN_LATEST = 11; // = FN_V в mail/mail-function.cjs (тест следит)
 export const REPLY_DEFAULT = 'lanafreitag8@gmail.com';
 async function autoReply() {
   const s = app().ctx().settings.site || {};
@@ -174,7 +174,7 @@ export function mailView(a) {
   const pages = Math.max(1, Math.ceil(list.length / PER)), pg = Math.min(M.page, pages - 1);
   // программа сервиса устарела — карточка обновления всегда сверху (12.11.2026: кнопка «Скопировать программу» пряталась и «пропала»)
   const upd = (M.info.v || 0) < FN_LATEST ? `<div class="card"><div class="row between" style="gap:12px;align-items:flex-start"><div><h2 style="margin:0">Обновите программу сервиса писем</h2>
-      <p class="small muted" style="margin:6px 0 0">Новая версия включает: поиск пиратов ещё и в Яндексе (по ночам), а также всё прежнее: претензии, сторож Директа, «Разбор недели» и итог месяца письмом.</p></div>
+      <p class="small muted" style="margin:6px 0 0">Новая версия: поиск пиратов в Яндексе по ночам стал дешёвым — не больше ≈ 23 ₽ в месяц (прежний способ был платным). Всё прежнее остаётся: претензии, сторож Директа, «Разбор недели» и итог месяца письмом.</p></div>
       <button class="primary" data-act="mail.fncopy">Скопировать программу</button></div>
     <ol class="small" style="margin:10px 0 0;padding-left:20px;line-height:1.7"><li>Нажмите «Скопировать программу».</li>
       <li>Яндекс Облако → <b>Cloud Functions</b> → функция <b>lana-mail</b> → <b>Редактор</b> → файл <b>index.js</b>.</li>

@@ -313,12 +313,17 @@ test('поиск пиратов в сервисе: поисковик напря
 test('поиск пиратов в Яндексе: только ночью, под аккаунтом функции; нет разрешения — до завтра не пробуем', async () => {
   stub();
   const html = '<ul><li><a href="https://ya-pirat.ru/b/1">Звериная тропа для двоих — Лана Фрейтаг, читать онлайн бесплатно</a></li><li><a href="https://litnet.com/x">Литнет</a></li><li><a href="https://a.ru/1">Другое</a></li></ul>';
-  const base = globalThis.fetch, calls = [];
+  const base = globalThis.fetch, calls = [], checks = [];
   let deny = false;
   globalThis.fetch = async (url, o) => {
-    if (String(url) === 'https://searchapi.api.cloud.yandex.net/v2/web/search') {
+    if (String(url) === 'https://searchapi.api.cloud.yandex.net/v2/web/search') throw new Error('платный синхронный запрос не зовём');
+    if (String(url) === 'https://searchapi.api.cloud.yandex.net/v2/web/searchAsync') {
       calls.push({ auth: o.headers.Authorization, body: JSON.parse(o.body) });
-      return deny ? { ok: false, status: 403, text: async () => '' } : { ok: true, status: 200, text: async () => JSON.stringify({ rawData: Buffer.from(html).toString('base64') }) };
+      return deny ? { ok: false, status: 403, text: async () => '' } : { ok: true, status: 200, text: async () => JSON.stringify({ id: 'op' + calls.length, done: false }) };
+    }
+    if (String(url).startsWith('https://operation.api.cloud.yandex.net/operations/')) {
+      checks.push(String(url).split('/').pop());
+      return { ok: true, status: 200, text: async () => JSON.stringify(checks.length === 1 ? { done: false } : { done: true, response: { rawData: Buffer.from(html).toString('base64') } }) };
     }
     if (/duckduckgo|r\.jina\.ai/.test(String(url))) throw new Error('ночью обычный поисковик не зовём');
     return base(url, o);
@@ -329,16 +334,25 @@ test('поиск пиратов в Яндексе: только ночью, по
   const cfg = { on: true, author: 'Лана Фрейтаг', books: [{ id: 'b1', title: 'Звериная тропа для двоих', q: ['q1', 'q2'] }], engines: ['https://lite.duckduckgo.com/lite/?q='], legit: P.LEGIT, hint: P.PIRATE_HINT.source, words: P.PIRATE_WORDS.source, known: [], skipUrls: [] };
   await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy', cfg });
   setYNow(() => Date.parse('2026-11-12T23:30:00Z')); // 02:30 по Москве
-  await handler({ messages: [{}] }, { token: { access_token: 'iam' }, functionFolderId: 'folder1' });
+  const tick = () => handler({ messages: [{}] }, { token: { access_token: 'iam' }, functionFolderId: 'folder1' });
+  await tick(); // отправили отложенный запрос (дёшево), ответа ещё нет
   let r = JSON.parse((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy' })).body);
-  assert.deepEqual(r.finds.map((f) => f.url), ['https://ya-pirat.ru/b/1']);
-  assert.ok(r.yOk); assert.equal(r.okAt, ''); // обычные поисковики не отчитались — браузер продолжает искать сам
+  assert.deepEqual(r.finds, []);
+  assert.equal(calls.length, 1);
   assert.equal(calls[0].auth, 'Bearer iam');
   assert.deepEqual(calls[0].body, { query: { searchType: 'SEARCH_TYPE_RU', queryText: 'q1' }, folderId: 'folder1', responseFormat: 'FORMAT_HTML' });
+  await tick(); // ответ ещё не готов — новый запрос не отправляем
+  assert.equal(calls.length, 1); assert.deepEqual(checks, ['op1']);
+  await tick(); // ответ готов — находки забраны
+  r = JSON.parse((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy' })).body);
+  assert.deepEqual(r.finds.map((f) => f.url), ['https://ya-pirat.ru/b/1']);
+  assert.ok(r.yOk); assert.equal(r.okAt, ''); // обычные поисковики не отчитались — браузер продолжает искать сам
   deny = true;
-  await handler({ messages: [{}] }, { token: { access_token: 'iam' }, functionFolderId: 'folder1' });
+  await tick();
   r = JSON.parse((await call(handler, { a: 'admin' }, { key: 'секрет', op: 'piracy' })).body);
   assert.match(r.yErr, /нет разрешения/);
+  assert.equal(calls.length, 2);
+  await tick(); // нет разрешения — до завтра не пробуем
   assert.equal(calls.length, 2);
   globalThis.fetch = base; setYNow(null);
 });

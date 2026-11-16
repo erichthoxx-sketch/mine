@@ -58,7 +58,7 @@ const link = (a, t) => `${ENV.SELF}?a=${a}&t=${t}`;
 const fill = (s, p) => String(s).replace(/\{unsub\}/g, link('unsub', p.token)).replace(/\{name\}/g, esc(p.name || ''));
 
 // письмо «подтвердите подписку» — короткое, в стиле сайта; тексты владелица меняет в Мастерской → Сайт → Почта (op: texts → d.texts)
-const FN_V = 10; // 9 — поиск пиратов напрямую в поисковике (читалка из России отвечает 451), «Это не пират» — по странице; 8 — 8 — письмо «Разбор недели» по понедельникам и письма от приложений (op: note); 7 — сторож Директа (op: watch, таймер); 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
+const FN_V = 11; // 11 — поиск в Яндексе отложенными запросами (дёшево, потолок на месяц), прежний способ был платным; 9 — поиск пиратов напрямую в поисковике (читалка из России отвечает 451), «Это не пират» — по странице; 8 — 8 — письмо «Разбор недели» по понедельникам и письма от приложений (op: note); 7 — сторож Директа (op: watch, таймер); 6 — круглосуточный поиск пиратских копий (op: piracy, таймер); 5 — претензии пиратам из Мастерской (op: claim); 4 — письмо с сайта выглядит как обычное письмо от читательницы; 3 — «Письмо автору» с сайта (?a=msg), адрес для ответов из Мастерской (op: reply) // версия программы: Почта видит, что программу пора обновить
 const TEXTS_DEF = { subj: 'Подтвердите подписку', head: 'Подтвердите подписку', text: 'Одно нажатие — и я напишу вам, когда выйдет мой новый роман. Только тогда.', btn: 'Подтвердить' };
 const textsOf = (d) => ({ ...TEXTS_DEF, ...Object.fromEntries(Object.entries(d?.texts || {}).filter(([k, v]) => k in TEXTS_DEF && String(v || '').trim())) });
 function confirmMail(p, t = TEXTS_DEF) {
@@ -166,38 +166,60 @@ function pTake(res, st, cfg, p) {
   }
   return fresh;
 }
-// Поиск Яндекса (12.11.2026, её просьба): официальный Yandex Search API v2 под сервисным аккаунтом функции (роль search-api.webSearch.user),
-// ключей нет. Только ночью 00:00–08:00 МСК (по тарифу — бесплатная тысяча запросов в месяц), не больше Y_NIGHT запросов за ночь.
-const Y_NIGHT = 30;
+// Поиск Яндекса (12.11.2026, её просьба): официальный Yandex Search API v2 под сервисным аккаунтом функции (роль search-api.webSearch.user), ключей нет.
+// 16.11.2026: обычный (синхронный) запрос v2 платный — 480 ₽ за 1000, бесплатной ночной тысячи у v2 нет (она только у v1 с API-ключом); из-за этого
+// счёт владелицы ушёл в минус и Облако заблокировало сервис. Теперь — отложенный запрос (searchAsync, 25 ₽ за 1000): отправили ночью, ответ забираем
+// следующим шагом таймера. Не больше Y_NIGHT отправок за ночь и Y_MONTH за месяц — потолок ≈ 23 ₽ в месяц.
+const Y_NIGHT = 30, Y_MONTH = 900;
 let yNow = () => Date.now(); // для тестов
 module.exports.setYNow = (f) => { yNow = f || (() => Date.now()); };
-async function ySearch(q) {
-  const folderId = FOLDER || process.env.FOLDER_ID || '';
-  if (!folderId) { const e = new Error('нет каталога'); e.stop = true; throw e; }
+async function yFetch(url, o = {}) {
   const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 20000);
   try {
-    const r = await fetch('https://searchapi.api.cloud.yandex.net/v2/web/search', { method: 'POST', signal: ctl.signal, headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: { searchType: 'SEARCH_TYPE_RU', queryText: q }, folderId, responseFormat: 'FORMAT_HTML' }) });
+    const r = await fetch(url, { ...o, signal: ctl.signal, headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json' } });
     if (r.status === 401 || r.status === 403) { const e = new Error('нет разрешения на поиск'); e.stop = true; throw e; }
     if (!r.ok) throw new Error('Яндекс ответил ' + r.status);
-    const t = await r.text();
-    let html = t;
-    try { const j = JSON.parse(t); if (j.rawData) html = Buffer.from(j.rawData, 'base64').toString('utf8'); } catch { /* пришла сама страница */ }
-    return pParse(html);
+    return JSON.parse(await r.text());
   } finally { clearTimeout(tm); }
 }
+async function ySubmit(q) { // отправить отложенный запрос → номер операции
+  const folderId = FOLDER || process.env.FOLDER_ID || '';
+  if (!folderId) { const e = new Error('нет каталога'); e.stop = true; throw e; }
+  const j = await yFetch('https://searchapi.api.cloud.yandex.net/v2/web/searchAsync', { method: 'POST',
+    body: JSON.stringify({ query: { searchType: 'SEARCH_TYPE_RU', queryText: q }, folderId, responseFormat: 'FORMAT_HTML' }) });
+  if (!j.id) throw new Error('Яндекс не принял запрос');
+  return j.id;
+}
+async function yResult(id) { // готов ли ответ: null — ещё нет, иначе ссылки выдачи
+  const j = await yFetch('https://operation.api.cloud.yandex.net/operations/' + encodeURIComponent(id));
+  if (!j.done) return null;
+  if (j.error) throw new Error('Яндекс: ' + String(j.error.message || 'ошибка поиска').slice(0, 80));
+  const raw = j.response?.rawData;
+  return pParse(raw ? Buffer.from(raw, 'base64').toString('utf8') : '');
+}
 async function runYandex(p, cfg, day) {
-  const hour = new Date(yNow() + 3 * 3600e3).getUTCHours();
-  if (hour >= 8) return null;
+  const now = yNow(), hour = new Date(now + 3 * 3600e3).getUTCHours(), month = day.slice(0, 7);
+  if (p.ymon?.m !== month) p.ymon = { m: month, n: 0 };
+  // сначала — ответ на уже отправленный запрос (проверка ответа бесплатна, в любое время)
+  if (p.yop) {
+    const op = p.yop, b = cfg.books.find((x) => x.id === op.b);
+    p.at = new Date().toISOString();
+    try {
+      const hits = await yResult(op.id);
+      if (!hits) { if (now - op.t > 6 * 3600e3) p.yop = null; return { fresh: [] }; } // ждём; за 6 часов не пришёл — бросаем
+      p.yop = null; p.yok = p.at; p.yerr = '';
+      return { fresh: b ? pTake(hits, { b, q: op.q }, cfg, p) : [] };
+    } catch (e) { p.yop = null; p.yerr = e.name === 'AbortError' ? 'нет ответа' : String(e.message || e).slice(0, 120); return { fresh: [] }; }
+  }
+  if (hour >= 8 || p.ymon.n >= Y_MONTH) return null;
   if (p.yday !== day) { p.yday = day; p.yi = 0; }
   const steps = cfg.books.flatMap((b) => (b.q || []).map((q) => ({ b, q }))).slice(0, Y_NIGHT);
   if (p.yi >= steps.length) return null;
   const st = steps[p.yi];
   p.yi++; p.at = new Date().toISOString();
-  let fresh = [];
-  try { fresh = pTake(await ySearch(st.q), st, cfg, p); p.yok = p.at; p.yerr = ''; }
+  try { p.yop = { id: await ySubmit(st.q), b: st.b.id, q: st.q, t: now }; p.ymon.n++; }
   catch (e) { p.yerr = e.name === 'AbortError' ? 'нет ответа' : String(e.message || e).slice(0, 120); if (e.stop) p.yi = steps.length; } // нет разрешения — до завтра не пробуем
-  return { fresh, step: p.yi, of: steps.length };
+  return { fresh: [] };
 }
 async function runPiracy() {
   const p = await getObj('piracy.json', null), cfg = p?.cfg;
