@@ -1,5 +1,5 @@
 // Один центр подключения всей писательской системы к личному MCP.
-// Все данные только на чтение для нейросети, отправка только по кнопке владелицы.
+// MCP только на чтение для нейросети. Отправка рукописей: вручную или после отдельного согласия на автосинхронизацию.
 import { acts, ask, esc, toast, download } from '../../../js/ui.js';
 import { ic } from '../../../js/icons.js';
 import { bookSnapshot, snapshotMarkdown } from '../bookai.js';
@@ -30,6 +30,8 @@ export function aiCenterCard(c) {
     '<button data-act="ai.export"' + (running ? ' disabled' : '') + '>' + ic('download') + 'Скачать для любой нейросети</button>' +
     '<button data-act="ai.drive"' + (running ? ' disabled' : '') + '>' + ic('refresh') + (s.aiDriveEnabled ? 'Обновить файл Google Drive' : 'Включить файл Google Drive') + '</button>' +
     (s.aiDriveEnabled ? '<button data-act="ai.drive.off"' + (running ? ' disabled' : '') + '>Остановить обновление Drive</button>' : '') +
+    '<button data-act="ai.books.auto"' + (running ? ' disabled' : '') + '>' +
+      (s.aiBooksAuto ? 'Остановить автообновление рукописей' : 'Автообновление рукописей и Легенд') + '</button>' +
     '<button data-act="bai.settings">Настроить</button>' +
     (when ? '<button class="link" data-act="ai.clear">Отключить всё</button>' : '') +
     '</div>' +
@@ -40,7 +42,8 @@ export function aiCenterCard(c) {
     (s.aiDriveEnabled ? '<p class="small muted">Google Drive: последний снимок ' + esc(dateLabel(s.aiDriveAt) || 'не подтвержден') +
       (drive.hasFreshToken() ? ' · вход Google действует' : ' · вход Google истек, нужно обновить вручную') +
       '. Файл: ' + esc(AI_DRIVE_FILENAME) + '</p>' : '') +
-    '<p class="hint">Аналитические снимки MCP обновляются при работе приложений после первого согласия. Рукописи по-прежнему обновляются только кнопкой «Обновить весь контекст». Для ChatGPT отдельный закрытый файл Google Drive обновляется автоматически, пока открыта Мастерская и действует вход Google (примерно час). Это не постоянный серверный доступ к Firebase; устаревшие даты надо проверять.</p>' +
+    (s.aiBooksAuto ? '<p class="small muted">Автообновление рукописей включено: только уже подключённые книги. Мастерская должна быть открыта; для глав необходим действующий вход Google. Несохранённые изменения редактора не передаются.</p>' : '') +
+    '<p class="hint">Аналитика MCP обновляется автоматически после первого согласия. Рукописи и Легенды обновляются автоматически только после отдельного включения и только для книг с доступом. Google Drive для ChatGPT содержит отдельный аналитический снимок и исходные Google Документы. Когда вход Google истёк, откройте Диск вручную; это не круглосуточная серверная синхронизация.</p>' +
     '</div>';
 }
 async function request(method, path, data) {
@@ -129,6 +132,26 @@ acts['ai.all'] = async () => {
   }
   return false;
 };
+acts['ai.books.auto'] = async () => {
+  if (running) return false;
+  const a = app(), s = a.ctx().settings;
+  if (s.aiBooksAuto) {
+    await a.store.saveSettings({ aiBooksAuto: false });
+    toast('Автообновление рукописей остановлено. Облачные копии остаются доступными.');
+    return false;
+  }
+  if (!worker()) { toast('Сначала настройте адрес личного Cloudflare Worker'); return false; }
+  if (!(a.ctx().wbooks || []).some((b) => b.aiShared === true)) {
+    toast('Сначала подключите хотя бы одну книгу к нейросети вручную.');
+    return false;
+  }
+  const agreed = await ask('Автоматически отправлять обновления уже подключённых книг (полный текст глав и Легенду) в ваш закрытый Cloudflare при открытой Мастерской? Передача начнётся после включения. Новые книги автоматически не подключаются.', 'Включить автообновление');
+  if (!agreed) return false;
+  await a.store.saveSettings({ aiBooksAuto: true });
+  toast('Автообновление включено. При действующем входе Google обновятся изменённые главы и Легенды.');
+  return false;
+};
+
 acts['ai.clear'] = async () => {
   if (running) return false;
   if (!(await ask('Удалить все подключённые книги, маркетинг, доходы, данные и доступ к Директу из личного Cloudflare? Исходные данные в приложениях останутся.', 'Отключить всё'))) return false;
@@ -142,7 +165,7 @@ acts['ai.clear'] = async () => {
       catch (e) { errors.push(b.title + ': ' + (e.message || e)); }
     }
     await app().store.saveSettings({
-      aiLastSyncedAt: '', aiLastCount: 0, aiLastError: errors.join('; ').slice(0, 700), aiDirectLive: 'off'
+      aiLastSyncedAt: '', aiLastCount: 0, aiLastError: errors.join('; ').slice(0, 700), aiDirectLive: 'off', aiBooksAuto: false
     });
     toast(errors.length ? 'Облачные копии удалены, но не все метки книг обновились' : 'Все облачные копии контекста удалены');
   } catch (e) { toast('Не удалось отключить: ' + (e.message || e)); }
