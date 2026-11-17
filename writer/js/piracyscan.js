@@ -5,6 +5,12 @@ import { searchQueries, ENGINES, parseResults, judge, findId, hostOf, emailsIn, 
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const GAP = 3500; // читалка без ключа пускает ~20 запросов в минуту
+// 16.11.2026: 5 запросов на книгу × 2 поисковика за раз — читалка стала отвечать 401 и обрывать связь. Браузер за день берёт 2 запроса книги
+// по кругу (за 3 дня — все 5), как было до расширения; полный набор каждую ночь — у Яндекса в сервисе писем
+export function dayQueries(qs, day = Math.floor(Date.now() / 864e5), per = 2) {
+  if (qs.length <= per) return qs;
+  return Array.from({ length: per }, (_, i) => qs[(day * per + i) % qs.length]);
+}
 export const scanState = { busy: false, step: '', err: '' };
 
 async function read(url, { timeout = 30000 } = {}) {
@@ -45,7 +51,7 @@ export async function scan(app, { onStep } = {}) {
   try {
     for (const b of books) {
       say(`Ищу «${plainTitle(b.title)}»… ${++done} из ${books.length}`);
-      for (const q of searchQueries(b.title, author)) {
+      for (const q of dayQueries(searchQueries(b.title, author))) {
         const { name, res } = await search(q);
         engine = name || engine;
         for (const r of res) {
@@ -66,7 +72,7 @@ export async function scan(app, { onStep } = {}) {
       if (gone !== null && !!f.goneMaybe !== gone) await app.store.put('w_piracy', { ...f, goneMaybe: gone, checkedAt: new Date().toISOString() });
       await sleep(GAP);
     }
-  } catch (e) { scanState.err = e.limit ? 'Поиск попросил паузу — продолжу при следующей проверке' : (e.name === 'AbortError' ? 'Поиск не ответил' : /failed to fetch|load failed|networkerror|страница не открылась \((401|403|451)\)/i.test(e.message) ? 'из браузера поиск недоступен — ищет Яндекс' : e.message); } // читалка r.jina.ai из России отвечает 451/401 без разрешения для браузера — это не ошибка владелицы
+  } catch (e) { scanState.err = e.limit || /failed to fetch|load failed|networkerror|страница не открылась \((401|403)\)/i.test(e.message) ? 'Поиск попросил паузу — продолжу при следующей проверке' : (e.name === 'AbortError' ? 'Поиск не ответил' : e.message); } // 401/403 и обрыв без ответа — читалка устала от запросов (16.11.2026 после 5 запросов на книгу), это не ошибка владелицы
   scanState.busy = false; say('');
   await app.store.saveSettings({ piracy: { ...(app.ctx().settings.piracy || {}), at: new Date().toISOString(), engine, added, err: scanState.err, books: books.length } });
   return { added, err: scanState.err };

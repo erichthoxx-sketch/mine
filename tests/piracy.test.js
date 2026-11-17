@@ -101,3 +101,11 @@ test('пираты: шаг «Литнет» после поисковиков, �
   assert.equal(authorIdOf('https://litnet.com/ru/lana-freitag-u987654', ''), '987654');
   assert.equal(authorIdOf(' 555777 '), '555777');
 });
+
+test('поиск из браузера: по 2 запроса книги в день по кругу — за 3 дня все 5', async () => {
+  const { dayQueries } = await import('../writer/js/piracyscan.js');
+  const qs = ['a', 'b', 'c', 'd', 'e'];
+  assert.deepEqual(dayQueries(qs, 0), ['a', 'b']);
+  assert.deepEqual(new Set([0, 1, 2].flatMap((d) => dayQueries(qs, d))).size, 5);
+  assert.deepEqual(dayQueries(['x', 'y'], 7), ['x', 'y']);
+});
