@@ -66,7 +66,7 @@ export async function scan(app, { onStep } = {}) {
       if (gone !== null && !!f.goneMaybe !== gone) await app.store.put('w_piracy', { ...f, goneMaybe: gone, checkedAt: new Date().toISOString() });
       await sleep(GAP);
     }
-  } catch (e) { scanState.err = e.limit ? 'Поиск попросил паузу — продолжу при следующей проверке' : (e.name === 'AbortError' ? 'Поиск не ответил' : e.message); }
+  } catch (e) { scanState.err = e.limit ? 'Поиск попросил паузу — продолжу при следующей проверке' : (e.name === 'AbortError' ? 'Поиск не ответил' : /failed to fetch|load failed|networkerror|страница не открылась \((401|403|451)\)/i.test(e.message) ? 'из браузера поиск недоступен — ищет Яндекс' : e.message); } // читалка r.jina.ai из России отвечает 451/401 без разрешения для браузера — это не ошибка владелицы
   scanState.busy = false; say('');
   await app.store.saveSettings({ piracy: { ...(app.ctx().settings.piracy || {}), at: new Date().toISOString(), engine, added, err: scanState.err, books: books.length } });
   return { added, err: scanState.err };
