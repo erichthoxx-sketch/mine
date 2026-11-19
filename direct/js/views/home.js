@@ -70,7 +70,7 @@ function goalTodo(main, stats, ctx) {
   const hs = goalHints({ campaigns: main.campaigns, keywords: main.keywords, kw: stats.kw, kwConv: stats.kwConv, daily: stats.daily, conv: stats.conv, mrows: stats.mrows, m, today: ctx.today, skip: outageSet(ctx.data.days || []) });
   const out = [];
   for (const h of hs.slice(0, 4)) {
-    const head = { counter: `Кампания «${esc(h.name)}»: привязать счётчик`, zero: `«${esc(h.name)}»: клики есть, конверсий нет`, bounce: `«${esc(h.name)}»: много уходят сразу`, noconv: `«${esc(h.phrase)}» тратит без покупок`, winner: `«${esc(h.phrase)}» приводит покупателей` }[h.kind];
+    const head = { counter: `Кампания «${esc(h.name)}»: привязать счётчик`, zero: `«${esc(h.name)}»: клики есть, конверсий нет`, early: `«${esc(h.name)}»: цель поставлена раньше времени`, bounce: `«${esc(h.name)}»: много уходят сразу`, noconv: `«${esc(h.phrase)}» тратит без покупок`, winner: `«${esc(h.phrase)}» приводит покупателей` }[h.kind];
     const btn = h.kind === 'counter' ? actBtn({ do: 'counter', campaign: h.cid, counter: m.counterId, why: h.why }, 'Привязать', 'small-btn')
       : h.kind === 'noconv' ? actBtn({ do: 'pause', target: 'keyword', ids: [h.id], why: h.why }, 'Остановить фразу', 'small-btn') : '';
     out.push(`<div class="item${h.kind === 'winner' ? ' d-good' : ''}"><div class="row between"><b>${head}</b>${btn}</div><div class="small muted">${esc(h.why)}${lessonLink(h.lesson)}</div></div>`);

@@ -65,7 +65,7 @@ export function retargetRules(lib, buy = []) {
 // Догонять «добавивших, но не купивших» имеет смысл, только когда кампания работает на ПОКУПКУ (подписка открыта):
 // пока цель кампании — добавление в библиотеку, эти люди цель уже выполнили, и показы им ничего не дают (её замечание 13.11.2026:
 // «она же на библиотеке настроена»). Поэтому: предлагаем только кампаниям с целью-покупкой, а подключённое раньше времени — предлагаем убрать.
-export function retargetItems({ main = {}, goals = {}, saved = {} }) {
+export function retargetItems({ main = {}, goals = {}, saved = {}, buys = null }) {
   if (!goals.lib || !(goals.buy || []).length) return [];
   const buy = new Set(goals.buy.map(String)), onBuy = (c) => c.goal != null && buy.has(String(c.goal));
   const live = (main.campaigns || []).filter((x) => x.state === 'ON' && x.strategy?.network && x.strategy.network !== 'SERVING_OFF');
@@ -73,7 +73,8 @@ export function retargetItems({ main = {}, goals = {}, saved = {} }) {
   // подключено к кампании, которая ещё учится на добавлениях, — убрать (вернётся само, когда цель станет «покупка»)
   for (const gid of has) { const c = (main.campaigns || []).find((x) => x.id === campOf[gid]); if (c && saved.listId && !onBuy(c)) { const g = (main.groups || []).find((x) => String(x.id) === gid);
     out.push({ rule: 'unretarget', key: `unretarget:${gid}`, cid: c.id, gid: g.id, listId: saved.listId, text: `убрать аудиторию «добавили, но не купили» из группы «${g.name}»`, why: 'кампания пока работает на добавления в библиотеку, а эти люди книгу уже добавили — показы им сейчас ничего не дают. Когда цель сменится на покупку, предложу подключить снова' }); } }
-  const ready = live.filter(onBuy);
+  // догонять добавивших имеет смысл, только когда цель «покупка» правда работает: покупок с рекламы за 7 дней хотя бы 5 (иначе стратегия «слепнет», 19.11.2026)
+  const ready = live.filter((c) => onBuy(c) && (!buys || (buys[c.id] ?? 0) >= 5));
   if (!ready.length) return out;
   if (!saved.listId) return [...out, { rule: 'audience', key: 'audience:lib-notbuy', lib: goals.lib, buy: goals.buy, text: 'создать аудиторию «добавили в библиотеку, но не купили»' }];
   for (const c of ready)

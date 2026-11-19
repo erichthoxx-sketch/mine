@@ -168,7 +168,7 @@ test('этап кампании: обучение → библиотека → �
   g = campaignStage({ id: 7, goal: 2, start: '2026-10-01' }, { econ: econ({ ran: 50, buy30: 40 }), st, goals, conv: convN(11), today, subStart: '2026-11-01', perSale: 90 });
   assert.equal(g.key, 'buy'); assert.match(g.text, /на 1 ₽ рекламы — 2,00 ₽/);
   g = campaignStage({ id: 7, goal: 2, start: '2026-10-01' }, { econ: econ({ ran: 50, buy30: 6 }), st, goals, conv: convN(2), today, subStart: '2026-11-01', perSale: 90 });
-  assert.match(g.next.what, /верните цель «добавление в библиотеку»/);
+  assert.match(g.next.what, /ерните цель «добавление в библиотеку» с ценой ≈ 25 ₽/);
   assert.equal(campaignStage({ id: 7 }, { econ: econ(), st: { key: 'draft' }, goals, today }), null);
 });
 
@@ -207,4 +207,19 @@ test('когда на покупки: до подписки — по добав�
   const s3 = switchEta({ id: 7 }, { conv, goals, today: T, subStart: '2026-10-29', open: true, econ: {}, buy7: 7 });
   assert.equal(s3.k, 'soon'); assert.equal(s3.at, '2026-11-26');
   assert.equal(switchEta({ id: 7 }, { goals, today: T, subStart: '2026-10-29', open: true, buy7: 12 }).k, 'now');
+});
+
+import { spendAdvice } from '../direct/js/dcalc.js';
+import { retargetItems } from '../direct/js/autorules.js';
+test('цель «покупка» поставлена рано: не «конверсий нет», а «верните добавление»; без совета урезать бюджет и без догоняющей аудитории', () => {
+  const T = '2026-11-19', daily = [], conv = [];
+  for (let i = 9; i >= 0; i--) { const d = new Date(Date.parse(T) - i * 864e5).toISOString().slice(0, 10); daily.push({ date: d, cid: 18, impr: 2000, clicks: 90, cost: 75 }); conv.push({ date: d, cid: 18, conv: { 215: 7 } }); }
+  const camp = { id: 18, name: 'ЕПК', state: 'ON', type: 'UNIFIED_CAMPAIGN', counters: [1], start: '2026-11-10', goal: 220, strategy: { search: 'PAY_FOR_CONVERSION', network: 'NETWORK_DEFAULT' } };
+  const m = { counterId: 1, main: ['220'], goals: [{ id: 215, name: 'Добавление книги в библиотеку' }, { id: 220, name: 'Покупка книги' }] };
+  const h = goalHints({ campaigns: [camp], daily, conv, m, today: T });
+  assert.equal(h[0].kind, 'early'); assert.match(h[0].why, /«Покупка книги».+«Добавление книги в библиотеку» — 70.+Верните цель/);
+  assert.equal(spendAdvice({ camp, daily, conv, today: T, goals: ['220'], value: 116 }), null);
+  const main = { campaigns: [{ ...camp, strategy: { search: 'PAY_FOR_CONVERSION', network: 'NETWORK_DEFAULT' } }], groups: [{ id: 5, cid: 18, name: 'Новая группа' }] };
+  assert.equal(retargetItems({ main, goals: { lib: '215', buy: ['220'] }, saved: { listId: 9 }, buys: { 18: 0 } }).length, 0);
+  assert.equal(retargetItems({ main, goals: { lib: '215', buy: ['220'] }, saved: { listId: 9 }, buys: { 18: 12 } }).length, 1);
 });

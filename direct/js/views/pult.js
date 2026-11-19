@@ -174,24 +174,29 @@ function queueOf(a) {
   const wbooks = c.data.w_books || [], extra = demo.on ? [] : [
     ...litTagItems({ main, code: c.settings.litTag?.code || '', late: !!litTagInfo(c.settings, c.today)?.late }),
     ...winnerQueryItems({ main, stats: a.snap('stats') || {}, goals: goalsOf(metrikaOf(c) || {}) }),
-    ...retargetItems({ main, goals: goalsOf(metrikaOf(c) || {}), saved: d.retarget || {} }),
+    ...retargetItems({ main, goals: goalsOf(metrikaOf(c) || {}), saved: d.retarget || {}, buys: Object.fromEntries(pultModel(a).rows.map((r) => [r.camp.id, r.stage?.buy7 ?? 0])) }),
     ...newAdItems({ main, bookOf: (camp) => { const b = bookOfCampaign(camp, main.ads || [], wbooks); return b ? wbooks.find((x) => x.id === b.id) : null; }, hits: (t, wb) => spoilerHits(t, spoilerList(wb)) }),
   ];
   return approvalQueue({ main, stats: a.snap('stats') || {}, on: d.auto || {}, today: c.today, goalActs, done: d.autoDone || [], no: d.queueNo || [], starter, extra });
 }
 const pqPicked = () => new Set([...document.querySelectorAll('#pq input[data-pq]:checked')].map((x) => x.dataset.pq));
 let pqBusy = false;
-acts['pq.yes'] = async () => {
+acts['pq.yes'] = async (d0, el) => {
   const a = window.__app, pick = pqPicked(), plan = queueOf(a).filter((x) => pick.has(x.key));
-  if (!plan.length) { toast('Ничего не отмечено'); return false; }
+  if (!plan.length) { toast(pick.size ? 'Это предложение уже неактуально — обновите страницу' : 'Ничего не отмечено'); return false; }
   if (demo.on) { toast('Это пример данных — в настоящем кабинете действия выполнятся'); return false; }
-  if (pqBusy) return false;
+  if (pqBusy) { toast('Уже отправляю в Директ — подождите'); return false; }
   pqBusy = true;
+  // сразу видно, что нажалось (19.11.2026: «кнопка не нажимается» — ответа Директа не было видно); не дольше минуты
+  const btn = el?.closest?.('button') || el; if (btn) { btn.disabled = true; btn.textContent = 'Отправляю в Директ…'; }
   try {
-    const done = await execPlan(a, plan, 'app'), n = plan.filter((x) => done.includes(x.key)).length, d = a.ctx().settings.direct || {};
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('Директ не ответил за минуту')), 60000));
+    const done = await Promise.race([execPlan(a, plan, 'app'), timeout]), n = plan.filter((x) => done.includes(x.key)).length, d = a.ctx().settings.direct || {};
     if (done.length) await a.store.saveSettings({ direct: { ...d, autoDone: [...(d.autoDone || []), ...done].slice(-400) } });
-    toast(n === plan.length ? `Готово: сделано ${n} — всё записано в «Что меняли»` : `Сделано ${n} из ${plan.length}. Остальное Директ не принял${lastPlanErrors[0] ? `: ${lastPlanErrors[0]}` : ''} — оно осталось в списке`);
-  } finally { pqBusy = false; }
+    toast(n === plan.length ? `Готово: сделано ${n} — всё записано в «Что меняли»` : `Сделано ${n} из ${plan.length}. Остальное Директ не принял${lastPlanErrors[0] ? `: ${lastPlanErrors[0]}` : ''}`);
+  } catch (e) { toast(`Не получилось: ${e.message || e}. Проверьте «Что меняли» чуть позже.`); }
+  finally { pqBusy = false; if (btn?.isConnected) { btn.disabled = false; btn.textContent = 'Применить отмеченное'; } a.rerender(); }
+  return false;
 };
 acts['pq.no'] = async () => {
   const a = window.__app, pick = [...pqPicked()], d = a.ctx().settings.direct || {}, was = d.queueNo || [];

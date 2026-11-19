@@ -115,7 +115,7 @@ export function campaignStage(camp, { econ, st, goals, conv = [], today, subStar
     const ret = perSale != null && econ.buy30 ? econ.buy30 * perSale / (econ.d30.cost || 1) : null;
     text = ret == null ? 'Покупок пока мало, чтобы судить об отдаче.' : `За 30 дней на 1 ₽ рекламы — ${ret.toFixed(2).replace('.', ',')} ₽ роялти с покупок.`;
     checks.push({ ok: buy7 >= NEED_BUYS, text: `покупок за 7 дней: ${buy7} (стратегии нужно от ${NEED_BUYS})` });
-    next = buy7 < NEED_BUYS / 2 && econ.ran >= 14 ? { what: 'Покупок слишком мало для обучения — верните цель «добавление в библиотеку»', why: 'на редких покупках стратегия теряет аудиторию; добавлений больше, и они ведут к тем же покупкам' }
+    next = buy7 < NEED_BUYS / 2 ? { what: 'Покупок слишком мало для обучения — верните цель «добавление в библиотеку»', why: 'на редких покупках стратегия теряет аудиторию; добавлений больше, и они ведут к тем же покупкам' }
       : ret != null && ret < 0.9 && econ.buy30 >= NEED_BUYS ? { what: 'Снизьте цену цели: покупка обходится дороже, чем приносит', why: 'расход превышает роялти с покупок по рекламе' }
         : { what: 'Ничего не менять — следить за отдачей раз в неделю', why: 'цель верная, данных стратегии хватает' };
   } else if (learning) {
@@ -141,6 +141,9 @@ export function campaignStage(camp, { econ, st, goals, conv = [], today, subStar
       : open ? `Пока не нужна: для кампании-напоминания добавивших мало (${libAll} из ${RETARGET_MIN}).`
         : 'Пока не нужна: одна кампания учится быстрее, а дробить бюджет до открытия подписки рано. Новая понадобится для следующей книги.';
   const price = goalPrice(camp, { onBuy, econ, perSale, wk, learning });
+  // вернуть «добавление»: цену — как реально выходило добавление (без НДС), а не прежнюю цену покупки
+  if (onBuy && buy7 < NEED_BUYS / 2 && econ.cpaLib) { const back = Math.max(1, Math.round(econ.cpaLib / VAT));
+    next = { ...next, what: `Верните цель «добавление в библиотеку» с ценой ≈ ${back} ₽`, why: `покупок с рекламы за 7 дней — ${buy7}: стратегии не на чем учиться, показы будут падать. Добавление сейчас выходит ≈ ${back} ₽ без НДС — с этой цены и начните${econ.libValue ? `; поднимать можно до ${Math.floor(econ.libValue / VAT)} ₽, не больше чем на треть за раз` : ''}` }; }
   const eta = onBuy ? null : switchEta(camp, { conv, goals, today, subStart, open, econ, skip, buy7 });
   return { key, title, text, next, checks, second, buy7, open, onBuy, price, eta };
 }
