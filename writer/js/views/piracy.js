@@ -185,14 +185,18 @@ acts['pr.add'] = () => {
 acts['pr.write'] = (d) => {
   const a = app(), c = a.ctx(), f = get(d.id);
   if (!f) return false;
-  const k = d.k, L = (k === 'host' ? letterHost : k === 'formal' ? letterFormal : letterSite)(f, bookOf(c, f), meOf(c), c.today);
+  const k = d.k;
+  const letter = (verifiedHost = false) => k === 'host'
+    ? letterHost(f, bookOf(c, f), meOf(c), c.today, { verifiedHost })
+    : (k === 'formal' ? letterFormal : letterSite)(f, bookOf(c, f), meOf(c), c.today);
+  let L = letter();
   const toOf = (ct) => (k === 'host' ? hostContactRoute(ct).to : ct?.site || []);
   const mailBox = (ct) => {
     if (!ct) return `<p class="small muted" id="pr-to">Ищу почту ${k === 'host' ? 'хостинга' : 'сайта'}…</p>`;
     const to = toOf(ct), route = k === 'host' ? hostContactRoute(ct) : null;
     const who = k === 'host' ? [ct.hostName ? `оператор IP: ${ct.hostName}` : '', ct.ip ? `IP ${ct.ip}` : ''].filter(Boolean).join(' · ') : '';
     return `<div id="pr-to">${to.length ? `<p class="small" style="margin:0 0 6px">Кому: <b>${esc(to.join(', '))}</b>${who ? ` <span class="muted">· ${esc(who)}</span>` : ''}</p>
-        <p style="margin:0 0 4px"><a class="small-btn" href="${esc(mailto(to, L))}" target="_blank" rel="noopener">Открыть в почте</a></p>`
+        <p style="margin:0 0 4px"><a class="small-btn" ${k === 'host' ? 'id="pr-host-mailto" ' : ''}href="${esc(mailto(to, L))}" target="_blank" rel="noopener">Открыть в почте</a></p>`
       : `<p class="small" style="margin:0 0 6px">${k === 'host' ? 'Подтвержденный адрес для отправки не найден.' : 'Почты на сайте не нашла — проверьте страницу «Правообладателям» или форму связи.'}</p>`}
       ${k === 'host' ? `<p class="small muted" style="margin:6px 0 0">${esc(route.reason)}</p>
         ${ct.reg?.length ? `<p class="small muted" style="margin:6px 0 0">Регистратор домена: ${esc(ct.regName || 'неизвестен')}, контакты ${esc(ct.reg.join(', '))}. <b>Не отправляем ему требование удалить файлы.</b></p>` : ''}
@@ -204,6 +208,7 @@ acts['pr.write'] = (d) => {
       ${k !== 'host' && !to.length ? `<p class="small" style="margin:6px 0 0"><button class="link" type="button" data-act="pr.write" data-id="${f.id}" data-k="host">Проверить IP-провайдера</button></p>` : ''}</div>`;
   };
   openSheet(k === 'host' ? `Оператор IP / хостинг · ${f.host}` : k === 'formal' ? `Заявление · ${f.host}` : `Сайту · ${f.host}`, `${mailBox(f.contacts)}
+    ${k === 'host' ? '<label class="d-check small"><input type="checkbox" id="pr-verified-host"> Я проверила: этот получатель действительно размещает незаконную копию на своих серверах. Использовать прямое требование об удалении.</label>' : ''}
     <label style="margin-top:10px">Тема</label><input id="pr-subj" value="${esc(L.subject)}" readonly>
     <label>Письмо</label><textarea id="pr-body" rows="12" style="font-size:14px;line-height:1.5">${esc(L.body)}</textarea>
     <p class="small" style="margin:8px 0 0"><button class="link" type="button" data-act="pr.copy">${ic('copy')} Скопировать письмо</button></p>
@@ -224,6 +229,15 @@ acts['pr.write'] = (d) => {
     }
     await patch(get(f.id) || f, k === 'host' ? { status: 'host', hostAt: new Date().toISOString(), goneMaybe: false, via: sentManually ? 'manual' : 'service' } : { status: 'sent', sentAt: new Date().toISOString(), via: sentManually ? 'manual' : 'service' }); toast(k === 'host' ? 'Готово. Через 5 дней напомню проверить' : `Готово. Через ${WAIT_SITE} дня проверю, удалили ли`); },
   { submitText: canSend() ? 'Отправить / отметить' : 'Отправила' });
+  if (k === 'host') document.getElementById('pr-verified-host')?.addEventListener('change', (event) => {
+    L = letter(!!event.target.checked);
+    const body = document.getElementById('pr-body');
+    if (body) body.value = L.body;
+    const ct = (get(f.id) || f).contacts;
+    const to = ct ? toOf(ct) : [];
+    const mailLink = document.getElementById('pr-host-mailto');
+    if (mailLink && to.length) mailLink.href = mailto(to, L);
+  });
   if ((!f.contacts || f.contacts.v !== 2) && !P.contacts[f.id]) {
     P.contacts[f.id] = true;
     findContacts(f).then(async (ct) => {

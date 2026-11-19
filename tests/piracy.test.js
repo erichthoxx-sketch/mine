@@ -79,6 +79,20 @@ test('пираты: ID автора из реального профиля, сп
   assert.equal(authorIdOf('555777', 'Лана Фрейтаг'), '555777');
 });
 
+test('пираты: подтвержденному хостингу направляется прямое требование, оператору IP — осторожное', () => {
+  const finding = { host: 'pirate.example', url: 'https://pirate.example/b/1', title: T };
+  const book = { title: T, link: 'https://litnet.com/ru/book/example-b1' };
+  const me = { pen: A };
+  const network = letterHost(finding, book, me, '2026-11-19').body;
+  const host = letterHost(finding, book, me, '2026-11-19', { verifiedHost: true }).body;
+  assert.match(network, /Если вы предоставляете только прокси/);
+  assert.doesNotMatch(network, /Вы предоставляете серверные мощности/);
+  assert.match(host, /Вы предоставляете серверные мощности, на которых хранится и распространяется этот материал/);
+  assert.match(host, /ТРЕБУЮ без промедления удалить незаконно размещенную копию/);
+  assert.match(host, /Your hosting infrastructure stores and serves this unauthorised copy/);
+  assert.doesNotMatch(host, /Если вы не хостинг-провайдер/);
+});
+
 test('пираты: письма и следующий шаг', () => {
   const f = { id: 'p1', url: 'https://pirat.ru/b/1', host: 'pirat.ru', title: T, status: 'new', foundAt: '2026-11-11T10:00:00Z' };
   const book = { title: T, link: 'https://litnet.com/ru/book/x-b1' }, me = { name: 'Иванова Анна Петровна', email: 'a@ya.ru', pen: A };
