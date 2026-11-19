@@ -11,6 +11,7 @@ cp -r js/vendor "$OUT/vendor"  # постоянная копия библиот�
 cp -r writer/js "$OUT/$V/writer/"
 cp -r direct/js "$OUT/$V/direct/"
 echo "$V" > "$OUT/version.txt"
+cp sw.js "$OUT/"  # ускоритель: файлы версии — из кэша телефона
 cp manifest.webmanifest heart-line.svg heart-line-180.png heart-line-512.png "$OUT/"
 cp writer/manifest.webmanifest writer/photo-32.png writer/photo-180.png writer/photo-512.png writer/bear.svg writer/bear-180.png writer/bear-512.png writer/star.svg writer/star-180.png writer/star-512.png "$OUT/workshop/"
 cp direct/manifest.webmanifest direct/target.svg direct/target-180.png direct/target-512.png proxy/direct-worker.js "$OUT/direct/"

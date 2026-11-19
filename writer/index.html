@@ -34,6 +34,8 @@ window.__V = '__APPV__';
       location.replace(location.pathname + '?v=' + v + location.hash);
     }).catch(function () {});
   }
+  // ускоритель: файлы версии — из кэша телефона (sw.js в корне, общий для трёх приложений)
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register((/\/(workshop|pisatel|direct)\//.test(location.pathname) ? '../' : '') + 'sw.js?v=' + window.__V).catch(function () {});
   window.addEventListener('load', check);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
 })();

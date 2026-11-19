@@ -491,6 +491,10 @@ docs/           SETUP.md (Firebase), SETUP-WRITER.md (Google Диск)
 
 - Push в ветку `claude/author-income-ads-tracker-3zjbxd` (или main) → GitHub Actions (`pages.yml`): `npm test` →
   копирует файлы в папку версии `_site/vXXXXXXXX/` → GitHub Pages. Через 1–2 минуты сайт обновлён.
+- **Ускоритель `sw.js`** (19.11.2026, в корне, кладёт `scripts/build-apps.sh`; регистрируется в трёх index.html только на сайте, не на localhost): файлы папки версии
+  `/vXXXXXXXX/` неизменны — берутся из кэша телефона (второе открытие: 3 запроса вместо ~100), шрифты gstatic — тоже; страницы, version.txt, Firebase и всё прочее — из сети.
+  Старые версии из кэша удаляются при смене версии. Перерисовка Мастерской и Директа — одна за кадр (requestAnimationFrame), фоновые проверки после записи
+  (конкурсы, сайт, пираты, рынок, когорты) — через 0,6 с тишины (`quiet` в writer/js/app.js, `bgT` в direct/js/app.js), а не на каждое сохранение.
 - Каждая версия в своей папке, поэтому браузер не держит старые файлы. Открытая старая вкладка сама перезагрузится
   (`window.__stale` в index.html). Библиотеки дополнительно лежат постоянной копией в `/vendor/`.
 - Локальная проверка: `python3 -m http.server 8765` в корне → http://localhost:8765/ и http://localhost:8765/writer/

@@ -194,7 +194,13 @@ async function savePendingToken() {
   } finally { saving = false; }
 }
 
-store.subscribe(() => { safeRender(); syncDemo().catch(console.error); savePendingToken().catch(console.error); autoDirectAccess(store); autoCohorts(store).catch(console.warn); autoMarket(app); autoMarketIntel(app); autoMarketMail(app); });
+// перерисовка — одна за кадр; фоновые задачи (рынок, когорты, доступ) — когда изменения затихли на 0,6 с, а не на каждую запись
+let renderQueued = false, bgT = null;
+store.subscribe(() => {
+  if (!renderQueued) { renderQueued = true; requestAnimationFrame(() => { renderQueued = false; safeRender(); }); }
+  syncDemo().catch(console.error); savePendingToken().catch(console.error);
+  clearTimeout(bgT); bgT = setTimeout(() => { try { autoDirectAccess(store); autoCohorts(store).catch(console.warn); autoMarket(app); autoMarketIntel(app); autoMarketMail(app); } catch (e) { console.error(e); } }, 600);
+});
 startAiAutoSync(store, ['income', 'direct']);
 store.init().then(async () => {
   await savePendingToken();

@@ -171,7 +171,11 @@ applyTheme();
 // меню слева на компьютере: свёрнутое (только иконки) или полное — запоминаем
 try { document.documentElement.classList.toggle('nav-mini', localStorage.getItem('navMini') === '1'); } catch { /* ок */ }
 acts['nav.mini'] = () => { const on = document.documentElement.classList.toggle('nav-mini'); try { localStorage.setItem('navMini', on ? '1' : '0'); } catch { /* ок */ } setTimeout(() => window.dispatchEvent(new Event('resize')), 300); };
-store.subscribe(() => { safeRender(); scheduleTodoist(app); });
+// изменения базы — одной перерисовкой за кадр (сохранение заметки, Todoist и т. п. приходят пачкой)
+let renderQueued = false;
+store.subscribe(() => { if (!renderQueued) { renderQueued = true; requestAnimationFrame(() => { renderQueued = false; safeRender(); }); } scheduleTodoist(app); });
+// фоновые проверки (конкурсы, сайт, пираты…) — не на каждое сохранение, а когда изменения затихли на 0,6 с
+const quiet = (fn, ms = 600) => { let t; return () => { clearTimeout(t); t = setTimeout(() => { try { const r = fn(); if (r && r.catch) r.catch(() => {}); } catch (e) { console.error(e); } }, ms); }; };
 startAiAutoSync(store, ['marketing', 'income']);
 startDriveMirror(store);
 // конкурсы, разобранные старой версией: один раз разбираем условия заново (даты, объём, имя файла); название не трогаем, если оно не «Литнет» и т. п.
@@ -205,17 +209,17 @@ async function reparseContests() {
     }
   } finally { reparsing = false; }
 }
-store.subscribe(() => { reparseContests().catch(() => {}); });
+store.subscribe(quiet(() => reparseContests()));
 // дописанные книги: событие «Завершение» в «Доходах» — в день выхода последней главы (переносится само, если график сдвинулся)
 let finSync = false;
-store.subscribe(async () => {
+store.subscribe(quiet(async () => {
   if (finSync || !store.data.w_books?.length || !store.data.days) return;
   finSync = true;
   try { const c = getCtx(); for (const b of store.data.w_books) if (b.status === 'done') await syncFinish(c, b); } catch { /* в следующий раз */ } finally { finSync = false; }
-});
+}));
 // дописанная книга: в день выхода последней главы на сайте сама ставится «Завершена» (раз в день проверяем; нужен вход владелицы)
 let siteDoneDay = '';
-store.subscribe(async () => {
+store.subscribe(quiet(async () => {
   const books = store.data.w_books;
   if (!books?.length) return;
   const t = todayISO();
@@ -230,10 +234,10 @@ store.subscribe(async () => {
       toast(`На сайте «${b.title.replace(/\*/g, '')}» теперь «Завершена»`);
     }
   } catch { /* при следующем открытии */ }
-});
+}));
 // жанры книг — сами на сайт (Мастерская → книга → жанры → админка сайта, поле «Жанр»); только когда что-то поменялось
 let genreKey = '';
-store.subscribe(async () => {
+store.subscribe(quiet(async () => {
   const books = store.data.w_books;
   if (!books?.length) return;
   // вместе с жанром — то, что на сайте ещё пусто: тропы, аннотация (вкладка Документа) и крючок (Легенда). Заполненное на сайте не трогаем
@@ -257,7 +261,7 @@ store.subscribe(async () => {
       if (Object.keys(patch).length) await patchSiteBook(title, patch, u ? await u.getIdToken() : '');
     }
   } catch { /* при следующем изменении */ }
-});
+}));
 // вернулась в приложение — подтягиваем свежие задачи из Todoist
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleTodoist(app, 800, { pull: true }); });
 // вставка в любое поле Мастерской — без невидимых символов из чатов и сайтов (редактор главы чистит сам)
@@ -275,7 +279,7 @@ setInterval(() => { if (document.visibilityState === 'visible') scheduleTodoist(
 setInterval(() => { if (document.visibilityState === 'visible') checkMailQueue(); }, 60e3);
 drive.preload().catch(() => {});
 let autoRefreshed = false;
-store.subscribe(() => { autoDirectAccess(store); runOneoffs(app); autoPiracy(app, autoSend); autoServer(app); autoMonthMail(app); autoNewBookDraft(app); });
+store.subscribe(quiet(() => { autoDirectAccess(store); runOneoffs(app); autoPiracy(app, autoSend); autoServer(app); autoMonthMail(app); autoNewBookDraft(app); }));
 store.init().then(() => {
   render();
   autoDirectAccess(store);
