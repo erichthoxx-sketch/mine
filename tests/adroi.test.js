@@ -82,7 +82,7 @@ test('Сравнение каналов: Литнет платит со ссыл
   assert.equal(dir.perReader, 10); assert.equal(dir.ret, 0.15);
   assert.equal(soc.spend, 0); assert.equal(soc.readers, 40);
   const v = channelVerdict(rows);
-  assert.equal(v.best, 'litnet');
+  assert.equal(v.best, undefined); assert.match(v.text, /разными способами/);
 });
 
 test('Метка Литнета — тот же код, что в ссылке', async () => {
@@ -106,7 +106,7 @@ test('сравнение каналов: Директ «на библиотек�
   const { channelCompare } = await import('../js/adroi.js');
   const rows = channelCompare({}, {}, '2026-11-13', { direct: { cost: 1000, clicks: 100, conv: 0, exp: 1200 }, perSale: 100 });
   const d = rows.find((r) => r.key === 'direct');
-  assert.equal(d.ret, 1.2); assert.equal(d.retExp, true);
+  assert.equal(d.ret, 0); assert.equal(d.forecastRet, 1.2); assert.equal(d.retExp, true);
   const d0 = channelCompare({}, {}, '2026-11-13', { direct: { cost: 1000, clicks: 100, conv: 0, exp: 0 }, perSale: 100 }).find((r) => r.key === 'direct');
-  assert.equal(d0.ret, 0); assert.equal(d0.retExp, false);
+  assert.equal(d0.ret, 0); assert.equal(d0.forecastRet, null); assert.equal(d0.retExp, false);
 });

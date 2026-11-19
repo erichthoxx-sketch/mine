@@ -85,7 +85,7 @@ test('План запуска: даты из Мастерской и сайта,
   assert.equal(p0.phase, 'prep'); assert.equal(p0.pubDate, '2026-11-09'); assert.equal(p0.subDate, '2026-11-23'); assert.equal(p0.src.sub, 'site');
   assert.equal(p0.bookUrl, 'https://litnet.com/ru/book/razvod-b1');
   assert.equal(p0.lib.id, 1); assert.equal(p0.buy.id, 3); // «Начало покупки» — не покупка
-  assert.equal(p0.libValue.value, 18); assert.ok(p0.libValue.measured); // 60/400 = 15 % × 120 ₽
+  assert.equal(p0.libValue.value, null); assert.equal(p0.libValue.measured, false); // 60 покупок / 400 библиотек — НЕ когорта одних читателей
   assert.equal(p0.money.freeBudget + p0.money.paidBudget, 10000); assert.equal(p0.money.freeDays, 14);
   assert.ok(p0.steps.prep.find((s) => s.id === 'goals').ok); assert.ok(p0.steps.prep.find((s) => s.id === 'url').ok);
   assert.equal(L.launchPlan(cfg, { today: '2026-11-10', wbooks, siteBooks, metrika: m }).phase, 'free');
@@ -94,8 +94,10 @@ test('План запуска: даты из Мастерской и сайта,
   const own = L.launchPlan({ ...cfg, subscriptionDate: '2026-11-30', publicationDate: '2026-11-10', pubManual: true }, { today: '2026-11-25', wbooks, siteBooks, metrika: m });
   assert.equal(own.subDate, '2026-11-30'); assert.equal(own.pubDate, '2026-11-10'); assert.equal(own.phase, 'free');
   assert.equal(L.launchPlan(cfg, { today: '2026-12-20', wbooks, siteBooks: [], metrika: m }).phase, 'free');
-  // мало данных в Метрике — осторожные 15 %
-  assert.equal(L.libraryValue({ libN: 5, buyN: 1, royalty: 100 }).measured, false);
+  // Без связанной когорты прогноз не изобретаем, даже если всего много достижений целей.
+  assert.equal(L.libraryValue({ libN: 5, buyN: 1, royalty: 100 }).value, null);
+  assert.equal(L.libraryValue({ libN: 400, buyN: 60, royalty: 120 }).value, null);
+  assert.deepEqual(L.libraryValue({ royalty: 120, cohortRate: 0.15, cohortEligible: 40 }), { share: 0.15, value: 18, measured: true });
   const ms = L.launchMilestones(p0).map((x) => x.date);
   assert.deepEqual(ms, ['2026-11-06', '2026-11-09', '2026-11-23', '2026-12-07']);
 });

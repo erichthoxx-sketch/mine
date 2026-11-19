@@ -32,12 +32,12 @@ const payTxt = (v) => (v == null ? '<span class="muted">нет базы</span>' 
 function summaryBody(c, s, { showBudget = true, past = null } = {}) {
   // прошедший месяц — итог месяца; текущий — как идёт сейчас
   const t1 = past
-    ? `<div><div class="k">Окупилась за ${fmtMonth(past)}</div><div class="v">${s.returned == null ? '<span class="muted">нет данных</span>' : payTxt(s.returned - s.spent)}</div><div class="s">${s.returned == null ? (s.spent ? `потрачено ≈ ${rub(s.spent, 0)}` : 'рекламы не было') : `потрачено ≈ ${rub(s.spent, 0)}, доход сверх обычного ${rub(Math.max(0, s.returned), 0)}`}</div></div>`
-    : `<div><div class="k">Окупаемость в день сейчас</div><div class="v">${s.live ? (s.perDayPayback == null ? '<span class="muted">ждём данные</span>' : payTxt(s.perDayPayback)) : '<span class="muted">не идёт</span>'}</div><div class="s">${s.live ? `расход ≈ ${rub(s.perDaySpend, 0)}/день${s.perDayUplift != null ? `, доход сверх обычного ${rub(s.perDayUplift, 0)}/день` : ''}` : 'сейчас кампаний нет'}</div></div>`;
+    ? `<div><div class="k">Оценка результата за ${fmtMonth(past)}</div><div class="v">${s.returned == null ? '<span class="muted">нет данных</span>' : payTxt(s.returned - s.spent)}</div><div class="s">${s.returned == null ? (s.spent ? `потрачено ≈ ${rub(s.spent, 0)}` : 'рекламы не было') : `потрачено ≈ ${rub(s.spent, 0)}, доход сверх обычного ${rub(Math.max(0, s.returned), 0)}`}</div></div>`
+    : `<div><div class="k">Оценочный эффект в день</div><div class="v">${s.live ? (s.perDayPayback == null ? '<span class="muted">ждём данные</span>' : payTxt(s.perDayPayback)) : '<span class="muted">не идёт</span>'}</div><div class="s">${s.live ? `расход ≈ ${rub(s.perDaySpend, 0)}/день${s.perDayUplift != null ? `, доход сверх обычного ${rub(s.perDayUplift, 0)}/день` : ''}` : 'сейчас кампаний нет'}</div></div>`;
   return `<div class="tiles">${t1}
-      <div><div class="k">Реклама вернула доходом</div><div class="v">${s.returnShare == null ? '—' : pct(Math.max(0, s.returnShare), 0)}</div><div class="s">${s.returned == null ? 'появится, когда будут данные' : `${rub(Math.max(0, s.returned), 0)} сверх обычного дохода`}</div></div>
+      <div><div class="k">Прирост против базового периода (оценка)</div><div class="v">${s.returnShare == null ? '—' : pct(Math.max(0, s.returnShare), 0)}</div><div class="s">${s.returned == null ? 'появится, когда будут данные' : `${rub(Math.max(0, s.returned), 0)} сверх обычного дохода`}</div></div>
     </div>
-    ${s.returnShare != null ? bar('Вернула от потраченного', `<b>${rub(Math.max(0, s.returned), 0)}</b> из ${rub(s.spent, 0)}`, s.returnShare, s.returnShare >= 1) : ''}
+    ${s.returnShare != null ? bar('Прирост относительно расходов (оценка)', `<b>${rub(Math.max(0, s.returned), 0)}</b> из ${rub(s.spent, 0)}`, s.returnShare, s.returnShare >= 1) : ''}
     ${showBudget && !past && s.paid ? bar('Бюджет идущих кампаний израсходован <span class="muted">≈ по плану</span>', `<b>${rub(s.plannedSpent, 0)}</b> из ${rub(s.paid, 0)}`, s.budgetShare) : ''}`;
 }
 
@@ -49,7 +49,7 @@ function miniCampaign(c, k, alerts) {
   const st = m.status === 'planned' ? (started ? `<span class="badge good">идёт · ждём данные</span>` : `<span class="badge">с ${fmtShort(k.start)}</span>`) : m.status === 'active' ? `<span class="badge good">день ${p.day}${p.total ? ' из ' + p.total : ''}</span>` : '<span class="badge">завершена</span>';
   return `<a class="item" href="#" data-act="go" data-to="/ad/${k.id}"><div class="row between"><b>${esc(k.name)}</b>${al ? '<span class="badge bad">⚠︎ проверить</span>' : st}</div>
     <div class="small muted">${esc(k.bookId ? c.titleOf(k.bookId, '') : 'все книги')}${k.budget ? ` · ${rub(k.budget, 0)}` : ''} · ${fmtDate(k.start)}–${fmtDate(k.end) || '…'}</div>
-    ${m.status === 'planned' ? (started ? '<div class="small muted">окупаемость появится, когда загрузите выгрузку Литнета за эти дни</div>' : '') : `<div class="small">окупаемость в день ${payTxt(m.payback)}${m.costPerSale != null ? ` · продажа ≈ ${rub(m.costPerSale, 0)}` : ''}</div>`}
+    ${m.status === 'planned' ? (started ? '<div class="small muted">окупаемость появится, когда загрузите выгрузку Литнета за эти дни</div>' : '') : `<div class="small">оценочный результат в день ${payTxt(m.payback)}${m.costPerSale != null ? ` · расход / все продажи ≈ ${rub(m.costPerSale, 0)} (не рекламный CPA)` : ''}</div>`}
     ${m.status !== 'planned' && !k.oneOff ? (() => { const v = campaignVerdict(m, p); return v.kind === 'wait' ? '' : `<div class="small ${VK[v.kind]}">${esc(v.text.charAt(0).toUpperCase() + v.text.slice(1))} — ${esc(v.todo)}${v.est ? ' <span class="muted">(расход — оценка)</span>' : ''}</div>`; })() : ''}
     ${m.overlaps?.length ? `<div class="small warnc">⚠︎ пересекается: ${m.overlaps.map((o) => `${esc(o.name)} (${fmtShort(o.from)}–${fmtShort(o.to)})`).join(', ')}</div>` : ''}
     ${al ? `<div class="small down">${esc(alertText(al))}</div>` : ''}</a>`;

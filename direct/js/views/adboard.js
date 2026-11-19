@@ -36,7 +36,7 @@ export function boardCard(a) {
       ${hints.map((h) => `<div class="small warnc">${h}</div>`).join('')}</a>`;
   };
   return `<div class="card"><div class="row between"><h2 style="margin:0">Вся реклама</h2><span class="small muted">из «Доходов»</span></div>
-    <p class="small muted">Окупаемость — как в «Доходах»: доход книги во время рекламы против обычных дней без неё. Нажмите на кампанию, чтобы внести отчёт или поправить.</p>
+    <p class="small muted">Оценочный прирост — как в «Доходах»: доход книги во время рекламы против обычных дней без неё. Это не подтвержденная рекламная выручка. Нажмите на кампанию, чтобы внести отчёт или поправить.</p>
     <div class="list">${rows.map(item).join('')}</div></div>`;
 }
 
@@ -57,8 +57,8 @@ export function channelCard(a) {
     const parts = [r.spend ? `расход ${rub(r.spend, 0)}${r.est ? ' (оценка)' : ''}` : 'без расхода',
       r.readers != null ? `${r.clicksAsReaders ? 'кликов' : 'читателей'} ${num(r.readers)}${r.perReader != null ? ` по ${rub(r.perReader, 0)}` : ''}` : '',
       r.buys != null && main.length ? `покупок ${num(r.buys)}${r.perBuy != null ? ` по ${rub(r.perBuy, 0)}` : ''}` : ''].filter(Boolean);
-    const ret = r.ret != null ? `<div class="small ${r.ret >= 1.2 ? 'up' : r.ret < 0.9 ? 'down' : ''}">на 1 ₽ — ${r.ret.toFixed(2).replace('.', ',')} ₽ ${r.retExp ? 'с покупок и ожидаемых от добавивших в библиотеку (оценка)' : r.retByBuys ? 'с покупок по рекламе' : 'дохода сверх обычного'}</div>` : '';
-    return `<div class="item"><div class="row between"><b>${esc(r.name)}</b>${r.camps ? `<span class="small muted">кампаний ${num(r.camps)}</span>` : ''}</div><div class="small">${parts.join(' · ')}</div>${ret}</div>`;
+    const ret = r.ret != null ? `<div class="small ${r.ret >= 1.2 ? 'up' : r.ret < 0.9 ? 'down' : ''}">на 1 ₽ — ${r.ret.toFixed(2).replace('.', ',')} ₽ ${r.retByBuys ? 'оценка по покупкам, атрибутированным Директом (среднее роялти)' : 'оценочный прирост дохода относительно базового периода'}</div>` : '';
+    return `<div class="item"><div class="row between"><b>${esc(r.name)}</b>${r.camps ? `<span class="small muted">кампаний ${num(r.camps)}</span>` : ''}</div><div class="small">${parts.join(' · ')}</div>${ret}${r.forecastRet != null ? `<div class="small muted">Отдельный сценарный прогноз с будущими покупками: ${r.forecastRet.toFixed(2).replace('.', ',')} ₽ на 1 ₽; не подтвержденная выручка.</div>` : ''}</div>`;
   };
   const b = budgetPlan({ ...adCtx(c.data, c.settings, t), settings: c.settings });
   const best = v?.best && rows.find((r) => r.key === v.best);

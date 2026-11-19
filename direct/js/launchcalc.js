@@ -76,11 +76,13 @@ const sameBook = (a, b) => !!norm(a) && norm(a) === norm(b);
 const dayDiff = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
 const addD = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 
-// Ценность добавления в библиотеку: какая доля добавивших потом покупает (по Метрике автора за 30 дней) × доход с покупки
-export function libraryValue({ libN = 0, buyN = 0, royalty = 0 } = {}) {
+// Ценность библиотеки — только по зрелой когорте «добавила → позже купила».
+// Общие количества двух разных целей Метрики НЕ являются конверсией одних и тех же людей.
+export function libraryValue({ royalty = 0, cohortRate = null, cohortEligible = 0 } = {}) {
   if (!(royalty > 0)) return null;
-  const share = libN >= 30 && buyN > 0 ? Math.min(0.6, buyN / libN) : 0.15; // мало данных — осторожно: 15 %
-  return { share, value: Math.max(1, Math.round(royalty * share)), measured: libN >= 30 && buyN > 0 };
+  if (cohortEligible < 20 || !Number.isFinite(cohortRate) || cohortRate < 0 || cohortRate > 1)
+    return { share: null, value: null, measured: false };
+  return { share: cohortRate, value: Math.round(royalty * cohortRate), measured: true };
 }
 
 export const PHASES = [
@@ -89,7 +91,7 @@ export const PHASES = [
   { id: 'paid', name: 'Подписка' },
 ];
 
-export function launchPlan(cfg, { today, wbooks = [], siteBooks = [], metrika = null, campaigns = [], royalty = null, mkTotals = null } = {}) {
+export function launchPlan(cfg, { today, wbooks = [], siteBooks = [], metrika = null, campaigns = [], royalty = null, mkTotals = null, cohorts = null } = {}) {
   const wb = wbooks.find((b) => sameBook(b.title, cfg.book)) || null;
   const sb = siteBooks.find((b) => sameBook(b.title, cfg.book)) || null;
   const pubDate = cfg.publicationDate && cfg.pubManual ? cfg.publicationDate : wb?.publishStart || cfg.publicationDate || '';
@@ -101,10 +103,11 @@ export function launchPlan(cfg, { today, wbooks = [], siteBooks = [], metrika = 
   const phase = !pubDate || today < pubDate ? 'prep' : subDate && today >= subDate ? 'paid' : 'free';
   const lib = libraryGoal(metrika), buy = buyGoal(metrika);
   const roy = Number(cfg.royalty) > 0 ? Number(cfg.royalty) : royalty > 0 ? royalty : null;
-  const lv = libraryValue({ libN: mkTotals?.lib || 0, buyN: mkTotals?.buy || 0, royalty: roy });
+  const picked = campaigns.find((x) => String(x.id) === String(cfg.campaignId)) || null;
+  const mature = picked && cohorts?.camps?.[String(picked.id)]?.libToBuy?.[30];
+  const lv = libraryValue({ royalty: roy, cohortRate: mature?.rate ?? null, cohortEligible: mature?.eligible || 0 });
   // деньги: на бесплатные главы — треть бюджета (не больше), остальное — на подписку (примерно 3 недели)
   const freeDays = pubDate && subDate ? Math.max(1, dayDiff(pubDate, subDate)) : 14;
-  const picked = campaigns.find((x) => String(x.id) === String(cfg.campaignId)) || null;
   const bs = budgetFrom(picked, cfg, freeDays + 21), budget = bs.total;
   const freeBudget = Math.round(budget * 0.33 / 100) * 100, paidBudget = budget - freeBudget;
   const money = { budget, src: bs.src, srcText: bs.text, freeDays, freeBudget, paidBudget, freeWeek: Math.round(freeBudget / freeDays * 7 / 10) * 10, paidWeek: Math.round(paidBudget / 3 / 10) * 10 };
@@ -123,7 +126,7 @@ export function launchPlan(cfg, { today, wbooks = [], siteBooks = [], metrika = 
       step('limit', cfg.limitVerified, `Недельный бюджет ≈ ${money.freeWeek} ₽`),
     ],
     paid: [
-      step('switch', cfg.buySwitched || (picked?.goal && buy && Number(picked.goal) === Number(buy.id)), `Цель «${buy?.name || 'Покупка книги'}» — только когда накопится хотя бы 10 покупок с рекламы за неделю`, 'Открытие подписки само по себе НЕ повод менять цель стратегии. До подтверждения частоты покупок оставьте «Добавление в библиотеку». Изменение цели — с ручным подтверждением.'),
+      step('switch', cfg.buySwitched || (picked?.goal && buy && Number(picked.goal) === Number(buy.id)), `Цель «${buy?.name || 'Покупка книги'}» — проверить после открытия подписки`, 'Покупки можно тестировать после открытия платного доступа; без накопленных рекламных покупок алгоритм может сократить показы. Ориентир 10 покупок в неделю, но это не запрет на тест. Изменение цели — только вручную.'),
       step('limit2', cfg.limit2Verified, `Недельный бюджет ≈ ${money.paidWeek} ₽ на подписку`),
     ],
   };
@@ -168,7 +171,7 @@ export function budgetCheck(p, { cpc = null, cpcSrc = '', crLib = null, goals = 
   const gotWeek = Math.round(p.money.freeWeek / libCost);
   const ok = p.money.freeWeek >= needWeek;
   lines.push({ k: 'learn', ok, text: `Чтобы Директ обучился на библиотеке, нужно около ${LEARN_WEEK} добавлений в неделю ≈ ${needWeek} ₽ в неделю. Сейчас на бесплатные главы — ${p.money.freeWeek} ₽ в неделю: это ≈ ${gotWeek} добавлений.${ok ? '' : ' Мало для обучения: либо добавьте бюджет на этот этап, либо ставьте стратегию на клики, а на конверсии переходите, когда наберутся добавления.'}` });
-  if (p.libValue) {
+  if (p.libValue?.value != null) {
     const fine = libCost <= p.libValue.value;
     lines.push({ k: 'lib', ok: fine, text: `Ожидаемая цена добавления ≈ ${Math.round(libCost)} ₽, а одно добавление приносит ≈ ${p.libValue.value} ₽ будущих покупок.${fine ? ' Окупается.' : ' Пока дороже, чем приносит: этап бесплатных глав — вложение в старт подписки, его смысл — читатели в библиотеке к старту.'}` });
   }

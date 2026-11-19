@@ -27,6 +27,8 @@ export function resolvedLaunches(a) {
     today: t, wbooks: c.data.w_books || [], siteBooks: siteBooks(a), metrika: m,
     campaigns: demo.on ? [] : (a.snap('main')?.campaigns || []),
     royalty: royaltyPerSale(c.data.sales || [], t)?.perSale || null,
+    // История переходов библиотека → покупка по одним и тем же читателям, не общие счетчики целей.
+    cohorts: demo.on ? null : a.snap('cohorts'),
     mkTotals: tot ? { lib: lib ? tot.goals[lib.id] || 0 : 0, buy: buy ? tot.goals[buy.id] || 0 : 0 } : null,
   };
   // для проверки бюджета: цена клика — свой Директ за 30 дней (если кликов достаточно), доля «в библиотеку» — Метрика автора,
