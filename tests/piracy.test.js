@@ -73,7 +73,7 @@ test('пираты: ID автора из реального профиля, сп
     '[Другая автор](https://litnet.com/ru/other-u998877)',
     '[Лана Фрейтаг](https://litnet.com/ru/lana-freitag-u11343252)',
     '[Комментарий](https://litnet.com/ru/visitor-u889977)',
-  ].join('\\n');
+  ].join('\n');
   assert.equal(authorIdOf(page, 'Лана Фрейтаг'), '11343252');
   assert.equal(authorIdOf(page, 'Неизвестный автор'), '');
   assert.equal(authorIdOf('555777', 'Лана Фрейтаг'), '555777');
