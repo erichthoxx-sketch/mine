@@ -163,22 +163,33 @@ ${f.url}
 ${w}, автор и правообладатель${e ? '\n' + e : ''}` };
 }
 // 2. Оператору IP-сети / подтвержденному хостингу. Не выдаём регистратора за хостинг.
-export function letterHost(f, book, m, today) {
+export function letterHost(f, book, m, today, { verifiedHost = false } = {}) {
   const w = pen(m), t = plainTitle(book?.title || f.title), e = mail(m);
+  // Пишем прямо, когда автор проверила: получатель хранит копию на своих серверах.
+  // Для RDAP/IP-контакта без проверки не выдаём оператора сети за хостера.
+  const ruIntro = verifiedHost
+    ? `На обслуживаемом вами хостинге размещена незаконная копия литературного произведения «${t}» (автор — ${w}) на сайте ${f.host}. Вы предоставляете серверные мощности, на которых хранится и распространяется этот материал без моего разрешения.`
+    : `На сайте ${f.host} без согласия правообладателя размещено литературное произведение «${t}» (автор — ${w}). Ваш контакт указан для сети, обслуживающей IP-адрес сайта. Если вы предоставляете только прокси/сетевую инфраструктуру, прошу передать обращение надлежащему хостинг-провайдеру или сообщить его abuse-контакт.`;
+  const ruRequest = verifiedHost
+    ? 'ТРЕБУЮ без промедления удалить незаконно размещенную копию произведения, включая главы, ознакомительные фрагменты и файлы для скачивания, либо прекратить доступ к указанным материалам с ваших серверов. Прошу письменно подтвердить принятые меры.'
+    : 'Если вы непосредственно размещаете материалы, прошу удалить незаконную копию или ограничить доступ к указанной странице. Если вы не хостинг-провайдер, прошу переслать уведомление ответственному лицу или сообщить, куда направить требование.';
+  const enRequest = verifiedHost
+    ? 'Your hosting infrastructure stores and serves this unauthorised copy. Please remove the infringing material or disable access to it, including all chapters, preview excerpts and downloadable files, and confirm your action.'
+    : 'If you host the infringing material, please remove or disable access to it. If you only provide network or proxy services, please forward this report to the origin host or provide its abuse contact.';
   return { subject: `Abuse / copyright infringement: ${f.host}`, body: `Здравствуйте.
 
-На сайте ${f.host} без согласия правообладателя размещено литературное произведение «${t}» (автор — ${w}). Ваш контакт указан для сети, обслуживающей IP-адрес сайта. Если вы предоставляете только прокси/сетевую инфраструктуру, прошу передать обращение надлежащему хостинг-провайдеру или сообщить его abuse-контакт.
+${ruIntro}
 Страница с нарушением: ${f.url}
 ${proof(book)}
 
 ${f.sentAt ? `${dmy(f.sentAt)} владельцу сайта направлена досудебная претензия — она не исполнена, произведение не удалено.` : 'Работающих контактов владельца на сайте нет.'}
 
-Если вы непосредственно размещаете материалы, прошу принять меры в пределах ваших технических возможностей, удалить незаконную копию или ограничить доступ к указанной странице. Если вы не хостинг-провайдер, прошу переслать уведомление ответственному лицу или сообщить, куда направить требование.
+${ruRequest}
 
 —
 Hello. The website ${f.host} distributes the copyrighted book "${t}" by ${w} without the author's permission.
 Infringing URL: ${f.url}
-${book?.link ? `Original (authorised) publication: ${book.link}\n` : ''}I am the author and the sole copyright holder. I have a good faith belief that this use is not authorised by the copyright owner, its agent, or the law. The information in this notice is accurate. If you host the infringing material, please remove or disable access to it. If you only provide network or proxy services, please forward this report to the origin host or provide its abuse contact.
+${book?.link ? `Original (authorised) publication: ${book.link}\n` : ''}I am the author and the sole copyright holder. I have a good faith belief that this use is not authorised by the copyright owner, its agent, or the law. The information in this notice is accurate. ${enRequest}
 
 ${w}, author and copyright holder${e ? '\n' + e : ''}
 ${dmy(today)}` };
