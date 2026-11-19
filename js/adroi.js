@@ -53,10 +53,11 @@ export function campaignVerdict(m, p) {
   if (m.baseline == null) return { kind: 'wait', est, text: 'не с чем сравнить: нет дней без рекламы до старта' };
   const share = p?.returnShare;
   if (share == null) return { kind: 'wait', est, text: 'расход пока нулевой' };
-  const per = `на 1 ₽ рекламы — ${share.toFixed(2).replace('.', ',')} ₽ дохода`;
-  if (share >= 1.2) return { kind: 'good', est, share, text: `окупается: ${per}`, todo: m.status === 'finished' ? 'стоит повторить' : 'можно продлить или добавить бюджет' };
-  if (share >= 0.9) return { kind: 'even', est, share, text: `примерно в ноль: ${per}`, todo: 'продлевать — только с новой ссылкой, текстом или аудиторией' };
-  return { kind: 'bad', est, share, text: `не окупается: ${per}`, todo: m.status === 'finished' ? 'в таком виде не повторять' : 'урезать бюджет или сменить подход' };
+  // Это прирост продаж относительно прошлых дней, а не подтвержденные покупки из рекламы.
+  const per = `оценочный прирост на 1 ₽ рекламы — ${share.toFixed(2).replace('.', ',')} ₽`;
+  if (share >= 1.2) return { kind: 'good', est, share, text: `рост относительно базового периода: ${per}`, todo: 'перед увеличением бюджета проверьте рекламные покупки по источнику' };
+  if (share >= 0.9) return { kind: 'even', est, share, text: `по модели близко к нулю: ${per}`, todo: 'сверьте фактический расход и покупки' };
+  return { kind: 'bad', est, share, text: `доход относительно базы не покрывает расход: ${per}`, todo: 'проверьте рекламные покупки и другие факторы изменения продаж' };
 }
 
 // Сводка по всем кампаниям «Доходов»: идут сейчас и закончившиеся за последние days дней
@@ -124,15 +125,18 @@ export function channelCompare(data = {}, settings = {}, today, { refs = {}, dir
     const r = row('direct');
     r.spend = direct.cost; r.readers = direct.clicks; r.buys = direct.conv || 0; r.hasReaders = true; r.clicksAsReaders = true;
     if (perSale != null && direct.conv != null) { r.returned = direct.conv * perSale; r.hasRet = true; r.retByBuys = true; }
-    // реклама шла на добавления в библиотеку: покупки придут позже — добавляем ожидаемое от добавивших (оценка), иначе канал выглядит нулевым
-    if (direct.exp > 0) { r.returned = (r.returned || 0) + direct.exp; r.hasRet = true; r.retByBuys = true; r.retExp = true; }
+    // Прогноз по библиотекам не смешиваем с расчетом по зафиксированным рекламным покупкам.
+    // Даже прогноз не является подтвержденной выручкой и не участвует в сравнении каналов.
+    if (direct.exp > 0) { r.forecastValue = direct.exp; r.retExp = true; }
   }
   return Object.values(rows).filter((r) => r.spend > 0 || r.readers > 0).map((r) => ({
     key: r.key, name: r.name, spend: Math.round(r.spend), est: r.est, camps: r.camps,
     readers: r.hasReaders ? r.readers : null, buys: r.hasReaders ? r.buys : null, clicksAsReaders: !!r.clicksAsReaders,
     perReader: r.hasReaders && r.readers && r.spend ? r.spend / r.readers : null,
     perBuy: r.hasReaders && r.buys && r.spend ? r.spend / r.buys : null,
-    ret: r.hasRet && r.spend ? r.returned / r.spend : null, retByBuys: !!r.retByBuys, retExp: !!r.retExp,
+    ret: r.hasRet && r.spend ? r.returned / r.spend : null,
+    forecastRet: r.forecastValue && r.spend ? ((r.hasRet ? r.returned : 0) + r.forecastValue) / r.spend : null,
+    retByBuys: !!r.retByBuys, retExp: !!r.retExp,
   })).sort((a, b) => b.spend - a.spend);
 }
 // Вывод по сравнению — только когда у двух каналов достаточно данных (30+ читателей и расход)
@@ -141,9 +145,13 @@ export function channelVerdict(rows = []) {
   const fmt = (x) => x.toFixed(2).replace('.', ',');
   const wr = rows.filter((r) => r.spend > 0 && r.ret != null).sort((a, b) => b.ret - a.ret);
   if (wr.length >= 2) {
+    // Прирост дохода до/после кампании и оценочное роялти по целям Директа — разные модели.
+    // Их нельзя ранжировать как подтвержденную доходность разных подрядчиков.
+    if (new Set(wr.map((r) => r.retByBuys ? 'goals' : 'uplift')).size > 1)
+      return { text: 'Директ и внешние кампании посчитаны разными способами: сравнить их окупаемость пока нельзя. Сверьте расход и атрибутированные покупки по каждому источнику.' };
     const best = wr[0], worst = wr[wr.length - 1];
     if (best.ret < worst.ret * 1.3 && best.ret - worst.ret < 0.3) return { best: best.key, text: `Каналы возвращают рубль примерно одинаково (${fmt(worst.ret)}–${fmt(best.ret)} ₽).` };
-    return { best: best.key, text: `Рубль лучше всего работает в «${best.name}»: на 1 ₽ — ${fmt(best.ret)} ₽, в «${worst.name}» — ${fmt(worst.ret)} ₽. ${best.ret >= 1.2 ? 'Туда и стоит переносить бюджет.' : 'Но окупается пока ни один — сначала менять подход, а не добавлять деньги.'}` };
+    return { best: best.key, text: `По оценочной модели у «${best.name}» на 1 ₽ — ${fmt(best.ret)} ₽, у «${worst.name}» — ${fmt(worst.ret)} ₽. Перед переносом бюджета проверьте фактические покупки и расходы.` };
   }
   const ok = rows.filter((r) => r.spend > 0 && r.readers >= 30 && r.perReader != null);
   if (ok.length < 2) return null;
