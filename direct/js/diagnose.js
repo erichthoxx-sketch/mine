@@ -5,6 +5,7 @@
 // Нормы берём не «из интернета», а из её же истории и из математики окупаемости. Чистые функции; тесты — tests/diagnose.test.js.
 import { addDays } from '../../js/calc.js';
 import { totals, convTotal, sumGoals } from './dcalc.js';
+import { twoProp, sampleSize } from './mcalc.js';
 
 const r0 = (v) => Math.round(v);
 const pct = (v) => (v == null ? '—' : (Math.round(v * 1000) / 10).toString().replace('.', ',') + ' %');
@@ -63,6 +64,26 @@ const sumBy = (rows, key, libIds) => {
   return [...m.values()];
 };
 
+// ---------- тест объявлений ----------
+// Победитель — только когда разница не случайна (95 %). Директ отдал цели по объявлениям и добавлений 10+ — судим по тому,
+// за что платим: сколько из 100 кликов добавляют книгу (у обоих 100+ кликов). Иначе — по CTR (у обоих 1000+ показов).
+// Остановить проигравшее можно, когда в кампании 3+ объявления и в его группе останется другое.
+export function adDuel({ all = [], measured = [] } = {}, ads = []) {
+  const info = (x) => { const a = ads.find((y) => String(y.id) === String(x.k)); return { ...x, title: a?.title || `Объявление ${x.k}`, gid: a?.gid ?? null, on: !a || (a.state === 'ON' && a.status !== 'REJECTED'),
+    ctr: x.impr ? x.clicks / x.impr : null, cr: x.clicks ? x.lib / x.clicks : null, cpa: x.lib ? x.cost / x.lib : null }; };
+  const useLib = measured.length >= 2 && measured.reduce((s, x) => s + x.lib, 0) >= 10;
+  const list = (useLib ? measured : all).map(info).filter((x) => x.on && (useLib ? x.clicks >= 30 : x.impr >= 200));
+  if (list.length < 2) return null;
+  const by = useLib ? 'lib' : 'ctr', m = by === 'lib' ? 'cr' : 'ctr', n = by === 'lib' ? 'clicks' : 'impr', k = by === 'lib' ? 'lib' : 'clicks', min = by === 'lib' ? 100 : 1000;
+  const top = [...list].sort((x, y) => (y[m] || 0) - (x[m] || 0)), best = top[0], loser = top[top.length - 1];
+  const t = twoProp(best[k], best[n], loser[k], loser[n]);
+  const win = best[n] >= min && loser[n] >= min && t.level !== 'low' && best[m] > loser[m];
+  const need = win ? null : (() => { const s = sampleSize(Math.max(best[m] || 0, by === 'lib' ? 0.01 : 0.005), Math.abs((best[m] || 0) - (loser[m] || 0))); return s ? Math.max(0, Math.max(s, min) - Math.min(best[n], loser[n])) : null; })();
+  const onAll = ads.filter((a) => a.state === 'ON' && a.status !== 'REJECTED');
+  const mates = loser.gid == null ? list.length - 1 : onAll.filter((a) => a.gid === loser.gid && String(a.id) !== String(loser.k)).length;
+  return { by, status: win ? 'win' : 'wait', best, loser, sure: t.level, need, unit: by === 'lib' ? 'кликов' : 'показов', list: top, canStop: win && list.length >= 3 && mates >= 1 };
+}
+
 // ---------- диагноз ----------
 // libValue — сколько в среднем приносит одно добавление (роялти × доля «библиотека → покупка»); perSale — роялти с покупки.
 export function diagnose({ camp, daily = [], conv = [], adDaily = [], ads = [], places = [], segments = [], goals = {}, today, libValue = null, perSale = null, skip = null, log = [] }) {
@@ -107,6 +128,8 @@ export function diagnose({ camp, daily = [], conv = [], adDaily = [], ads = [], 
     place: breakdown(places.filter((x) => x.cid === cid && x.network === 'network').map((x) => ({ k: x.place, label: x.place, impr: x.impr, clicks: x.clicks, cost: x.cost, lib: x.conv || 0, bounce: x.bounce }))).slice(0, 12),
   };
   if (!sg.length) { delete groups.dev; delete groups.gen; delete groups.age; }
+  const adAll = adDaily.filter((x) => x.cid === cid && x.date >= f30), campAds = ads.filter((a) => a.cid == null || a.cid === cid);
+  const duel = adDuel({ all: sumBy(adAll, 'aid', []), measured: ad30.length ? sumBy(ad30, 'aid', libIds) : [] }, campAds);
   // данных мало — честно говорим, чего ждать
   const ran = camp.start ? Math.round((Date.parse(today) - Date.parse(camp.start)) / 864e5) + 1 : 30;
   const enough = L30 >= 5 && t30.clicks >= 100;
@@ -163,5 +186,5 @@ export function diagnose({ camp, daily = [], conv = [], adDaily = [], ads = [], 
     trend.push({ date: d, cpa: l >= 2 ? w.cost / l : null, lib: l, cost: w.cost });
   }
   const marks = (log || []).filter((x) => String(x.cid) === String(cid) && x.ok !== false && x.at && x.at.slice(0, 10) >= addDays(today, -59)).map((x) => ({ date: x.at.slice(0, 10), text: x.text || x.why || '' }));
-  return { score, grade, gradeText: GRADE[grade], why, unit, funnel, neck, groups, plan: plan.slice(0, 8), trend, marks, enough, ran };
+  return { score, grade, gradeText: GRADE[grade], why, unit, funnel, neck, groups, plan: plan.slice(0, 8), trend, marks, enough, ran, duel };
 }

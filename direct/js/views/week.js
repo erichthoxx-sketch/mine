@@ -9,6 +9,7 @@ import { addDays } from '../../../js/calc.js';
 import { actBtn } from './common.js';
 import { placementRows } from '../qualitycalc.js';
 import { pultModel } from './pult.js';
+import { diagStrip } from './diagnose.js';
 
 const TONE = { good: 'up', bad: 'down', warn: 'warnc', info: '', wait: 'muted' };
 const dm = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
@@ -29,6 +30,7 @@ function campBlock(a, r, wk, done) {
   const todo = R.todo.map((t) => `<label class="d-check" style="display:flex;gap:10px;align-items:flex-start;margin:8px 0"><input type="checkbox" data-chg="wk.done" data-k="${esc(id + ':' + t.k)}"${done.includes(id + ':' + t.k) ? ' checked' : ''}> <span>${esc(t.text)}${t.to ? ` <button class="link small" data-act="go" data-to="${t.to}">открыть</button>` : ''}</span></label>`).join('');
   return `<div class="card">
     <div class="row between"><h2 style="margin:0">${esc(r.book?.title ? `«${r.book.title}»` : r.camp.name)}</h2><span class="small muted">${dm(p.from)}–${dm(p.to)} · ${p.days} дн.${p.days < 7 ? ' (кампания моложе недели)' : ''}</span></div>
+    ${diagStrip(a, r)}
     <div class="tiles d-tiles" style="margin-top:12px">
       ${tile('Расход', money(n.cost), ch(d?.cost))}
       ${tile('Клики', num(n.clicks), ch(d?.clicks, 1))}

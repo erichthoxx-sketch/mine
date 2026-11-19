@@ -3633,3 +3633,10 @@ a.dg-strip .dg-more { margin-left: auto; white-space: nowrap; color: var(--text-
 @media (max-width: 600px) { :root .tiles.dg-econ { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .card .dg-h, .dg-wrap h3 { font: 500 17px/1.3 var(--font-display); margin: 24px 0 10px; }
 @media (max-width: 600px) { .dg-rv { display: flex !important; flex-wrap: wrap; gap: 2px 12px; justify-content: flex-start !important; } .dg-rv span:last-child { margin-left: auto; } }
+
+/* «Все кампании — кто работает лучше» и «Тест объявлений» (Директ) */
+.cmp-row.cmp-go { cursor: pointer; }
+.cmp-row.cmp-go:hover .cmp-n { text-decoration: underline; text-underline-offset: 3px; }
+.cmp-r { display: flex; align-items: center; gap: 10px; text-align: right; white-space: nowrap; flex: none; }
+.dg-guide { padding-left: 20px; margin: 0 0 10px; }
+.dg-guide li { margin: 0 0 10px; line-height: 1.55; }

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { segRows, breakdown, diagnose } from '../direct/js/diagnose.js';
+import { segRows, breakdown, diagnose, adDuel } from '../direct/js/diagnose.js';
+import { compareRows } from '../direct/js/compare.js';
 
 const day = (i) => new Date(Date.UTC(2026, 10, 19) - i * 864e5).toISOString().slice(0, 10);
 
@@ -44,4 +45,27 @@ test('диагноз: экономика добавления, безубыто�
   // мало данных — без оценки
   const W = diagnose({ camp, daily: daily.slice(-1), conv: conv.slice(-1), goals: { lib: '9002', buy: [] }, today: day(0) });
   assert.equal(W.score, null); assert.equal(W.neck.k, 'data');
+});
+
+test('тест объявлений: по добавлениям, когда они видны; победитель — только при заметной разнице; останавливать — если в группе останется другое', () => {
+  const ads = [{ id: 1, gid: 5, state: 'ON', title: 'Вдова' }, { id: 2, gid: 5, state: 'ON', title: 'Медведь' }, { id: 3, gid: 5, state: 'ON', title: 'Третье' }];
+  const measured = [{ k: 1, impr: 9000, clicks: 400, cost: 4000, lib: 60 }, { k: 2, impr: 9000, clicks: 400, cost: 4000, lib: 20 }, { k: 3, impr: 9000, clicks: 300, cost: 3000, lib: 30 }];
+  const T = adDuel({ all: measured, measured }, ads);
+  assert.equal(T.by, 'lib'); assert.equal(T.status, 'win'); assert.equal(T.best.k, 1); assert.equal(T.loser.k, 2); assert.equal(T.canStop, true);
+  // два объявления в группе — победитель есть, но останавливать нельзя
+  const T2 = adDuel({ all: measured.slice(0, 2), measured: measured.slice(0, 2) }, ads.slice(0, 2));
+  assert.equal(T2.status, 'win'); assert.equal(T2.canStop, false);
+  // целей по объявлениям нет — по CTR; мало показов — тест идёт, сколько ещё нужно
+  const W = adDuel({ all: [{ k: 1, impr: 600, clicks: 12, cost: 100, lib: 0 }, { k: 2, impr: 600, clicks: 9, cost: 100, lib: 0 }], measured: [] }, ads);
+  assert.equal(W.by, 'ctr'); assert.equal(W.status, 'wait'); assert.ok(W.need > 0);
+});
+
+test('все кампании в одной таблице: свой Директ и таргетологи по одному мерилу, без двойного счёта Директа из «Доходов»', () => {
+  const income = [
+    { c: { id: 'k1', name: 'Иванова, ноябрь', channel: 'own' }, m: { status: 'running', spendTotal: 10000 }, v: { kind: 'bad', share: 0.6 }, live: true },
+    { c: { id: 'k2', name: 'Директ: «Вдова»', src: 'direct' }, m: { status: 'running', spendTotal: 5000 }, v: { kind: 'good', share: 2 }, live: true },
+  ];
+  const { rows, verdict } = compareRows({ direct: [{ id: 7, name: 'Вдова — ЕПК', book: 'Вдова', cost: 8000, score: 81, grade: 'good', share: 1.5, enough: true }], income, partners: [{ id: 'p', name: 'Иванова' }] });
+  assert.deepEqual(rows.map((x) => [x.who, x.kind]), [['Мой Директ', 'good'], ['Иванова', 'bad']]);
+  assert.match(verdict, /Лучше всех рубль отдаёт «Вдова»/);
 });
