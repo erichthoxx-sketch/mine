@@ -123,15 +123,19 @@ export async function findContacts(f) {
   const out = { v: 2, site: [], host: [], hostName: '', hostSource: 'ip-rdap', ip: '',
     reg: [], regName: '', cf: false, proxy: false, at: new Date().toISOString() };
   // сайт: главная и страницы «правообладателям / контакты»
-  for (const p of CONTACT_PATHS.slice(0, 5)) {
+  for (const p of CONTACT_PATHS) {
     try { out.site.push(...emailsIn(await read(origin + p, { timeout: 20000 }))); } catch { /* страницы нет */ }
-    if (out.site.length >= 2) break;
+    // Не останавливаемся на случайной почте с главной: ищем юридический/abuse адрес.
+    if (out.site.some((e) => /^(abuse|dmca|copyright|legal|pravo)@/i.test(e))) break;
     await sleep(1500);
   }
   out.site = [...new Set(out.site)].sort((a, b) => rank(b, root) - rank(a, root)).slice(0, 3);
   // хостинг: адрес сервера → чья это сеть и куда жаловаться
   const dns = await json('https://dns.google/resolve?name=' + encodeURIComponent(f.host) + '&type=A');
-  const ip = (dns?.Answer || []).map((a) => a.data).find((d) => /^\d+\.\d+\.\d+\.\d+$/.test(d || ''));
+  const ipv4 = (dns?.Answer || []).map((a) => a.data).find((d) => /^\d+\.\d+\.\d+\.\d+$/.test(d || ''));
+  const dns6 = !ipv4 ? await json('https://dns.google/resolve?name=' + encodeURIComponent(f.host) + '&type=AAAA') : null;
+  const ipv6 = (dns6?.Answer || []).map((a) => a.data).find((d) => /^[0-9a-f:]+$/i.test(d || '') && String(d).includes(':'));
+  const ip = ipv4 || ipv6;
   if (ip) {
     out.ip = ip;
     const i = rdapInfo(await json('https://rdap.org/ip/' + ip));
