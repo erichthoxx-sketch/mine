@@ -168,7 +168,7 @@ test('этап кампании: обучение → библиотека → �
   g = campaignStage({ id: 7, goal: 2, start: '2026-10-01' }, { econ: econ({ ran: 50, buy30: 40 }), st, goals, conv: convN(11), today, subStart: '2026-11-01', perSale: 90 });
   assert.equal(g.key, 'buy'); assert.match(g.text, /на 1 ₽ рекламы — 2,00 ₽/);
   g = campaignStage({ id: 7, goal: 2, start: '2026-10-01' }, { econ: econ({ ran: 50, buy30: 6 }), st, goals, conv: convN(2), today, subStart: '2026-11-01', perSale: 90 });
-  assert.match(g.next.what, /ерните цель «добавление в библиотеку» с ценой ≈ 25 ₽/);
+  assert.match(g.next.what, /Проверить открутку и цель покупки/); assert.doesNotMatch(g.next.why, /Верните цель/);
   assert.equal(campaignStage({ id: 7 }, { econ: econ(), st: { key: 'draft' }, goals, today }), null);
 });
 
@@ -217,7 +217,7 @@ test('цель «покупка» поставлена рано: не «конв
   const camp = { id: 18, name: 'ЕПК', state: 'ON', type: 'UNIFIED_CAMPAIGN', counters: [1], start: '2026-11-10', goal: 220, strategy: { search: 'PAY_FOR_CONVERSION', network: 'NETWORK_DEFAULT' } };
   const m = { counterId: 1, main: ['220'], goals: [{ id: 215, name: 'Добавление книги в библиотеку' }, { id: 220, name: 'Покупка книги' }] };
   const h = goalHints({ campaigns: [camp], daily, conv, m, today: T });
-  assert.equal(h[0].kind, 'early'); assert.match(h[0].why, /«Покупка книги».+«Добавление книги в библиотеку» — 70.+Верните цель/);
+  assert.equal(h[0].kind, 'early'); assert.match(h[0].why, /«Покупка книги».+«Добавление книги в библиотеку» — 70/); assert.doesNotMatch(h[0].why, /Верните цель/);
   assert.equal(spendAdvice({ camp, daily, conv, today: T, goals: ['220'], value: 116 }), null);
   const main = { campaigns: [{ ...camp, strategy: { search: 'PAY_FOR_CONVERSION', network: 'NETWORK_DEFAULT' } }], groups: [{ id: 5, cid: 18, name: 'Новая группа' }] };
   assert.equal(retargetItems({ main, goals: { lib: '215', buy: ['220'] }, saved: { listId: 9 }, buys: { 18: 0 } }).length, 0);
