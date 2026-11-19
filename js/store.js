@@ -157,7 +157,18 @@ class FirebaseStore extends Base {
     catch (e) {
       request.catch(() => {});
       if (synced() && uid === this.user?.uid) return; // данные подписки сверены с сервером — их и сопоставляем
-      throw e;
+      // 19.11.2026: Firebase сразу ответил «Failed to get documents from server» (связь вкладки с сервером на миг пропала —
+      // ноутбук проснулся, сеть переключилась). Ждём до 25 с: живая подписка сама переподключается; заодно повторяем прямой запрос
+      const lost = /server|offline|network|unavailable/i.test(String(e?.message));
+      for (let i = 0; lost && i < 50 && uid === this.user?.uid; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        if (synced()) return;
+        if (i % 10 === 9) {
+          try { snapshots = await Promise.all(names.map((name) => getDocsFromServer(collection(this.db, 'users', uid, name)))); break; }
+          catch { /* ещё нет связи — ждём дальше */ }
+        }
+      }
+      if (!snapshots) throw new Error(lost ?'Нет связи с Firebase — выгрузка не загружена, данные не тронуты. Обновите страницу и загрузите файл ещё раз.' : e.message);
     }
     finally { clearTimeout(timer); }
     if (uid !== this.user?.uid) throw new Error('Аккаунт изменился во время загрузки');
