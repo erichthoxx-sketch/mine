@@ -18,6 +18,7 @@ import { ic } from '../../js/icons.js';
 import { booksView, bookPage, refreshAll, refreshOne, refreshing } from './views/books.js';
 import { reviewsPage } from './views/reviews.js';
 import { ideasView } from './views/ideas.js';
+import { notebookView } from './views/notebook.js';
 import { homeView } from './views/home.js';
 import { planView, navToday } from './views/plan.js';
 import { scheduleTodoist } from './tdsync.js';
@@ -37,7 +38,7 @@ import { editorView, editorDirty } from './views/editor.js';
 import { legendPage } from './views/legend.js';
 import { cleanText, cleanedMsg } from '../../js/cleantext.js';
 
-export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews', 'w_promolinks', 'w_blog', 'w_piracy'];
+export const WCOLLS = ['w_books', 'w_ideas', 'w_contests', 'w_queue', 'w_waiting', 'w_media', 'w_links', 'w_goals', 'w_legver', 'w_reviews', 'w_promolinks', 'w_blog', 'w_piracy', 'w_notes', 'w_prompts'];
 const store = createStore({ colls: [...WCOLLS, 'd_snap', 'sales', 'books', 'campaigns', 'reports', 'days', 'months'], localKey: 'authorWriter.v1' });
 initAccent(store);
 keepNavDown(); // iPhone: нижнее меню не «повисает» посреди экрана
@@ -80,7 +81,7 @@ function getCtx() {
   return cache;
 }
 
-const TABS = [['/', 'house', 'Главная'], ['/books', 'books', 'Книги'], ['/ideas', 'ideas', 'Идеи'], ['/plan', 'plan', 'Планер'], ['/marketing', 'marketing', 'Маркетинг'], ['/site', 'bear', 'Сайт']];
+const TABS = [['/', 'house', 'Главная'], ['/books', 'books', 'Книги'], ['/ideas', 'ideas', 'Блокнот'], ['/plan', 'plan', 'Планер'], ['/marketing', 'marketing', 'Маркетинг'], ['/site', 'bear', 'Сайт']];
 function route() {
   const [, a, b] = ('#' + (ui.route || '/')).split('/');
   if (a === 'book' && b) return { tab: '/books', view: (x) => bookPage(x, decodeURIComponent(b)) };
@@ -95,6 +96,8 @@ function route() {
   // «Сайт»: Обзор · Почта (письмо — свой экран-редактор)
   if (a === 'site' && b === 'mail') return { tab: '/site', view: mailView };
   if (a === 'site' && b === 'letter') return { tab: '/site', view: letterView };
+  // «Блокнот»: Заметки · Идеи · Промты
+  if (a === 'ideas') return { tab: '/ideas', view: (x) => notebookView(x, b) };
   const map = { '': homeView, books: booksView, ideas: ideasView, plan: planView, links: (x) => marketingView(x, 'links'), social: socialView, site: mySiteView, mysite: mySiteView, settings: settingsView };
   return { tab: a === 'social' || a === 'links' ? '/marketing' : a === 'mysite' ? '/site' : '/' + (a || ''), view: map[a || ''] || homeView };
 }

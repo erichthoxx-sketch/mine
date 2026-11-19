@@ -3512,3 +3512,90 @@ svg.mk-rk .mk-rel { stroke: var(--good, #2e7d5b); stroke-width: 8; stroke-lineca
 :root a.small-btn:hover { background: var(--text); color: var(--bg); }
 @media (max-width: 720px) { .pr-item > .row.between:has(.pr-yn) { flex-wrap: wrap; } .pr-item .pr-yn { width: 100%; justify-content: flex-start; margin-top: 8px; } }
 .pr-more a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+/* ===== Блокнот: Заметки · Идеи · Промты (заметки — как в Simplenote: список слева, текст справа) ===== */
+.nb-tabs { margin-bottom: 14px; }
+.nb-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+.nb-wrap .nb-ed { display: none; }
+.nb-wrap.nb-has .nb-list { display: none; }
+.nb-wrap.nb-has .nb-ed { display: flex; }
+@media (min-width: 900px) {
+  .nb-wrap { grid-template-columns: 300px minmax(0, 1fr); }
+  .nb-wrap .nb-list, .nb-wrap.nb-has .nb-list { display: flex; position: sticky; top: 12px; max-height: calc(100vh - 150px); }
+  .nb-wrap .nb-ed { display: flex; min-height: calc(100vh - 150px); }
+  .nb-back { display: none !important; }
+}
+:root .card.nb-list { display: flex; flex-direction: column; padding: 12px 10px 10px; margin: 0; }
+.nb-head { display: flex; gap: 8px; align-items: center; padding: 0 4px; }
+:root .nb-head .nb-q { flex: 1; min-width: 0; min-height: 40px; border-radius: 999px; padding: 0 16px; background: var(--soft); border: 0; }
+.nb-chips { display: flex; gap: 6px; overflow-x: auto; padding: 10px 4px 6px; scrollbar-width: none; flex: none; }
+.nb-chips::-webkit-scrollbar { display: none; }
+:root :is(main, dialog) button.nb-chip { flex: none; min-height: 30px !important; padding: 0 12px !important; border-radius: 999px !important; background: transparent !important; border: 0 !important; color: var(--text-2) !important; font: 500 13px/1 var(--font-body) !important; white-space: nowrap; }
+:root :is(main, dialog) button.nb-chip span { color: var(--muted); margin-left: 3px; }
+:root :is(main, dialog) button.nb-chip:hover { background: var(--soft) !important; color: var(--text) !important; }
+:root :is(main, dialog) button.nb-chip.on { background: var(--text) !important; color: var(--bg) !important; }
+:root :is(main, dialog) button.nb-chip.on span { color: inherit; opacity: .7; }
+.nb-items { overflow-y: auto; flex: 1; min-height: 0; padding: 2px 0; }
+:root main button.nb-item { display: block !important; width: 100%; text-align: left; min-height: 0 !important; padding: 11px 12px !important; margin: 1px 0; border: 0 !important; border-radius: 12px !important; background: transparent !important; color: var(--text) !important; font: inherit !important; }
+:root main button.nb-item:hover { background: var(--soft) !important; }
+:root main button.nb-item.on { background: var(--soft-2, var(--soft)) !important; }
+.nb-it-t { display: flex; align-items: baseline; gap: 8px; }
+.nb-it-t b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 15px/1.35 var(--font-body); }
+.nb-it-t small { flex: none; font-size: 12px; color: var(--muted); }
+.nb-pin { flex: none; display: inline-grid; color: var(--text-2); } .nb-pin .ic { width: 14px; height: 14px; }
+.nb-it-p { display: block; margin-top: 2px; font-size: 13.5px; line-height: 1.4; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-empty { padding: 14px 12px; margin: 0; }
+.nb-foot { display: flex; gap: 16px; justify-content: center; padding: 8px 4px 2px; border-top: 1px solid var(--line); flex: none; }
+:root .nb-foot button.link { font: 500 13px/1.3 var(--font-body) !important; color: var(--muted) !important; }
+:root .card.nb-ed { flex-direction: column; margin: 0; padding: 12px 22px 14px; }
+.nb-bar { display: flex; align-items: center; gap: 2px; margin: 0 -10px 4px; }
+.nb-sp { flex: 1; }
+:root main button.nb-back { display: inline-flex; align-items: center; gap: 2px; background: transparent !important; border: 0 !important; padding: 0 8px !important; min-height: 36px !important; color: var(--text) !important; font: 500 15px/1 var(--font-display) !important; }
+.nb-back .ic { transform: rotate(180deg); width: 18px; height: 18px; }
+:root main .nb-bar button.ed-ic { width: 36px; height: 36px; padding: 0 !important; display: inline-grid; place-items: center; border-radius: 50% !important; }
+:root main .nb-bar button.ed-ic.on { background: var(--soft) !important; }
+:root main .nb-bar button.ed-ic[disabled] { opacity: .35; }
+:root main textarea.nb-text { flex: 1; width: 100%; min-height: 55vh; border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none; resize: none; padding: 6px 0 !important; font: 400 17px/1.65 var(--font-body); color: var(--text); border-radius: 0 !important; }
+.nb-view { flex: 1; min-height: 40vh; font: 400 17px/1.65 var(--font-body); padding: 6px 0; overflow-wrap: anywhere; }
+.nb-view p { margin: 0; } .nb-view .nb-gap { height: .8em; }
+.nb-view :is(h3, h4, h5) { font-family: var(--font-display); font-weight: 500; margin: .6em 0 .2em; line-height: 1.3; }
+.nb-view h3 { font-size: 24px; } .nb-view h4 { font-size: 20px; } .nb-view h5 { font-size: 17px; }
+.nb-view :is(ul, ol) { margin: .2em 0; padding-left: 22px; }
+.nb-view a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.nb-view ul.nb-checks { list-style: none; padding: 0; }
+.nb-checks li { display: flex; gap: 10px; align-items: flex-start; padding: 3px 0; }
+:root main button.nb-box { flex: none; width: 20px; height: 20px; min-height: 20px !important; padding: 0 !important; margin-top: 4px; border-radius: 6px !important; border: 1.5px solid var(--muted) !important; background: transparent !important; }
+:root main .nb-checks li.on button.nb-box { background: var(--text) !important; border-color: var(--text) !important; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") !important; background-size: 14px !important; background-position: center !important; background-repeat: no-repeat !important; }
+.nb-checks li.on span { color: var(--muted); text-decoration: line-through; }
+.nb-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; border-top: 1px solid var(--line); padding-top: 10px; margin-top: 8px; }
+.nb-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.nb-tg { display: inline-flex; align-items: center; gap: 2px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--soft); font-size: 13px; color: var(--text-2); }
+:root main .nb-tg button { min-height: 0 !important; padding: 0 6px !important; background: transparent !important; border: 0 !important; color: var(--muted) !important; font: 400 15px/1 var(--font-body) !important; }
+:root main input.nb-tagin { width: 90px; min-height: 28px; padding: 0 4px !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 13.5px; }
+.nb-info { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+:root main select.nb-book { width: auto; max-width: 220px; min-height: 30px; padding: 0 26px 0 10px; border: 0; background-color: var(--soft); border-radius: 999px; font-size: 13px; }
+.nb-blank { margin: auto; text-align: center; }
+.nb-trash { padding: 10px 0 14px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.nb-steps { padding-left: 20px; line-height: 1.5; } .nb-steps li { margin: 4px 0; }
+/* промты */
+.nb-prhead { gap: 14px; margin-bottom: 14px; align-items: flex-end; flex-wrap: wrap; }
+:root .card.nb-prlist { padding: 12px 10px 14px; }
+.pr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; padding: 6px 4px 0; }
+.pr-card { padding: 12px 14px; border-radius: 16px; background: var(--soft); cursor: pointer; transition: background .15s; }
+.pr-card:hover { background: var(--soft-2, var(--soft)); }
+.pr-card .row b { font: 600 15px/1.35 var(--font-body); }
+:root main .pr-card button.ed-ic { width: 32px; height: 32px; min-width: 32px; padding: 0 !important; display: inline-grid; place-items: center; border-radius: 50% !important; margin: -6px -6px 0 0; }
+.pr-prev { margin: 6px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.pr-found b { display: block; margin-bottom: 4px; } .pr-f { padding: 8px 0; border-top: 1px solid var(--line); gap: 10px; }
+.pr-f .sub { display: block; font-size: 13px; color: var(--muted); }
+textarea.pr-text { min-height: 220px; font-size: 15px; line-height: 1.5; }
+.pr-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; }
+:root dialog .pr-vars button.nb-chip { background: var(--soft) !important; color: var(--text-2) !important; }
+.pr-pick { padding: 12px 0; border-top: 1px solid var(--line); } .pr-pick:first-child { border-top: 0; padding-top: 0; }
+.pr-pick .pr-prev { margin-bottom: 8px; }
+.nb-pin { align-self: center; }
+.nb-view > p:first-child { font: 600 20px/1.4 var(--font-display); margin-bottom: 4px; }
+@media (max-width: 899px) { :root .nb-wrap.nb-has .card.nb-list { display: none; } :root .card.nb-ed { min-height: calc(100vh - 230px); } }
+.nb-back .ic { transform: none; }
+/* галочка чек-листа — цветом фона, видна и в тёмной теме */
+:root main .nb-checks li.on button.nb-box { background-image: none !important; color: var(--bg) !important; display: inline-grid; place-items: center; }
+:root main .nb-checks button.nb-box svg { display: none; } :root main .nb-checks li.on button.nb-box svg { display: block; }

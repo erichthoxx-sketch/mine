@@ -11,6 +11,7 @@ import { docxBlob, noYo } from '../publish.js';
 import { synText, synSource } from '../synopsis.js';
 import { cleanText } from '../../../js/cleantext.js';
 import './pubfiles.js'; // «Скопировать» и «Word» синопсиса
+import { openPrompts, promptCount } from './notebook.js';
 import { IDEA_FIELDS, ROLES, PERSON, CHAR_FIELDS, LEGEND_TABS, PLAN_ST, planSt, isProl, chapterNums, legendOf, formatCharacterAge, legendContext, legendTemplate, applyTemplate, parsePlan, actsOf, legendBlocks, blocksPlain, hashText, normText } from '../legend.js';
 
 const app = () => window.__app;
@@ -38,9 +39,12 @@ export function legendPage(a, id) {
     <div class="lg-acts"><button class="dl" data-act="leg.ai" data-id="${b.id}">${ic('sparkle')}Для нейросети</button><button class="dl" data-act="leg.docx" data-id="${b.id}">${ic('download')}Word</button><button class="dl" data-act="leg.pdf" data-id="${b.id}">${ic('download')}PDF</button><button class="dl" data-act="leg.hist" data-id="${b.id}" title="Версии Легенды: сохранить и вернуть">${ic('timer')}Версии</button></div></div>
   ${syncLine(b, L)}
   ${tab === 'syn' ? synHtml(c, b) : tab === 'idea' ? ideaHtml(b, L) : tab === 'plan' ? planHtml(b, L, main) : charsHtml(b, L, main)}
-  ${tab === 'syn' ? '' : `<div class="lg-tpl"><button class="dl" data-act="leg.tpl" data-id="${b.id}" data-p="${tab}">${ic('download')}Шаблон для нейросети</button><button class="dl" data-act="leg.tplin" data-id="${b.id}" data-p="${tab}">${ic('upload')}Загрузить ответ</button></div>`}`;
+  ${tab === 'syn' ? `<div class="lg-tpl">${promptBtn(b, 'synopsis')}</div>` : `<div class="lg-tpl">${promptBtn(b, tab)}<button class="dl" data-act="leg.tpl" data-id="${b.id}" data-p="${tab}">${ic('download')}Шаблон для нейросети</button><button class="dl" data-act="leg.tplin" data-id="${b.id}" data-p="${tab}">${ic('upload')}Загрузить ответ</button></div>`}`;
   return { html, after: () => document.querySelectorAll('.lg-ta').forEach(grow) };
 }
+// «Промты» из Блокнота для этого места Легенды — с подставленной книгой и Легендой
+const promptBtn = (b, place) => { const n = promptCount(place, b.id); return `<button class="dl" data-act="leg.prompts" data-id="${b.id}" data-p="${place}">${ic('prompt')}Промты${n ? ` · ${n}` : ''}</button>`; };
+acts['leg.prompts'] = (d) => { openPrompts(d.p, bookOf(d.id)); return false; };
 // поле растёт по тексту — длинную мысль видно целиком
 function grow(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; if (!el.dataset.g) { el.dataset.g = 1; el.addEventListener('input', () => grow(el)); } }
 

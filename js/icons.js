@@ -47,6 +47,12 @@ export const ICONS = {
   folder: svg('<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>'),
   doc: svg('<path d="M7 3.5h7l4 4V20.5H7z"/><path d="M14 3.5v4h4"/><path d="M9.5 12h6M9.5 15.5h6"/>'),
   pen: svg('<path d="M15.5 4.5l4 4L9 19H5v-4z"/>'),
+  // булавка: закрепить заметку сверху
+  pin: svg('<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/>'),
+  // чек-лист: квадрат с галочкой и строки
+  list: svg('<rect x="3.5" y="5" width="5" height="5" rx="1"/><path d="M4.8 7.6l1.2 1.2 2-2.3"/><path d="M11.5 7.5H20"/><rect x="3.5" y="14" width="5" height="5" rx="1"/><path d="M11.5 16.5H20"/>'),
+  // промт: строки с искрой
+  prompt: svg('<path d="M4 6h10"/><path d="M4 11h7"/><path d="M4 16h9"/><path d="M18 11l1 2.2 2.2 1-2.2 1L18 17.4l-1-2.2-2.2-1 2.2-1z"/>'),
 };
 export const ic = (name) => ICONS[name] || '';
 // маленькая иконка в строку текста (размер — по шрифту)

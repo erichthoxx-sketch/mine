@@ -26,7 +26,7 @@ const TABS = [['open', 'Открытые'], ['done', 'Готово'], ['trash', 
 const inTabOf = (st) => (x) => (st === 'trash' ? !!x.deletedAt : !x.deletedAt && (st === 'done' ? isDone(x) : !isDone(x)));
 const stampOf = (st, x) => (st === 'trash' ? x.deletedAt : st === 'done' ? x.doneAt || x.createdAt : x.createdAt) || '';
 
-export function ideasView(a) {
+export function ideasView(a, { embedded = false } = {}) {
   const c = a.ctx(), ui = a.ui;
   const q = ui.ideaQ || '', fb = ui.ideaBook || '', st = TABS.some(([k]) => k === ui.ideaSt) ? ui.ideaSt : 'open', fk = ui.ideaKind || '';
   const all = c.data.w_ideas, inTab = inTabOf(st);
@@ -39,7 +39,8 @@ export function ideasView(a) {
   const bookName = fb === '-' ? 'Без книги' : fb ? short(c.wbooksById[fb]?.title || 'Книга') : 'Все книги';
   const rows = shown.map((x) => (st === 'trash' ? trashRow(c, x, !fb) : ideaRow(c, x, ui.openIdea === x.id, !fb))).join('');
   const empty = q || fb || fk ? 'Ничего не нашлось — попробуйте другое слово, книгу или вид.' : st === 'done' ? 'Здесь появится то, что вы отметили кружком как сделанное.' : st === 'trash' ? 'Корзина пуста.' : 'Пусто. Запишите мысль — книгу, главу и вид записи приложение определит само.';
-  const html = `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Идеи и заметки</h2><button class="primary" data-act="idea.new" data-book="${fb && fb !== '-' ? fb : ''}">+ Записать</button></div>
+  // в «Блокноте» заголовок не нужен — над списком уже вкладки
+  const html = `<div class="row between" style="margin-bottom:10px">${embedded ? '<span></span>' : '<h2 style="margin:0">Идеи и заметки</h2>'}<button class="primary" data-act="idea.new" data-book="${fb && fb !== '-' ? fb : ''}">+ Записать</button></div>
   <div class="ideas-wrap">
     <aside class="card ideas-side">${bookList(c, base, fb)}</aside>
     <div class="ideas-main">
@@ -159,7 +160,7 @@ acts['idea.open'] = (d) => {
   const a = app();
   const x = d.id ? a.ctx().data.w_ideas.find((i) => i.id === d.id) : null;
   a.ui.ideaBook = d.book || ''; a.ui.ideaQ = ''; a.ui.ideaKind = ''; a.ui.ideaN = PAGE; a.ui.ideaSt = x && isDone(x) ? 'done' : 'open'; a.ui.openIdea = d.id || null;
-  a.go('/ideas');
+  a.go('/ideas/ideas');
   if (d.id) setTimeout(() => document.getElementById('idea-' + d.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50);
 };
 acts['idea.toggle'] = (d) => { app().ui.openIdea = app().ui.openIdea === d.id ? null : d.id; };
@@ -192,7 +193,7 @@ acts['idea.quickDel'] = async (d) => {
   toast('В корзине — вкладка «Корзина»', { undo: async () => { await app().store.put('w_ideas', { ...x, deletedAt: '' }); } });
 };
 // корзина — третья вкладка («Открытые | Готово | Корзина»)
-acts['idea.trash'] = () => { app().ui.ideaSt = 'trash'; app().go('/ideas'); };
+acts['idea.trash'] = () => { app().ui.ideaSt = 'trash'; app().go('/ideas/ideas'); };
 acts['idea.restore'] = async (d) => {
   const x = app().ctx().data.w_ideas.find((i) => i.id === d.id);
   await app().store.put('w_ideas', { ...x, deletedAt: '' });
