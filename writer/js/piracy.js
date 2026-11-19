@@ -102,6 +102,25 @@ export function rdapInfo(j) {
 // Cloudflare прячет настоящий хостинг и почту не читает — у него только форма жалобы
 export const CF_FORM = 'https://abuse.cloudflare.com/';
 export const isCloudflare = (name = '', mails = []) => /cloudflare/i.test(name) || mails.some((m) => /cloudflare/i.test(m));
+// Сеть IP может оказаться CDN или прокси, а не сервером с контентом.
+// В таком случае нельзя называть её хостингом и автоматически направлять туда претензию.
+export const isProxyNetwork = (name = '', mails = []) =>
+  /cloudflare|ddos.?guard|akamai|fastly|imperva|incapsula|sucuri|cloudfront|amazon cloudfront|bunnycdn|quic.?cloud|gcore|stormwall|stackpath/i
+    .test([name, ...(mails || [])].join(' '));
+// Только адреса оператора IP из RDAP IP; RDAP домена = регистратор и всегда отдельный канал.
+// Старые записи без ip требуют повторного определения, а адрес, совпавший с регистратором,
+// нельзя автоматически считать почтой хостинга.
+export function hostContactRoute(ct = {}) {
+  const host = [...new Set((ct.host || []).map((x) => String(x).toLowerCase()).filter((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)))];
+  const reg = new Set((ct.reg || []).map((x) => String(x).toLowerCase()));
+  if (!ct.ip || !ct.v || ct.v < 2) return { to: [], kind: 'stale', reason: 'Контакты собраны старым способом — обновите сведения об IP и регистраторе.' };
+  if (ct.proxy || ct.cf || isProxyNetwork(ct.hostName, host))
+    return { to: [], kind: 'proxy', reason: 'IP принадлежит CDN/прокси: настоящий хостинг не подтвержден. Используйте форму жалоб посредника или найдите origin-провайдера.' };
+  const clean = host.filter((x) => !reg.has(x));
+  if (!clean.length) return { to: [], kind: host.length ? 'overlap' : 'missing',
+    reason: host.length ? 'Адрес оператора IP совпал с регистратором домена. Нельзя уверенно определить получателя — проверьте вручную.' : 'Почта оператора IP не найдена. Регистратору претензию за хостинг не отправляем.' };
+  return { to: clean.slice(0, 2), kind: 'network', reason: 'Это abuse-контакт оператора сети IP, а не гарантированно хостинг с файлами сайта.' };
+}
 // страницы сайта, где обычно лежит почта для правообладателей
 export const CONTACT_PATHS = ['', '/abuse', '/dmca', '/copyright', '/pravoobladatelyam', '/contacts', '/contact', '/feedback'];
 
@@ -143,23 +162,23 @@ ${f.url}
 
 ${w}, автор и правообладатель${e ? '\n' + e : ''}` };
 }
-// 2. Хостингу / регистратору: сайт не исполнил претензию. Для зарубежных — часть по-английски
+// 2. Оператору IP-сети / подтвержденному хостингу. Не выдаём регистратора за хостинг.
 export function letterHost(f, book, m, today) {
   const w = pen(m), t = plainTitle(book?.title || f.title), e = mail(m);
   return { subject: `Abuse / copyright infringement: ${f.host}`, body: `Здравствуйте.
 
-Сайт ${f.host}, размещённый на ваших мощностях, нарушает авторские права: на нём без согласия правообладателя размещено литературное произведение «${t}» (автор — ${w}).
+На сайте ${f.host} без согласия правообладателя размещено литературное произведение «${t}» (автор — ${w}). Ваш контакт указан для сети, обслуживающей IP-адрес сайта. Если вы предоставляете только прокси/сетевую инфраструктуру, прошу передать обращение надлежащему хостинг-провайдеру или сообщить его abuse-контакт.
 Страница с нарушением: ${f.url}
 ${proof(book)}
 
 ${f.sentAt ? `${dmy(f.sentAt)} владельцу сайта направлена досудебная претензия — она не исполнена, произведение не удалено.` : 'Работающих контактов владельца на сайте нет.'}
 
-Как информационный посредник вы обязаны принять меры по заявлению правообладателя (ст. 1253.1 ГК РФ). Прошу в течение 3 рабочих дней удалить с сайта произведение полностью — весь текст и любые его части, включая ознакомительные фрагменты, — или ограничить доступ к этим страницам. Иначе требования о прекращении нарушения и компенсации (ст. 1301 ГК РФ) будут заявлены в суде и к вам.
+Если вы непосредственно размещаете материалы, прошу принять меры в пределах ваших технических возможностей, удалить незаконную копию или ограничить доступ к указанной странице. Если вы не хостинг-провайдер, прошу переслать уведомление ответственному лицу или сообщить, куда направить требование.
 
 —
-Hello. The website ${f.host} hosted on your network distributes the copyrighted book "${t}" by ${w} without the author's permission.
+Hello. The website ${f.host} distributes the copyrighted book "${t}" by ${w} without the author's permission.
 Infringing URL: ${f.url}
-${book?.link ? `Original (authorised) publication: ${book.link}\n` : ''}I am the author and the sole copyright holder. I have a good faith belief that this use is not authorised by the copyright owner, its agent, or the law. The information in this notice is accurate. Please remove or disable access to the infringing material in full, including any excerpts or preview chapters of the book.
+${book?.link ? `Original (authorised) publication: ${book.link}\n` : ''}I am the author and the sole copyright holder. I have a good faith belief that this use is not authorised by the copyright owner, its agent, or the law. The information in this notice is accurate. If you host the infringing material, please remove or disable access to it. If you only provide network or proxy services, please forward this report to the origin host or provide its abuse contact.
 
 ${w}, author and copyright holder${e ? '\n' + e : ''}
 ${dmy(today)}` };
@@ -216,16 +235,33 @@ export function litnetFormUrl({ authorId = '', title = '', pen = '', urls = [] }
   if (urls.length) q.set('entry.1437517371', urls.join('\n'));
   return LITNET_FORM + '?' + q.toString();
 }
-// ID автора — цифры после «-u» в адресе его страницы; со страницы книги — из карточки автора («Имя Автор • N книг»)
+// Публичная подтвержденная страница автора (Литнет). Это резервный вариант именно
+// для псевдонима Лана Фрейтаг, а не произвольный ID любого автора.
+export const LANA_LITNET_PROFILE = 'https://litnet.com/ru/lana-freitag-u11343252';
 export function authorIdOf(text, pen = '') {
-  const t = String(text || ''), direct = t.match(/litnet\.com\/[a-z]{2}\/[a-z0-9-]+-u(\d{3,})/i);
-  if (/^\s*https?:\/\//.test(t) && direct) return direct[1];
-  if (/^\s*\d{3,}\s*$/.test(t)) return t.trim();
-  const lines = t.split('\n').filter((l) => /-u\d{3,}\)/.test(l));
-  const p = norm(pen), byName = p && lines.find((l) => norm(l).includes(p)), card = lines.find((l) => /Автор\s*•/.test(l));
-  const m = (byName || card || '').match(/-u(\d{3,})\)/);
-  return m ? m[1] : '';
+  const t = String(text || '').trim();
+  if (/^\d{3,}$/.test(t)) return t;
+  // Вставленный пользователем URL профиля.
+  const profile = /^https?:\/\/(?:www\.)?litnet\.com\/[a-z]{2}\/[a-z0-9-]+-u(\d{3,})(?:[/?#].*)?$/i.exec(t);
+  if (profile) return profile[1];
+  const p = norm(pen);
+  const lines = t.split('\n');
+  const re = /(?:https?:\/\/)?(?:www\.)?litnet\.com\/[a-z]{2}\/[a-z0-9-]+-u(\d{3,})\b/gi;
+  const matches = [];
+  for (const line of lines) {
+    for (const m of line.matchAll(re)) matches.push({ id: m[1], line });
+  }
+  // В карточке книги бывает много чужих профилей (комментарии, рекомендации).
+  // Выбираем только профиль, рядом с которым видим имя нужного автора.
+  const named = p ? matches.filter((m) => norm(m.line).includes(p)) : [];
+  const ids = [...new Set(named.map((m) => m.id))];
+  if (ids.length === 1) return ids[0];
+  // Без имени нельзя угадывать ID среди нескольких ссылок.
+  if (!p && matches.length === 1) return matches[0].id;
+  return '';
 }
+export const knownLitnetAuthorId = (pen = '') =>
+  norm(pen) === norm('Лана Фрейтаг') ? authorIdOf(LANA_LITNET_PROFILE, pen) : '';
 // Дела в Планер: одно на «новые копии», по одному на «сайт не ответил»
 export function piracyTodos(finds = [], today) {
   const live = finds.filter((f) => f.status !== 'gone' && f.status !== 'skip'), out = [];

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseResults, judge, unwrap, searchQueries, emailsIn, rdapInfo, letterSite, letterHost, letterFormal, mailto, nextStep, piracyTodos, isLegit, findId } from '../writer/js/piracy.js';
+import { parseResults, judge, unwrap, searchQueries, emailsIn, rdapInfo, letterSite, letterHost, letterFormal, mailto, nextStep, piracyTodos, isLegit, findId, hostContactRoute, isProxyNetwork, authorIdOf, knownLitnetAuthorId } from '../writer/js/piracy.js';
 
 const T = 'Звериная тропа для двоих', A = 'Лана Фрейтаг';
 
@@ -42,6 +42,41 @@ test('пираты: почты сайта и хостинга', () => {
     entities: [{ roles: ['abuse'], vcardArray: ['vcard', [['email', {}, 'text', 'abuse@fornex.com']]] }] }] };
   assert.deepEqual(rdapInfo(j), { name: 'RU-FORNEX', emails: ['info@fornex.com'], abuse: ['abuse@fornex.com'] });
   assert.deepEqual(rdapInfo(null), { name: '', emails: [], abuse: [] });
+});
+
+test('пираты: регистратор и CDN не становятся хостингом автоматически', async () => {
+  const fresh = { v: 2, ip: '203.0.113.8', host: ['abuse@ip-host.net'], hostName: 'Example Network', reg: ['abuse@registrar.ru'], regName: 'Registrar' };
+  assert.deepEqual(hostContactRoute(fresh).to, ['abuse@ip-host.net']);
+  assert.ok(!hostContactRoute(fresh).to.includes('abuse@registrar.ru'));
+  const same = { ...fresh, host: ['abuse@registrar.ru'] };
+  assert.equal(hostContactRoute(same).kind, 'overlap');
+  assert.deepEqual(hostContactRoute(same).to, []);
+  const onlyReg = { ...fresh, host: [] };
+  assert.equal(hostContactRoute(onlyReg).kind, 'missing');
+  assert.deepEqual(hostContactRoute(onlyReg).to, []);
+  assert.equal(hostContactRoute({ host: fresh.host, reg: fresh.reg }).kind, 'stale');
+  assert.equal(hostContactRoute({ ...fresh, proxy: true }).kind, 'proxy');
+  assert.equal(hostContactRoute({ ...fresh, hostName: 'CLOUDFLARENET' }).kind, 'proxy');
+  assert.ok(isProxyNetwork('DDoS-Guard CDN'));
+  assert.ok(isProxyNetwork('Fastly'));
+  assert.deepEqual(hostContactRoute({ ...fresh, hostName: 'Fastly, Inc.' }).to, []);
+  const { registeredDomain } = await import('../writer/js/piracyscan.js');
+  assert.equal(registeredDomain('books.example.co.uk'), 'example.co.uk');
+  assert.equal(registeredDomain('reader.example.ru'), 'example.ru');
+});
+
+test('пираты: ID автора из реального профиля, списка книг и безопасный резерв', () => {
+  assert.equal(knownLitnetAuthorId('Лана Фрейтаг'), '11343252');
+  assert.equal(knownLitnetAuthorId('Другой автор'), '');
+  assert.equal(authorIdOf('https://litnet.com/ru/lana-freitag-u11343252'), '11343252');
+  const page = [
+    '[Другая автор](https://litnet.com/ru/other-u998877)',
+    '[Лана Фрейтаг](https://litnet.com/ru/lana-freitag-u11343252)',
+    '[Комментарий](https://litnet.com/ru/visitor-u889977)',
+  ].join('\n');
+  assert.equal(authorIdOf(page, 'Лана Фрейтаг'), '11343252');
+  assert.equal(authorIdOf(page, 'Неизвестный автор'), '');
+  assert.equal(authorIdOf('555777', 'Лана Фрейтаг'), '555777');
 });
 
 test('пираты: письма и следующий шаг', () => {

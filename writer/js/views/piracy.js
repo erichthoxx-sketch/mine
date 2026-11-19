@@ -3,7 +3,7 @@
 import { ic } from '../../../js/icons.js';
 import { esc, acts, changes, toast, openSheet, fold, copyRich, ask } from '../../../js/ui.js';
 import { fmtDate, plural } from '../../../js/format.js';
-import { searchQueries, ENGINES, LEGIT, PIRATE_HINT, PIRATE_WORDS, nextStep, piracySummary, letterSite, letterHost, letterFormal, mailto, SEARCH_FORMS, archiveUrl, CF_FORM, findId, hostOf, plainTitle, isLegit, WAIT_SITE, litnetFormUrl, authorIdOf } from '../piracy.js';
+import { searchQueries, ENGINES, LEGIT, PIRATE_HINT, PIRATE_WORDS, nextStep, piracySummary, letterSite, letterHost, letterFormal, mailto, SEARCH_FORMS, archiveUrl, CF_FORM, findId, hostOf, plainTitle, isLegit, WAIT_SITE, litnetFormUrl, authorIdOf, knownLitnetAuthorId, LANA_LITNET_PROFILE, hostContactRoute } from '../piracy.js';
 import { scan, scanState, findContacts, pageLen, onSkipBack } from '../piracyscan.js';
 import { mailSvc } from './mail.js';
 
@@ -20,8 +20,10 @@ export async function sendClaim(a, id) {
   let f = get(id); if (!f) return '';
   const c = a.ctx(), st = nextStep(f, c.today);
   if (!st || st.wait || !['site', 'host'].includes(st.k)) return '';
-  if (!f.contacts) { const ct = await findContacts(f); await patch(get(id) || f, { contacts: ct }); f = { ...(get(id) || f), contacts: ct }; }
-  const ct = f.contacts, hostTo = [...(ct.host || []), ...(ct.reg || [])].filter((x) => !/cloudflare/i.test(x));
+  if (!f.contacts || f.contacts.v !== 2) { const ct = await findContacts(f); await patch(get(id) || f, { contacts: ct }); f = { ...(get(id) || f), contacts: ct }; }
+  const ct = f.contacts, route = hostContactRoute(ct);
+  // Никогда не объединяем с адресами регистратора: он не может удалить файлы сайта.
+  const hostTo = route.to;
   const k = st.k === 'site' && (ct.site || []).length ? 'site' : hostTo.length ? 'host' : '';
   if (!k) return '';
   const L = (k === 'host' ? letterHost : letterSite)(f, bookOf(c, f), meOf(c), c.today);
@@ -97,7 +99,7 @@ function row(c, f) {
   const st = nextStep(f, c.today), done = f.status === 'gone';
   const act = f.sure === false && (f.status || 'new') === 'new' ? `<button class="primary" data-act="pr.mine" data-id="${f.id}">Да, моя книга</button>`
     : !st ? '' : st.k === 'site' ? `<button class="primary" data-act="pr.write" data-id="${f.id}" data-k="site">Написать сайту</button>`
-    : st.k === 'host' && !st.wait ? `<button class="primary" data-act="pr.write" data-id="${f.id}" data-k="host">Написать хостингу</button>`
+    : st.k === 'host' && !st.wait ? `<button class="primary" data-act="pr.write" data-id="${f.id}" data-k="host">Проверить оператора IP</button>`
     : st.k === 'search' && !st.wait ? `<button class="primary" data-act="pr.search" data-id="${f.id}">Убрать из поиска</button>`
     : st.k === 'litnet' ? `<button class="primary" data-act="pr.litnet" data-id="${f.id}">В Литнет</button>`
     : st.k === 'confirm' ? `<div class="pr-yn"><button class="primary" data-act="pr.gone" data-id="${f.id}">Да, удалили</button><button class="small-btn" data-act="pr.still" data-id="${f.id}">Нет, висит</button></div>` : '';
@@ -145,7 +147,7 @@ export function piracyView(a) {
   ${fold('pr-how', 'Как это работает', `<div class="small" style="line-height:1.7">
     <p style="margin:0 0 8px">Каждый день каждая книга ищется в поисковиках («читать онлайн бесплатно», «скачать fb2») и показывает чужие сайты с вашим текстом. Ваши площадки и магазины не считаются.</p>
     <p style="margin:0 0 8px"><b>1. Досудебная претензия сайту</b> — от имени автора (псевдоним), без ваших личных данных. Почту сайта и его хостинга нахожу сама. Срок — 24 часа (ст. 15.7 закона № 149-ФЗ, ст. 1253.1 ГК РФ). Перед письмом нажмите «Сохранить доказательство» — копия страницы останется в веб-архиве.</p>
-    <p style="margin:0 0 8px"><b>2. Через ${WAIT_SITE} дня — хостингу.</b> Хостинг не хочет проблем и обычно закрывает страницу сам.</p>
+    <p style="margin:0 0 8px"><b>2. Через ${WAIT_SITE} дня — оператору IP или подтвержденному хостингу.</b> Данные доменного регистратора — отдельная справка, не контакт хостинга. Если сайт скрыт CDN/прокси, используйте его форму жалоб или найдите исходный сервер. Получатель по IP не всегда хранит сам контент.</p>
     <p style="margin:0 0 8px"><b>3. Поисковики.</b> Если не помогло — заявка в Google и Яндекс, чтобы страницу убрали из поиска: без поиска её почти никто не найдёт.</p>
     <p style="margin:0">Дальше — только суд (блокировка сайта через Мосгорсуд и компенсация по ст. 1301 ГК РФ); тут нужен юрист. Письма — шаблоны, не юридическая консультация. Если книга на Литнете по эксклюзивному договору, спросите и поддержку Литнета: у них есть своя защита от пиратов.</p></div>`)}
   <p class="small" style="margin:12px 0 0;display:flex;gap:16px;flex-wrap:wrap"><button class="link" data-act="pr.add">+ Добавить ссылку вручную</button></p>`;
@@ -184,32 +186,45 @@ acts['pr.write'] = (d) => {
   const a = app(), c = a.ctx(), f = get(d.id);
   if (!f) return false;
   const k = d.k, L = (k === 'host' ? letterHost : k === 'formal' ? letterFormal : letterSite)(f, bookOf(c, f), meOf(c), c.today);
-  const toOf = (ct) => (k === 'host' ? [...(ct?.host || []), ...(ct?.reg || [])] : ct?.site || []);
+  const toOf = (ct) => (k === 'host' ? hostContactRoute(ct).to : ct?.site || []);
   const mailBox = (ct) => {
     if (!ct) return `<p class="small muted" id="pr-to">Ищу почту ${k === 'host' ? 'хостинга' : 'сайта'}…</p>`;
-    const to = toOf(ct);
-    const who = k === 'host' ? [ct.hostName ? `хостинг ${ct.hostName}` : '', ct.regName ? `регистратор ${ct.regName}` : ''].filter(Boolean).join(', ') : '';
+    const to = toOf(ct), route = k === 'host' ? hostContactRoute(ct) : null;
+    const who = k === 'host' ? [ct.hostName ? `оператор IP: ${ct.hostName}` : '', ct.ip ? `IP ${ct.ip}` : ''].filter(Boolean).join(' · ') : '';
     return `<div id="pr-to">${to.length ? `<p class="small" style="margin:0 0 6px">Кому: <b>${esc(to.join(', '))}</b>${who ? ` <span class="muted">· ${esc(who)}</span>` : ''}</p>
         <p style="margin:0 0 4px"><a class="small-btn" href="${esc(mailto(to, L))}" target="_blank" rel="noopener">Открыть в почте</a></p>`
-      : `<p class="small" style="margin:0 0 6px">${k === 'host' ? 'Почту хостинга найти не удалось.' : 'Почты на сайте не нашла — поищите на нём страницу «Правообладателям» или форму связи и вставьте письмо туда. Если связи нет — сразу пишите хостингу.'}</p>`}
-      ${k === 'host' && ct.cf ? `<p class="small" style="margin:6px 0 0">Сайт спрятан за Cloudflare — почту он не читает, жалоба подаётся <a href="${CF_FORM}" target="_blank" rel="noopener">через его форму</a> (текст письма ниже подойдёт).</p>` : ''}
-      ${k !== 'host' && !to.length && (ct.host || []).length ? `<p class="small" style="margin:6px 0 0"><button class="link" type="button" data-act="pr.write" data-id="${f.id}" data-k="host">Написать хостингу (${esc(ct.host[0])})</button></p>` : ''}</div>`;
+      : `<p class="small" style="margin:0 0 6px">${k === 'host' ? 'Подтвержденный адрес для отправки не найден.' : 'Почты на сайте не нашла — проверьте страницу «Правообладателям» или форму связи.'}</p>`}
+      ${k === 'host' ? `<p class="small muted" style="margin:6px 0 0">${esc(route.reason)}</p>
+        ${ct.reg?.length ? `<p class="small muted" style="margin:6px 0 0">Регистратор домена: ${esc(ct.regName || 'неизвестен')}, контакты ${esc(ct.reg.join(', '))}. <b>Не отправляем ему требование удалить файлы.</b></p>` : ''}
+        ${ct.cf ? `<p class="small">Cloudflare — подайте жалобу <a href="${CF_FORM}" target="_blank" rel="noopener">через официальную форму</a>.</p>` : ''}
+        <p class="small"><button type="button" class="link" data-act="pr.refresh" data-id="${f.id}">Повторно проверить контакты</button></p>
+        <label style="margin-top:8px">Проверенный вами адрес хостинга (не регистратора), если есть</label>
+        <input id="pr-manual-email" type="email" autocomplete="off" placeholder="abuse@hosting.example">
+        ` : ''}
+      ${k !== 'host' && !to.length ? `<p class="small" style="margin:6px 0 0"><button class="link" type="button" data-act="pr.write" data-id="${f.id}" data-k="host">Проверить IP-провайдера</button></p>` : ''}</div>`;
   };
-  openSheet(k === 'host' ? `Хостингу · ${f.host}` : k === 'formal' ? `Заявление · ${f.host}` : `Сайту · ${f.host}`, `${mailBox(f.contacts)}
+  openSheet(k === 'host' ? `Оператор IP / хостинг · ${f.host}` : k === 'formal' ? `Заявление · ${f.host}` : `Сайту · ${f.host}`, `${mailBox(f.contacts)}
     <label style="margin-top:10px">Тема</label><input id="pr-subj" value="${esc(L.subject)}" readonly>
     <label>Письмо</label><textarea id="pr-body" rows="12" style="font-size:14px;line-height:1.5">${esc(L.body)}</textarea>
     <p class="small" style="margin:8px 0 0"><button class="link" type="button" data-act="pr.copy">${ic('copy')} Скопировать письмо</button></p>
-    ${k === 'formal' ? '<p class="small muted" style="margin:8px 0 0">По закону в заявлении указывают паспортные данные и телефон — впишите их сами вместо квадратных скобок. Первое письмо я отправляю без них: большинство сайтов удаляет и так.</p>' : ''}`,
+    ${k === 'formal' ? '<p class="small muted" style="margin:8px 0 0">По закону в заявлении указывают паспортные данные и телефон — впишите их сами вместо квадратных скобок.</p>' :
+      '<label class="d-check small"><input type="checkbox" id="pr-manual-confirm"> Я уже отправила письмо самостоятельно или подала жалобу через форму (повторно не отправлять)</label>'`,
   k === 'formal' ? null : async () => {
-    const ct = (get(f.id) || f).contacts, to = toOf(ct).filter((x) => !/cloudflare/i.test(x));
-    if (canSend() && to.length) {
+    const ct = (get(f.id) || f).contacts;
+    const override = k === 'host' ? (document.getElementById('pr-manual-email')?.value || '').trim().toLowerCase() : '';
+    if (override && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(override)) { toast('Укажите корректный email проверенного хостинга'); return false; }
+    const to = override ? [override] : toOf(ct);
+    const sentManually = !!document.getElementById('pr-manual-confirm')?.checked;
+    if (!sentManually && canSend() && !to.length) { toast('Получатель не найден. Укажите проверенный адрес или подайте жалобу через форму, затем подтвердите вручную.'); return false; }
+    if (!sentManually && !canSend()) { toast('Сначала отправьте жалобу, затем подтвердите отправку галочкой.'); return false; }
+    if (!sentManually && canSend() && to.length) {
       const body = document.getElementById('pr-body')?.value || L.body;
       let r; try { r = await mailSvc().call({ op: 'claim', to, subject: L.subject, text: body }); } catch (e) { toast('Не отправилось: ' + e.message); return false; }
       if (!r?.ok) { toast('Письмо не принято почтой адресата — откройте в своей почте'); return false; }
     }
-    await patch(get(f.id) || f, k === 'host' ? { status: 'host', hostAt: new Date().toISOString(), goneMaybe: false } : { status: 'sent', sentAt: new Date().toISOString() }); toast(k === 'host' ? 'Готово. Через 5 дней напомню проверить' : `Готово. Через ${WAIT_SITE} дня проверю, удалили ли`); },
-  { submitText: canSend() ? 'Отправить' : 'Отправила' });
-  if (!f.contacts && !P.contacts[f.id]) {
+    await patch(get(f.id) || f, k === 'host' ? { status: 'host', hostAt: new Date().toISOString(), goneMaybe: false, via: sentManually ? 'manual' : 'service' } : { status: 'sent', sentAt: new Date().toISOString(), via: sentManually ? 'manual' : 'service' }); toast(k === 'host' ? 'Готово. Через 5 дней напомню проверить' : `Готово. Через ${WAIT_SITE} дня проверю, удалили ли`); },
+  { submitText: canSend() ? 'Отправить / отметить' : 'Отправила' });
+  if ((!f.contacts || f.contacts.v !== 2) && !P.contacts[f.id]) {
     P.contacts[f.id] = true;
     findContacts(f).then(async (ct) => {
       delete P.contacts[f.id];
@@ -218,6 +233,16 @@ acts['pr.write'] = (d) => {
       await patch(get(f.id) || f, { contacts: ct });
     }).catch(() => { delete P.contacts[f.id]; const el = document.getElementById('pr-to'); if (el) el.textContent = 'Почту найти не получилось — проверьте интернет.'; });
   }
+  return false;
+};
+acts['pr.refresh'] = async (d) => {
+  const f = get(d.id); if (!f) return false;
+  toast('Проверяю контакты по IP и RDAP…');
+  try {
+    const ct = await findContacts(f);
+    await patch(get(f.id) || f, { contacts: ct });
+    acts['pr.write']({ id: f.id, k: 'host' });
+  } catch (e) { toast('Не удалось обновить контакты: ' + e.message); }
   return false;
 };
 acts['pr.copy'] = () => { copyRich(document.getElementById('pr-body')?.value || ''); toast('Письмо скопировано'); return false; };
@@ -247,11 +272,11 @@ acts['pr.litnet'] = (d) => {
   const a = app(), c = a.ctx(), f = get(d.id); if (!f) return false;
   const live = (c.data.w_piracy || []).filter((x) => x.bookId === f.bookId && !['gone', 'skip'].includes(x.status) && x.sure !== false);
   const urls = [...new Set(live.map((x) => x.url))], pen = c.settings.pseudonym || '', title = bookOf(c, f).title;
-  let id = c.settings.piracy?.litnetId || '';
+  let id = authorIdOf(c.settings.piracy?.litnetId || '', pen) || knownLitnetAuthorId(pen);
   const href = () => litnetFormUrl({ authorId: id, title, pen, urls });
   openSheet(`Литнету · «${plainTitle(title)}»`, `<p class="small" style="margin-top:0">Литнет сам добивается удаления копий своих книг — у него соглашение с ассоциацией правообладателей. Форма откроется уже заполненной: ваш ID, книга, псевдоним и ${urls.length} ${plural(urls.length, ['ссылка', 'ссылки', 'ссылок'])} на пиратские страницы — останется нажать «Отправить».</p>
     <label for="pr-lid">Ваш ID на Литнете</label><input id="pr-lid" inputmode="numeric" autocomplete="off" value="${esc(id)}" placeholder="${id ? '' : 'ищу на странице вашей книги…'}">
-    <p class="small muted" style="margin:4px 0 0" id="pr-lid-h">${id ? 'Цифры после «-u» в адресе вашей страницы на Литнете.' : 'Если не найду сама: Литнет → «Моя страница» → цифры после «-u» в адресе (можно вставить весь адрес).'}</p>
+    <p class="small muted" style="margin:4px 0 0" id="pr-lid-h">${id ? (id === knownLitnetAuthorId(pen) ? `Профиль Литнета: <a href="${LANA_LITNET_PROFILE}" target="_blank" rel="noopener">проверить ID ${esc(id)}</a>.` : `ID ${esc(id)} — проверьте его в адресе своего профиля.`) : 'Если не найду: Литнет → «Моя страница» → цифры после «-u» в адресе.'}</p>
     <p style="margin:14px 0 0"><a class="small-btn" id="pr-lform" href="${esc(href())}" target="_blank" rel="noopener">Открыть форму Литнета</a></p>
     <p class="small muted" style="margin:10px 0 0">Литнет принимает жалобы на платные книги, выложенные целиком.</p>`,
   async () => {
