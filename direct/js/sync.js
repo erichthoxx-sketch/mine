@@ -132,6 +132,18 @@ export async function refresh(app, { onStep = () => {} } = {}) {
       console.warn(placementErr);
     }
   }
+  // Кто кликает и добавляет: устройство, пол, возраст, поиск/сети за 30 дней (для «Диагноза» кампании) — раз в 6 часов, как площадки.
+  // Не вышло — остаётся прошлый отчёт, остальное не страдает.
+  let segments = old?.segments || [], segAt = old?.segAt || null;
+  if (cids.length && (!segAt || Date.now() - Date.parse(segAt) > 6 * 3600000)) {
+    try {
+      onStep('Кто кликает: устройства, пол, возраст…');
+      const f = ['CampaignId', 'AdNetworkType', 'Device', 'Gender', 'Age', 'Impressions', 'Clicks', 'Cost'];
+      const raw = goalIds.length ? await report(s, { name: 'segments-goals', fields: [...f, 'Conversions'], goals: goalIds, from: addDays(today, -29), to: today })
+        : await report(s, { name: 'segments', fields: f, from: addDays(today, -29), to: today });
+      segments = segRows(raw); segAt = new Date().toISOString();
+    } catch (e) { if (e.transient) console.warn('сегменты: сбой Яндекса'); else console.warn('сегменты', e); }
+  }
   // Цели Метрики: конверсии по дням и по фразам (Директ считает их сам) + поведение на странице книги.
   // Любая неудача здесь не ломает загрузку: остаются прошлые данные, причина — в mErr
   // цели из настроек Метрики + цели стратегий кампаний (за них платим — их и считаем)
@@ -159,7 +171,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   const at = new Date().toISOString();
   await putSnap(app, [
     { id: 'main', at, sandbox: !!s.direct?.sandbox, campaigns, groups, keywords, ads },
-    { id: 'stats', at, daily, adDaily, kw, queries, conv, kwConv, mrows, mErr, mAt, placements, placementAt, placementErr },
+    { id: 'stats', at, daily, adDaily, kw, queries, conv, kwConv, mrows, mErr, mAt, placements, placementAt, placementErr, segments, segAt },
   ]);
   await autoLinkIncome(app, campaigns, ads, daily);
   await pushToIncome(app, daily);

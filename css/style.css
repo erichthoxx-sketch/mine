@@ -3599,3 +3599,37 @@ textarea.pr-text { min-height: 220px; font-size: 15px; line-height: 1.5; }
 /* галочка чек-листа — цветом фона, видна и в тёмной теме */
 :root main .nb-checks li.on button.nb-box { background-image: none !important; color: var(--bg) !important; display: inline-grid; place-items: center; }
 :root main .nb-checks button.nb-box svg { display: none; } :root main .nb-checks li.on button.nb-box svg { display: block; }
+/* ===== Директ: «Диагноз кампании» ===== */
+.dg-head { display: flex; gap: 16px; align-items: center; margin: 4px 0 6px; }
+.dg-score { flex: none; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font: 600 24px/1 var(--font-num, inherit); background: var(--soft); color: var(--text); border: 3px solid var(--line); }
+.dg-score.dg-good { border-color: var(--good); } .dg-score.dg-ok { border-color: #c9a227; } .dg-score.dg-weak { border-color: #d98a3a; } .dg-score.dg-bad { border-color: var(--bad, #c0392b); }
+.dg-score.dg-wait { color: var(--muted); }
+.dg-score.dg-sm { width: 38px; height: 38px; font-size: 15px; border-width: 2.5px; }
+.dg-grade { font: 500 20px/1.3 var(--font-display); }
+.card h3 { margin-top: 22px; }
+.dg-funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.dg-fs { background: var(--soft); border-radius: var(--r-tile, 14px); padding: 10px 12px; }
+.dg-fs b { display: block; font: 600 20px/1.3 var(--font-num, inherit); margin: 2px 0; }
+.dg-neck { margin-top: 14px; padding: 12px 14px; border-radius: var(--r-tile, 14px); background: var(--soft); border-left: 3px solid var(--text); }
+.dg-neck.dg-none { border-left-color: var(--good); } .dg-neck.dg-data { border-left-color: var(--muted); }
+.dg-chart { display: block; margin-top: 4px; overflow: visible; }
+.dg-chart .dg-lv { stroke: var(--good); stroke-dasharray: 4 4; stroke-width: 1.2; }
+.dg-chart .dg-mk { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.dg-chart .dg-dot { fill: transparent; } .dg-chart .dg-dot:hover { fill: var(--soft-2, var(--soft)); }
+.dg-grp { margin-top: 12px; }
+.dg-gh { font: 500 15px/1.3 var(--font-display); margin-bottom: 4px; }
+.dg-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.6fr); gap: 4px 14px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); }
+.dg-rl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dg-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; }
+.dg-bar { height: 4px; border-radius: 4px; background: var(--soft); overflow: hidden; } .dg-bar i { display: block; height: 100%; background: var(--text-2); border-radius: 4px; }
+.dg-rv { display: grid; grid-template-columns: 1fr .9fr .8fr 1.1fr; gap: 8px; white-space: nowrap; }
+.dg-rv span:last-child { text-align: right; }
+@media (max-width: 600px) { .dg-row { grid-template-columns: 1fr; } .dg-rv { grid-template-columns: repeat(4, auto); justify-content: space-between; } }
+a.dg-strip { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; padding: 8px 12px; border-radius: var(--r-tile, 14px); background: var(--soft); color: var(--text); text-decoration: none; }
+a.dg-strip:hover { background: var(--soft-2, var(--soft)); }
+a.dg-strip .dg-more { margin-left: auto; white-space: nowrap; color: var(--text-2); }
+.dg-plan b { font-weight: 600; }
+:root .tiles.dg-econ { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 600px) { :root .tiles.dg-econ { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.card .dg-h, .dg-wrap h3 { font: 500 17px/1.3 var(--font-display); margin: 24px 0 10px; }
+@media (max-width: 600px) { .dg-rv { display: flex !important; flex-wrap: wrap; gap: 2px 12px; justify-content: flex-start !important; } .dg-rv span:last-child { margin-left: auto; } }

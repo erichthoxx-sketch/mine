@@ -11,6 +11,7 @@ import { metrikaOf } from './metrika.js';
 import { todo } from './home.js';
 import { homeView } from './home.js';
 import { demo } from '../demo.js';
+import { diagStrip } from './diagnose.js';
 import { actBtn } from './common.js';
 import { ic } from '../../../js/icons.js';
 import { litTagInfo } from '../../../js/littag.js';
@@ -76,6 +77,7 @@ function card(r) {
   const tile = (k, v, s = '') => `<div><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
   return `<div class="card pult-c"><div class="row between"><a href="#" data-act="go" data-to="/c/${camp.id}"><h2 style="margin:0">${esc(book?.title ? `«${book.title}»` : camp.name)}</h2></a><span class="small ${TONE[st.tone]}">● ${esc(st.text)}</span></div>
     ${book?.title ? `<div class="small muted">${esc(camp.name)}</div>` : ''}
+    ${diagStrip(window.__app, r)}
     <div class="tiles d-tiles">
       ${tile('Сегодня', money(e.today.cost), `за 7 дней ${money(e.d7.cost)}`)}
       ${wk ? tile('Неделя', `${money(wk.spent)}`, `из ${money(wk.limit)}`) : tile('30 дней', money(e.d30.cost), `кликов ${num(e.d30.clicks)}`)}

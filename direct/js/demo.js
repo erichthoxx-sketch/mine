@@ -83,8 +83,14 @@ export function demoSnapshot(today) {
   const kwConv = { 901: { 9001: 9 }, 902: { 9001: 6 }, 904: { 9001: 4 }, 906: { 9001: 3 } };
   if (kw[903]) { kw[903].clicks = Math.max(kw[903].clicks, 30); kw[903].cost = Math.max(kw[903].cost, 900); } // фраза тратит без покупок
   const mrows = [{ cid: 701, name: 'Книга — поиск', visits: 412, bounce: 0.21, depth: 3.4, dur: 255 }, { cid: 702, name: 'Книга — сети', visits: 160, bounce: 0.68, depth: 1.3, dur: 34 }];
+  // кто кликает (для «Диагноза»): женщины 25–44 добавляют охотнее, мужчины — почти нет
+  const segments = [];
+  for (const [dev, dv] of [['MOBILE', 0.7], ['DESKTOP', 0.3]]) for (const [gen, gv, gq] of [['GENDER_FEMALE', 0.82, 1.15], ['GENDER_MALE', 0.18, 0.15]]) for (const [age, av, aq] of [['AGE_18_24', 0.15, 0.6], ['AGE_25_34', 0.3, 1.2], ['AGE_35_44', 0.3, 1.25], ['AGE_45_54', 0.17, 0.9], ['AGE_55', 0.08, 0.7]]) {
+    const clicks = Math.round(1250 * dv * gv * av), cost = Math.round(clicks * 9 * 100) / 100;
+    segments.push({ cid: 701, net: 's', dev, gen, age, impr: clicks * 22, clicks, cost, goals: { 9002: Math.round(clicks * 0.1 * gq * aq * (dev === 'DESKTOP' ? 1.2 : 0.95)) } });
+  }
   const at = new Date().toISOString();
-  return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, demo: true, daily, adDaily, kw, queries, conv, kwConv, mrows }];
+  return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, demo: true, daily, adDaily, kw, queries, conv, kwConv, mrows, segments }];
 }
 
 // Пример Метрики: 8 недель по дням (с ритмом недели), источники, устройства, страницы входа
