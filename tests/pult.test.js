@@ -180,3 +180,31 @@ test('страницы книг сайта: заходы, «Читать», Ли
   const r = siteBookFunnel({ pages, goalIds: { read: 9 }, mkUtm, goals: { lib: '7', buy: ['8'] }, books });
   assert.equal(r.length, 1); assert.equal(r[0].visits, 120); assert.equal(r[0].reader, 20); assert.equal(r[0].read, 40); assert.equal(r[0].lit, 35);
 });
+
+import { goalPrice, switchEta } from '../direct/js/pult.js';
+test('цена цели: предел — ценность конверсии без НДС, рекомендую 80 %; выше предела — снизить, тесно — поднять не больше чем на треть', () => {
+  const econ = { libValue: 122, cpaLib: 100 };
+  const P = goalPrice({ cpa: 150 }, { econ, perSale: 610 });
+  assert.equal(P.max, 100); assert.equal(P.rec, 80); assert.equal(P.k, 'down'); assert.match(P.text, /Снизьте до ≈ 100 ₽, через неделю — до 80 ₽/);
+  assert.deepEqual(P.forBuy, { max: 500, rec: 400 });
+  const U = goalPrice({ cpa: 40 }, { econ, perSale: 610, wk: { share: 0.4 } });
+  assert.equal(U.k, 'up'); assert.match(U.text, /до ≈ 53 ₽/);
+  assert.equal(goalPrice({ cpa: 75 }, { econ, perSale: 610 }).k, 'ok');
+  assert.equal(goalPrice({ cpa: 75 }, { econ: {}, perSale: null }).ready, false);
+  // на покупках — предел по роялти с покупки
+  assert.equal(goalPrice({ cpa: 300 }, { onBuy: true, econ: {}, perSale: 610 }).max, 500);
+});
+
+test('когда на покупки: до подписки — по добавлениям × доле покупающих; после — по темпу и росту', () => {
+  const T = '2026-11-19', goals = { lib: '1', buy: ['2'] };
+  const s1 = switchEta({ id: 7 }, { goals, today: T, subStart: '2026-11-25', open: false, econ: { lib7: 60, libShare: 0.2, cpaLib: 50 } });
+  assert.equal(s1.k, 'soon'); assert.equal(s1.at, '2026-12-02');
+  const s2 = switchEta({ id: 7 }, { goals, today: T, subStart: '2026-11-25', open: false, econ: { lib7: 20, libShare: 0.1, cpaLib: 50 } });
+  assert.equal(s2.k, 'low'); assert.match(s2.text, /нужно ≈ 100 добавлений в неделю \(сейчас 20\) — это ≈ 5[\s ]000 ₽/);
+  // открыта 3 недели: прошлая неделя 4 покупки, эта 7 → +3 в неделю → 10 через неделю
+  const conv = [];
+  for (let i = 13; i >= 0; i--) conv.push({ date: new Date(Date.parse(T) - i * 864e5).toISOString().slice(0, 10), cid: 7, conv: { 2: i >= 7 ? (i < 11 ? 1 : 0) : (i < 7 ? 1 : 0) } });
+  const s3 = switchEta({ id: 7 }, { conv, goals, today: T, subStart: '2026-10-29', open: true, econ: {}, buy7: 7 });
+  assert.equal(s3.k, 'soon'); assert.equal(s3.at, '2026-11-26');
+  assert.equal(switchEta({ id: 7 }, { goals, today: T, subStart: '2026-10-29', open: true, buy7: 12 }).k, 'now');
+});

@@ -89,7 +89,7 @@ export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSal
       : worth === false ? { kind: 'warn', text: `добавление по ${r0(cpaLib)} ₽, а приносит в среднем ≈ ${r0(libValue)} ₽ — пока дороже, чем окупается` }
         : { kind: 'even', text: `добавление по ${r0(cpaLib)} ₽${target ? ` при цене цели ${r0(target)} ₽` : ''}; будущая окупаемость требует проверки по когортам` };
   } else verdict = { kind: 'wait', text: ran < 7 ? `учится (день ${ran}) — выводы после 7 дней и 5 добавлений` : 'мало добавлений для выводов — нужно хотя бы 5 за 30 дней' };
-  return { today: dToday, d7, d30, usable, lib7, lib30, buy30, cpaLib, cpaBuy, revenue, libValue, target, ran, verdict };
+  return { today: dToday, d7, d30, usable, lib7, lib30, buy30, cpaLib, cpaBuy, revenue, libValue, libShare, target, ran, verdict };
 }
 
 // Этап кампании и следующий шаг (13.11.2026, её просьба: «понимать, когда переключить цель, когда создать другую кампанию»).
@@ -98,7 +98,7 @@ export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSal
 //    и она «ослепнет»; до этого остаёмся на библиотеке; 4) на покупках судим по отдаче рубля.
 // Вторая кампания нужна редко: одна учится быстрее. Поводы — другая книга; ретаргетинг на добавивших, когда их набралось RETARGET_MIN и открыта подписка.
 export const NEED_BUYS = 10, RETARGET_MIN = 300;
-export function campaignStage(camp, { econ, st, goals, conv = [], today, subStart = '', perSale = null, skip = null, convVerified = true }) {
+export function campaignStage(camp, { econ, st, goals, conv = [], today, subStart = '', perSale = null, skip = null, convVerified = true, wk = null }) {
   if (!['on', 'capped', 'idle'].includes(st?.key)) return null;
   if (!convVerified || econ?.usable === false) return { key: 'data', title: 'Сначала восстановить аналитику',
     text: 'Недостаточно надежных конверсий: менять цель и масштабировать рекламу по этому периоду нельзя.',
@@ -140,7 +140,62 @@ export function campaignStage(camp, { econ, st, goals, conv = [], today, subStar
     : open && libAll >= RETARGET_MIN ? `Имеет смысл: за 30 дней ${libAll} добавлений — отдельная кампания-напоминание тем, кто добавил, но не купил (аудиторию создам в «Предложениях»).`
       : open ? `Пока не нужна: для кампании-напоминания добавивших мало (${libAll} из ${RETARGET_MIN}).`
         : 'Пока не нужна: одна кампания учится быстрее, а дробить бюджет до открытия подписки рано. Новая понадобится для следующей книги.';
-  return { key, title, text, next, checks, second, buy7, open, onBuy };
+  const price = goalPrice(camp, { onBuy, econ, perSale, wk, learning });
+  const eta = onBuy ? null : switchEta(camp, { conv, goals, today, subStart, open, econ, skip, buy7 });
+  return { key, title, text, next, checks, second, buy7, open, onBuy, price, eta };
+}
+
+// Рекомендуемая цена цели (19.11.2026, её просьба: «указывать рекомендуемую цену конверсии… погружая меня в процесс»).
+// Предел — сколько в среднем приносит одна конверсия: добавление → ценность добавления (роялти × доля добавивших, кто потом покупает),
+// покупка → роялти с покупки. Директ списывает с НДС, а цену цели в стратегии пишут без НДС — поэтому предел ÷ VAT.
+// Рекомендуем 80 % предела: запас на колебания цены и на то, что не каждая конверсия из отчёта — новая читательница.
+// Сравниваем с нынешней ценой цели: выше предела — снизить; намного ниже и бюджет недели не выбирается — можно поднять, но не больше чем на треть за раз.
+export function goalPrice(camp, { onBuy = false, econ = {}, perSale = null, wk = null, learning = false } = {}) {
+  const val = onBuy ? perSale : econ.libValue, now = camp.cpa || null, net = (v) => (v == null ? null : v / VAT);
+  const forBuy = perSale != null ? { max: Math.floor(perSale / VAT), rec: Math.max(1, Math.floor(perSale * 0.8 / VAT)) } : null;
+  if (val == null || !(val > 0)) return { ready: false, now, forBuy, what: onBuy ? 'покупка' : 'добавление',
+    why: onBuy ? 'Чтобы посчитать, нужен доход с одной покупки — он берётся из выгрузки Литнета в «Доходах».' : 'Чтобы посчитать, нужна доля «добавила в библиотеку → купила» по Метрике автора и доход с покупки из «Доходов».' };
+  const max = Math.max(1, Math.floor(val / VAT)), rec = Math.max(1, Math.floor(val * 0.8 / VAT));
+  const fact = net(onBuy ? econ.cpaBuy : econ.cpaLib), under = wk && wk.share < 0.6;
+  let k, text;
+  if (!now) { k = 'set'; text = `Поставьте в стратегии ≈ ${rec} ₽ за ${onBuy ? 'покупку' : 'добавление'}.`; }
+  else if (now > max * 1.02) { k = 'down'; text = `Сейчас ${now} ₽ — выше предела: каждая ${onBuy ? 'покупка' : 'конверсия'} в среднем в минусе. Снизьте до ≈ ${Math.max(rec, Math.ceil(now * 2 / 3))} ₽${Math.max(rec, Math.ceil(now * 2 / 3)) > rec ? `, через неделю — до ${rec} ₽` : ''}.`; }
+  else if (now < rec * 0.7 && under) { k = 'up'; text = `Сейчас ${now} ₽, бюджет недели выбирается на ${Math.round(wk.share * 100)} %: Директу тесно по этой цене. Можно поднять до ≈ ${Math.min(rec, Math.floor(now * 4 / 3))} ₽ — запас до предела есть.`; }
+  else { k = 'ok'; text = `Сейчас ${now} ₽ — в разумных пределах (рекомендую ≈ ${rec} ₽, предел ${max} ₽).`; }
+  const to = k === 'down' ? Math.max(rec, Math.ceil(now * 2 / 3)) : k === 'up' ? Math.min(rec, Math.floor(now * 4 / 3)) : null;
+  const brief = k === 'down' ? `снизить до ${to} ₽` : k === 'up' ? `можно поднять до ${to} ₽` : k === 'set' ? `поставить ${rec} ₽` : 'в норме';
+  if (learning && (k === 'down' || k === 'up')) text += ' Но идёт обучение — менять после 7-го дня.';
+  return { ready: true, onBuy, now, rec, max, to, brief, fact: fact != null ? Math.round(fact) : null, k, text, forBuy: onBuy ? null : forBuy,
+    why: onBuy ? `Покупка приносит ≈ ${Math.round(val)} ₽ роялти. Без НДС это ${max} ₽ — дороже платить нельзя; 80 % — ${rec} ₽.`
+      : `Добавление приносит ≈ ${Math.round(val)} ₽: роялти ${perSale != null ? Math.round(perSale) + ' ₽ ' : ''}× доля добавивших, кто потом покупает. Без НДС это ${max} ₽ — предел; 80 % — ${rec} ₽.` };
+}
+
+// Когда можно переключить цель на «покупку» (19.11.2026, её вопрос «через сколько это сделать»).
+// Нужно NEED_BUYS покупок с рекламы за 7 дней. До подписки — оценка по добавлениям × доле покупающих (Метрика автора);
+// после — темп с открытия и рост неделя к неделе. Не набирается — сколько добавлений в неделю нужно и во что это обойдётся.
+export function switchEta(camp, { conv = [], goals = {}, today, subStart = '', open = false, econ = {}, skip = null, buy7 = 0 } = {}) {
+  const buyIds = (goals.buy || []).map(String), dm = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`, r0 = Math.round;
+  const libShare = econ.libShare ?? null, lib7 = econ.lib7 || 0, cpaLib = econ.cpaLib;
+  const needLib = libShare ? Math.ceil(NEED_BUYS / libShare) : null, needCost = needLib && cpaLib ? needLib * cpaLib : null;
+  const short = needLib ? ` Чтобы покупок стало ${NEED_BUYS} в неделю, нужно ≈ ${needLib} добавлений в неделю (сейчас ${lib7})${needCost ? ` — это ≈ ${r0(needCost).toLocaleString('ru-RU')} ₽ в неделю при нынешней цене добавления` : ''}.` : '';
+  if (!buyIds.length) return { k: 'nogoal', val: null, brief: 'цель «покупка» не выбрана', text: 'Цель «покупка» не выбрана в настройках Метрики Директа — без неё прогноз не посчитать.' };
+  if (!open) {
+    if (!subStart) return { k: 'nodate', val: null, brief: 'нет даты старта подписки', text: 'Дата старта подписки не указана (Мастерская → книга → «О книге»). Пока книга бесплатная, переключать не на что.' };
+    if (libShare == null) return { k: 'collect', val: null, brief: `не раньше ${dm(addDays(subStart, 7))}`, text: `Подписка откроется ${dm(subStart)}. Переключить на покупку можно будет не раньше ${dm(addDays(subStart, 7))} — нужна неделя покупок, чтобы увидеть, хватает ли их.` };
+    const exp = lib7 * libShare;
+    return exp >= NEED_BUYS
+      ? { k: 'soon', at: addDays(subStart, 7), val: exp, pre: true, brief: `≈ ${dm(addDays(subStart, 7))}`, text: `Подписка откроется ${dm(subStart)}. По Метрике автора покупает каждая ${r0(1 / libShare)}-я добавившая — при нынешних ${lib7} добавлениях в неделю ожидаю ≈ ${r0(exp)} покупок в неделю. Если так и будет, переключить можно ≈ ${dm(addDays(subStart, 7))}.` }
+      : { k: 'low', val: exp, pre: true, brief: needLib ? `нужно ≈ ${needLib} добавлений в неделю` : 'мало для цели «покупка»', text: `Подписка откроется ${dm(subStart)}. По Метрике автора покупает каждая ${r0(1 / libShare)}-я добавившая — при нынешних ${lib7} добавлениях в неделю это ≈ ${Math.max(0, Math.round(exp * 10) / 10).toString().replace('.', ',')} покупки в неделю: для цели «покупка» мало, кампания, скорее всего, останется на библиотеке.${short}` };
+  }
+  if (buy7 >= NEED_BUYS) return { k: 'now', val: buy7, brief: 'можно переключать', text: `Покупок с рекламы за 7 дней — ${buy7}: можно переключать сейчас.` };
+  const days = Math.max(1, Math.round((Date.parse(today) - Date.parse(subStart)) / 864e5) + 1);
+  const since = convTotal(conv, subStart, today, camp.id, buyIds, skip), prev7 = days >= 14 ? convTotal(conv, addDays(today, -13), addDays(today, -7), camp.id, buyIds, skip) : null;
+  if (days < 7) { const pace = since / days * 7;
+    return { k: pace >= NEED_BUYS ? 'soon' : 'low', at: pace >= NEED_BUYS ? addDays(subStart, 7) : null, val: pace, brief: pace >= NEED_BUYS ? `≈ ${dm(addDays(subStart, 7))}` : 'пока мало', text: `Подписка открыта ${days} ${days === 1 ? 'день' : days < 5 ? 'дня' : 'дней'}: покупок с рекламы ${since}, темп ≈ ${r0(pace)} в неделю.${pace >= NEED_BUYS ? ` Если удержится — переключить можно ≈ ${dm(addDays(subStart, 7))}.` : ` Для цели «покупка» нужно от ${NEED_BUYS} в неделю — пока оставляем библиотеку.${short}`}` }; }
+  const grow = prev7 != null ? buy7 - prev7 : null;
+  if (grow > 0) { const weeks = Math.ceil((NEED_BUYS - buy7) / grow), at = addDays(today, weeks * 7);
+    return { k: 'soon', at, val: buy7, brief: `≈ к ${dm(at)}`, text: `Покупок с рекламы за 7 дней — ${buy7}, неделей раньше — ${prev7}: растёт на ${grow} в неделю. Если рост сохранится, ${NEED_BUYS} в неделю наберётся ≈ к ${dm(at)}.` }; }
+  return { k: 'low', val: buy7, brief: 'роста нет — остаёмся на библиотеке', text: `Покупок с рекламы за 7 дней — ${buy7}${prev7 != null ? `, неделей раньше — ${prev7}` : ''}: роста нет. При таком темпе цель «покупка» не наберёт данных — кампания остаётся на библиотеке, и это нормально.${short}` };
 }
 
 // Окупаемость с начала кампании (как считает книжный таргетолог): потрачено → уже вернулось роялти с покупок → ещё «ждёт» в библиотеках

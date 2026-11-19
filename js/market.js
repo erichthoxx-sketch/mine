@@ -151,7 +151,7 @@ export function marketInsights(snap = {}, { src = null, mine = [], myPrices = []
     const np = median(near.filter((x) => x.price > 0).map((x) => x.price));
     if (near.length >= 3 && np != null) lines.push(`У ближайших по тропам книг обычная цена — ${Math.round(np)} ₽${b.price > 0 ? `, у вас ${Math.round(b.price)} ₽` : ''}.`);
     if (b.ann && anns0(cur, books) >= 0.4 && !/^\s*[—–-]\s*\S/.test(b.ann)) lines.push(`Аннотация: ${Math.round(anns0(cur, books) * 100)} % книг топа начинают её с реплики героя, ваша начинается с описания.`);
-    return { id: b.id, title: b.title, tropes: tr, near, lines };
+    return { id: b.id, title: b.title, tropes: tr, near, lines, price: b.price || 0, nearPrice: near.length >= 3 ? np : null };
   }).filter(Boolean);
   // пары тропов, которые чаще всего стоят вместе
   const pairN = {}; for (const r of cur) { const tr = tagsOf(r); for (let i = 0; i < tr.length; i++) for (let j = i + 1; j < tr.length; j++) { const k = [tr[i], tr[j]].sort().join(' + '); pairN[k] = (pairN[k] || 0) + 1; } }
@@ -360,4 +360,38 @@ export function rivalBoard(snap = {}, { watch = [], myTropes = [], me = '', src 
   const evAll = Object.fromEntries(watchReport(snap, rivals.filter((r) => !r.watched).map((r) => r.name)).map((w) => [low(w.name), w.events]));
   for (const r of rivals) if (!r.watched) r.events = evAll[low(r.name)] || [];
   return { rivals, dates: slices.map((s) => s.d), gap, prevDate: prevS?.d || null, lastDate };
+}
+
+// ---------- Советы для неё (19.11.2026: «глубокая аналитика и советы ДЛЯ МЕНЯ, учитывая все мои показатели») ----------
+// Не общие фразы о топе, а что делать с её книгами: какой троп ставить первым, цена против топа и ближайших соперниц,
+// её место и куда оно идёт, что сделали конкурентки с её тропами, что пора на Литгород, на что писать следующую книгу.
+// Каждый совет — одна строка: {book, text, tone}. Не больше 6, важное сверху.
+export function adviceForMe({ M = null, ranks = [], rivals = [], lg = [], forecast = null } = {}) {
+  const out = [], x1 = (v) => '×' + v.toFixed(1).replace('.', ','), pct = (v) => Math.round(v * 100) + ' %';
+  for (const f of M?.fit || []) {
+    const good = f.tropes.filter((t) => t.interest != null && (t.verdict === 'niche' || t.verdict === 'hot')).sort((a, b) => b.interest - a.interest)[0];
+    const tired = f.tropes.filter((t) => t.verdict === 'tired').sort((a, b) => b.share - a.share)[0];
+    if (good) out.push({ w: 90, book: f.title, tone: 'up', text: `Первым крючком — «${good.name}»: такие книги добавляют в библиотеку в ${x1(good.interest).slice(1)} раза охотнее обычного, а в топе их ${pct(good.share)}. Начните с него аннотацию и объявления.` });
+    if (tired) out.push({ w: 70, book: f.title, tone: 'down', text: `«${tired.name}» перегрет: ${pct(tired.share)} топа, добавляют реже обычного. Не делайте его главным — пусть идёт вторым.` });
+    if (!good && !tired && f.tropes.every((t) => t.verdict === 'few' || t.verdict === 'none')) out.push({ w: 50, book: f.title, tone: '', text: 'Ваших тропов в топе почти нет: конкуренции мало, но и спрос не подтверждён — следите за местом книги в первые недели.' });
+    const ref = f.nearPrice ?? M.price?.median;
+    if (f.price > 0 && ref) {
+      if (f.price > ref * 1.15) out.push({ w: 75, book: f.title, tone: 'down', text: `Цена ${Math.round(f.price)} ₽ выше, чем у ${f.nearPrice != null ? 'ближайших по тропам книг' : 'книг топа'} (обычно ${Math.round(ref)} ₽): на старте подписки это тормозит покупки.` });
+      else if (f.price < ref * 0.8) out.push({ w: 45, book: f.title, tone: '', text: `Цена ${Math.round(f.price)} ₽ ниже, чем у ${f.nearPrice != null ? 'ближайших по тропам книг' : 'книг топа'} (обычно ${Math.round(ref)} ₽) — есть запас поднять.` });
+    }
+  }
+  for (const r of ranks) {
+    if (r.was == null) continue;
+    const d = r.was - r.now;
+    if (d >= 5) out.push({ w: 60, book: r.title, tone: 'up', text: `${r.now} место (неделю назад ${r.was}) — растёт. Держите ритм выкладки, сейчас лучшее время для рекламы.` });
+    else if (d <= -5) out.push({ w: 80, book: r.title, tone: 'down', text: `${r.now} место (неделю назад ${r.was}) — опускается. Поднимают обычно новая глава в срок, скидка на день или реклама в дни выхода глав.` });
+  }
+  for (const r of rivals.filter((x) => x.common?.length)) {
+    const e = r.events.find((x) => x.kind === 'sale') || r.events.find((x) => x.kind === 'new');
+    if (e) { out.push({ w: 55, book: r.name, tone: '', text: `«${e.title}» — ${e.text}. Пишет на ваш троп «${r.common[0]}»: ${e.kind === 'sale' ? 'на эти дни конкуренция за читательниц выше — не ставьте свою скидку одновременно.' : 'посмотрите её аннотацию и цену.'}` }); break; }
+  }
+  for (const x of lg.filter((y) => y.k === 'go').slice(0, 1)) out.push({ w: 65, book: x.title, tone: 'up', text: `Пора на Литгород: на Литнете продажи — ${x.phase ? pct(x.phase.ratio) + ' от пика' : 'на нуле'}, вторая площадка почти ничего у него не отнимет.` });
+  const up = forecast?.ready ? forecast.up?.[0] : null;
+  if (up) out.push({ w: 40, book: 'Следующая книга', tone: '', text: `«${up.name}» поднимается: ${pct(up.share)} топа → ≈ ${pct(up.proj)} через месяц. Если он вам близок — хорошая основа.` });
+  return out.sort((a, b) => b.w - a.w).slice(0, 6);
 }

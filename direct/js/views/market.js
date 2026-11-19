@@ -2,7 +2,7 @@
 // Порядок сверху вниз: выводы → портрет книги топа → карта тропов → цена и объём → подача → движение за неделю → сам топ. Расчёты — js/market.js.
 import { esc, acts, changes, toast, openSheet, more } from '../../../js/ui.js';
 import { num, fmtDate } from '../../../js/format.js';
-import { marketInsights, myRanks, tropeForecast, rivalBoard } from '../../../js/market.js';
+import { marketInsights, myRanks, tropeForecast, rivalBoard, adviceForMe } from '../../../js/market.js';
 import { litgorodPlan, dupSummary } from '../../../js/litgorod.js';
 import { scanMarket, marketSnap, marketState, srcsOf, okSrc, MARKET_DEFAULT } from '../marketscan.js';
 import { marketWorldView } from './marketworld.js';
@@ -77,27 +77,63 @@ export function marketView(a) {
     else if (sec === 'price') body = priceSection(M);
     else if (sec === 'rivals') body = rivalsSection(a, snap, src, mine);
     else if (sec === 'mine') body = mineSection(a, M, snap, src, srcs);
-    else body = overviewSection(M);
+    else body = overviewSection(a, M, snap, src, srcs, mine, isMine);
   } catch (e) { console.error(e); body = `<div class="card"><p class="warnc" style="margin:0">Этот раздел не собрался: ${esc(e.message)}</p></div>`; }
   return { html: `<section class="mk-page">${head}${body}</section>` };
 }
 
-function overviewSection(M) {
-  const few = M.n < 30;
-  const moves = [
-    M.movers.length ? sub('Быстрее всех растут библиотеки') + `<div class="list">${more('mk-mv', M.movers.map((b) => bookRow(b, `<b class="up">+${num(b.perDay)}</b> в день`)), 3)}</div>` : '',
-    M.fresh.length ? sub('Новые в топе') + `<div class="list">${more('mk-new', M.fresh.map((b) => bookRow(b, `${short(b.lib)} в библ.`)), 3)}</div>` : '',
-    M.gone.length ? sub('Выпали') + `<div class="list">${more('mk-gone', M.gone.map((b) => bookRow(b, `было место ${b.n}`)), 3)}</div>` : '',
-    M.odd.length ? sub('В топе при малом числе читателей') + `<p class="small muted" style="margin:0 0 4px">Библиотек в десятки раз меньше, чем у соседей (обычно ${short(M.medLib)}). Слежу, сколько дней продержатся.</p><div class="list">${more('mk-odd', M.odd.map((b) => bookRow(b, `место ${b.n} · ${short(b.lib)}${b.days > 1 ? ` · ${b.days} дн.` : ''}`)), 3)}</div>` : '',
-  ].filter(Boolean).join('');
-  return `<div class="card"><h2 style="margin:0 0 8px">Главное</h2>${M.notes.slice(0, 5).map((n) => `<p style="margin:6px 0">${esc(n)}</p>`).join('')}
-      ${how(`${M.prevDate ? `Изменения — против ${fmtDate(M.prevDate)} (${M.gap} дн. назад).` : 'Это первый срез: изменения появятся, когда будет с чем сравнить.'}${few ? ' Книг в срезе пока мало — выводы осторожные.' : ''} Чем больше дней наблюдений, тем точнее выводы: приложение снимает срез само раз в сутки.`)}</div>
-    <div class="card"><h2 style="margin:0 0 4px">Портрет книги из топа</h2>${how('Обычные значения по срезу — с ними сравнивайте свою книгу.')}
-      <div class="tiles" style="margin-top:10px"><div><div class="k">Цена</div><div class="v">${M.price.median != null ? Math.round(M.price.median) + ' ₽' : '—'}</div><div class="s">со скидкой ${pc(M.price.off)}</div></div>
+// Карта тропов — одна картинка вместо списка: вправо — теснее (доля в топе), вверх — охотнее добавляют. Ваши тропы — тёмные и подписаны.
+function quadrant(M, isMine) {
+  const pts = M.tropeMap.filter((t) => t.interest != null && t.n >= 2);
+  if (pts.length < 4) return '';
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 600, W = narrow ? 360 : 880, H = narrow ? 300 : 340, L = 14, R = 14, T = 18, B = 26;
+  const xmax = Math.max(...pts.map((t) => t.share)) * 1.1, ly = (v) => Math.log2(Math.max(0.25, Math.min(4, v))), lys = pts.map((t) => ly(t.interest)), yhi = Math.max(0.35, ...lys) + 0.25, ylo = Math.min(-0.35, ...lys) - 0.25;
+  const X = (v) => L + v / xmax * (W - L - R), Y = (v) => T + (yhi - ly(v)) / (yhi - ylo) * (H - T - B);
+  const midX = X(median(pts.map((t) => t.share))), y1 = Y(1);
+  const P = pts.map((t) => ({ t, mine: isMine(t.name), x: X(t.share), y: Y(t.interest), r: 4 + Math.sqrt(t.n) * (narrow ? 1.3 : 1.6) }));
+  // подписи: сначала ваши, потом самые заметные; подпись, которая налезает на уже поставленную, пропускаем (троп виден по нажатию)
+  const placed = [], hit = (b) => placed.some((p) => b.x1 < p.x2 && b.x2 > p.x1 && b.y1 < p.y2 && b.y2 > p.y1);
+  const order = [...P.filter((p) => p.mine), ...P.filter((p) => !p.mine).sort((a, b) => Math.abs(ly(b.t.interest)) * b.t.share - Math.abs(ly(a.t.interest)) * a.t.share).slice(0, narrow ? 5 : 9)];
+  const labels = [];
+  for (const p of order) {
+    const w = p.t.name.length * (p.mine ? 7 : 6.4) + 4;
+    const tries = [[p.x + p.r + 4, p.y + 4, 'start'], [p.x - p.r - 4, p.y + 4, 'end'], [p.x - w / 2, p.y - p.r - 6, 'start'], [p.x - w / 2, p.y + p.r + 14, 'start']];
+    for (const [tx, ty, an] of tries) {
+      const x1 = an === 'end' ? tx - w : tx, b = { x1, x2: x1 + w, y1: ty - 11, y2: ty + 3 };
+      if (b.x1 < 2 || b.x2 > W - 2 || hit(b)) continue;
+      placed.push(b); labels.push(`<text class="mk-q-l${p.mine ? ' me' : ''}" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${an}">${esc(p.t.name)}</text>`); break;
+    }
+  }
+  return `<svg class="mk-q" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Карта тропов">
+    <rect class="mk-q-niche" x="${L}" y="${T}" width="${(midX - L).toFixed(1)}" height="${(y1 - T).toFixed(1)}" rx="10"/>
+    <line class="mk-q-ax" x1="${midX.toFixed(1)}" x2="${midX.toFixed(1)}" y1="${T}" y2="${H - B}"/><line class="mk-q-ax" x1="${L}" x2="${W - R}" y1="${y1.toFixed(1)}" y2="${y1.toFixed(1)}"/>
+    <text class="mk-q-c" x="${L + 8}" y="${T + 16}">ниша</text><text class="mk-q-c" x="${W - R - 8}" y="${T + 16}" text-anchor="end">читают, но тесно</text>
+    <text class="mk-q-c" x="${L + 8}" y="${H - B - 8}">слабый спрос</text><text class="mk-q-c" x="${W - R - 8}" y="${H - B - 8}" text-anchor="end">перегрето</text>
+    ${[...P].sort((a, b) => a.mine - b.mine).map((p) => `<circle class="mk-q-d${p.mine ? ' me' : ''}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p.r.toFixed(1)}" data-act="mk.trope" data-t="${esc(p.t.name)}" role="button"><title>${esc(p.t.name)}: ${pc(p.t.share)} топа, интерес ${x1(p.t.interest)}</title></circle>`).join('')}
+    ${labels.join('')}
+    <text class="mk-q-a" x="${L}" y="${H - 6}">меньше книг</text><text class="mk-q-a" x="${W - R}" y="${H - 6}" text-anchor="end">больше книг в топе →</text></svg>`;
+}
+const median = (a) => { const v = a.filter((x) => x != null).sort((x, y) => x - y); return v.length ? v[Math.floor(v.length / 2)] : 0; };
+
+function overviewSection(a, M, snap, src, srcs, mine, isMine) {
+  const c = a.ctx();
+  const ranks = myRanks(snap, { names: Object.fromEntries(srcs.map((x) => [x.url, x.name.replace(/^Литнет · /, '')])) }).filter((r) => !src || r.src === src);
+  const rivals = rivalBoard(snap, { watch: c.settings.direct?.market?.watch || [], myTropes: mine, me: c.settings.pseudonym || '', src }).rivals;
+  let lg = []; try { lg = lgPlan(a, snap); } catch { /* без Литгорода */ }
+  const tips = adviceForMe({ M, ranks, rivals, lg, forecast: tropeForecast(snap, { src }) });
+  const advice = `<div class="card mk-for"><h2 style="margin:0 0 10px">Для вас</h2>
+    ${tips.length ? `<div class="mk-tips">${tips.map((t) => `<div class="mk-tip t-${t.tone || 'n'}"><i></i><div><div class="small muted">${esc(t.book)}</div><div>${esc(t.text)}</div></div></div>`).join('')}</div>`
+      : `<p class="small muted" style="margin:0">${(c.data.w_books || []).some((b) => b.status === 'progress' && (b.tags || []).length) ? 'Сейчас по вашим книгам ничего срочного — рынок ровный.' : 'Отметьте тропы своих книг в «Мастерской» (книга → «О книге»), и здесь появятся советы именно по ним.'}</p>`}</div>`;
+  const map = quadrant(M, isMine);
+  return `${advice}
+    ${map ? `<div class="card"><div class="row between" style="gap:10px;align-items:baseline"><h2 style="margin:0">Где ваши тропы</h2><span class="small muted">нажмите на кружок — его книги</span></div>${map}
+      ${how('Вправо — больше книг с этим тропом в топе (теснее). Вверх — их охотнее добавляют в библиотеку. Зелёный угол — ниша: читают охотно, а книг мало. Ваши тропы — тёмные. Размер кружка — число книг.')}</div>` : ''}
+    <div class="card"><h2 style="margin:0 0 10px">Книга из топа — какая она</h2>
+      <div class="tiles"><div><div class="k">Цена</div><div class="v">${M.price.median != null ? Math.round(M.price.median) + ' ₽' : '—'}</div><div class="s">со скидкой ${pc(M.price.off)}</div></div>
         <div><div class="k">Объём</div><div class="v">${M.formula.pages ? Math.round(M.formula.pages) + ' стр.' : '—'}</div><div class="s">пишутся ${pc(M.progress)}</div></div>
         <div><div class="k">В библиотеках</div><div class="v">${short(M.formula.lib)}</div><div class="s">эксклюзив ${pc(M.excl)}</div></div>
-        <div><div class="k">Библиотек на 100 просмотров</div><div class="v">${M.formula.conv != null ? (M.formula.conv * 100).toFixed(1).replace('.', ',') : '—'}</div><div class="s">лайк — каждая ${M.formula.likes ? Math.round(1 / M.formula.likes) + '-я' : '—'}</div></div></div></div>
-    ${moves ? `<div class="card"><h2 style="margin:0 0 2px">Движение за неделю</h2>${moves}</div>` : ''}
+        <div><div class="k">Добавляют из 100</div><div class="v">${M.formula.conv != null ? (M.formula.conv * 100).toFixed(1).replace('.', ',') : '—'}</div><div class="s">открывших книгу</div></div></div></div>
+    ${M.movers.length ? `<div class="card"><h2 style="margin:0 0 4px">Растут быстрее всех</h2><div class="list">${more('mk-mv', M.movers.map((b) => bookRow(b, `<b class="up">+${num(b.perDay)}</b> в день`)), 3)}</div></div>` : ''}
     <div class="card"><h2 style="margin:0 0 6px">Топ сейчас</h2><div class="list">${more('mk-top', M.top.map((b) => bookRow(b, `${short(b.lib)} в библ.`)), 5)}</div></div>`;
 }
 
@@ -154,13 +190,15 @@ function mineSection(a, M, snap, src, srcs) {
 }
 
 // Литгород: какие книги дублировать и когда (расчёты — js/litgorod.js)
-function lgSection(a, snap) {
-  const c = a.ctx(), me = String(c.settings.pseudonym || '').toLowerCase().trim(), dup = c.settings.direct?.market?.dup || {};
-  // эксклюзив её книг — по срезам топа (метка «Эксклюзив» на карточке)
-  const excl = []; if (snap && me) { const dates = Object.keys(snap.days || {}).sort(), d = snap.days?.[dates[dates.length - 1]] || {};
+function lgPlan(a, snap) {
+  const c = a.ctx(), me = String(c.settings.pseudonym || '').toLowerCase().trim(), excl = [];
+  if (snap && me) { const dates = Object.keys(snap.days || {}).sort(), d = snap.days?.[dates[dates.length - 1]] || {};
     for (const rows of Object.values(d)) for (const r of rows) { const b = snap.books?.[r.id]; if (r.e && b && String(b.a || '').toLowerCase().trim() === me) excl.push(b.t); } }
   const priceOf = (title) => Number(((c.data.books || []).find((x) => String(x.title || '').toLowerCase() === String(title || '').toLowerCase())?.priceHistory || []).slice(-1)[0]?.price) || 0;
-  const plan = litgorodPlan({ wbooks: c.data.w_books || [], sales: c.data.sales || [], today: c.today, excl, dup, priceOf }), S = dupSummary(plan);
+  return litgorodPlan({ wbooks: c.data.w_books || [], sales: c.data.sales || [], today: c.today, excl, dup: c.settings.direct?.market?.dup || {}, priceOf });
+}
+function lgSection(a, snap) {
+  const plan = lgPlan(a, snap), S = dupSummary(plan);
   const K = { go: ['Пора', 'up'], soon: ['Скоро', ''], wait: ['Подождать', 'muted'], later: ['После завершения', 'muted'], done: ['Уже там', ''], no: ['Нельзя', 'down'] };
   const rub0 = (v) => num(Math.round(v)) + ' ₽';
   const eff = (x) => { const e = x.effect; if (!e) return ''; if (!e.ready) return `<div class="small muted">Выложена ${fmtDate(e.at)} — что это дало, посчитаю через ${14 - e.after} ${plural(14 - e.after, 'день', 'дня', 'дней')}.</div>`;

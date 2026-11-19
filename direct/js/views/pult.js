@@ -1,6 +1,6 @@
 // «Пульт» — главная «Директа»: что требует внимания и одна карточка на кампанию (состояние, деньги, цена цели, окупаемость, вывод).
 // Расчёты — direct/js/pult.js. Бюджеты приложение не меняет: только подсказывает и даёт кнопки минус-фраз, паузы, привязки счётчика.
-import { esc, more } from '../../../js/ui.js';
+import { esc, more, openSheet } from '../../../js/ui.js';
 import { rub, num } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { goalsOf, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget, campaignLevers, campaignPayback, campaignStage, NEED_BUYS } from '../pult.js';
@@ -12,7 +12,7 @@ import { todo } from './home.js';
 import { homeView } from './home.js';
 import { demo } from '../demo.js';
 import { diagStrip } from './diagnose.js';
-import { actBtn } from './common.js';
+import { actBtn, q } from './common.js';
 import { ic } from '../../../js/icons.js';
 import { litTagInfo } from '../../../js/littag.js';
 import { weekKeyOf } from '../weekreview.js';
@@ -49,7 +49,7 @@ export function pultModel(a) {
     // старт подписки книги: Мастерская («О книге») или сайт
     const wb = book ? (c.data.w_books || []).find((x) => x.id === book.id) : null, sbk = book && !demo.on ? siteBooks(a).find((x) => String(x.title || '').toLowerCase() === String(book.title || '').toLowerCase()) : null;
     const subStart = wb?.subStart || sbk?.startDate || '';
-    const stage = campaignStage(camp, { econ, st, goals, conv, today: t, subStart, perSale, skip, convVerified: ev.ready });
+    const stage = campaignStage(camp, { econ, st, goals, conv, today: t, subStart, perSale, skip, convVerified: ev.ready, wk: wk0 });
     return { camp, goals, book, st, econ, perSale, stage, subStart, ownSales: sold?.qty >= 5, libMeasured: false, convReady: ev.ready && econ.usable, pay: campaignPayback(camp, { daily, conv, today: t, goals, perSale, libValue: econ.libValue, skip, convVerified: ev.ready }), wk: wk0, lev: campaignLevers(camp, st, { ...econ, libValue: null }, wk0, { ads, daily, today: t }), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
   }).sort((x, y) => (ORDER[x.st.key] ?? 9) - (ORDER[y.st.key] ?? 9));
   return { c, main, stats, m, rows, lv, conversionEvidence: ev };
@@ -59,11 +59,28 @@ const money = (v) => (v == null ? '—' : rub(v, 0));
 // «Этап и следующий шаг»: одна мысль, одно действие, условия — галочками; вторая кампания — одной строкой
 function stageHtml(r) {
   const g = r.stage, act = g.next?.act === 'goal' ? readyGoalActs(window.__app).find((x) => x.campaign === r.camp.id) : null;
-  return `<div class="pult-stage"><div class="small muted">Этап</div><b>${esc(g.title)}</b><div class="small" style="margin-top:2px">${esc(g.text)}</div>
-    ${g.checks.length ? `<div class="small" style="margin-top:6px">${g.checks.map((x) => `<div class="${x.ok ? '' : 'muted'}">${x.ok ? '✓' : '○'} ${esc(x.text)}</div>`).join('')}</div>` : ''}
-    <div class="pult-next"><div style="min-width:0"><span class="small muted">Следующий шаг</span><div><b>${esc(g.next.what)}</b></div><div class="small muted">${esc(g.next.why)}</div></div>${act ? actBtn(act, 'Сменить цель', 'primary') : ''}</div>
-    <div class="small muted" style="margin-top:8px"><b>Вторая кампания.</b> ${esc(g.second)}</div></div>`;
+  // на виду — этап, следующий шаг и шкалы; рассуждения таргетолога — по «почему так» (её просьба: «минималистично, без стены текста»)
+  return `<div class="pult-stage"><div class="row between" style="gap:10px;align-items:baseline"><b>${esc(g.title)}</b><span class="small muted">этап</span></div>
+    <div class="pult-next"><div style="min-width:0"><span class="small muted">Следующий шаг</span><div><b>${esc(g.next.what)}</b></div></div>${act ? actBtn(act, 'Сменить цель', 'primary') : ''}</div>
+    ${priceHtml(g)}</div>`;
 }
+// Цена цели и «когда на покупки» — наглядно: полоска до 10 покупок в неделю и шкала цены; объяснения — по «почему» (её просьба: «минималистично, наглядно»)
+export function priceHtml(g) {
+  const P = g.price, E = g.eta;
+  if (!P && !E) return g.text ? `<button class="link small gp-why" data-act="gp.why" data-t="${esc([g.text, g.next?.why, g.second].filter(Boolean).join('\n'))}">почему так</button>` : '';
+  const why = [g.text, ...(g.checks || []).map((x) => `${x.ok ? '✓' : '○'} ${x.text}`), g.next?.why ? `Следующий шаг: ${g.next.what} — ${g.next.why}.` : '', E?.text, P?.ready ? P.text : P?.why, P?.ready ? P.why : '', P?.forBuy ? `Когда переключите на покупку — ставьте ≈ ${P.forBuy.rec} ₽ за покупку (предел ${P.forBuy.max} ₽).` : '', g.second ? `Вторая кампания. ${g.second}` : ''].filter(Boolean).join('\n');
+  const bar = E && E.val != null ? (() => { const v = Math.max(0, E.val), w = Math.min(100, v / NEED_BUYS * 100);
+    return `<div class="gp-l"><span>Покупок в неделю</span><b>${(Math.round(v * 10) / 10).toString().replace('.', ',')} из ${NEED_BUYS}</b></div>
+      <div class="gp-bar${E.k === 'now' ? ' ok' : ''}"><i style="width:${w.toFixed(1)}%"></i></div><div class="gp-s ${E.k === 'now' ? 'up' : ''}">${E.pre ? 'ожидаю после открытия подписки · ' : ''}${esc(E.brief)}</div>`; })()
+    : E ? `<div class="gp-l"><span>На покупку</span><b>${esc(E.brief)}</b></div>` : '';
+  const scale = P?.ready ? (() => { const top = Math.max(P.max * 1.3, (P.now || 0) * 1.1, (P.fact || 0) * 1.1), X = (v) => Math.min(100, v / top * 100).toFixed(1);
+    const mk = (v, cls, label) => (v == null ? '' : `<span class="gp-m ${cls}" style="left:${X(v)}%"><i></i><em>${label} ${v}</em></span>`);
+    return `<div class="gp-l"><span>Цена цели · ${P.onBuy ? 'покупка' : 'добавление'}</span><b class="${P.k === 'down' ? 'down' : P.k === 'up' ? 'up' : ''}">${esc(P.brief)}</b></div>
+      <div class="gp-sc"><div class="gp-ok" style="width:${X(P.max)}%"></div>${mk(P.rec, 'rec', 'совет')}${mk(P.now, 'now', 'сейчас')}${mk(P.max, 'max', 'предел')}</div>
+      <div class="gp-s muted">${P.fact != null ? `фактически выходит ${P.fact} ₽` : ''}</div>`; })() : P ? `<div class="gp-l"><span>Цена цели</span><b class="muted">нужны данные</b></div>` : '';
+  return `<div class="pult-gp">${bar}${scale}<button class="link small gp-why" data-act="gp.why" data-t="${esc(why)}">почему так</button></div>`;
+}
+acts['gp.why'] = (d) => { openSheet('Почему так', d.t.split('\n').map((x) => `<p style="margin:0 0 10px">${esc(x)}</p>`).join('') + '<p class="small muted">Знаки «?» в Диагнозе объясняют каждую цифру подробнее.</p>', null); return false; };
 // Смену цели предлагаем, только когда покупок с рекламы хватает для обучения (этап «switch» с NEED_BUYS за 7 дней)
 export function readyGoalActs(a) {
   if (demo.on) return [];

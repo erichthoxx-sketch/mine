@@ -124,3 +124,18 @@ test('прогноз тропов: растущий по новым книгам
   assert.ok(F.down.some((x) => x.name === 'Измена'));
   assert.equal(m.tropeForecast({ days: { '2026-11-01': days['2026-11-01'] }, books }).ready, false);
 });
+
+import { adviceForMe } from '../js/market.js';
+test('советы для неё: троп-ниша первым крючком, перегретый — вторым, цена против соседей, падение места, Литгород', () => {
+  const M = { price: { median: 149 }, fit: [{ title: 'Вдова', price: 199, nearPrice: 150, tropes: [
+    { name: 'Врачи', share: 0.04, interest: 2.4, verdict: 'niche', n: 2 }, { name: 'Измена', share: 0.3, interest: 0.8, verdict: 'tired', n: 15 }] }] };
+  const T = adviceForMe({ M, ranks: [{ title: 'Вдова', now: 40, was: 22 }], lg: [{ k: 'go', title: 'Старая', phase: { ratio: 0.07 } }] });
+  const txt = T.map((x) => x.text).join(' | ');
+  assert.match(txt, /Первым крючком — «Врачи».+в 2,4 раза/);
+  assert.match(txt, /«Измена» перегрет/);
+  assert.match(txt, /Цена 199 ₽ выше, чем у ближайших по тропам книг \(обычно 150 ₽\)/);
+  assert.match(txt, /40 место \(неделю назад 22\) — опускается/);
+  assert.match(txt, /Пора на Литгород/);
+  assert.equal(T[0].text.startsWith('Первым крючком'), true);
+  assert.deepEqual(adviceForMe({}), []);
+});
