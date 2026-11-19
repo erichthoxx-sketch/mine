@@ -111,7 +111,7 @@ export const metrikaFor = (rows = [], camp) => rows.find((r) => (r.cid && r.cid 
 
 // Аналитик: что видно только с целями Метрики. m — {counterId, main: [цели «покупка»]}.
 // Выводы осторожные: на малых числах не советуем (мало кликов — рано).
-export function goalHints({ campaigns = [], keywords = [], kw = {}, kwConv = {}, daily = [], conv = [], mrows = [], m = {}, today, skip = null }) {
+export function goalHints({ campaigns = [], keywords = [], kw = {}, kwConv = {}, daily = [], conv = [], mrows = [], m = {}, today, skip = null, paidSince = {} }) {
   const out = [], goals = m.main?.length ? m.main : null, from = addDays(today, -29);
   for (const c of campaigns) {
     if (c.state !== 'ON') continue;
@@ -119,15 +119,22 @@ export function goalHints({ campaigns = [], keywords = [], kw = {}, kwConv = {},
       out.push({ kind: 'counter', cid: c.id, name: c.name, why: 'к кампании не привязан ваш счётчик Метрики — Директ не видит покупки и не может учиться на них', lesson: 'goals' });
       continue;
     }
-    // цель стратегии кампании (например, «добавление в библиотеку») тоже считается — иначе кампания на библиотеку выглядит «без покупок»
-    const cg = c.goal ? [...new Set([String(c.goal), ...(goals || []).map(String)])] : goals;
-    const g = goalTotals(daily, conv, from, today, { cid: c.id, goals: cg, skip });
-    const young = c.start && Math.round((Date.parse(today) - Date.parse(c.start)) / 86400000) < 3; // конверсии Директ досчитывает с задержкой
+    // Оценивать нужно именно цель стратегии, а не сумму библиотек и покупок.
+    // Для новой подписки не включаем в окно дни, когда книгу было нельзя купить.
+    const cg = c.goal ? [String(c.goal)] : goals;
+    const paidDate = paidSince[String(c.id)] || '';
+    const isPaidGoal = c.goal != null && (m.goals || []).some((x) => String(x.id) === String(c.goal) && /покуп|оплат|купил/i.test(x.name) && !/начал|начат/i.test(x.name));
+    const start = isPaidGoal && /^\d{4}-\d{2}-\d{2}$/.test(paidDate) && paidDate <= today && paidDate > from ? paidDate : from;
+    const g = goalTotals(daily, conv, start, today, { cid: c.id, goals: cg, skip });
+    const paidDays = paidDate && paidDate <= today ? Math.round((Date.parse(today) - Date.parse(paidDate)) / 86400000) + 1 : null;
+    const recentPaid = isPaidGoal && paidDays != null && paidDays < 7;
+    const young = (c.start && Math.round((Date.parse(today) - Date.parse(c.start)) / 86400000) < 3) || recentPaid; // избегаем преждевременных выводов
     // целей кампании нет, но реклама даёт другие конверсии (обычно — добавления в библиотеку): это не «конверсий нет», а цель поставлена рано (19.11.2026)
-    const other = !g.conv && g.clicks >= 50 && !young ? (m.goals || []).filter((x) => !(cg || []).map(String).includes(String(x.id))).map((x) => ({ ...x, n: goalTotals(daily, conv, from, today, { cid: c.id, goals: [String(x.id)], skip }).conv })).sort((x, y) => y.n - x.n)[0] : null;
+    const other = !g.conv && g.clicks >= 50 && !young ? (m.goals || []).filter((x) => !(cg || []).map(String).includes(String(x.id))).map((x) => ({ ...x, n: goalTotals(daily, conv, start, today, { cid: c.id, goals: [String(x.id)], skip }).conv })).sort((x, y) => y.n - x.n)[0] : null;
     const gname = (id) => (m.goals || []).find((x) => String(x.id) === String(id))?.name || 'цель кампании';
-    if (other?.n >= 5) out.push({ kind: 'early', cid: c.id, name: c.name, ...g, other, why: `Цель кампании — «${gname(c.goal || (cg || [])[0])}»: таких конверсий с рекламы за 30 дней нет. Зато «${other.name}» — ${other.n}. Реклама работает, но цель поставлена раньше времени: стратегии не на чем учиться, показы будут падать. Верните цель «${other.name}».`, lesson: 'goals' });
-    else if (!g.conv && g.clicks >= 50 && !young) out.push({ kind: 'zero', cid: c.id, name: c.name, ...g, why: `за 30 дней ${g.clicks} кликов и ни одной конверсии по целям кампании — проверьте, та ли цель выбрана, и что страница книги убеждает`, lesson: 'goals' });
+    if (recentPaid && !g.conv && g.clicks >= 10) out.push({ kind: 'learning', cid: c.id, name: c.name, ...g, why: `Подписка открыта ${paidDate}, прошло ${paidDays} дн. Рекламных покупок пока нет, но бесплатные дни до открытия подписки не считаются неудачными. Проверьте показы и регистрацию цели «${gname(c.goal)}»; не меняйте стратегию только из-за этого сигнала.`, lesson: 'goals' });
+    else if (other?.n >= 5) out.push({ kind: 'early', cid: c.id, name: c.name, ...g, other, why: `По цели «${gname(c.goal || (cg || [])[0])}» с ${start} нет конверсий, по «${other.name}» — ${other.n}. Покупок может не хватать для обучения: проверьте показы, регистрацию оплаты и экономику, но возврат на «${other.name}» не гарантирует продаж.`, lesson: 'goals' });
+    else if (!g.conv && g.clicks >= 50 && !young) out.push({ kind: 'zero', cid: c.id, name: c.name, ...g, why: `с ${start} получено ${g.clicks} кликов и ни одной конверсии по выбранной цели — проверьте регистрацию цели и показатели кампании`, lesson: 'goals' });
     const mr = metrikaFor(mrows, c);
     if (mr && mr.visits >= 30 && mr.bounce >= 0.6) out.push({ kind: 'bounce', cid: c.id, name: c.name, ...mr, why: `${Math.round(mr.bounce * 100)} % посетителей уходят сразу: объявление обещает не то, что они видят на странице книги, или приходят не те люди`, lesson: 'goals' });
     if (g.conv < 3) continue; // средняя цена покупки ещё ненадёжна
@@ -141,7 +148,7 @@ export function goalHints({ campaigns = [], keywords = [], kw = {}, kwConv = {},
       else if (n >= 2 && s.cost / n <= 0.6 * g.cpa) out.push({ kind: 'winner', cid: c.id, id: k.id, phrase: k.phrase, ...s, conv: n, cpa: r2(s.cost / n), avg: g.cpa, why: `покупка по ${Math.round(s.cost / n)} ₽ — заметно дешевле средней (${Math.round(g.cpa)} ₽): эта фраза приводит ваших читателей`, lesson: 'goals' });
     }
   }
-  const order = { counter: 0, noconv: 1, zero: 2, bounce: 3, winner: 4 };
+  const order = { counter: 0, learning: 1, early: 2, noconv: 3, zero: 4, bounce: 5, winner: 6 };
   return out.sort((a, b) => order[a.kind] - order[b.kind] || (b.cost || 0) - (a.cost || 0));
 }
 
