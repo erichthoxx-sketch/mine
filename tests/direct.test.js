@@ -233,6 +233,22 @@ test('директ: аналитик по покупкам — счётчик, �
   assert.ok(!goalHints({ campaigns, keywords, kw, kwConv, daily, conv, mrows: [], m: { counterId: 555, main: [9001] }, today, skip: new Set(['2026-10-10']) }).some((x) => x.kind === 'noconv'));
 });
 
+test('Подписка только открылась: дни бесплатных глав не трактуем как провал цели покупки', () => {
+  const c = { id: 18, name: 'Вдова', state: 'ON', type: 'UNIFIED_CAMPAIGN', start: '2026-11-10', goal: 220, counters: [1] };
+  const m = { counterId: 1, main: [220], goals: [{ id: 220, name: 'Покупка книги' }, { id: 215, name: 'Добавление книги в библиотеку' }] };
+  const daily = [
+    { date: '2026-11-11', cid: 18, clicks: 200, impr: 3000, cost: 500 },
+    { date: '2026-11-18', cid: 18, clicks: 12, impr: 200, cost: 0 },
+    { date: '2026-11-19', cid: 18, clicks: 15, impr: 200, cost: 0 },
+  ];
+  const conv = [{ date: '2026-11-11', cid: 18, conv: { 215: 40 } }];
+  const hs = goalHints({ campaigns: [c], daily, conv, m, today: '2026-11-19', paidSince: { 18: '2026-11-16' } });
+  assert.equal(hs[0]?.kind, 'learning');
+  assert.equal(hs[0].clicks, 27); // 200 кликов до открытия платной подписки не учитываем
+  assert.match(hs[0].why, /Подписка открыта 2026-11-16/);
+  assert.doesNotMatch(hs[0].why, /Верните цель/);
+});
+
 test('директ: покупки неделя к неделе — осторожно на малых числах', () => {
   const daily = [{ date: '2026-10-05', cid: 1, impr: 1, clicks: 50, cost: 1000 }, { date: '2026-10-14', cid: 1, impr: 1, clicks: 50, cost: 1000 }];
   const few = goalWeekInsight(daily, [{ date: '2026-10-05', cid: 1, conv: { 1: 2 } }, { date: '2026-10-14', cid: 1, conv: { 1: 5 } }], '2026-10-17');
