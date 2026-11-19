@@ -67,10 +67,14 @@ const lessonLink = () => ''; // раздела «Учёба» больше не�
 function goalTodo(main, stats, ctx) {
   const m = metrikaOf(ctx);
   if (!m?.counterId) return [];
-  const hs = goalHints({ campaigns: main.campaigns, keywords: main.keywords, kw: stats.kw, kwConv: stats.kwConv, daily: stats.daily, conv: stats.conv, mrows: stats.mrows, m, today: ctx.today, skip: outageSet(ctx.data.days || []) });
+  // Дата открытия платной подписки — из плана книги, сайта или Мастерской.
+  // Без этой даты не выдаём старые бесплатные дни за провал рекламы на покупку.
+  const paidSince = Object.fromEntries(resolvedLaunches(app()).filter((x) => x.plan?.picked?.id && x.plan?.subDate && x.plan.subDate <= ctx.today)
+    .map((x) => [String(x.plan.picked.id), x.plan.subDate]));
+  const hs = goalHints({ campaigns: main.campaigns, keywords: main.keywords, kw: stats.kw, kwConv: stats.kwConv, daily: stats.daily, conv: stats.conv, mrows: stats.mrows, m, today: ctx.today, skip: outageSet(ctx.data.days || []), paidSince });
   const out = [];
   for (const h of hs.slice(0, 4)) {
-    const head = { counter: `Кампания «${esc(h.name)}»: привязать счётчик`, zero: `«${esc(h.name)}»: клики есть, конверсий нет`, early: `«${esc(h.name)}»: цель поставлена раньше времени`, bounce: `«${esc(h.name)}»: много уходят сразу`, noconv: `«${esc(h.phrase)}» тратит без покупок`, winner: `«${esc(h.phrase)}» приводит покупателей` }[h.kind];
+    const head = { counter: `Кампания «${esc(h.name)}»: привязать счётчик`, zero: `«${esc(h.name)}»: клики есть, конверсий нет`, learning: `«${esc(h.name)}»: новая подписка — тестируем покупки`, early: `«${esc(h.name)}»: недостаточно покупок для оценки`, bounce: `«${esc(h.name)}»: много уходят сразу`, noconv: `«${esc(h.phrase)}» тратит без покупок`, winner: `«${esc(h.phrase)}» приводит покупателей` }[h.kind];
     const btn = h.kind === 'counter' ? actBtn({ do: 'counter', campaign: h.cid, counter: m.counterId, why: h.why }, 'Привязать', 'small-btn')
       : h.kind === 'noconv' ? actBtn({ do: 'pause', target: 'keyword', ids: [h.id], why: h.why }, 'Остановить фразу', 'small-btn') : '';
     out.push(`<div class="item${h.kind === 'winner' ? ' d-good' : ''}"><div class="row between"><b>${head}</b>${btn}</div><div class="small muted">${esc(h.why)}${lessonLink(h.lesson)}</div></div>`);
