@@ -213,7 +213,7 @@ acts['pr.write'] = (d) => {
     <label>Письмо</label><textarea id="pr-body" rows="12" style="font-size:14px;line-height:1.5">${esc(L.body)}</textarea>
     <p class="small" style="margin:8px 0 0"><button class="link" type="button" data-act="pr.copy">${ic('copy')} Скопировать письмо</button></p>
     ${k === 'formal' ? '<p class="small muted" style="margin:8px 0 0">По закону в заявлении указывают паспортные данные и телефон — впишите их сами вместо квадратных скобок.</p>' :
-      '<label class="d-check small"><input type="checkbox" id="pr-manual-confirm"> Я уже отправила письмо самостоятельно или подала жалобу через форму (повторно не отправлять)</label>'`,
+      '<label class="d-check small"><input type="checkbox" id="pr-manual-confirm"> Я уже отправила письмо самостоятельно или подала жалобу через форму (повторно не отправлять)</label>'}`,
   k === 'formal' ? null : async () => {
     const ct = (get(f.id) || f).contacts;
     const override = k === 'host' ? (document.getElementById('pr-manual-email')?.value || '').trim().toLowerCase() : '';
