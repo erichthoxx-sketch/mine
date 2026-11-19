@@ -3640,3 +3640,16 @@ a.dg-strip .dg-more { margin-left: auto; white-space: nowrap; color: var(--text-
 .cmp-r { display: flex; align-items: center; gap: 10px; text-align: right; white-space: nowrap; flex: none; }
 .dg-guide { padding-left: 20px; margin: 0 0 10px; }
 .dg-guide li { margin: 0 0 10px; line-height: 1.55; }
+
+/* «Рынок» по разделам (19.11.2026): площадка — тонкой линией, разделы — мягкими кнопками-словами под ней */
+.mk-page .mk-ptabs { margin: 12px 0 8px; }
+.mk-stabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 16px; }
+main .mk-stabs button { min-height: 32px; padding: 5px 13px; border-radius: 999px; border: 0; background: transparent; color: var(--text-2); font: 500 14px/1.2 var(--font-display); box-shadow: none; }
+main .mk-stabs button:hover { background: var(--soft); }
+main .mk-stabs button.on { background: var(--soft); color: var(--text); }
+@media (max-width: 600px) { .mk-stabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -4px; margin-right: -4px; } .mk-stabs::-webkit-scrollbar { display: none; } main .mk-stabs button { flex: none; } }
+.mk-how { margin: 4px 0 10px; line-height: 1.5; }
+.mk-rv-r { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; color: var(--text-2); }
+.mk-ll { display: block; }
+.mk-lg .small-btn { white-space: nowrap; }
+@media (max-width: 600px) { .item.mk-rv > .row.between:first-child, .item.mk-lg > .row.between:first-child { flex-wrap: wrap; } .item.mk-rv > .row.between:first-child > div:first-child, .item.mk-lg > .row.between:first-child > div:first-child { flex: 1 1 100%; } .mk-rv-r { flex-direction: row; align-items: center; width: 100%; justify-content: space-between; } }

@@ -24,7 +24,24 @@ export function tropesOf(text) {
   return TROPES.filter(([, re]) => re.test(t)).map(([n]) => n);
 }
 
-// Страница топа Литнета (текст от «читалки») → карточки книг по порядку
+// Сырая страница (через переходник владелицы) → такой же текст, какой отдаёт «читалка»: заголовки «####», ссылки «[текст](адрес)»,
+// значки «![Image N: имя](адрес)». Так один разбор parseLitnetList работает для обоих путей. Без DOM — работает и в тестах.
+const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', laquo: '«', raquo: '»', mdash: '—', ndash: '–', hellip: '…' };
+const unent = (t) => String(t).replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, k) => (k[0] === '#' ? String.fromCodePoint(k[1] === 'x' || k[1] === 'X' ? parseInt(k.slice(2), 16) : +k.slice(1)) : ENT[k.toLowerCase()] ?? m));
+const flat = (t) => unent(t.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+export function htmlToMd(html, base = 'https://litnet.com') {
+  const abs = (u) => { u = unent(u || ''); return /^https?:/i.test(u) ? u : u.startsWith('//') ? 'https:' + u : base + (u.startsWith('/') ? '' : '/') + u; };
+  const attr = (tag, k) => (tag.match(new RegExp('\\s' + k + '\\s*=\\s*("([^"]*)"|\'([^\']*)\')', 'i')) || [])[2] ?? (tag.match(new RegExp('\\s' + k + '\\s*=\\s*\'([^\']*)\'', 'i')) || [])[1] ?? '';
+  let n = 0, h = String(html || '');
+  h = h.replace(/<(script|style|noscript|svg|template|head)\b[\s\S]*?<\/\1>/gi, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
+  h = h.replace(/<img\b[^>]*>/gi, (t) => ` ![Image ${++n}: ${unent(attr(t, 'alt')).trim()}](${abs(attr(t, 'src') || attr(t, 'data-src'))}) `);
+  h = h.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (m, at, inner) => { const href = attr(' ' + at, 'href'); const txt = flat(inner); return href && txt ? `[${txt}](${abs(href)})` : txt; });
+  h = h.replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (m, l, inner) => `\n${'#'.repeat(+l)} ${flat(inner)}\n`);
+  h = h.replace(/<br\s*\/?>/gi, '\n').replace(/<\/?(div|p|li|ul|ol|section|article|header|footer|main|nav|tr|table|button)\b[^>]*>/gi, '\n');
+  return unent(h.replace(/<[^>]+>/g, ' ')).split('\n').map((l) => l.replace(/[ \t\u00a0]+/g, ' ').trim()).filter((l, i, arr) => l || (arr[i - 1] || '').trim()).join('\n');
+}
+
+// Страница топа Литнета (текст от «читалки» или htmlToMd) → карточки книг по порядку
 export function parseLitnetList(text) {
   const out = [], parts = String(text || '').split(/\n(?=#### \[)/);
   for (let i = 1; i < parts.length; i++) {
@@ -300,3 +317,47 @@ export function tropeForecast(snap = {}, { src = null, weeks = 4 } = {}) {
     down: items.filter((x) => x.verdict === 'down').sort((a, b) => a.score - b.score).slice(0, 5), items };
 }
 const addDaysIso = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+
+// ---------- Конкуренты (19.11.2026, её просьба: «более совершенная сводка по конкурентам, наглядно») ----------
+// Кто рядом с ней в топе: авторы, чьи книги пишутся на те же тропы (сами находятся), и те, за кем она следит.
+// По каждому: книг в топе, лучшее место, библиотеки всего, прирост в день против прошлого среза, ход библиотек по срезам (для линии),
+// общие с ней тропы и события (новая книга, скидка, смена цены — из watchReport). Чем больше срезов, тем длиннее и точнее линии.
+export function rivalBoard(snap = {}, { watch = [], myTropes = [], me = '', src = null, limit = 8 } = {}) {
+  const dates = Object.keys(snap.days || {}).sort(), books = snap.books || {};
+  if (!dates.length) return { rivals: [], dates: [] };
+  const low = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е').trim(), mine = new Set(myTropes.map(low)), meL = low(me);
+  const flat = (d) => { const m = {}; for (const [k, rows] of Object.entries(snap.days[d] || {})) if (!src || k === src) for (const r of rows) if (!m[r.id] || r.n < m[r.id].n) m[r.id] = r; return m; };
+  const slices = dates.map((d) => ({ d, m: flat(d) })).filter((x) => Object.keys(x.m).length);
+  if (!slices.length) return { rivals: [], dates: [] };
+  const last = slices[slices.length - 1], lastDate = last.d;
+  const prevS = [...slices].reverse().find((x) => { const g = (Date.parse(lastDate) - Date.parse(x.d)) / 864e5; return g >= 5 && g <= 9; }) || (slices.length > 1 ? slices[0] : null);
+  const gap = prevS ? Math.max(1, Math.round((Date.parse(lastDate) - Date.parse(prevS.d)) / 864e5)) : 0;
+  const tagsOf = (r) => (Array.isArray(r.tr) ? r.tr.map((i) => TROPES[i]?.[0]).filter(Boolean) : books[r.id]?.tr || []);
+  const by = new Map();
+  for (const r of Object.values(last.m)) {
+    const a = books[r.id]?.a; if (!a || low(a) === meL) continue;
+    const x = by.get(low(a)) || { name: a, books: [], lib: 0, best: Infinity, tropes: new Map() };
+    x.books.push({ id: r.id, title: books[r.id]?.t || '', url: books[r.id]?.u || '', n: r.n, lib: r.l, price: r.p, off: r.o, done: !!r.s, excl: !!r.e });
+    x.lib += r.l || 0; x.best = Math.min(x.best, r.n);
+    for (const t of tagsOf(r)) x.tropes.set(t, (x.tropes.get(t) || 0) + 1);
+    by.set(low(a), x);
+  }
+  const watched = new Set(watch.map(low));
+  const ev = Object.fromEntries(watchReport(snap, watch).map((w) => [low(w.name), w.events]));
+  const out = [...by.values()].map((x) => {
+    const ids = new Set(x.books.map((b) => b.id));
+    const series = slices.map((s) => ({ d: s.d, lib: [...ids].reduce((a, id) => a + (s.m[id]?.l || 0), 0), on: [...ids].filter((id) => s.m[id]).length }));
+    const prevLib = prevS ? [...ids].filter((id) => prevS.m[id]).reduce((a, id) => a + (last.m[id].l - prevS.m[id].l), 0) : null;
+    const common = [...x.tropes.keys()].filter((t) => mine.has(low(t)));
+    return { name: x.name, books: x.books.sort((a, b) => a.n - b.n), n: x.books.length, lib: x.lib, best: x.best, perDay: prevLib != null && gap ? Math.round(prevLib / gap) : null,
+      series, common, tropes: [...x.tropes.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).slice(0, 4), watched: watched.has(low(x.name)), events: ev[low(x.name)] || [],
+      sale: x.books.some((b) => b.off > 0), similar: common.length > 0 };
+  });
+  // порядок: те, за кем следит; потом похожие на неё по тропам (больше общих — выше), потом крупные (2+ книги в топе)
+  const score = (r) => (r.watched ? 1e12 : 0) + (r.similar ? 1e9 * r.common.length : 0) + (r.n >= 2 ? 1e6 : 0) + r.lib;
+  const rivals = out.filter((r) => r.watched || r.similar || r.n >= 2).sort((a, b) => score(b) - score(a)).slice(0, Math.max(limit, watched.size));
+  // события ещё и по похожим (не только по тем, за кем следит): новые книги и скидки — то, на что стоит реагировать
+  const evAll = Object.fromEntries(watchReport(snap, rivals.filter((r) => !r.watched).map((r) => r.name)).map((w) => [low(w.name), w.events]));
+  for (const r of rivals) if (!r.watched) r.events = evAll[low(r.name)] || [];
+  return { rivals, dates: slices.map((s) => s.d), gap, prevDate: prevS?.d || null, lastDate };
+}
