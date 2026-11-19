@@ -208,21 +208,22 @@ acts['pr.write'] = (d) => {
     <label>Письмо</label><textarea id="pr-body" rows="12" style="font-size:14px;line-height:1.5">${esc(L.body)}</textarea>
     <p class="small" style="margin:8px 0 0"><button class="link" type="button" data-act="pr.copy">${ic('copy')} Скопировать письмо</button></p>
     ${k === 'formal' ? '<p class="small muted" style="margin:8px 0 0">По закону в заявлении указывают паспортные данные и телефон — впишите их сами вместо квадратных скобок.</p>' :
-      !canSend() ? '<label class="d-check small"><input type="checkbox" id="pr-manual-confirm"> Я действительно отправила письмо самостоятельно или подала жалобу через форму</label>' : ''}`,
+      '<label class="d-check small"><input type="checkbox" id="pr-manual-confirm"> Я уже отправила письмо самостоятельно или подала жалобу через форму (повторно не отправлять)</label>'`,
   k === 'formal' ? null : async () => {
     const ct = (get(f.id) || f).contacts;
     const override = k === 'host' ? (document.getElementById('pr-manual-email')?.value || '').trim().toLowerCase() : '';
     if (override && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(override)) { toast('Укажите корректный email проверенного хостинга'); return false; }
     const to = override ? [override] : toOf(ct);
-    if (canSend() && !to.length) { toast('Получатель не подтвержден. Укажите проверенный адрес или используйте форму CDN. Статус не изменен.'); return false; }
-    if (!canSend() && !document.getElementById('pr-manual-confirm')?.checked) { toast('Сначала отправьте жалобу, затем подтвердите отправку галочкой.'); return false; }
-    if (canSend() && to.length) {
+    const sentManually = !!document.getElementById('pr-manual-confirm')?.checked;
+    if (!sentManually && canSend() && !to.length) { toast('Получатель не найден. Укажите проверенный адрес или подайте жалобу через форму, затем подтвердите вручную.'); return false; }
+    if (!sentManually && !canSend()) { toast('Сначала отправьте жалобу, затем подтвердите отправку галочкой.'); return false; }
+    if (!sentManually && canSend() && to.length) {
       const body = document.getElementById('pr-body')?.value || L.body;
       let r; try { r = await mailSvc().call({ op: 'claim', to, subject: L.subject, text: body }); } catch (e) { toast('Не отправилось: ' + e.message); return false; }
       if (!r?.ok) { toast('Письмо не принято почтой адресата — откройте в своей почте'); return false; }
     }
-    await patch(get(f.id) || f, k === 'host' ? { status: 'host', hostAt: new Date().toISOString(), goneMaybe: false } : { status: 'sent', sentAt: new Date().toISOString() }); toast(k === 'host' ? 'Готово. Через 5 дней напомню проверить' : `Готово. Через ${WAIT_SITE} дня проверю, удалили ли`); },
-  { submitText: canSend() ? 'Отправить' : 'Отправила' });
+    await patch(get(f.id) || f, k === 'host' ? { status: 'host', hostAt: new Date().toISOString(), goneMaybe: false, via: sentManually ? 'manual' : 'service' } : { status: 'sent', sentAt: new Date().toISOString(), via: sentManually ? 'manual' : 'service' }); toast(k === 'host' ? 'Готово. Через 5 дней напомню проверить' : `Готово. Через ${WAIT_SITE} дня проверю, удалили ли`); },
+  { submitText: canSend() ? 'Отправить / отметить' : 'Отправила' });
   if ((!f.contacts || f.contacts.v !== 2) && !P.contacts[f.id]) {
     P.contacts[f.id] = true;
     findContacts(f).then(async (ct) => {
@@ -275,7 +276,7 @@ acts['pr.litnet'] = (d) => {
   const href = () => litnetFormUrl({ authorId: id, title, pen, urls });
   openSheet(`Литнету · «${plainTitle(title)}»`, `<p class="small" style="margin-top:0">Литнет сам добивается удаления копий своих книг — у него соглашение с ассоциацией правообладателей. Форма откроется уже заполненной: ваш ID, книга, псевдоним и ${urls.length} ${plural(urls.length, ['ссылка', 'ссылки', 'ссылок'])} на пиратские страницы — останется нажать «Отправить».</p>
     <label for="pr-lid">Ваш ID на Литнете</label><input id="pr-lid" inputmode="numeric" autocomplete="off" value="${esc(id)}" placeholder="${id ? '' : 'ищу на странице вашей книги…'}">
-    <p class="small muted" style="margin:4px 0 0" id="pr-lid-h">${id ? `Профиль Литнета: <a href="${LANA_LITNET_PROFILE}" target="_blank" rel="noopener">проверить ID ${esc(id)}</a>.` : 'Если не найду: Литнет → «Моя страница» → цифры после «-u» в адресе.'}</p>
+    <p class="small muted" style="margin:4px 0 0" id="pr-lid-h">${id ? (id === knownLitnetAuthorId(pen) ? `Профиль Литнета: <a href="${LANA_LITNET_PROFILE}" target="_blank" rel="noopener">проверить ID ${esc(id)}</a>.` : `ID ${esc(id)} — проверьте его в адресе своего профиля.`) : 'Если не найду: Литнет → «Моя страница» → цифры после «-u» в адресе.'}</p>
     <p style="margin:14px 0 0"><a class="small-btn" id="pr-lform" href="${esc(href())}" target="_blank" rel="noopener">Открыть форму Литнета</a></p>
     <p class="small muted" style="margin:10px 0 0">Литнет принимает жалобы на платные книги, выложенные целиком.</p>`,
   async () => {
