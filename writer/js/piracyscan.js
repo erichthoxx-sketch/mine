@@ -1,7 +1,7 @@
 // «Защита от пиратов»: работа с сетью. Всё бесплатно и без ключей: выдачу поисковиков и страницы читает общедоступная
 // «читалка» r.jina.ai (браузер сам чужой сайт открыть не может), почту хостинга дают открытые сведения RDAP и dns.google.
 // Раз в сутки при открытой Мастерской (autoPiracy) или по кнопке. Найденное — коллекция w_piracy, служебное — settings.piracy.
-import { searchQueries, ENGINES, parseResults, judge, findId, hostOf, emailsIn, rdapInfo, isCloudflare, CONTACT_PATHS, norm, plainTitle, fullTextBack, skipToRecheck } from './piracy.js';
+import { searchQueries, ENGINES, parseResults, judge, findId, hostOf, emailsIn, rdapInfo, isCloudflare, isProxyNetwork, CONTACT_PATHS, norm, plainTitle, fullTextBack, skipToRecheck } from './piracy.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const GAP = 3500; // читалка без ключа пускает ~20 запросов в минуту
@@ -112,9 +112,16 @@ async function json(url) {
   try { const r = await fetch(url); if (r.ok) return await r.json(); } catch { /* запасной путь ниже */ }
   try { const t = await read(url, { timeout: 20000 }); const i = t.indexOf('{'); return i >= 0 ? JSON.parse(t.slice(i, t.lastIndexOf('}') + 1)) : null; } catch { return null; }
 }
+export function registeredDomain(host = '') {
+  const parts = String(host).toLowerCase().split('.').filter(Boolean);
+  const multi = new Set(['co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'net.au', 'org.au', 'co.jp', 'com.br', 'com.tr', 'com.ua', 'co.nz']);
+  const suffix = parts.slice(-2).join('.');
+  return parts.slice(-(multi.has(suffix) ? 3 : 2)).join('.');
+}
 export async function findContacts(f) {
-  const root = f.host.split('.').slice(-2).join('.'), origin = 'https://' + f.host;
-  const out = { site: [], host: [], hostName: '', reg: [], regName: '', cf: false, at: new Date().toISOString() };
+  const root = registeredDomain(f.host), origin = 'https://' + f.host;
+  const out = { v: 2, site: [], host: [], hostName: '', hostSource: 'ip-rdap', ip: '',
+    reg: [], regName: '', cf: false, proxy: false, at: new Date().toISOString() };
   // сайт: главная и страницы «правообладателям / контакты»
   for (const p of CONTACT_PATHS.slice(0, 5)) {
     try { out.site.push(...emailsIn(await read(origin + p, { timeout: 20000 }))); } catch { /* страницы нет */ }
@@ -125,10 +132,18 @@ export async function findContacts(f) {
   // хостинг: адрес сервера → чья это сеть и куда жаловаться
   const dns = await json('https://dns.google/resolve?name=' + encodeURIComponent(f.host) + '&type=A');
   const ip = (dns?.Answer || []).map((a) => a.data).find((d) => /^\d+\.\d+\.\d+\.\d+$/.test(d || ''));
-  if (ip) { const i = rdapInfo(await json('https://rdap.org/ip/' + ip)); out.hostName = i.name; out.host = (i.abuse.length ? i.abuse : i.emails).slice(0, 2); }
+  if (ip) {
+    out.ip = ip;
+    const i = rdapInfo(await json('https://rdap.org/ip/' + ip));
+    out.hostName = i.name;
+    out.host = (i.abuse.length ? i.abuse : i.emails).slice(0, 2);
+  }
+  // Регистратор домена не управляет файлами сайта. Его контакты храним отдельно,
+  // никогда не добавляем в список получателей претензии «хостингу».
   const d = rdapInfo(await json('https://rdap.org/domain/' + root));
   out.regName = d.name; out.reg = (d.abuse.length ? d.abuse : d.emails).slice(0, 2);
   out.cf = isCloudflare(out.hostName, out.host);
+  out.proxy = isProxyNetwork(out.hostName, out.host);
   return out;
 }
 const rank = (m, root) => (/abuse|dmca|copyright|prav|legal/.test(m) ? 3 : 0) + (m.endsWith('@' + root) ? 2 : 0) + (/admin|support|info|help|contact/.test(m) ? 1 : 0);
