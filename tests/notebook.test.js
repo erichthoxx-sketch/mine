@@ -54,3 +54,24 @@ test('промты: подстановка переменных, место и �
   assert.deepEqual(docPromptTabs(books, [{ src: 'b1:Prompt сцены' }]).map((x) => x.tab), ['Промт эксперементальный']);
   assert.equal(guessPlace('Промт для сцен'), 'chapter'); assert.equal(guessPlace('Промт персонажи'), 'chars'); assert.equal(guessPlace('Промт'), 'any');
 });
+
+import { toSimplenoteJson, changedHere } from '../writer/js/notecalc.js';
+test('экспорт в Simplenote: их формат notes.json, теги без пробелов, закреп и markdown; туда-обратно без потерь; «новые и изменённые»', () => {
+  const list = [
+    { id: 'n1', text: '# Сцены\n- [ ] свадьба', tags: ['черная вдова'], pinned: true, createdAt: '2026-11-01T10:00:00.000Z', updatedAt: '2026-11-02T10:00:00.000Z' },
+    { id: 'n2', sid: 'abc', text: 'Из Simplenote', tags: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z', impAt: '2026-11-10T00:00:00.000Z' },
+    { id: 'n3', text: 'В корзине', deletedAt: '2026-11-03' }, { id: 'n4', text: '   ' },
+  ];
+  const J = toSimplenoteJson(list);
+  assert.deepEqual(J.trashedNotes, []);
+  assert.equal(J.activeNotes.length, 2);
+  assert.deepEqual(J.activeNotes[0], { id: 'n1', content: '# Сцены\n- [ ] свадьба', creationDate: '2026-11-01T10:00:00.000Z', lastModified: '2026-11-02T10:00:00.000Z', tags: ['черная-вдова'], pinned: true, markdown: true });
+  assert.equal(J.activeNotes[1].id, 'abc');
+  const back = fromSimplenoteJson(JSON.stringify(J));
+  assert.deepEqual(back.map((n) => [n.text, n.pinned, n.updatedAt]), [['# Сцены\n- [ ] свадьба', true, '2026-11-02T10:00:00.000Z'], ['Из Simplenote', false, '2026-01-02T00:00:00.000Z']]);
+  // новые и изменённые: созданная здесь — да; перенесённая и не тронутая — нет; тронутая после переноса — да; после экспорта — только свежее
+  assert.deepEqual(list.filter((n) => changedHere(n)).map((n) => n.id), ['n1']);
+  assert.equal(changedHere({ ...list[1], updatedAt: '2026-11-15T00:00:00.000Z' }), true);
+  assert.equal(changedHere(list[0], '2026-11-05T00:00:00.000Z'), false); // уже выгружена — второй раз не попадёт
+  assert.equal(changedHere({ ...list[0], updatedAt: '2026-11-06T00:00:00.000Z' }, '2026-11-05T00:00:00.000Z'), true);
+});

@@ -3693,3 +3693,7 @@ circle.mk-q-d.me { fill: var(--text); }
 circle.mk-q-d:hover { fill: var(--text-2); }
 .mk-q-l { fill: var(--text-2); font-size: 12px; pointer-events: none; }
 .mk-q-l.me { fill: var(--text); font-weight: 600; }
+
+/* Блокнот: окно «Экспорт заметок» — кнопки столбиком */
+.nb-exp { display: grid; gap: 8px; justify-items: stretch; }
+.nb-exp .link { justify-self: start; margin-top: 2px; }

@@ -12,7 +12,7 @@ import { synText } from '../synopsis.js';
 import { ideasView } from './ideas.js';
 import {
   noteTitle, notePreview, notesView, noteTags, normTag, textStats, expiredNote, toggleCheck, noteHtml,
-  fromSimplenoteJson, fromText, newOnly, PLACES, VARS, fillPrompt, missingVars, promptsFor, docPromptTabs, guessPlace,
+  fromSimplenoteJson, fromText, newOnly, toSimplenoteJson, changedHere, PLACES, VARS, fillPrompt, missingVars, promptsFor, docPromptTabs, guessPlace,
 } from '../notecalc.js';
 
 const app = () => window.__app;
@@ -56,7 +56,7 @@ function notesPane(a) {
         <button class="plus-btn hm-plus" data-act="note.new" title="Новая заметка" aria-label="Новая заметка">${ic('plus')}</button></div>
       <div class="nb-chips">${chip('', 'Все')}${tags.map((t) => chip(t.tag, '#' + esc(t.tag), t.n)).join('')}${trashN || tag === '@trash' ? chip('@trash', 'Корзина', trashN) : ''}</div>
       <div class="nb-items">${list.length ? list.map(item).join('') : `<p class="muted nb-empty">${empty}</p>`}</div>
-      <div class="nb-foot"><button class="link" data-act="note.import">Перенести из Simplenote</button>${all.length ? '<button class="link" data-act="note.export">Скачать все</button>' : ''}</div>
+      <div class="nb-foot"><button class="link" data-act="note.import">Импорт</button>${all.length ? '<button class="link" data-act="note.export">Экспорт</button>' : ''}</div>
     </section>
     <section class="card nb-ed">${open ? editorHtml(a, open) : `<div class="nb-blank"><p class="muted">Выберите заметку слева или создайте новую.</p><button class="primary" data-act="note.new">Новая заметка</button></div>`}</section>
   </div>`;
@@ -189,23 +189,44 @@ changes['note.importFile'] = async (v, el) => {
       } else if (/\.json$/i.test(f.name)) got.push(...fromSimplenoteJson(await f.text()));
       else got.push(fromText(f.name, await f.text(), new Date(f.lastModified || Date.now()).toISOString()));
     }
-    const add = newOnly(got.filter((n) => n.text.trim()), notes()).map((n) => ({ id: 'n' + uid(), ...n }));
+    const impAt = new Date().toISOString(), add = newOnly(got.filter((n) => n.text.trim()), notes()).map((n) => ({ id: 'n' + uid(), ...n, impAt }));
     if (!add.length) { toast(got.length ? 'Все эти заметки уже перенесены' : 'В файле не нашлось заметок'); return; }
     await app().store.putMany('w_notes', add);
     closeSheet(); app().ui.noteTag = ''; app().ui.noteId = null;
     toast(`Перенесено заметок: ${add.length}`);
   } catch (e) { toast('Не получилось прочитать файл: ' + (e.message || e)); }
 };
-acts['note.export'] = async () => {
-  const list = notes().filter((n) => !n.deletedAt);
-  const Zip = await drive.loadJsZip(), z = new Zip(), used = new Set();
-  for (const n of list) {
-    let nm = noteTitle(n).replace(/[\\/:*?"<>|«»]+/g, ' ').trim().slice(0, 60) || 'zametka', k = nm, i = 2;
-    while (used.has(k)) k = `${nm} ${i++}`; used.add(k);
-    z.file(`${k}.txt`, n.text + ((n.tags || []).length ? `\n\n${n.tags.map((t) => '#' + t).join(' ')}` : ''));
+// экспорт: в Simplenote (их notes.json — загружается в Simplenote: Файл → Импорт заметок → Simplenote) или текстовыми файлами (.zip)
+acts['note.export'] = () => {
+  const c = app().ctx(), at = c.settings.notesExport?.at || '', all = notes().filter((n) => !n.deletedAt), fresh = all.filter((n) => changedHere(n, at));
+  openSheet('Экспорт заметок', `<div class="nb-exp">
+      <button class="primary" data-act="note.exp" data-k="sn" data-w="fresh"${fresh.length ? '' : ' disabled'}>В Simplenote — новые и изменённые · ${fresh.length}</button>
+      <button class="small-btn" data-act="note.exp" data-k="sn" data-w="all">В Simplenote — все · ${all.length}</button>
+      <button class="link small" data-act="note.exp" data-k="txt" data-w="all">Текстовыми файлами (.zip)</button></div>
+    <p class="small muted" style="margin:12px 0 0">В Simplenote на компьютере: <b>Файл → Импорт заметок</b> (Import Notes) <b>→ Simplenote</b> → выберите скачанный notes.json. Теги, закреплённые и даты перенесутся.
+      Simplenote добавляет заметки как новые — поэтому по умолчанию только созданные или изменённые здесь${at ? ` после прошлого экспорта ${fmtDate(at.slice(0, 10))}` : ''}, без двойных.</p>`, null);
+  return false;
+};
+acts['note.exp'] = async (d) => {
+  const c = app().ctx(), at = c.settings.notesExport?.at || '', all = notes().filter((n) => !n.deletedAt), list = d.w === 'fresh' ? all.filter((n) => changedHere(n, at)) : all;
+  if (!list.length) { toast('Новых и изменённых заметок нет'); return false; }
+  let ok;
+  if (d.k === 'sn') {
+    const json = JSON.stringify(toSimplenoteJson(list), null, 1);
+    if (json.length > 4900000) { toast('Больше 5 МБ — Simplenote такой файл не примет. Выберите «новые и изменённые».'); return false; }
+    ok = await download('notes.json', new Blob([json], { type: 'application/json' }), 'application/json');
+  } else {
+    const Zip = await drive.loadJsZip(), z = new Zip(), used = new Set();
+    for (const n of list) {
+      let nm = noteTitle(n).replace(/[\\/:*?"<>|«»]+/g, ' ').trim().slice(0, 60) || 'zametka', k = nm, i = 2;
+      while (used.has(k)) k = `${nm} ${i++}`; used.add(k);
+      z.file(`${k}.txt`, n.text + ((n.tags || []).length ? `\n\n${n.tags.map((t) => '#' + t).join(' ')}` : ''));
+    }
+    ok = await download(`zametki_${c.today}.zip`, await z.generateAsync({ type: 'blob' }), 'application/zip');
   }
-  const blob = await z.generateAsync({ type: 'blob' });
-  if (await download(`zametki_${app().ctx().today}.zip`, blob, 'application/zip')) toast('Заметки скачаны');
+  if (!ok) return false;
+  if (d.k === 'sn') await app().store.saveSettings({ notesExport: { at: new Date().toISOString(), n: list.length } });
+  closeSheet(); toast(d.k === 'sn' ? `Скачан notes.json · ${list.length} — загрузите его в Simplenote` : 'Заметки скачаны');
   return false;
 };
 

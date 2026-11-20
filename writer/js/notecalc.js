@@ -129,3 +129,23 @@ export function guessPlace(title) {
   if (/реклам|аннотац|пост|блог|маркет|таргет/.test(t)) return 'marketing';
   return 'any';
 }
+
+// Экспорт в Simplenote (20.11.2026, её просьба: «экспорт в Simplenote не работает»): их собственный формат notes.json —
+// {activeNotes: [{content, creationDate, lastModified, tags, pinned, markdown}], trashedNotes: []} (сверено с импортом Simplenote:
+// lib/utils/import/simplenote — .json или .zip с source/notes.json, не больше 5 МБ; теги без пробелов и запятых).
+const MD = /^\s*#{1,3}\s|\*\*|^\s*[-*]\s*\[[ xх]\]/m;
+export function toSimplenoteJson(list) {
+  const one = (n) => ({
+    id: n.sid && !String(n.sid).startsWith('txt:') ? String(n.sid) : String(n.id || ''),
+    content: String(n.text || ''),
+    creationDate: n.createdAt || n.updatedAt || new Date().toISOString(),
+    lastModified: n.updatedAt || n.createdAt || new Date().toISOString(),
+    tags: (n.tags || []).map((t) => String(t).replace(/[\s,]+/g, '-')).filter(Boolean),
+    ...(n.pinned ? { pinned: true } : {}),
+    ...(MD.test(n.text || '') ? { markdown: true } : {}),
+  });
+  return { activeNotes: (list || []).filter((n) => !n.deletedAt && String(n.text || '').trim()).map(one), trashedNotes: [] };
+}
+// «новые и изменённые здесь»: созданные в Мастерской, правленные после переноса из Simplenote или после прошлого экспорта —
+// чтобы в Simplenote не появлялись двойные заметки
+export const changedHere = (n, exportAt = '') => !n.deletedAt && String(n.text || '').trim() !== '' && (exportAt ? String(n.updatedAt || n.createdAt || '') > exportAt : (!n.sid || (!!n.impAt && String(n.updatedAt || '') > n.impAt)));
