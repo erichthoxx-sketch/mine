@@ -94,3 +94,20 @@ test('название и текст — всегда на одном расст
   assert.deepEqual(r[2].deleteContentRange.range, { startIndex: 1, endIndex: 2, tabId: 'g' }); // пустая строка перед названием
   assert.equal(r[4].insertText.text, 'Глава 3'); assert.equal(r[4].insertText.location.index, 1);
 });
+
+test('вставка: абзацы через пустую строку — без пустых строк, обычный текст не трогаем', async () => {
+  const { pasteText } = await import('../writer/js/docedit.js');
+  assert.equal(pasteText('Раз.\n\nДва.\r\n\r\nТри.'), 'Раз.\nДва.\nТри.');
+  assert.equal(pasteText('Раз.\n \nДва.'), 'Раз.\nДва.');
+  assert.equal(pasteText('Раз.\nДва.\nТри.\n\n***\nЧетыре.'), 'Раз.\nДва.\nТри.\n\n***\nЧетыре.');
+  assert.equal(pasteText('Просто слово'), 'Просто слово');
+});
+test('глава через строку: пустые абзацы между абзацами убираются, одиночные у сцен остаются', async () => {
+  const { squeezeBlank } = await import('../writer/js/docedit.js');
+  const P = (t) => ({ st: {}, runs: t ? [{ t }] : [] });
+  const r = squeezeBlank([P('Глава 1'), P(''), P('А'), P(''), P('Б'), P(''), P(' '), P('В'), P(''), P('Г')]);
+  assert.equal(r.n, 5);
+  assert.deepEqual(r.blocks.map((p) => p.runs[0]?.t), ['Глава 1', 'А', 'Б', 'В', 'Г']);
+  const ok = [P('А'), P('Б'), P(''), P('***'), P(''), P('В'), P('Г'), P('Д')];
+  assert.equal(squeezeBlank(ok).n, 0);
+});

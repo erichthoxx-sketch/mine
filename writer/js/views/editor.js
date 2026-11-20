@@ -8,7 +8,7 @@ import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
 import './legend.js';
 import { openPrompts } from './notebook.js';
-import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats, nextChapterTab, isChapterTitle } from '../docedit.js';
+import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats, nextChapterTab, isChapterTitle, pasteText, squeezeBlank } from '../docedit.js';
 import { alNum, chapterList } from '../wcalc.js';
 import { cleanText, cleanedMsg } from '../../../js/cleantext.js';
 import { editorToolbar, editorFindBar } from '../editor-ui.js';
@@ -138,9 +138,11 @@ async function load(key, b, title) {
     const draft = ls.get(draftKey(key));
     // невидимые символы (из чатов и сайтов) — убираем сразу, исправленная глава сама сохранится в Документ
     let cleaned = 0;
-    const clean = blocks.map((p) => ({ ...p, runs: p.runs.map((r) => { const x = cleanText(r.t); cleaned += x.n; return x.n ? { ...r, t: x.text } : r; }) }));
+    const clean0 = blocks.map((p) => ({ ...p, runs: p.runs.map((r) => { const x = cleanText(r.t); cleaned += x.n; return x.n ? { ...r, t: x.text } : r; }) }));
+    // абзацы, разделённые пустыми строками (после вставки), — без пустых строк; исправленная глава тоже сохранится сама
+    const sq = squeezeBlank(clean0), clean = sq.blocks;
     ed = { key, bookId: b.id, title, tabId: tab?.tabProperties?.tabId || '', status: 'ready', named, base, font: named.NORMAL_TEXT?.run?.f || '',
-      html: blocksToHtml(clean, named, base), baseText: blocksText(blocks), dirty: cleaned > 0, cleaned, startChars: textStats(blocks).chars,
+      html: blocksToHtml(clean, named, base), baseText: blocksText(blocks), dirty: cleaned > 0 || sq.n > 0, cleaned, blanks: sq.n, startChars: textStats(blocks).chars,
       draft: draft && draft.text !== blocksText(blocks) ? draft : null };
   } catch (e) { ed = { key, bookId: b.id, title, status: 'error', err: e.message }; }
   if (app().ui.route.startsWith('/ed/')) app().rerender();
@@ -240,12 +242,13 @@ function wire() {
   el.addEventListener('paste', (e) => {
     e.preventDefault();
     const x = cleanText((e.clipboardData || window.clipboardData).getData('text/plain'));
-    document.execCommand('insertText', false, x.text);
+    document.execCommand('insertText', false, pasteText(x.text)); // абзацы без пустых строк между ними
     if (x.n) toast(cleanedMsg(x.n));
   });
-  if (ed.cleaned) {
-    toast(`${cleanedMsg(ed.cleaned)} в главе — сохранится в Документ`);
-    ed.cleaned = 0;
+  if (ed.cleaned || ed.blanks) {
+    const nb = ed.blanks, w = nb % 10 === 1 && nb % 100 !== 11 ? 'пустую строку' : [2, 3, 4].includes(nb % 10) && ![12, 13, 14].includes(nb % 100) ? 'пустые строки' : 'пустых строк';
+    toast(`${[ed.cleaned ? cleanedMsg(ed.cleaned) : '', nb ? `${ed.cleaned ? 'убрала' : 'Убрала'} ${nb} ${w} между абзацами` : ''].filter(Boolean).join(', ')} — сохранится в Документ`);
+    ed.cleaned = 0; ed.blanks = 0;
     if (pref('auto', true)) { clearTimeout(autoTimer); autoTimer = setTimeout(() => save({ auto: true }), 3000); }
   }
   // курсор в абзаце → показываем его стиль

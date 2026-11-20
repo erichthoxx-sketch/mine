@@ -201,3 +201,25 @@ export function titleRequests(doc) {
   walk(doc?.tabs);
   return out;
 }
+
+// Пустые строки между абзацами (20.11.2026, её жалоба: «опять двойные пробелы перед абзацами»). Браузер при копировании
+// абзацев (из чата, с Литнета и даже внутри самой главы) разделяет их пустой строкой — при вставке каждая становилась пустым абзацем.
+// Вставка: если абзацы в тексте разделены пустыми строками (большинство переходов) — оставляем один перевод строки.
+export function pasteText(s) {
+  const t = String(s ?? '').replace(/\r\n?/g, '\n').replace(/[\u2028\u2029]/g, '\n');
+  const breaks = t.replace(/^\n+|\n+$/g, '').match(/\n(?:[ \t]*\n)*/g) || [];
+  const blank = breaks.filter((b) => b.length > 1).length;
+  if (!blank || blank < breaks.length * 0.6) return t;
+  return t.replace(/\n(?:[ \t]*\n)+/g, '\n');
+}
+// Глава, где абзацы уже разделены пустыми абзацами (то же «через строку»): убираем пустые абзацы между абзацами текста —
+// только если так разделено большинство абзацев (3+ раза); одиночные пустые строки у сцен остаются. → { blocks, n }
+export function squeezeBlank(blocks) {
+  const empty = (p) => !p.runs.some((r) => r.t.trim());
+  let gaps = 0, trans = 0, prev = -1;
+  blocks.forEach((p, k) => { if (empty(p)) return; if (prev >= 0) { trans++; if (k - prev > 1) gaps++; } prev = k; });
+  if (gaps < 3 || gaps < trans * 0.6) return { blocks, n: 0 };
+  const first = blocks.findIndex((p) => !empty(p)), last = blocks.length - 1 - [...blocks].reverse().findIndex((p) => !empty(p));
+  const out = blocks.filter((p, k) => !(k > first && k < last && empty(p)));
+  return { blocks: out, n: blocks.length - out.length };
+}
