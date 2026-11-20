@@ -2,6 +2,7 @@
 // только когда с сервера пришли книги, события дней и настройки — иначе можно затереть чужие события дня.
 import { pubMap, pubState, pubPlatforms, chapterList, scheduleDates } from './wcalc.js';
 import { chapterEvent, syncFinish } from './sync.js';
+import { needsWsTag, WS_TAG } from './notecalc.js';
 
 // 10.11.2026: «Развод для черной вдовы» — новый график на Литнете (владелица перенесла сама):
 // пролог и глава 1 вышли 09.11, главы 2–7 — на таймере 11, 13, 16, 18, 20, 23 ноября в 19:00,
@@ -51,6 +52,17 @@ export async function runOneoffs(app) {
   const st = app.store;
   if (busy || st.mode !== 'firebase' || !st.user || !st.settingsServerLoaded || !st.loaded?.w_books || !st.loaded?.days) return;
   const s = st.data.settings || {};
+  // 20.11.2026: тег «мастерская» — заметкам, созданным в Мастерской, один раз (новые получают его сами при создании)
+  if (!s.oneoff?.notesWsTag && st.loaded?.w_notes) {
+    busy = true;
+    try {
+      const add = needsWsTag(st.data.w_notes || []).map((n) => ({ ...n, tags: [...(n.tags || []), WS_TAG] }));
+      if (add.length) await st.putMany('w_notes', add);
+      await st.saveSettings({ oneoff: { ...(s.oneoff || {}), notesWsTag: new Date().toISOString() } });
+    } catch (e) { console.warn('Тег «мастерская» заметкам:', e); }
+    finally { busy = false; }
+    return;
+  }
   if (s.oneoff?.[VDOVA.key]) return;
   const b = st.data.w_books.find((x) => VDOVA.title.test(x.title || ''));
   if (!b) return;

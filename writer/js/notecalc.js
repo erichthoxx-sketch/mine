@@ -149,3 +149,9 @@ export function toSimplenoteJson(list) {
 // «новые и изменённые здесь»: созданные в Мастерской, правленные после переноса из Simplenote или после прошлого экспорта —
 // чтобы в Simplenote не появлялись двойные заметки
 export const changedHere = (n, exportAt = '') => !n.deletedAt && String(n.text || '').trim() !== '' && (exportAt ? String(n.updatedAt || n.createdAt || '') > exportAt : (!n.sid || (!!n.impAt && String(n.updatedAt || '') > n.impAt)));
+
+// Тег «мастерская» (20.11.2026, её просьба: «ко всем заметкам из Мастерской автоматом добавлять тег мастерская, только аккуратно, с возможностью удалить»):
+// новые заметки получают его при создании; уже созданные здесь (без sid — не перенесённые из Simplenote и не из файлов) — один раз.
+// Корзину, перенесённые и те, где тег уже есть, не трогаем; дату правки не меняем. Удалила тег у заметки — сам он не вернётся.
+export const WS_TAG = 'мастерская';
+export const needsWsTag = (list) => (list || []).filter((n) => !n.sid && !n.deletedAt && !(n.tags || []).includes(WS_TAG));

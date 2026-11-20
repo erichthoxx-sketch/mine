@@ -12,7 +12,7 @@ import { synText } from '../synopsis.js';
 import { ideasView } from './ideas.js';
 import {
   noteTitle, notePreview, notesView, noteTags, normTag, textStats, expiredNote, toggleCheck, noteHtml,
-  fromSimplenoteJson, fromText, newOnly, toSimplenoteJson, changedHere, PLACES, VARS, fillPrompt, missingVars, promptsFor, docPromptTabs, guessPlace,
+  fromSimplenoteJson, fromText, newOnly, toSimplenoteJson, changedHere, WS_TAG, PLACES, VARS, fillPrompt, missingVars, promptsFor, docPromptTabs, guessPlace,
 } from '../notecalc.js';
 
 const app = () => window.__app;
@@ -45,7 +45,6 @@ function notesPane(a) {
   const list = notesView(all, { q, tag });
   const open = ui.noteId && noteOf(ui.noteId) ? noteOf(ui.noteId) : null;
   const tags = noteTags(all), trashN = all.filter((n) => n.deletedAt).length;
-  const chip = (v, t, n) => `<button class="nb-chip${tag === v ? ' on' : ''}" data-act="note.tag" data-v="${esc(v)}">${t}${n ? ` <span>${n}</span>` : ''}</button>`;
   const item = (n) => `<button class="nb-item${open?.id === n.id ? ' on' : ''}" data-act="note.open" data-id="${n.id}" data-nid="${n.id}">
       <span class="nb-it-t">${n.pinned ? `<i class="nb-pin">${ic('pin')}</i>` : ''}<b>${esc(noteTitle(n))}</b><small>${when(n.updatedAt)}</small></span>
       <span class="nb-it-p">${esc(notePreview(n)) || '&nbsp;'}</span></button>`;
@@ -54,7 +53,9 @@ function notesPane(a) {
     <section class="card nb-list">
       <div class="nb-head"><input type="search" class="nb-q" value="${esc(q)}" placeholder="Поиск по заметкам" data-chg="note.q" aria-label="Поиск по заметкам">
         <button class="plus-btn hm-plus" data-act="note.new" title="Новая заметка" aria-label="Новая заметка">${ic('plus')}</button></div>
-      <div class="nb-chips">${chip('', 'Все')}${tags.map((t) => chip(t.tag, '#' + esc(t.tag), t.n)).join('')}${trashN || tag === '@trash' ? chip('@trash', 'Корзина', trashN) : ''}</div>
+      ${tags.length || trashN || tag ? `<label class="nb-filter"><select data-chg="note.tagSel" aria-label="Какие заметки показать">
+        <option value="">Все заметки · ${all.length - trashN}</option>${tags.map((t) => `<option value="${esc(t.tag)}"${tag === t.tag ? ' selected' : ''}>#${esc(t.tag)} · ${t.n}</option>`).join('')}
+        ${trashN || tag === '@trash' ? `<option value="@trash"${tag === '@trash' ? ' selected' : ''}>Корзина · ${trashN}</option>` : ''}</select></label>` : ''}
       <div class="nb-items">${list.length ? list.map(item).join('') : `<p class="muted nb-empty">${empty}</p>`}</div>
       <div class="nb-foot"><button class="link" data-act="note.import">Импорт</button>${all.length ? '<button class="link" data-act="note.export">Экспорт</button>' : ''}</div>
     </section>
@@ -131,7 +132,7 @@ const flushText = () => { const ta = document.getElementById('nbText'); clearTim
 acts['note.new'] = async () => {
   await flushText(); dropEmpty(app().ui.noteId);
   const u = app().ui, tag = u.noteTag && u.noteTag !== '@trash' ? u.noteTag : '';
-  const n = { id: 'n' + uid(), text: '', tags: tag ? [tag] : [], pinned: false, createdAt: now(), updatedAt: now() };
+  const n = { id: 'n' + uid(), text: '', tags: [...new Set([WS_TAG, ...(tag ? [tag] : [])])], pinned: false, createdAt: now(), updatedAt: now() };
   if (u.noteTag === '@trash') u.noteTag = '';
   u.noteId = n.id; u.notePrev = false; u.noteFocus = Date.now() + 1000;
   await app().store.put('w_notes', n);
@@ -143,6 +144,8 @@ acts['note.open'] = async (d) => {
 };
 acts['note.back'] = async () => { await flushText(); dropEmpty(app().ui.noteId); app().ui.noteId = null; };
 acts['note.tag'] = (d) => { app().ui.noteTag = d.v; };
+// фильтр заметок — одна тихая строка-список вместо ряда тегов (20.11.2026, её просьба: «лишнее… поминималистичнее»)
+changes['note.tagSel'] = (v) => { app().ui.noteTag = v; app().ui.noteId = null; app().rerender(); };
 changes['note.q'] = (v) => { app().ui.noteQ = v.trim(); app().rerender(); };
 acts['note.pin'] = async (d) => { const n = cur(d.id); await app().store.put('w_notes', { ...n, pinned: !n.pinned }); };
 acts['note.prev'] = async () => { await flushText(); app().ui.notePrev = !app().ui.notePrev; };

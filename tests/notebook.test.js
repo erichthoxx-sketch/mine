@@ -75,3 +75,9 @@ test('экспорт в Simplenote: их формат notes.json, теги бе�
   assert.equal(changedHere(list[0], '2026-11-05T00:00:00.000Z'), false); // уже выгружена — второй раз не попадёт
   assert.equal(changedHere({ ...list[0], updatedAt: '2026-11-06T00:00:00.000Z' }, '2026-11-05T00:00:00.000Z'), true);
 });
+
+import { needsWsTag, WS_TAG } from '../writer/js/notecalc.js';
+test('тег «мастерская»: только созданным здесь, без корзины, перенесённых и уже помеченных', () => {
+  const L = [{ id: 1, text: 'а' }, { id: 2, sid: 'sn', text: 'б' }, { id: 3, sid: 'txt:x', text: 'в' }, { id: 4, text: 'г', deletedAt: 'x' }, { id: 5, text: 'д', tags: [WS_TAG] }, { id: 6, text: 'е', tags: ['идеи'] }];
+  assert.deepEqual(needsWsTag(L).map((n) => n.id), [1, 6]);
+});

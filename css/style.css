@@ -3697,3 +3697,11 @@ circle.mk-q-d:hover { fill: var(--text-2); }
 /* Блокнот: окно «Экспорт заметок» — кнопки столбиком */
 .nb-exp { display: grid; gap: 8px; justify-items: stretch; }
 .nb-exp .link { justify-self: start; margin-top: 2px; }
+
+/* Блокнот: фильтр заметок одной тихой строкой (вместо ряда тегов) */
+.nb-filter { display: block; padding: 8px 4px 4px; flex: none; }
+:root .nb-filter select { width: auto; max-width: 100%; min-height: 30px; padding: 2px 22px 2px 2px; border: 0 !important; background-color: transparent !important; box-shadow: none !important;
+  font: 500 13.5px/1.2 var(--font-body); color: var(--text-2); cursor: pointer; appearance: none; -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%) !important;
+  background-position: calc(100% - 9px) 55%, calc(100% - 5px) 55%; background-size: 4px 4px, 4px 4px; background-repeat: no-repeat; }
+:root .nb-filter select:hover, :root .nb-filter select:focus { color: var(--text); outline: none; }
