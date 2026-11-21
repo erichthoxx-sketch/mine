@@ -27,3 +27,14 @@ test('rejects disallowed browser origins', async () => {
   assert.equal(response.status, 403);
   assert.equal(response.headers.get('access-control-allow-origin'), null);
 });
+
+test('existing books namespace enables access without old MCP secret', async () => {
+  const response = await gateway.fetch(new Request('https://example.workers.dev/health'), {
+    POLZA_API_KEY: 'dummy', OWNER_UID: 'owner-id',
+    BOOKS: { async get() { return null; } }
+  });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.configured, true);
+  assert.equal(data.booksConnected, true);
+});
