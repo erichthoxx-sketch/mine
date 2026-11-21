@@ -275,10 +275,35 @@ function pinnedExcerpt(raw,question,maxLength){
   return result.slice(0,maxLength);
 }
 function polzaMessages(c){
-  // For Opus, use the author's literary profile and review examples rather
-  // than the truncated 4096-token Qwen prompt. The Worker adds MCP context.
-  const last = [...c.messages].reverse().find(x=>x.role==="user")?.content || "";
-  return [{role:"system",content:buildExternalBrief(c).slice(0,115000)},
+  // The Cloudflare gateway injects the canonical book snapshot and recent
+  // chapters on the server. Do not duplicate that huge material from the
+  // browser: duplicated context caused expensive and avoidable reservations.
+  const p=project(c.projectId);
+  const mode=WRITING_MODES[c.mode]||WRITING_MODES.dialog;
+  const last=[...c.messages].reverse().find(x=>x.role==="user")?.content||"";
+  const feedback=state.feedback.filter(x=>x.projectId===c.projectId);
+  const examples=[
+    ...feedback.filter(x=>x.kind==="good").slice(-2).map(x=>"ПРИНЯТЫЙ ПРИМЕР: "+(x.reason||"")+
+      "\n"+String(x.finalText||x.answer||"").slice(0,1800)),
+    ...feedback.filter(x=>x.kind==="bad").slice(-2).map(x=>"НЕ ПОВТОРЯТЬ: "+(x.reason||"")+
+      (x.finalText?"\nПравка автора: "+String(x.finalText).slice(0,1200):""))
+  ].join("\n\n");
+  const parts=[
+    state.settings.globalInstruction.slice(0,6000),
+    "РЕЖИМ: "+mode.name+". "+mode.instruction,
+    "Пиши по-русски. Не выдавай непроверенную догадку за канон.",
+    p?"РОМАН: "+p.name:"",
+    p?.instruction?"ИНСТРУКЦИЯ ПРОЕКТА:\n"+p.instruction.slice(0,3500):"",
+    p?.voice?"ЭТАЛОН ГОЛОСА АВТОРА:\n"+p.voice.slice(0,5000):"",
+    p?.canon?"ДОПОЛНЕНИЯ АВТОРА К КАНОНУ:\n"+p.canon.slice(0,6000):"",
+    p?.scene?"ТЕКУЩАЯ СЦЕНА:\n"+p.scene.slice(0,4000):"",
+    examples?"ПОДТВЕРЖДЕННЫЕ АВТОРОМ ПРИМЕРЫ И ПРАВКИ:\n"+examples:"",
+    "Серверный снимок Мастерской содержит канон и последние главы. Если важный факт отсутствует в переданном материале, скажи об этом, не выдумывай."
+  ].filter(Boolean);
+  const prior=c.messages.filter(x=>["user","assistant"].includes(x.role)).slice(-7,-1)
+    .filter(x=>!String(x.content||"").startsWith("Ошибка Claude:"))
+    .map(x=>({role:x.role,content:String(x.content).slice(-1800)}));
+  return [{role:"system",content:parts.join("\n\n").slice(0,26000)},...prior,
           {role:"user",content:last}];
 }
 function buildMessages(c){
