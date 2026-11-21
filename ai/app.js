@@ -99,12 +99,12 @@ function renderKnowledge(){
 }
 function renderSettings(){
   const s=state.settings;
-  $("#panel").innerHTML='<div class="f-content">'+titleLine("Настройки","Ollama или Claude Opus через защищенный шлюз Polza.")+
+  $("#panel").innerHTML='<div class="f-content">'+titleLine("Настройки","Ollama или Claude Opus 5.5 через защищенный шлюз ModelProxy.")+
   '<form id="f-settings" class="f-form"><div class="f-section"><h2>Модель для ответов</h2>'+
   '<label for="f-provider">Провайдер</label><select id="f-provider" name="provider" class="f-select">'+
-  [["ollama","Локальная Ollama"],["polza","Claude Opus 5.5 через Polza"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===(s.provider||"ollama")?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
+  [["ollama","Локальная Ollama"],["modelproxy","Claude Opus 5.5 через ModelProxy"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===(s.provider||"ollama")?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
   '<label for="f-worker">Адрес личного Cloudflare Worker для Claude</label>'+
-  '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-polza....workers.dev">'+
+  '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
   '<p class="f-muted">Тестовая версия автоматически использует защищенное подключение на этом же адресе, без прямых запросов браузера к Worker. API-ключ хранится только в Cloudflare. Для Claude нужен вход в «Мастерскую».</p>'+
   '</div><div class="f-section"><h2>Подключение Ollama</h2>'+
   '<label for="f-endpoint">Адрес Ollama на этом компьютере</label><input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
@@ -160,7 +160,7 @@ function renderChat(){
       '<button type="button" class="f-btn" data-action="export-context">Подготовить контекст</button>'+
       '<button type="button" class="f-btn" data-action="paste-external">Сохранить внешний ответ</button>'+
       '<button type="button" class="f-btn" data-action="open-settings">Подключение</button></div>'+
-      '<p class="f-muted">Контекст можно передать в выбранную тобой модель вручную. Никакие рукописи без твоего действия никуда не отправляются. «Отправить» пока работает через локальную Qwen.</p></details>'+
+      '<p class="f-muted">Контекст можно передать в выбранную тобой модель вручную. Никакие рукописи без твоего действия никуда не отправляются. «Отправить» работает через выбранного в настройках провайдера.</p></details>'+
     '</form></div>';
   $("#f-messages")?.lastElementChild?.scrollIntoView({block:"nearest"});
 }
@@ -274,7 +274,7 @@ function pinnedExcerpt(raw,question,maxLength){
   }
   return result.slice(0,maxLength);
 }
-function polzaMessages(c){
+function modelproxyMessages(c){
   // The Cloudflare gateway injects the canonical book snapshot and recent
   // chapters on the server. Do not duplicate that huge material from the
   // browser: duplicated context caused expensive and avoidable reservations.
@@ -372,8 +372,8 @@ function claudeGateway(savedUrl){
   return safeWorkerEndpoint(savedUrl);
 }
 async function probeLocalConnection(){
-  if(state.settings.provider==="polza"){
-    connectOk=false;connectText="Claude Opus: проверь шлюз в настройках";
+  if(state.settings.provider==="modelproxy"){
+    connectOk=false;connectText="ModelProxy Opus: проверь шлюз в настройках";
     renderHeader();return;
   }
   const endpoint=safeEndpoint(state.settings.endpoint);
@@ -395,13 +395,14 @@ async function probeLocalConnection(){
   if(mini)mini.textContent=connectOk?"● Ollama подключена":connectText==="Нет соединения"?"Нет связи с Ollama":connectText;
 }
 async function testConnection(){
-  if(($("#f-provider")?.value||state.settings.provider)==="polza"){
+  if(($("#f-provider")?.value||state.settings.provider)==="modelproxy"){
     const gateway=claudeGateway($("#f-worker")?.value||state.settings.workerUrl);
     if(!gateway)return notice("Укажи HTTPS-адрес личного Cloudflare Worker.");
     try{
       const response=await fetch(gateway+"/health",{cache:"no-store"});
       if(!response.ok)throw Error("HTTP "+response.status);
       const data=await response.json();
+      if(data.provider!=="ModelProxy"||data.model!=="claude-opus-5-5")throw Error("На сервере еще старая версия Polza — сначала обнови Worker.");
       if(!data.ok||!data.configured)throw Error("Шлюз пока не настроен: нужны секреты Cloudflare.");
       connectOk=true;connectText="Шлюз Claude доступен";
       const status=$("#f-test-status");if(status)status.textContent=data.booksConnected?
@@ -517,32 +518,65 @@ async function saveFeedback(i,kind){
     finalText:v.finalText.trim().slice(0,18000),source:response.provider||"Qwen",at:stamp()});
   await save();notice(kind==="good"?"Пример добавлен в память стиля.":"Отказ и причина сохранены для следующих заданий.");
 }
+let approvedSnapshot = "";
 async function sendMessage(text){
   if(busy||!text.trim())return;
-  const isPolza=state.settings.provider==="polza";
+  const isModelProxy=state.settings.provider==="modelproxy";
   const endpoint=safeEndpoint(state.settings.endpoint);
   const gateway=claudeGateway(state.settings.workerUrl);
-  if(isPolza && !gateway)return notice("Для Claude укажи адрес защищенного Worker в настройках.");
-  if(isPolza && !master.user)return notice("Сначала войди в аккаунт Мастерской: раздел «Проекты».");
-  if(!isPolza && !endpoint)return notice("Проверь адрес Ollama в настройках.");
+  if(isModelProxy && !gateway)return notice("Для Claude укажи адрес защищенного Worker в настройках.");
+  if(isModelProxy && !master.user)return notice("Сначала войди в аккаунт Мастерской: раздел «Проекты».");
+  if(!isModelProxy && !endpoint)return notice("Проверь адрес Ollama в настройках.");
   let idToken="";
-  if(isPolza){
+  if(isModelProxy){
     try{idToken=await master.idToken();}catch(e){return notice(e.message);}
+  }
+  if(isModelProxy){
+    // Fail closed: the old gateway uses Polza. Never silently bill it.
+    try{
+      const check=await fetch(gateway+"/health",{cache:"no-store"});
+      if(!check.ok)throw Error("Шлюз недоступен: HTTP "+check.status);
+      const health=await check.json();
+      if(health.provider!=="ModelProxy"||health.model!=="claude-opus-5-5")
+        throw Error("На сервере старая версия с Polza. Платный запрос не отправлен.");
+      if(!health.configured)throw Error("В Cloudflare не задан MODELPROXY_API_KEY.");
+      const bookId=project(state.activeProjectId)?.masterBookId;
+      if(bookId){
+        const response=await fetch(gateway+"/snapshot?bookId="+encodeURIComponent(bookId),{
+          headers:{"Authorization":"Bearer "+idToken},cache:"no-store"
+        });
+        if(!response.ok){
+          const info=await response.json().catch(()=>({}));
+          throw Error("Проверка снимка: "+(info.error||"HTTP "+response.status));
+        }
+        const snapshot=await response.json();
+        const marker=bookId+"|"+snapshot.updatedAt;
+        if(marker!==approvedSnapshot){
+          const chapters=(snapshot.lastChapters||[]).map(ch=>ch.slot+": "+ch.title).join("\n");
+          const message="Бесплатная проверка снимка Мастерской:\n"
+            +snapshot.chapterCount+" частей, обновлен: "+snapshot.updatedAt
+            +"\nПоследние:\n"+chapters
+            +"\n\nЭтот контекст будет отправлен ModelProxy. Продолжить платный запрос?";
+          if(!confirm(message))return;
+          approvedSnapshot=marker;
+        }
+      }
+    }catch(e){return notice(e.message);}
   }
   const c=ensureChat(),msg=text.trim();
   c.messages.push({role:"user",content:msg,at:stamp()});
   if(c.title==="Новый чат")c.title=msg.slice(0,65);
   c.updated=stamp();await save();
   busy=true;render();
-  const messages=isPolza?polzaMessages(c):buildMessages(c);
-  const assistant={role:"assistant",provider:isPolza?"Claude":"Qwen",content:"",at:stamp()};
+  const messages=isModelProxy?modelproxyMessages(c):buildMessages(c);
+  const assistant={role:"assistant",provider:isModelProxy?"Claude":"Qwen",content:"",at:stamp()};
   c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
-  el.innerHTML='<span class="f-speaker">'+(isPolza?"Claude Opus 5.5":"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
+  el.innerHTML='<span class="f-speaker">'+(isModelProxy?"Claude Opus 5.5":"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
   $("#f-messages")?.append(el);const target=el.querySelector(".f-msg-text");
   currentController=new AbortController();
   try{
-    const res=isPolza?await fetch(gateway+"/chat",{
+    const res=isModelProxy?await fetch(gateway+"/chat",{
       method:"POST",
       headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
       body:JSON.stringify({messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null}),
@@ -561,7 +595,7 @@ async function sendMessage(text){
     const reader=res.body.getReader(),decoder=new TextDecoder();let pending="";
     const consume=(line)=>{
       if(!line.trim())return;
-      if(isPolza){
+      if(isModelProxy){
         if(!line.startsWith("data:"))return;
         const data=line.slice(5).trim();
         if(data==="[DONE]")return;
@@ -586,13 +620,13 @@ async function sendMessage(text){
       for(const line of lines)consume(line.trimEnd());
     }
     if(pending.trim())consume(pending.trimEnd());
-    if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты в Polza.");
-    connectOk=true;connectText=isPolza?"Claude Opus подключен":"Ollama доступна";
+    if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты в ModelProxy.");
+    connectOk=true;connectText=isModelProxy?"Claude Opus подключен":"Ollama доступна";
   }catch(e){
-    const prefix=e.name==="AbortError"?"Ответ остановлен.":(isPolza?"Ошибка Claude: ":"Ошибка Ollama: ")+e.message;
+    const prefix=e.name==="AbortError"?"Ответ остановлен.":(isModelProxy?"Ошибка Claude: ":"Ошибка Ollama: ")+e.message;
     assistant.content=assistant.content?(assistant.content+"\n\n["+prefix+"]"):prefix;
     target.textContent=assistant.content;target.classList.remove("pending");
-    connectOk=false;connectText=isPolza?"Ошибка Claude":"Нет соединения";
+    connectOk=false;connectText=isModelProxy?"Ошибка Claude":"Нет соединения";
   }finally{
     busy=false;currentController=null;c.updated=stamp();await save();render();
   }
@@ -697,7 +731,7 @@ document.addEventListener("submit",async(e)=>{
   if(e.target.id==="f-settings"){e.preventDefault();const fd=new FormData(e.target);
     const url=safeEndpoint(String(fd.get("endpoint")||""));if(!url)return notice("Неверный адрес Ollama.");
     const provider=String(fd.get("provider")||"ollama");
-    if(!["ollama","polza"].includes(provider))return notice("Неверный провайдер.");
+    if(!["ollama","modelproxy"].includes(provider))return notice("Неверный провайдер.");
     const workerRaw=String(fd.get("workerUrl")||"").trim();
     const workerUrl=workerRaw?safeWorkerEndpoint(workerRaw):"";
     if(workerRaw&&!workerUrl)return notice("Неверный HTTPS-адрес Cloudflare Worker.");
@@ -706,7 +740,7 @@ document.addEventListener("submit",async(e)=>{
     state.settings.globalInstruction=String(fd.get("globalInstruction")||"").slice(0,8000);
     state.settings.context=Number(fd.get("context"))||4096;
     state.theme=String(fd.get("theme"))||"auto";
-    connectOk=false;connectText=provider==="polza"?"Claude Opus: проверь шлюз в настройках":"Ollama: проверь соединение";
+    connectOk=false;connectText=provider==="modelproxy"?"ModelProxy Opus: проверь шлюз в настройках":"Ollama: проверь соединение";
     await save();render();notice("Настройки сохранены.");}
 });
 document.addEventListener("change",async(e)=>{
@@ -739,7 +773,9 @@ document.addEventListener("keydown",e=>{
   }
 });
 (async()=>{
-  try{db=await openDb();const loaded=await getDb();if(loaded&&Array.isArray(loaded.projects)&&Array.isArray(loaded.chats))state={...blank(),...loaded,settings:{...blank().settings,...loaded.settings}};}
+  try{db=await openDb();const loaded=await getDb();if(loaded&&Array.isArray(loaded.projects)&&Array.isArray(loaded.chats))state={...blank(),...loaded,settings:{...blank().settings,...loaded.settings}};
+    // Migrate existing test settings: Polza is no longer available.
+    if(state.settings.provider==="polza")state.settings.provider="modelproxy";}
   catch(e){$("#panel").innerHTML=empty("Хранилище недоступно","Разреши браузеру сохранять данные сайта: "+e.message);return;}
   state.feedback=Array.isArray(state.feedback)?state.feedback:[];
   render();
