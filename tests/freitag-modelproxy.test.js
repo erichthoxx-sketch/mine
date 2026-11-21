@@ -94,8 +94,8 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
 test("browser and Pages bridge must reject an old Polza gateway", async () => {
   const app = await readFile(new URL("../ai/app.js",import.meta.url),"utf8");
   const pages = await readFile(new URL("../functions/api/freitag/[route].js",import.meta.url),"utf8");
-  assert.match(app,/health\\.provider!=="ModelProxy"/);
-  assert.match(app,/modelproxyMessages/);
-  assert.match(app,/gateway\\+"\\/snapshot\\?bookId="/);
+  assert.ok(app.includes('health.provider!=="ModelProxy"'));
+  assert.ok(app.includes("modelproxyMessages"));
+  assert.ok(app.includes('gateway+"/snapshot?bookId="'));
   assert.match(pages,/route === "snapshot"/);
 });
