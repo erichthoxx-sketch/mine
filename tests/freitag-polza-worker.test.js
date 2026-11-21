@@ -86,3 +86,39 @@ test('canon query is compact and provider 402 remains 402 with trace identifier'
     globalThis.fetch = originalFetch;
   }
 });
+
+test('Pages deployment previews receive CORS headers without exposing the gateway to other sites', async () => {
+  const request=new Request('https://example.workers.dev/health',{
+    headers:{Origin:'https://a1b2c3.freitag-ai-test.pages.dev'}
+  });
+  const response=await gateway.fetch(request,{});
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'),'https://a1b2c3.freitag-ai-test.pages.dev');
+});
+
+test('invalid Pages lookalike origin is forbidden', async () => {
+  const response=await gateway.fetch(new Request('https://example.workers.dev/health',{
+    headers:{Origin:'https://freitag-ai-test.pages.dev.evil.example'}
+  }),{});
+  assert.equal(response.status,403);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'),null);
+});
+
+test('gateway returns a visible 500 if an internal operation fails before reaching Polza', async () => {
+  const original = globalThis.URL;
+  // Force a routing error while preserving the Request object's URL.
+  globalThis.URL=class BrokenURL {constructor(){throw Error('internal issue');}};
+  const previousError=console.error;
+  console.error=()=>{};
+  try{
+    const response=await gateway.fetch(new Request('https://example.workers.dev/health',{
+      headers:{Origin:'https://freitag-ai-test.pages.dev'}
+    }),{});
+    assert.equal(response.status,500);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'),'https://freitag-ai-test.pages.dev');
+    assert.match((await response.json()).error,/Сбой шлюза/);
+  } finally {
+    globalThis.URL=original;
+    console.error=previousError;
+  }
+});
