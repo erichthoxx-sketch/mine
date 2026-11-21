@@ -5,6 +5,7 @@ export async function onRequest(context) {
   const route = context.params.route;
   const method = context.request.method;
   if (!((route === "health" && method === "GET") ||
+        (route === "snapshot" && method === "GET") ||
         (route === "chat" && method === "POST"))) {
     return Response.json({ error: "Метод не поддерживается." }, { status: 405 });
   }
@@ -19,7 +20,9 @@ export async function onRequest(context) {
   const token = context.request.headers.get("Authorization");
   if (token) headers.set("Authorization", token);
   if (route === "chat") headers.set("Content-Type", "application/json");
-  const target = "https://freitag-opus-gateway.erichtho-xx.workers.dev/" + route;
+  // Pass the query string through for read-only snapshot status. Never include credentials in URLs.
+  const query = route === "snapshot" ? new URL(context.request.url).search : "";
+  const target = "https://freitag-opus-gateway.erichtho-xx.workers.dev/" + route + query;
   try {
     const result = await upstream.fetch(new Request(target, {
       method, headers,
