@@ -166,7 +166,7 @@ function renderChat(){
 }
 function ensureChat(){
   if(chat())return chat();
-  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:"draft",messages:[],updated:stamp()};
+  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:state.activeProjectId?"draft":"dialog",messages:[],updated:stamp()};
   state.chats.unshift(c);state.activeChatId=c.id;save();return c;
 }
 function openModal(title,fields,preset={},saveLabel="Сохранить"){
