@@ -75,6 +75,27 @@ async function mcpTool(env, name, args) {
 
 async function getBookMaterial(env, id) {
   if (!/^[a-z0-9_-]{1,100}$/i.test(id)) throw Error("Неверный ID книги.");
+  // Prefer the owner's existing Cloudflare KV namespace binding. No MCP
+  // secret is needed and no existing Worker or its credentials are modified.
+  if (env.BOOKS) {
+    const book = await env.BOOKS.get("book:" + id, { type: "json" });
+    if (!book || !Array.isArray(book.chapters) || typeof book.context !== "string")
+      throw Error("Книга не найдена в снимках Мастерской. Обнови синхронизацию.");
+    const updated = Date.parse(book.updatedAt || "");
+    const maxAge = Number(env.MAX_SNAPSHOT_HOURS || 168) * 3600000;
+    if (!Number.isFinite(updated) || Date.now() - updated > maxAge ||
+        updated > Date.now() + 60000)
+      throw Error("Снимок книги устарел. Обнови контекст нейросетей в Мастерской.");
+    const last = book.chapters.slice(-2);
+    return [
+      "АКТУАЛЬНЫЙ СНИМОК МАСТЕРСКОЙ (только чтение):",
+      "Обновлен: " + book.updatedAt,
+      book.context.slice(0, 90000),
+      "ПОСЛЕДНИЕ ГЛАВЫ (текст из сохраненного снимка):",
+      ...last.map((ch, i) => "Глава " + (book.chapters.length - last.length + i + 1) +
+        " — " + (ch.title || "") + "\n" + String(ch.text || "").slice(0, 30000))
+    ].join("\n\n").slice(0, 180000);
+  }
   // Current snapshots in MCP are read-only. The client never receives the MCP access key.
   const [context, listRaw] = await Promise.all([
     mcpTool(env, "get_book_context", { book_id: id }),
@@ -158,7 +179,7 @@ export default {
     if (path === "/health" && req.method === "GET")
       return json(req, 200, { ok: true, provider: "Polza.ai", model: MODEL,
         configured: !!env.POLZA_API_KEY && !!env.OWNER_UID,
-        booksConnected: !!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY });
+        booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY) });
     if (path === "/chat" && req.method === "POST") return generate(req, env);
     return fail(req, 404, "Адрес не найден.");
   }
