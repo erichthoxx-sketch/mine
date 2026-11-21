@@ -73,8 +73,18 @@ async function mcpTool(env, name, args) {
   return result;
 }
 
-async function getBookMaterial(env, id) {
+async function getBookMaterial(env, id, mode = "dialog") {
   if (!/^[a-z0-9_-]{1,100}$/i.test(id)) throw Error("Неверный ID книги.");
+  // Canon check uses a smaller, affordable context; literary drafting uses
+  // more of the book. Neither ever sends the entire archive by accident.
+  const budgets = {
+    dialog: { context: 15000, chapter: 8000 },
+    canon: { context: 28000, chapter: 14000 },
+    plot: { context: 48000, chapter: 20000 },
+    edit: { context: 34000, chapter: 20000 },
+    draft: { context: 65000, chapter: 28000 }
+  };
+  const budget = budgets[mode] || budgets.dialog;
   // Prefer the owner's existing Cloudflare KV namespace binding. No MCP
   // secret is needed and no existing Worker or its credentials are modified.
   if (env.BOOKS) {
@@ -90,10 +100,10 @@ async function getBookMaterial(env, id) {
     return [
       "АКТУАЛЬНЫЙ СНИМОК МАСТЕРСКОЙ (только чтение):",
       "Обновлен: " + book.updatedAt,
-      book.context.slice(0, 90000),
+      book.context.slice(0, budget.context),
       "ПОСЛЕДНИЕ ГЛАВЫ (текст из сохраненного снимка):",
       ...last.map((ch, i) => "Глава " + (book.chapters.length - last.length + i + 1) +
-        " — " + (ch.title || "") + "\n" + String(ch.text || "").slice(0, 30000))
+        " — " + (ch.title || "") + "\n" + String(ch.text || "").slice(0, budget.chapter))
     ].join("\n\n").slice(0, 180000);
   }
   // Current snapshots in MCP are read-only. The client never receives the MCP access key.
@@ -110,13 +120,13 @@ async function getBookMaterial(env, id) {
     throw Error("Снимок книги устарел. Обнови контекст нейросетей в Мастерской.");
   const last = list.chapters.slice(-2);
   const chapters = await Promise.all(last.map(c =>
-    mcpTool(env, "read_chapter", { book_id: id, chapter: c.chapter, offset: 0, limit: 30000 })
+    mcpTool(env, "read_chapter", { book_id: id, chapter: c.chapter, offset: 0, limit: budget.chapter })
       .then(t => JSON.parse(t))
   ));
   return [
     "АКТУАЛЬНЫЙ СНИМОК МАСТЕРСКОЙ (только чтение):",
     "Обновлен: " + list.updatedAt,
-    context.slice(0, 90000),
+    context.slice(0, budget.context),
     "ПОСЛЕДНИЕ ГЛАВЫ, НЕПРОИЗВОЛЬНЫЙ ПЕРЕСКАЗ ЗАПРЕЩЕН:",
     ...chapters.map(ch => "Глава " + ch.chapter + " — " + ch.title + "\n" +
       ch.text + (ch.nextOffset !== null ? "\n[Глава длиннее 30 тыс. знаков; требуется дочитать]" : ""))
@@ -139,14 +149,14 @@ async function generate(req, env) {
   const messages = entries.map(x => ({ role: x.role, content: x.content }));
   if (input.bookId) {
     try {
-      const material = await getBookMaterial(env, input.bookId);
+      const material = await getBookMaterial(env, input.bookId, input.mode);
       messages.unshift({ role: "system", content: material });
     } catch (e) { return fail(req, 424, e.message); }
   }
   const isDraft = input.mode === "draft";
   const body = {
     model: MODEL, messages, stream: true,
-    max_tokens: isDraft ? 10000 : 1800
+    max_tokens: isDraft ? 8500 : input.mode === "canon" ? 1300 : 1800
   };
   let upstream;
   try {
@@ -158,10 +168,24 @@ async function generate(req, env) {
     });
   } catch { return fail(req, 502, "Нет связи с Polza.ai."); }
   if (!upstream.ok) {
-    // Do not forward the provider's raw body: it could contain request fragments.
-    return fail(req, upstream.status === 429 ? 429 : 502,
-      upstream.status === 429 ? "Лимит или баланс Polza.ai. Проверь кабинет." :
-      "Polza.ai вернула ошибку HTTP " + upstream.status + ".");
+    // Preserve the status: 402 is billing/temporary reservation, not 502.
+    // Never expose upstream raw bodies (they may contain input fragments).
+    let traceId = null;
+    try {
+      const payload = await upstream.json();
+      const rawId = payload?.trace_id || payload?.error?.trace_id;
+      if (typeof rawId === "string" && /^[a-zA-Z0-9-]{6,100}$/.test(rawId))
+        traceId = rawId;
+    } catch {}
+    if (upstream.status === 402) return json(req, 402, {
+      error: "Polza.ai: не хватает доступного баланса или резерва для этого запроса. Мы уменьшили повторяющийся контекст; если ошибка повторится, проверь лимит в Polza.",
+      ...(traceId ? { trace_id: traceId } : {})
+    });
+    if (upstream.status === 429) return fail(req, 429, "Polza.ai: ограничение частоты запросов.");
+    return json(req, upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502, {
+      error: "Polza.ai вернула HTTP " + upstream.status + ".",
+      ...(traceId ? { trace_id: traceId } : {})
+    });
   }
   return new Response(upstream.body, {
     status: 200,
