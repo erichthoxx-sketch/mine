@@ -3,13 +3,23 @@
 const PROJECT = "dohody-6d6dd";
 const MODEL = "anthropic/claude-opus-5.5";
 const ORIGINS = new Set(["https://erichthoxx-sketch.github.io", "https://freitag-ai-test.pages.dev", "http://localhost:8765", "http://127.0.0.1:8765"]);
+const allowedOrigin = origin => {
+  if (!origin) return true;
+  if (ORIGINS.has(origin)) return true;
+  // Cloudflare Pages assigns unique preview hosts for each deployment.
+  // All such hosts must be allowed for this test project, but not arbitrary Pages apps.
+  try {
+    const u = new URL(origin);
+    return u.protocol === "https:" && /^[a-z0-9-]+\.freitag-ai-test\.pages\.dev$/i.test(u.hostname);
+  } catch { return false; }
+};
 let jwksCache = null;
 let jwksUntil = 0;
 
 const headers = req => {
   const h = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Vary": "Origin" };
   const origin = req.headers.get("Origin");
-  if (ORIGINS.has(origin)) Object.assign(h, {
+  if (allowedOrigin(origin)) Object.assign(h, {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
@@ -197,14 +207,21 @@ async function generate(req, env) {
 export default {
   async fetch(req, env) {
     const origin = req.headers.get("Origin");
-    if (origin && !ORIGINS.has(origin)) return fail(req, 403, "Источник запрещен.");
+    if (origin && !allowedOrigin(origin)) return fail(req, 403, "Источник запрещен.");
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: headers(req) });
-    const path = new URL(req.url).pathname;
-    if (path === "/health" && req.method === "GET")
-      return json(req, 200, { ok: true, provider: "Polza.ai", model: MODEL,
-        configured: !!env.POLZA_API_KEY && !!env.OWNER_UID,
-        booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY) });
-    if (path === "/chat" && req.method === "POST") return generate(req, env);
-    return fail(req, 404, "Адрес не найден.");
+    try {
+      const path = new URL(req.url).pathname;
+      if (path === "/health" && req.method === "GET")
+        return json(req, 200, { ok: true, provider: "Polza.ai", model: MODEL,
+          configured: !!env.POLZA_API_KEY && !!env.OWNER_UID,
+          booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY) });
+      if (path === "/chat" && req.method === "POST") return await generate(req, env);
+      return fail(req, 404, "Адрес не найден.");
+    } catch (error) {
+      // Never log user input or secrets. Return a CORS-visible error instead of
+      // a generic Cloudflare exception which browsers surface as "Failed to fetch".
+      console.error("gateway_exception", error?.name || "unknown");
+      return fail(req, 500, "Сбой шлюза при обработке запроса. Запрос к Opus мог не выполниться.");
+    }
   }
 };
