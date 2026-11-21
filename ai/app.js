@@ -105,7 +105,7 @@ function renderSettings(){
   [["ollama","Локальная Ollama"],["polza","Claude Opus 5.5 через Polza"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===(s.provider||"ollama")?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
   '<label for="f-worker">Адрес личного Cloudflare Worker для Claude</label>'+
   '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-polza....workers.dev">'+
-  '<p class="f-muted">API-ключ Polza вводится только в секреты Cloudflare, не сюда. Для Claude нужен вход в аккаунт Мастерской в разделе «Проекты».</p>'+
+  '<p class="f-muted">Тестовая версия автоматически использует защищенное подключение на этом же адресе, без прямых запросов браузера к Worker. API-ключ хранится только в Cloudflare. Для Claude нужен вход в «Мастерскую».</p>'+
   '</div><div class="f-section"><h2>Подключение Ollama</h2>'+
   '<label for="f-endpoint">Адрес Ollama на этом компьютере</label><input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
   '<label for="f-model">Модель</label><input id="f-model" class="f-text-field" name="model" list="f-model-list" value="'+esc(s.model)+'" required><datalist id="f-model-list"></datalist>'+
@@ -361,6 +361,16 @@ const safeWorkerEndpoint=(value)=>{
   if(url.protocol!=="https:" && !["localhost","127.0.0.1","[::1]"].includes(url.hostname))return null;
   return endpoint;
 };
+// The Pages-hosted test uses a same-origin Function so the browser never
+// calls a cross-origin Worker directly. The Function forwards only via
+// Cloudflare Service binding, and the Worker checks the Firebase token.
+function claudeGateway(savedUrl){
+  const host=location.hostname.toLowerCase();
+  if (host==="freitag-ai-test.pages.dev" ||
+      /^[a-z0-9-]+\.freitag-ai-test\.pages\.dev$/.test(host))
+    return location.origin+"/api/freitag";
+  return safeWorkerEndpoint(savedUrl);
+}
 async function probeLocalConnection(){
   if(state.settings.provider==="polza"){
     connectOk=false;connectText="Claude Opus: проверь шлюз в настройках";
@@ -386,7 +396,7 @@ async function probeLocalConnection(){
 }
 async function testConnection(){
   if(($("#f-provider")?.value||state.settings.provider)==="polza"){
-    const gateway=safeWorkerEndpoint($("#f-worker")?.value||state.settings.workerUrl);
+    const gateway=claudeGateway($("#f-worker")?.value||state.settings.workerUrl);
     if(!gateway)return notice("Укажи HTTPS-адрес личного Cloudflare Worker.");
     try{
       const response=await fetch(gateway+"/health",{cache:"no-store"});
@@ -511,7 +521,7 @@ async function sendMessage(text){
   if(busy||!text.trim())return;
   const isPolza=state.settings.provider==="polza";
   const endpoint=safeEndpoint(state.settings.endpoint);
-  const gateway=safeWorkerEndpoint(state.settings.workerUrl);
+  const gateway=claudeGateway(state.settings.workerUrl);
   if(isPolza && !gateway)return notice("Для Claude укажи адрес защищенного Worker в настройках.");
   if(isPolza && !master.user)return notice("Сначала войди в аккаунт Мастерской: раздел «Проекты».");
   if(!isPolza && !endpoint)return notice("Проверь адрес Ollama в настройках.");
