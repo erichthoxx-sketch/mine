@@ -33,6 +33,12 @@ export const master = {
     })();
     return loading;
   },
+  async idToken(){
+    await this.init();
+    const current = state.auth.currentUser;
+    if (!current) throw Error("Войди в аккаунт Мастерской в разделе «Проекты».");
+    return state.mods.A.getIdToken(current);
+  },
   async login(email,password){
     await this.init();
     await state.mods.A.signInWithEmailAndPassword(state.auth,email,password);

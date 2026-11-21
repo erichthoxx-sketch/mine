@@ -15,7 +15,7 @@ const WRITING_MODES = {
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], activeProjectId:null, activeChatId:null,
-  settings:{endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
+  settings:{provider:"ollama",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
 let state=blank(), tab="chat", busy=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено";
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -99,8 +99,14 @@ function renderKnowledge(){
 }
 function renderSettings(){
   const s=state.settings;
-  $("#panel").innerHTML='<div class="f-content">'+titleLine("Настройки","Локальная модель, оформление, экспорт данных.")+
-  '<form id="f-settings" class="f-form"><div class="f-section"><h2>Подключение Ollama</h2>'+
+  $("#panel").innerHTML='<div class="f-content">'+titleLine("Настройки","Ollama или Claude Opus 5.5 через защищенный шлюз ModelProxy.")+
+  '<form id="f-settings" class="f-form"><div class="f-section"><h2>Модель для ответов</h2>'+
+  '<label for="f-provider">Провайдер</label><select id="f-provider" name="provider" class="f-select">'+
+  [["ollama","Локальная Ollama"],["modelproxy","Claude Opus 5.5 через ModelProxy"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===(s.provider||"ollama")?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
+  '<label for="f-worker">Адрес личного Cloudflare Worker для Claude</label>'+
+  '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
+  '<p class="f-muted">Тестовая версия автоматически использует защищенное подключение на этом же адресе, без прямых запросов браузера к Worker. API-ключ хранится только в Cloudflare. Для Claude нужен вход в «Мастерскую».</p>'+
+  '</div><div class="f-section"><h2>Подключение Ollama</h2>'+
   '<label for="f-endpoint">Адрес Ollama на этом компьютере</label><input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
   '<label for="f-model">Модель</label><input id="f-model" class="f-text-field" name="model" list="f-model-list" value="'+esc(s.model)+'" required><datalist id="f-model-list"></datalist>'+
   '<div class="f-row" style="margin-top:14px"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button><button type="submit" class="f-btn primary">Сохранить</button></div>'+
@@ -117,7 +123,7 @@ function renderSettings(){
   '<textarea id="f-global" name="globalInstruction" class="f-textarea">'+esc(s.globalInstruction)+'</textarea>'+
   '<label for="f-context">Контекст</label><select id="f-context" name="context" class="f-select">'+
   [2048,4096,8192].map(n=>'<option value="'+n+'" '+(n===s.context?"selected":"")+'>'+n+' токенов</option>').join("")+'</select>'+
-  '<p class="f-muted">Большой контекст может замедлять модель на ноутбуке.</p></div>'+
+  '<p class="f-muted">Этот лимит относится к локальной Ollama; Claude использует отдельные настройки.</p></div>'+
   '<div class="f-section"><h2>Внешний вид</h2><label for="f-theme">Тема</label><select id="f-theme" class="f-select" name="theme">'+
   [["auto","Как в системе"],["light","Светлая"],["dark","Темная"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===state.theme?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></div>'+
   '<div class="f-section"><h2>Моя литературная память</h2><p class="f-muted">Одобренных ответов: '+state.feedback.filter(x=>x.kind==="good").length+
@@ -154,13 +160,13 @@ function renderChat(){
       '<button type="button" class="f-btn" data-action="export-context">Подготовить контекст</button>'+
       '<button type="button" class="f-btn" data-action="paste-external">Сохранить внешний ответ</button>'+
       '<button type="button" class="f-btn" data-action="open-settings">Подключение</button></div>'+
-      '<p class="f-muted">Контекст можно передать в выбранную тобой модель вручную. Никакие рукописи без твоего действия никуда не отправляются. «Отправить» пока работает через локальную Qwen.</p></details>'+
+      '<p class="f-muted">Контекст можно передать в выбранную тобой модель вручную. Никакие рукописи без твоего действия никуда не отправляются. «Отправить» работает через выбранного в настройках провайдера.</p></details>'+
     '</form></div>';
   $("#f-messages")?.lastElementChild?.scrollIntoView({block:"nearest"});
 }
 function ensureChat(){
   if(chat())return chat();
-  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:"draft",messages:[],updated:stamp()};
+  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:state.activeProjectId?"draft":"dialog",messages:[],updated:stamp()};
   state.chats.unshift(c);state.activeChatId=c.id;save();return c;
 }
 function openModal(title,fields,preset={},saveLabel="Сохранить"){
@@ -268,6 +274,38 @@ function pinnedExcerpt(raw,question,maxLength){
   }
   return result.slice(0,maxLength);
 }
+function modelproxyMessages(c){
+  // The Cloudflare gateway injects the canonical book snapshot and recent
+  // chapters on the server. Do not duplicate that huge material from the
+  // browser: duplicated context caused expensive and avoidable reservations.
+  const p=project(c.projectId);
+  const mode=WRITING_MODES[c.mode]||WRITING_MODES.dialog;
+  const last=[...c.messages].reverse().find(x=>x.role==="user")?.content||"";
+  const feedback=state.feedback.filter(x=>x.projectId===c.projectId);
+  const examples=[
+    ...feedback.filter(x=>x.kind==="good").slice(-2).map(x=>"ПРИНЯТЫЙ ПРИМЕР: "+(x.reason||"")+
+      "\n"+String(x.finalText||x.answer||"").slice(0,1800)),
+    ...feedback.filter(x=>x.kind==="bad").slice(-2).map(x=>"НЕ ПОВТОРЯТЬ: "+(x.reason||"")+
+      (x.finalText?"\nПравка автора: "+String(x.finalText).slice(0,1200):""))
+  ].join("\n\n");
+  const parts=[
+    state.settings.globalInstruction.slice(0,6000),
+    "РЕЖИМ: "+mode.name+". "+mode.instruction,
+    "Пиши по-русски. Не выдавай непроверенную догадку за канон.",
+    p?"РОМАН: "+p.name:"",
+    p?.instruction?"ИНСТРУКЦИЯ ПРОЕКТА:\n"+p.instruction.slice(0,3500):"",
+    p?.voice?"ЭТАЛОН ГОЛОСА АВТОРА:\n"+p.voice.slice(0,5000):"",
+    p?.canon?"ДОПОЛНЕНИЯ АВТОРА К КАНОНУ:\n"+p.canon.slice(0,6000):"",
+    p?.scene?"ТЕКУЩАЯ СЦЕНА:\n"+p.scene.slice(0,4000):"",
+    examples?"ПОДТВЕРЖДЕННЫЕ АВТОРОМ ПРИМЕРЫ И ПРАВКИ:\n"+examples:"",
+    "Серверный снимок Мастерской содержит канон и последние главы. Если важный факт отсутствует в переданном материале, скажи об этом, не выдумывай."
+  ].filter(Boolean);
+  const prior=c.messages.filter(x=>["user","assistant"].includes(x.role)).slice(-7,-1)
+    .filter(x=>!String(x.content||"").startsWith("Ошибка Claude:"))
+    .map(x=>({role:x.role,content:String(x.content).slice(-1800)}));
+  return [{role:"system",content:parts.join("\n\n").slice(0,26000)},...prior,
+          {role:"user",content:last}];
+}
 function buildMessages(c){
   const p=project(c.projectId),s=state.settings;
   const mode=WRITING_MODES[c.mode]||WRITING_MODES.dialog;
@@ -316,7 +354,28 @@ const safeEndpoint=(endpoint)=>{
   if(u.protocol==="http:"&&!["localhost","127.0.0.1","[::1]"].includes(u.hostname))return null;
   return u.origin+u.pathname.replace(/\/+$/,"");
 };
+const safeWorkerEndpoint=(value)=>{
+  const endpoint=safeEndpoint(value);
+  if(!endpoint)return null;
+  const url=new URL(endpoint);
+  if(url.protocol!=="https:" && !["localhost","127.0.0.1","[::1]"].includes(url.hostname))return null;
+  return endpoint;
+};
+// The Pages-hosted test uses a same-origin Function so the browser never
+// calls a cross-origin Worker directly. The Function forwards only via
+// Cloudflare Service binding, and the Worker checks the Firebase token.
+function claudeGateway(savedUrl){
+  const host=location.hostname.toLowerCase();
+  if (host==="freitag-ai-test.pages.dev" ||
+      /^[a-z0-9-]+\.freitag-ai-test\.pages\.dev$/.test(host))
+    return location.origin+"/api/freitag";
+  return safeWorkerEndpoint(savedUrl);
+}
 async function probeLocalConnection(){
+  if(state.settings.provider==="modelproxy"){
+    connectOk=false;connectText="ModelProxy Opus: проверь шлюз в настройках";
+    renderHeader();return;
+  }
   const endpoint=safeEndpoint(state.settings.endpoint);
   if(!endpoint)return;
   connectText="Проверка Ollama…";renderHeader();
@@ -336,6 +395,23 @@ async function probeLocalConnection(){
   if(mini)mini.textContent=connectOk?"● Ollama подключена":connectText==="Нет соединения"?"Нет связи с Ollama":connectText;
 }
 async function testConnection(){
+  if(($("#f-provider")?.value||state.settings.provider)==="modelproxy"){
+    const gateway=claudeGateway($("#f-worker")?.value||state.settings.workerUrl);
+    if(!gateway)return notice("Укажи HTTPS-адрес личного Cloudflare Worker.");
+    try{
+      const response=await fetch(gateway+"/health",{cache:"no-store"});
+      if(!response.ok)throw Error("HTTP "+response.status);
+      const data=await response.json();
+      if(data.provider!=="ModelProxy"||data.model!=="claude-opus-5-5")throw Error("На сервере еще старая версия Polza — сначала обнови Worker.");
+      if(!data.ok||!data.configured)throw Error("Шлюз пока не настроен: нужны секреты Cloudflare.");
+      connectOk=true;connectText="Шлюз Claude доступен";
+      const status=$("#f-test-status");if(status)status.textContent=data.booksConnected?
+        "Шлюз отвечает. Коннектор Мастерской настроен. Платная генерация еще не проверена.":
+        "Шлюз отвечает, но доступ к MCP-коннектору Мастерской пока не настроен.";
+      notice("Защищенный шлюз найден. Оплата за проверку соединения не списывается.");
+    }catch(e){connectOk=false;connectText="Шлюз недоступен";notice("Claude: "+e.message);}
+    renderHeader();return;
+  }
   const endpoint=safeEndpoint($("#f-endpoint")?.value||state.settings.endpoint);
   if(!endpoint)return notice("Разрешен локальный http://localhost:11434 или защищенный HTTPS-адрес.");
   connectText="Проверка…";renderHeader();
@@ -442,42 +518,115 @@ async function saveFeedback(i,kind){
     finalText:v.finalText.trim().slice(0,18000),source:response.provider||"Qwen",at:stamp()});
   await save();notice(kind==="good"?"Пример добавлен в память стиля.":"Отказ и причина сохранены для следующих заданий.");
 }
+let approvedSnapshot = "";
 async function sendMessage(text){
   if(busy||!text.trim())return;
+  const isModelProxy=state.settings.provider==="modelproxy";
   const endpoint=safeEndpoint(state.settings.endpoint);
-  if(!endpoint)return notice("Проверь адрес Ollama в настройках.");
-  const c=ensureChat(), msg=text.trim();
+  const gateway=claudeGateway(state.settings.workerUrl);
+  if(isModelProxy && !gateway)return notice("Для Claude укажи адрес защищенного Worker в настройках.");
+  if(isModelProxy && !master.user)return notice("Сначала войди в аккаунт Мастерской: раздел «Проекты».");
+  if(!isModelProxy && !endpoint)return notice("Проверь адрес Ollama в настройках.");
+  let idToken="";
+  if(isModelProxy){
+    try{idToken=await master.idToken();}catch(e){return notice(e.message);}
+  }
+  if(isModelProxy){
+    // Fail closed: the old gateway uses Polza. Never silently bill it.
+    try{
+      const check=await fetch(gateway+"/health",{cache:"no-store"});
+      if(!check.ok)throw Error("Шлюз недоступен: HTTP "+check.status);
+      const health=await check.json();
+      if(health.provider!=="ModelProxy"||health.model!=="claude-opus-5-5")
+        throw Error("На сервере старая версия с Polza. Платный запрос не отправлен.");
+      if(!health.configured)throw Error("В Cloudflare не задан MODELPROXY_API_KEY.");
+      const bookId=project(state.activeProjectId)?.masterBookId;
+      if(bookId){
+        const response=await fetch(gateway+"/snapshot?bookId="+encodeURIComponent(bookId),{
+          headers:{"Authorization":"Bearer "+idToken},cache:"no-store"
+        });
+        if(!response.ok){
+          const info=await response.json().catch(()=>({}));
+          throw Error("Проверка снимка: "+(info.error||"HTTP "+response.status));
+        }
+        const snapshot=await response.json();
+        const marker=bookId+"|"+snapshot.updatedAt;
+        if(marker!==approvedSnapshot){
+          const chapters=(snapshot.lastChapters||[]).map(ch=>ch.slot+": "+ch.title).join("\n");
+          const message="Бесплатная проверка снимка Мастерской:\n"
+            +snapshot.chapterCount+" частей, обновлен: "+snapshot.updatedAt
+            +"\nПоследние:\n"+chapters
+            +"\n\nЭтот контекст будет отправлен ModelProxy. Продолжить платный запрос?";
+          if(!confirm(message))return;
+          approvedSnapshot=marker;
+        }
+      }
+    }catch(e){return notice(e.message);}
+  }
+  const c=ensureChat(),msg=text.trim();
   c.messages.push({role:"user",content:msg,at:stamp()});
   if(c.title==="Новый чат")c.title=msg.slice(0,65);
   c.updated=stamp();await save();
   busy=true;render();
-  const assistant={role:"assistant",provider:"Qwen",content:"",at:stamp()};c.messages.push(assistant);
-  const messages=buildMessages(c).filter((x,i,a)=>!(i===a.length-1&&x.role==="assistant"&&!x.content));
+  const messages=isModelProxy?modelproxyMessages(c):buildMessages(c);
+  const assistant={role:"assistant",provider:isModelProxy?"Claude":"Qwen",content:"",at:stamp()};
+  c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
-  el.innerHTML='<span class="f-speaker">Freitag AI</span><div class="f-msg-text pending">Генерация ответа…</div>';
+  el.innerHTML='<span class="f-speaker">'+(isModelProxy?"Claude Opus 5.5":"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
   $("#f-messages")?.append(el);const target=el.querySelector(".f-msg-text");
   currentController=new AbortController();
   try{
-    const res=await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",options:{num_ctx:Number(state.settings.context)||4096,num_predict:(WRITING_MODES[c.mode]||WRITING_MODES.dialog).maxTokens}}),signal:currentController.signal});
-    if(!res.ok)throw new Error("HTTP "+res.status+": "+(await res.text()).slice(0,180));
-    if(!res.body)throw new Error("Браузер не получил поток ответа");
-    const reader=res.body.getReader(), decoder=new TextDecoder();let pending="";
-    for(;;){
-      const {done,value}=await reader.read();if(done)break;pending+=decoder.decode(value,{stream:true});
-      const lines=pending.split("\n");pending=lines.pop();
-      for(const line of lines){
-        if(!line.trim())continue;let obj;try{obj=JSON.parse(line);}catch{continue;}
-        if(obj.error)throw new Error(obj.error);
-        if(obj.message?.content){assistant.content+=obj.message.content;target.classList.remove("pending");target.textContent=assistant.content;}
-      }
+    const res=isModelProxy?await fetch(gateway+"/chat",{
+      method:"POST",
+      headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
+      body:JSON.stringify({messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null}),
+      signal:currentController.signal
+    }):await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",
+        options:{num_ctx:Number(state.settings.context)||4096,num_predict:(WRITING_MODES[c.mode]||WRITING_MODES.dialog).maxTokens}}),
+      signal:currentController.signal});
+    if(!res.ok){
+      const errorText=await res.text();
+      let detail=errorText.slice(0,200);
+      try{detail=JSON.parse(errorText).error||detail;}catch{}
+      throw Error("HTTP "+res.status+": "+detail);
     }
-    if(!assistant.content)assistant.content="Модель не вернула текст ответа.";
-    connectOk=true;connectText="Ollama доступна";
+    if(!res.body)throw Error("Сервер не вернул поток ответа");
+    const reader=res.body.getReader(),decoder=new TextDecoder();let pending="";
+    const consume=(line)=>{
+      if(!line.trim())return;
+      if(isModelProxy){
+        if(!line.startsWith("data:"))return;
+        const data=line.slice(5).trim();
+        if(data==="[DONE]")return;
+        let obj;try{obj=JSON.parse(data);}catch{return;}
+        if(obj.error)throw Error(typeof obj.error==="string"?obj.error:obj.error.message||"Ошибка провайдера");
+        const fragment=obj.choices?.[0]?.delta?.content;
+        if(typeof fragment==="string")assistant.content+=fragment;
+        else if(Array.isArray(fragment))assistant.content+=fragment.map(x=>x.text||"").join("");
+      }else{
+        let obj;try{obj=JSON.parse(line);}catch{return;}
+        if(obj.error)throw Error(obj.error);
+        if(obj.message?.content)assistant.content+=obj.message.content;
+      }
+      if(assistant.content){target.classList.remove("pending");target.textContent=assistant.content;}
+    };
+    for(;;){
+      const {done,value}=await reader.read();
+      if(done)break;
+      pending+=decoder.decode(value,{stream:true});
+      const lines=pending.split("\n");
+      pending=lines.pop();
+      for(const line of lines)consume(line.trimEnd());
+    }
+    if(pending.trim())consume(pending.trimEnd());
+    if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты в ModelProxy.");
+    connectOk=true;connectText=isModelProxy?"Claude Opus подключен":"Ollama доступна";
   }catch(e){
-    if(e.name==="AbortError"){assistant.content=assistant.content||"Ответ остановлен.";}
-    else {assistant.content="Не удалось подключиться к Ollama: "+e.message+". "+connectionHint();connectOk=false;connectText="Нет соединения";}
+    const prefix=e.name==="AbortError"?"Ответ остановлен.":(isModelProxy?"Ошибка Claude: ":"Ошибка Ollama: ")+e.message;
+    assistant.content=assistant.content?(assistant.content+"\n\n["+prefix+"]"):prefix;
     target.textContent=assistant.content;target.classList.remove("pending");
+    connectOk=false;connectText=isModelProxy?"Ошибка Claude":"Нет соединения";
   }finally{
     busy=false;currentController=null;c.updated=stamp();await save();render();
   }
@@ -581,10 +730,18 @@ document.addEventListener("submit",async(e)=>{
   }
   if(e.target.id==="f-settings"){e.preventDefault();const fd=new FormData(e.target);
     const url=safeEndpoint(String(fd.get("endpoint")||""));if(!url)return notice("Неверный адрес Ollama.");
+    const provider=String(fd.get("provider")||"ollama");
+    if(!["ollama","modelproxy"].includes(provider))return notice("Неверный провайдер.");
+    const workerRaw=String(fd.get("workerUrl")||"").trim();
+    const workerUrl=workerRaw?safeWorkerEndpoint(workerRaw):"";
+    if(workerRaw&&!workerUrl)return notice("Неверный HTTPS-адрес Cloudflare Worker.");
+    state.settings.provider=provider;state.settings.workerUrl=workerUrl;
     state.settings.endpoint=url;state.settings.model=String(fd.get("model")||"").trim();
     state.settings.globalInstruction=String(fd.get("globalInstruction")||"").slice(0,8000);
     state.settings.context=Number(fd.get("context"))||4096;
-    state.theme=String(fd.get("theme"))||"auto";await save();render();notice("Настройки сохранены.");}
+    state.theme=String(fd.get("theme"))||"auto";
+    connectOk=false;connectText=provider==="modelproxy"?"ModelProxy Opus: проверь шлюз в настройках":"Ollama: проверь соединение";
+    await save();render();notice("Настройки сохранены.");}
 });
 document.addEventListener("change",async(e)=>{
   if(e.target.id==="f-writing-mode"){
@@ -616,7 +773,9 @@ document.addEventListener("keydown",e=>{
   }
 });
 (async()=>{
-  try{db=await openDb();const loaded=await getDb();if(loaded&&Array.isArray(loaded.projects)&&Array.isArray(loaded.chats))state={...blank(),...loaded,settings:{...blank().settings,...loaded.settings}};}
+  try{db=await openDb();const loaded=await getDb();if(loaded&&Array.isArray(loaded.projects)&&Array.isArray(loaded.chats))state={...blank(),...loaded,settings:{...blank().settings,...loaded.settings}};
+    // Migrate existing test settings: Polza is no longer available.
+    if(state.settings.provider==="polza")state.settings.provider="modelproxy";}
   catch(e){$("#panel").innerHTML=empty("Хранилище недоступно","Разреши браузеру сохранять данные сайта: "+e.message);return;}
   state.feedback=Array.isArray(state.feedback)?state.feedback:[];
   render();
