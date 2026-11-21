@@ -2,7 +2,7 @@
 // Only an authenticated Firebase owner can generate; all paid-provider secrets stay on Cloudflare.
 const PROJECT = "dohody-6d6dd";
 const MODEL = "anthropic/claude-opus-5.5";
-const ORIGINS = new Set(["https://erichthoxx-sketch.github.io", "http://localhost:8765", "http://127.0.0.1:8765"]);
+const ORIGINS = new Set(["https://erichthoxx-sketch.github.io", "https://freitag-ai-test.pages.dev", "http://localhost:8765", "http://127.0.0.1:8765"]);
 let jwksCache = null;
 let jwksUntil = 0;
 
