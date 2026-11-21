@@ -15,7 +15,7 @@ const WRITING_MODES = {
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], activeProjectId:null, activeChatId:null,
-  settings:{endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
+  settings:{provider:"ollama",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
 let state=blank(), tab="chat", busy=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено";
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -99,8 +99,14 @@ function renderKnowledge(){
 }
 function renderSettings(){
   const s=state.settings;
-  $("#panel").innerHTML='<div class="f-content">'+titleLine("Настройки","Локальная модель, оформление, экспорт данных.")+
-  '<form id="f-settings" class="f-form"><div class="f-section"><h2>Подключение Ollama</h2>'+
+  $("#panel").innerHTML='<div class="f-content">'+titleLine("Настройки","Ollama или Claude Opus через защищенный шлюз Polza.")+
+  '<form id="f-settings" class="f-form"><div class="f-section"><h2>Модель для ответов</h2>'+
+  '<label for="f-provider">Провайдер</label><select id="f-provider" name="provider" class="f-select">'+
+  [["ollama","Локальная Ollama"],["polza","Claude Opus 5.5 через Polza"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===(s.provider||"ollama")?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
+  '<label for="f-worker">Адрес личного Cloudflare Worker для Claude</label>'+
+  '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-polza....workers.dev">'+
+  '<p class="f-muted">API-ключ Polza вводится только в секреты Cloudflare, не сюда. Для Claude нужен вход в аккаунт Мастерской в разделе «Проекты».</p>'+
+  '</div><div class="f-section"><h2>Подключение Ollama</h2>'+
   '<label for="f-endpoint">Адрес Ollama на этом компьютере</label><input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
   '<label for="f-model">Модель</label><input id="f-model" class="f-text-field" name="model" list="f-model-list" value="'+esc(s.model)+'" required><datalist id="f-model-list"></datalist>'+
   '<div class="f-row" style="margin-top:14px"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button><button type="submit" class="f-btn primary">Сохранить</button></div>'+
@@ -117,7 +123,7 @@ function renderSettings(){
   '<textarea id="f-global" name="globalInstruction" class="f-textarea">'+esc(s.globalInstruction)+'</textarea>'+
   '<label for="f-context">Контекст</label><select id="f-context" name="context" class="f-select">'+
   [2048,4096,8192].map(n=>'<option value="'+n+'" '+(n===s.context?"selected":"")+'>'+n+' токенов</option>').join("")+'</select>'+
-  '<p class="f-muted">Большой контекст может замедлять модель на ноутбуке.</p></div>'+
+  '<p class="f-muted">Этот лимит относится к локальной Ollama; Claude использует отдельные настройки.</p></div>'+
   '<div class="f-section"><h2>Внешний вид</h2><label for="f-theme">Тема</label><select id="f-theme" class="f-select" name="theme">'+
   [["auto","Как в системе"],["light","Светлая"],["dark","Темная"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===state.theme?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></div>'+
   '<div class="f-section"><h2>Моя литературная память</h2><p class="f-muted">Одобренных ответов: '+state.feedback.filter(x=>x.kind==="good").length+
@@ -268,6 +274,13 @@ function pinnedExcerpt(raw,question,maxLength){
   }
   return result.slice(0,maxLength);
 }
+function polzaMessages(c){
+  // For Opus, use the author's literary profile and review examples rather
+  // than the truncated 4096-token Qwen prompt. The Worker adds MCP context.
+  const last = [...c.messages].reverse().find(x=>x.role==="user")?.content || "";
+  return [{role:"system",content:buildExternalBrief(c).slice(0,115000)},
+          {role:"user",content:last}];
+}
 function buildMessages(c){
   const p=project(c.projectId),s=state.settings;
   const mode=WRITING_MODES[c.mode]||WRITING_MODES.dialog;
@@ -316,7 +329,18 @@ const safeEndpoint=(endpoint)=>{
   if(u.protocol==="http:"&&!["localhost","127.0.0.1","[::1]"].includes(u.hostname))return null;
   return u.origin+u.pathname.replace(/\/+$/,"");
 };
+const safeWorkerEndpoint=(value)=>{
+  const endpoint=safeEndpoint(value);
+  if(!endpoint)return null;
+  const url=new URL(endpoint);
+  if(url.protocol!=="https:" && !["localhost","127.0.0.1","[::1]"].includes(url.hostname))return null;
+  return endpoint;
+};
 async function probeLocalConnection(){
+  if(state.settings.provider==="polza"){
+    connectOk=false;connectText="Claude Opus: проверь шлюз в настройках";
+    renderHeader();return;
+  }
   const endpoint=safeEndpoint(state.settings.endpoint);
   if(!endpoint)return;
   connectText="Проверка Ollama…";renderHeader();
@@ -336,6 +360,22 @@ async function probeLocalConnection(){
   if(mini)mini.textContent=connectOk?"● Ollama подключена":connectText==="Нет соединения"?"Нет связи с Ollama":connectText;
 }
 async function testConnection(){
+  if(($("#f-provider")?.value||state.settings.provider)==="polza"){
+    const gateway=safeWorkerEndpoint($("#f-worker")?.value||state.settings.workerUrl);
+    if(!gateway)return notice("Укажи HTTPS-адрес личного Cloudflare Worker.");
+    try{
+      const response=await fetch(gateway+"/health",{cache:"no-store"});
+      if(!response.ok)throw Error("HTTP "+response.status);
+      const data=await response.json();
+      if(!data.ok||!data.configured)throw Error("Шлюз пока не настроен: нужны секреты Cloudflare.");
+      connectOk=true;connectText="Шлюз Claude доступен";
+      const status=$("#f-test-status");if(status)status.textContent=data.booksConnected?
+        "Шлюз отвечает. Коннектор Мастерской настроен. Платная генерация еще не проверена.":
+        "Шлюз отвечает, но доступ к MCP-коннектору Мастерской пока не настроен.";
+      notice("Защищенный шлюз найден. Оплата за проверку соединения не списывается.");
+    }catch(e){connectOk=false;connectText="Шлюз недоступен";notice("Claude: "+e.message);}
+    renderHeader();return;
+  }
   const endpoint=safeEndpoint($("#f-endpoint")?.value||state.settings.endpoint);
   if(!endpoint)return notice("Разрешен локальный http://localhost:11434 или защищенный HTTPS-адрес.");
   connectText="Проверка…";renderHeader();
@@ -444,40 +484,80 @@ async function saveFeedback(i,kind){
 }
 async function sendMessage(text){
   if(busy||!text.trim())return;
+  const isPolza=state.settings.provider==="polza";
   const endpoint=safeEndpoint(state.settings.endpoint);
-  if(!endpoint)return notice("Проверь адрес Ollama в настройках.");
-  const c=ensureChat(), msg=text.trim();
+  const gateway=safeWorkerEndpoint(state.settings.workerUrl);
+  if(isPolza && !gateway)return notice("Для Claude укажи адрес защищенного Worker в настройках.");
+  if(isPolza && !master.user)return notice("Сначала войди в аккаунт Мастерской: раздел «Проекты».");
+  if(!isPolza && !endpoint)return notice("Проверь адрес Ollama в настройках.");
+  let idToken="";
+  if(isPolza){
+    try{idToken=await master.idToken();}catch(e){return notice(e.message);}
+  }
+  const c=ensureChat(),msg=text.trim();
   c.messages.push({role:"user",content:msg,at:stamp()});
   if(c.title==="Новый чат")c.title=msg.slice(0,65);
   c.updated=stamp();await save();
   busy=true;render();
-  const assistant={role:"assistant",provider:"Qwen",content:"",at:stamp()};c.messages.push(assistant);
-  const messages=buildMessages(c).filter((x,i,a)=>!(i===a.length-1&&x.role==="assistant"&&!x.content));
+  const messages=isPolza?polzaMessages(c):buildMessages(c);
+  const assistant={role:"assistant",provider:isPolza?"Claude":"Qwen",content:"",at:stamp()};
+  c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
-  el.innerHTML='<span class="f-speaker">Freitag AI</span><div class="f-msg-text pending">Генерация ответа…</div>';
+  el.innerHTML='<span class="f-speaker">'+(isPolza?"Claude Opus 5.5":"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
   $("#f-messages")?.append(el);const target=el.querySelector(".f-msg-text");
   currentController=new AbortController();
   try{
-    const res=await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",options:{num_ctx:Number(state.settings.context)||4096,num_predict:(WRITING_MODES[c.mode]||WRITING_MODES.dialog).maxTokens}}),signal:currentController.signal});
-    if(!res.ok)throw new Error("HTTP "+res.status+": "+(await res.text()).slice(0,180));
-    if(!res.body)throw new Error("Браузер не получил поток ответа");
-    const reader=res.body.getReader(), decoder=new TextDecoder();let pending="";
-    for(;;){
-      const {done,value}=await reader.read();if(done)break;pending+=decoder.decode(value,{stream:true});
-      const lines=pending.split("\n");pending=lines.pop();
-      for(const line of lines){
-        if(!line.trim())continue;let obj;try{obj=JSON.parse(line);}catch{continue;}
-        if(obj.error)throw new Error(obj.error);
-        if(obj.message?.content){assistant.content+=obj.message.content;target.classList.remove("pending");target.textContent=assistant.content;}
-      }
+    const res=isPolza?await fetch(gateway+"/chat",{
+      method:"POST",
+      headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
+      body:JSON.stringify({messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null}),
+      signal:currentController.signal
+    }):await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",
+        options:{num_ctx:Number(state.settings.context)||4096,num_predict:(WRITING_MODES[c.mode]||WRITING_MODES.dialog).maxTokens}}),
+      signal:currentController.signal});
+    if(!res.ok){
+      const errorText=await res.text();
+      let detail=errorText.slice(0,200);
+      try{detail=JSON.parse(errorText).error||detail;}catch{}
+      throw Error("HTTP "+res.status+": "+detail);
     }
-    if(!assistant.content)assistant.content="Модель не вернула текст ответа.";
-    connectOk=true;connectText="Ollama доступна";
+    if(!res.body)throw Error("Сервер не вернул поток ответа");
+    const reader=res.body.getReader(),decoder=new TextDecoder();let pending="";
+    const consume=(line)=>{
+      if(!line.trim())return;
+      if(isPolza){
+        if(!line.startsWith("data:"))return;
+        const data=line.slice(5).trim();
+        if(data==="[DONE]")return;
+        let obj;try{obj=JSON.parse(data);}catch{return;}
+        if(obj.error)throw Error(typeof obj.error==="string"?obj.error:obj.error.message||"Ошибка провайдера");
+        const fragment=obj.choices?.[0]?.delta?.content;
+        if(typeof fragment==="string")assistant.content+=fragment;
+        else if(Array.isArray(fragment))assistant.content+=fragment.map(x=>x.text||"").join("");
+      }else{
+        let obj;try{obj=JSON.parse(line);}catch{return;}
+        if(obj.error)throw Error(obj.error);
+        if(obj.message?.content)assistant.content+=obj.message.content;
+      }
+      if(assistant.content){target.classList.remove("pending");target.textContent=assistant.content;}
+    };
+    for(;;){
+      const {done,value}=await reader.read();
+      if(done)break;
+      pending+=decoder.decode(value,{stream:true});
+      const lines=pending.split("\n");
+      pending=lines.pop();
+      for(const line of lines)consume(line.trimEnd());
+    }
+    if(pending.trim())consume(pending.trimEnd());
+    if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты в Polza.");
+    connectOk=true;connectText=isPolza?"Claude Opus подключен":"Ollama доступна";
   }catch(e){
-    if(e.name==="AbortError"){assistant.content=assistant.content||"Ответ остановлен.";}
-    else {assistant.content="Не удалось подключиться к Ollama: "+e.message+". "+connectionHint();connectOk=false;connectText="Нет соединения";}
+    const prefix=e.name==="AbortError"?"Ответ остановлен.":(isPolza?"Ошибка Claude: ":"Ошибка Ollama: ")+e.message;
+    assistant.content=assistant.content?(assistant.content+"\n\n["+prefix+"]"):prefix;
     target.textContent=assistant.content;target.classList.remove("pending");
+    connectOk=false;connectText=isPolza?"Ошибка Claude":"Нет соединения";
   }finally{
     busy=false;currentController=null;c.updated=stamp();await save();render();
   }
@@ -581,10 +661,18 @@ document.addEventListener("submit",async(e)=>{
   }
   if(e.target.id==="f-settings"){e.preventDefault();const fd=new FormData(e.target);
     const url=safeEndpoint(String(fd.get("endpoint")||""));if(!url)return notice("Неверный адрес Ollama.");
+    const provider=String(fd.get("provider")||"ollama");
+    if(!["ollama","polza"].includes(provider))return notice("Неверный провайдер.");
+    const workerRaw=String(fd.get("workerUrl")||"").trim();
+    const workerUrl=workerRaw?safeWorkerEndpoint(workerRaw):"";
+    if(workerRaw&&!workerUrl)return notice("Неверный HTTPS-адрес Cloudflare Worker.");
+    state.settings.provider=provider;state.settings.workerUrl=workerUrl;
     state.settings.endpoint=url;state.settings.model=String(fd.get("model")||"").trim();
     state.settings.globalInstruction=String(fd.get("globalInstruction")||"").slice(0,8000);
     state.settings.context=Number(fd.get("context"))||4096;
-    state.theme=String(fd.get("theme"))||"auto";await save();render();notice("Настройки сохранены.");}
+    state.theme=String(fd.get("theme"))||"auto";
+    connectOk=false;connectText=provider==="polza"?"Claude Opus: проверь шлюз в настройках":"Ollama: проверь соединение";
+    await save();render();notice("Настройки сохранены.");}
 });
 document.addEventListener("change",async(e)=>{
   if(e.target.id==="f-writing-mode"){
