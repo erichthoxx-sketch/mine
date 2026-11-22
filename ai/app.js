@@ -130,11 +130,11 @@ function renderSettings(){
     '<section class="f-settings-card"><div class="f-section-kicker">01 / МОДЕЛЬ</div>'+
     '<h2>Кто отвечает</h2><p class="f-muted">Выбери модель для новых сообщений. Существующие чаты останутся на месте.</p>'+
     '<label for="f-provider">Модель</label><select id="f-provider" name="provider" class="f-select">'+
-    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"]].map(x=>
+    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"],["bothub","Claude Opus 5.5 · BotHub"]].map(x=>
       '<option value="'+x[0]+'" '+(x[0]===provider?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
     '<div class="f-row f-connection-row"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button>'+
     '<span id="f-test-status" class="f-muted" role="status">Проверка не выполняет платную генерацию.</span></div>'+
-    '<details class="f-settings-fold"><summary>Адрес шлюза ModelProxy</summary>'+
+    '<details class="f-settings-fold"><summary>Защищенный API-шлюз · ModelProxy / BotHub</summary>'+
     '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
     '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
     '<p class="f-muted">В тестовой версии на Cloudflare Pages шлюз выбирается автоматически. Секретный API-ключ вводится только в Cloudflare, не здесь.</p></div></details>'+
@@ -175,7 +175,8 @@ function renderSettings(){
     '<div class="f-settings-save"><button type="submit" class="f-btn primary">Сохранить настройки</button></div>'+
     '</form></div>';
 }
-const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":"Локальная Qwen · Ollama";
+const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":
+  state.settings.provider==="bothub"?"Claude Opus 5.5 · BotHub":"Локальная Qwen · Ollama";
 function renderChat(){
   const c=chat();
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
@@ -451,8 +452,8 @@ function claudeGateway(savedUrl){
   return safeWorkerEndpoint(savedUrl);
 }
 async function probeLocalConnection(){
-  if(state.settings.provider==="modelproxy"){
-    connectOk=false;connectText="ModelProxy Opus: проверь шлюз в настройках";
+  if(["modelproxy","bothub"].includes(state.settings.provider)){
+    connectOk=false;connectText=activeProviderLabel()+": проверь шлюз в настройках";
     renderHeader();return;
   }
   const endpoint=safeEndpoint(state.settings.endpoint);
@@ -474,15 +475,18 @@ async function probeLocalConnection(){
   if(mini)mini.textContent=connectOk?"● Ollama подключена":connectText==="Нет соединения"?"Нет связи с Ollama":connectText;
 }
 async function testConnection(){
-  if(($("#f-provider")?.value||state.settings.provider)==="modelproxy"){
+  if(["modelproxy","bothub"].includes($("#f-provider")?.value||state.settings.provider)){
     const gateway=claudeGateway($("#f-worker")?.value||state.settings.workerUrl);
     if(!gateway)return notice("Укажи HTTPS-адрес личного Cloudflare Worker.");
     try{
       const response=await fetch(gateway+"/health",{cache:"no-store"});
       if(!response.ok)throw Error("HTTP "+response.status);
       const data=await response.json();
-      if(data.provider!=="ModelProxy"||data.model!=="claude-opus-5-5")throw Error("На сервере еще старая версия Polza — сначала обнови Worker.");
-      if(!data.ok||!data.configured)throw Error("Шлюз пока не настроен: нужны секреты Cloudflare.");
+      if(data.provider!=="ModelProxy"||data.model!=="claude-opus-5-5")
+        throw Error("На сервере прежняя версия шлюза. Обнови Worker без платных запросов.");
+      const chosen=$("#f-provider")?.value||state.settings.provider;
+      if(!data.ok || (chosen==="modelproxy"?!data.configured:!data.bothubConfigured))
+        throw Error(chosen==="bothub"?"BotHub пока не подключен: отсутствует BOTHUB_API_KEY.":"ModelProxy пока не подключен: отсутствует MODELPROXY_API_KEY.");
       connectOk=true;connectText="Шлюз Claude доступен";
       const status=$("#f-test-status");if(status)status.textContent=data.booksConnected?
         "Шлюз отвечает. Коннектор Мастерской настроен. Платная генерация еще не проверена.":
@@ -600,17 +604,17 @@ async function saveFeedback(i,kind){
 let approvedSnapshot = "";
 async function sendMessage(text){
   if(busy||!text.trim())return;
-  const isModelProxy=state.settings.provider==="modelproxy";
+  const isPaidProvider=["modelproxy","bothub"].includes(state.settings.provider);
   const endpoint=safeEndpoint(state.settings.endpoint);
   const gateway=claudeGateway(state.settings.workerUrl);
-  if(isModelProxy && !gateway)return notice("Для Claude укажи адрес защищенного Worker в настройках.");
-  if(isModelProxy && !master.user)return notice("Сначала войди в аккаунт Мастерской: раздел «Проекты».");
-  if(!isModelProxy && !endpoint)return notice("Проверь адрес Ollama в настройках.");
+  if(isPaidProvider && !gateway)return notice("Для Claude укажи адрес защищенного Worker в настройках.");
+  if(isPaidProvider && !master.user)return notice("Сначала войди в аккаунт Мастерской: раздел «Проекты».");
+  if(!isPaidProvider && !endpoint)return notice("Проверь адрес Ollama в настройках.");
   let idToken="";
-  if(isModelProxy){
+  if(isPaidProvider){
     try{idToken=await master.idToken();}catch(e){return notice(e.message);}
   }
-  if(isModelProxy){
+  if(isPaidProvider){
     // Fail closed: the old gateway uses Polza. Never silently bill it.
     try{
       const check=await fetch(gateway+"/health",{cache:"no-store"});
@@ -618,7 +622,10 @@ async function sendMessage(text){
       const health=await check.json();
       if(health.provider!=="ModelProxy"||health.model!=="claude-opus-5-5")
         throw Error("На сервере старая версия с Polza. Платный запрос не отправлен.");
-      if(!health.configured)throw Error("В Cloudflare не задан MODELPROXY_API_KEY.");
+      if(state.settings.provider==="bothub"&&!health.bothubConfigured)
+        throw Error("BotHub не подключен. Нужен BOTHUB_API_KEY в Cloudflare.");
+      if(state.settings.provider==="modelproxy"&&!health.configured)
+        throw Error("В Cloudflare не задан MODELPROXY_API_KEY.");
       const bookId=project(state.activeProjectId)?.masterBookId;
       if(bookId){
         const response=await fetch(gateway+"/snapshot?bookId="+encodeURIComponent(bookId),{
@@ -635,7 +642,7 @@ async function sendMessage(text){
           const message="Бесплатная проверка снимка Мастерской:\n"
             +snapshot.chapterCount+" частей, обновлен: "+snapshot.updatedAt
             +"\nПоследние:\n"+chapters
-            +"\n\nЭтот контекст будет отправлен ModelProxy. Продолжить платный запрос?";
+            +"\n\nЭтот контекст будет отправлен "+(state.settings.provider==="bothub"?"BotHub":"ModelProxy")+". Продолжить платный запрос?";
           if(!confirm(message))return;
           approvedSnapshot=marker;
         }
@@ -653,18 +660,18 @@ async function sendMessage(text){
   if(c.title==="Новый чат")c.title=msg.slice(0,65);
   c.updated=stamp();await save();
   busy=true;render();
-  const messages=isModelProxy?modelproxyMessages(c):buildMessages(c);
-  const assistant={role:"assistant",provider:isModelProxy?"Claude":"Qwen",content:"",at:stamp()};
+  const messages=isPaidProvider?modelproxyMessages(c):buildMessages(c);
+  const assistant={role:"assistant",provider:isPaidProvider?"Claude":"Qwen",content:"",at:stamp()};
   c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
-  el.innerHTML='<span class="f-speaker">'+(isModelProxy?"Claude Opus 5.5":"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
+  el.innerHTML='<span class="f-speaker">'+(isPaidProvider?"Claude Opus 5.5":"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
   $("#f-messages")?.append(el);const target=el.querySelector(".f-msg-text");
   currentController=new AbortController();
   try{
-    const res=isModelProxy?await fetch(gateway+"/chat",{
+    const res=isPaidProvider?await fetch(gateway+"/chat",{
       method:"POST",
       headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
-      body:JSON.stringify({messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null}),
+      body:JSON.stringify({provider:state.settings.provider,messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null}),
       signal:currentController.signal
     }):await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",
@@ -680,7 +687,7 @@ async function sendMessage(text){
     const reader=res.body.getReader(),decoder=new TextDecoder();let pending="";
     const consume=(line)=>{
       if(!line.trim())return;
-      if(isModelProxy){
+      if(isPaidProvider){
         if(!line.startsWith("data:"))return;
         const data=line.slice(5).trim();
         if(data==="[DONE]")return;
@@ -705,13 +712,13 @@ async function sendMessage(text){
       for(const line of lines)consume(line.trimEnd());
     }
     if(pending.trim())consume(pending.trimEnd());
-    if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты в ModelProxy.");
-    connectOk=true;connectText=isModelProxy?"Claude Opus подключен":"Ollama доступна";
+    if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты у провайдера.");
+    connectOk=true;connectText=isPaidProvider?"Claude Opus подключен":"Ollama доступна";
   }catch(e){
-    const prefix=e.name==="AbortError"?"Ответ остановлен.":(isModelProxy?"Ошибка Claude: ":"Ошибка Ollama: ")+e.message;
+    const prefix=e.name==="AbortError"?"Ответ остановлен.":(isPaidProvider?"Ошибка Claude: ":"Ошибка Ollama: ")+e.message;
     assistant.content=assistant.content?(assistant.content+"\n\n["+prefix+"]"):prefix;
     target.textContent=assistant.content;target.classList.remove("pending");
-    connectOk=false;connectText=isModelProxy?"Ошибка Claude":"Нет соединения";
+    connectOk=false;connectText=isPaidProvider?"Ошибка Claude":"Нет соединения";
   }finally{
     busy=false;currentController=null;c.updated=stamp();await save();render();
   }
@@ -822,7 +829,7 @@ document.addEventListener("submit",async(e)=>{
   if(e.target.id==="f-settings"){e.preventDefault();const fd=new FormData(e.target);
     const url=safeEndpoint(String(fd.get("endpoint")||""));if(!url)return notice("Неверный адрес Ollama.");
     const provider=String(fd.get("provider")||"ollama");
-    if(!["ollama","modelproxy"].includes(provider))return notice("Неверный провайдер.");
+    if(!["ollama","modelproxy","bothub"].includes(provider))return notice("Неверный провайдер.");
     const workerRaw=String(fd.get("workerUrl")||"").trim();
     const workerUrl=workerRaw?safeWorkerEndpoint(workerRaw):"";
     if(workerRaw&&!workerUrl)return notice("Неверный HTTPS-адрес Cloudflare Worker.");
@@ -831,7 +838,7 @@ document.addEventListener("submit",async(e)=>{
     state.settings.globalInstruction=String(fd.get("globalInstruction")||"").slice(0,8000);
     state.settings.context=Number(fd.get("context"))||4096;
     state.theme=String(fd.get("theme"))||"auto";
-    connectOk=false;connectText=provider==="modelproxy"?"ModelProxy Opus: проверь шлюз в настройках":"Ollama: проверь соединение";
+    connectOk=false;connectText=provider==="modelproxy"?"ModelProxy Opus: проверь шлюз в настройках":provider==="bothub"?"BotHub Opus: проверь шлюз в настройках":"Ollama: проверь соединение";
     await save();render();notice("Настройки сохранены.");}
 });
 document.addEventListener("change",async(e)=>{
