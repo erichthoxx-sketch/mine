@@ -151,7 +151,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(withRevision.status,200);
     assert.equal(calls.length,beforeFresh+1);
     const lastBookCall=JSON.parse(calls.at(-1).init.body);
-    assert.match(lastBookCall.messages[0].content,/новая глава/);
+    assert.match(lastBookCall.messages[1].content,/новая глава/);
     assert.equal(lastBookCall.stream,false);
     assert.equal(lastBookCall.tools.length,4);
     const beforeToolCalls=calls.length;
