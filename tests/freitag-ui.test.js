@@ -88,7 +88,7 @@ test("BotHub offers a compact, persistent model choice without exposing the key 
   assert.match(app,/claude-opus-5\.5/);
   assert.match(app,/state\.settings\.bothubModel=bothubModel/);
   assert.match(app,/activeBotHubModel\(\)/);
-  assert.match(app,/\/preflight\?model=/);
+  assert.match(app,/\/preflight\?provider=/);
   assert.doesNotMatch(app,/name="BOTHUB_API_KEY"/);
 });
 

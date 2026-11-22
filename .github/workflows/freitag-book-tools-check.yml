@@ -1,0 +1,32 @@
+name: Freitag AI · book tools and ApiMira
+on:
+  push:
+    branches: [feature/freitag-ai-book-tools-apimira]
+    paths:
+      - "ai/**"
+      - "proxy/freitag-modelproxy-worker.js"
+      - "tests/freitag-*.test.js"
+      - ".github/workflows/freitag-book-tools-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check ai/app.js
+          node --check proxy/freitag-modelproxy-worker.js
+      - name: Complete regression suite
+        run: npm test
+      - name: Build preview
+        run: |
+          bash scripts/build-apps.sh test-preview _site
+          test -f _site/test-preview/ai/app.js
+          test -f _site/workshop/bear.svg

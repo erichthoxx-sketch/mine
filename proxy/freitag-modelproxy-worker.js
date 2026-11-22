@@ -12,6 +12,10 @@ const PROVIDERS = Object.freeze({
   bothub: Object.freeze({
     name: "BotHub", model: "claude-sonnet-5.5", secret: "BOTHUB_API_KEY",
     endpoint: "https://openai.bothub.chat/v1/chat/completions"
+  }),
+  apimira: Object.freeze({
+    name: "ApiMira", model: "anthropic/claude-opus-5.5", secret: "APIMIRA_API_KEY",
+    endpoint: "https://apimira.com/v1/chat/completions"
   })
 });
 const ORIGINS = new Set(["https://erichthoxx-sketch.github.io", "https://freitag-ai-test.pages.dev", "http://localhost:8765", "http://127.0.0.1:8765"]);
@@ -159,6 +163,139 @@ async function getBookMaterial(env, id, mode = "dialog", requiredRevision = "") 
   ].join("\n\n").slice(0, 180000);
 }
 
+// Read-only manuscript tools. These use exactly the same owner's KV book
+// snapshots as the Masterskaya MCP worker, and only the book explicitly selected
+// in Freitag AI. The model cannot select other book IDs or call write/finance tools.
+const BOOK_TOOLS = Object.freeze([
+  {type:"function",function:{name:"get_book_context",
+    description:"Прочитать утвержденный канон, персонажей и сюжетную легенду выбранного романа.",
+    parameters:{type:"object",properties:{},additionalProperties:false}}},
+  {type:"function",function:{name:"list_chapters",
+    description:"Получить названия и номера всех глав выбранного романа перед чтением.",
+    parameters:{type:"object",properties:{},additionalProperties:false}}},
+  {type:"function",function:{name:"read_chapter",
+    description:"Прочитать точный текст выбранной главы, можно по частям через offset.",
+    parameters:{type:"object",properties:{
+      chapter:{type:"integer",minimum:1},offset:{type:"integer",minimum:0},
+      limit:{type:"integer",minimum:1000,maximum:16000}
+    },required:["chapter"],additionalProperties:false}}},
+  {type:"function",function:{name:"search_book",
+    description:"Найти факт, имя или фразу в написанных главах романа.",
+    parameters:{type:"object",properties:{
+      query:{type:"string",minLength:2,maxLength:120}
+    },required:["query"],additionalProperties:false}}}
+]);
+const MAX_BOOK_TOOL_ROUNDS=3;
+function runBookTool(book,name,args){
+  if (!book || !Array.isArray(book.chapters)) throw Error("Нет обновленной книги.");
+  if (!args || typeof args!=="object" || Array.isArray(args)) throw Error("Неверные аргументы.");
+  if (name==="get_book_context"){
+    return JSON.stringify({title:book.title,updatedAt:book.updatedAt,
+      context:String(book.context||"").slice(0,30000)});
+  }
+  if (name==="list_chapters"){
+    return JSON.stringify({title:book.title,updatedAt:book.updatedAt,
+      chapters:book.chapters.map((c,i)=>({chapter:i+1,title:c.title,characters:c.text.length}))});
+  }
+  if (name==="read_chapter"){
+    const n=Number(args.chapter),offset=args.offset===undefined?0:Number(args.offset);
+    if(!Number.isInteger(n)||n<1||n>book.chapters.length ||
+       !Number.isInteger(offset)||offset<0)throw Error("Неверный номер главы или offset.");
+    const chapter=book.chapters[n-1];
+    const limit=Math.min(16000,Math.max(1000,Number.isInteger(args.limit)?args.limit:12000));
+    return JSON.stringify({chapter:n,title:chapter.title,offset,
+      totalChars:chapter.text.length,
+      nextOffset:offset+limit<chapter.text.length?offset+limit:null,
+      text:chapter.text.slice(offset,offset+limit)});
+  }
+  if (name==="search_book"){
+    const q=String(args.query||"").trim();
+    if(q.length<2||q.length>120)throw Error("Уточни фразу для поиска.");
+    const result=[],needle=q.toLocaleLowerCase("ru");
+    for(let i=0;i<book.chapters.length && result.length<12;i++){
+      const chapter=book.chapters[i],text=chapter.text;
+      const lower=text.toLocaleLowerCase("ru");
+      let from=0,found=0;
+      while(found<3&&result.length<12){
+        const at=lower.indexOf(needle,from);
+        if(at<0)break;
+        result.push({chapter:i+1,title:chapter.title,
+          offset:at,excerpt:text.slice(Math.max(0,at-180),Math.min(text.length,at+needle.length+220))});
+        from=at+needle.length;found++;
+      }
+    }
+    return JSON.stringify({query:q,found:result});
+  }
+  throw Error("Действие не разрешено.");
+}
+const toolResultSSE=text=> new ReadableStream({
+  start(controller){
+    const encoder=new TextEncoder();
+    const data={choices:[{index:0,delta:{content:text},finish_reason:null}]};
+    controller.enqueue(encoder.encode("data: "+JSON.stringify(data)+"\n\n"));
+    controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+    controller.close();
+  }
+});
+const visibleCompletion=message=>{
+  if(typeof message?.content==="string")return message.content;
+  if(Array.isArray(message?.content))return message.content.map(x=>x?.text||"").join("");
+  return "";
+};
+async function bookToolsCompletion(req,env,provider,model,messages,book,maxTokens){
+  const history=[{
+    role:"system",
+    content:"У тебя есть инструменты Мастерской для чтения выбранного романа. "+
+      "Если требуется проверить факт или прежнюю сцену, вызови list_chapters, "+
+      "read_chapter или search_book. Не придумывай содержание непрочитанных глав. "+
+      "Инструменты только для чтения одной выбранной книги."
+  },...messages];
+  let rounds=0;
+  while(rounds<=MAX_BOOK_TOOL_ROUNDS){
+    let upstream;
+    try{
+      upstream=await fetch(provider.endpoint,{
+        method:"POST",
+        headers:{Authorization:"Bearer "+env[provider.secret],"Content-Type":"application/json"},
+        body:JSON.stringify({model,messages:history,stream:false,max_tokens:maxTokens,
+          tools:BOOK_TOOLS,tool_choice:"auto"}),
+        signal:AbortSignal.timeout(160000)
+      });
+    }catch{return fail(req,502,provider.name+": нет связи или истекло время ответа.");}
+    if(!upstream.ok){
+      if(upstream.status===402)return fail(req,402,provider.name+": недостаточно баланса или доступного резерва.");
+      if(upstream.status===429)return fail(req,429,provider.name+": превышен лимит запросов.");
+      return fail(req,upstream.status>=400&&upstream.status<500?upstream.status:502,
+        provider.name+" вернул HTTP "+upstream.status+".");
+    }
+    let data;
+    try{data=await upstream.json();}
+    catch{return fail(req,502,"API провайдера вернул неожиданный формат ответа.");}
+    const message=data?.choices?.[0]?.message;
+    if(!message||!Array.isArray(message.tool_calls)||!message.tool_calls.length){
+      const text=visibleCompletion(message);
+      if(!text)return fail(req,502,provider.name+": модель не вернула текст.");
+      return new Response(toolResultSSE(text),{status:200,
+        headers:{...headers(req),"Content-Type":"text/event-stream; charset=utf-8"}});
+    }
+    if(++rounds>MAX_BOOK_TOOL_ROUNDS || message.tool_calls.length>4)
+      return fail(req,424,"Слишком много вызовов инструментов. Уточни запрос и повтори.");
+    if(message.tool_calls.some(call=>typeof call?.id!=="string" ||
+        !["get_book_context","list_chapters","read_chapter","search_book"].includes(call.function?.name)))
+      return fail(req,424,"Модель запросила недопустимый инструмент.");
+    history.push({role:"assistant",content:message.content||null,tool_calls:message.tool_calls});
+    for(const call of message.tool_calls){
+      let response;
+      try{
+        const args=JSON.parse(call.function.arguments||"{}");
+        response=runBookTool(book,call.function.name,args);
+      }catch(e){response=JSON.stringify({error:e.message});}
+      history.push({role:"tool",tool_call_id:call.id,content:response.slice(0,35000)});
+    }
+  }
+  return fail(req,424,"Превышен лимит обращений к книге.");
+}
+
 // Owner-only automatic refresh. The client reads a fresh Google Doc with its
 // own Google OAuth session and publishes only the chosen book into the SAME KV
 // namespace as the existing read-only MCP server. No API keys or Google tokens
@@ -242,7 +379,8 @@ async function generate(req, env) {
   let input;
   try { input = JSON.parse(raw); } catch { return fail(req, 400, "Неверный JSON."); }
   // Whitelisted provider IDs; never accept arbitrary endpoints/models from the browser.
-  const provider = PROVIDERS[input.provider || "modelproxy"];
+  const providerId=input.provider||"modelproxy";
+  const provider = PROVIDERS[providerId];
   if (!provider) return fail(req, 400, "Неизвестный API-провайдер.");
   if (!env[provider.secret]) return fail(req, 503, "В Cloudflare не задан секрет " + provider.secret + ".");
   const entries = input.messages;
@@ -254,6 +392,8 @@ async function generate(req, env) {
   const model = input.provider === "bothub" ? (input.model || provider.model) : provider.model;
   if (input.provider === "bothub" && !BOTHUB_MODELS.includes(model))
     return fail(req, 400, "Эта модель BotHub не разрешена.");
+  if(input.provider==="apimira" && model!=="anthropic/claude-opus-5.5")
+    return fail(req,400,"Эта модель ApiMira не разрешена.");
   const messages = entries.map(x => ({ role: x.role, content: x.content }));
   if (input.bookId) {
     try {
@@ -263,9 +403,18 @@ async function generate(req, env) {
     } catch (e) { return fail(req, 424, e.message); }
   }
   const isDraft = input.mode === "draft";
+  const maxTokens=isDraft?4500:input.mode==="canon"?750:900;
+  // Tool calling makes this a real read-only book connector, not merely a
+  // summary of two chapters. A fresh revision was already checked above.
+  if(input.bookId && env.BOOKS && providerId!=="modelproxy"){
+    const book=await env.BOOKS.get("book:"+input.bookId,{type:"json"});
+    if(!book || (input.sourceRevision && book.updatedAt!==input.sourceRevision))
+      return fail(req,424,"Не удалось подтвердить свежую рукопись.");
+    return await bookToolsCompletion(req,env,provider,model,messages,book,maxTokens);
+  }
   const body = {
     model, messages, stream: true,
-    max_tokens: isDraft ? 4500 : input.mode === "canon" ? 750 : 900
+    max_tokens: maxTokens
   };
   let upstream;
   try {
@@ -306,25 +455,31 @@ async function generate(req, env) {
 // Owner-only preflight checks the actual key/model catalog without generating text.
 async function bothubPreflight(req, env) {
   if (!await verifyOwner(req, env)) return fail(req, 401, "Требуется вход владельца в Мастерскую.");
-  if (!env.BOTHUB_API_KEY) return fail(req, 503, "В Cloudflare не задан BOTHUB_API_KEY.");
-  const model = new URL(req.url).searchParams.get("model") || "claude-sonnet-5.5";
-  if (!BOTHUB_MODELS.includes(model)) return fail(req, 400, "Неизвестная модель BotHub.");
+  const params=new URL(req.url).searchParams;
+  const provider=params.get("provider")==="apimira"?"apimira":"bothub";
+  const model=params.get("model")||(provider==="apimira"?"anthropic/claude-opus-5.5":"claude-sonnet-5.5");
+  if(provider==="bothub"&&!BOTHUB_MODELS.includes(model))
+    return fail(req,400,"Неизвестная модель BotHub.");
+  if(provider==="apimira"&&model!=="anthropic/claude-opus-5.5")
+    return fail(req,400,"Неизвестная модель ApiMira.");
+  const key=provider==="apimira"?env.APIMIRA_API_KEY:env.BOTHUB_API_KEY;
+  if(!key)return fail(req,503,provider==="apimira"?"ApiMira API не настроен.":"BotHub API не настроен.");
   let upstream;
   try {
-    upstream = await fetch("https://openai.bothub.chat/v1/models", {
-      headers: { Authorization: "Bearer " + env.BOTHUB_API_KEY },
+    upstream = await fetch(provider==="apimira"?"https://apimira.com/v1/models":"https://openai.bothub.chat/v1/models", {
+      headers: { Authorization: "Bearer " + key },
       signal: AbortSignal.timeout(8000)
     });
-  } catch { return fail(req, 502, "BotHub не ответил на проверку каталога моделей."); }
+  } catch { return fail(req, 502, "Провайдер не ответил на проверку каталога моделей."); }
   if (!upstream.ok) {
     if (upstream.status === 401 || upstream.status === 403)
-      return fail(req, 401, "BotHub отклонил API-ключ. Проверь его в Cloudflare.");
-    return fail(req, 502, "Не удалось проверить каталог BotHub (HTTP " + upstream.status + ").");
+      return fail(req, 401, "API-провайдер отклонил ключ. Проверь его в Cloudflare.");
+    return fail(req, 502, "Не удалось проверить каталог моделей (HTTP " + upstream.status + ").");
   }
   let data;
   try { data = await upstream.json(); }
-  catch { return fail(req, 502, "BotHub вернул некорректный список моделей."); }
-  if (!Array.isArray(data.data)) return fail(req, 502, "BotHub не вернул список моделей.");
+  catch { return fail(req, 502, "Провайдер вернул некорректный список моделей."); }
+  if (!Array.isArray(data.data)) return fail(req, 502, "Провайдер не вернул список моделей.");
   const item = data.data.find(x => x?.id === model);
   return json(req, 200, { ok: !!item, model,
     message: item ? "Модель доступна по API-ключу. Платная генерация не запускалась." :
@@ -342,9 +497,12 @@ export default {
         return json(req, 200, { ok: true, provider: "ModelProxy", model: MODEL,
           configured: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
           bothubConfigured: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
+          apimiraConfigured: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
+          bookToolsSupported: !!env.BOOKS,
           availableProviders: {
             modelproxy: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
-            bothub: !!env.BOTHUB_API_KEY && !!env.OWNER_UID
+            bothub: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
+            apimira: !!env.APIMIRA_API_KEY && !!env.OWNER_UID
           },
           booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY),
           autoSyncSupported: !!env.BOOKS && typeof env.BOOKS.put === "function" });
