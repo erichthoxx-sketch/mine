@@ -155,7 +155,7 @@ export function homeView(a) {
       </div>
       <div class="hm-act"><button class="primary" data-act="go" data-to="${esc(goTo)}">${main ? `Продолжить писать${lastTab && main.fileId ? ` · ${esc(lastTab.title)}` : ''}` : 'Добавить книгу'}</button>${main ? `<span class="small muted">«${esc(main.title)}»</span>` : ''}</div>
       <div class="hm-month"><span class="small muted">${fmtMonthCap(mk).split(' ')[0]}</span>
-        ${stale ? `<button class="link" data-act="wbook.refresh" title="Пересчитать по Google Диску">${refreshing() ? 'считаю…' : 'пересчитать написанное'}</button>` : `<span><b>${alNum(sum('wrote'))}</b> а.л.</span>`}
+        ${stale ? `<button class="link" data-act="wbook.refresh" title="Пересчитать по Google Диску">${refreshing.on ? 'считаю…' : 'пересчитать написанное'}</button>` : `<span><b>${alNum(sum('wrote'))}</b> а.л.</span>`}
         <button class="link" data-act="home.chapters" title="Какие главы и откуда"><b>${sum('chapters') + sum('timers')}</b> ${plural(sum('chapters') + sum('timers'), ['глава', 'главы', 'глав'])}${sum('timers') ? ` <span class="muted">(${sum('timers')} на таймере)</span>` : ''}</button>
         <span><b>${rub(monthInc, 0)}</b> доход</span></div></div>`;
   const remRow = (r) => `<a class="item row between" href="${r.to.startsWith('..') ? r.to : '#'}" ${r.to.startsWith('..') ? '' : `data-act="go" data-to="${r.to}"`}><span>${esc(r.title)}${r.sub ? `<span class="sub">${r.sub}</span>` : ''}</span><span class="badge ${r.n < 0 ? 'bad' : r.n <= 3 ? 'warn' : ''}">${r.n === 0 ? 'сегодня' : `${fmtDate(r.date).slice(0, 5)} · ${when(r.n)}`}</span></a>`;
