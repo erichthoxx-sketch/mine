@@ -539,3 +539,12 @@ html.app-freitag.f-chat-mode .f-extra-tools summary{
     padding:4px 0 8px;
   }
 }
+
+/* Full chapter output is explicit and never enabled by default. */
+.f-chapter-length:not([hidden]){display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap}
+.f-chapter-length[hidden]{display:none!important}
+.f-chapter-length .f-select{max-width:245px!important;border:1px solid var(--f-line)!important;border-radius:8px}
+@media(max-width:760px){
+  .f-chapter-length:not([hidden]){width:100%;margin-top:1px}
+  .f-chapter-length .f-select{max-width:250px!important}
+}
