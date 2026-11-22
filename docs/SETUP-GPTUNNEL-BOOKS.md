@@ -41,7 +41,7 @@ Wrangler откроет в браузере вход в Cloudflare. Выбери
 
 `npm test` проверяет новую авторизацию, обе схемы MCP-транспорта, данные книги, отказ для чужого ID, попыток записи и чтения служебных разделов. Оба транспорта дополнительно проверены официальным MCP SDK в локальном Cloudflare Worker с вымышленным снимком. Совместимость с фактической кнопкой «Проверить» и передачу `Authorization` клиентом GPTunneL нужно подтвердить после подключения в личном аккаунте. Для этого достаточно открытия списка инструментов без запроса к модели.
 
-- [Поля MCP и токен в GPTunneL Assistant API](https://docs.gptunnel.ru/api/assistants/create/#mcp)
+- [Поля MCP и токен в GPTunneL Assistant API](https://docs.gptunnel.ru/api/assistants/create/)
 - [Обновление существующего ассистента](https://docs.gptunnel.ru/api/assistants/update/)
 - [Подключение MCP через настройки GPTunneL](https://www.gptunnel.ru/ru/blog/mcp-in-gptunnel)
 - [Доступ к приватному ассистенту только для владельца](https://www.gptunnel.ru/ru/blog/ai-assistant-how-to)
