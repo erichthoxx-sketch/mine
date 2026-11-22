@@ -65,3 +65,14 @@ test("design has true dark theme, reduced-motion and responsive layouts",async()
     assert.ok(css.includes(selector),"Expected UI selector "+selector);
   }
 });
+
+test("BotHub offers a compact, persistent model choice without exposing the key in the browser",async()=>{
+  const app=await load("../ai/app.js");
+  assert.match(app,/id="f-bothub-model"/);
+  assert.match(app,/claude-sonnet-5\.5/);
+  assert.match(app,/claude-opus-5\.5/);
+  assert.match(app,/state\.settings\.bothubModel=bothubModel/);
+  assert.match(app,/activeBotHubModel\(\)/);
+  assert.match(app,/\/preflight\?model=/);
+  assert.doesNotMatch(app,/name="BOTHUB_API_KEY"/);
+});
