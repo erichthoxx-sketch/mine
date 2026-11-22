@@ -25,19 +25,20 @@ export async function onRequest(context) {
   // Authorization is a short-lived Firebase ID token; Worker validates it.
   const token = context.request.headers.get("Authorization");
   if (token) headers.set("Authorization", token);
+  if (route === "chat") headers.set("Accept", "text/event-stream");
   if (method === "POST") headers.set("Content-Type", "application/json");
   // Pass the query string through for read-only snapshot status. Never include credentials in URLs.
   const query = ["snapshot", "preflight", "batch-status"].includes(route) ? new URL(context.request.url).search : "";
   const target = "https://freitag-opus-gateway.erichtho-xx.workers.dev/" + route + query;
   try {
     const result = await upstream.fetch(new Request(target, {
-      method, headers,
+      method, headers, signal:context.request.signal,
       ...(method === "POST" ? { body: context.request.body, duplex: "half" } : {})
     }));
     const responseHeaders = new Headers();
     responseHeaders.set("Content-Type", result.headers.get("Content-Type") ||
       (route === "chat" && result.ok ? "text/event-stream; charset=utf-8" : "application/json; charset=utf-8"));
-    responseHeaders.set("Cache-Control", "no-store");
+    responseHeaders.set("Cache-Control", "no-store, no-transform");
     responseHeaders.set("X-Content-Type-Options", "nosniff");
     return new Response(result.body, { status: result.status, headers: responseHeaders });
   } catch (e) {

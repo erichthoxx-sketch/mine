@@ -136,7 +136,10 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
         }
         if(rpc.params?.name==="read_chapter"){
           assert.equal(rpc.params.arguments.book_id,"test");
-          return payload({content:[{type:"text",text:JSON.stringify({chapter:2,text:"новая глава"})}]});
+          const {chapter,offset=0,limit=16000}=rpc.params.arguments;
+          const text=book.chapters[chapter-1].text;
+          return payload({content:[{type:"text",text:JSON.stringify({chapter,offset,totalChars:text.length,
+            nextOffset:offset+limit<text.length?offset+limit:null,text:text.slice(offset,offset+limit)})}]});
         }
         if(rpc.params?.name==="get_income_overview")
           return payload({content:[{type:"text",text:"Доход 1200 рублей"}]});
@@ -490,7 +493,7 @@ test("book project uses the exact large master instruction and verbatim long cha
   assert.match(app,/outputTokenLimit:requestMode==="draft"/);
   assert.match(worker,/\[4500,9000,14000\]\.includes\(requestedDraftLimit\)/);
   assert.match(worker,/maxTokens=greeting\?128:isDraft\?requestedDraftLimit/);
-  assert.match(worker,/const authorChapter=mode==="draft"/);
+  assert.match(worker,/if\(useMcp && !isDraft\)/);
 });
 
 
@@ -501,7 +504,7 @@ test("ordinary book greetings stay cheap; genuine chapters retain large prompts"
   ]);
   assert.match(app,/const lightweight=isSimpleGreeting\(msg\)/);
   assert.match(app,/lightweight\?\[\{role:"user",content:msg\}\]:modelproxyMessages\(c\)/);
-  assert.match(app,/bookId:lightweight\?null:/);
+  assert.match(app,/const bookId=lightweight\?null:/);
   assert.match(worker,/if\(input.bookId&&!greeting\)/);
   assert.match(worker,/const maxTokens=greeting\?128:/);
   assert.match(app,/void save\(\)/);

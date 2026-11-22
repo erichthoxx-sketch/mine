@@ -17,11 +17,11 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
     '<form id="f-project-instructions" data-project-id="'+esc(p.id)+'" class="f-project-editor">'+
       '<div><h2>Инструкция проекта</h2><p class="f-muted">Вставь свой мастер-промпт целиком и сохрани один раз. Он будет применяться ко всем новым чатам этого романа — как в Claude Projects. Ничего разделять не нужно.</p></div>'+
       '<label class="f-label" for="f-project-instruction">Твоя постоянная инструкция</label>'+
-      '<textarea id="f-project-instruction" name="instruction" class="f-textarea f-project-prompt" placeholder="Вставь сюда свой мастер-промпт целиком, без переработки и сокращений.">'+esc(userInstruction(p.instruction))+'</textarea>'+
+      '<textarea id="f-project-instruction" name="instruction" class="f-textarea f-project-prompt" placeholder="Вставь сюда свой мастер-промпт целиком, без переработки и сокращений.">\n'+esc(userInstruction(p.instruction))+'</textarea>'+
       '<details class="f-project-options"><summary>Мои дополнения к канону, голосу и текущей сцене</summary>'+
-        '<label class="f-label" for="f-project-voice">Голос и стиль</label><textarea id="f-project-voice" name="voice" class="f-textarea">'+esc(p.voice||"")+'</textarea>'+
-        '<label class="f-label" for="f-project-canon">Дополнительные факты канона</label><textarea id="f-project-canon" name="canon" class="f-textarea">'+esc(p.canon||"")+'</textarea>'+
-        '<label class="f-label" for="f-project-scene">Текущая сцена</label><textarea id="f-project-scene" name="scene" class="f-textarea">'+esc(p.scene||"")+'</textarea>'+
+        '<label class="f-label" for="f-project-voice">Голос и стиль</label><textarea id="f-project-voice" name="voice" class="f-textarea">\n'+esc(p.voice||"")+'</textarea>'+
+        '<label class="f-label" for="f-project-canon">Дополнительные факты канона</label><textarea id="f-project-canon" name="canon" class="f-textarea">\n'+esc(p.canon||"")+'</textarea>'+
+        '<label class="f-label" for="f-project-scene">Текущая сцена</label><textarea id="f-project-scene" name="scene" class="f-textarea">\n'+esc(p.scene||"")+'</textarea>'+
       '</details>'+
       '<div class="f-row"><button class="f-btn primary" type="submit">Сохранить инструкции</button>'+
         '<button class="f-btn" data-action="edit-project" data-id="'+esc(p.id)+'" type="button">Название и описание</button></div>'+

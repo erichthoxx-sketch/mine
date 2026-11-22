@@ -1,10 +1,14 @@
 name: Freitag AI · stream BotHub chapter
 on:
+  pull_request:
+    branches: [fix/freitag-bothub-streamed-chapters]
   push:
     branches: [fix/freitag-bothub-streamed-chapters]
     paths:
       - "proxy/freitag-modelproxy-worker.js"
-      - "ai/app.js"
+      - "ai/**"
+      - "functions/api/freitag/**"
+      - "scripts/freitag-chapter-smoke.mjs"
       - "tests/freitag-*.test.js"
       - ".github/workflows/freitag-bothub-stream-check.yml"
   workflow_dispatch:
@@ -23,5 +27,12 @@ jobs:
         run: |
           node --check proxy/freitag-modelproxy-worker.js
           node --check ai/app.js
+          node --check ai/project-view.js
+          node --check "functions/api/freitag/[route].js"
       - name: Full regression (mock API, no billed calls)
         run: npm test
+      - name: Проверить получение главы в Chromium на тестовых данных
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps chromium
+          node scripts/freitag-chapter-smoke.mjs
