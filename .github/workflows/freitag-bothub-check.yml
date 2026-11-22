@@ -33,3 +33,10 @@ jobs:
           node --check writer/js/views/aicenter.js
       - name: Full regression suite
         run: npm test
+      - name: Build deployed files and verify live connector is bundled
+        run: |
+          bash scripts/build-apps.sh test-build _site
+          test -f _site/test-build/ai/live-context.js
+          test -f _site/test-build/ai/master-sync.js
+          test -f _site/test-build/writer/js/bookai.js
+          test -f _site/test-build/writer/js/drive.js
