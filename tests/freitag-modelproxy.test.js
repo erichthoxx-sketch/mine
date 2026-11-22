@@ -138,8 +138,10 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
         return Response.json({choices:[{message:{role:"assistant",
           content:lastTool.includes("Доход 1200")?"Проверено: доход 1200 рублей.":called?"События главы подтверждены.":"OK"}}]});
       }
-      return new Response('data: {"choices":[{"delta":{"content":"OK"}}]}\\n\\n', {
-        headers:{"Content-Type":"text/event-stream"}});
+      return new Response('data: {"choices":[{"delta":{"content":"OK"}}]}\\n\\n' +
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\\n\\n' +
+        'data: [DONE]\\n\\n', {
+        headers:{"Content-Type":"text/event-stream; charset=utf-8"}});
     }
     throw Error("Unexpected fetch "+input);
   };
@@ -229,11 +231,14 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
         ]})
     }),env);
     assert.equal(fullChapter.status,200);
-    assert.match(await fullChapter.text(),/OK/);
+    const chapterEvents=await fullChapter.text();
+    assert.match(chapterEvents,/OK/);
+    assert.match(chapterEvents,/data: \[DONE\]/);
     const paidAfter=calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length;
     assert.equal(paidAfter-paidBefore,1,"full chapter must take only one paid generation");
     const chapterCall=JSON.parse(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).at(-1).init.body);
     assert.equal(chapterCall.max_tokens,14000);
+    assert.equal(chapterCall.stream,true,"full chapter must stream from BotHub; nonstreaming can time out at Cloudflare");
     assert.equal(chapterCall.tools,undefined,"no iterative MCP tool calls during full chapter");
     assert.equal(chapterCall.messages.find(m=>m.content===masterPrompt)?.content,masterPrompt);
     assert.equal(chapterCall.messages.at(-1).content,authorPrompt);
