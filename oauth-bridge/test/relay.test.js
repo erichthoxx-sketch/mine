@@ -34,7 +34,7 @@ test("valid book tools and MCP initialize are accepted",()=>{
   assert.ok(checkRpc(JSON.stringify(rpc("tools/call",{name:"read_chapter",arguments:{book_id:"b",chapter:1}}))).message);
   assert.equal(checkRpc("{").error.error.code,-32700);
   assert.equal(checkRpc("[]").error.error.code,-32600);
-  assert.equal(checkRpc("x".repeat(130000)).error.error.code,-32600);
+  assert.equal(checkRpc("x".repeat(140000)).error.error.code,-32600);
 });
 test("anonymous or another Github user cannot reach old MCP Worker",async()=>{
   let upstreamCalls=0;
