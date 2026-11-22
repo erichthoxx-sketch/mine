@@ -80,7 +80,9 @@ function renderHeader(){
 }
 function render(){
   // Chat gets the full available viewport; other pages remain document-scrolled.
+  const wasChat=document.documentElement.classList.contains("f-chat-mode");
   document.documentElement.classList.toggle("f-chat-mode",tab==="chat");
+  if(tab==="chat"&&!wasChat)document.scrollingElement?.scrollTo(0,0);
   setTheme();renderHeader();renderSidebar();
   if(tab==="projects")return projectHomeId?renderProjectHome():renderProjects();
   if(tab==="knowledge")return renderKnowledge();
