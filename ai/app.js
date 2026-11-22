@@ -706,15 +706,17 @@ async function sendMessage(text){
       throw Error("HTTP "+res.status+": "+detail);
     }
     if(!res.body)throw Error("Сервер не вернул поток ответа");
-    const reader=res.body.getReader(),decoder=new TextDecoder();let pending="";
+    const reader=res.body.getReader(),decoder=new TextDecoder();let pending="",streamFinished=false,finishReason="";
     const consume=(line)=>{
       if(!line.trim())return;
       if(isPaidProvider){
         if(!line.startsWith("data:"))return;
         const data=line.slice(5).trim();
-        if(data==="[DONE]")return;
+        if(data==="[DONE]"){streamFinished=true;return;}
         let obj;try{obj=JSON.parse(data);}catch{return;}
         if(obj.error)throw Error(typeof obj.error==="string"?obj.error:obj.error.message||"Ошибка провайдера");
+        const reason=obj.choices?.[0]?.finish_reason;
+        if(reason){finishReason=String(reason);streamFinished=true;}
         const fragment=obj.choices?.[0]?.delta?.content;
         if(typeof fragment==="string")assistant.content+=fragment;
         else if(Array.isArray(fragment))assistant.content+=fragment.map(x=>x.text||"").join("");
@@ -735,6 +737,11 @@ async function sendMessage(text){
     }
     if(pending.trim())consume(pending.trimEnd());
     if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты у провайдера.");
+    if(isPaidProvider&&(!streamFinished||finishReason==="length")){
+      // Preserve the paid partial chapter rather than pretending that a broken
+      // stream or max_tokens cutoff is a complete manuscript.
+      assistant.content+="\n\n[Генерация не завершена: "+(finishReason==="length"?"достигнут лимит длины ответа.":"поток прервался до подтверждения завершения.")+" Уже полученный текст сохранен. Не отправляй запрос повторно автоматически.]";
+    }
     connectOk=true;connectText=isPaidProvider?activeProviderLabel()+" подключен":"Ollama доступна";
   }catch(e){
     const prefix=e.name==="AbortError"?"Ответ остановлен.":(isPaidProvider?"Ошибка Claude: ":"Ошибка Ollama: ")+e.message;
