@@ -34,6 +34,11 @@ test("unverified users cannot use paid API or access manuscript metadata", async
     assert.equal(snapshot.status,401);
     const preflight = await gateway.fetch(new Request(url("preflight?model=claude-sonnet-5.5"),{headers:{Origin:ORIGIN}}),env);
     assert.equal(preflight.status,401);
+    const refresh = await gateway.fetch(new Request(url("refresh-book"),{
+      method:"POST",headers:{Origin:ORIGIN,"Content-Type":"application/json"},
+      body:JSON.stringify({id:"test",context:"secret",chapters:[{title:"chapter",text:"secret"}]})
+    }),env);
+    assert.equal(refresh.status,401);
   } finally { globalThis.fetch = original; }
 });
 
@@ -56,7 +61,16 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     chapters:[{title:"Пролог",text:"начало"},
       {title:"Глава 14",text:"события 14"},
       {title:"Глава 15",text:"события 15"}]};
-  const env = {OWNER_UID:"owner",MODELPROXY_API_KEY:"mp-test",BOTHUB_API_KEY:"bh-test",BOOKS:{get:async()=>book}};
+  const written=[];
+  const env = {OWNER_UID:"owner",MODELPROXY_API_KEY:"mp-test",BOTHUB_API_KEY:"bh-test",BOOKS:{
+    get:async()=>book,
+    put:async(key,raw,opts)=>{
+      assert.equal(key,"book:test");
+      const data=JSON.parse(raw);
+      Object.assign(book,data);
+      written.push({data,metadata:opts.metadata});
+    }
+  }};
   const headers = {Origin:ORIGIN,Authorization:"Bearer "+token};
   const original = globalThis.fetch;
   const calls = [];
@@ -92,6 +106,38 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(payload.stream,true);
     assert.match(payload.messages[0].content,/Глава 15/);
     assert.match(payload.messages[0].content,/события 15/);
+    // Paid call with a stale revision is stopped BEFORE the provider is called.
+    const beforeStale=calls.length;
+    const stale=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({bookId:"test",sourceRevision:"2000-01-01T00:00:00.000Z",
+        provider:"bothub",messages:[{role:"user",content:"Пиши"}]})
+    }),env);
+    assert.equal(stale.status,424);
+    assert.equal(calls.length,beforeStale);
+    const freshDoc={id:"test",title:"Тестовый роман",
+      context:"Новый подтвержденный канон",
+      chapters:[{title:"Пролог",text:"обновленный пролог"},{title:"Глава 16",text:"новая глава"}],
+      generatedAt:new Date().toISOString()};
+    const fresh=await gateway.fetch(new Request(url("refresh-book"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify(freshDoc)
+    }),env);
+    assert.equal(fresh.status,200);
+    const refreshed=await fresh.json();
+    assert.equal(refreshed.chapterCount,2);
+    assert.equal(written.length,1);
+    assert.match(written[0].data.context,/Новый подтвержденный канон/);
+    assert.equal(written[0].metadata.chapters,2);
+    const beforeFresh=calls.length;
+    const withRevision=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({bookId:"test",sourceRevision:refreshed.updatedAt,
+        provider:"bothub",messages:[{role:"user",content:"Продолжай"}]})
+    }),env);
+    assert.equal(withRevision.status,200);
+    assert.equal(calls.length,beforeFresh+1);
+    assert.match(JSON.parse(calls.at(-1).init.body).messages[0].content,/новая глава/);
     const beforeBotHubCalls=calls.length;
     const botRes=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
@@ -147,9 +193,12 @@ test("browser and Pages bridge must reject an old Polza gateway", async () => {
   const pages = await readFile(new URL("../functions/api/freitag/[route].js",import.meta.url),"utf8");
   assert.ok(app.includes('health.provider!=="ModelProxy"'));
   assert.ok(app.includes("modelproxyMessages"));
-  assert.ok(app.includes('gateway+"/snapshot?bookId="'));
+  assert.ok(app.includes('refreshLinkedBook({'));
+  assert.ok(app.includes('sourceRevision'));
+  assert.ok(app.includes('health.autoSyncSupported'));
   assert.match(pages,/route === "snapshot"/);
   assert.match(pages,/route === "preflight"/);
+  assert.match(pages,/route === "refresh-book"/);
   assert.ok(app.includes("f-bothub-model"));
   assert.ok(app.includes("activeBotHubModel"));
 });
