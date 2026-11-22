@@ -41,7 +41,7 @@ test("Paid chats use MCP on send without Google Drive OAuth popups or hidden pro
   const instructions=app.slice(app.indexOf("function modelproxyMessages(c){"),app.indexOf("function buildMessages(c){"));
   assert.doesNotMatch(instructions,/mode\.instruction/);
   assert.doesNotMatch(instructions,/ТЕКУЩАЯ СЦЕНА\/ПОСЛЕДНИЕ СОБЫТИЯ/);
-  assert.match(instructions,/userInstruction\(p\.instruction\)/);
+  assert.match(instructions,/userInstruction\(p\?\.instruction\)/);
   assert.doesNotMatch(worker,/const editorialStyle=/);
   assert.match(worker,/if\(input\.sourceRevision\)/);
   assert.match(worker,/mcpToolsCompletion/);
