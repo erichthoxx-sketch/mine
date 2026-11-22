@@ -1,5 +1,6 @@
 // Freitag AI — персональная литературная среда: сменяемые модели, память и контекст автора.
 import { master } from './master-sync.js';
+import { renderMarkdown } from './markdown.js';
 import { ensureDriveAccess, refreshLinkedBook } from './live-context.js';
 // Чаты, проекты и текстовые материалы хранятся только в IndexedDB этого браузера.
 // Никаких ключей и рукописей в репозитории.
@@ -7,7 +8,8 @@ const $ = (q) => document.querySelector(q);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid = () => (globalThis.crypto?.randomUUID?.() || "id-" + Date.now() + "-" + Math.random().toString(36).slice(2));
 const stamp = () => new Date().toISOString();
-const DEFAULT_INSTRUCTION = "Отвечай по-русски, точно и без внутренних рассуждений. В авторском тексте сохраняй голос и факты книги. Не подменяй канон догадками и не выдумывай содержание отсутствующих глав.";
+const LEGACY_DEFAULT_INSTRUCTION = "Отвечай по-русски, точно и без внутренних рассуждений. В авторском тексте сохраняй голос и факты книги. Не подменяй канон догадками и не выдумывай содержание отсутствующих глав.";
+const userInstruction = v => { const t=String(v||"").trim(); return [LEGACY_DEFAULT_INSTRUCTION,"Не нарушай утверждённый канон.","Отвечай с учетом канона проекта. Если факта нет в материалах, скажи об этом."].includes(t)?"":t; };
 const WRITING_MODES = {
   dialog: {name:"Диалог",instruction:"Отвечай кратко и конкретно. При нехватке сведений сообщи, каких именно.",maxTokens:320},
   draft: {name:"Написать сцену",instruction:"Ты работаешь над художественной сценой. Пиши сразу прозу, не вступай с объяснениями. Соблюдай канон, POV, время, место, характеры, заданный стиль и последнюю сцену. Не изобретай события и родственные связи без запроса. Если нет нужной завязки, задай один конкретный вопрос.",maxTokens:700},
@@ -16,8 +18,8 @@ const WRITING_MODES = {
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
-  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
-let state=blank(), tab="chat", busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
+  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",globalInstruction:"",context:4096}, theme:"auto"});
+let state=blank(), tab="chat", projectHomeId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const getDb=()=>new Promise((resolve,reject)=>{const r=db.transaction("data").objectStore("data").get("state");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
