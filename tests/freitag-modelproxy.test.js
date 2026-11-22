@@ -100,6 +100,14 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
         {name:"delete_book",description:"НЕДОПУСТИМО",inputSchema:{type:"object",properties:{}}}
       ]});
       if(rpc.method==="tools/call"){
+        if(rpc.params?.name==="list_chapters"){
+          assert.equal(rpc.params.arguments.book_id,"test");
+          return payload({content:[{type:"text",text:JSON.stringify({
+            book:book.title,updatedAt:book.updatedAt,chapters:book.chapters.map((ch,i)=>({
+              chapter:i+1,title:ch.title,chars:ch.text.length
+            }))
+          })}]});
+        }
         if(rpc.params?.name==="read_chapter"){
           assert.equal(rpc.params.arguments.book_id,"test");
           return payload({content:[{type:"text",text:JSON.stringify({chapter:2,text:"новая глава"})}]});
