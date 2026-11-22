@@ -685,8 +685,10 @@ async function sendMessage(text){
   }
   c.messages.push({role:"user",content:msg,at:stamp()});
   if(c.title==="Новый чат")c.title=msg.slice(0,65);
-  c.updated=stamp();await save();
-  busy=true;render();
+  c.updated=stamp();
+  // Block a second Send while IndexedDB persists the first request.
+  busy=true;
+  await save();render();
   const messages=isPaidProvider?modelproxyMessages(c):buildMessages(c);
   const assistant={role:"assistant",provider:isPaidProvider?(state.settings.provider==="bothub"?activeClaudeName():"Claude Opus 5.5"):"Qwen",content:"",at:stamp()};
   c.messages.push(assistant);
