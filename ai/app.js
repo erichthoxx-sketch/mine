@@ -16,7 +16,7 @@ const WRITING_MODES = {
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], activeProjectId:null, activeChatId:null,
   settings:{provider:"ollama",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
-let state=blank(), tab="chat", busy=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено";
+let state=blank(), tab="chat", busy=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const getDb=()=>new Promise((resolve,reject)=>{const r=db.transaction("data").objectStore("data").get("state");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -180,7 +180,7 @@ function renderChat(){
       '<button type="button" class="f-inline-btn" data-action="feedback-bad" data-i="'+i+'">Не то</button></div>':"")+
     '</article>').join("");
   const modeOptions=Object.entries(WRITING_MODES).map(([key,v])=>
-    '<option value="'+key+'" '+((c?.mode||(p?"draft":"dialog"))===key?"selected":"")+'>'+esc(v.name)+'</option>').join("");
+    '<option value="'+key+'" '+((c?.mode||pendingMode||(p?"draft":"dialog"))===key?"selected":"")+'>'+esc(v.name)+'</option>').join("");
   const bookOptions='<option value="">Без книги</option>'+state.projects.map(x=>
     '<option value="'+esc(x.id)+'" '+(x.id===(p?.id||"")?"selected":"")+'>'+esc(x.name)+'</option>').join("");
   $("#panel").innerHTML=
@@ -224,7 +224,8 @@ function renderChat(){
 }
 function ensureChat(){
   if(chat())return chat();
-  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:state.activeProjectId?"draft":"dialog",messages:[],updated:stamp()};
+  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:pendingMode||(state.activeProjectId?"draft":"dialog"),messages:[],updated:stamp()};
+  pendingMode=null;
   state.chats.unshift(c);state.activeChatId=c.id;save();return c;
 }
 function openModal(title,fields,preset={},saveLabel="Сохранить"){
@@ -703,8 +704,8 @@ document.addEventListener("click",async(e)=>{
   const b=e.target.closest("[data-action]");if(!b)return;
   const a=b.dataset.action,id=b.dataset.id;
   if(a==="theme"){state.theme=state.theme==="auto"?"light":state.theme==="light"?"dark":"auto";save();render();}
-  if(a==="new-chat"){state.activeChatId=null;ensureChat();tab="chat";render();$("#f-message-input")?.focus();}
-  if(a==="select-chat"){state.activeChatId=id;state.activeProjectId=chat(id)?.projectId||null;save();tab="chat";render();}
+  if(a==="new-chat"){state.activeChatId=null;pendingMode=null;await save();tab="chat";render();$("#f-message-input")?.focus();}
+  if(a==="select-chat"){state.activeChatId=id;state.activeProjectId=chat(id)?.projectId||null;pendingMode=null;await save();tab="chat";render();}
   if(a==="add-project")await editProject(null);
   if(a==="edit-project")await editProject(id);
   if(a==="master-connect"){
@@ -729,7 +730,7 @@ document.addEventListener("click",async(e)=>{
     state.activeProjectId=p.id;state.activeChatId=null;await save();render();notice("Книга «"+p.name+"» связана с Freitag AI.");
   }
   if(a==="edit-active-project"){const selected=project(chat()?.projectId||state.activeProjectId);if(selected)await editProject(selected.id);}
-  if(a==="open-project"){state.activeProjectId=id;state.activeChatId=null;save();tab="chat";render();}
+  if(a==="open-project"){state.activeProjectId=id;state.activeChatId=null;pendingMode=null;await save();tab="chat";render();}
   if(a==="delete-project"){const p=project(id);if(!p||!confirm("Удалить проект «"+p.name+"» и все его чаты и материалы?"))return;
     state.projects=state.projects.filter(x=>x.id!==id);state.chats=state.chats.filter(x=>x.projectId!==id);state.docs=state.docs.filter(x=>x.projectId!==id);
     if(state.activeProjectId===id){state.activeProjectId=null;state.activeChatId=null;}await save();render();}
@@ -810,11 +811,11 @@ document.addEventListener("submit",async(e)=>{
 document.addEventListener("change",async(e)=>{
   if(e.target.id==="f-writing-mode"){
     if(!WRITING_MODES[e.target.value])return;
-    const c=ensureChat();c.mode=e.target.value;
-    await save();render();return;
+    const c=chat();if(c){c.mode=e.target.value;await save();}else pendingMode=e.target.value;
+    return;
   }
   if(e.target.id==="f-sidebar-project"||e.target.id==="f-chat-project"||e.target.id==="f-doc-project"){
-    state.activeProjectId=e.target.value||null;state.activeChatId=null;await save();render();return;
+    state.activeProjectId=e.target.value||null;state.activeChatId=null;pendingMode=null;await save();render();return;
   }
   if(e.target.id==="f-upload"){
     try{const file=e.target.files?.[0];if(!file)return;if(!state.activeProjectId)return notice("Выбери проект.");
