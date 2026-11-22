@@ -108,6 +108,7 @@ test("complete MCP pages arrive before one streaming request, which stays cancel
     assert.equal(init.headers.Accept,"text/event-stream");
     const body=JSON.parse(init.body);
     assert.equal(body.messages.at(-1).content,prompt);
+    assert.equal(body.messages.length,2,"only the preloaded book and original prompt");
     const sources=body.messages.find(m=>m.content.includes("Справочные материалы")).content;
     assert.ok(sources.includes(last) && sources.includes(canon));
     assert.ok(!sources.includes(embedded));
