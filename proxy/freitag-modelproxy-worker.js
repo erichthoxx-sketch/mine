@@ -369,7 +369,7 @@ async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxToke
         headers:{Authorization:"Bearer "+env[provider.secret],
           "Content-Type":"application/json"},
         body:JSON.stringify({
-          model,messages:history,stream:false,max_tokens:maxTokens,
+          model,messages:history,stream:authorChapter,max_tokens:maxTokens,
           ...(selected.length?{tools:toProviderTools(selected),tool_choice:"auto"}:{})
         }),
         signal:AbortSignal.any([req.signal,AbortSignal.timeout(maxTokens>=9000?300000:160000)])
@@ -380,6 +380,22 @@ async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxToke
       if(upstream.status===429)return fail(req,429,provider.name+": превышен лимит.");
       return fail(req,upstream.status>=400&&upstream.status<500?upstream.status:502,
         provider.name+" вернул HTTP "+upstream.status+".");
+    }
+    if(authorChapter){
+      // BotHub documents streamed OpenAI-compatible completions for Opus 5.5.
+      // The old stream:false waited for every output token before returning
+      // headers and triggered BotHub/Cloudflare's 524 read timeout.
+      const ct=String(upstream.headers.get("Content-Type")||"").toLowerCase();
+      if(!upstream.body||!ct.includes("text/event-stream")){
+        // Never mislabel a provider JSON error as a finished chapter, or
+        // automatically retry a potentially billable request.
+        return fail(req,502,"BotHub не вернул потоковую выдачу Opus. Не повторяй платный запрос до проверки провайдера.");
+      }
+      return new Response(upstream.body,{
+        status:200,
+        headers:{...headers(req),"Content-Type":"text/event-stream; charset=utf-8",
+          "Cache-Control":"no-store","X-Accel-Buffering":"no"}
+      });
     }
     let data;
     try{data=await upstream.json();}catch{return fail(req,502,"Некорректный ответ модели.");}
