@@ -293,7 +293,7 @@ async function editProject(id){
   const details={name:v.name.trim(),description:v.description.trim(),instruction:v.instruction.trim(),
     canon:(v.canon||"").trim(),voice:(v.voice||"").trim(),scene:(v.scene||"").trim()};
   if(p)Object.assign(p,details);
-  else{const q={id:uid(),...details};state.projects.unshift(q);state.activeProjectId=q.id;state.activeChatId=null;}
+  else{const q={id:uid(),...details};state.projects.unshift(q);state.activeProjectId=q.id;state.activeChatId=null;projectHomeId=q.id;}
   await save();render();
 }
 async function addNote(){
@@ -755,7 +755,7 @@ document.addEventListener("click",async(e)=>{
       state.projects.unshift(p);
     }
     p.masterCanon=master.canonicalText(b);p.masterSyncedAt=stamp();
-    state.activeProjectId=p.id;state.activeChatId=null;await save();render();notice("Книга «"+p.name+"» связана с Freitag AI.");
+    state.activeProjectId=p.id;state.activeChatId=null;projectHomeId=p.id;await save();render();notice("Книга «"+p.name+"» связана с Freitag AI.");
   }
   if(a==="edit-active-project"){const selected=project(chat()?.projectId||state.activeProjectId);if(selected)await editProject(selected.id);}
   if(a==="sync-current-book"){
