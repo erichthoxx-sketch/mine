@@ -17,6 +17,8 @@ test("book can be changed without desktop sidebar and empty chat accepts text",a
   const app=await load("../ai/app.js");
   assert.match(app,/id="f-chat-project"/);
   assert.match(app,/f-chat-welcome/);
+  assert.match(app,/f-mobile-history/);
+  assert.match(app,/aria-label="История разговоров"/);
   assert.match(app,/if\(e.target.id==="f-sidebar-project"\|\|e.target.id==="f-chat-project"/);
   assert.match(app,/const c=ensureChat\(\),msg=text.trim\(\);/);
   assert.match(app,/if\(a==="new-chat"\)\{state.activeChatId=null;pendingMode=null/);
