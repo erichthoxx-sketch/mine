@@ -112,6 +112,14 @@ html.app-freitag [hidden]{display:none!important}
 .f-chat-book .f-select{width:min(310px,100%);padding:6px 10px;min-height:32px;font-size:12px!important;border-color:var(--f-line);background:var(--f-paper);border-radius:8px}
 .f-chat-head-actions{display:flex;align-items:center;gap:8px;flex:none}
 .f-btn-new{border-color:var(--f-line)!important;background:transparent!important}
+.f-mobile-history{display:none;position:relative}
+.f-mobile-history summary{list-style:none;display:flex;align-items:center;justify-content:center;min-height:36px;padding:7px 11px;cursor:pointer;border:1px solid var(--f-line);border-radius:9px;color:var(--f-soft-ink);font-size:11px;font-weight:600}
+.f-mobile-history summary::-webkit-details-marker{display:none}
+.f-mobile-history[open] summary{background:var(--f-hover);color:var(--f-ink)}
+.f-mobile-history-panel{position:absolute;z-index:45;right:0;top:41px;width:min(350px,calc(100vw - 26px));max-height:54dvh;overflow-y:auto;border:1px solid var(--f-line);border-radius:13px;padding:7px;background:var(--f-paper);box-shadow:var(--f-shadow)}
+.f-mobile-history-panel button{display:block;width:100%;border:0!important;border-radius:8px;background:transparent!important;color:var(--f-soft-ink)!important;font-size:12px!important;text-align:left;padding:11px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.f-mobile-history-panel button.on,.f-mobile-history-panel button:hover{background:var(--f-active)!important;color:var(--f-ink)!important}
+.f-mobile-history-panel p{color:var(--f-muted);padding:8px 10px;font-size:12px}
 .f-chat-more{position:relative}
 .f-chat-more summary{list-style:none;display:grid;place-items:center;border:1px solid var(--f-line);border-radius:9px;width:37px;height:37px;color:var(--f-soft-ink);cursor:pointer;font-weight:700;letter-spacing:.08em}
 .f-chat-more summary::-webkit-details-marker{display:none}
@@ -223,6 +231,7 @@ html.app-freitag [hidden]{display:none!important}
   .f-mobile-nav{display:grid;position:fixed;left:0;right:0;bottom:0;z-index:30;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;align-items:center;min-height:61px;padding:7px 10px calc(7px + env(safe-area-inset-bottom));background:var(--f-paper);border-top:1px solid var(--f-line)}
   .f-mobile-nav button{text-align:center!important;border-radius:9px;padding:10px 2px;min-height:39px;font-size:11px!important}
   .f-mobile-nav button.on{background:var(--f-active)!important;color:var(--f-ink)!important}
+  .f-mobile-history{display:block}
   .f-chat{min-height:calc(100dvh - 63px - 103px)}
   .f-chat-meta{gap:11px;align-items:flex-start;margin-bottom:9px}
   .f-chat-meta .f-title{font-size:24px}
