@@ -225,7 +225,7 @@ function renderChat(){
       '<button type="button" class="f-destructive" data-action="delete-chat">Удалить чат</button></div></details>':"")+
     '</div></div>'+
     '<div class="f-chat-body" id="f-messages" role="log" aria-live="polite" aria-relevant="additions text">'+
-      (body||'<div class="f-chat-welcome"><span class="f-welcome-mark" aria-hidden="true">F.</span>'+
+      (body||'<div class="f-chat-welcome"><span class="f-welcome-mark" aria-hidden="true"><img src="../workshop/bear.svg" alt="" width="55" height="55"></span>'+
         '<h2>Место для твоих историй.</h2><p>Выбери книгу, задай вопрос или начни новую сцену.</p></div>')+
     '</div>'+
     '<form id="f-chat-form" class="f-compose">'+
