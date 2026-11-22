@@ -9,8 +9,7 @@ const $ = (q) => document.querySelector(q);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid = () => (globalThis.crypto?.randomUUID?.() || "id-" + Date.now() + "-" + Math.random().toString(36).slice(2));
 const stamp = () => new Date().toISOString();
-const LEGACY_DEFAULT_INSTRUCTION = "Отвечай по-русски, точно и без внутренних рассуждений. В авторском тексте сохраняй голос и факты книги. Не подменяй канон догадками и не выдумывай содержание отсутствующих глав.";
-const userInstruction = v => { const t=String(v||"").trim(); return [LEGACY_DEFAULT_INSTRUCTION,"Не нарушай утверждённый канон.","Отвечай с учетом канона проекта. Если факта нет в материалах, скажи об этом."].includes(t)?"":t; };
+const userInstruction = v => typeof v === "string" ? v : "";
 const WRITING_MODES = {
   dialog: {name:"Диалог",instruction:"Отвечай кратко и конкретно. При нехватке сведений сообщи, каких именно.",maxTokens:320},
   draft: {name:"Написать сцену",instruction:"Ты работаешь над художественной сценой. Пиши сразу прозу, не вступай с объяснениями. Соблюдай канон, POV, время, место, характеры, заданный стиль и последнюю сцену. Не изобретай события и родственные связи без запроса. Если нет нужной завязки, задай один конкретный вопрос.",maxTokens:700},
@@ -154,7 +153,7 @@ function renderSettings(){
     '<details class="f-settings-fold"><summary>Защищенный API-шлюз · ModelProxy / BotHub / ApiMira</summary>'+
     '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
     '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
-    '<p class="f-muted">В тестовой версии Cloudflare Pages шлюз выбирается автоматически. Freitag AI напрямую вызывает MCP-инструменты Мастерской для чтения книг, доходов, маркетинга и Директа. Для связанной книги Google Docs обновляется перед каждым сообщением. Секреты хранятся только в Cloudflare.</p></div></details>'+
+    '<p class="f-muted">В тестовой версии Cloudflare Pages шлюз выбирается автоматически. Freitag AI напрямую вызывает MCP-инструменты Мастерской для чтения книг, доходов, маркетинга и Директа. Для главы используется последний снимок книги в Мастерской. После правок в рукописи нажми «Обновить Google Docs» в проекте. Секреты хранятся только в Cloudflare.</p></div></details>'+
     '<details class="f-settings-fold"><summary>Локальная Ollama · дополнительные настройки</summary>'+
     '<div class="f-fold-body"><label for="f-endpoint">Адрес Ollama</label>'+
     '<input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
@@ -172,7 +171,7 @@ function renderSettings(){
     '<section class="f-settings-card"><div class="f-section-kicker">02 / ПИСЬМО</div>'+
     '<h2>Как работать с текстом</h2>'+
     '<label for="f-global">Общая инструкция</label>'+
-    '<textarea id="f-global" name="globalInstruction" class="f-textarea f-instruction" rows="5">'+esc(s.globalInstruction)+'</textarea>'+
+    '<textarea id="f-global" name="globalInstruction" class="f-textarea f-instruction" rows="5">\n'+esc(s.globalInstruction)+'</textarea>'+
     '<p class="f-muted">Настройки конкретной книги и ее канон задаются в разделе «Книги».</p></section>'+
     '<section class="f-settings-card"><div class="f-section-kicker">03 / ИНТЕРФЕЙС</div>'+
     '<h2>Оформление</h2><label for="f-theme">Цветовая тема</label>'+
@@ -214,6 +213,7 @@ function renderChat(){
     '<article class="f-msg '+esc(m.role)+'"><div class="f-speaker">'+
     (m.role==="user"?"Ты":m.provider==="Claude"?"Claude Opus":String(m.provider||"").startsWith("Claude ") ? esc(m.provider) :m.provider==="Внешняя модель"?"Внешняя модель":"Freitag AI")+
     '</div><div class="f-msg-text">'+(m.role==="assistant"?renderMarkdown(m.content):'<p>'+esc(m.content).replace(/\n/g,"<br>")+'</p>')+'</div>'+
+    (m.receiving && !busy?'<p class="f-mini">Получен фрагмент. Завершение главы не подтверждено.</p>':"")+
     (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
       '<div class="f-feedback-actions"><button type="button" class="f-inline-btn" data-action="copy-answer" data-i="'+i+'">Копировать</button>'+
       '<button type="button" class="f-inline-btn" data-action="feedback-good" data-i="'+i+'">В образцы</button>'+
@@ -259,7 +259,7 @@ function renderChat(){
       '<span class="f-compose-canon">'+(p?.masterBookId?"MCP Мастерская · автоматически":p?"Инструкции проекта":"Обычный чат")+'</span>'+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
-      '<textarea class="f-textarea" id="f-message-input" rows="2" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'>'+esc(state.drafts?.[draftKey()]||"")+'</textarea>'+
+      '<textarea class="f-textarea" id="f-message-input" rows="2" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'>\n'+esc(state.drafts?.[draftKey()]||"")+'</textarea>'+
       '<div class="f-compose-controls">'+
       '<span class="f-mini" title="'+esc(connectText)+'">'+esc(activeProviderLabel())+
       (connectOk?' · подключено':"")+'</span>'+
@@ -271,7 +271,7 @@ function renderChat(){
       (c?.batch?.batchId&&c.batch.status!=="completed"?
         '<div class="f-row"><span class="f-mini">Batch: '+esc(c.batch.status||"отправлен")+'</span>'+
         '<button type="button" class="f-btn" data-action="check-batch-chapter">Проверить готовность главы</button></div>':"")+
-      (!c?.batch?.batchId&&c?.messages?.at(-1)?.role==="assistant"&&/HTTP 524|вернул 524/.test(c.messages.at(-1).content)&&p?
+      (state.settings.provider==="bothub"&&activeBotHubModel()==="claude-opus-5.5"&&!c?.batch?.batchId&&c?.messages?.at(-1)?.role==="assistant"&&/HTTP 524|вернул 524/.test(c.messages.at(-1).content)&&p?
         '<div class="f-row"><button type="button" class="f-btn" data-action="retry-batch-chapter">Эту главу — через Batch API</button></div>':"")+
       '<details class="f-extra-tools"><summary>Инструменты и подключение</summary><div class="f-row">'+
       '<button type="button" class="f-btn" data-action="export-context">Скопировать контекст</button>'+
@@ -301,7 +301,7 @@ function openModal(title,fields,preset={},saveLabel="Сохранить"){
   const dlg=document.createElement("dialog");dlg.className="f-dialog";
   dlg.innerHTML='<form id="f-dialog-form" method="dialog"><h2>'+esc(title)+'</h2>'+
     fields.map(f=>'<label for="f-field-'+esc(f.key)+'">'+esc(f.label)+'</label>'+
-      (f.multi?'<textarea class="f-textarea" id="f-field-'+esc(f.key)+'" name="'+esc(f.key)+'">'+esc(preset[f.key]||"")+'</textarea>':
+      (f.multi?'<textarea class="f-textarea" id="f-field-'+esc(f.key)+'" name="'+esc(f.key)+'">\n'+esc(preset[f.key]||"")+'</textarea>':
       '<input class="f-text-field" id="f-field-'+esc(f.key)+'" name="'+esc(f.key)+'" value="'+esc(preset[f.key]||"")+'" '+(f.required?"required":"")+' maxlength="300">')).join("")+
     '<div class="f-row" style="justify-content:flex-end;margin-top:20px"><button class="f-btn" value="cancel">Отмена</button><button class="f-btn primary" value="save">'+esc(saveLabel)+'</button></div></form>';
   document.body.appendChild(dlg);dlg.showModal();dlg.addEventListener("close",()=>dlg.remove());
@@ -323,8 +323,8 @@ async function editProject(id){
      {key:"instruction",label:"Дополнительные указания модели",multi:true}],
     p?{...p,instruction:userInstruction(p.instruction)}:{name:"",instruction:""});
   if(!v)return;
-  const details={name:v.name.trim(),description:v.description.trim(),instruction:v.instruction.trim(),
-    canon:(v.canon||"").trim(),voice:(v.voice||"").trim(),scene:(v.scene||"").trim()};
+  const details={name:v.name.trim(),description:v.description.trim(),instruction:v.instruction,
+    canon:v.canon||"",voice:v.voice||"",scene:v.scene||""};
   if(p)Object.assign(p,details);
   else{const q={id:uid(),...details};state.projects.unshift(q);state.activeProjectId=q.id;state.activeChatId=null;projectHomeId=q.id;}
   await save();render();
@@ -423,7 +423,7 @@ function modelproxyMessages(c){
   // inside its own history. Keep the latest author request verbatim.
   const history=messages.slice(-7,-1)
     .filter(m=>!(m.role==="user"&&m.content===latest) &&
-      !(m.role==="assistant"&&/^(?:Ошибка Claude:|Ответ остановлен\.|Ошибка Ollama:)/.test(m.content)))
+      !(m.role==="assistant"&&/^(?:Ошибка Claude:|Ответ остановлен\.|Ошибка Ollama:|Отправка Batch:|Batch не запущен:)/.test(m.content)))
     .map(m=>({role:m.role,content:m.content}));
   return [...(projectInstructions?[{role:"system",content:projectInstructions}]:[]),
     ...history,{role:"user",content:latest}];
@@ -524,18 +524,19 @@ async function testConnection(){
       const response=await fetch(gateway+"/health",{cache:"no-store"});
       if(!response.ok)throw Error("HTTP "+response.status);
       const data=await response.json();
-      if(data.provider!=="ModelProxy"||data.model!=="claude-opus-5-5")
+      if(data.provider!=="ModelProxy"||data.model!=="claude-opus-5-5"||data.chapterProtocol!==2)
         throw Error("На сервере прежняя версия шлюза. Обнови Worker без платных запросов.");
       const chosen=$("#f-provider")?.value||state.settings.provider;
       if(!data.ok || (chosen==="modelproxy"?!data.configured:chosen==="apimira"?!data.apimiraConfigured:!data.bothubConfigured))
-        throw Error(chosen==="bothub"?"BotHub пока не подключен: отсутствует BOTHUB_API_KEY.":chosen==="apimira"?"ApiMira пока не подключена: требуется APIMIRA_API_KEY.":"ModelProxy пока не подключен: отсутствует MODELPROXY_API_KEY.");
+        throw Error(chosen==="bothub"?"BotHub пока не подключен: проверь настройки владельца и BOTHUB_API_KEY.":chosen==="apimira"?"ApiMira пока не подключена: проверь настройки владельца и APIMIRA_API_KEY.":"ModelProxy пока не подключен: проверь настройки владельца и MODELPROXY_API_KEY.");
+      let info;
       if(chosen==="bothub"||chosen==="apimira"){
         const model=chosen==="apimira"?"anthropic/claude-opus-5.5":($("#f-bothub-model")?.value||activeBotHubModel());
         const token=await master.idToken();
         const check=await fetch(gateway+"/preflight?provider="+chosen+"&model="+encodeURIComponent(model),{
           headers:{"Authorization":"Bearer "+token},cache:"no-store"
         });
-        const info=await check.json().catch(()=>({}));
+        info=await check.json().catch(()=>({}));
         if(!check.ok||!info.ok)throw Error(info.error||info.message||"Модель недоступна.");
       }
       // Check the REAL MCP server, not the mere existence of a KV binding.
@@ -549,15 +550,16 @@ async function testConnection(){
       connectOk=true;
       connectText="Мастерская MCP · "+mcpInfo.toolCount+" инструментов · "+activeProviderLabel();
       const status=$("#f-test-status");
-      const money=chosen==="apimira"&&typeof info.balanceUsd==="number"?
+      const money=chosen==="apimira"&&typeof info?.balanceUsd==="number"?
         " Баланс ApiMira: $"+info.balanceUsd.toFixed(4)+
         (info.balanceUsd===0?" — средств для платной главы нет.":"")+
-        " Для длинной главы сервис временно резервирует стоимость max_tokens.":"";
-      if(status)status.textContent="Модель доступна. MCP Мастерской подключен напрямую: "+
+        " Для длинной главы сервис временно резервирует стоимость входного текста и выбранного лимита ответа.":"";
+      if(status)status.textContent=(info?"Модель есть в каталоге. ":"")+"MCP Мастерской подключен напрямую: "+
         mcpInfo.toolCount+" инструментов (книги, маркетинг, доходы, Директ, Метрика). "+
         "Проверка не выполняет платную генерацию."+money;
       notice("Защищенный шлюз найден. Оплата за проверку соединения не списывается.");
-    }catch(e){connectOk=false;connectText="Шлюз недоступен";notice("Claude: "+e.message);}
+    }catch(e){connectOk=false;connectText=e.message;const status=$("#f-test-status");
+      if(status)status.textContent=e.message;notice("Claude: "+e.message);}
     renderHeader();return;
   }
   const endpoint=safeEndpoint($("#f-endpoint")?.value||state.settings.endpoint);
@@ -688,14 +690,17 @@ async function sendBatchChapter(text){
   if(busy||preparingPaid||!text?.trim())return;
   const p=project();
   if(!p)return notice("Для Batch-главы выбери проект книги.");
+  if(isSimpleGreeting(text))return notice("Для Batch требуется задание на главу.");
+  if(chat()?.batch?.batchId && !["completed","failed","cancelled","expired"].includes(chat().batch.status))
+    return notice("В этом чате уже ожидается результат Batch. Проверь готовность главы.");
   if(state.settings.provider!=="bothub"||activeBotHubModel()!=="claude-opus-5.5")
     return notice("Batch-глава поддерживается для Claude Opus 5.5 через BotHub.");
-  if(!confirm("BotHub Batch API принимает целую главу отдельной задачей (окно выполнения — до 24 часов). Запрос платный, но не зависит от открытого соединения и ошибки 524. Отправить один раз?"))
+  if(!confirm("Отправить главу в BotHub как платную фоновую задачу? После принятия появится номер задачи. Окно выполнения — до 24 часов."))
     return;
   const gateway=claudeGateway(state.settings.workerUrl);
   if(!gateway)return notice("Не настроен шлюз Freitag AI.");
   busy=true;preparingPaid=true;
-  const prevDraft=draftKey(),c=ensureChat(),msg=text.trim();
+  const prevDraft=draftKey(),c=ensureChat(),msg=text;
   c.mode="draft";
   c.messages.push({role:"user",content:msg,at:stamp()});
   if(c.title==="Новый чат")c.title=msg.slice(0,65);
@@ -733,7 +738,7 @@ async function sendBatchChapter(text){
       (result.reused?"\nРанее отправленная задача найдена — повторного запуска нет.":"")+
       "\nМожно закрыть вкладку: задача выполняется у провайдера. Вернись в этот чат и нажми «Проверить готовность главы».";
     notice("Batch принят. Проверка статуса не запускает новую платную генерацию.");
-  }catch(e){assistant.content="Batch не запущен: "+e.message;notice(assistant.content);}
+  }catch(e){assistant.content="Отправка Batch: "+e.message;notice(assistant.content);}
   finally{busy=false;preparingPaid=false;c.updated=stamp();await save();render();}
 }
 async function checkBatchChapter(){
@@ -753,10 +758,12 @@ async function checkBatchChapter(){
     const assistant=c.messages[job.assistantIndex];
     if(!assistant)throw Error("Ответ Batch не найден в этом чате.");
     if(job.status==="completed"&&result.ok&&typeof result.content==="string"){
-      assistant.content=result.content+
-        (result.finishReason==="length"?"\n\n[Достигнут лимит ответа: глава может быть неполной.]":"");
+      assistant.content=result.content;
+      if(result.finishReason!=="stop")
+        assistant.content+=result.finishReason==="length"?"\n\n[Достигнут лимит ответа: глава может быть неполной.]":
+          "\n\n[Провайдер не подтвердил завершение главы. Полученный текст сохранен.]";
       job.usage=result.usage||null;
-      notice("Глава получена из BotHub Batch и сохранена в чате.");
+      notice("Текст из BotHub Batch сохранен в чате.");
     }else if(result.ok===false||["failed","cancelled","expired"].includes(job.status)){
       assistant.content="BotHub Batch завершился без главы: "+(result.error||job.status)+
         ". Не отправляй дубликат автоматически.";
@@ -770,13 +777,16 @@ async function checkBatchChapter(){
 }
 async function sendMessage(text){
   if(busy||preparingPaid||!text.trim())return;
-  const isPaidProvider=["modelproxy","bothub","apimira"].includes(state.settings.provider);
+  const provider=state.settings.provider, selectedModel=activeBotHubModel();
+  const outputLimit=Number(state.settings.sceneOutputTokens)||14000;
+  const isPaidProvider=["modelproxy","bothub","apimira"].includes(provider);
   const endpoint=safeEndpoint(state.settings.endpoint);
   const gateway=claudeGateway(state.settings.workerUrl);
   if(isPaidProvider&&!gateway)return notice("Не настроен API-шлюз Claude.");
   if(!isPaidProvider&&!endpoint)return notice("Проверь адрес Ollama в настройках.");
   let idToken="",sourceRevision="";
   if(isPaidProvider){
+    const selectedChat=draftKey();
     preparingPaid=true;
     try {
       // Firebase session persists in the browser. This is silent, unlike
@@ -784,11 +794,13 @@ async function sendMessage(text){
       await master.init();
       if(!master.user)throw Error("Один раз войди в Мастерскую в разделе «Книги». Затем книги доступны через MCP без повторных входов.");
       idToken=await master.idToken();
+      if(selectedChat!==draftKey() || provider!==state.settings.provider || selectedModel!==activeBotHubModel())
+        return notice("Выбор чата или модели изменился. Отправь задание из нужного чата.");
     }catch(e){return notice("Авторизация: "+e.message);}
     finally{preparingPaid=false;}
   }
   const previousDraft=draftKey();
-  const c=ensureChat(),msg=text.trim();
+  const c=ensureChat(),msg=text;
   if(c.projectId && !c.mode) c.mode="draft";
   const lightweight=isSimpleGreeting(msg);
   const requestMode=lightweight?"dialog":(c.mode||"dialog");
@@ -802,32 +814,30 @@ async function sendMessage(text){
   c.updated=stamp();
   // Block a second Send while IndexedDB persists the first request.
   busy=true;
-  await save();render();
   const messages=isPaidProvider?(lightweight?[{role:"user",content:msg}]:modelproxyMessages(c)):buildMessages(c);
-  const assistant={role:"assistant",provider:isPaidProvider?(state.settings.provider==="bothub"?activeClaudeName():"Claude Opus 5.5"):"Qwen",content:"",at:stamp()};
+  const assistant={role:"assistant",provider:isPaidProvider?(provider==="bothub"?activeClaudeName():"Claude Opus 5.5"):"Qwen",content:"",at:stamp()};
+  const bookId=lightweight?null:(project(c.projectId)?.masterBookId||null);
+  await save();render();
   c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
   el.innerHTML='<span class="f-speaker">'+(isPaidProvider?esc(assistant.provider):"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
   $("#f-messages")?.append(el);const target=el.querySelector(".f-msg-text");
   currentController=new AbortController();
-  let lastCheckpoint=Date.now(),lastSavedLength=0;
+  let checkpointTimer=null,firstFragment=true;
+  if(isPaidProvider)assistant.receiving=true;
   try{
     const res=isPaidProvider?await fetch(gateway+"/chat",{
       method:"POST",
       headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
-      body:JSON.stringify({provider:state.settings.provider,model:state.settings.provider==="bothub"?activeBotHubModel():undefined,messages,mode:requestMode,outputTokenLimit:requestMode==="draft"?(Number(state.settings.sceneOutputTokens)||14000):undefined,bookId:lightweight?null:(project(c.projectId)?.masterBookId||null),sourceRevision}),
+      body:JSON.stringify({provider,model:provider==="bothub"?selectedModel:undefined,messages,mode:requestMode,outputTokenLimit:requestMode==="draft"?outputLimit:undefined,bookId,sourceRevision}),
       signal:currentController.signal
     }):await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",
         options:{num_ctx:Number(state.settings.context)||4096,num_predict:(WRITING_MODES[c.mode]||WRITING_MODES.dialog).maxTokens}}),
       signal:currentController.signal});
     if(!res.ok){
-      const errorText=await res.text();
-      let detail=errorText.slice(0,200);
-      try{detail=JSON.parse(errorText).error||detail;}catch{}
-      if(res.status===502&&/BotHub вернул HTTP 524/.test(String(detail)))
-        detail="BotHub вернул 524: сервер провайдера не начал отдавать ответ вовремя. Повторный платный запрос не запускался. Проверь расходы перед новой попыткой.";
-      throw Error("HTTP "+res.status+": "+detail);
+      const error=await res.json().catch(()=>null);
+      throw Error(typeof error?.error==="string"?error.error:"Сервер вернул HTTP "+res.status+".");
     }
     if(!res.body)throw Error("Сервер не вернул поток ответа");
     const reader=res.body.getReader(),decoder=new TextDecoder();let pending="",streamFinished=false,finishReason="";
@@ -836,9 +846,10 @@ async function sendMessage(text){
       if(isPaidProvider){
         if(!line.startsWith("data:"))return;
         const data=line.slice(5).trim();
-        if(data==="[DONE]"){streamFinished=true;return;}
-        let obj;try{obj=JSON.parse(data);}catch{return;}
-        if(obj.error)throw Error(typeof obj.error==="string"?obj.error:obj.error.message||"Ошибка провайдера");
+        if(data==="[DONE]"){streamFinished=true;return true;}
+        let obj;try{obj=JSON.parse(data);}catch{throw Error("Поток содержит поврежденный фрагмент.");}
+        if(obj?.error)throw Error("Провайдер сообщил об ошибке в потоке. Проверь историю запроса.");
+        if(!obj || !Array.isArray(obj.choices))throw Error("Провайдер вернул неизвестный формат потока.");
         const reason=obj.choices?.[0]?.finish_reason;
         if(reason){finishReason=String(reason);streamFinished=true;}
         const fragment=obj.choices?.[0]?.delta?.content;
@@ -852,9 +863,8 @@ async function sendMessage(text){
       if(assistant.content){
         target.classList.remove("pending");target.textContent=assistant.content;
         // Persist long chapters during streaming; closing the tab must not erase paid text.
-        if(assistant.content.length-lastSavedLength>=2000&&Date.now()-lastCheckpoint>=4000){
-          lastCheckpoint=Date.now();lastSavedLength=assistant.content.length;void save();
-        }
+        if(firstFragment){firstFragment=false;void save();}
+        else if(checkpointTimer===null)checkpointTimer=setTimeout(()=>{checkpointTimer=null;void save();},1000);
       }
     };
     for(;;){
@@ -863,22 +873,27 @@ async function sendMessage(text){
       pending+=decoder.decode(value,{stream:true});
       const lines=pending.split("\n");
       pending=lines.pop();
-      for(const line of lines)consume(line.trimEnd());
+      if(lines.some(line=>consume(line.trimEnd())===true)){
+        pending="";void reader.cancel().catch(()=>{});break;
+      }
     }
+    pending+=decoder.decode();
     if(pending.trim())consume(pending.trimEnd());
     if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты у провайдера.");
-    if(isPaidProvider&&(!streamFinished||finishReason==="length")){
+    if(isPaidProvider&&(!streamFinished||(finishReason&&finishReason!=="stop"))){
       // Preserve the paid partial chapter rather than pretending that a broken
       // stream or max_tokens cutoff is a complete manuscript.
-      assistant.content+="\n\n[Генерация не завершена: "+(finishReason==="length"?"достигнут лимит длины ответа.":"поток прервался до подтверждения завершения.")+" Уже полученный текст сохранен. Не отправляй запрос повторно автоматически.]";
+      assistant.content+="\n\n[Генерация не завершена: "+(finishReason==="length"?"достигнут лимит длины ответа.":finishReason?"провайдер остановил выдачу.":"поток прервался до подтверждения завершения.")+" Уже полученный текст сохранен. Не отправляй запрос повторно автоматически.]";
     }
     connectOk=true;connectText=isPaidProvider?activeProviderLabel()+" подключен":"Ollama доступна";
   }catch(e){
+    currentController.abort();
     const prefix=e.name==="AbortError"?"Ответ остановлен.":(isPaidProvider?"Ошибка Claude: ":"Ошибка Ollama: ")+e.message;
     assistant.content=assistant.content?(assistant.content+"\n\n["+prefix+"]"):prefix;
     target.textContent=assistant.content;target.classList.remove("pending");
     connectOk=false;connectText=isPaidProvider?"Ошибка Claude":"Нет соединения";
   }finally{
+    clearTimeout(checkpointTimer);delete assistant.receiving;
     busy=false;currentController=null;c.updated=stamp();await save();render();
   }
 }
@@ -1036,7 +1051,7 @@ document.addEventListener("submit",async(e)=>{
     if(!["claude-sonnet-5.5","claude-opus-5.5"].includes(bothubModel))return notice("Неизвестная модель BotHub.");
     state.settings.provider=provider;state.settings.workerUrl=workerUrl;state.settings.bothubModel=bothubModel;
     state.settings.endpoint=url;state.settings.model=String(fd.get("model")||"").trim();
-    state.settings.globalInstruction=String(fd.get("globalInstruction")||"").slice(0,8000);
+    state.settings.globalInstruction=String(fd.get("globalInstruction")||"");
     state.settings.context=Number(fd.get("context"))||4096;
     state.theme=String(fd.get("theme"))||"auto";
     connectOk=false;connectText=provider==="modelproxy"?"ModelProxy Opus: проверь шлюз в настройках":provider==="bothub"?"BotHub: проверь шлюз в настройках":provider==="apimira"?"ApiMira: проверь шлюз в настройках":"Ollama: проверь соединение";
