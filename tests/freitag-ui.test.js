@@ -42,7 +42,8 @@ test("response copy, clear settings, backups and ModelProxy protection remain pr
     assert.ok(app.includes(text), "Missing behavior or form field: "+text);
   }
   assert.match(app,/health.provider!=="ModelProxy"/);
-  assert.match(app,/gateway\+"\/snapshot\?bookId="/);
+  assert.match(app,/refreshLinkedBook\(\{/);
+  assert.match(app,/sourceRevision/);
   assert.match(app,/indexedDB.open\("freitag-ai-v1",1\)/);
 });
 
@@ -75,4 +76,18 @@ test("BotHub offers a compact, persistent model choice without exposing the key 
   assert.match(app,/activeBotHubModel\(\)/);
   assert.match(app,/\/preflight\?model=/);
   assert.doesNotMatch(app,/name="BOTHUB_API_KEY"/);
+});
+
+test("fresh book must be loaded from Google Docs on every paid send, not from cached MCP snapshot",async()=>{
+  const live=await load("../ai/live-context.js");
+  const app=await load("../ai/app.js");
+  const worker=await load("../proxy/freitag-modelproxy-worker.js");
+  assert.match(live,/await master\.refresh\(\)/);
+  assert.match(live,/await bookSnapshot\(current\)/);
+  assert.match(live,/gateway \+ "\/refresh-book"/);
+  assert.match(app,/await ensureDriveAccess\(selectedBookId\)/);
+  assert.match(app,/await refreshLinkedBook\(/);
+  assert.match(worker,/path === "\/refresh-book"/);
+  assert.match(worker,/requiredRevision && book\.updatedAt !== requiredRevision/);
+  assert.doesNotMatch(app,/gateway\+"\/snapshot\?bookId="/);
 });
