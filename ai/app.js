@@ -151,7 +151,7 @@ function renderSettings(){
       '<option value="'+x[0]+'" '+(x[0]===s.bothubModel?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></div>'+
     '<div class="f-row f-connection-row"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button>'+
     '<span id="f-test-status" class="f-muted" role="status">Проверка не выполняет платную генерацию.</span></div>'+
-    '<details class="f-settings-fold"><summary>Защищенный API-шлюз · ModelProxy / BotHub</summary>'+
+    '<details class="f-settings-fold"><summary>Защищенный API-шлюз · ModelProxy / BotHub / ApiMira</summary>'+
     '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
     '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
     '<p class="f-muted">В тестовой версии Cloudflare Pages шлюз выбирается автоматически. Freitag AI напрямую вызывает MCP-инструменты Мастерской для чтения книг, доходов, маркетинга и Директа. Для связанной книги Google Docs обновляется перед каждым сообщением. Секреты хранятся только в Cloudflare.</p></div></details>'+
@@ -549,9 +549,13 @@ async function testConnection(){
       connectOk=true;
       connectText="Мастерская MCP · "+mcpInfo.toolCount+" инструментов · "+activeProviderLabel();
       const status=$("#f-test-status");
+      const money=chosen==="apimira"&&typeof info.balanceUsd==="number"?
+        " Баланс ApiMira: $"+info.balanceUsd.toFixed(4)+
+        (info.balanceUsd===0?" — средств для платной главы нет.":"")+
+        " Для длинной главы сервис временно резервирует стоимость max_tokens.":"";
       if(status)status.textContent="Модель доступна. MCP Мастерской подключен напрямую: "+
         mcpInfo.toolCount+" инструментов (книги, маркетинг, доходы, Директ, Метрика). "+
-        "Проверка не выполняет платную генерацию.";
+        "Проверка не выполняет платную генерацию."+money;
       notice("Защищенный шлюз найден. Оплата за проверку соединения не списывается.");
     }catch(e){connectOk=false;connectText="Шлюз недоступен";notice("Claude: "+e.message);}
     renderHeader();return;
