@@ -343,3 +343,20 @@ test("MCP does not impose hidden editorial persona or special chapter rules",asy
   assert.match(worker,/tool_choice:"auto"/);
   assert.match(worker,/await mcpCallTool\(env,call\.function\.name,args\)/);
 });
+
+test("full chapter generation is opt-in, bounded and keeps ending on continuation",async()=>{
+  const worker=await readFile(new URL("../proxy/freitag-modelproxy-worker.js",import.meta.url),"utf8");
+  const app=await readFile(new URL("../ai/app.js",import.meta.url),"utf8");
+  assert.match(worker,/const requestedDraftLimit=Number\(input\.outputTokenLimit\|\|4500\)/);
+  assert.match(worker,/\[4500,9000,14000\]\.includes\(requestedDraftLimit\)/);
+  assert.match(worker,/maxTokens=isDraft\?requestedDraftLimit/);
+  assert.match(app,/sceneOutputTokens:4500/);
+  assert.match(app,/id="f-chapter-limit"/);
+  assert.match(app,/outputTokenLimit:c\.mode==="draft"/);
+  assert.match(app,/content\.slice\(-24000\)/);
+  assert.match(app,/continueChapter&&content\.length>12000/);
+  assert.match(app,/content\.slice\(0,5000\)/);
+  assert.match(app,/content\.slice\(-12000\)/);
+  // The current user chapter request is sent untruncated to the gateway.
+  assert.match(app,/role:"user",content:last/);
+});
