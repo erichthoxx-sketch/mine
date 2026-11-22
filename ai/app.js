@@ -505,7 +505,7 @@ async function testConnection(){
       }
       connectOk=true;connectText=chosen==="bothub"?"BotHub: ключ и модель проверены":chosen==="apimira"?"ApiMira: ключ и модель проверены":"Шлюз Claude доступен";
       const status=$("#f-test-status");if(status)status.textContent=data.booksConnected?
-        (chosen==="bothub"||chosen==="apimira"?"Ключ и модель доступны. Книги подключены. Генерация не тестировалась.":"Шлюз отвечает. Книги подключены. Генерация не тестировалась."):
+        (chosen==="bothub"||chosen==="apimira"?"Ключ и модель доступны. "+(data.bookToolsSupported?"Инструменты чтения глав активны. ":"Книги доступны, но инструменты еще не развернуты. ")+"Генерация не тестировалась.":"Шлюз отвечает. Книги подключены. Генерация не тестировалась."):
         "Шлюз отвечает, но доступ к книгам Мастерской пока не настроен.";
       notice("Защищенный шлюз найден. Оплата за проверку соединения не списывается.");
     }catch(e){connectOk=false;connectText="Шлюз недоступен";notice("Claude: "+e.message);}
@@ -648,6 +648,8 @@ async function sendMessage(text){
       if(state.settings.provider==="modelproxy"&&!health.configured)
         throw Error("ModelProxy пока не подключен: нужен MODELPROXY_API_KEY в Cloudflare.");
       if(selectedBookId){
+        if(!health.bookToolsSupported && state.settings.provider!=="modelproxy")
+          throw Error("Инструменты чтения глав не подключены. Обнови Worker до версии с инструментами Мастерской.");
         if(!health.autoSyncSupported)
           throw Error("В Cloudflare Worker нет обновления из Google Docs. Обнови Worker и проверь BOOKS.");
         // A network read from Firestore + a fresh Google Doc, then an
