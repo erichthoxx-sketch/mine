@@ -39,6 +39,10 @@ const rememberDraft=(text)=>{
 const setTheme=()=>{document.documentElement.setAttribute("data-theme",state.theme==="auto"?(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"):state.theme);};
 const titleLine=(title,sub="",right="")=>'<div class="f-heading"><div><h1 class="f-title">'+esc(title)+'</h1>'+(sub?'<p class="f-subtitle">'+esc(sub)+'</p>':"")+'</div>'+right+'</div>';
 const empty=(title,sub)=>'<div class="f-empty"><strong>'+esc(title)+'</strong>'+esc(sub)+'</div>';
+const plural=(n,one,few,many)=>{
+  const tail=n%10,cent=n%100;
+  return cent>=11&&cent<=14?many:tail===1?one:tail>=2&&tail<=4?few:many;
+};
 function renderSidebar(){
   const el=$("#sidebar-content");
   if(tab==="chat"){
@@ -59,11 +63,11 @@ function renderSidebar(){
       '</div>';
   }else if(tab==="projects"){
     el.innerHTML='<div class="f-side-label">ТВОЯ БИБЛИОТЕКА</div>'+
-      '<p class="f-sidebar-empty">'+state.projects.length+' книг в работе</p>'+
+      '<p class="f-sidebar-empty">'+state.projects.length+' '+plural(state.projects.length,"книга","книги","книг")+' в работе</p>'+
       '<button type="button" data-action="add-project" class="f-btn f-new-chat">＋ Добавить книгу</button>';
   }else if(tab==="knowledge"){
     el.innerHTML='<div class="f-side-label">ЛОКАЛЬНЫЕ МАТЕРИАЛЫ</div>'+
-      '<p class="f-sidebar-empty">'+state.docs.length+' текстов и заметок. Хранятся в этом браузере.</p>';
+      '<p class="f-sidebar-empty">'+state.docs.length+' '+plural(state.docs.length,"материал","материала","материалов")+'. Хранятся в этом браузере.</p>';
   }else{
     el.innerHTML='<div class="f-side-label">ПОДКЛЮЧЕНИЯ</div>'+
       '<p class="f-sidebar-empty">Здесь настраиваются модели, внешний вид и резервные копии.</p>';
@@ -83,19 +87,19 @@ function render(){
 }
 function renderProjects(){
   $("#panel").innerHTML='<div class="f-content">'+titleLine("Мои книги","Канон, стиль и диалоги — отдельно для каждой истории.",
-    '<button class="f-btn primary" data-action="add-project">+ Новый проект</button>')+
+    '<button class="f-btn primary" data-action="add-project">+ Новая книга</button>')+
     (state.projects.length?'<div class="f-projects">'+state.projects.map(p=>{
       const count=state.chats.filter(c=>c.projectId===p.id).length;
       const docs=state.docs.filter(d=>d.projectId===p.id).length;
-      return '<article class="f-project-card"><h2>'+esc(p.name)+'</h2><p>'+esc(p.description||"Без описания")+'</p><p>'+count+' чатов · '+docs+' материалов'+(p.masterBookId?" · связан с Мастерской":p.canon?" · канон закреплён":" · канон не заполнен")+'</p><div class="f-row"><button class="f-btn primary" data-action="open-project" data-id="'+esc(p.id)+'">Открыть</button><button class="f-btn" data-action="edit-project" data-id="'+esc(p.id)+'">Настроить</button><button class="f-btn danger" data-action="delete-project" data-id="'+esc(p.id)+'">Удалить</button></div></article>';
-    }).join("")+'</div>':empty("Проектов пока нет","Создай первый проект, например «Развод для черной вдовы»."))+
+      return '<article class="f-project-card"><h2>'+esc(p.name)+'</h2><p>'+esc(p.description||"Без описания")+'</p><p>'+count+' чатов · '+docs+' материалов'+(p.masterBookId?" · связан с Мастерской":p.canon?" · канон закреплён":" · канон не заполнен")+'</p><div class="f-row"><button class="f-btn primary" data-action="open-project" data-id="'+esc(p.id)+'">В чат</button><button class="f-btn" data-action="edit-project" data-id="'+esc(p.id)+'">Настроить</button><button class="f-btn danger" data-action="delete-project" data-id="'+esc(p.id)+'">Удалить</button></div></article>';
+    }).join("")+'</div>':empty("Книг пока нет","Добавь первую книгу, например «Развод для черной вдовы»."))+
     '<div class="f-section f-master-section"><h2>Книги из «Мастерской»</h2><p class="f-muted">Подключение только для чтения. Импортируются утверждённые факты Легенды, персонажи, каркас и синопсис; рукописи не изменяются.</p>'+
     (!master.ready?'<button class="f-btn" data-action="master-connect">Подключить аккаунт</button>':
      master.user?'<p class="f-muted">Аккаунт: '+esc(master.user.email||"подключён")+'</p>'+
        '<div class="f-row"><button class="f-btn" data-action="master-refresh">Обновить список и связанные книги</button></div>'+
        (master.books.length?'<div class="f-master-books">'+master.books.map(b=>{
          const link=state.projects.find(p=>p.masterBookId===b.id);
-         return '<div class="f-master-book"><span>'+esc(b.title||"Без названия")+'</span><button class="f-btn" data-action="master-import" data-id="'+esc(b.id)+'">'+(link?"Обновить канон":"Создать проект")+'</button></div>';
+         return '<div class="f-master-book"><span>'+esc(b.title||"Без названия")+'</span><button class="f-btn" data-action="master-import" data-id="'+esc(b.id)+'">'+(link?"Обновить канон":"Подключить книгу")+'</button></div>';
        }).join("")+'</div>':'<p class="f-muted">Нажми «Обновить список и связанные книги», чтобы получить актуальные книги.</p>'):
      '<form id="f-master-auth" class="f-master-login"><label>Email Мастерской<input class="f-text-field" type="email" name="email" autocomplete="username" required></label>'+
        '<label>Пароль<input class="f-text-field" type="password" name="password" autocomplete="current-password" required></label><button class="f-btn primary" type="submit">Войти и получить книги</button></form>')+
@@ -107,10 +111,10 @@ function renderKnowledge(){
   const examples=state.feedback.filter(f=>!state.activeProjectId||f.projectId===state.activeProjectId).slice().reverse();
   $("#panel").innerHTML='<div class="f-content">'+titleLine("Материалы","Тексты, заметки и авторские образцы.")+
   '<div class="f-notice">Канон из «Мастерской» и загруженные главы — источники. Авторские образцы и замечания — правила стиля. Ни один из этих материалов сам по себе не меняет веса модели.</div>'+
-  '<div class="f-section"><label class="f-label">Проект</label><select class="f-select" id="f-doc-project"><option value="">Выбери проект</option>'+
+  '<div class="f-section"><label class="f-label">Книга</label><select class="f-select" id="f-doc-project"><option value="">Выбери книгу</option>'+
     state.projects.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===state.activeProjectId?"selected":"")+'>'+esc(p.name)+'</option>').join("")+'</select></div>'+
-  (state.activeProjectId?'<div class="f-section"><h2>Добавить материал</h2><p class="f-muted">Только .txt, .md или .json, до 2 МБ за файл. Содержимое остаётся в твоём браузере и не публикуется на GitHub.</p><input id="f-upload" class="f-upload" type="file" accept=".txt,.md,.json,text/plain,application/json"><div class="f-row" style="margin-top:10px"><button class="f-btn" data-action="add-note">+ Добавить заметку</button></div></div>':'<div class="f-notice">Сначала создай или выбери проект.</div>')+
-  '<div class="f-section"><h2>Материалы'+(state.activeProjectId?" проекта":"")+'</h2>'+
+  (state.activeProjectId?'<div class="f-section"><h2>Добавить материал</h2><p class="f-muted">Только .txt, .md или .json, до 2 МБ за файл. Содержимое остаётся в твоём браузере и не публикуется на GitHub.</p><div class="f-row f-add-material"><button type="button" class="f-btn" data-action="upload-file">+ Загрузить файл</button><input id="f-upload" class="f-upload" type="file" accept=".txt,.md,.json,text/plain,application/json" hidden><button type="button" class="f-btn" data-action="add-note">+ Добавить заметку</button></div></div>':'<div class="f-notice">Сначала создай или выбери книгу.</div>')+
+  '<div class="f-section"><h2>Материалы'+(state.activeProjectId?" книги":"")+'</h2>'+
     (docs.length?'<ul class="f-list">'+docs.map(d=>'<li class="f-spread"><div><strong>'+esc(d.name)+'</strong><p class="f-muted">'+(d.text.length).toLocaleString("ru-RU")+' знаков</p></div><button class="f-btn danger" data-action="delete-doc" data-id="'+esc(d.id)+'">Удалить</button></li>').join("")+'</ul>':empty("Материалов нет","Добавь главу или текстовую заметку."))+'</div>'+
   '<div class="f-section"><div class="f-spread"><div><h2>Мой стиль · память соавтора</h2><p class="f-muted">Одобренные сцены, твои правки и причины отказов. Они будут учитываться в заданиях для выбранной модели.</p></div>'+
     (state.activeProjectId?'<button class="f-btn" data-action="add-style">+ Мой образец</button>':"")+'</div>'+
@@ -760,6 +764,7 @@ document.addEventListener("click",async(e)=>{
   if(a==="delete-project"){const p=project(id);if(!p||!confirm("Удалить проект «"+p.name+"» и все его чаты и материалы?"))return;
     state.projects=state.projects.filter(x=>x.id!==id);state.chats=state.chats.filter(x=>x.projectId!==id);state.docs=state.docs.filter(x=>x.projectId!==id);
     if(state.activeProjectId===id){state.activeProjectId=null;state.activeChatId=null;}await save();render();}
+  if(a==="upload-file")$("#f-upload")?.click();
   if(a==="add-note")await addNote();
   if(a==="add-style"){
     if(!state.activeProjectId)return notice("Выбери проект.");
