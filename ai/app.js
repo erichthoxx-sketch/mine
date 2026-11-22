@@ -20,7 +20,7 @@ const WRITING_MODES = {
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
   settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",sceneOutputTokens:14000,globalInstruction:"",context:4096}, theme:"auto"});
-let state=blank(), tab="chat", projectHomeId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
+let state=blank(), tab="chat", projectHomeId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null, batchCheck=null;
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const getDb=()=>new Promise((resolve,reject)=>{const r=db.transaction("data").objectStore("data").get("state");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -267,7 +267,7 @@ function renderChat(){
             '<button type="submit" class="f-btn primary">Отправить <span aria-hidden="true">↗</span></button>')+
       '</div></div>'+
       (p&&state.settings.provider==="bothub"&&activeBotHubModel()==="claude-opus-5.5"?
-        '<div class="f-row"><button type="button" class="f-btn" data-action="send-batch-chapter">Целая глава через Batch API (без 524)</button></div>':"")+
+        '<div class="f-row"><button type="button" class="f-btn" data-action="check-batch-availability">Проверить Batch бесплатно</button>'+(batchCheck===true?'<span class="f-mini">Opus 5.5 Batch доступен</span>':batchCheck===false?'<span class="f-mini">Batch недоступен</span>':"")+'</div>'+(batchCheck===true?'<div class="f-row"><button type="button" class="f-btn" data-action="send-batch-chapter">Целая глава через Batch API (платно)</button></div>':""):"")+
       (c?.batch?.batchId&&c.batch.status!=="completed"?
         '<div class="f-row"><span class="f-mini">Batch: '+esc(c.batch.status||"отправлен")+'</span>'+
         '<button type="button" class="f-btn" data-action="check-batch-chapter">Проверить готовность главы</button></div>':"")+
@@ -663,6 +663,23 @@ async function saveFeedback(i,kind){
   await save();notice(kind==="good"?"Пример добавлен в память стиля.":"Отказ и причина сохранены для следующих заданий.");
 }
 
+async function checkBatchAvailability(){
+  if(busy||preparingPaid)return;
+  const gateway=claudeGateway(state.settings.workerUrl);
+  if(!gateway)return notice("Не настроен шлюз Freitag AI.");
+  try{
+    await master.init();
+    if(!master.user)throw Error("Сначала войди в Мастерскую.");
+    const token=await master.idToken();
+    const response=await fetch(gateway+"/batch-models",{
+      headers:{Authorization:"Bearer "+token},cache:"no-store"});
+    const result=await response.json().catch(()=>({}));
+    batchCheck=!!(response.ok&&result.ok);
+    notice(batchCheck?"Opus 5.5 доступен для Batch по этому ключу. Проверка бесплатная.":
+      "Batch Opus 5.5 недоступен: "+(result.error||result.message||"Неизвестная ошибка."));
+  }catch(e){batchCheck=false;notice("Batch: "+e.message);}
+  render();
+}
 async function sendBatchChapter(text){
   if(busy||preparingPaid||!text?.trim())return;
   const p=project();
@@ -949,6 +966,7 @@ document.addEventListener("click",async(e)=>{
     catch{notice("Не удалось скопировать. Выдели текст ответа вручную.");}
   }
   if(a==="stop")currentController?.abort();
+  if(a==="check-batch-availability"){await checkBatchAvailability();return;}
   if(a==="send-batch-chapter"){
     const text=$("#f-message-input")?.value||"";
     if(!text.trim())return notice("Вставь привычный полный промпт главы.");
