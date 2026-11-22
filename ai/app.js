@@ -30,20 +30,33 @@ const setTheme=()=>{document.documentElement.setAttribute("data-theme",state.the
 const titleLine=(title,sub="",right="")=>'<div class="f-heading"><div><h1 class="f-title">'+esc(title)+'</h1>'+(sub?'<p class="f-subtitle">'+esc(sub)+'</p>':"")+'</div>'+right+'</div>';
 const empty=(title,sub)=>'<div class="f-empty"><strong>'+esc(title)+'</strong>'+esc(sub)+'</div>';
 function renderSidebar(){
-  const el=$("#sidebar-content");const p=project();
+  const el=$("#sidebar-content");
   if(tab==="chat"){
-    const arr=[...state.chats].sort((a,b)=>b.updated.localeCompare(a.updated));
-    el.innerHTML='<button type="button" class="f-btn primary" data-action="new-chat">+ Новый чат</button>'+
-      '<label class="f-label f-sidebar-label">Проект</label><select id="f-sidebar-project" class="f-select"><option value="">Без проекта</option>'+
-      state.projects.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===state.activeProjectId?"selected":"")+'>'+esc(x.name)+'</option>').join("")+'</select>'+
-      '<label class="f-label f-sidebar-label">Недавние чаты</label>'+
-      (arr.length?'<ul class="f-list">'+arr.map(x=>'<li><button type="button" class="'+(x.id===state.activeChatId?"on":"")+'" data-action="select-chat" data-id="'+esc(x.id)+'"><span>'+esc(x.title)+'</span></button></li>').join("")+'</ul>':'<p class="f-muted">Чатов пока нет.</p>');
+    const selected=state.activeProjectId||null;
+    const arr=state.chats.filter(x=>(x.projectId||null)===selected)
+      .sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||"")));
+    el.innerHTML=
+      '<button type="button" class="f-btn primary f-new-chat" data-action="new-chat"><span aria-hidden="true">＋</span> Новый чат</button>'+
+      '<div class="f-side-section"><label for="f-sidebar-project" class="f-side-label">КНИГА</label>'+
+      '<select id="f-sidebar-project" class="f-select" aria-label="Активная книга"><option value="">Без книги</option>'+
+      state.projects.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===selected?"selected":"")+'>'+esc(x.name)+'</option>').join("")+
+      '</select></div>'+
+      '<div class="f-side-section f-side-history"><div class="f-side-label f-side-count">ИСТОРИЯ <span>'+arr.length+'</span></div>'+
+      (arr.length?'<ul class="f-list f-chat-list">'+arr.map(x=>
+        '<li><button type="button" class="'+(x.id===state.activeChatId?"on":"")+
+        '" data-action="select-chat" data-id="'+esc(x.id)+'" title="'+esc(x.title)+'"><span>'+esc(x.title)+'</span></button></li>'
+      ).join("")+'</ul>':'<p class="f-sidebar-empty">Здесь появятся диалоги по выбранной книге.</p>')+
+      '</div>';
   }else if(tab==="projects"){
-    el.innerHTML='<p class="f-muted">'+state.projects.length+' проектов</p><button type="button" data-action="add-project" class="f-btn primary">+ Создать проект</button>';
+    el.innerHTML='<div class="f-side-label">ТВОЯ БИБЛИОТЕКА</div>'+
+      '<p class="f-sidebar-empty">'+state.projects.length+' книг в работе</p>'+
+      '<button type="button" data-action="add-project" class="f-btn f-new-chat">＋ Добавить книгу</button>';
   }else if(tab==="knowledge"){
-    el.innerHTML='<p class="f-muted">'+state.docs.length+' материалов<br>Сохраняются локально на этом устройстве.</p>';
+    el.innerHTML='<div class="f-side-label">ЛОКАЛЬНЫЕ МАТЕРИАЛЫ</div>'+
+      '<p class="f-sidebar-empty">'+state.docs.length+' текстов и заметок. Хранятся в этом браузере.</p>';
   }else{
-    el.innerHTML='<p class="f-muted">Freitag AI<br>Личная рабочая среда</p>';
+    el.innerHTML='<div class="f-side-label">ПОДКЛЮЧЕНИЯ</div>'+
+      '<p class="f-sidebar-empty">Здесь настраиваются модели, внешний вид и резервные копии.</p>';
   }
 }
 function renderHeader(){
@@ -133,36 +146,62 @@ function renderSettings(){
   '<button type="button" class="f-btn" data-action="cloud-load">Восстановить память из Firebase</button></div>'+
   '<div class="f-row"><button type="button" class="f-btn" data-action="export">Скачать архив JSON</button><label class="f-btn f-file-label">Импортировать JSON<input id="f-import" type="file" accept=".json,application/json" hidden></label></div></div></form></div>';
 }
+const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":"Локальная Qwen · Ollama";
 function renderChat(){
-  let c=chat();if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
+  const c=chat();
+  if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
   const p=project(c?.projectId||state.activeProjectId);
-  if(!c){$("#panel").innerHTML='<div class="f-content">'+titleLine("Новый чат",p?'Книга: '+p.name:"Без проекта")+
-    empty("Чат ещё не создан","Нажми «Новый чат», чтобы писать прямо здесь.")+
-    '<div class="f-row" style="justify-content:center"><button class="f-btn primary" data-action="new-chat">+ Новый чат</button></div></div>';return;}
-  const body=c.messages.map((m,i)=>'<div class="f-msg '+esc(m.role)+'"><span class="f-speaker">'+(m.role==="user"?"Ты":m.provider==="Claude"?"Ответ Claude":"Freitag AI · локальная Qwen")+'</span><div class="f-msg-text">'+esc(m.content)+'</div>'+
-    (m.role==="assistant"&&m.content&&!m.content.startsWith("Не удалось")?'<div class="f-feedback-actions"><button class="f-inline-btn" data-action="feedback-good" data-i="'+i+'">В образцы</button><button class="f-inline-btn" data-action="feedback-bad" data-i="'+i+'">Не то</button></div>':"")+
-    '</div>').join("");
-  const modeOptions=Object.entries(WRITING_MODES).map(([key,v])=>'<option value="'+key+'" '+((c.mode||"draft")===key?"selected":"")+'>'+esc(v.name)+'</option>').join("");
-  $("#panel").innerHTML='<div class="f-chat">'+
-    '<div class="f-chat-meta f-spread"><div><h1 class="f-title">'+esc(c.title)+'</h1><p class="f-subtitle">'+esc(p?.name||"Без проекта")+'</p></div>'+
-    '<div class="f-row f-chat-head-actions"><button class="f-btn" data-action="rename-chat">Переименовать</button><button class="f-btn danger" data-action="delete-chat">Удалить</button></div></div>'+
-    '<div class="f-chat-body" id="f-messages">'+(body||empty("Начни разговор","Напиши задачу. Ответ появится прямо в этом чате."))+'</div>'+
+  const body=(c?.messages||[]).map((m,i)=>
+    '<article class="f-msg '+esc(m.role)+'"><div class="f-speaker">'+
+    (m.role==="user"?"Ты":m.provider==="Claude"?"Claude Opus":m.provider==="Внешняя модель"?"Внешняя модель":"Freitag AI")+
+    '</div><div class="f-msg-text">'+esc(m.content)+'</div>'+
+    (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
+      '<div class="f-feedback-actions"><button type="button" class="f-inline-btn" data-action="copy-answer" data-i="'+i+'">Копировать</button>'+
+      '<button type="button" class="f-inline-btn" data-action="feedback-good" data-i="'+i+'">В образцы</button>'+
+      '<button type="button" class="f-inline-btn" data-action="feedback-bad" data-i="'+i+'">Не то</button></div>':"")+
+    '</article>').join("");
+  const modeOptions=Object.entries(WRITING_MODES).map(([key,v])=>
+    '<option value="'+key+'" '+((c?.mode||(p?"draft":"dialog"))===key?"selected":"")+'>'+esc(v.name)+'</option>').join("");
+  const bookOptions='<option value="">Без книги</option>'+state.projects.map(x=>
+    '<option value="'+esc(x.id)+'" '+(x.id===(p?.id||"")?"selected":"")+'>'+esc(x.name)+'</option>').join("");
+  $("#panel").innerHTML=
+    '<section class="f-chat" aria-label="Литературный чат">'+
+    '<div class="f-chat-meta"><div class="f-chat-identity">'+
+    '<span class="f-eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span>'+
+    '<h1 class="f-title">'+esc(c?.title&&c.title!=="Новый чат"?c.title:"Новый диалог")+'</h1>'+
+    '<div class="f-chat-book"><label for="f-chat-project">Книга</label>'+
+    '<select id="f-chat-project" class="f-select" aria-label="Выбрать книгу">'+bookOptions+'</select></div></div>'+
+    '<div class="f-chat-head-actions">'+
+    '<button type="button" class="f-btn f-btn-new" data-action="new-chat">＋ Новый чат</button>'+
+    (c?'<details class="f-chat-more"><summary aria-label="Действия с чатом" title="Действия с чатом">···</summary>'+
+      '<div class="f-chat-more-menu"><button type="button" data-action="rename-chat">Переименовать</button>'+
+      '<button type="button" class="f-destructive" data-action="delete-chat">Удалить чат</button></div></details>':"")+
+    '</div></div>'+
+    '<div class="f-chat-body" id="f-messages" role="log" aria-live="polite" aria-relevant="additions text">'+
+      (body||'<div class="f-chat-welcome"><span class="f-welcome-mark" aria-hidden="true">F.</span>'+
+        '<h2>Место для твоих историй.</h2><p>Выбери книгу, задай вопрос или начни новую сцену.</p></div>')+
+    '</div>'+
     '<form id="f-chat-form" class="f-compose">'+
-      '<div class="f-writing-bar"><select class="f-select" id="f-writing-mode" aria-label="Режим работы" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
-      '<span class="f-writing-hint">'+(p?.masterCanon?"Легенда из Мастерской":p?.canon?"Канон указан":p?"Канон не заполнен":"Без проекта")+
-      (p?' · <button type="button" class="f-inline-btn" data-action="edit-active-project">Настроить</button>':"")+'</span></div>'+
-    '<textarea class="f-textarea" id="f-message-input" placeholder="Напиши сообщение или вставь сцену…" aria-label="Сообщение" '+(busy?"disabled":"")+'></textarea>'+
-    '<div class="f-compose-controls">'+
-      '<span class="f-mini">'+(connectOk?"● Ollama подключена":connectText==="Нет соединения"?"Нет связи с Ollama":"Локальная Qwen · "+esc(state.settings.model))+'</span>'+
-      '<div class="f-row">'+(busy?'<button type="button" class="f-btn danger" data-action="stop">Остановить</button>':
-      '<button type="submit" class="f-btn primary">Отправить</button>')+'</div></div>'+
-    '<details class="f-extra-tools"><summary>Дополнительные инструменты</summary><div class="f-row">'+
-      '<button type="button" class="f-btn" data-action="export-context">Подготовить контекст</button>'+
-      '<button type="button" class="f-btn" data-action="paste-external">Сохранить внешний ответ</button>'+
-      '<button type="button" class="f-btn" data-action="open-settings">Подключение</button></div>'+
-      '<p class="f-muted">Контекст можно передать в выбранную тобой модель вручную. Никакие рукописи без твоего действия никуда не отправляются. «Отправить» работает через выбранного в настройках провайдера.</p></details>'+
-    '</form></div>';
-  $("#f-messages")?.lastElementChild?.scrollIntoView({block:"nearest"});
+      '<div class="f-compose-surface"><div class="f-writing-bar">'+
+      '<label class="f-compact-label" for="f-writing-mode">Режим</label>'+
+      '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
+      '<span class="f-compose-canon">'+(p?.masterCanon?"Канон из Мастерской":p?.canon?"Канон проекта":p?"Канон не задан":"Без контекста книги")+'</span>'+
+      '</div>'+
+      '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
+      '<textarea class="f-textarea" id="f-message-input" rows="4" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'></textarea>'+
+      '<div class="f-compose-controls">'+
+      '<span class="f-mini" title="'+esc(connectText)+'">'+esc(activeProviderLabel())+
+      (connectOk?' · подключено':"")+'</span>'+
+      (busy?'<button type="button" class="f-btn danger" data-action="stop">Остановить</button>':
+            '<button type="submit" class="f-btn primary">Отправить <span aria-hidden="true">↗</span></button>')+
+      '</div></div>'+
+      '<details class="f-extra-tools"><summary>Инструменты и подключение</summary><div class="f-row">'+
+      '<button type="button" class="f-btn" data-action="export-context">Скопировать контекст</button>'+
+      '<button type="button" class="f-btn" data-action="paste-external">Добавить внешний ответ</button>'+
+      '<button type="button" class="f-btn" data-action="open-settings">Настройки модели</button></div>'+
+      '<p class="f-muted">Текст отправляется выбранной модели только после нажатия «Отправить». Проектные материалы сохраняются в браузере.</p></details>'+
+    '</form></section>';
+  if(c?.messages?.length)$("#f-messages")?.lastElementChild?.scrollIntoView({block:"nearest"});
 }
 function ensureChat(){
   if(chat())return chat();
