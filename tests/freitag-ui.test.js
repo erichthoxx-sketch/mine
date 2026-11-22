@@ -13,6 +13,20 @@ test("Freitag AI navigation and branding remain accessible",async()=>{
   assert.match(html,/Рабочее пространство автора/);
 });
 
+test("Freitag AI uses the original Masterskaya bear, not placeholder F",async()=>{
+  const [html,app,css,build]=await Promise.all([
+    load("../ai/index.html"),load("../ai/app.js"),
+    load("../ai/style.css"),load("../scripts/build-apps.sh")
+  ]);
+  assert.match(html,/class="f-monogram"[^>]*><img src="\.\.\/workshop\/bear\.svg"/);
+  assert.match(app,/class="f-welcome-mark"[^>]*><img src="\.\.\/workshop\/bear\.svg"/);
+  assert.match(css,/\.f-monogram img/);
+  assert.match(css,/\.f-welcome-mark img/);
+  assert.match(build,/writer\/bear\.svg/);
+  assert.doesNotMatch(html,/aria-hidden="true">F\.<\/span>/);
+  assert.doesNotMatch(app,/aria-hidden=\\"true\\">F\.<\/span>/);
+});
+
 test("book can be changed without desktop sidebar and empty chat accepts text",async()=>{
   const app=await load("../ai/app.js");
   assert.match(app,/id="f-chat-project"/);
