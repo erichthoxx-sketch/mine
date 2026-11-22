@@ -636,7 +636,7 @@ async function sendMessage(text){
           throw Error("Проверка снимка: "+(info.error||"HTTP "+response.status));
         }
         const snapshot=await response.json();
-        const marker=bookId+"|"+snapshot.updatedAt;
+        const marker=state.settings.provider+"|"+bookId+"|"+snapshot.updatedAt;
         if(marker!==approvedSnapshot){
           const chapters=(snapshot.lastChapters||[]).map(ch=>ch.slot+": "+ch.title).join("\n");
           const message="Бесплатная проверка снимка Мастерской:\n"
