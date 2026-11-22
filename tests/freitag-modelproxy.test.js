@@ -320,11 +320,16 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     const greeting=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
-        bookId:"test",messages:[{role:"user",content:"Привет!"}]})
+        bookId:"test",mode:"draft",messages:[{role:"user",content:"Привет!"}]})
     }),env);
     assert.equal(greeting.status,200);
     const lastGreetingCall=calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).at(-1);
-    assert.equal(JSON.parse(lastGreetingCall.init.body).tools,undefined);
+    const greetingPayload=JSON.parse(lastGreetingCall.init.body);
+    assert.equal(greetingPayload.tools,undefined);
+    assert.equal(greetingPayload.max_tokens,128,"a greeting must not request a 14k chapter");
+    assert.equal(greetingPayload.stream,false,"greeting is not a literary draft");
+    assert.deepEqual(greetingPayload.messages.filter(m=>m.role==="user"),[{role:"user",content:"Привет!"}]);
+    assert.ok(!greetingPayload.messages.some(m=>String(m.content).includes("Справочные материалы выбранного романа")));
     const mcpList=await gateway.fetch(new Request(url("mcp-tools"),{headers}),env);
     assert.equal(mcpList.status,200);
     const mcpData=await mcpList.json();
@@ -398,9 +403,24 @@ test("book project uses the exact large master instruction and verbatim long cha
   ]);
   assert.match(app,/p\.instruction=String\(fd\.get\("instruction"\)\|\|""\);/);
   assert.doesNotMatch(source,/slice\(0,26000\)|slice\(0,20000\)|slice\(0,6000\)/);
-  assert.match(app,/if\(c\.projectId\) c\.mode="draft"/);
-  assert.match(app,/outputTokenLimit:c\.mode==="draft"\?14000/);
+  assert.match(app,/if\(c\.projectId && !c\.mode\) c\.mode="draft"/);
+  assert.match(app,/outputTokenLimit:requestMode==="draft"/);
   assert.match(worker,/\[4500,9000,14000\]\.includes\(requestedDraftLimit\)/);
   assert.match(worker,/maxTokens=isDraft\?requestedDraftLimit/);
-  assert.match(worker,/mode==="draft"&&bookId/);
+  assert.match(worker,/const authorChapter=mode==="draft"/);
+});
+
+
+test("ordinary book greetings stay cheap; genuine chapters retain large prompts", async()=>{
+  const [app,worker]=await Promise.all([
+    readFile(new URL("../ai/app.js",import.meta.url),"utf8"),
+    readFile(new URL("../proxy/freitag-modelproxy-worker.js",import.meta.url),"utf8")
+  ]);
+  assert.match(app,/const lightweight=isSimpleGreeting\(msg\)/);
+  assert.match(app,/lightweight\?\[\{role:"user",content:msg\}\]:modelproxyMessages\(c\)/);
+  assert.match(app,/bookId:lightweight\?null:/);
+  assert.match(worker,/if\(input.bookId&&!greeting\)/);
+  assert.match(worker,/const maxTokens=greeting\?128:/);
+  assert.match(app,/void save\(\)/);
+  assert.match(app,/\[4500,"4 500"\],\[9000,"9 000"\],\[14000,"14 000"\]/);
 });
