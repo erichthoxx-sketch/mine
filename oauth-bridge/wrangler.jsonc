@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "masterskaya-chatgpt-oauth",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "vars": {
+    "MCP_RESOURCE": "https://masterskaya-chatgpt-oauth.erichtho-xx.workers.dev/mcp"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+  "secrets": {
+    "required": [
+      "GITHUB_CLIENT_ID",
+      "GITHUB_CLIENT_SECRET",
+      "OWNER_GITHUB_ID",
+      "MCP_READ_KEY"
+    ]
+  },
+  "observability": { "enabled": false }
+}
