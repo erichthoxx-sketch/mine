@@ -198,6 +198,7 @@ const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opu
   state.settings.provider==="bothub"?activeClaudeName()+" · BotHub":state.settings.provider==="apimira"?"Claude Opus 5.5 · ApiMira":"Локальная Qwen · Ollama";
 const currentModelChoice=()=>state.settings.provider==="bothub"?
   "bothub:"+activeBotHubModel():state.settings.provider;
+const isSimpleGreeting = text => /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе (?:утро)|добрый (?:день|вечер)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(String(text||"").trim());
 const modelChoices=()=>[
   ["bothub:claude-opus-5.5","Opus 5.5 · BotHub"],
   ["bothub:claude-sonnet-5.5","Sonnet 5.5 · BotHub"],
@@ -253,7 +254,7 @@ function renderChat(){
       '<div class="f-compose-surface"><div class="f-writing-bar">'+
       '<label class="f-compact-label" for="f-quick-model">Модель</label>'+
       '<select id="f-quick-model" class="f-select f-quick-model" aria-label="Модель для следующего ответа" '+(busy?"disabled":"")+'>'+modelChoices()+'</select>'+
-      (p?"":'<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
+      (p?'<span id="f-chapter-limit-wrap"><label class="f-compact-label" for="f-chapter-limit">Лимит главы</label>'+'<select class="f-select" id="f-chapter-limit" title="Максимум выходных токенов. Это верхний предел, не заданная длина главы.">'+[[4500,"4 500"],[9000,"9 000"],[14000,"14 000"]].map(([n,label])=>'<option value="'+n+'" '+(Number(state.settings.sceneOutputTokens||14000)===n?"selected":"")+'>'+label+'</option>').join("")+'</select></span>':'<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
       '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>')+
       '<span class="f-compose-canon">'+(p?.masterBookId?"MCP Мастерская · автоматически":p?"Инструкции проекта":"Обычный чат")+'</span>'+
       '</div>'+
@@ -670,7 +671,9 @@ async function sendMessage(text){
   }
   const previousDraft=draftKey();
   const c=ensureChat(),msg=text.trim();
-  if(c.projectId) c.mode="draft";
+  if(c.projectId && !c.mode) c.mode="draft";
+  const lightweight=isSimpleGreeting(msg);
+  const requestMode=lightweight?"dialog":(c.mode||"dialog");
   clearTimeout(draftSaveTimer);
   if(state.drafts){
     delete state.drafts[previousDraft];
@@ -682,18 +685,19 @@ async function sendMessage(text){
   // Block a second Send while IndexedDB persists the first request.
   busy=true;
   await save();render();
-  const messages=isPaidProvider?modelproxyMessages(c):buildMessages(c);
+  const messages=isPaidProvider?(lightweight?[{role:"user",content:msg}]:modelproxyMessages(c)):buildMessages(c);
   const assistant={role:"assistant",provider:isPaidProvider?(state.settings.provider==="bothub"?activeClaudeName():"Claude Opus 5.5"):"Qwen",content:"",at:stamp()};
   c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
   el.innerHTML='<span class="f-speaker">'+(isPaidProvider?esc(assistant.provider):"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
   $("#f-messages")?.append(el);const target=el.querySelector(".f-msg-text");
   currentController=new AbortController();
+  let lastCheckpoint=Date.now(),lastSavedLength=0;
   try{
     const res=isPaidProvider?await fetch(gateway+"/chat",{
       method:"POST",
       headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
-      body:JSON.stringify({provider:state.settings.provider,model:state.settings.provider==="bothub"?activeBotHubModel():undefined,messages,mode:c.mode||"dialog",outputTokenLimit:c.mode==="draft"?14000:undefined,bookId:project(c.projectId)?.masterBookId||null,sourceRevision}),
+      body:JSON.stringify({provider:state.settings.provider,model:state.settings.provider==="bothub"?activeBotHubModel():undefined,messages,mode:requestMode,outputTokenLimit:requestMode==="draft"?(Number(state.settings.sceneOutputTokens)||14000):undefined,bookId:lightweight?null:(project(c.projectId)?.masterBookId||null),sourceRevision}),
       signal:currentController.signal
     }):await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",
@@ -703,6 +707,8 @@ async function sendMessage(text){
       const errorText=await res.text();
       let detail=errorText.slice(0,200);
       try{detail=JSON.parse(errorText).error||detail;}catch{}
+      if(res.status===502&&/BotHub вернул HTTP 524/.test(String(detail)))
+        detail="BotHub вернул 524: сервер провайдера не начал отдавать ответ вовремя. Повторный платный запрос не запускался. Проверь расходы перед новой попыткой.";
       throw Error("HTTP "+res.status+": "+detail);
     }
     if(!res.body)throw Error("Сервер не вернул поток ответа");
@@ -725,7 +731,13 @@ async function sendMessage(text){
         if(obj.error)throw Error(obj.error);
         if(obj.message?.content)assistant.content+=obj.message.content;
       }
-      if(assistant.content){target.classList.remove("pending");target.textContent=assistant.content;}
+      if(assistant.content){
+        target.classList.remove("pending");target.textContent=assistant.content;
+        // Persist long chapters during streaming; closing the tab must not erase paid text.
+        if(assistant.content.length-lastSavedLength>=2000&&Date.now()-lastCheckpoint>=4000){
+          lastCheckpoint=Date.now();lastSavedLength=assistant.content.length;void save();
+        }
+      }
     };
     for(;;){
       const {done,value}=await reader.read();
