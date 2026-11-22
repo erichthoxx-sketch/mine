@@ -16,34 +16,34 @@
 </head>
 <body>
   <div id="app">
-    <header class="f-head">
+    <header class="f-head" role="banner">
       <div class="f-brand">
-        <img class="f-brand-bear" src="../workshop/bear.svg" alt="" width="42" height="42">
-        <div><h1>Freitag AI</h1><small>Личная ИИ-среда</small></div>
+        <span class="f-monogram" aria-hidden="true">F.</span>
+        <div><h1>Freitag <span>AI</span></h1><small>Рабочее пространство автора</small></div>
       </div>
       <div class="f-head-actions">
-        <a href="../workshop/" class="f-quiet-link" title="Открыть Мастерскую">Мастерская</a>
+        <a href="../workshop/" class="f-quiet-link" title="Открыть Мастерскую">Мастерская <span aria-hidden="true">↗</span></a>
         <button type="button" class="f-icon-btn" data-action="theme" title="Переключить тему" aria-label="Переключить тему">◐</button>
       </div>
     </header>
     <div class="f-layout">
       <aside class="f-sidebar" aria-label="Разделы Freitag AI">
         <nav class="f-nav" aria-label="Главное меню">
-          <button data-nav="chat" class="on">Чаты</button>
-          <button data-nav="projects">Проекты</button>
-          <button data-nav="knowledge">Знания</button>
-          <button data-nav="settings">Настройки</button>
+          <button type="button" data-nav="chat" class="on">Чаты</button>
+          <button type="button" data-nav="projects">Книги</button>
+          <button type="button" data-nav="knowledge">Материалы</button>
+          <button type="button" data-nav="settings">Настройки</button>
         </nav>
         <div class="f-sidebar-content" id="sidebar-content"></div>
         <div class="f-sidebar-foot"><span class="f-status-dot" id="status-dot"></span><span id="connection-label">Подключение не проверено</span></div>
       </aside>
-      <main class="f-main" id="panel" aria-live="polite"></main>
+      <main class="f-main" id="panel"></main>
     </div>
     <nav class="f-mobile-nav" aria-label="Разделы на телефоне">
-      <button data-nav="chat" class="on">Чаты</button>
-      <button data-nav="projects">Проекты</button>
-      <button data-nav="knowledge">Знания</button>
-      <button data-nav="settings">Настройки</button>
+      <button type="button" data-nav="chat" class="on">Чаты</button>
+      <button type="button" data-nav="projects">Книги</button>
+      <button type="button" data-nav="knowledge">Материалы</button>
+      <button type="button" data-nav="settings">Настройки</button>
     </nav>
   </div>
   <script type="module" src="./app.js"></script>
