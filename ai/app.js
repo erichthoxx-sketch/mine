@@ -14,7 +14,7 @@ const WRITING_MODES = {
   plot: {name:"Сюжет",instruction:"Работай как сюжетный редактор. Проверяй причинность, мотивацию, ставки и последствия; предлагай не более трёх конкретных вариантов и указывай слабые места без лести. Отделяй гипотезы от фактов канона.",maxTokens:520},
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
-const blank = () => ({projects:[], chats:[], docs:[], feedback:[], activeProjectId:null, activeChatId:null,
+const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
   settings:{provider:"ollama",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
 let state=blank(), tab="chat", busy=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
 const MAX_DOC=2*1024*1024;
@@ -26,6 +26,16 @@ const save=()=>{const snapshot=structuredClone(state); saveChain=saveChain.catch
 const notice=(msg)=>{let el=$("#f-flash");if(!el){el=document.createElement("div");el.id="f-flash";el.className="f-notice f-flash";document.body.appendChild(el);}el.textContent=msg;el.hidden=false;clearTimeout(notice.timer);notice.timer=setTimeout(()=>el.hidden=true,7000);};
 const project=(id=state.activeProjectId)=>state.projects.find(p=>p.id===id);
 const chat=(id=state.activeChatId)=>state.chats.find(c=>c.id===id);
+// Drafts are private to each conversation or to the initial composer for a book.
+// They are persisted in the existing IndexedDB, never sent to a provider until submission.
+const draftKey=()=>chat()?"chat:"+chat().id:"new:"+(state.activeProjectId||"none");
+let draftSaveTimer=null;
+const rememberDraft=(text)=>{
+  if(!state.drafts || typeof state.drafts!=="object")state.drafts={};
+  state.drafts[draftKey()]=text;
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer=setTimeout(()=>save(),550);
+};
 const setTheme=()=>{document.documentElement.setAttribute("data-theme",state.theme==="auto"?(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"):state.theme);};
 const titleLine=(title,sub="",right="")=>'<div class="f-heading"><div><h1 class="f-title">'+esc(title)+'</h1>'+(sub?'<p class="f-subtitle">'+esc(sub)+'</p>':"")+'</div>'+right+'</div>';
 const empty=(title,sub)=>'<div class="f-empty"><strong>'+esc(title)+'</strong>'+esc(sub)+'</div>';
@@ -207,7 +217,7 @@ function renderChat(){
       '<span class="f-compose-canon">'+(p?.masterCanon?"Канон из Мастерской":p?.canon?"Канон проекта":p?"Канон не задан":"Без контекста книги")+'</span>'+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
-      '<textarea class="f-textarea" id="f-message-input" rows="4" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'></textarea>'+
+      '<textarea class="f-textarea" id="f-message-input" rows="4" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'>'+esc(state.drafts?.[draftKey()]||"")+'</textarea>'+
       '<div class="f-compose-controls">'+
       '<span class="f-mini" title="'+esc(connectText)+'">'+esc(activeProviderLabel())+
       (connectOk?' · подключено':"")+'</span>'+
@@ -622,7 +632,13 @@ async function sendMessage(text){
       }
     }catch(e){return notice(e.message);}
   }
+  const previousDraft=draftKey();
   const c=ensureChat(),msg=text.trim();
+  clearTimeout(draftSaveTimer);
+  if(state.drafts){
+    delete state.drafts[previousDraft];
+    delete state.drafts[draftKey()];
+  }
   c.messages.push({role:"user",content:msg,at:stamp()});
   if(c.title==="Новый чат")c.title=msg.slice(0,65);
   c.updated=stamp();await save();
@@ -754,7 +770,7 @@ document.addEventListener("click",async(e)=>{
   }
   if(a==="delete-doc"){if(!confirm("Удалить материал?"))return;state.docs=state.docs.filter(d=>d.id!==id);await save();render();}
   if(a==="rename-chat"){const c=chat();if(!c)return;const v=await openModal("Название чата",[{key:"title",label:"Название",required:true}],{title:c.title});if(v){c.title=v.title.trim();await save();render();}}
-  if(a==="delete-chat"){const c=chat();if(!c||!confirm("Удалить этот чат?"))return;state.chats=state.chats.filter(x=>x.id!==c.id);state.activeChatId=null;await save();render();}
+  if(a==="delete-chat"){const c=chat();if(!c||!confirm("Удалить этот чат?"))return;if(state.drafts)delete state.drafts["chat:"+c.id];state.chats=state.chats.filter(x=>x.id!==c.id);state.activeChatId=null;await save();render();}
   if(a==="copy-answer"){
     const message=chat()?.messages[Number(b.dataset.i)];
     if(message?.role!=="assistant" || !message.content)return;
@@ -833,6 +849,9 @@ document.addEventListener("change",async(e)=>{
     }catch(err){notice("Ошибка импорта: "+err.message);}
   }
 });
+document.addEventListener("input",e=>{
+  if(e.target.id==="f-message-input")rememberDraft(e.target.value);
+});
 document.addEventListener("keydown",e=>{
   if(e.target.id==="f-message-input"&&e.key==="Enter"&&(e.ctrlKey||e.metaKey)&&!e.isComposing){
     e.preventDefault();if(!busy)e.target.closest("form")?.requestSubmit();
@@ -844,6 +863,7 @@ document.addEventListener("keydown",e=>{
     if(state.settings.provider==="polza")state.settings.provider="modelproxy";}
   catch(e){$("#panel").innerHTML=empty("Хранилище недоступно","Разреши браузеру сохранять данные сайта: "+e.message);return;}
   state.feedback=Array.isArray(state.feedback)?state.feedback:[];
+  state.drafts=state.drafts&&typeof state.drafts==="object"&&!Array.isArray(state.drafts)?state.drafts:{};
   render();
   // Не требуем от пользователя вручную проверять уже настроенную Ollama
   // при каждом обновлении страницы. Это тихая проверка без всплывающих окон.
