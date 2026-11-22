@@ -412,7 +412,12 @@ function modelproxyMessages(c){
   // No truncation, excerpt selection, automatic prompt rewriting or restart.
   // Any request that exceeds the gateway limit produces a visible error before
   // a paid provider call rather than silently dropping author material.
-  const history=messages.slice(-7,-1).map(m=>({role:m.role,content:m.content}));
+  // A retry after HTTP 524 must not bill the same 40k-character prompt twice
+  // inside its own history. Keep the latest author request verbatim.
+  const history=messages.slice(-7,-1)
+    .filter(m=>!(m.role==="user"&&m.content===latest) &&
+      !(m.role==="assistant"&&/^(?:Ошибка Claude:|Ответ остановлен\.|Ошибка Ollama:)/.test(m.content)))
+    .map(m=>({role:m.role,content:m.content}));
   return [...(projectInstructions?[{role:"system",content:projectInstructions}]:[]),
     ...history,{role:"user",content:latest}];
 }
