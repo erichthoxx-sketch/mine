@@ -34,7 +34,7 @@ test("Paid chats use MCP on send without Google Drive OAuth popups or hidden pro
   assert.ok(!send.includes("refreshLinkedBook("));
   assert.ok(!send.includes("confirm("));
   assert.match(send,/await master\.idToken\(\)/);
-  assert.match(send,/const messages=isPaidProvider\?modelproxyMessages/);
+  assert.match(send,/const messages=isPaidProvider\?\(lightweight\?/);
   assert.match(app,/function renderProjectHome/);
   assert.match(app,/renderMarkdown\(m\.content\)/);
   assert.match(app,/p\.instruction=String\(fd\.get\("instruction"\)/);

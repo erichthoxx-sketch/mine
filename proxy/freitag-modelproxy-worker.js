@@ -342,8 +342,8 @@ async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxToke
   const recentUser=String([...messages].reverse().find(m=>m.role==="user")?.content||"");
   // Only discover MCP tool schemas when the task actually needs source data.
   const willNeedTools=bookId || /(?:книг|роман|глав|сюжет|героин|геро|канон|рукопис|персонаж|сцен|пролог|напис|продолж|доход|выруч|продаж|покуп|конверс|подпис|литнет|рентабельност|кохорт|читател|прочтен|директ|метрик|реклам|кампани|таргет|маркетинг|ctr|cpc|клик|трафик|расход)/i.test(recentUser);
-  const authorChapter=mode==="draft"&&!!bookId;
-  const bookSources=authorChapter?await draftBookSources(env,bookId,messages):"";
+  const authorChapter=mode==="draft";
+  const bookSources=authorChapter&&bookId?await draftBookSources(env,bookId,messages):"";
   // Chapter writing uses exactly ONE paid model call, without tool schemas.
   // Other chat modes retain interactive read-only MCP tool calling.
   const catalog=willNeedTools&&!authorChapter?await mcpDiscover(env):[];
@@ -369,7 +369,7 @@ async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxToke
         headers:{Authorization:"Bearer "+env[provider.secret],
           "Content-Type":"application/json"},
         body:JSON.stringify({
-          model,messages:history,stream:false,max_tokens:maxTokens,
+          model,messages:history,stream:authorChapter,max_tokens:maxTokens,
           ...(selected.length?{tools:toProviderTools(selected),tool_choice:"auto"}:{})
         }),
         signal:AbortSignal.any([req.signal,AbortSignal.timeout(maxTokens>=9000?300000:160000)])
@@ -379,7 +379,24 @@ async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxToke
       if(upstream.status===402)return fail(req,402,provider.name+": недостаточный баланс или резерв.");
       if(upstream.status===429)return fail(req,429,provider.name+": превышен лимит.");
       return fail(req,upstream.status>=400&&upstream.status<500?upstream.status:502,
-        provider.name+" вернул HTTP "+upstream.status+".");
+        provider.name+" вернул HTTP "+upstream.status+ (upstream.status===524?
+          ": тайм-аут на стороне API-провайдера. Автоматического повтора и второго платного запроса не было.":"."));
+    }
+    if(authorChapter){
+      // BotHub documents streamed OpenAI-compatible completions for Opus 5.5.
+      // The old stream:false waited for every output token before returning
+      // headers and triggered BotHub/Cloudflare's 524 read timeout.
+      const ct=String(upstream.headers.get("Content-Type")||"").toLowerCase();
+      if(!upstream.body||!ct.includes("text/event-stream")){
+        // Never mislabel a provider JSON error as a finished chapter, or
+        // automatically retry a potentially billable request.
+        return fail(req,502,"BotHub не вернул потоковую выдачу Opus. Не повторяй платный запрос до проверки провайдера.");
+      }
+      return new Response(upstream.body,{
+        status:200,
+        headers:{...headers(req),"Content-Type":"text/event-stream; charset=utf-8",
+          "Cache-Control":"no-store","X-Accel-Buffering":"no"}
+      });
     }
     let data;
     try{data=await upstream.json();}catch{return fail(req,502,"Некорректный ответ модели.");}
@@ -511,9 +528,14 @@ async function generate(req, env) {
     return fail(req, 400, "Эта модель BotHub не разрешена.");
   if(input.provider==="apimira" && model!=="anthropic/claude-opus-5.5")
     return fail(req,400,"Эта модель ApiMira не разрешена.");
-  const messages = entries.map(x => ({ role: x.role, content: x.content }));
+  const lastMessage=entries.at(-1);
+  const greeting=lastMessage?.role==="user" && /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый (?:день|вечер)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(lastMessage.content.trim());
+  // A greeting in an open manuscript project must not bill the full master
+  // prompt, long chat history, canon or 14k-token chapter allocation.
+  const messages = greeting?[{role:"user",content:lastMessage.content}]:
+    entries.map(x => ({ role: x.role, content: x.content }));
   const useMcp=mcpConfigured(env);
-  if(input.bookId){
+  if(input.bookId&&!greeting){
     try{
       if(!/^[a-z0-9_-]{1,100}$/i.test(input.bookId))
         throw Error("Некорректный ID выбранной книги.");
@@ -548,17 +570,17 @@ async function generate(req, env) {
       }
     }catch(e){return fail(req,424,e.message);}
   }
-  const isDraft = input.mode === "draft";
+  const isDraft = input.mode === "draft" && !greeting;
   // Author explicitly chooses a ceiling for paid long-form writing. A higher
   // ceiling permits a full chapter; it never starts automatic continuations.
   // Reject arbitrary values rather than letting the browser request unlimited output.
   const requestedDraftLimit=Number(input.outputTokenLimit||4500);
   if(isDraft && ![4500,9000,14000].includes(requestedDraftLimit))
     return fail(req,400,"Недопустимый лимит ответа. Выбери 4500, 9000 или 14000.");
-  const maxTokens=isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
+  const maxTokens=greeting?128:isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
   if(useMcp){
     try{return await mcpToolsCompletion(req,env,provider,model,messages,
-      input.bookId||"",maxTokens,input.mode);}
+      greeting?"":(input.bookId||""),maxTokens,greeting?"dialog":input.mode);}
     catch(e){return fail(req,502,"MCP: "+e.message);}
   }
   const body = {
@@ -601,6 +623,150 @@ async function generate(req, env) {
   });
 }
 
+
+// Reliable long-form alternative to streamed completions: the provider accepts
+// one full chapter in a Batch job and exposes a job ID. No request stays open
+// while Opus writes. No author prompts or API keys are persisted in GitHub.
+const BATCH_API="https://openai.bothub.chat/v1";
+const BATCH_MODEL_IDS=[
+  "claude-opus-5.5:batch","anthropic/claude-opus-5.5:batch",
+  "claude-opus-5.5","anthropic/claude-opus-5.5"
+];
+const batchAuthHeaders=env=>({Authorization:"Bearer "+env.BOTHUB_API_KEY});
+async function loadBatchModel(env){
+  let response;
+  try{response=await fetch(BATCH_API+"/batches/models",{
+    headers:batchAuthHeaders(env),signal:AbortSignal.timeout(10000)
+  });}catch{throw Error("Не удалось проверить Batch API BotHub.");}
+  if(!response.ok)throw Error("Batch API BotHub вернул HTTP "+response.status+" при проверке моделей.");
+  let payload;
+  try{payload=await response.json();}catch{throw Error("BotHub вернул некорректный каталог Batch моделей.");}
+  const items=Array.isArray(payload)?payload:Array.isArray(payload?.data)?payload.data:
+    Array.isArray(payload?.models)?payload.models:[];
+  const ids=items.map(v=>typeof v==="string"?v:v?.id).filter(Boolean);
+  const chosen=BATCH_MODEL_IDS.find(id=>ids.includes(id));
+  return chosen||null;
+}
+async function batchModels(req,env){
+  if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца.");
+  if(!env.BOTHUB_API_KEY)return fail(req,503,"Секрет BotHub не настроен.");
+  try{
+    const model=await loadBatchModel(env);
+    return json(req,200,{ok:!!model,model:model||null,
+      message:model?"Opus 5.5 доступен через Batch API. Бесплатная проверка пройдена.":
+      "Opus 5.5 не обнаружен среди моделей Batch API. Генерация не запускалась."});
+  }catch(e){return fail(req,502,e.message);}
+}
+async function batchStart(req,env){
+  if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца.");
+  if(!env.BOTHUB_API_KEY)return fail(req,503,"Секрет BotHub не настроен.");
+  let input;
+  try{const raw=await req.text();
+    if(utf8(raw).length>340000)return fail(req,413,"Запрос слишком велик.");
+    input=JSON.parse(raw);
+  }catch{return fail(req,400,"Некорректный JSON запроса.");}
+  const entries=input?.messages, bookId=input?.bookId||"";
+  if(input?.provider!=="bothub"||input.model!=="claude-opus-5.5"||input.mode!=="draft"||
+     ![4500,9000,14000].includes(Number(input.outputTokenLimit))||
+     !Array.isArray(entries)||!entries.length||entries.length>16||
+     entries.some(m=>!["system","user","assistant"].includes(m?.role)||
+       typeof m.content!=="string"||m.content.length>130000)||
+     entries.reduce((n,m)=>n+m.content.length,0)>180000)
+    return fail(req,400,"Неверный формат или модель длинного запроса.");
+  if(bookId&&!/^[a-z0-9_-]{1,100}$/i.test(bookId))return fail(req,400,"Неверный ID книги.");
+  let selected;
+  try{selected=await loadBatchModel(env);}
+  catch(e){return fail(req,502,e.message);}
+  if(!selected)return fail(req,424,"Opus 5.5 не поддерживается текущим Batch API-ключом. Платный запрос не запускался.");
+  const messages=entries.map(x=>({role:x.role,content:x.content}));
+  if(bookId){
+    if(!mcpConfigured(env))return fail(req,424,"MCP Мастерской не настроен. Платный запрос отменен.");
+    try{
+      const source=await draftBookSources(env,bookId,messages);
+      messages.unshift({role:"system",content:source});
+      messages.unshift({role:"system",content:
+        "Выбранный роман: "+bookId+". Канон и предыдущие главы взяты из Мастерской. "+
+        "Напиши полную главу на основе запроса автора."});
+    }catch(e){return fail(req,424,"Не удалось загрузить главу: "+e.message);}
+  }
+  const body={model:selected,messages,max_tokens:Number(input.outputTokenLimit),stream:false};
+  // One JSONL row, one model completion; the provider processes it outside
+  // Cloudflare's 125s synchronous read timeout.
+  const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",
+    utf8(JSON.stringify(body))))).map(b=>b.toString(16).padStart(2,"0")).join("");
+  const key="freitag:opus-batch:"+fingerprint;
+  if(env.BOOKS){
+    const existing=await env.BOOKS.get(key,{type:"json"});
+    if(existing?.batchId)return json(req,200,{ok:true,reused:true,
+      batchId:existing.batchId,status:"submitted",model:selected});
+  }
+  const customId="freitag-"+fingerprint.slice(0,24);
+  const data=JSON.stringify({custom_id:customId,method:"POST",
+    url:"/v1/chat/completions",body})+"\n";
+  const form=new FormData();
+  form.set("purpose","batch");
+  form.set("file",new Blob([data],{type:"application/jsonl"}),"freitag-chapter.jsonl");
+  let fileResponse;
+  try{fileResponse=await fetch(BATCH_API+"/files",{
+    method:"POST",headers:batchAuthHeaders(env),body:form,
+    signal:AbortSignal.timeout(30000)
+  });}catch{return fail(req,502,"BotHub не принял файл задачи. Платная генерация не подтверждена.");}
+  if(!fileResponse.ok)return fail(req,502,"BotHub отклонил файл Batch (HTTP "+fileResponse.status+").");
+  let file;
+  try{file=await fileResponse.json();}catch{}
+  if(typeof file?.id!=="string"||!file.id)return fail(req,502,"BotHub не вернул ID файла задачи.");
+  let batchResponse;
+  try{batchResponse=await fetch(BATCH_API+"/batches",{
+    method:"POST",headers:{...batchAuthHeaders(env),"Content-Type":"application/json"},
+    body:JSON.stringify({input_file_id:file.id,endpoint:"/v1/chat/completions",
+      completion_window:"24h"}),signal:AbortSignal.timeout(30000)
+  });}catch{return fail(req,502,"Файл загружен, но подтверждение запуска Batch не получено. Не отправляй повторно до проверки истории BotHub.");}
+  if(!batchResponse.ok)return fail(req,502,"BotHub не подтвердил создание Batch (HTTP "+batchResponse.status+").");
+  let batch;
+  try{batch=await batchResponse.json();}catch{}
+  if(typeof batch?.id!=="string"||!batch.id)return fail(req,502,"BotHub не вернул ID Batch. Не запускай дубликат.");
+  if(env.BOOKS)await env.BOOKS.put(key,JSON.stringify({batchId:batch.id,createdAt:Date.now()}),
+    {expirationTtl:60*60*24*7});
+  return json(req,200,{ok:true,batchId:batch.id,status:batch.status||"submitted",model:selected});
+}
+async function batchStatus(req,env){
+  if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца.");
+  if(!env.BOTHUB_API_KEY)return fail(req,503,"Секрет BotHub не настроен.");
+  const id=new URL(req.url).searchParams.get("id")||"";
+  if(!/^[A-Za-z0-9_-]{4,150}$/.test(id))return fail(req,400,"Некорректный ID Batch.");
+  let response;
+  try{response=await fetch(BATCH_API+"/batches/"+encodeURIComponent(id)+"?include_usage=true",{
+    headers:batchAuthHeaders(env),signal:AbortSignal.timeout(12000)
+  });}catch{return fail(req,502,"Нет связи с сервером статуса BotHub.");}
+  if(!response.ok)return fail(req,502,"BotHub не отдал статус Batch (HTTP "+response.status+").");
+  let batch;
+  try{batch=await response.json();}catch{return fail(req,502,"Некорректный ответ статуса Batch.");}
+  if(batch.status!=="completed")return json(req,200,{ok:true,status:batch.status||"unknown",
+    batchId:id,requestCounts:batch.request_counts||null,usage:batch.usage||null});
+  if(typeof batch.output_file_id!=="string"||!batch.output_file_id)
+    return fail(req,502,"Пакет завершен без выходного файла. Проверь BotHub.");
+  let output;
+  try{output=await fetch(BATCH_API+"/files/"+encodeURIComponent(batch.output_file_id)+"/content",{
+    headers:batchAuthHeaders(env),signal:AbortSignal.timeout(16000)
+  });}catch{return fail(req,502,"Файл результата BotHub недоступен.");}
+  if(!output.ok)return fail(req,502,"Результат Batch вернул HTTP "+output.status+".");
+  const raw=await output.text();
+  if(raw.length>700000)return fail(req,413,"Ответ Batch слишком большой.");
+  const rows=raw.split("\n").filter(Boolean);
+  let result;
+  try{result=rows.map(line=>JSON.parse(line)).find(r=>String(r?.custom_id||"").startsWith("freitag-"));}
+  catch{return fail(req,502,"Неправильный JSONL результата Batch.");}
+  const responseBody=result?.response?.body;
+  const content=responseBody?.choices?.[0]?.message?.content;
+  if(result?.response?.status_code!==200||typeof content!=="string"||!content.trim())
+    return json(req,200,{ok:false,status:"failed",batchId:id,
+      error:"Пакет завершен, но ответ модели отсутствует или содержит ошибку.",
+      statusCode:result?.response?.status_code||null});
+  return json(req,200,{ok:true,status:"completed",batchId:id,content,
+    finishReason:responseBody?.choices?.[0]?.finish_reason||null,
+    usage:responseBody?.usage||batch.usage||null});
+}
+
 // Owner-only preflight checks the actual key/model catalog without generating text.
 async function bothubPreflight(req, env) {
   if (!await verifyOwner(req, env)) return fail(req, 401, "Требуется вход владельца в Мастерскую.");
@@ -630,8 +796,26 @@ async function bothubPreflight(req, env) {
   catch { return fail(req, 502, "Провайдер вернул некорректный список моделей."); }
   if (!Array.isArray(data.data)) return fail(req, 502, "Провайдер не вернул список моделей.");
   const item = data.data.find(x => x?.id === model);
+  // ApiMira documents a free, owner-only balance endpoint. A model listed
+  // in the catalog may still be unusable when its prepaid balance is empty.
+  let balanceUsd = null;
+  if(provider === "apimira" && item){
+    try{
+      const account = await fetch("https://apimira.com/v1/account/balance",{
+        headers:{ Authorization: "Bearer " + key },
+        signal:AbortSignal.timeout(8000)
+      });
+      if(account.ok){
+        const payload = await account.json();
+        if(typeof payload.balance_usd === "number" &&
+           Number.isFinite(payload.balance_usd) && payload.balance_usd >= 0)
+          balanceUsd = payload.balance_usd;
+      }
+    }catch{}
+  }
   return json(req, 200, { ok: !!item, model,
-    message: item ? "Модель доступна по API-ключу. Платная генерация не запускалась." :
+    ...(balanceUsd !== null ? {balanceUsd} : {}),
+    message: item ? "Модель есть в каталоге API-ключа. Платная генерация не запускалась." :
       "Модель отсутствует в списке, доступном этому API-ключу." });
 }
 
@@ -663,6 +847,9 @@ export default {
             toolCount:items.length,tools:items.map(t=>t.name)});}
         catch(e){return fail(req,503,"MCP: "+e.message);}
       }
+      if (path === "/batch-models" && req.method === "GET") return await batchModels(req,env);
+      if (path === "/batch-start" && req.method === "POST") return await batchStart(req,env);
+      if (path === "/batch-status" && req.method === "GET") return await batchStatus(req,env);
       if (path === "/refresh-book" && req.method === "POST") return await refreshBook(req, env);
       if (path === "/preflight" && req.method === "GET") return await bothubPreflight(req, env);
       if (path === "/snapshot" && req.method === "GET") return await snapshotStatus(req, env);

@@ -63,12 +63,13 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     chapters:[{title:"Пролог",text:"начало"},
       {title:"Глава 14",text:"события 14"},
       {title:"Глава 15",text:"события 15"}]};
-  const written=[];
+  const written=[],batchCache=new Map(),batchInputs=[];
   let staleMcpRevision=false;
   const env = {OWNER_UID:"owner",MODELPROXY_API_KEY:"mp-test",BOTHUB_API_KEY:"bh-test",APIMIRA_API_KEY:"am-test",
     BOOKS_MCP_URL:"https://masterskaya-ai.erichtho-xx.workers.dev/mcp",MCP_READ_KEY:"read-key-".repeat(8),BOOKS:{
-    get:async()=>book,
+    get:async(key)=>key.startsWith("freitag:opus-batch:")?(batchCache.get(key)||null):book,
     put:async(key,raw,opts)=>{
+      if(key.startsWith("freitag:opus-batch:")){batchCache.set(key,JSON.parse(raw));return;}
       assert.equal(key,"book:test");
       const data=JSON.parse(raw);
       Object.assign(book,data);
@@ -84,8 +85,32 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
       return Response.json({keys:[jwk]});
     if (String(input) === "https://openai.bothub.chat/v1/models")
       return Response.json({object:"list",data:[{id:"claude-sonnet-5.5",kind:"chat",endpoints:["/v1/chat/completions"]},{id:"claude-opus-5.5",kind:"chat"}]});
+    if (String(input) === "https://openai.bothub.chat/v1/batches/models")
+      return Response.json({data:[{id:"claude-opus-5.5:batch"}]});
+    if (String(input) === "https://openai.bothub.chat/v1/files" && init.method==="POST"){
+      assert.equal(init.headers.Authorization,"Bearer bh-test");
+      assert.equal(init.body.get("purpose"),"batch");
+      const row=JSON.parse((await init.body.get("file").text()).trim());
+      batchInputs.push(row);
+      return Response.json({id:"file-upload-test"});
+    }
+    if (String(input) === "https://openai.bothub.chat/v1/batches" && init.method==="POST"){
+      const data=JSON.parse(init.body);
+      assert.equal(data.input_file_id,"file-upload-test");
+      assert.equal(data.completion_window,"24h");
+      return Response.json({id:"batch-chapter-test",status:"in_progress"});
+    }
+    if (String(input).includes("/v1/batches/batch-chapter-test?include_usage=true"))
+      return Response.json({id:"batch-chapter-test",status:"completed",output_file_id:"file-answer-test"});
+    if (String(input) === "https://openai.bothub.chat/v1/files/file-answer-test/content")
+      return new Response(JSON.stringify({custom_id:"freitag-abcdef",
+        response:{status_code:200,body:{choices:[{message:{content:"Готовая глава целиком."},finish_reason:"stop"}],usage:{prompt_tokens:999,completion_tokens:333}}}})+"\n");
     if (String(input) === "https://apimira.com/v1/models")
       return Response.json({object:"list",data:[{id:"anthropic/claude-opus-5.5",object:"model"}]});
+    if (String(input) === "https://apimira.com/v1/account/balance"){
+      assert.equal(init.headers.Authorization,"Bearer am-test");
+      return Response.json({object:"account.balance",balance_usd:3.45,currency:"USD"});
+    }
     if(String(input)==="https://masterskaya-ai.erichtho-xx.workers.dev/mcp"){
       assert.equal(init.headers.Authorization,"Bearer "+"read-key-".repeat(8));
       const rpc=JSON.parse(init.body);
@@ -138,8 +163,10 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
         return Response.json({choices:[{message:{role:"assistant",
           content:lastTool.includes("Доход 1200")?"Проверено: доход 1200 рублей.":called?"События главы подтверждены.":"OK"}}]});
       }
-      return new Response('data: {"choices":[{"delta":{"content":"OK"}}]}\\n\\n', {
-        headers:{"Content-Type":"text/event-stream"}});
+      return new Response('data: {"choices":[{"delta":{"content":"OK"}}]}\\n\\n' +
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\\n\\n' +
+        'data: [DONE]\\n\\n', {
+        headers:{"Content-Type":"text/event-stream; charset=utf-8"}});
     }
     throw Error("Unexpected fetch "+input);
   };
@@ -229,15 +256,49 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
         ]})
     }),env);
     assert.equal(fullChapter.status,200);
-    assert.match(await fullChapter.text(),/OK/);
+    const chapterEvents=await fullChapter.text();
+    assert.match(chapterEvents,/OK/);
+    assert.match(chapterEvents,/data: \[DONE\]/);
     const paidAfter=calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length;
     assert.equal(paidAfter-paidBefore,1,"full chapter must take only one paid generation");
     const chapterCall=JSON.parse(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).at(-1).init.body);
     assert.equal(chapterCall.max_tokens,14000);
+    assert.equal(chapterCall.stream,true,"full chapter must stream from BotHub; nonstreaming can time out at Cloudflare");
     assert.equal(chapterCall.tools,undefined,"no iterative MCP tool calls during full chapter");
     assert.equal(chapterCall.messages.find(m=>m.content===masterPrompt)?.content,masterPrompt);
     assert.equal(chapterCall.messages.at(-1).content,authorPrompt);
     assert.match(chapterCall.messages.find(m=>m.content.includes("Справочные материалы выбранного романа"))?.content||"",/новая глава/);
+    const readyBatch=await gateway.fetch(new Request(url("batch-models"),{headers}),env);
+    assert.equal(readyBatch.status,200);
+    assert.equal((await readyBatch.json()).model,"claude-opus-5.5:batch");
+    const batchRequest={bookId:"test",provider:"bothub",model:"claude-opus-5.5",
+      mode:"draft",outputTokenLimit:14000,messages:[
+        {role:"system",content:masterPrompt},{role:"user",content:authorPrompt}
+      ]};
+    const batchStart=await gateway.fetch(new Request(url("batch-start"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify(batchRequest)
+    }),env);
+    assert.equal(batchStart.status,200);
+    assert.equal((await batchStart.json()).batchId,"batch-chapter-test");
+    assert.equal(batchInputs.length,1);
+    assert.equal(batchInputs[0].body.model,"claude-opus-5.5:batch");
+    assert.equal(batchInputs[0].body.stream,false);
+    assert.equal(batchInputs[0].body.max_tokens,14000);
+    assert.equal(batchInputs[0].body.messages.at(-1).content,authorPrompt);
+    assert.ok(batchInputs[0].body.messages.some(m=>m.content===masterPrompt));
+    assert.match(batchInputs[0].body.messages.find(m=>m.content.includes("Справочные материалы выбранного романа")).content,/новая глава/);
+    const beforeDuplicate=batchInputs.length;
+    const duplicate=await gateway.fetch(new Request(url("batch-start"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify(batchRequest)
+    }),env);
+    assert.equal(duplicate.status,200);
+    assert.equal((await duplicate.json()).reused,true);
+    assert.equal(batchInputs.length,beforeDuplicate,"Batch idempotency prevents duplicate paid chapters");
+    const resultBatch=await gateway.fetch(new Request(url("batch-status?id=batch-chapter-test"),{headers}),env);
+    assert.equal(resultBatch.status,200);
+    assert.equal((await resultBatch.json()).content,"Готовая глава целиком.");
     const beforeToolCalls=calls.length;
     const toolResponse=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
@@ -293,7 +354,24 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(JSON.parse(calls.at(-1).init.body).model,"anthropic/claude-opus-5.5");
     const apiPreflight=await gateway.fetch(new Request(url("preflight?provider=apimira&model=anthropic%2Fclaude-opus-5.5"),{headers}),env);
     assert.equal(apiPreflight.status,200);
-    assert.equal((await apiPreflight.json()).ok,true);
+    const apimiraInfo=await apiPreflight.json();
+    assert.equal(apimiraInfo.ok,true);
+    assert.equal(apimiraInfo.balanceUsd,3.45,"free preflight reads ApiMira balance");
+    // ApiMira uses the same one-call streamed long-chapter path as BotHub.
+    const apimiraChapter=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({bookId:"test",provider:"apimira",mode:"draft",outputTokenLimit:14000,
+        messages:[{role:"system",content:masterPrompt},{role:"user",content:authorPrompt}]})
+    }),env);
+    assert.equal(apimiraChapter.status,200);
+    assert.match(await apimiraChapter.text(),/data: \[DONE\]/);
+    const apimiraCalls=calls.filter(c=>String(c.input)==="https://apimira.com/v1/chat/completions");
+    const apimiraPayload=JSON.parse(apimiraCalls.at(-1).init.body);
+    assert.equal(apimiraPayload.stream,true);
+    assert.equal(apimiraPayload.max_tokens,14000);
+    assert.equal(apimiraPayload.model,"anthropic/claude-opus-5.5");
+    assert.equal(apimiraPayload.messages.at(-1).content,authorPrompt);
+    assert.ok(apimiraPayload.messages.some(m=>m.content===masterPrompt));
     const income=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
@@ -315,11 +393,16 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     const greeting=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
-        bookId:"test",messages:[{role:"user",content:"Привет!"}]})
+        bookId:"test",mode:"draft",messages:[{role:"user",content:"Привет!"}]})
     }),env);
     assert.equal(greeting.status,200);
     const lastGreetingCall=calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).at(-1);
-    assert.equal(JSON.parse(lastGreetingCall.init.body).tools,undefined);
+    const greetingPayload=JSON.parse(lastGreetingCall.init.body);
+    assert.equal(greetingPayload.tools,undefined);
+    assert.equal(greetingPayload.max_tokens,128,"a greeting must not request a 14k chapter");
+    assert.equal(greetingPayload.stream,false,"greeting is not a literary draft");
+    assert.deepEqual(greetingPayload.messages.filter(m=>m.role==="user"),[{role:"user",content:"Привет!"}]);
+    assert.ok(!greetingPayload.messages.some(m=>String(m.content).includes("Справочные материалы выбранного романа")));
     const mcpList=await gateway.fetch(new Request(url("mcp-tools"),{headers}),env);
     assert.equal(mcpList.status,200);
     const mcpData=await mcpList.json();
@@ -391,11 +474,36 @@ test("book project uses the exact large master instruction and verbatim long cha
     {role:"system",content:masterPrompt},
     {role:"user",content:chapterPrompt}
   ]);
+  // Retrying a timed-out chapter should NOT duplicate the expensive prompt.
+  const retried=fn({projectId:"book-1",messages:[
+    {role:"user",content:chapterPrompt},
+    {role:"assistant",content:"Ошибка Claude: HTTP 502: BotHub вернул HTTP 524."},
+    {role:"user",content:chapterPrompt}
+  ]});
+  assert.deepEqual(retried,[
+    {role:"system",content:masterPrompt},
+    {role:"user",content:chapterPrompt}
+  ]);
   assert.match(app,/p\.instruction=String\(fd\.get\("instruction"\)\|\|""\);/);
   assert.doesNotMatch(source,/slice\(0,26000\)|slice\(0,20000\)|slice\(0,6000\)/);
-  assert.match(app,/if\(c\.projectId\) c\.mode="draft"/);
-  assert.match(app,/outputTokenLimit:c\.mode==="draft"\?14000/);
+  assert.match(app,/if\(c\.projectId && !c\.mode\) c\.mode="draft"/);
+  assert.match(app,/outputTokenLimit:requestMode==="draft"/);
   assert.match(worker,/\[4500,9000,14000\]\.includes\(requestedDraftLimit\)/);
-  assert.match(worker,/maxTokens=isDraft\?requestedDraftLimit/);
-  assert.match(worker,/mode==="draft"&&bookId/);
+  assert.match(worker,/maxTokens=greeting\?128:isDraft\?requestedDraftLimit/);
+  assert.match(worker,/const authorChapter=mode==="draft"/);
+});
+
+
+test("ordinary book greetings stay cheap; genuine chapters retain large prompts", async()=>{
+  const [app,worker]=await Promise.all([
+    readFile(new URL("../ai/app.js",import.meta.url),"utf8"),
+    readFile(new URL("../proxy/freitag-modelproxy-worker.js",import.meta.url),"utf8")
+  ]);
+  assert.match(app,/const lightweight=isSimpleGreeting\(msg\)/);
+  assert.match(app,/lightweight\?\[\{role:"user",content:msg\}\]:modelproxyMessages\(c\)/);
+  assert.match(app,/bookId:lightweight\?null:/);
+  assert.match(worker,/if\(input.bookId&&!greeting\)/);
+  assert.match(worker,/const maxTokens=greeting\?128:/);
+  assert.match(app,/void save\(\)/);
+  assert.match(app,/\[4500,"4 500"\],\[9000,"9 000"\],\[14000,"14 000"\]/);
 });
