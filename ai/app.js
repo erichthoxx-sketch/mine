@@ -948,6 +948,9 @@ document.addEventListener("keydown",e=>{
   state.feedback=Array.isArray(state.feedback)?state.feedback:[];
   state.drafts=state.drafts&&typeof state.drafts==="object"&&!Array.isArray(state.drafts)?state.drafts:{};
   render();
+  // Reuse an existing Firebase session and silently load the books list.
+  // This never starts Google Drive OAuth and does not send a paid model request.
+  master.init().then(async()=>{if(master.user){await master.refresh();if(tab==="projects")render();}}).catch(()=>{});
   // Не требуем от пользователя вручную проверять уже настроенную Ollama
   // при каждом обновлении страницы. Это тихая проверка без всплывающих окон.
   probeLocalConnection().catch(()=>{});
