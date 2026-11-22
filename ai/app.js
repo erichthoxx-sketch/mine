@@ -48,10 +48,6 @@ function renderSidebar(){
       .sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||"")));
     el.innerHTML=
       '<button type="button" class="f-btn primary f-new-chat" data-action="new-chat"><span aria-hidden="true">＋</span> Новый чат</button>'+
-      '<div class="f-side-section"><label for="f-sidebar-project" class="f-side-label">КНИГА</label>'+
-      '<select id="f-sidebar-project" class="f-select" aria-label="Активная книга"><option value="">Без книги</option>'+
-      state.projects.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===selected?"selected":"")+'>'+esc(x.name)+'</option>').join("")+
-      '</select></div>'+
       '<div class="f-side-section f-side-history"><div class="f-side-label f-side-count">ИСТОРИЯ <span>'+arr.length+'</span></div>'+
       (arr.length?'<ul class="f-list f-chat-list">'+arr.map(x=>
         '<li><button type="button" class="'+(x.id===state.activeChatId?"on":"")+
@@ -129,7 +125,7 @@ function renderSettings(){
     titleLine("Настройки","Все необходимое для работы. Технические параметры — в дополнительных разделах.")+
     '<form id="f-settings" class="f-form">'+
     '<section class="f-settings-card"><div class="f-section-kicker">01 / МОДЕЛЬ</div>'+
-    '<h2>Кто отвечает</h2><p class="f-muted">Выбери модель для новых сообщений. Существующие чаты останутся на месте.</p>'+
+    '<h2>Кто отвечает</h2><p class="f-muted">Выбор модели сохраняется сразу и применяется к следующему сообщению. История чатов остается на месте.</p>'+
     '<label for="f-provider">Модель</label><select id="f-provider" name="provider" class="f-select">'+
     [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"],["bothub","BotHub · Claude"]].map(x=>
       '<option value="'+x[0]+'" '+(x[0]===provider?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
@@ -184,6 +180,24 @@ const activeBotHubModel=()=>state.settings.bothubModel==="claude-opus-5.5"?"clau
 const activeClaudeName=()=>activeBotHubModel()==="claude-opus-5.5"?"Claude Opus 5.5":"Claude Sonnet 5.5";
 const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":
   state.settings.provider==="bothub"?activeClaudeName()+" · BotHub":"Локальная Qwen · Ollama";
+const chatModelValue=()=>state.settings.provider==="bothub"?
+  "bothub:"+activeBotHubModel():state.settings.provider;
+const chatModelOptions=()=>[
+  ["bothub:claude-opus-5.5","Opus 5.5 · BotHub"],
+  ["bothub:claude-sonnet-5.5","Sonnet 5.5 · BotHub"],
+  ["ollama","Qwen · локально"],
+  ["modelproxy","Opus 5.5 · ModelProxy"]
+].map(([value,label])=>'<option value="'+value+'" '+(value===chatModelValue()?"selected":"")+'>'+label+'</option>').join("");
+async function activateModel(provider, model){
+  if(!["bothub","ollama","modelproxy"].includes(provider))return false;
+  if(provider==="bothub" && !["claude-opus-5.5","claude-sonnet-5.5"].includes(model))return false;
+  state.settings.provider=provider;
+  if(provider==="bothub")state.settings.bothubModel=model;
+  connectOk=false;connectText=activeProviderLabel()+" · соединение не проверено";
+  await save();
+  renderHeader();
+  return true;
+}
 function renderChat(){
   const c=chat();
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
@@ -210,10 +224,9 @@ function renderChat(){
   const bookOptions='<option value="">Без книги</option>'+state.projects.map(x=>
     '<option value="'+esc(x.id)+'" '+(x.id===(p?.id||"")?"selected":"")+'>'+esc(x.name)+'</option>').join("");
   $("#panel").innerHTML=
-    '<section class="f-chat" aria-label="Литературный чат">'+
+    '<section class="f-chat'+(body?" has-messages":"")+'" aria-label="Литературный чат">'+
     '<div class="f-chat-meta"><div class="f-chat-identity">'+
-    '<span class="f-eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span>'+
-    '<h1 class="f-title">'+esc(c?.title&&c.title!=="Новый чат"?c.title:"Новый диалог")+'</h1>'+
+    '<h1 class="f-title" title="'+esc(c?.title&&c.title!=="Новый чат"?c.title:"Новый чат")+'">'+esc(c?.title&&c.title!=="Новый чат"?c.title:"Новый чат")+'</h1>'+
     '<div class="f-chat-book"><label for="f-chat-project">Книга</label>'+
     '<select id="f-chat-project" class="f-select" aria-label="Выбрать книгу">'+bookOptions+'</select></div></div>'+
     '<div class="f-chat-head-actions">'+
@@ -230,12 +243,14 @@ function renderChat(){
     '</div>'+
     '<form id="f-chat-form" class="f-compose">'+
       '<div class="f-compose-surface"><div class="f-writing-bar">'+
+      '<label class="f-compact-label" for="f-chat-model">Модель</label>'+
+      '<select class="f-select f-chat-model-select" id="f-chat-model" aria-label="Модель для следующего ответа" '+(busy||preparingPaid?"disabled":"")+'>'+chatModelOptions()+'</select>'+
       '<label class="f-compact-label" for="f-writing-mode">Режим</label>'+
       '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
       '<span class="f-compose-canon">'+(p?.masterCanon?"Канон из Мастерской":p?.canon?"Канон проекта":p?"Канон не задан":"Без контекста книги")+'</span>'+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
-      '<textarea class="f-textarea" id="f-message-input" rows="4" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'>'+esc(state.drafts?.[draftKey()]||"")+'</textarea>'+
+      '<textarea class="f-textarea" id="f-message-input" rows="3" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'>'+esc(state.drafts?.[draftKey()]||"")+'</textarea>'+
       '<div class="f-compose-controls">'+
       '<span class="f-mini" title="'+esc(connectText)+'">'+esc(activeProviderLabel())+
       (connectOk?' · подключено':"")+'</span>'+
@@ -873,8 +888,22 @@ document.addEventListener("submit",async(e)=>{
     await save();render();notice("Настройки сохранены.");}
 });
 document.addEventListener("change",async(e)=>{
-  if(e.target.id==="f-provider"){
-    const row=$("#f-bothub-model-row");if(row)row.hidden=e.target.value!=="bothub";
+  if(e.target.id==="f-provider"||e.target.id==="f-bothub-model"){
+    const provider=$("#f-provider")?.value||state.settings.provider;
+    const model=$("#f-bothub-model")?.value||activeBotHubModel();
+    if(!await activateModel(provider,model))return notice("Неверная модель.");
+    const row=$("#f-bothub-model-row");if(row)row.hidden=provider!=="bothub";
+    const status=$("#f-test-status");
+    if(status)status.textContent="Модель сохранена: "+activeProviderLabel()+". Соединение пока не проверено.";
+    return;
+  }
+  if(e.target.id==="f-chat-model"){
+    const value=String(e.target.value||"");
+    const provider=value.startsWith("bothub:")?"bothub":value;
+    const model=provider==="bothub"?value.slice(7):"";
+    if(!await activateModel(provider,model))return notice("Неверная модель.");
+    const mini=document.querySelector(".f-compose-controls .f-mini");
+    if(mini){mini.textContent=activeProviderLabel();mini.title=connectText;}
     return;
   }
   if(e.target.id==="f-writing-mode"){
@@ -882,7 +911,7 @@ document.addEventListener("change",async(e)=>{
     const c=chat();if(c){c.mode=e.target.value;await save();}else pendingMode=e.target.value;
     return;
   }
-  if(e.target.id==="f-sidebar-project"||e.target.id==="f-chat-project"||e.target.id==="f-doc-project"){
+  if(e.target.id==="f-chat-project"||e.target.id==="f-doc-project"){
     state.activeProjectId=e.target.value||null;state.activeChatId=null;pendingMode=null;await save();render();return;
   }
   if(e.target.id==="f-upload"){
