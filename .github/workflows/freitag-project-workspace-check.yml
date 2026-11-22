@@ -4,6 +4,7 @@ on:
     branches: [feature/freitag-ai-project-workspace]
     paths:
       - "ai/**"
+      - "scripts/build-apps.sh"
       - "proxy/freitag-modelproxy-worker.js"
       - "tests/freitag-*.test.js"
       - ".github/workflows/freitag-project-workspace-check.yml"
