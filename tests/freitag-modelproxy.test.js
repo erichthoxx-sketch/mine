@@ -406,7 +406,7 @@ test("book project uses the exact large master instruction and verbatim long cha
   assert.match(app,/if\(c\.projectId && !c\.mode\) c\.mode="draft"/);
   assert.match(app,/outputTokenLimit:requestMode==="draft"/);
   assert.match(worker,/\[4500,9000,14000\]\.includes\(requestedDraftLimit\)/);
-  assert.match(worker,/maxTokens=isDraft\?requestedDraftLimit/);
+  assert.match(worker,/maxTokens=greeting\?128:isDraft\?requestedDraftLimit/);
   assert.match(worker,/const authorChapter=mode==="draft"/);
 });
 
