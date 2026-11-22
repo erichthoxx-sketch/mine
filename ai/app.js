@@ -16,7 +16,7 @@ const WRITING_MODES = {
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
-  settings:{provider:"ollama",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-sonnet-5.5",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
+  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
 let state=blank(), tab="chat", busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -131,7 +131,7 @@ function renderSettings(){
     '<section class="f-settings-card"><div class="f-section-kicker">01 / МОДЕЛЬ</div>'+
     '<h2>Кто отвечает</h2><p class="f-muted">Выбери модель для новых сообщений. Существующие чаты останутся на месте.</p>'+
     '<label for="f-provider">Модель</label><select id="f-provider" name="provider" class="f-select">'+
-    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"],["bothub","BotHub · Claude"]].map(x=>
+    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"],["bothub","BotHub · Claude"],["apimira","ApiMira · Claude Opus 5.5"]].map(x=>
       '<option value="'+x[0]+'" '+(x[0]===provider?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
     '<div id="f-bothub-model-row" '+(provider==="bothub"?"":'hidden')+'><label for="f-bothub-model">Модель BotHub</label>'+
     '<select id="f-bothub-model" name="bothubModel" class="f-select">'+
@@ -183,7 +183,7 @@ function renderSettings(){
 const activeBotHubModel=()=>state.settings.bothubModel==="claude-opus-5.5"?"claude-opus-5.5":"claude-sonnet-5.5";
 const activeClaudeName=()=>activeBotHubModel()==="claude-opus-5.5"?"Claude Opus 5.5":"Claude Sonnet 5.5";
 const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":
-  state.settings.provider==="bothub"?activeClaudeName()+" · BotHub":"Локальная Qwen · Ollama";
+  state.settings.provider==="bothub"?activeClaudeName()+" · BotHub":state.settings.provider==="apimira"?"Claude Opus 5.5 · ApiMira":"Локальная Qwen · Ollama";
 function renderChat(){
   const c=chat();
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
@@ -459,7 +459,7 @@ function claudeGateway(savedUrl){
   return safeWorkerEndpoint(savedUrl);
 }
 async function probeLocalConnection(){
-  if(["modelproxy","bothub"].includes(state.settings.provider)){
+  if(["modelproxy","bothub","apimira"].includes(state.settings.provider)){
     connectOk=false;connectText=activeProviderLabel()+": проверь шлюз в настройках";
     renderHeader();return;
   }
@@ -482,7 +482,7 @@ async function probeLocalConnection(){
   if(mini)mini.textContent=connectOk?"● Ollama подключена":connectText==="Нет соединения"?"Нет связи с Ollama":connectText;
 }
 async function testConnection(){
-  if(["modelproxy","bothub"].includes($("#f-provider")?.value||state.settings.provider)){
+  if(["modelproxy","bothub","apimira"].includes($("#f-provider")?.value||state.settings.provider)){
     const gateway=claudeGateway($("#f-worker")?.value||state.settings.workerUrl);
     if(!gateway)return notice("Укажи HTTPS-адрес личного Cloudflare Worker.");
     try{
@@ -492,20 +492,20 @@ async function testConnection(){
       if(data.provider!=="ModelProxy"||data.model!=="claude-opus-5-5")
         throw Error("На сервере прежняя версия шлюза. Обнови Worker без платных запросов.");
       const chosen=$("#f-provider")?.value||state.settings.provider;
-      if(!data.ok || (chosen==="modelproxy"?!data.configured:!data.bothubConfigured))
-        throw Error(chosen==="bothub"?"BotHub пока не подключен: отсутствует BOTHUB_API_KEY.":"ModelProxy пока не подключен: отсутствует MODELPROXY_API_KEY.");
-      if(chosen==="bothub"){
-        const model=$("#f-bothub-model")?.value||activeBotHubModel();
+      if(!data.ok || (chosen==="modelproxy"?!data.configured:chosen==="apimira"?!data.apimiraConfigured:!data.bothubConfigured))
+        throw Error(chosen==="bothub"?"BotHub пока не подключен: отсутствует BOTHUB_API_KEY.":chosen==="apimira"?"ApiMira пока не подключена: требуется APIMIRA_API_KEY.":"ModelProxy пока не подключен: отсутствует MODELPROXY_API_KEY.");
+      if(chosen==="bothub"||chosen==="apimira"){
+        const model=chosen==="apimira"?"anthropic/claude-opus-5.5":($("#f-bothub-model")?.value||activeBotHubModel());
         const token=await master.idToken();
-        const check=await fetch(gateway+"/preflight?model="+encodeURIComponent(model),{
+        const check=await fetch(gateway+"/preflight?provider="+chosen+"&model="+encodeURIComponent(model),{
           headers:{"Authorization":"Bearer "+token},cache:"no-store"
         });
         const info=await check.json().catch(()=>({}));
-        if(!check.ok||!info.ok)throw Error(info.error||info.message||"Модель BotHub недоступна.");
+        if(!check.ok||!info.ok)throw Error(info.error||info.message||"Модель недоступна.");
       }
-      connectOk=true;connectText=chosen==="bothub"?"BotHub: ключ и модель проверены":"Шлюз Claude доступен";
+      connectOk=true;connectText=chosen==="bothub"?"BotHub: ключ и модель проверены":chosen==="apimira"?"ApiMira: ключ и модель проверены":"Шлюз Claude доступен";
       const status=$("#f-test-status");if(status)status.textContent=data.booksConnected?
-        (chosen==="bothub"?"Ключ и модель доступны. Книги подключены. Генерация не тестировалась.":"Шлюз отвечает. Книги подключены. Генерация не тестировалась."):
+        (chosen==="bothub"||chosen==="apimira"?"Ключ и модель доступны. Книги подключены. Генерация не тестировалась.":"Шлюз отвечает. Книги подключены. Генерация не тестировалась."):
         "Шлюз отвечает, но доступ к книгам Мастерской пока не настроен.";
       notice("Защищенный шлюз найден. Оплата за проверку соединения не списывается.");
     }catch(e){connectOk=false;connectText="Шлюз недоступен";notice("Claude: "+e.message);}
@@ -620,7 +620,7 @@ async function saveFeedback(i,kind){
 let approvedSnapshot = "";
 async function sendMessage(text){
   if(busy||preparingPaid||!text.trim())return;
-  const isPaidProvider=["modelproxy","bothub"].includes(state.settings.provider);
+  const isPaidProvider=["modelproxy","bothub","apimira"].includes(state.settings.provider);
   const endpoint=safeEndpoint(state.settings.endpoint);
   const gateway=claudeGateway(state.settings.workerUrl);
   if(isPaidProvider && !gateway)return notice("Для Claude укажи адрес защищенного Worker в настройках.");
@@ -641,6 +641,8 @@ async function sendMessage(text){
       const health=await check.json();
       if(health.provider!=="ModelProxy"||health.model!=="claude-opus-5-5")
         throw Error("Шлюз устарел. Обнови тестовую версию Cloudflare Worker.");
+      if(state.settings.provider==="apimira"&&!health.apimiraConfigured)
+        throw Error("ApiMira пока не подключена: нужен APIMIRA_API_KEY в Cloudflare.");
       if(state.settings.provider==="bothub"&&!health.bothubConfigured)
         throw Error("BotHub пока не подключен: нужен BOTHUB_API_KEY в Cloudflare.");
       if(state.settings.provider==="modelproxy"&&!health.configured)
@@ -667,7 +669,7 @@ async function sendMessage(text){
           const message="Прочитана свежая рукопись из Google Docs:\n"
             +status.chapterCount+" частей, обновлено: "+status.updatedAt
             +"\nПоследние:\n"+chapters
-            +"\n\nПередать материалы "+(state.settings.provider==="bothub"?"BotHub":"ModelProxy")
+            +"\n\nПередать материалы "+(state.settings.provider==="bothub"?"BotHub":state.settings.provider==="apimira"?"ApiMira":"ModelProxy")
             +" для платного запроса?";
           if(!confirm(message))return;
           approvedSnapshot=marker;
@@ -858,7 +860,7 @@ document.addEventListener("submit",async(e)=>{
   if(e.target.id==="f-settings"){e.preventDefault();const fd=new FormData(e.target);
     const url=safeEndpoint(String(fd.get("endpoint")||""));if(!url)return notice("Неверный адрес Ollama.");
     const provider=String(fd.get("provider")||"ollama");
-    if(!["ollama","modelproxy","bothub"].includes(provider))return notice("Неверный провайдер.");
+    if(!["ollama","modelproxy","bothub","apimira"].includes(provider))return notice("Неверный провайдер.");
     const workerRaw=String(fd.get("workerUrl")||"").trim();
     const workerUrl=workerRaw?safeWorkerEndpoint(workerRaw):"";
     if(workerRaw&&!workerUrl)return notice("Неверный HTTPS-адрес Cloudflare Worker.");
@@ -869,12 +871,21 @@ document.addEventListener("submit",async(e)=>{
     state.settings.globalInstruction=String(fd.get("globalInstruction")||"").slice(0,8000);
     state.settings.context=Number(fd.get("context"))||4096;
     state.theme=String(fd.get("theme"))||"auto";
-    connectOk=false;connectText=provider==="modelproxy"?"ModelProxy Opus: проверь шлюз в настройках":provider==="bothub"?"BotHub: проверь шлюз в настройках":"Ollama: проверь соединение";
+    connectOk=false;connectText=provider==="modelproxy"?"ModelProxy Opus: проверь шлюз в настройках":provider==="bothub"?"BotHub: проверь шлюз в настройках":provider==="apimira"?"ApiMira: проверь шлюз в настройках":"Ollama: проверь соединение";
     await save();render();notice("Настройки сохранены.");}
 });
 document.addEventListener("change",async(e)=>{
-  if(e.target.id==="f-provider"){
-    const row=$("#f-bothub-model-row");if(row)row.hidden=e.target.value!=="bothub";
+  if(e.target.id==="f-provider"||e.target.id==="f-bothub-model"){
+    const provider=$("#f-provider")?.value||"bothub";
+    const model=$("#f-bothub-model")?.value||"claude-opus-5.5";
+    if(!["ollama","modelproxy","bothub","apimira"].includes(provider) ||
+       !["claude-sonnet-5.5","claude-opus-5.5"].includes(model))return;
+    state.settings.provider=provider;state.settings.bothubModel=model;
+    connectOk=false;connectText=activeProviderLabel()+" · не проверено";
+    await save();
+    const row=$("#f-bothub-model-row");if(row)row.hidden=provider!=="bothub";
+    const status=$("#f-test-status");if(status)status.textContent="Модель сохранена. Проверка не запускает платную генерацию.";
+    renderHeader();
     return;
   }
   if(e.target.id==="f-writing-mode"){
