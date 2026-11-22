@@ -110,7 +110,7 @@ test("model picked in chat/settings persists immediately, never silently uses Ol
   const [app,css]=await Promise.all([load("../ai/app.js"),load("../ai/style.css")]);
   assert.match(app,/id="f-chat-model"/);
   assert.match(app,/chatModelOptions\(\)/);
-  assert.match(app,/value==="bothub:claude-opus-5\.5"/);
+  assert.match(app,/\["bothub:claude-opus-5\.5","Opus 5\.5 · BotHub"\]/);
   assert.match(app,/if\(e\.target\.id==="f-chat-model"\)/);
   assert.match(app,/if\(e\.target\.id==="f-provider"\|\|e\.target\.id==="f-bothub-model"\)/);
   assert.match(app,/async function activateModel\(provider, model\)/);
