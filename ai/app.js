@@ -192,6 +192,15 @@ const activeBotHubModel=()=>state.settings.bothubModel==="claude-opus-5.5"?"clau
 const activeClaudeName=()=>activeBotHubModel()==="claude-opus-5.5"?"Claude Opus 5.5":"Claude Sonnet 5.5";
 const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":
   state.settings.provider==="bothub"?activeClaudeName()+" · BotHub":state.settings.provider==="apimira"?"Claude Opus 5.5 · ApiMira":"Локальная Qwen · Ollama";
+const currentModelChoice=()=>state.settings.provider==="bothub"?
+  "bothub:"+activeBotHubModel():state.settings.provider;
+const modelChoices=()=>[
+  ["bothub:claude-opus-5.5","Opus 5.5 · BotHub"],
+  ["bothub:claude-sonnet-5.5","Sonnet 5.5 · BotHub"],
+  ["apimira","Opus 5.5 · ApiMira"],
+  ["modelproxy","Opus 5.5 · ModelProxy"],
+  ["ollama","Qwen · локально"]
+].map(([id,label])=>'<option value="'+id+'" '+(currentModelChoice()===id?"selected":"")+'>'+label+'</option>').join("");
 function renderChat(){
   const c=chat();
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
@@ -238,6 +247,8 @@ function renderChat(){
     '</div>'+
     '<form id="f-chat-form" class="f-compose">'+
       '<div class="f-compose-surface"><div class="f-writing-bar">'+
+      '<label class="f-compact-label" for="f-quick-model">Модель</label>'+
+      '<select id="f-quick-model" class="f-select f-quick-model" aria-label="Модель для следующего ответа" '+(busy?"disabled":"")+'>'+modelChoices()+'</select>'+
       '<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
       '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
       '<span class="f-compose-canon">'+(p?.masterBookId?"MCP Мастерская · автоматически":p?"Инструкции проекта":"Обычный чат")+'</span>'+
@@ -867,6 +878,21 @@ document.addEventListener("submit",async(e)=>{
     await save();render();notice("Настройки сохранены.");}
 });
 document.addEventListener("change",async(e)=>{
+  if(e.target.id==="f-quick-model"){
+    const val=String(e.target.value||"");
+    const provider=val.startsWith("bothub:")?"bothub":val;
+    if(!["bothub","apimira","modelproxy","ollama"].includes(provider))return;
+    if(provider==="bothub"){
+      const model=val.slice(7);
+      if(!["claude-opus-5.5","claude-sonnet-5.5"].includes(model))return;
+      state.settings.bothubModel=model;
+    }
+    state.settings.provider=provider;
+    const input=$("#f-message-input");
+    if(input){if(!state.drafts)state.drafts={};state.drafts[draftKey()]=input.value;}
+    connectOk=false;connectText="Модель выбрана · "+activeProviderLabel();
+    await save();render();return;
+  }
   if(e.target.id==="f-provider"||e.target.id==="f-bothub-model"){
     const provider=$("#f-provider")?.value||"bothub";
     const model=$("#f-bothub-model")?.value||"claude-opus-5.5";
