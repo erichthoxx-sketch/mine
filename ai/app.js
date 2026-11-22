@@ -728,7 +728,7 @@ async function readTextFile(file){
   return file.text();
 }
 document.addEventListener("click",async(e)=>{
-  const nav=e.target.closest("[data-nav]");if(nav){tab=nav.dataset.nav;render();return;}
+  const nav=e.target.closest("[data-nav]");if(nav){tab=nav.dataset.nav;if(tab==="projects")projectHomeId=null;render();return;}
   const b=e.target.closest("[data-action]");if(!b)return;
   const a=b.dataset.action,id=b.dataset.id;
   if(a==="theme"){state.theme=state.theme==="auto"?"light":state.theme==="light"?"dark":"auto";save();render();}
@@ -758,7 +758,23 @@ document.addEventListener("click",async(e)=>{
     state.activeProjectId=p.id;state.activeChatId=null;await save();render();notice("Книга «"+p.name+"» связана с Freitag AI.");
   }
   if(a==="edit-active-project"){const selected=project(chat()?.projectId||state.activeProjectId);if(selected)await editProject(selected.id);}
-  if(a==="open-project"){state.activeProjectId=id;state.activeChatId=null;pendingMode=null;await save();tab="chat";render();}
+  if(a==="sync-current-book"){
+    const p=project(id);
+    if(!p?.masterBookId)return notice("Сначала свяжи проект с книгой Мастерской.");
+    try{
+      // Explicit one-off Google Docs refresh; never during normal chat Send.
+      await ensureDriveAccess(p.masterBookId);
+      const token=await master.idToken();
+      const gateway=claudeGateway(state.settings.workerUrl);
+      if(!gateway)throw Error("Не найден API-шлюз.");
+      const {status,canon}=await refreshLinkedBook({bookId:p.masterBookId,gateway,idToken:token});
+      p.masterCanon=canon;p.masterSyncedAt=status.updatedAt;
+      await save();render();notice("Google Docs обновлен в Мастерской. Чатов и данных проекта не меняли.");
+    }catch(err){notice("Обновление Google Docs: "+err.message);}
+  }
+  if(a==="open-project"||a==="project-home"){projectHomeId=id;state.activeProjectId=id;tab="projects";await save();render();}
+  if(a==="projects-back"){projectHomeId=null;tab="projects";render();}
+  if(a==="new-project-chat"){state.activeProjectId=id;state.activeChatId=null;projectHomeId=null;pendingMode=null;await save();tab="chat";render();$("#f-message-input")?.focus();}
   if(a==="delete-project"){const p=project(id);if(!p||!confirm("Удалить проект «"+p.name+"» и все его чаты и материалы?"))return;
     state.projects=state.projects.filter(x=>x.id!==id);state.chats=state.chats.filter(x=>x.projectId!==id);state.docs=state.docs.filter(x=>x.projectId!==id);
     if(state.activeProjectId===id){state.activeProjectId=null;state.activeChatId=null;}await save();render();}
@@ -816,6 +832,18 @@ document.addEventListener("click",async(e)=>{
 });
 document.addEventListener("submit",async(e)=>{
   if(e.target.id==="f-chat-form"){e.preventDefault();const inp=$("#f-message-input"),val=inp?.value||"";if(!val.trim())return;await sendMessage(val);}
+  if(e.target.id==="f-project-instructions"){
+    e.preventDefault();
+    const p=project(e.target.dataset.projectId);
+    if(!p)return;
+    const fd=new FormData(e.target);
+    p.instruction=String(fd.get("instruction")||"").slice(0,20000);
+    p.voice=String(fd.get("voice")||"").slice(0,20000);
+    p.canon=String(fd.get("canon")||"").slice(0,40000);
+    p.scene=String(fd.get("scene")||"").slice(0,20000);
+    await save();notice("Твои инструкции сохранены в проекте.");
+    return;
+  }
   if(e.target.id==="f-master-auth"){
     e.preventDefault();const fd=new FormData(e.target);const password=String(fd.get("password")||"");
     try{await master.login(String(fd.get("email")||"").trim(),password);render();notice("Мастерская подключена. Книги доступны только для чтения.");}
