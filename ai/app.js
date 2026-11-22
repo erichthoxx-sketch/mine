@@ -79,6 +79,8 @@ function renderHeader(){
   $("#status-dot").className="f-status-dot"+(connectOk?" on":connectText==="Нет соединения"?" bad":"");
 }
 function render(){
+  // Chat gets the full available viewport; other pages remain document-scrolled.
+  document.documentElement.classList.toggle("f-chat-mode",tab==="chat");
   setTheme();renderHeader();renderSidebar();
   if(tab==="projects")return projectHomeId?renderProjectHome():renderProjects();
   if(tab==="knowledge")return renderKnowledge();
@@ -254,7 +256,7 @@ function renderChat(){
       '<span class="f-compose-canon">'+(p?.masterBookId?"MCP Мастерская · автоматически":p?"Инструкции проекта":"Обычный чат")+'</span>'+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
-      '<textarea class="f-textarea" id="f-message-input" rows="4" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'>'+esc(state.drafts?.[draftKey()]||"")+'</textarea>'+
+      '<textarea class="f-textarea" id="f-message-input" rows="2" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'>'+esc(state.drafts?.[draftKey()]||"")+'</textarea>'+
       '<div class="f-compose-controls">'+
       '<span class="f-mini" title="'+esc(connectText)+'">'+esc(activeProviderLabel())+
       (connectOk?' · подключено':"")+'</span>'+
@@ -267,7 +269,17 @@ function renderChat(){
       '<button type="button" class="f-btn" data-action="open-settings">Настройки модели</button></div>'+
       '<p class="f-muted">Текст отправляется выбранной модели только после нажатия «Отправить». Проектные материалы сохраняются в браузере.</p></details>'+
     '</form></section>';
-  if(c?.messages?.length)$("#f-messages")?.lastElementChild?.scrollIntoView({block:"nearest"});
+  const historyEl=$("#f-messages");
+  if(historyEl&&c?.messages?.length)historyEl.scrollTop=historyEl.scrollHeight;
+  resizeChatInput($("#f-message-input"));
+}
+// Keep the input one/two lines tall for ordinary prompts. Grow only when typed
+// content needs it, and cap height so the reader's conversation stays visible.
+function resizeChatInput(input){
+  if(!input)return;
+  input.style.height="auto";
+  const cap=Math.max(44,Math.floor(window.innerHeight*(window.innerWidth<=760?.27:.34)));
+  input.style.height=Math.min(input.scrollHeight,cap)+"px";
 }
 function ensureChat(){
   if(chat())return chat();
@@ -931,7 +943,10 @@ document.addEventListener("change",async(e)=>{
   }
 });
 document.addEventListener("input",e=>{
-  if(e.target.id==="f-message-input")rememberDraft(e.target.value);
+  if(e.target.id==="f-message-input"){
+    resizeChatInput(e.target);
+    rememberDraft(e.target.value);
+  }
 });
 document.addEventListener("keydown",e=>{
   if(e.target.id==="f-message-input"&&e.key==="Enter"&&(e.ctrlKey||e.metaKey)&&!e.isComposing){
