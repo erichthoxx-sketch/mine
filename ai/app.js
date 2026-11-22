@@ -72,7 +72,7 @@ function render(){
   renderChat();
 }
 function renderProjects(){
-  $("#panel").innerHTML='<div class="f-content">'+titleLine("Проекты","Для каждого романа — свои инструкции, материалы и чаты.",
+  $("#panel").innerHTML='<div class="f-content">'+titleLine("Мои книги","Канон, стиль и диалоги — отдельно для каждой истории.",
     '<button class="f-btn primary" data-action="add-project">+ Новый проект</button>')+
     (state.projects.length?'<div class="f-projects">'+state.projects.map(p=>{
       const count=state.chats.filter(c=>c.projectId===p.id).length;
@@ -95,7 +95,7 @@ function renderProjects(){
 function renderKnowledge(){
   const docs=state.docs.filter(d=>!state.activeProjectId||d.projectId===state.activeProjectId);
   const examples=state.feedback.filter(f=>!state.activeProjectId||f.projectId===state.activeProjectId).slice().reverse();
-  $("#panel").innerHTML='<div class="f-content">'+titleLine("Знания","Материалы романов и твоя личная школа письма.")+
+  $("#panel").innerHTML='<div class="f-content">'+titleLine("Материалы","Тексты, заметки и авторские образцы."+
   '<div class="f-notice">Канон из «Мастерской» и загруженные главы — источники. Авторские образцы и замечания — правила стиля. Ни один из этих материалов сам по себе не меняет веса модели.</div>'+
   '<div class="f-section"><label class="f-label">Проект</label><select class="f-select" id="f-doc-project"><option value="">Выбери проект</option>'+
     state.projects.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===state.activeProjectId?"selected":"")+'>'+esc(p.name)+'</option>').join("")+'</select></div>'+
@@ -112,39 +112,58 @@ function renderKnowledge(){
 }
 function renderSettings(){
   const s=state.settings;
-  $("#panel").innerHTML='<div class="f-content">'+titleLine("Настройки","Ollama или Claude Opus 5.5 через защищенный шлюз ModelProxy.")+
-  '<form id="f-settings" class="f-form"><div class="f-section"><h2>Модель для ответов</h2>'+
-  '<label for="f-provider">Провайдер</label><select id="f-provider" name="provider" class="f-select">'+
-  [["ollama","Локальная Ollama"],["modelproxy","Claude Opus 5.5 через ModelProxy"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===(s.provider||"ollama")?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
-  '<label for="f-worker">Адрес личного Cloudflare Worker для Claude</label>'+
-  '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
-  '<p class="f-muted">Тестовая версия автоматически использует защищенное подключение на этом же адресе, без прямых запросов браузера к Worker. API-ключ хранится только в Cloudflare. Для Claude нужен вход в «Мастерскую».</p>'+
-  '</div><div class="f-section"><h2>Подключение Ollama</h2>'+
-  '<label for="f-endpoint">Адрес Ollama на этом компьютере</label><input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
-  '<label for="f-model">Модель</label><input id="f-model" class="f-text-field" name="model" list="f-model-list" value="'+esc(s.model)+'" required><datalist id="f-model-list"></datalist>'+
-  '<div class="f-row" style="margin-top:14px"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button><button type="submit" class="f-btn primary">Сохранить</button></div>'+
-  '<p id="f-test-status" class="f-muted">Для ответов требуется запущенная Ollama на этом компьютере. На телефоне localhost означает телефон, а не ноутбук.</p>'+
-  '<details class="f-notice f-connection-help" open><summary>Как включить доступ к Ollama с этого сайта</summary>'+
-  '<p>Freitag AI работает через HTTPS, а Ollama запущена на ноутбуке. Для связи нужны два разрешения:</p>'+
-  '<p><b>1.</b> В PowerShell выполни команду ниже. Она разрешит доступ только сайту <code>'+esc(location.origin)+'</code>, а не всем сайтам:</p>'+
-  '<code class="f-command">'+esc(originsCommand())+'</code>'+
-  '<button type="button" class="f-btn" data-action="copy-origins">Копировать команду</button>'+
-  '<p><b>2.</b> Полностью закрой Ollama через значок в области уведомлений Windows (Quit), затем открой Ollama заново.</p>'+
-  '<p><b>3.</b> Нажми «Проверить соединение» выше. Если Chrome спросит разрешение на доступ к локальному устройству или сети, разреши его для Freitag AI.</p>'+
-  '<p>Ollama остаётся доступной только на этом компьютере; публичный порт открывать не нужно.</p></details></div>'+
-  '<div class="f-section"><h2>Поведение модели</h2><label for="f-global">Общая инструкция</label>'+
-  '<textarea id="f-global" name="globalInstruction" class="f-textarea">'+esc(s.globalInstruction)+'</textarea>'+
-  '<label for="f-context">Контекст</label><select id="f-context" name="context" class="f-select">'+
-  [2048,4096,8192].map(n=>'<option value="'+n+'" '+(n===s.context?"selected":"")+'>'+n+' токенов</option>').join("")+'</select>'+
-  '<p class="f-muted">Этот лимит относится к локальной Ollama; Claude использует отдельные настройки.</p></div>'+
-  '<div class="f-section"><h2>Внешний вид</h2><label for="f-theme">Тема</label><select id="f-theme" class="f-select" name="theme">'+
-  [["auto","Как в системе"],["light","Светлая"],["dark","Темная"]].map(x=>'<option value="'+x[0]+'" '+(x[0]===state.theme?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></div>'+
-  '<div class="f-section"><h2>Моя литературная память</h2><p class="f-muted">Одобренных ответов: '+state.feedback.filter(x=>x.kind==="good").length+
-  ' · Отклонённых: '+state.feedback.filter(x=>x.kind==="bad").length+'. Сохраняй примеры после редактирования: это материал для будущего дообучения. Примеры входят в JSON-архив.</p></div>'+
-  '<div class="f-section"><h2>Мои данные и резервные копии</h2><p class="f-muted">Можно сохранить проекты, канон и авторские примеры в твой Firebase. Сохранение и восстановление запускаются только по твоей команде. Чаты пока входят в полный JSON-экспорт и не синхронизируются автоматически.</p>'+
-  '<div class="f-row"><button type="button" class="f-btn" data-action="cloud-save">Сохранить память в Firebase</button>'+
-  '<button type="button" class="f-btn" data-action="cloud-load">Восстановить память из Firebase</button></div>'+
-  '<div class="f-row"><button type="button" class="f-btn" data-action="export">Скачать архив JSON</button><label class="f-btn f-file-label">Импортировать JSON<input id="f-import" type="file" accept=".json,application/json" hidden></label></div></div></form></div>';
+  const provider=s.provider||"ollama";
+  $("#panel").innerHTML=
+    '<div class="f-content f-settings-page">'+
+    titleLine("Настройки","Все необходимое для работы. Технические параметры — в дополнительных разделах.")+
+    '<form id="f-settings" class="f-form">'+
+    '<section class="f-settings-card"><div class="f-section-kicker">01 / МОДЕЛЬ</div>'+
+    '<h2>Кто отвечает</h2><p class="f-muted">Выбери модель для новых сообщений. Существующие чаты останутся на месте.</p>'+
+    '<label for="f-provider">Модель</label><select id="f-provider" name="provider" class="f-select">'+
+    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"]].map(x=>
+      '<option value="'+x[0]+'" '+(x[0]===provider?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
+    '<div class="f-row f-connection-row"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button>'+
+    '<span id="f-test-status" class="f-muted" role="status">Проверка не выполняет платную генерацию.</span></div>'+
+    '<details class="f-settings-fold"><summary>Адрес шлюза ModelProxy</summary>'+
+    '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
+    '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
+    '<p class="f-muted">В тестовой версии на Cloudflare Pages шлюз выбирается автоматически. Секретный API-ключ вводится только в Cloudflare, не здесь.</p></div></details>'+
+    '<details class="f-settings-fold"><summary>Локальная Ollama · дополнительные настройки</summary>'+
+    '<div class="f-fold-body"><label for="f-endpoint">Адрес Ollama</label>'+
+    '<input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
+    '<label for="f-model">Название локальной модели</label>'+
+    '<input id="f-model" class="f-text-field" name="model" list="f-model-list" value="'+esc(s.model)+'" required><datalist id="f-model-list"></datalist>'+
+    '<label for="f-context">Контекст локальной модели</label>'+
+    '<select id="f-context" name="context" class="f-select">'+
+    [2048,4096,8192].map(n=>'<option value="'+n+'" '+(n===s.context?"selected":"")+'>'+n+' токенов</option>').join("")+'</select>'+
+    '<details class="f-settings-fold f-connection-help"><summary>Инструкция по подключению на Windows</summary>'+
+    '<div class="f-fold-body"><p>Разреши Ollama принимать запросы с этого адреса, затем перезапусти Ollama.</p>'+
+    '<code class="f-command">'+esc(originsCommand())+'</code>'+
+    '<button type="button" class="f-btn" data-action="copy-origins">Скопировать команду</button>'+
+    '<p class="f-muted">На телефоне localhost не подключается к Ollama, установленной на компьютере.</p></div></details>'+
+    '</div></details></section>'+
+    '<section class="f-settings-card"><div class="f-section-kicker">02 / ПИСЬМО</div>'+
+    '<h2>Как работать с текстом</h2>'+
+    '<label for="f-global">Общая инструкция</label>'+
+    '<textarea id="f-global" name="globalInstruction" class="f-textarea f-instruction" rows="5">'+esc(s.globalInstruction)+'</textarea>'+
+    '<p class="f-muted">Настройки конкретной книги и ее канон задаются в разделе «Книги».</p></section>'+
+    '<section class="f-settings-card"><div class="f-section-kicker">03 / ИНТЕРФЕЙС</div>'+
+    '<h2>Оформление</h2><label for="f-theme">Цветовая тема</label>'+
+    '<select id="f-theme" class="f-select" name="theme">'+
+    [["auto","Как в системе"],["light","Светлая"],["dark","Темная"]].map(x=>
+      '<option value="'+x[0]+'" '+(x[0]===state.theme?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></section>'+
+    '<details class="f-settings-card f-settings-storage"><summary>Резервные копии и мои данные</summary>'+
+    '<div class="f-fold-body">'+
+    '<p class="f-muted">Чаты и заметки хранятся в этом браузере. Полный JSON-архив можно скачать. Память проектов и образцы можно вручную сохранить в Firebase.</p>'+
+    '<p class="f-muted">Принятых образцов: '+state.feedback.filter(x=>x.kind==="good").length+
+    ' · отклоненных: '+state.feedback.filter(x=>x.kind==="bad").length+'</p>'+
+    '<div class="f-row"><button type="button" class="f-btn" data-action="export">Скачать архив JSON</button>'+
+    '<label class="f-btn f-file-label">Импортировать JSON<input id="f-import" type="file" accept=".json,application/json" hidden></label></div>'+
+    '<div class="f-row"><button type="button" class="f-btn" data-action="cloud-save">Сохранить память в Firebase</button>'+
+    '<button type="button" class="f-btn" data-action="cloud-load">Восстановить из Firebase</button></div>'+
+    '</div></details>'+
+    '<div class="f-settings-save"><button type="submit" class="f-btn primary">Сохранить настройки</button></div>'+
+    '</form></div>';
 }
 const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":"Локальная Qwen · Ollama";
 function renderChat(){
