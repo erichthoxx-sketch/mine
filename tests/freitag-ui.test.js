@@ -106,3 +106,22 @@ test("Google Docs refresh is optional; normal Opus MCP messages do not reauthori
   assert.match(worker,/if\(input\.sourceRevision\)/);
   assert.match(worker,/path === "\/refresh-book"/);
 });
+
+test("chat uses full viewport height and scrolls messages inside it, not whole page",async()=>{
+  const css=await load("../ai/style.css");
+  const app=await load("../ai/app.js");
+  for(const cssRule of [
+    "html.app-freitag.f-chat-mode #app",
+    "height:100dvh",
+    "html.app-freitag.f-chat-mode .f-chat-body",
+    "overflow-y:auto",
+    "html.app-freitag.f-chat-mode .f-compose textarea.f-textarea",
+    "height:48px",
+    "min-height:0"
+  ])assert.ok(css.includes(cssRule),cssRule);
+  assert.match(app,/classList\.toggle\("f-chat-mode",tab==="chat"\)/);
+  assert.match(app,/id="f-message-input" rows="2"/);
+  assert.match(app,/resizeChatInput\(e\.target\)/);
+  assert.match(app,/historyEl\.scrollTop=historyEl\.scrollHeight/);
+  assert.doesNotMatch(app,/lastElementChild\?\.scrollIntoView/);
+});
