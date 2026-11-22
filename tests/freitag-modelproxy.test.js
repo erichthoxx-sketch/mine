@@ -401,6 +401,16 @@ test("book project uses the exact large master instruction and verbatim long cha
     {role:"system",content:masterPrompt},
     {role:"user",content:chapterPrompt}
   ]);
+  // Retrying a timed-out chapter should NOT duplicate the expensive prompt.
+  const retried=fn({projectId:"book-1",messages:[
+    {role:"user",content:chapterPrompt},
+    {role:"assistant",content:"Ошибка Claude: HTTP 502: BotHub вернул HTTP 524."},
+    {role:"user",content:chapterPrompt}
+  ]});
+  assert.deepEqual(retried,[
+    {role:"system",content:masterPrompt},
+    {role:"user",content:chapterPrompt}
+  ]);
   assert.match(app,/p\.instruction=String\(fd\.get\("instruction"\)\|\|""\);/);
   assert.doesNotMatch(source,/slice\(0,26000\)|slice\(0,20000\)|slice\(0,6000\)/);
   assert.match(app,/if\(c\.projectId && !c\.mode\) c\.mode="draft"/);
