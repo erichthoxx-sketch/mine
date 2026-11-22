@@ -208,7 +208,9 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     const lastBookCall=JSON.parse(calls.at(-1).init.body);
     assert.match(lastBookCall.messages[1].content,/Выбранная книга: test/);
     assert.equal(lastBookCall.stream,false);
-    assert.equal(lastBookCall.tools.length,4);
+    assert.deepEqual(lastBookCall.tools.map(t=>t.function.name),
+      ["list_books","read_chapter"]);
+    assert.ok(!lastBookCall.tools.some(t=>["get_income_overview","get_direct_live"].includes(t.function.name)));
     const beforeToolCalls=calls.length;
     const toolResponse=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
@@ -236,6 +238,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     const bothubPayload=JSON.parse(botCall.init.body);
     assert.equal(bothubPayload.model,"claude-sonnet-5.5");
     assert.equal(bothubPayload.stream,false);
+    assert.equal(bothubPayload.tools,undefined,"ordinary chat must not carry 18 MCP tool schemas");
     const opus=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",messages:[{role:"user",content:"Тест Opus"}]})
@@ -281,6 +284,15 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(rejected.status,424);
     assert.equal(calls.filter(c=>String(c.input)==="https://masterskaya-ai.erichtho-xx.workers.dev/mcp" &&
       JSON.parse(c.init.body).method==="tools/call").length,beforeWrite);
+    // Plain greeting with a selected book must NOT send the full MCP schema.
+    const greeting=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
+        bookId:"test",messages:[{role:"user",content:"Привет!"}]})
+    }),env);
+    assert.equal(greeting.status,200);
+    const lastGreetingCall=calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).at(-1);
+    assert.equal(JSON.parse(lastGreetingCall.init.body).tools,undefined);
     const mcpList=await gateway.fetch(new Request(url("mcp-tools"),{headers}),env);
     assert.equal(mcpList.status,200);
     const mcpData=await mcpList.json();
