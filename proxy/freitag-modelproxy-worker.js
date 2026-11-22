@@ -342,8 +342,8 @@ async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxToke
   const recentUser=String([...messages].reverse().find(m=>m.role==="user")?.content||"");
   // Only discover MCP tool schemas when the task actually needs source data.
   const willNeedTools=bookId || /(?:книг|роман|глав|сюжет|героин|геро|канон|рукопис|персонаж|сцен|пролог|напис|продолж|доход|выруч|продаж|покуп|конверс|подпис|литнет|рентабельност|кохорт|читател|прочтен|директ|метрик|реклам|кампани|таргет|маркетинг|ctr|cpc|клик|трафик|расход)/i.test(recentUser);
-  const authorChapter=mode==="draft"&&!!bookId;
-  const bookSources=authorChapter?await draftBookSources(env,bookId,messages):"";
+  const authorChapter=mode==="draft";
+  const bookSources=authorChapter&&bookId?await draftBookSources(env,bookId,messages):"";
   // Chapter writing uses exactly ONE paid model call, without tool schemas.
   // Other chat modes retain interactive read-only MCP tool calling.
   const catalog=willNeedTools&&!authorChapter?await mcpDiscover(env):[];
@@ -379,7 +379,8 @@ async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxToke
       if(upstream.status===402)return fail(req,402,provider.name+": недостаточный баланс или резерв.");
       if(upstream.status===429)return fail(req,429,provider.name+": превышен лимит.");
       return fail(req,upstream.status>=400&&upstream.status<500?upstream.status:502,
-        provider.name+" вернул HTTP "+upstream.status+".");
+        provider.name+" вернул HTTP "+upstream.status+ (upstream.status===524?
+          ": тайм-аут на стороне API-провайдера. Автоматического повтора и второго платного запроса не было.":"."));
     }
     if(authorChapter){
       // BotHub documents streamed OpenAI-compatible completions for Opus 5.5.
@@ -527,9 +528,14 @@ async function generate(req, env) {
     return fail(req, 400, "Эта модель BotHub не разрешена.");
   if(input.provider==="apimira" && model!=="anthropic/claude-opus-5.5")
     return fail(req,400,"Эта модель ApiMira не разрешена.");
-  const messages = entries.map(x => ({ role: x.role, content: x.content }));
+  const lastMessage=entries.at(-1);
+  const greeting=lastMessage?.role==="user" && /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый (?:день|вечер)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(lastMessage.content.trim());
+  // A greeting in an open manuscript project must not bill the full master
+  // prompt, long chat history, canon or 14k-token chapter allocation.
+  const messages = greeting?[{role:"user",content:lastMessage.content}]:
+    entries.map(x => ({ role: x.role, content: x.content }));
   const useMcp=mcpConfigured(env);
-  if(input.bookId){
+  if(input.bookId&&!greeting){
     try{
       if(!/^[a-z0-9_-]{1,100}$/i.test(input.bookId))
         throw Error("Некорректный ID выбранной книги.");
@@ -564,17 +570,17 @@ async function generate(req, env) {
       }
     }catch(e){return fail(req,424,e.message);}
   }
-  const isDraft = input.mode === "draft";
+  const isDraft = input.mode === "draft" && !greeting;
   // Author explicitly chooses a ceiling for paid long-form writing. A higher
   // ceiling permits a full chapter; it never starts automatic continuations.
   // Reject arbitrary values rather than letting the browser request unlimited output.
   const requestedDraftLimit=Number(input.outputTokenLimit||4500);
   if(isDraft && ![4500,9000,14000].includes(requestedDraftLimit))
     return fail(req,400,"Недопустимый лимит ответа. Выбери 4500, 9000 или 14000.");
-  const maxTokens=isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
+  const maxTokens=greeting?128:isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
   if(useMcp){
     try{return await mcpToolsCompletion(req,env,provider,model,messages,
-      input.bookId||"",maxTokens,input.mode);}
+      greeting?"":(input.bookId||""),maxTokens,greeting?"dialog":input.mode);}
     catch(e){return fail(req,502,"MCP: "+e.message);}
   }
   const body = {
