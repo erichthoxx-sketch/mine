@@ -95,7 +95,7 @@ async function mcpTool(env, name, args) {
   return result;
 }
 
-async function getBookMaterial(env, id, mode = "dialog") {
+async function getBookMaterial(env, id, mode = "dialog", requiredRevision = "") {
   if (!/^[a-z0-9_-]{1,100}$/i.test(id)) throw Error("Неверный ID книги.");
   // Canon check uses a smaller, affordable context; literary drafting uses
   // more of the book. Neither ever sends the entire archive by accident.
@@ -113,6 +113,8 @@ async function getBookMaterial(env, id, mode = "dialog") {
     const book = await env.BOOKS.get("book:" + id, { type: "json" });
     if (!book || !Array.isArray(book.chapters) || typeof book.context !== "string")
       throw Error("Книга не найдена в снимках Мастерской. Обнови синхронизацию.");
+    if (requiredRevision && book.updatedAt !== requiredRevision)
+      throw Error("Обновление Google Docs еще не видно в Cloudflare. Платный запрос остановлен; повтори отправку.");
     const updated = Date.parse(book.updatedAt || "");
     const maxAge = Number(env.MAX_SNAPSHOT_HOURS || 168) * 3600000;
     if (!Number.isFinite(updated) || Date.now() - updated > maxAge ||
@@ -128,6 +130,8 @@ async function getBookMaterial(env, id, mode = "dialog") {
         " — " + (ch.title || "") + "\n" + String(ch.text || "").slice(0, budget.chapter))
     ].join("\n\n").slice(0, 180000);
   }
+  if (requiredRevision)
+    throw Error("Для автоматического чтения книги нужен Cloudflare KV binding BOOKS.");
   // Current snapshots in MCP are read-only. The client never receives the MCP access key.
   const [context, listRaw] = await Promise.all([
     mcpTool(env, "get_book_context", { book_id: id }),
@@ -153,6 +157,55 @@ async function getBookMaterial(env, id, mode = "dialog") {
     ...chapters.map(ch => "Глава " + ch.chapter + " — " + ch.title + "\n" +
       ch.text + (ch.nextOffset !== null ? "\n[Глава длиннее 30 тыс. знаков; требуется дочитать]" : ""))
   ].join("\n\n").slice(0, 180000);
+}
+
+// Owner-only automatic refresh. The client reads a fresh Google Doc with its
+// own Google OAuth session and publishes only the chosen book into the SAME KV
+// namespace as the existing read-only MCP server. No API keys or Google tokens
+// are stored here, and the original manuscript is never changed.
+async function refreshBook(req, env) {
+  if (!await verifyOwner(req, env))
+    return fail(req, 401, "Требуется вход владельца в Мастерскую.");
+  if (!env.BOOKS || typeof env.BOOKS.put !== "function")
+    return fail(req, 503, "Cloudflare KV BOOKS не привязан к Freitag AI.");
+  const raw = await req.text();
+  if (utf8(raw).length > 8_000_000)
+    return fail(req, 413, "Рукопись слишком велика для одного обновления.");
+  let incoming;
+  try { incoming = JSON.parse(raw); }
+  catch { return fail(req, 400, "Неверный формат рукописи."); }
+  const id = incoming?.id, title = incoming?.title, context = incoming?.context;
+  const chapters = incoming?.chapters;
+  if (typeof id !== "string" || !/^[a-z0-9_-]{1,100}$/i.test(id) ||
+      typeof title !== "string" || !title.trim() || title.length > 300 ||
+      typeof context !== "string" || !context.trim() || context.length > 300_000 ||
+      !Array.isArray(chapters) || chapters.length < 1 || chapters.length > 300 ||
+      chapters.some(ch => !ch || typeof ch.title !== "string" ||
+        !ch.title.trim() || ch.title.length > 250 ||
+        typeof ch.text !== "string" || ch.text.length > 400_000) ||
+      !chapters.some(ch => ch.text.trim()))
+    return fail(req, 400, "Снимок книги неполон или содержит недопустимые поля.");
+  const sourceAt = Date.parse(incoming.generatedAt || "");
+  if (!Number.isFinite(sourceAt) || Math.abs(Date.now() - sourceAt) > 5 * 60_000)
+    return fail(req, 409, "Снимок Google Docs уже устарел. Обнови страницу и повтори.");
+  const updatedAt = new Date().toISOString();
+  const clean = {
+    id, title: title.trim(), context,
+    chapters: chapters.map(ch => ({ title: ch.title, text: ch.text })),
+    updatedAt
+  };
+  try {
+    await env.BOOKS.put("book:" + id, JSON.stringify(clean), {
+      metadata: { id, title: clean.title, updatedAt, chapters: chapters.length }
+    });
+  } catch { return fail(req, 502, "Не удалось сохранить обновленный канон в Cloudflare."); }
+  return json(req, 200, {
+    ok: true, title: clean.title, updatedAt, chapterCount: chapters.length,
+    lastChapters: chapters.slice(-4).map((ch, i) => ({
+      slot: chapters.length - Math.min(4, chapters.length) + i + 1,
+      title: ch.title.slice(0, 100)
+    }))
+  });
 }
 
 // Free read-only preflight: allows the author to verify which manuscript chapters
@@ -204,7 +257,8 @@ async function generate(req, env) {
   const messages = entries.map(x => ({ role: x.role, content: x.content }));
   if (input.bookId) {
     try {
-      const material = await getBookMaterial(env, input.bookId, input.mode);
+      const material = await getBookMaterial(env, input.bookId, input.mode,
+        typeof input.sourceRevision === "string" ? input.sourceRevision : "");
       messages.unshift({ role: "system", content: material });
     } catch (e) { return fail(req, 424, e.message); }
   }
@@ -292,7 +346,9 @@ export default {
             modelproxy: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
             bothub: !!env.BOTHUB_API_KEY && !!env.OWNER_UID
           },
-          booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY) });
+          booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY),
+          autoSyncSupported: !!env.BOOKS && typeof env.BOOKS.put === "function" });
+      if (path === "/refresh-book" && req.method === "POST") return await refreshBook(req, env);
       if (path === "/preflight" && req.method === "GET") return await bothubPreflight(req, env);
       if (path === "/snapshot" && req.method === "GET") return await snapshotStatus(req, env);
       if (path === "/chat" && req.method === "POST") return await generate(req, env);

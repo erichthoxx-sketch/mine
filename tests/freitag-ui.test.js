@@ -13,6 +13,20 @@ test("Freitag AI navigation and branding remain accessible",async()=>{
   assert.match(html,/Рабочее пространство автора/);
 });
 
+test("Freitag AI uses the original Masterskaya bear, not placeholder F",async()=>{
+  const [html,app,css,build]=await Promise.all([
+    load("../ai/index.html"),load("../ai/app.js"),
+    load("../ai/style.css"),load("../scripts/build-apps.sh")
+  ]);
+  assert.match(html,/class="f-monogram"[^>]*><img src="\.\.\/workshop\/bear\.svg"/);
+  assert.match(app,/class="f-welcome-mark"[^>]*><img src="\.\.\/workshop\/bear\.svg"/);
+  assert.match(css,/\.f-monogram img/);
+  assert.match(css,/\.f-welcome-mark img/);
+  assert.match(build,/writer\/bear\.svg/);
+  assert.doesNotMatch(html,/aria-hidden="true">F\.<\/span>/);
+  assert.doesNotMatch(app,/aria-hidden=\\"true\\">F\.<\/span>/);
+});
+
 test("book can be changed without desktop sidebar and empty chat accepts text",async()=>{
   const app=await load("../ai/app.js");
   assert.match(app,/id="f-chat-project"/);
@@ -42,7 +56,8 @@ test("response copy, clear settings, backups and ModelProxy protection remain pr
     assert.ok(app.includes(text), "Missing behavior or form field: "+text);
   }
   assert.match(app,/health.provider!=="ModelProxy"/);
-  assert.match(app,/gateway\+"\/snapshot\?bookId="/);
+  assert.match(app,/refreshLinkedBook\(\{/);
+  assert.match(app,/sourceRevision/);
   assert.match(app,/indexedDB.open\("freitag-ai-v1",1\)/);
 });
 
@@ -75,4 +90,18 @@ test("BotHub offers a compact, persistent model choice without exposing the key 
   assert.match(app,/activeBotHubModel\(\)/);
   assert.match(app,/\/preflight\?model=/);
   assert.doesNotMatch(app,/name="BOTHUB_API_KEY"/);
+});
+
+test("fresh book must be loaded from Google Docs on every paid send, not from cached MCP snapshot",async()=>{
+  const live=await load("../ai/live-context.js");
+  const app=await load("../ai/app.js");
+  const worker=await load("../proxy/freitag-modelproxy-worker.js");
+  assert.match(live,/await master\.refresh\(\)/);
+  assert.match(live,/await bookSnapshot\(current\)/);
+  assert.match(live,/gateway \+ "\/refresh-book"/);
+  assert.match(app,/await ensureDriveAccess\(selectedBookId\)/);
+  assert.match(app,/await refreshLinkedBook\(/);
+  assert.match(worker,/path === "\/refresh-book"/);
+  assert.match(worker,/requiredRevision && book\.updatedAt !== requiredRevision/);
+  assert.doesNotMatch(app,/gateway\+"\/snapshot\?bookId="/);
 });

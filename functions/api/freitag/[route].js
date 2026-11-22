@@ -7,7 +7,8 @@ export async function onRequest(context) {
   if (!((route === "health" && method === "GET") ||
         (route === "snapshot" && method === "GET") ||
         (route === "preflight" && method === "GET") ||
-        (route === "chat" && method === "POST"))) {
+        (route === "chat" && method === "POST") ||
+        (route === "refresh-book" && method === "POST"))) {
     return Response.json({ error: "Метод не поддерживается." }, { status: 405 });
   }
   const upstream = context.env.FREITAG_GATEWAY;
@@ -20,7 +21,7 @@ export async function onRequest(context) {
   // Authorization is a short-lived Firebase ID token; Worker validates it.
   const token = context.request.headers.get("Authorization");
   if (token) headers.set("Authorization", token);
-  if (route === "chat") headers.set("Content-Type", "application/json");
+  if (method === "POST") headers.set("Content-Type", "application/json");
   // Pass the query string through for read-only snapshot status. Never include credentials in URLs.
   const query = ["snapshot", "preflight"].includes(route) ? new URL(context.request.url).search : "";
   const target = "https://freitag-opus-gateway.erichtho-xx.workers.dev/" + route + query;

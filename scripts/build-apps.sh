@@ -25,6 +25,7 @@ HTML
 cp ai/manifest.webmanifest ai/style.css "$OUT/ai/"
 cp ai/app.js "$OUT/$V/ai/app.js"
 cp ai/master-sync.js "$OUT/$V/ai/master-sync.js"
+cp ai/live-context.js "$OUT/$V/ai/live-context.js"
 sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\./style.css#./style.css?v=$V#; s#\./app.js#../$V/ai/app.js#" ai/index.html > "$OUT/ai/index.html"
 sed "s#__APPV__#$V#; s#css/style.css#$V/css/style.css#; s#js/app.js#$V/js/app.js#" index.html > "$OUT/index.html"
 sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/writer/js/app.js#" writer/index.html > "$OUT/workshop/index.html"
