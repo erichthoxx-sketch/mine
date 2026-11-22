@@ -70,6 +70,7 @@ try{
   // The dark theme must really apply after saving settings, not just appear in the menu.
   await desktop.locator("#f-theme").selectOption("dark");
   await desktop.locator('#f-settings button[type="submit"]').click();
+  await desktop.waitForFunction(() => document.documentElement.getAttribute("data-theme")==="dark",null,{timeout:7000});
   assert.equal(await desktop.locator("html").getAttribute("data-theme"),"dark");
   await desktop.screenshot({path:OUT+"/dark.png",fullPage:true});
 
