@@ -19,7 +19,7 @@ const WRITING_MODES = {
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
-  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",globalInstruction:"",context:4096}, theme:"auto"});
+  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",sceneOutputTokens:14000,globalInstruction:"",context:4096}, theme:"auto"});
 let state=blank(), tab="chat", projectHomeId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -253,8 +253,8 @@ function renderChat(){
       '<div class="f-compose-surface"><div class="f-writing-bar">'+
       '<label class="f-compact-label" for="f-quick-model">Модель</label>'+
       '<select id="f-quick-model" class="f-select f-quick-model" aria-label="Модель для следующего ответа" '+(busy?"disabled":"")+'>'+modelChoices()+'</select>'+
-      '<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
-      '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
+      (p?"":'<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
+      '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>')+
       '<span class="f-compose-canon">'+(p?.masterBookId?"MCP Мастерская · автоматически":p?"Инструкции проекта":"Обычный чат")+'</span>'+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
@@ -285,7 +285,7 @@ function resizeChatInput(input){
 }
 function ensureChat(){
   if(chat())return chat();
-  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:pendingMode||"dialog",messages:[],updated:stamp()};
+  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:pendingMode||(state.activeProjectId?"draft":"dialog"),messages:[],updated:stamp()};
   pendingMode=null;
   state.chats.unshift(c);state.activeChatId=c.id;save();return c;
 }
@@ -395,24 +395,25 @@ function pinnedExcerpt(raw,question,maxLength){
   return result.slice(0,maxLength);
 }
 function modelproxyMessages(c){
-  // Opus receives only the author's own instructions, not hidden literary
-  // persona templates or instructions about chapter numbering.
+  // Claude Projects-style workflow: one editable instruction, an unchanged
+  // full user request in every chapter chat and no injected style templates.
   const p=project(c.projectId);
-  const last=[...c.messages].reverse().find(x=>x.role==="user")?.content||"";
-  const custom=[
+  const messages=c.messages.filter(m=>m.role==="user"||m.role==="assistant");
+  const latest=messages.at(-1)?.content||"";
+  const projectInstructions=[
     userInstruction(state.settings.globalInstruction),
-    p?.instruction?userInstruction(p.instruction):"",
-    p?.voice?"Голос и стиль (указаны автором):\n"+p.voice:"",
-    p?.canon?"Дополнения к канону (указаны автором):\n"+p.canon:"",
-    p?.scene?"Текущая сцена (указана автором):\n"+p.scene:""
-  ].filter(Boolean);
-  const examples=state.feedback.filter(x=>x.projectId===c.projectId&&x.kind==="good")
-    .slice(-2).map(x=>"Пример, выбранный автором:\n"+String(x.finalText||x.answer||"").slice(0,1800));
-  const history=c.messages.filter(x=>["user","assistant"].includes(x.role)).slice(-8,-1)
-    .filter(x=>!String(x.content||"").startsWith("Ошибка Claude:"))
-    .map(x=>({role:x.role,content:String(x.content).slice(-6000)}));
-  const instructions=[...custom,...examples].join("\n\n").slice(0,26000);
-  return [...(instructions?[{role:"system",content:instructions}]:[]),...history,{role:"user",content:last}];
+    userInstruction(p?.instruction),
+    p?.voice?"Дополнительные инструкции автора о стиле:\n"+p.voice:"",
+    p?.canon?"Дополнительные сведения автора:\n"+p.canon:"",
+    p?.scene?"Заметки автора о текущей сцене:\n"+p.scene:""
+  ].filter(Boolean).join("\n\n");
+  // The original request, including an entire preceding chapter, stays intact.
+  // No truncation, excerpt selection, automatic prompt rewriting or restart.
+  // Any request that exceeds the gateway limit produces a visible error before
+  // a paid provider call rather than silently dropping author material.
+  const history=messages.slice(-7,-1).map(m=>({role:m.role,content:m.content}));
+  return [...(projectInstructions?[{role:"system",content:projectInstructions}]:[]),
+    ...history,{role:"user",content:latest}];
 }
 function buildMessages(c){
   const p=project(c.projectId),s=state.settings;
@@ -669,6 +670,7 @@ async function sendMessage(text){
   }
   const previousDraft=draftKey();
   const c=ensureChat(),msg=text.trim();
+  if(c.projectId) c.mode="draft";
   clearTimeout(draftSaveTimer);
   if(state.drafts){
     delete state.drafts[previousDraft];
@@ -691,7 +693,7 @@ async function sendMessage(text){
     const res=isPaidProvider?await fetch(gateway+"/chat",{
       method:"POST",
       headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
-      body:JSON.stringify({provider:state.settings.provider,model:state.settings.provider==="bothub"?activeBotHubModel():undefined,messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null,sourceRevision}),
+      body:JSON.stringify({provider:state.settings.provider,model:state.settings.provider==="bothub"?activeBotHubModel():undefined,messages,mode:c.mode||"dialog",outputTokenLimit:c.mode==="draft"?14000:undefined,bookId:project(c.projectId)?.masterBookId||null,sourceRevision}),
       signal:currentController.signal
     }):await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",
@@ -862,10 +864,10 @@ document.addEventListener("submit",async(e)=>{
     const p=project(e.target.dataset.projectId);
     if(!p)return;
     const fd=new FormData(e.target);
-    p.instruction=String(fd.get("instruction")||"").slice(0,20000);
-    p.voice=String(fd.get("voice")||"").slice(0,20000);
-    p.canon=String(fd.get("canon")||"").slice(0,40000);
-    p.scene=String(fd.get("scene")||"").slice(0,20000);
+    p.instruction=String(fd.get("instruction")||"");
+    p.voice=String(fd.get("voice")||"");
+    p.canon=String(fd.get("canon")||"");
+    p.scene=String(fd.get("scene")||"");
     await save();notice("Твои инструкции сохранены в проекте.");
     return;
   }
@@ -923,7 +925,14 @@ document.addEventListener("change",async(e)=>{
   if(e.target.id==="f-writing-mode"){
     if(!WRITING_MODES[e.target.value])return;
     const c=chat();if(c){c.mode=e.target.value;await save();}else pendingMode=e.target.value;
+    const lengthRow=$("#f-chapter-limit-wrap");if(lengthRow)lengthRow.hidden=e.target.value!=="draft";
     return;
+  }
+  if(e.target.id==="f-chapter-limit"){
+    const limit=Number(e.target.value);
+    if(![4500,9000,14000].includes(limit))return;
+    state.settings.sceneOutputTokens=limit;
+    await save();return;
   }
   if(e.target.id==="f-sidebar-project"||e.target.id==="f-chat-project"||e.target.id==="f-doc-project"){
     state.activeProjectId=e.target.value||null;state.activeChatId=null;pendingMode=null;await save();render();return;

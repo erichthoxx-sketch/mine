@@ -236,7 +236,7 @@ function toProviderTools(tools){
 // tools, not schemas for Direct, Metrika, income and marketing on every turn.
 // Ordinary chats are plain Opus, with no forced tools. This changes neither
 // model identity nor the author's editable project instructions.
-function relevantMcpTools(catalog,bookId,messages){
+function relevantMcpTools(catalog,bookId,messages,mode){
   const last=String([...messages].reverse().find(m=>m.role==="user")?.content||"")
     .toLocaleLowerCase("ru").slice(0,12000);
   if(/^\s*(привет|приветик|здравствуй(?:те)?|добрый (?:день|вечер|утро)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(last))
@@ -244,6 +244,13 @@ function relevantMcpTools(catalog,bookId,messages){
   const wantsBook=!!bookId||/(?:книг|роман|глав|сюжет|героин|геро|канон|рукопис|персонаж|сцен|пролог|напис|продолж)/i.test(last);
   const wantsSales=/(?:доход|выруч|продаж|покуп|конверс|подпис|литнет|рентабельност|кохорт|читател|прочтен)/i.test(last);
   const wantsAds=/(?:директ|метрик|реклам|кампани|таргет|маркетинг|ctr|cpc|клик|трафик|расход)/i.test(last);
+  // A chapter-writing request is literary, even if the author mentions
+  // readers, book sales, traffic or marketing inside her usual prompt.
+  // Restrict paid tool schemas to the chosen book's read-only tools.
+  if(mode==="draft"&&bookId){
+    return catalog.filter(t=>["list_books","get_book_context","list_chapters",
+      "read_chapter","search_book"].includes(t.name));
+  }
   const names=new Set();
   if(wantsBook)for(const t of ["list_books","get_book_context","list_chapters","read_chapter","search_book"])names.add(t);
   if(wantsSales)for(const t of ["get_income_overview","get_book_sales","get_part_reads","get_cohorts"])names.add(t);
@@ -288,12 +295,12 @@ function visibleCompletion(message){
     return message.content.map(x=>x?.text||"").join("");
   return "";
 }
-async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxTokens){
+async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxTokens,mode){
   const recentUser=String([...messages].reverse().find(m=>m.role==="user")?.content||"");
   // Only discover MCP tool schemas when the task actually needs source data.
   const willNeedTools=bookId || /(?:книг|роман|глав|сюжет|героин|геро|канон|рукопис|персонаж|сцен|пролог|напис|продолж|доход|выруч|продаж|покуп|конверс|подпис|литнет|рентабельност|кохорт|читател|прочтен|директ|метрик|реклам|кампани|таргет|маркетинг|ctr|cpc|клик|трафик|расход)/i.test(recentUser);
   const catalog=willNeedTools?await mcpDiscover(env):[];
-  const selected=relevantMcpTools(catalog,bookId,messages);
+  const selected=relevantMcpTools(catalog,bookId,messages,mode);
   const allowed=new Set(selected.map(t=>t.name));
   // Only neutral tool protocol guidance. Writer voice, tone and rules belong
   // entirely to user-editable global/project instructions in Freitag AI.
@@ -316,7 +323,7 @@ async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxToke
           model,messages:history,stream:false,max_tokens:maxTokens,
           ...(selected.length?{tools:toProviderTools(selected),tool_choice:"auto"}:{})
         }),
-        signal:AbortSignal.timeout(160000)
+        signal:AbortSignal.any([req.signal,AbortSignal.timeout(maxTokens>=9000?300000:160000)])
       });
     }catch{return fail(req,502,provider.name+": модель недоступна или истекло время ожидания.");}
     if(!upstream.ok){
@@ -491,10 +498,16 @@ async function generate(req, env) {
     }catch(e){return fail(req,424,e.message);}
   }
   const isDraft = input.mode === "draft";
-  const maxTokens=isDraft?4500:input.mode==="canon"?750:900;
+  // Author explicitly chooses a ceiling for paid long-form writing. A higher
+  // ceiling permits a full chapter; it never starts automatic continuations.
+  // Reject arbitrary values rather than letting the browser request unlimited output.
+  const requestedDraftLimit=Number(input.outputTokenLimit||4500);
+  if(isDraft && ![4500,9000,14000].includes(requestedDraftLimit))
+    return fail(req,400,"Недопустимый лимит ответа. Выбери 4500, 9000 или 14000.");
+  const maxTokens=isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
   if(useMcp){
     try{return await mcpToolsCompletion(req,env,provider,model,messages,
-      input.bookId||"",maxTokens);}
+      input.bookId||"",maxTokens,input.mode);}
     catch(e){return fail(req,502,"MCP: "+e.message);}
   }
   const body = {
