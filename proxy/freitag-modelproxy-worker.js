@@ -491,7 +491,13 @@ async function generate(req, env) {
     }catch(e){return fail(req,424,e.message);}
   }
   const isDraft = input.mode === "draft";
-  const maxTokens=isDraft?4500:input.mode==="canon"?750:900;
+  // Author explicitly chooses a ceiling for paid long-form writing. A higher
+  // ceiling permits a full chapter; it never starts automatic continuations.
+  // Reject arbitrary values rather than letting the browser request unlimited output.
+  const requestedDraftLimit=Number(input.outputTokenLimit||4500);
+  if(isDraft && ![4500,9000,14000].includes(requestedDraftLimit))
+    return fail(req,400,"Недопустимый лимит ответа. Выбери 4500, 9000 или 14000.");
+  const maxTokens=isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
   if(useMcp){
     try{return await mcpToolsCompletion(req,env,provider,model,messages,
       input.bookId||"",maxTokens);}
