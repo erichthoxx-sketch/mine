@@ -162,7 +162,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(payload.model,"claude-opus-5-5");
     assert.equal(payload.max_tokens,750);
     assert.equal(payload.stream,false);
-    assert.match(payload.messages[1].content,/Тестовый роман/);
+    assert.match(payload.messages[1].content,/Выбранная книга: test/);
     assert.ok(payload.tools.some(t=>t.function.name==="get_income_overview"));
     assert.ok(!payload.tools.some(t=>t.function.name==="delete_book"));
     // Paid call with a stale revision is stopped BEFORE the provider is called.
@@ -206,7 +206,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(withRevision.status,200);
     assert.equal(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length,1);
     const lastBookCall=JSON.parse(calls.at(-1).init.body);
-    assert.match(lastBookCall.messages[1].content,/Тестовый роман/);
+    assert.match(lastBookCall.messages[1].content,/Выбранная книга: test/);
     assert.equal(lastBookCall.stream,false);
     assert.equal(lastBookCall.tools.length,4);
     const beforeToolCalls=calls.length;
@@ -307,29 +307,26 @@ test("health reports both API configurations separately, without paid requests",
   assert.deepEqual(data.availableProviders,{modelproxy:false,bothub:true,apimira:false});
 });
 
-test("browser and Pages bridge must reject an old Polza gateway", async () => {
-  const app = await readFile(new URL("../ai/app.js",import.meta.url),"utf8");
-  const pages = await readFile(new URL("../functions/api/freitag/[route].js",import.meta.url),"utf8");
-  assert.ok(app.includes('health.provider!=="ModelProxy"'));
-  assert.ok(app.includes("modelproxyMessages"));
-  assert.ok(app.includes('refreshLinkedBook({'));
-  assert.ok(app.includes('sourceRevision'));
-  assert.ok(app.includes('health.autoSyncSupported'));
+test("browser and Pages bridge preserve authenticated provider routing and optional refresh",async()=>{
+  const app=await readFile(new URL("../ai/app.js",import.meta.url),"utf8");
+  const pages=await readFile(new URL("../functions/api/freitag/[route].js",import.meta.url),"utf8");
+  assert.match(app,/await master\.idToken\(\)/);
+  assert.match(app,/modelproxyMessages\(c\)/);
+  assert.match(app,/data-action="sync-current-book"/);
+  assert.match(app,/refreshLinkedBook\(\{/);
+  assert.match(app,/sourceRevision/);
   assert.match(pages,/route === "snapshot"/);
   assert.match(pages,/route === "preflight"/);
   assert.match(pages,/route === "refresh-book"/);
   assert.match(pages,/route === "mcp-tools"/);
-  assert.ok(app.includes("f-bothub-model"));
-  assert.ok(app.includes("activeBotHubModel"));
+  assert.match(app,/activeBotHubModel/);
 });
 
-test("MCP answers use a conversational editorial style, not tool tracing",async()=>{
+test("MCP does not impose hidden editorial persona or special chapter rules",async()=>{
   const worker=await readFile(new URL("../proxy/freitag-modelproxy-worker.js",import.meta.url),"utf8");
-  assert.match(worker,/const editorialStyle=/);
-  assert.match(worker,/Не превращай диалог в протокол проверки/);
-  assert.match(worker,/Не делай выводы о мотивах, действиях или перемещениях персонажей/);
-  assert.match(worker,/Если явно попросили назвать инструмент или источник/);
-  assert.match(worker,/Если просят написать прозу или полный редакторский разбор/);
+  assert.doesNotMatch(worker,/const editorialStyle=/);
+  assert.doesNotMatch(worker,/Не превращай диалог в протокол проверки/);
+  assert.doesNotMatch(worker,/При совпадении названий глав с разными порядковыми индексами/);
   assert.match(worker,/tool_choice:"auto"/);
   assert.match(worker,/await mcpCallTool\(env,call\.function\.name,args\)/);
 });
