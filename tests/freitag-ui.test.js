@@ -44,6 +44,16 @@ test("response copy, clear settings, backups and ModelProxy protection remain pr
   assert.match(app,/indexedDB.open\("freitag-ai-v1",1\)/);
 });
 
+test("unsent chapter prompts survive navigation and are cleared only after submission",async()=>{
+  const app=await load("../ai/app.js");
+  assert.match(app,/drafts:\{\}/);
+  assert.match(app,/const draftKey=/);
+  assert.match(app,/const rememberDraft=/);
+  assert.match(app,/if\(e.target.id==="f-message-input"\)rememberDraft\(e.target.value\)/);
+  assert.match(app,/esc\(state.drafts\?\.\[draftKey\(\)\]\|\|""\)/);
+  assert.match(app,/delete state.drafts\[previousDraft\]/);
+});
+
 test("design has true dark theme, reduced-motion and responsive layouts",async()=>{
   const css=await load("../ai/style.css");
   for(const selector of ['html.app-freitag[data-theme="dark"]','.f-chat-welcome',
