@@ -373,3 +373,169 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
   .f-writing-bar{gap:5px}
   .f-writing-bar .f-quick-model{max-width:175px;min-width:135px}
 }
+
+
+/* ───── Full viewport CHAT: history scrolls, composer does not eat the screen ─────
+   This mode is applied only on the chat route. Project/settings pages remain scrollable. */
+html.app-freitag.f-chat-mode,
+html.app-freitag.f-chat-mode body{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+}
+html.app-freitag.f-chat-mode #app{
+  display:flex;
+  flex-direction:column;
+  height:100dvh;
+  min-height:0;
+  overflow:hidden;
+}
+html.app-freitag.f-chat-mode .f-head{
+  position:relative;
+  top:auto;
+  flex:0 0 70px;
+}
+html.app-freitag.f-chat-mode .f-layout{
+  width:100%;
+  height:calc(100dvh - 70px);
+  flex:1 1 auto;
+  min-height:0;
+  overflow:hidden;
+}
+html.app-freitag.f-chat-mode .f-sidebar{
+  top:0;
+  height:100%;
+  min-height:0;
+}
+html.app-freitag.f-chat-mode .f-main{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  min-height:0;
+  overflow:hidden;
+  padding:12px clamp(14px,2vw,30px) 10px;
+}
+html.app-freitag.f-chat-mode .f-chat{
+  display:flex;
+  flex-direction:column;
+  width:100%;
+  height:100%;
+  min-height:0;
+  max-height:100%;
+  flex:1 1 auto;
+  margin:0;
+}
+html.app-freitag.f-chat-mode .f-chat-meta{
+  flex:0 0 auto;
+  min-height:0;
+  margin:0 0 6px;
+}
+html.app-freitag.f-chat-mode .f-chat-body{
+  flex:1 1 auto;
+  min-height:0;
+  max-height:none;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  padding:10px 4px 14px 0;
+}
+html.app-freitag.f-chat-mode .f-chat-welcome{
+  margin:auto;
+  padding:8px 0 18px;
+}
+html.app-freitag.f-chat-mode .f-compose{
+  position:static;
+  flex:0 0 auto;
+  margin:0;
+  padding:6px 0 0;
+  background:var(--f-bg);
+  min-height:0;
+}
+html.app-freitag.f-chat-mode .f-compose-surface{
+  padding:8px 12px;
+  border-radius:13px;
+}
+html.app-freitag.f-chat-mode .f-writing-bar{
+  min-height:30px;
+  gap:6px 9px;
+  padding-bottom:6px;
+}
+html.app-freitag.f-chat-mode .f-writing-bar .f-select{
+  min-height:30px;
+  padding:4px 8px;
+}
+html.app-freitag.f-chat-mode .f-compose textarea.f-textarea{
+  display:block;
+  box-sizing:border-box;
+  width:100%;
+  height:48px;
+  min-height:48px;
+  max-height:34dvh;
+  line-height:1.5;
+  padding:10px 2px 4px;
+  margin:0;
+  resize:none;
+  overflow-y:auto;
+}
+html.app-freitag.f-chat-mode .f-compose-controls{
+  padding-top:4px;
+  min-height:35px;
+}
+html.app-freitag.f-chat-mode .f-compose-controls .f-btn{
+  min-height:33px;
+}
+html.app-freitag.f-chat-mode .f-extra-tools{
+  padding:0 4px;
+  font-size:11px;
+}
+html.app-freitag.f-chat-mode .f-extra-tools summary{
+  padding:3px 0 0;
+}
+@media(max-width:760px){
+  html.app-freitag.f-chat-mode .f-head{
+    flex-basis:63px;
+  }
+  html.app-freitag.f-chat-mode .f-layout{
+    height:calc(100dvh - 63px - 61px - env(safe-area-inset-bottom));
+    flex:1 1 auto;
+    min-height:0;
+  }
+  html.app-freitag.f-chat-mode .f-main{
+    padding:8px 12px 7px;
+    min-height:0;
+  }
+  html.app-freitag.f-chat-mode .f-chat{
+    height:100%;
+    min-height:0;
+  }
+  html.app-freitag.f-chat-mode .f-chat-body{
+    min-height:0;
+    padding-bottom:10px;
+  }
+  html.app-freitag.f-chat-mode .f-compose{
+    bottom:auto;
+  }
+  html.app-freitag.f-chat-mode .f-compose textarea.f-textarea{
+    height:44px;
+    min-height:44px;
+    max-height:27dvh;
+  }
+  html.app-freitag.f-chat-mode .f-compose-canon{
+    display:none;
+  }
+  html.app-freitag.f-chat-mode .f-mobile-nav{
+    min-height:61px;
+  }
+}
+@media(max-height:650px) and (min-width:761px){
+  html.app-freitag.f-chat-mode .f-head{
+    flex-basis:56px;
+  }
+  html.app-freitag.f-chat-mode .f-layout{
+    height:calc(100dvh - 56px);
+  }
+  html.app-freitag.f-chat-mode .f-chat-welcome{
+    padding:4px 0 8px;
+  }
+}
