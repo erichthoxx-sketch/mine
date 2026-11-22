@@ -7,6 +7,7 @@ export async function onRequest(context) {
   if (!((route === "health" && method === "GET") ||
         (route === "snapshot" && method === "GET") ||
         (route === "preflight" && method === "GET") ||
+        (route === "mcp-tools" && method === "GET") ||
         (route === "chat" && method === "POST") ||
         (route === "refresh-book" && method === "POST"))) {
     return Response.json({ error: "Метод не поддерживается." }, { status: 405 });
