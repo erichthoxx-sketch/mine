@@ -212,6 +212,32 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.deepEqual(lastBookCall.tools.map(t=>t.function.name),
       ["list_books","read_chapter"]);
     assert.ok(!lastBookCall.tools.some(t=>["get_income_overview","get_direct_live"].includes(t.function.name)));
+
+    // A long-form chapter must receive preloaded MCP canon and the author's
+    // exact original large prompt, without iterative billable tool loops.
+    const masterPrompt="ИНСТРУКЦИИ ПРОЕКТА: ".repeat(1450);
+    const authorPrompt="Глава 15, заметки и полная глава 14. ".repeat(1450);
+    assert.ok(masterPrompt.length>24000);
+    assert.ok(authorPrompt.length>40000);
+    const paidBefore=calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length;
+    const fullChapter=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({bookId:"test",provider:"bothub",model:"claude-opus-5.5",
+        mode:"draft",outputTokenLimit:14000,messages:[
+          {role:"system",content:masterPrompt},
+          {role:"user",content:authorPrompt}
+        ]})
+    }),env);
+    assert.equal(fullChapter.status,200);
+    assert.match(await fullChapter.text(),/OK/);
+    const paidAfter=calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length;
+    assert.equal(paidAfter-paidBefore,1,"full chapter must take only one paid generation");
+    const chapterCall=JSON.parse(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).at(-1).init.body);
+    assert.equal(chapterCall.max_tokens,14000);
+    assert.equal(chapterCall.tools,undefined,"no iterative MCP tool calls during full chapter");
+    assert.equal(chapterCall.messages.find(m=>m.content===masterPrompt)?.content,masterPrompt);
+    assert.equal(chapterCall.messages.at(-1).content,authorPrompt);
+    assert.match(chapterCall.messages.find(m=>m.content.includes("Справочные материалы выбранного романа"))?.content||"",/новая глава/);
     const beforeToolCalls=calls.length;
     const toolResponse=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
