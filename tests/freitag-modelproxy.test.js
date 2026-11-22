@@ -32,6 +32,8 @@ test("unverified users cannot use paid API or access manuscript metadata", async
     assert.equal(chat.status,401);
     const snapshot = await gateway.fetch(new Request(url("snapshot?bookId=test"),{headers:{Origin:ORIGIN}}),env);
     assert.equal(snapshot.status,401);
+    const preflight = await gateway.fetch(new Request(url("preflight?model=claude-sonnet-5.5"),{headers:{Origin:ORIGIN}}),env);
+    assert.equal(preflight.status,401);
   } finally { globalThis.fetch = original; }
 });
 
@@ -62,6 +64,8 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     calls.push({input,init});
     if (String(input).includes("googleapis.com"))
       return Response.json({keys:[jwk]});
+    if (String(input) === "https://openai.bothub.chat/v1/models")
+      return Response.json({object:"list",data:[{id:"claude-sonnet-5.5",kind:"chat",endpoints:["/v1/chat/completions"]},{id:"claude-opus-5.5",kind:"chat"}]});
     if (["https://api.modelproxy.org/v1/chat/completions","https://openai.bothub.chat/v1/chat/completions"].includes(String(input)))
       return new Response('data: {"choices":[{"delta":{"content":"OK"}}]}\\n\\n', {
         headers:{"Content-Type":"text/event-stream"}});
@@ -100,14 +104,32 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(String(botCall.input),"https://openai.bothub.chat/v1/chat/completions");
     assert.equal(botCall.init.headers.Authorization,"Bearer bh-test");
     const bothubPayload=JSON.parse(botCall.init.body);
-    assert.equal(bothubPayload.model,"claude-opus-5.5");
+    assert.equal(bothubPayload.model,"claude-sonnet-5.5");
     assert.equal(bothubPayload.stream,true);
+    const opus=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",messages:[{role:"user",content:"Тест Opus"}]})
+    }),env);
+    assert.equal(opus.status,200);
+    assert.equal(JSON.parse(calls.at(-1).init.body).model,"claude-opus-5.5");
+    const beforeInvalid=calls.length;
+    const invalidModel=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({provider:"bothub",model:"https://attacker.example",messages:[{role:"user",content:"Never forward"}]})
+    }),env);
+    assert.equal(invalidModel.status,400);
+    assert.equal(calls.length,beforeInvalid);
+    const preflight=await gateway.fetch(new Request(url("preflight?model=claude-sonnet-5.5"),{headers}),env);
+    assert.equal(preflight.status,200);
+    assert.equal((await preflight.json()).ok,true);
+    assert.equal(calls.at(-1).init.headers.Authorization,"Bearer bh-test");
+    const beforeProviderInvalid=calls.length;
     const invalid=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({provider:"https://attacker.example",messages:[{role:"user",content:"Never forward"}]})
     }),env);
     assert.equal(invalid.status,400);
-    assert.equal(calls.length,beforeBotHubCalls+1);
+    assert.equal(calls.length,beforeProviderInvalid);
   } finally {globalThis.fetch=original;}
 });
 
@@ -127,4 +149,7 @@ test("browser and Pages bridge must reject an old Polza gateway", async () => {
   assert.ok(app.includes("modelproxyMessages"));
   assert.ok(app.includes('gateway+"/snapshot?bookId="'));
   assert.match(pages,/route === "snapshot"/);
+  assert.match(pages,/route === "preflight"/);
+  assert.ok(app.includes("f-bothub-model"));
+  assert.ok(app.includes("activeBotHubModel"));
 });
