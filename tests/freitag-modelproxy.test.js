@@ -34,6 +34,8 @@ test("unverified users cannot use paid API or access manuscript metadata", async
     assert.equal(snapshot.status,401);
     const preflight = await gateway.fetch(new Request(url("preflight?model=claude-sonnet-5.5"),{headers:{Origin:ORIGIN}}),env);
     assert.equal(preflight.status,401);
+    const mcp=await gateway.fetch(new Request(url("mcp-tools"),{headers:{Origin:ORIGIN}}),env);
+    assert.equal(mcp.status,401);
     const refresh = await gateway.fetch(new Request(url("refresh-book"),{
       method:"POST",headers:{Origin:ORIGIN,"Content-Type":"application/json"},
       body:JSON.stringify({id:"test",context:"secret",chapters:[{title:"chapter",text:"secret"}]})
@@ -115,9 +117,17 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
       if(body.stream===false){
         const called=body.messages.some(m=>m.role==="tool");
         const wantsChapter=body.messages.some(m=>m.role==="user"&&m.content.includes("Проверить Марту"));
+        const wantsIncome=body.messages.some(m=>m.role==="user"&&m.content.includes("Проверить доходы"));
+        const wantsDelete=body.messages.some(m=>m.role==="user"&&m.content.includes("Удалить книгу"));
+        if(wantsDelete)return Response.json({choices:[{message:{role:"assistant",content:null,
+          tool_calls:[{id:"evil-1",type:"function",function:{name:"delete_book",arguments:"{}"}}]}}]});
         if(wantsChapter&&!called)return Response.json({choices:[{message:{role:"assistant",content:null,
           tool_calls:[{id:"call-1",type:"function",function:{name:"read_chapter",arguments:'{"chapter":2}'}}]}}]});
-        return Response.json({choices:[{message:{role:"assistant",content:called?"События главы подтверждены.":"OK"}}]});
+        if(wantsIncome&&!called)return Response.json({choices:[{message:{role:"assistant",content:null,
+          tool_calls:[{id:"income-1",type:"function",function:{name:"get_income_overview",arguments:"{}"}}]}}]});
+        const lastTool=body.messages.filter(m=>m.role==="tool").at(-1)?.content||"";
+        return Response.json({choices:[{message:{role:"assistant",
+          content:lastTool.includes("Доход 1200")?"Проверено: доход 1200 рублей.":called?"События главы подтверждены.":"OK"}}]});
       }
       return new Response('data: {"choices":[{"delta":{"content":"OK"}}]}\\n\\n', {
         headers:{"Content-Type":"text/event-stream"}});
@@ -132,7 +142,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.deepEqual(data.lastChapters.map(x=>x.title),["Пролог","Глава 14","Глава 15"]);
     const res = await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
-      body:JSON.stringify({bookId:"test",mode:"canon",messages:[{role:"user",content:"Последние события?"}]})
+      body:JSON.stringify({bookId:"test",sourceRevision:nowIso,mode:"canon",messages:[{role:"user",content:"Последние события?"}]})
     }),env);
     assert.equal(res.status,200);
     assert.match(await res.text(),/OK/);
@@ -236,6 +246,23 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     const apiPreflight=await gateway.fetch(new Request(url("preflight?provider=apimira&model=anthropic%2Fclaude-opus-5.5"),{headers}),env);
     assert.equal(apiPreflight.status,200);
     assert.equal((await apiPreflight.json()).ok,true);
+    const income=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
+        messages:[{role:"user",content:"Проверить доходы"}]})
+    }),env);
+    assert.equal(income.status,200);
+    assert.match(await income.text(),/Проверено: доход 1200 рублей/);
+    const beforeWrite=calls.filter(c=>String(c.input)==="https://masterskaya-ai.erichtho-xx.workers.dev/mcp" &&
+      JSON.parse(c.init.body).method==="tools/call").length;
+    const rejected=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
+        messages:[{role:"user",content:"Удалить книгу"}]})
+    }),env);
+    assert.equal(rejected.status,424);
+    assert.equal(calls.filter(c=>String(c.input)==="https://masterskaya-ai.erichtho-xx.workers.dev/mcp" &&
+      JSON.parse(c.init.body).method==="tools/call").length,beforeWrite);
     const mcpList=await gateway.fetch(new Request(url("mcp-tools"),{headers}),env);
     assert.equal(mcpList.status,200);
     const mcpData=await mcpList.json();
