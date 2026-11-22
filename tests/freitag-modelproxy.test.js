@@ -163,7 +163,8 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(payload.max_tokens,750);
     assert.equal(payload.stream,false);
     assert.match(payload.messages[1].content,/Выбранная книга: test/);
-    assert.ok(payload.tools.some(t=>t.function.name==="get_income_overview"));
+    assert.ok(payload.tools.some(t=>t.function.name==="read_chapter"));
+    assert.ok(!payload.tools.some(t=>t.function.name==="get_income_overview"));
     assert.ok(!payload.tools.some(t=>t.function.name==="delete_book"));
     // Paid call with a stale revision is stopped BEFORE the provider is called.
     const beforeStale=calls.length;
