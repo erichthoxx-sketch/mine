@@ -239,7 +239,7 @@ function toProviderTools(tools){
 function relevantMcpTools(catalog,bookId,messages){
   const last=String([...messages].reverse().find(m=>m.role==="user")?.content||"")
     .toLocaleLowerCase("ru").slice(0,12000);
-  if(/^\\s*(привет|приветик|здравствуй(?:те)?|добрый (?:день|вечер|утро)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(last))
+  if(/^\s*(привет|приветик|здравствуй(?:те)?|добрый (?:день|вечер|утро)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(last))
     return [];
   const wantsBook=!!bookId||/(?:книг|роман|глав|сюжет|героин|геро|канон|рукопис|персонаж|сцен|пролог|напис|продолж)/i.test(last);
   const wantsSales=/(?:доход|выруч|продаж|покуп|конверс|подпис|литнет|рентабельност|кохорт|читател|прочтен)/i.test(last);
