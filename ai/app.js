@@ -735,6 +735,12 @@ document.addEventListener("click",async(e)=>{
   if(a==="delete-doc"){if(!confirm("Удалить материал?"))return;state.docs=state.docs.filter(d=>d.id!==id);await save();render();}
   if(a==="rename-chat"){const c=chat();if(!c)return;const v=await openModal("Название чата",[{key:"title",label:"Название",required:true}],{title:c.title});if(v){c.title=v.title.trim();await save();render();}}
   if(a==="delete-chat"){const c=chat();if(!c||!confirm("Удалить этот чат?"))return;state.chats=state.chats.filter(x=>x.id!==c.id);state.activeChatId=null;await save();render();}
+  if(a==="copy-answer"){
+    const message=chat()?.messages[Number(b.dataset.i)];
+    if(message?.role!=="assistant" || !message.content)return;
+    try{await navigator.clipboard.writeText(message.content);notice("Ответ скопирован.");}
+    catch{notice("Не удалось скопировать. Выдели текст ответа вручную.");}
+  }
   if(a==="stop")currentController?.abort();
   if(a==="test-connection")await testConnection();
   if(a==="ask-local"){const v=$("#f-message-input")?.value||"";if(v.trim()){await sendMessage(v);}else notice("Напиши задачу.");}
@@ -761,7 +767,7 @@ document.addEventListener("click",async(e)=>{
   if(a==="export"){await save();download("FreitagAI-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify({app:"FreitagAI",version:1,data:state},null,2));}
 });
 document.addEventListener("submit",async(e)=>{
-  if(e.target.id==="f-chat-form"){e.preventDefault();const inp=$("#f-message-input"),val=inp?.value||"";if(!val.trim())return;if(inp)inp.value="";await sendMessage(val);}
+  if(e.target.id==="f-chat-form"){e.preventDefault();const inp=$("#f-message-input"),val=inp?.value||"";if(!val.trim())return;await sendMessage(val);}
   if(e.target.id==="f-master-auth"){
     e.preventDefault();const fd=new FormData(e.target);const password=String(fd.get("password")||"");
     try{await master.login(String(fd.get("email")||"").trim(),password);render();notice("Мастерская подключена. Книги доступны только для чтения.");}
@@ -784,10 +790,11 @@ document.addEventListener("submit",async(e)=>{
 });
 document.addEventListener("change",async(e)=>{
   if(e.target.id==="f-writing-mode"){
-    const c=chat();if(c&&WRITING_MODES[e.target.value]){c.mode=e.target.value;await save();notice("Режим: "+WRITING_MODES[c.mode].name);}
-    return;
+    if(!WRITING_MODES[e.target.value])return;
+    const c=ensureChat();c.mode=e.target.value;
+    await save();render();return;
   }
-  if(e.target.id==="f-sidebar-project"||e.target.id==="f-doc-project"){
+  if(e.target.id==="f-sidebar-project"||e.target.id==="f-chat-project"||e.target.id==="f-doc-project"){
     state.activeProjectId=e.target.value||null;state.activeChatId=null;await save();render();return;
   }
   if(e.target.id==="f-upload"){
@@ -807,7 +814,7 @@ document.addEventListener("change",async(e)=>{
   }
 });
 document.addEventListener("keydown",e=>{
-  if(e.target.id==="f-message-input"&&e.key==="Enter"&&!e.shiftKey&&!e.isComposing){
+  if(e.target.id==="f-message-input"&&e.key==="Enter"&&(e.ctrlKey||e.metaKey)&&!e.isComposing){
     e.preventDefault();if(!busy)e.target.closest("form")?.requestSubmit();
   }
 });
