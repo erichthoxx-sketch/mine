@@ -1,0 +1,27 @@
+name: Masterskaya ChatGPT OAuth bridge checks
+on:
+  push:
+    branches: [feature/masterskaya-chatgpt-oauth-bridge]
+    paths:
+      - "oauth-bridge/**"
+      - ".github/workflows/masterskaya-chatgpt-oauth.yml"
+  pull_request:
+    branches: [feature/freitag-ai-live-master-sync]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Cloudflare OAuth dependencies
+        run: npm install --prefix oauth-bridge --no-audit --no-fund
+      - name: Security and protocol tests
+        run: npm run check --prefix oauth-bridge
+      - name: Bundle for Cloudflare (no deployment)
+        run: npm run build --prefix oauth-bridge
