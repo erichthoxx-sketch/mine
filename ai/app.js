@@ -267,7 +267,7 @@ function renderChat(){
             '<button type="submit" class="f-btn primary">Отправить <span aria-hidden="true">↗</span></button>')+
       '</div></div>'+
       (p&&state.settings.provider==="bothub"&&activeBotHubModel()==="claude-opus-5.5"?
-        '<div class="f-row"><button type="button" class="f-btn" data-action="check-batch-availability">Проверить Batch бесплатно</button>'+(batchCheck===true?'<span class="f-mini">Opus 5.5 Batch доступен</span>':batchCheck===false?'<span class="f-mini">Batch недоступен</span>':"")+'</div>'+(batchCheck===true?'<div class="f-row"><button type="button" class="f-btn" data-action="send-batch-chapter">Целая глава через Batch API (платно)</button></div>':""):"")+
+        '<div class="f-row"><button type="button" class="f-btn" data-action="check-batch-availability">Проверить Batch бесплатно</button>'+(batchCheck===true?'<span class="f-mini">Opus 5.5 есть в каталоге Batch; разрешение запуска не проверено</span>':batchCheck===false?'<span class="f-mini">Batch недоступен</span>':"")+'</div>'+(batchCheck===true?'<div class="f-row"><button type="button" class="f-btn" data-action="send-batch-chapter">Целая глава через Batch API (платно)</button></div>':""):"")+
       (c?.batch?.batchId&&c.batch.status!=="completed"?
         '<div class="f-row"><span class="f-mini">Batch: '+esc(c.batch.status||"отправлен")+'</span>'+
         '<button type="button" class="f-btn" data-action="check-batch-chapter">Проверить готовность главы</button></div>':"")+
@@ -675,7 +675,7 @@ async function checkBatchAvailability(){
       headers:{Authorization:"Bearer "+token},cache:"no-store"});
     const result=await response.json().catch(()=>({}));
     batchCheck=!!(response.ok&&result.ok);
-    notice(batchCheck?"Opus 5.5 доступен для Batch по этому ключу. Проверка бесплатная.":
+    notice(batchCheck?"Opus 5.5 есть в каталоге Batch. Проверка бесплатная, но она НЕ подтверждает разрешение на создание задачи.":
       "Batch Opus 5.5 недоступен: "+(result.error||result.message||"Неизвестная ошибка."));
   }catch(e){batchCheck=false;notice("Batch: "+e.message);}
   render();
@@ -713,7 +713,7 @@ async function sendBatchChapter(text){
     const availability=await ready.json().catch(()=>({}));
     if(!ready.ok||!availability.ok)
       throw Error(availability.error||availability.message||
-        "Batch API недоступен. Нужна публикация новой версии Cloudflare Worker.");
+        "Batch недоступен по этому ключу или не опубликован в Worker. Генерация не запускалась.");
     const response=await fetch(gateway+"/batch-start",{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
