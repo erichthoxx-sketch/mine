@@ -1,0 +1,27 @@
+name: Freitag AI · stream BotHub chapter
+on:
+  push:
+    branches: [fix/freitag-bothub-streamed-chapters]
+    paths:
+      - "proxy/freitag-modelproxy-worker.js"
+      - "ai/app.js"
+      - "tests/freitag-*.test.js"
+      - ".github/workflows/freitag-bothub-stream-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check proxy/freitag-modelproxy-worker.js
+          node --check ai/app.js
+      - name: Full regression (mock API, no billed calls)
+        run: npm test
