@@ -64,6 +64,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
       {title:"Глава 14",text:"события 14"},
       {title:"Глава 15",text:"события 15"}]};
   const written=[];
+  let staleMcpRevision=false;
   const env = {OWNER_UID:"owner",MODELPROXY_API_KEY:"mp-test",BOTHUB_API_KEY:"bh-test",APIMIRA_API_KEY:"am-test",
     BOOKS_MCP_URL:"https://masterskaya-ai.erichtho-xx.workers.dev/mcp",MCP_READ_KEY:"read-key-".repeat(8),BOOKS:{
     get:async()=>book,
@@ -103,7 +104,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
         if(rpc.params?.name==="list_chapters"){
           assert.equal(rpc.params.arguments.book_id,"test");
           return payload({content:[{type:"text",text:JSON.stringify({
-            book:book.title,updatedAt:book.updatedAt,chapters:book.chapters.map((ch,i)=>({
+            book:book.title,updatedAt:staleMcpRevision?"2000-01-01T00:00:00.000Z":book.updatedAt,chapters:book.chapters.map((ch,i)=>({
               chapter:i+1,title:ch.title,chars:ch.text.length
             }))
           })}]});
@@ -188,6 +189,15 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.match(written[0].data.context,/Новый подтвержденный канон/);
     assert.equal(written[0].metadata.chapters,2);
     const beforeFresh=calls.length;
+    staleMcpRevision=true;
+    const staleMcp=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({bookId:"test",sourceRevision:refreshed.updatedAt,
+        provider:"bothub",messages:[{role:"user",content:"Проверить данные"}]})
+    }),env);
+    assert.equal(staleMcp.status,424);
+    assert.equal(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length,0);
+    staleMcpRevision=false;
     const withRevision=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({bookId:"test",sourceRevision:refreshed.updatedAt,
