@@ -1,0 +1,33 @@
+name: Freitag AI · BotHub regression
+on:
+  push:
+    branches: [feature/freitag-ai-bothub-compact]
+    paths:
+      - "ai/**"
+      - "proxy/freitag-modelproxy-worker.js"
+      - "functions/api/freitag/**"
+      - "writer/js/views/aicenter.js"
+      - "tests/freitag-*.test.js"
+      - ".github/workflows/freitag-bothub-check.yml"
+  pull_request:
+    branches: [feature/freitag-ai-minimal-workspace]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: JavaScript syntax
+        run: |
+          node --check ai/app.js
+          node --check proxy/freitag-modelproxy-worker.js
+          node --check "functions/api/freitag/[route].js"
+          node --check writer/js/views/aicenter.js
+      - name: Full regression suite
+        run: npm test
