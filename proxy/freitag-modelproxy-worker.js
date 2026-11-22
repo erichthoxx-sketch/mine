@@ -1,7 +1,17 @@
-// Freitag AI → ModelProxy Claude Opus 5.5. Test gateway; NEVER edit the existing Books MCP Worker.
+// Freitag AI → ModelProxy / BotHub Claude Opus 5.5. Test gateway; never edit the existing Books MCP Worker.
 // Only an authenticated Firebase owner can generate; all paid-provider secrets stay on Cloudflare.
 const PROJECT = "dohody-6d6dd";
 const MODEL = "claude-opus-5-5";
+const PROVIDERS = Object.freeze({
+  modelproxy: Object.freeze({
+    name: "ModelProxy", model: MODEL, secret: "MODELPROXY_API_KEY",
+    endpoint: "https://api.modelproxy.org/v1/chat/completions"
+  }),
+  bothub: Object.freeze({
+    name: "BotHub", model: "claude-opus-5.5", secret: "BOTHUB_API_KEY",
+    endpoint: "https://openai.bothub.chat/v1/chat/completions"
+  })
+});
 const ORIGINS = new Set(["https://erichthoxx-sketch.github.io", "https://freitag-ai-test.pages.dev", "http://localhost:8765", "http://127.0.0.1:8765"]);
 const allowedOrigin = origin => {
   if (!origin) return true;
@@ -172,11 +182,14 @@ async function snapshotStatus(req, env) {
 
 async function generate(req, env) {
   if (!await verifyOwner(req, env)) return fail(req, 401, "Требуется вход владельца в Мастерскую.");
-  if (!env.MODELPROXY_API_KEY) return fail(req, 503, "В Cloudflare не задан секрет MODELPROXY_API_KEY.");
   const raw = await req.text();
   if (utf8(raw).length > 340000) return fail(req, 413, "Слишком большой запрос.");
   let input;
   try { input = JSON.parse(raw); } catch { return fail(req, 400, "Неверный JSON."); }
+  // Whitelisted provider IDs; never accept arbitrary endpoints/models from the browser.
+  const provider = PROVIDERS[input.provider || "modelproxy"];
+  if (!provider) return fail(req, 400, "Неизвестный API-провайдер.");
+  if (!env[provider.secret]) return fail(req, 503, "В Cloudflare не задан секрет " + provider.secret + ".");
   const entries = input.messages;
   if (!Array.isArray(entries) || entries.length < 1 || entries.length > 16 ||
       entries.some(x => !["system", "user", "assistant"].includes(x?.role) ||
@@ -192,18 +205,18 @@ async function generate(req, env) {
   }
   const isDraft = input.mode === "draft";
   const body = {
-    model: MODEL, messages, stream: true,
+    model: provider.model, messages, stream: true,
     max_tokens: isDraft ? 4500 : input.mode === "canon" ? 750 : 900
   };
   let upstream;
   try {
-    upstream = await fetch("https://api.modelproxy.org/v1/chat/completions", {
+    upstream = await fetch(provider.endpoint, {
       method: "POST",
-      headers: { Authorization: "Bearer " + env.MODELPROXY_API_KEY,
+      headers: { Authorization: "Bearer " + env[provider.secret],
         "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-  } catch { return fail(req, 502, "Нет связи с ModelProxy."); }
+  } catch { return fail(req, 502, "Нет связи с " + provider.name + "."); }
   if (!upstream.ok) {
     // Preserve the status: 402 is billing/temporary reservation, not 502.
     // Never expose upstream raw bodies (they may contain input fragments).
@@ -215,12 +228,12 @@ async function generate(req, env) {
         traceId = rawId;
     } catch {}
     if (upstream.status === 402) return json(req, 402, {
-      error: "ModelProxy: не хватает доступного баланса или резерва для этого запроса. Проверь баланс и лимит в ModelProxy.",
+      error: provider.name + ": не хватает доступного баланса или резерва для этого запроса. Проверь баланс и лимит.",
       ...(traceId ? { trace_id: traceId } : {})
     });
-    if (upstream.status === 429) return fail(req, 429, "ModelProxy: ограничение частоты запросов.");
+    if (upstream.status === 429) return fail(req, 429, provider.name + ": ограничение частоты запросов.");
     return json(req, upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502, {
-      error: "ModelProxy вернула HTTP " + upstream.status + ".",
+      error: provider.name + " вернул HTTP " + upstream.status + ".",
       ...(traceId ? { trace_id: traceId } : {})
     });
   }
@@ -241,6 +254,11 @@ export default {
       if (path === "/health" && req.method === "GET")
         return json(req, 200, { ok: true, provider: "ModelProxy", model: MODEL,
           configured: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
+          bothubConfigured: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
+          availableProviders: {
+            modelproxy: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
+            bothub: !!env.BOTHUB_API_KEY && !!env.OWNER_UID
+          },
           booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY) });
       if (path === "/snapshot" && req.method === "GET") return await snapshotStatus(req, env);
       if (path === "/chat" && req.method === "POST") return await generate(req, env);
