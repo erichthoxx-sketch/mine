@@ -796,8 +796,26 @@ async function bothubPreflight(req, env) {
   catch { return fail(req, 502, "Провайдер вернул некорректный список моделей."); }
   if (!Array.isArray(data.data)) return fail(req, 502, "Провайдер не вернул список моделей.");
   const item = data.data.find(x => x?.id === model);
+  // ApiMira documents a free, owner-only balance endpoint. A model listed
+  // in the catalog may still be unusable when its prepaid balance is empty.
+  let balanceUsd = null;
+  if(provider === "apimira" && item){
+    try{
+      const account = await fetch("https://apimira.com/v1/account/balance",{
+        headers:{ Authorization: "Bearer " + key },
+        signal:AbortSignal.timeout(8000)
+      });
+      if(account.ok){
+        const payload = await account.json();
+        if(typeof payload.balance_usd === "number" &&
+           Number.isFinite(payload.balance_usd) && payload.balance_usd >= 0)
+          balanceUsd = payload.balance_usd;
+      }
+    }catch{}
+  }
   return json(req, 200, { ok: !!item, model,
-    message: item ? "Модель доступна по API-ключу. Платная генерация не запускалась." :
+    ...(balanceUsd !== null ? {balanceUsd} : {}),
+    message: item ? "Модель есть в каталоге API-ключа. Платная генерация не запускалась." :
       "Модель отсутствует в списке, доступном этому API-ключу." });
 }
 
