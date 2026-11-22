@@ -253,14 +253,8 @@ function renderChat(){
       '<div class="f-compose-surface"><div class="f-writing-bar">'+
       '<label class="f-compact-label" for="f-quick-model">Модель</label>'+
       '<select id="f-quick-model" class="f-select f-quick-model" aria-label="Модель для следующего ответа" '+(busy?"disabled":"")+'>'+modelChoices()+'</select>'+
-      '<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
-      '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
-      '<span class="f-chapter-length" id="f-chapter-limit-wrap" '+((c?.mode||pendingMode||(p?"draft":"dialog"))==="draft"?"":'hidden')+'>'+
-      '<label class="f-compact-label" for="f-chapter-limit">Макс. токенов</label>'+
-      '<select id="f-chapter-limit" class="f-select" title="Верхняя граница художественного ответа; большие значения могут стоить значительно дороже" '+(busy?"disabled":"")+'>'+
-      [[4500,"4 500 · короткий фрагмент"],[9000,"9 000 · длинная сцена"],[14000,"14 000 · глава (дороже)"]].map(([v,label])=>
-        '<option value="'+v+'" '+(Number(state.settings.sceneOutputTokens||4500)===v?"selected":"")+'>'+label+'</option>').join("")+
-      '</select></span>'+
+      (p?"":'<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
+      '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>')+
       '<span class="f-compose-canon">'+(p?.masterBookId?"MCP Мастерская · автоматически":p?"Инструкции проекта":"Обычный чат")+'</span>'+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
