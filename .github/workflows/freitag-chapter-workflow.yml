@@ -1,0 +1,28 @@
+name: Freitag AI · long-form chapter workflow
+on:
+  push:
+    branches: [feature/freitag-full-chapter-workflow]
+    paths:
+      - "ai/app.js"
+      - "ai/style.css"
+      - "proxy/freitag-modelproxy-worker.js"
+      - "tests/freitag-modelproxy.test.js"
+      - ".github/workflows/freitag-chapter-workflow.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax checks
+        run: |
+          node --check ai/app.js
+          node --check proxy/freitag-modelproxy-worker.js
+      - name: Full test suite (no paid API requests)
+        run: npm test
