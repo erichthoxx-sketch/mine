@@ -179,7 +179,8 @@ const MCP_BOOK_TOOLS=new Set([
   "get_book_context","list_chapters","read_chapter","search_book",
   "get_book_marketing","get_part_reads"
 ]);
-const MCP_MAX_ROUNDS=3, MCP_MAX_CALLS=8;
+// Guard paid iterative tool calls; no unlimited agent loops on Opus.
+const MCP_MAX_ROUNDS=2, MCP_MAX_CALLS=4;
 const MCP_URL="https://masterskaya-ai.erichtho-xx.workers.dev/mcp";
 const mcpConfigured=env=>!!env.MCP_READ_KEY &&
   String(env.MCP_READ_KEY).length>=32 && env.BOOKS_MCP_URL===MCP_URL;
@@ -231,6 +232,26 @@ function toProviderTools(tools){
     name:t.name,description:t.description,parameters:t.inputSchema
   }}));
 }
+// Tool definitions are billable model context. A book chapter requires book
+// tools, not schemas for Direct, Metrika, income and marketing on every turn.
+// Ordinary chats are plain Opus, with no forced tools. This changes neither
+// model identity nor the author's editable project instructions.
+function relevantMcpTools(catalog,bookId,messages){
+  const last=String([...messages].reverse().find(m=>m.role==="user")?.content||"")
+    .toLocaleLowerCase("ru").slice(0,12000);
+  if(/^\s*(привет|приветик|здравствуй(?:те)?|добрый (?:день|вечер|утро)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(last))
+    return [];
+  const wantsBook=!!bookId||/(?:книг|роман|глав|сюжет|героин|геро|канон|рукопис|персонаж|сцен|пролог|напис|продолж)/i.test(last);
+  const wantsSales=/(?:доход|выруч|продаж|покуп|конверс|подпис|литнет|рентабельност|кохорт|читател|прочтен)/i.test(last);
+  const wantsAds=/(?:директ|метрик|реклам|кампани|таргет|маркетинг|ctr|cpc|клик|трафик|расход)/i.test(last);
+  const names=new Set();
+  if(wantsBook)for(const t of ["list_books","get_book_context","list_chapters","read_chapter","search_book"])names.add(t);
+  if(wantsSales)for(const t of ["get_income_overview","get_book_sales","get_part_reads","get_cohorts"])names.add(t);
+  if(wantsAds)for(const t of ["get_marketing_overview","get_book_marketing","get_direct_overview",
+    "get_direct_campaign","get_direct_report","get_direct_search_queries",
+    "get_metrika_sources","get_direct_live","get_system_status"])names.add(t);
+  return catalog.filter(t=>names.has(t.name));
+}
 function safeMcpArguments(name,raw,bookId){
   if(!MCP_READ_TOOLS.has(name))throw Error("MCP-инструмент не разрешен.");
   if(typeof raw!=="string"||raw.length>10000)throw Error("Некорректные аргументы инструмента.");
@@ -268,8 +289,12 @@ function visibleCompletion(message){
   return "";
 }
 async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxTokens){
-  const catalog=await mcpDiscover(env);
-  const allowed=new Set(catalog.map(t=>t.name));
+  const recentUser=String([...messages].reverse().find(m=>m.role==="user")?.content||"");
+  // Only discover MCP tool schemas when the task actually needs source data.
+  const willNeedTools=bookId || /(?:книг|роман|глав|сюжет|героин|геро|канон|рукопис|персонаж|сцен|пролог|напис|продолж|доход|выруч|продаж|покуп|конверс|подпис|литнет|рентабельност|кохорт|читател|прочтен|директ|метрик|реклам|кампани|таргет|маркетинг|ctr|cpc|клик|трафик|расход)/i.test(recentUser);
+  const catalog=willNeedTools?await mcpDiscover(env):[];
+  const selected=relevantMcpTools(catalog,bookId,messages);
+  const allowed=new Set(selected.map(t=>t.name));
   // Only neutral tool protocol guidance. Writer voice, tone and rules belong
   // entirely to user-editable global/project instructions in Freitag AI.
   const history=[{
@@ -289,7 +314,7 @@ async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxToke
           "Content-Type":"application/json"},
         body:JSON.stringify({
           model,messages:history,stream:false,max_tokens:maxTokens,
-          tools:toProviderTools(catalog),tool_choice:"auto"
+          ...(selected.length?{tools:toProviderTools(selected),tool_choice:"auto"}:{})
         }),
         signal:AbortSignal.timeout(160000)
       });

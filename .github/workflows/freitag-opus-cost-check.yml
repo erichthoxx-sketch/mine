@@ -1,0 +1,26 @@
+name: Freitag AI · economical Opus chapter
+on:
+  push:
+    branches: [feature/freitag-opus-cost-safe-chapter]
+    paths:
+      - "proxy/freitag-modelproxy-worker.js"
+      - "tests/freitag-*.test.js"
+      - ".github/workflows/freitag-opus-cost-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: JavaScript syntax
+        run: |
+          node --check proxy/freitag-modelproxy-worker.js
+          node --check ai/app.js
+      - name: Full test suite
+        run: npm test
