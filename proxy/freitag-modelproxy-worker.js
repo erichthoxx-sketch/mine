@@ -379,7 +379,8 @@ async function generate(req, env) {
   let input;
   try { input = JSON.parse(raw); } catch { return fail(req, 400, "Неверный JSON."); }
   // Whitelisted provider IDs; never accept arbitrary endpoints/models from the browser.
-  const provider = PROVIDERS[input.provider || "modelproxy"];
+  const providerId=input.provider||"modelproxy";
+  const provider = PROVIDERS[providerId];
   if (!provider) return fail(req, 400, "Неизвестный API-провайдер.");
   if (!env[provider.secret]) return fail(req, 503, "В Cloudflare не задан секрет " + provider.secret + ".");
   const entries = input.messages;
@@ -405,7 +406,7 @@ async function generate(req, env) {
   const maxTokens=isDraft?4500:input.mode==="canon"?750:900;
   // Tool calling makes this a real read-only book connector, not merely a
   // summary of two chapters. A fresh revision was already checked above.
-  if(input.bookId && env.BOOKS && input.provider!=="modelproxy"){
+  if(input.bookId && env.BOOKS && providerId!=="modelproxy"){
     const book=await env.BOOKS.get("book:"+input.bookId,{type:"json"});
     if(!book || (input.sourceRevision && book.updatedAt!==input.sourceRevision))
       return fail(req,424,"Не удалось подтвердить свежую рукопись.");
