@@ -54,7 +54,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     chapters:[{title:"Пролог",text:"начало"},
       {title:"Глава 14",text:"события 14"},
       {title:"Глава 15",text:"события 15"}]};
-  const env = {OWNER_UID:"owner",MODELPROXY_API_KEY:"mp-test",BOOKS:{get:async()=>book}};
+  const env = {OWNER_UID:"owner",MODELPROXY_API_KEY:"mp-test",BOTHUB_API_KEY:"bh-test",BOOKS:{get:async()=>book}};
   const headers = {Origin:ORIGIN,Authorization:"Bearer "+token};
   const original = globalThis.fetch;
   const calls = [];
@@ -62,7 +62,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     calls.push({input,init});
     if (String(input).includes("googleapis.com"))
       return Response.json({keys:[jwk]});
-    if (String(input)==="https://api.modelproxy.org/v1/chat/completions")
+    if (["https://api.modelproxy.org/v1/chat/completions","https://openai.bothub.chat/v1/chat/completions"].includes(String(input)))
       return new Response('data: {"choices":[{"delta":{"content":"OK"}}]}\\n\\n', {
         headers:{"Content-Type":"text/event-stream"}});
     throw Error("Unexpected fetch "+input);
@@ -88,7 +88,36 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(payload.stream,true);
     assert.match(payload.messages[0].content,/Глава 15/);
     assert.match(payload.messages[0].content,/события 15/);
+    const beforeBotHubCalls=calls.length;
+    const botRes=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({provider:"bothub",messages:[{role:"user",content:"Только тест"}],mode:"dialog"})
+    }),env);
+    assert.equal(botRes.status,200);
+    assert.match(await botRes.text(),/OK/);
+    assert.equal(calls.length,beforeBotHubCalls+1);
+    const botCall=calls.at(-1);
+    assert.equal(String(botCall.input),"https://openai.bothub.chat/v1/chat/completions");
+    assert.equal(botCall.init.headers.Authorization,"Bearer bh-test");
+    const bothubPayload=JSON.parse(botCall.init.body);
+    assert.equal(bothubPayload.model,"claude-opus-5.5");
+    assert.equal(bothubPayload.stream,true);
+    const invalid=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({provider:"https://attacker.example",messages:[{role:"user",content:"Never forward"}]})
+    }),env);
+    assert.equal(invalid.status,400);
+    assert.equal(calls.length,beforeBotHubCalls+1);
   } finally {globalThis.fetch=original;}
+});
+
+test("health reports both API configurations separately, without paid requests",async()=>{
+  const env={OWNER_UID:"owner",BOTHUB_API_KEY:"bh-test"};
+  const res=await gateway.fetch(new Request(url("health"),{headers:{Origin:ORIGIN}}),env);
+  const data=await res.json();
+  assert.equal(data.configured,false);
+  assert.equal(data.bothubConfigured,true);
+  assert.deepEqual(data.availableProviders,{modelproxy:false,bothub:true});
 });
 
 test("browser and Pages bridge must reject an old Polza gateway", async () => {
