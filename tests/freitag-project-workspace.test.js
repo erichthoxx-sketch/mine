@@ -9,7 +9,7 @@ test("Markdown displays paragraphs, bold text, lists and code without HTML execu
   const html=renderMarkdown("**Главное**\n\nПервый абзац.\n\n- канон\n- сцена\n\n\x60nextOffset: null\x60");
   assert.match(html,/<strong>Главное<\/strong>/);
   assert.match(html,/<p>Первый абзац\.<\/p>/);
-  assert.match(html,/<ul><li>канон<\/li><li>сцена<\/li><\/ul>/);
+  assert.match(html,/<ul>\s*<li>канон<\/li>\s*<li>сцена<\/li>\s*<\/ul>/);
   assert.match(html,/<code>nextOffset: null<\/code>/);
   const injected=renderMarkdown('<img src=x onerror="alert(1)">\n\n<a href="javascript:alert(1)">click</a>');
   assert.doesNotMatch(injected,/<img\b|<a href="javascript:/i);
