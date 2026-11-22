@@ -4,6 +4,7 @@ on:
     branches: [feature/freitag-full-chapter-workflow]
     paths:
       - "ai/app.js"
+      - "ai/project-view.js"
       - "ai/style.css"
       - "proxy/freitag-modelproxy-worker.js"
       - "tests/freitag-modelproxy.test.js"
