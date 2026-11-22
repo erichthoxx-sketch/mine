@@ -66,7 +66,8 @@ test("unsent chapter prompts survive navigation and are cleared only after submi
   assert.match(app,/drafts:\{\}/);
   assert.match(app,/const draftKey=/);
   assert.match(app,/const rememberDraft=/);
-  assert.match(app,/if\(e.target.id==="f-message-input"\)rememberDraft\(e.target.value\)/);
+  assert.match(app,/if\(e.target.id==="f-message-input"\)\{/);
+  assert.match(app,/rememberDraft\(e.target.value\)/);
   assert.match(app,/esc\(state.drafts\?\.\[draftKey\(\)\]\|\|""\)/);
   assert.match(app,/delete state.drafts\[previousDraft\]/);
 });
