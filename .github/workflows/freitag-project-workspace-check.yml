@@ -1,0 +1,35 @@
+name: Freitag AI · project workspace
+on:
+  push:
+    branches: [feature/freitag-ai-project-workspace]
+    paths:
+      - "ai/**"
+      - "proxy/freitag-modelproxy-worker.js"
+      - "tests/freitag-*.test.js"
+      - ".github/workflows/freitag-project-workspace-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check ai/app.js
+          node --check ai/project-view.js
+          node --check ai/markdown.js
+          node --check proxy/freitag-modelproxy-worker.js
+      - name: Regression
+        run: npm test
+      - name: Preview build
+        run: |
+          bash scripts/build-apps.sh ux-preview _site
+          test -f _site/ux-preview/ai/project-view.js
+          test -f _site/ux-preview/ai/markdown.js
+          test -f _site/workshop/bear.svg
