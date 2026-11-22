@@ -95,7 +95,7 @@ function renderProjects(){
 function renderKnowledge(){
   const docs=state.docs.filter(d=>!state.activeProjectId||d.projectId===state.activeProjectId);
   const examples=state.feedback.filter(f=>!state.activeProjectId||f.projectId===state.activeProjectId).slice().reverse();
-  $("#panel").innerHTML='<div class="f-content">'+titleLine("Материалы","Тексты, заметки и авторские образцы."+
+  $("#panel").innerHTML='<div class="f-content">'+titleLine("Материалы","Тексты, заметки и авторские образцы.")+
   '<div class="f-notice">Канон из «Мастерской» и загруженные главы — источники. Авторские образцы и замечания — правила стиля. Ни один из этих материалов сам по себе не меняет веса модели.</div>'+
   '<div class="f-section"><label class="f-label">Проект</label><select class="f-select" id="f-doc-project"><option value="">Выбери проект</option>'+
     state.projects.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===state.activeProjectId?"selected":"")+'>'+esc(p.name)+'</option>').join("")+'</select></div>'+
