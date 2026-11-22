@@ -67,6 +67,11 @@ try{
   await desktop.screenshot({path:OUT+"/settings.png",fullPage:true});
   await desktop.getByText("Резервные копии и мои данные").click();
   assert.equal(await desktop.locator("#f-import").count(),1);
+  // The dark theme must really apply after saving settings, not just appear in the menu.
+  await desktop.locator("#f-theme").selectOption("dark");
+  await desktop.locator('#f-settings button[type="submit"]').click();
+  assert.equal(await desktop.locator("html").getAttribute("data-theme"),"dark");
+  await desktop.screenshot({path:OUT+"/dark.png",fullPage:true});
 
   const mobile=await pageAt(390,844);
   assert.equal(await mobile.locator("#f-chat-project").count(),1);
