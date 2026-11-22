@@ -199,7 +199,7 @@ function renderChat(){
   const body=(c?.messages||[]).map((m,i)=>
     '<article class="f-msg '+esc(m.role)+'"><div class="f-speaker">'+
     (m.role==="user"?"Ты":m.provider==="Claude"?"Claude Opus":String(m.provider||"").startsWith("Claude ") ? esc(m.provider) :m.provider==="Внешняя модель"?"Внешняя модель":"Freitag AI")+
-    '</div><div class="f-msg-text">'+esc(m.content)+'</div>'+
+    '</div><div class="f-msg-text">'+(m.role==="assistant"?renderMarkdown(m.content):'<p>'+esc(m.content).replace(/\n/g,"<br>")+'</p>')+'</div>'+
     (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
       '<div class="f-feedback-actions"><button type="button" class="f-inline-btn" data-action="copy-answer" data-i="'+i+'">Копировать</button>'+
       '<button type="button" class="f-inline-btn" data-action="feedback-good" data-i="'+i+'">В образцы</button>'+
@@ -220,10 +220,10 @@ function renderChat(){
   $("#panel").innerHTML=
     '<section class="f-chat" aria-label="Литературный чат">'+
     '<div class="f-chat-meta"><div class="f-chat-identity">'+
-    '<span class="f-eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span>'+
     '<h1 class="f-title">'+esc(c?.title&&c.title!=="Новый чат"?c.title:"Новый диалог")+'</h1>'+
     '<div class="f-chat-book"><label for="f-chat-project">Книга</label>'+
-    '<select id="f-chat-project" class="f-select" aria-label="Выбрать книгу">'+bookOptions+'</select></div></div>'+
+    '<select id="f-chat-project" class="f-select" aria-label="Выбрать книгу">'+bookOptions+'</select>'+
+      (p?'<button type="button" class="f-project-open-link" data-action="project-home" data-id="'+esc(p.id)+'">Инструкции проекта</button>':"")+'</div></div>'+
     '<div class="f-chat-head-actions">'+
     '<button type="button" class="f-btn f-btn-new" data-action="new-chat">＋ Новый чат</button>'+
     '<details class="f-mobile-history"><summary aria-label="История разговоров">История</summary>'+
@@ -238,9 +238,9 @@ function renderChat(){
     '</div>'+
     '<form id="f-chat-form" class="f-compose">'+
       '<div class="f-compose-surface"><div class="f-writing-bar">'+
-      '<label class="f-compact-label" for="f-writing-mode">Режим</label>'+
+      '<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
       '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
-      '<span class="f-compose-canon">'+(p?.masterCanon?"Канон из Мастерской":p?.canon?"Канон проекта":p?"Канон не задан":"Без контекста книги")+'</span>'+
+      '<span class="f-compose-canon">'+(p?.masterBookId?"MCP Мастерская · автоматически":p?"Инструкции проекта":"Обычный чат")+'</span>'+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
       '<textarea class="f-textarea" id="f-message-input" rows="4" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'>'+esc(state.drafts?.[draftKey()]||"")+'</textarea>'+
@@ -260,7 +260,7 @@ function renderChat(){
 }
 function ensureChat(){
   if(chat())return chat();
-  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:pendingMode||(state.activeProjectId?"draft":"dialog"),messages:[],updated:stamp()};
+  const c={id:uid(),projectId:state.activeProjectId||null,title:"Новый чат",mode:pendingMode||"dialog",messages:[],updated:stamp()};
   pendingMode=null;
   state.chats.unshift(c);state.activeChatId=c.id;save();return c;
 }
