@@ -10,6 +10,9 @@ on:
       - "functions/api/freitag/**"
       - "tests/*.test.js"
       - ".github/workflows/freitag-ui-preview.yml"
+  pull_request:
+    branches:
+      - feature/freitag-ai-polza-opus
   workflow_dispatch:
 
 permissions:
