@@ -62,7 +62,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
       {title:"Глава 14",text:"события 14"},
       {title:"Глава 15",text:"события 15"}]};
   const written=[];
-  const env = {OWNER_UID:"owner",MODELPROXY_API_KEY:"mp-test",BOTHUB_API_KEY:"bh-test",BOOKS:{
+  const env = {OWNER_UID:"owner",MODELPROXY_API_KEY:"mp-test",BOTHUB_API_KEY:"bh-test",APIMIRA_API_KEY:"am-test",BOOKS:{
     get:async()=>book,
     put:async(key,raw,opts)=>{
       assert.equal(key,"book:test");
@@ -80,9 +80,22 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
       return Response.json({keys:[jwk]});
     if (String(input) === "https://openai.bothub.chat/v1/models")
       return Response.json({object:"list",data:[{id:"claude-sonnet-5.5",kind:"chat",endpoints:["/v1/chat/completions"]},{id:"claude-opus-5.5",kind:"chat"}]});
-    if (["https://api.modelproxy.org/v1/chat/completions","https://openai.bothub.chat/v1/chat/completions"].includes(String(input)))
+    if (String(input) === "https://apimira.com/v1/models")
+      return Response.json({object:"list",data:[{id:"anthropic/claude-opus-5.5",object:"model"}]});
+    if (["https://api.modelproxy.org/v1/chat/completions",
+      "https://openai.bothub.chat/v1/chat/completions",
+      "https://apimira.com/v1/chat/completions"].includes(String(input))){
+      const body=JSON.parse(init.body);
+      if(body.stream===false){
+        const called=body.messages.some(m=>m.role==="tool");
+        const wantsChapter=body.messages.some(m=>m.role==="user"&&m.content.includes("Проверить Марту"));
+        if(wantsChapter&&!called)return Response.json({choices:[{message:{role:"assistant",content:null,
+          tool_calls:[{id:"call-1",type:"function",function:{name:"read_chapter",arguments:'{"chapter":2}'}}]}}]});
+        return Response.json({choices:[{message:{role:"assistant",content:called?"События главы подтверждены.":"OK"}}]});
+      }
       return new Response('data: {"choices":[{"delta":{"content":"OK"}}]}\\n\\n', {
         headers:{"Content-Type":"text/event-stream"}});
+    }
     throw Error("Unexpected fetch "+input);
   };
   try {
@@ -137,7 +150,23 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     }),env);
     assert.equal(withRevision.status,200);
     assert.equal(calls.length,beforeFresh+1);
-    assert.match(JSON.parse(calls.at(-1).init.body).messages[0].content,/новая глава/);
+    const lastBookCall=JSON.parse(calls.at(-1).init.body);
+    assert.match(lastBookCall.messages[0].content,/новая глава/);
+    assert.equal(lastBookCall.stream,false);
+    assert.equal(lastBookCall.tools.length,4);
+    const beforeToolCalls=calls.length;
+    const toolResponse=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({bookId:"test",sourceRevision:refreshed.updatedAt,mode:"canon",
+        provider:"bothub",model:"claude-opus-5.5",messages:[{role:"user",content:"Проверить Марту в главе 2"}]})
+    }),env);
+    assert.equal(toolResponse.status,200);
+    assert.match(await toolResponse.text(),/События главы подтверждены/);
+    assert.equal(calls.length,beforeToolCalls+2);
+    const followup=JSON.parse(calls.at(-1).init.body);
+    assert.equal(followup.messages.at(-1).role,"tool");
+    assert.match(followup.messages.at(-1).content,/новая глава/);
+    assert.equal(followup.messages.at(-1).tool_call_id,"call-1");
     const beforeBotHubCalls=calls.length;
     const botRes=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
@@ -169,6 +198,17 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(preflight.status,200);
     assert.equal((await preflight.json()).ok,true);
     assert.equal(calls.at(-1).init.headers.Authorization,"Bearer bh-test");
+    const apiRes=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({provider:"apimira",messages:[{role:"user",content:"Только тест"}]})
+    }),env);
+    assert.equal(apiRes.status,200);
+    assert.equal(String(calls.at(-1).input),"https://apimira.com/v1/chat/completions");
+    assert.equal(calls.at(-1).init.headers.Authorization,"Bearer am-test");
+    assert.equal(JSON.parse(calls.at(-1).init.body).model,"anthropic/claude-opus-5.5");
+    const apiPreflight=await gateway.fetch(new Request(url("preflight?provider=apimira&model=anthropic%2Fclaude-opus-5.5"),{headers}),env);
+    assert.equal(apiPreflight.status,200);
+    assert.equal((await apiPreflight.json()).ok,true);
     const beforeProviderInvalid=calls.length;
     const invalid=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
@@ -185,7 +225,7 @@ test("health reports both API configurations separately, without paid requests",
   const data=await res.json();
   assert.equal(data.configured,false);
   assert.equal(data.bothubConfigured,true);
-  assert.deepEqual(data.availableProviders,{modelproxy:false,bothub:true});
+  assert.deepEqual(data.availableProviders,{modelproxy:false,bothub:true,apimira:false});
 });
 
 test("browser and Pages bridge must reject an old Polza gateway", async () => {
