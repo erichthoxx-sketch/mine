@@ -86,6 +86,16 @@ try{
   await mobile.locator("#f-chat-form").waitFor();
   assert.equal(await mobile.locator("#f-message-input").inputValue(),"Тестовый роман: новый абзац");
 
+  // Send in the active book; the phone must be able to reopen that conversation.
+  await mobile.locator("#f-message-input").fill("Проверка истории на телефоне.");
+  await mobile.locator("#f-chat-form button[type=submit]").click();
+  await mobile.locator(".f-msg.assistant .f-msg-text").filter({hasText:"Тестовый ответ"}).waitFor({timeout:12000});
+  await mobile.locator('.f-mobile-history summary').click();
+  assert.equal(await mobile.locator('.f-mobile-history-panel button[data-action="select-chat"]').count(),1);
+  await mobile.screenshot({path:OUT+"/mobile-history.png",fullPage:true});
+  await mobile.locator('.f-mobile-history-panel button[data-action="select-chat"]').click();
+  assert.match(await mobile.locator(".f-msg.user .f-msg-text").innerText(),/Проверка истории/);
+
   const overflow=await mobile.evaluate(()=>({
     scrollWidth:document.documentElement.scrollWidth,
     clientWidth:document.documentElement.clientWidth
