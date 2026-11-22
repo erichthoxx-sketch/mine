@@ -276,3 +276,58 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 @media(prefers-reduced-motion:no-preference){
   .f-btn,.f-nav button,.f-list button,.f-icon-btn{transition:background-color .16s ease,color .16s ease,border-color .16s ease}
 }
+
+/* Dense editorial chat: one model selector, no oversized chat headings.
+   Keep the long-form textarea resizable for actual chapter work. */
+.f-main{padding:18px clamp(18px,3vw,42px) 30px}
+.f-layout{grid-template-columns:220px minmax(0,1fr)}
+.f-sidebar{padding:16px 12px}
+.f-sidebar-content{margin-top:18px}
+.f-side-section{margin-top:18px}
+.f-chat{max-width:960px;min-height:calc(100dvh - 135px)}
+.f-chat.has-messages{min-height:0}
+.f-chat-meta{align-items:center;gap:12px;margin-bottom:8px}
+.f-chat-meta .f-title{
+  font-size:19px;line-height:1.22;letter-spacing:-.02em;
+  overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;
+  -webkit-line-clamp:2;line-clamp:2;max-width:630px
+}
+.f-chat-book{margin-top:7px}
+.f-chat-body{gap:13px;padding:8px 1px 17px;min-height:120px}
+.f-chat.has-messages .f-chat-body{flex:0 0 auto;min-height:0;padding:10px 1px 15px}
+.f-chat.has-messages .f-chat-body .f-msg:last-child{margin-bottom:0}
+.f-msg.user{padding:10px 13px;border-radius:12px 12px 3px 12px}
+.f-msg.assistant{padding:2px 1px}
+.f-msg-text{line-height:1.7;font-size:14px}
+.f-feedback-actions{margin-top:8px;gap:16px}
+.f-chat-welcome{padding:30px 0 45px}
+.f-chat-welcome h2{font-size:23px}
+.f-compose{padding:8px 0 0}
+.f-compose-surface{padding:9px 12px;border-radius:12px}
+.f-writing-bar{gap:7px;padding-bottom:7px}
+.f-writing-bar .f-select{min-height:33px}
+.f-writing-bar .f-chat-model-select{max-width:235px;width:auto;min-width:145px;background:var(--f-paper);border-color:var(--f-line-strong)}
+.f-compact-label{font-size:11px}
+.f-compose .f-textarea{min-height:72px;max-height:38dvh;padding:10px 2px;resize:vertical;border:0;border-radius:0;background:transparent;outline:none}
+.f-compose .f-textarea:focus{border:0}
+.f-compose-controls{padding-top:5px}
+.f-extra-tools{padding:5px 3px 0}
+.f-extra-tools summary{font-size:11px}
+.f-btn-new{display:none}
+@media(max-width:760px){
+  .f-main{padding:14px 12px calc(90px + env(safe-area-inset-bottom))}
+  .f-chat{min-height:calc(100dvh - 170px)}
+  .f-chat.has-messages{min-height:0}
+  .f-chat-meta .f-title{font-size:18px}
+  .f-btn-new{display:inline-flex}
+  .f-writing-bar .f-chat-model-select{max-width:190px}
+  .f-compose .f-textarea{min-height:72px}
+}
+@media(max-width:470px){
+  .f-chat-meta .f-title{font-size:17px}
+  .f-writing-bar .f-chat-model-select{max-width:170px;min-width:140px}
+  .f-compact-label{font-size:10px}
+  .f-writing-bar{gap:5px}
+  .f-writing-bar .f-select{font-size:11px!important;padding:5px 6px}
+  .f-compose-canon{font-size:10px}
+}
