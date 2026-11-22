@@ -444,6 +444,14 @@ async function generate(req, env) {
         const book=await env.BOOKS.get("book:"+input.bookId,{type:"json"});
         if(!book||book.updatedAt!==input.sourceRevision)
           throw Error("Снимок выбранной книги устарел. Платный запрос остановлен.");
+        // KV may take time to propagate between the gateway and the original
+        // MCP Worker. Validate the original MCP's view BEFORE any paid call.
+        const listText=await mcpCallTool(env,"list_chapters",{book_id:input.bookId});
+        let mcpList;
+        try{mcpList=JSON.parse(listText);}
+        catch{throw Error("MCP не подтвердил список глав.");}
+        if(mcpList?.updatedAt!==input.sourceRevision)
+          throw Error("Синхронизация с MCP еще не завершилась. Повтори отправку после обновления.");
         messages.unshift({role:"system",content:
           "Роман: "+String(book.title||"").slice(0,300)+
           ". Книга обновлена: "+book.updatedAt+". Полный текст и канон доступны "+
