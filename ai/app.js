@@ -19,7 +19,7 @@ const WRITING_MODES = {
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
-  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",globalInstruction:"",context:4096}, theme:"auto"});
+  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",sceneOutputTokens:4500,globalInstruction:"",context:4096}, theme:"auto"});
 let state=blank(), tab="chat", projectHomeId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -255,6 +255,12 @@ function renderChat(){
       '<select id="f-quick-model" class="f-select f-quick-model" aria-label="Модель для следующего ответа" '+(busy?"disabled":"")+'>'+modelChoices()+'</select>'+
       '<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
       '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>'+
+      '<span class="f-chapter-length" id="f-chapter-limit-wrap" '+((c?.mode||pendingMode||(p?"draft":"dialog"))==="draft"?"":'hidden')+'>'+
+      '<label class="f-compact-label" for="f-chapter-limit">Макс. токенов</label>'+
+      '<select id="f-chapter-limit" class="f-select" title="Верхняя граница художественного ответа; большие значения могут стоить значительно дороже" '+(busy?"disabled":"")+'>'+
+      [[4500,"4 500 · короткий фрагмент"],[9000,"9 000 · длинная сцена"],[14000,"14 000 · глава (дороже)"]].map(([v,label])=>
+        '<option value="'+v+'" '+(Number(state.settings.sceneOutputTokens||4500)===v?"selected":"")+'>'+label+'</option>').join("")+
+      '</select></span>'+
       '<span class="f-compose-canon">'+(p?.masterBookId?"MCP Мастерская · автоматически":p?"Инструкции проекта":"Обычный чат")+'</span>'+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
@@ -408,9 +414,18 @@ function modelproxyMessages(c){
   ].filter(Boolean);
   const examples=state.feedback.filter(x=>x.projectId===c.projectId&&x.kind==="good")
     .slice(-2).map(x=>"Пример, выбранный автором:\n"+String(x.finalText||x.answer||"").slice(0,1800));
-  const history=c.messages.filter(x=>["user","assistant"].includes(x.role)).slice(-8,-1)
-    .filter(x=>!String(x.content||"").startsWith("Ошибка Claude:"))
-    .map(x=>({role:x.role,content:String(x.content).slice(-6000)}));
+  const continueChapter=c.mode==="draft"&&/^(?:продолж(?:ай|и|ение|ить)?|дальше|продолжи главу)[.!?\s]*$/i.test(last.trim());
+  const prior=c.messages.filter(x=>["user","assistant"].includes(x.role)).slice(-8,-1)
+    .filter(x=>!String(x.content||"").startsWith("Ошибка Claude:"));
+  const history=prior.map(x=>{
+    const content=String(x.content||"");
+    // Preserve the END of previous scene output. Before this change the
+    // first 6000 characters were sent and the model might restart the scene.
+    if(x.role==="assistant"&&c.mode==="draft")return {role:x.role,content:content.slice(-24000)};
+    if(x.role==="user"&&continueChapter&&content.length>12000)
+      return {role:x.role,content:content.slice(0,5000)+"\n[… середина предыдущего запроса опущена …]\n"+content.slice(-12000)};
+    return {role:x.role,content:content.slice(-6000)};
+  });
   const instructions=[...custom,...examples].join("\n\n").slice(0,26000);
   return [...(instructions?[{role:"system",content:instructions}]:[]),...history,{role:"user",content:last}];
 }
@@ -691,7 +706,7 @@ async function sendMessage(text){
     const res=isPaidProvider?await fetch(gateway+"/chat",{
       method:"POST",
       headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
-      body:JSON.stringify({provider:state.settings.provider,model:state.settings.provider==="bothub"?activeBotHubModel():undefined,messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null,sourceRevision}),
+      body:JSON.stringify({provider:state.settings.provider,model:state.settings.provider==="bothub"?activeBotHubModel():undefined,messages,mode:c.mode||"dialog",outputTokenLimit:c.mode==="draft"?Number(state.settings.sceneOutputTokens||4500):undefined,bookId:project(c.projectId)?.masterBookId||null,sourceRevision}),
       signal:currentController.signal
     }):await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",
@@ -923,7 +938,14 @@ document.addEventListener("change",async(e)=>{
   if(e.target.id==="f-writing-mode"){
     if(!WRITING_MODES[e.target.value])return;
     const c=chat();if(c){c.mode=e.target.value;await save();}else pendingMode=e.target.value;
+    const lengthRow=$("#f-chapter-limit-wrap");if(lengthRow)lengthRow.hidden=e.target.value!=="draft";
     return;
+  }
+  if(e.target.id==="f-chapter-limit"){
+    const limit=Number(e.target.value);
+    if(![4500,9000,14000].includes(limit))return;
+    state.settings.sceneOutputTokens=limit;
+    await save();return;
   }
   if(e.target.id==="f-sidebar-project"||e.target.id==="f-chat-project"||e.target.id==="f-doc-project"){
     state.activeProjectId=e.target.value||null;state.activeChatId=null;pendingMode=null;await save();render();return;
