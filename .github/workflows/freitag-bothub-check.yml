@@ -1,16 +1,17 @@
-name: Freitag AI · BotHub regression
+name: Freitag AI · Live sync regression
 on:
   push:
-    branches: [feature/freitag-ai-bothub-compact]
+    branches: [feature/freitag-ai-live-master-sync]
     paths:
       - "ai/**"
       - "proxy/freitag-modelproxy-worker.js"
       - "functions/api/freitag/**"
       - "writer/js/views/aicenter.js"
+      - "scripts/build-apps.sh"
       - "tests/freitag-*.test.js"
       - ".github/workflows/freitag-bothub-check.yml"
   pull_request:
-    branches: [feature/freitag-ai-minimal-workspace]
+    branches: [feature/freitag-ai-bothub-compact]
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,6 +27,7 @@ jobs:
       - name: JavaScript syntax
         run: |
           node --check ai/app.js
+          node --check ai/live-context.js
           node --check proxy/freitag-modelproxy-worker.js
           node --check "functions/api/freitag/[route].js"
           node --check writer/js/views/aicenter.js
