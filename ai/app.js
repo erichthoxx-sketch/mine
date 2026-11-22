@@ -1,6 +1,7 @@
 // Freitag AI — персональная литературная среда: сменяемые модели, память и контекст автора.
 import { master } from './master-sync.js';
 import { renderMarkdown } from './markdown.js';
+import { projectHomeHtml } from './project-view.js';
 import { ensureDriveAccess, refreshLinkedBook } from './live-context.js';
 // Чаты, проекты и текстовые материалы хранятся только в IndexedDB этого браузера.
 // Никаких ключей и рукописей в репозитории.
@@ -50,10 +51,10 @@ function renderSidebar(){
       .sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||"")));
     el.innerHTML=
       '<button type="button" class="f-btn primary f-new-chat" data-action="new-chat"><span aria-hidden="true">＋</span> Новый чат</button>'+
-      '<div class="f-side-section"><label for="f-sidebar-project" class="f-side-label">КНИГА</label>'+
+      '<div class="f-side-section"><label for="f-sidebar-project" class="f-side-label">ПРОЕКТ</label>'+
       '<select id="f-sidebar-project" class="f-select" aria-label="Активная книга"><option value="">Без книги</option>'+
       state.projects.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===selected?"selected":"")+'>'+esc(x.name)+'</option>').join("")+
-      '</select></div>'+
+      '</select>'+(selected?'<button type="button" class="f-project-shortcut" data-action="project-home" data-id="'+esc(selected)+'">Инструкции проекта ↗</button>':"")+'</div>'+
       '<div class="f-side-section f-side-history"><div class="f-side-label f-side-count">ИСТОРИЯ <span>'+arr.length+'</span></div>'+
       (arr.length?'<ul class="f-list f-chat-list">'+arr.map(x=>
         '<li><button type="button" class="'+(x.id===state.activeChatId?"on":"")+
@@ -79,10 +80,15 @@ function renderHeader(){
 }
 function render(){
   setTheme();renderHeader();renderSidebar();
-  if(tab==="projects")return renderProjects();
+  if(tab==="projects")return projectHomeId?renderProjectHome():renderProjects();
   if(tab==="knowledge")return renderKnowledge();
   if(tab==="settings")return renderSettings();
   renderChat();
+}
+function renderProjectHome(){
+  const p=project(projectHomeId);
+  if(!p){projectHomeId=null;return renderProjects();}
+  $("#panel").innerHTML=projectHomeHtml(p,state.chats,state.docs,userInstruction);
 }
 function renderProjects(){
   $("#panel").innerHTML='<div class="f-content">'+titleLine("Мои книги","Канон, стиль и диалоги — отдельно для каждой истории.",
@@ -90,7 +96,7 @@ function renderProjects(){
     (state.projects.length?'<div class="f-projects">'+state.projects.map(p=>{
       const count=state.chats.filter(c=>c.projectId===p.id).length;
       const docs=state.docs.filter(d=>d.projectId===p.id).length;
-      return '<article class="f-project-card"><h2>'+esc(p.name)+'</h2><p>'+esc(p.description||"Без описания")+'</p><p>'+count+' чатов · '+docs+' материалов'+(p.masterBookId?" · связан с Мастерской":p.canon?" · канон закреплён":" · канон не заполнен")+'</p><div class="f-row"><button class="f-btn primary" data-action="open-project" data-id="'+esc(p.id)+'">Открыть</button><button class="f-btn" data-action="edit-project" data-id="'+esc(p.id)+'">Настроить</button><button class="f-btn danger" data-action="delete-project" data-id="'+esc(p.id)+'">Удалить</button></div></article>';
+      return '<article class="f-project-card"><h2>'+esc(p.name)+'</h2><p>'+esc(p.description||"Без описания")+'</p><p>'+count+' чатов · '+docs+' материалов'+(p.masterBookId?" · связан с Мастерской":p.canon?" · канон закреплён":" · канон не заполнен")+'</p><div class="f-row"><button class="f-btn primary" data-action="open-project" data-id="'+esc(p.id)+'">Открыть проект</button><button class="f-btn" data-action="edit-project" data-id="'+esc(p.id)+'">Настроить</button><button class="f-btn danger" data-action="delete-project" data-id="'+esc(p.id)+'">Удалить</button></div></article>';
     }).join("")+'</div>':empty("Проектов пока нет","Создай первый проект, например «Развод для черной вдовы»."))+
     '<div class="f-section f-master-section"><h2>Книги из «Мастерской»</h2><p class="f-muted">Подключение только для чтения. Импортируются утверждённые факты Легенды, персонажи, каркас и синопсис; рукописи не изменяются.</p>'+
     (!master.ready?'<button class="f-btn" data-action="master-connect">Подключить аккаунт</button>':
