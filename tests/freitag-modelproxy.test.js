@@ -322,3 +322,14 @@ test("browser and Pages bridge must reject an old Polza gateway", async () => {
   assert.ok(app.includes("f-bothub-model"));
   assert.ok(app.includes("activeBotHubModel"));
 });
+
+test("MCP answers use a conversational editorial style, not tool tracing",async()=>{
+  const worker=await readFile(new URL("../proxy/freitag-modelproxy-worker.js",import.meta.url),"utf8");
+  assert.match(worker,/const editorialStyle=/);
+  assert.match(worker,/Не превращай диалог в протокол проверки/);
+  assert.match(worker,/Не делай выводы о мотивах, действиях или перемещениях персонажей/);
+  assert.match(worker,/Если явно попросили назвать инструмент или источник/);
+  assert.match(worker,/Если просят написать прозу или полный редакторский разбор/);
+  assert.match(worker,/tool_choice:"auto"/);
+  assert.match(worker,/await mcpCallTool\(env,call\.function\.name,args\)/);
+});

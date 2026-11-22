@@ -1,0 +1,24 @@
+name: Freitag AI editor style
+on:
+  push:
+    branches: [feature/freitag-ai-editorial-response-style]
+    paths:
+      - "proxy/freitag-modelproxy-worker.js"
+      - "tests/freitag-modelproxy.test.js"
+      - ".github/workflows/freitag-editor-style-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: node --check proxy/freitag-modelproxy-worker.js
+      - name: Regression
+        run: npm test
