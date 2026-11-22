@@ -323,7 +323,7 @@ async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxToke
           model,messages:history,stream:false,max_tokens:maxTokens,
           ...(selected.length?{tools:toProviderTools(selected),tool_choice:"auto"}:{})
         }),
-        signal:AbortSignal.timeout(160000)
+        signal:AbortSignal.any([req.signal,AbortSignal.timeout(maxTokens>=9000?300000:160000)])
       });
     }catch{return fail(req,502,provider.name+": модель недоступна или истекло время ожидания.");}
     if(!upstream.ok){
