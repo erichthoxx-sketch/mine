@@ -15,9 +15,9 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
       (p.masterBookId?'Книга связана с Мастерской · MCP вызывается автоматически':'Локальный проект · подключи книгу через «Мастерскую»')+
       ' · '+history.length+' последних чатов</div>'+
     '<form id="f-project-instructions" data-project-id="'+esc(p.id)+'" class="f-project-editor">'+
-      '<div><h2>Инструкции проекта</h2><p class="f-muted">Здесь только твои правила. Никаких навязанных литературных промптов.</p></div>'+
-      '<label class="f-label" for="f-project-instruction">Как Opus должен работать с этой книгой</label>'+
-      '<textarea id="f-project-instruction" name="instruction" class="f-textarea f-project-prompt" placeholder="Необязательно. Например, правила голоса, POV и логики сцен.">'+esc(userInstruction(p.instruction))+'</textarea>'+
+      '<div><h2>Инструкция проекта</h2><p class="f-muted">Вставь свой мастер-промпт целиком и сохрани один раз. Он будет применяться ко всем новым чатам этого романа — как в Claude Projects. Ничего разделять не нужно.</p></div>'+
+      '<label class="f-label" for="f-project-instruction">Твоя постоянная инструкция</label>'+
+      '<textarea id="f-project-instruction" name="instruction" class="f-textarea f-project-prompt" placeholder="Вставь сюда свой мастер-промпт целиком, без переработки и сокращений.">'+esc(userInstruction(p.instruction))+'</textarea>'+
       '<details class="f-project-options"><summary>Мои дополнения к канону, голосу и текущей сцене</summary>'+
         '<label class="f-label" for="f-project-voice">Голос и стиль</label><textarea id="f-project-voice" name="voice" class="f-textarea">'+esc(p.voice||"")+'</textarea>'+
         '<label class="f-label" for="f-project-canon">Дополнительные факты канона</label><textarea id="f-project-canon" name="canon" class="f-textarea">'+esc(p.canon||"")+'</textarea>'+
