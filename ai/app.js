@@ -15,7 +15,7 @@ const WRITING_MODES = {
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
-  settings:{provider:"ollama",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
+  settings:{provider:"ollama",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-sonnet-5.5",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
 let state=blank(), tab="chat", busy=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -130,8 +130,12 @@ function renderSettings(){
     '<section class="f-settings-card"><div class="f-section-kicker">01 / МОДЕЛЬ</div>'+
     '<h2>Кто отвечает</h2><p class="f-muted">Выбери модель для новых сообщений. Существующие чаты останутся на месте.</p>'+
     '<label for="f-provider">Модель</label><select id="f-provider" name="provider" class="f-select">'+
-    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"],["bothub","Claude Opus 5.5 · BotHub"]].map(x=>
+    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"],["bothub","BotHub · Claude"]].map(x=>
       '<option value="'+x[0]+'" '+(x[0]===provider?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
+    '<div id="f-bothub-model-row" '+(provider==="bothub"?"":'hidden')+'><label for="f-bothub-model">Модель BotHub</label>'+
+    '<select id="f-bothub-model" name="bothubModel" class="f-select">'+
+    [["claude-sonnet-5.5","Sonnet 5.5 · на каждый день"],["claude-opus-5.5","Opus 5.5 · сложные задачи"]].map(x=>
+      '<option value="'+x[0]+'" '+(x[0]===s.bothubModel?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></div>'+
     '<div class="f-row f-connection-row"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button>'+
     '<span id="f-test-status" class="f-muted" role="status">Проверка не выполняет платную генерацию.</span></div>'+
     '<details class="f-settings-fold"><summary>Защищенный API-шлюз · ModelProxy / BotHub</summary>'+
@@ -175,15 +179,17 @@ function renderSettings(){
     '<div class="f-settings-save"><button type="submit" class="f-btn primary">Сохранить настройки</button></div>'+
     '</form></div>';
 }
+const activeBotHubModel=()=>state.settings.bothubModel==="claude-opus-5.5"?"claude-opus-5.5":"claude-sonnet-5.5";
+const activeClaudeName=()=>activeBotHubModel()==="claude-opus-5.5"?"Claude Opus 5.5":"Claude Sonnet 5.5";
 const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":
-  state.settings.provider==="bothub"?"Claude Opus 5.5 · BotHub":"Локальная Qwen · Ollama";
+  state.settings.provider==="bothub"?activeClaudeName()+" · BotHub":"Локальная Qwen · Ollama";
 function renderChat(){
   const c=chat();
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
   const p=project(c?.projectId||state.activeProjectId);
   const body=(c?.messages||[]).map((m,i)=>
     '<article class="f-msg '+esc(m.role)+'"><div class="f-speaker">'+
-    (m.role==="user"?"Ты":m.provider==="Claude"?"Claude Opus":m.provider==="Внешняя модель"?"Внешняя модель":"Freitag AI")+
+    (m.role==="user"?"Ты":m.provider==="Claude"?"Claude Opus":String(m.provider||"").startsWith("Claude ") ? esc(m.provider) :m.provider==="Внешняя модель"?"Внешняя модель":"Freitag AI")+
     '</div><div class="f-msg-text">'+esc(m.content)+'</div>'+
     (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
       '<div class="f-feedback-actions"><button type="button" class="f-inline-btn" data-action="copy-answer" data-i="'+i+'">Копировать</button>'+
@@ -487,10 +493,19 @@ async function testConnection(){
       const chosen=$("#f-provider")?.value||state.settings.provider;
       if(!data.ok || (chosen==="modelproxy"?!data.configured:!data.bothubConfigured))
         throw Error(chosen==="bothub"?"BotHub пока не подключен: отсутствует BOTHUB_API_KEY.":"ModelProxy пока не подключен: отсутствует MODELPROXY_API_KEY.");
-      connectOk=true;connectText="Шлюз Claude доступен";
+      if(chosen==="bothub"){
+        const model=$("#f-bothub-model")?.value||activeBotHubModel();
+        const token=await master.idToken();
+        const check=await fetch(gateway+"/preflight?model="+encodeURIComponent(model),{
+          headers:{"Authorization":"Bearer "+token},cache:"no-store"
+        });
+        const info=await check.json().catch(()=>({}));
+        if(!check.ok||!info.ok)throw Error(info.error||info.message||"Модель BotHub недоступна.");
+      }
+      connectOk=true;connectText=chosen==="bothub"?"BotHub: ключ и модель проверены":"Шлюз Claude доступен";
       const status=$("#f-test-status");if(status)status.textContent=data.booksConnected?
-        "Шлюз отвечает. Коннектор Мастерской настроен. Платная генерация еще не проверена.":
-        "Шлюз отвечает, но доступ к MCP-коннектору Мастерской пока не настроен.";
+        (chosen==="bothub"?"Ключ и модель доступны. Книги подключены. Генерация не тестировалась.":"Шлюз отвечает. Книги подключены. Генерация не тестировалась."):
+        "Шлюз отвечает, но доступ к книгам Мастерской пока не настроен.";
       notice("Защищенный шлюз найден. Оплата за проверку соединения не списывается.");
     }catch(e){connectOk=false;connectText="Шлюз недоступен";notice("Claude: "+e.message);}
     renderHeader();return;
@@ -661,17 +676,17 @@ async function sendMessage(text){
   c.updated=stamp();await save();
   busy=true;render();
   const messages=isPaidProvider?modelproxyMessages(c):buildMessages(c);
-  const assistant={role:"assistant",provider:isPaidProvider?"Claude":"Qwen",content:"",at:stamp()};
+  const assistant={role:"assistant",provider:isPaidProvider?(state.settings.provider==="bothub"?activeClaudeName():"Claude Opus 5.5"):"Qwen",content:"",at:stamp()};
   c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
-  el.innerHTML='<span class="f-speaker">'+(isPaidProvider?"Claude Opus 5.5":"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
+  el.innerHTML='<span class="f-speaker">'+(isPaidProvider?esc(assistant.provider):"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
   $("#f-messages")?.append(el);const target=el.querySelector(".f-msg-text");
   currentController=new AbortController();
   try{
     const res=isPaidProvider?await fetch(gateway+"/chat",{
       method:"POST",
       headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
-      body:JSON.stringify({provider:state.settings.provider,messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null}),
+      body:JSON.stringify({provider:state.settings.provider,model:state.settings.provider==="bothub"?activeBotHubModel():undefined,messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null}),
       signal:currentController.signal
     }):await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",
@@ -713,7 +728,7 @@ async function sendMessage(text){
     }
     if(pending.trim())consume(pending.trimEnd());
     if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты у провайдера.");
-    connectOk=true;connectText=isPaidProvider?"Claude Opus подключен":"Ollama доступна";
+    connectOk=true;connectText=isPaidProvider?activeProviderLabel()+" подключен":"Ollama доступна";
   }catch(e){
     const prefix=e.name==="AbortError"?"Ответ остановлен.":(isPaidProvider?"Ошибка Claude: ":"Ошибка Ollama: ")+e.message;
     assistant.content=assistant.content?(assistant.content+"\n\n["+prefix+"]"):prefix;
@@ -833,15 +848,21 @@ document.addEventListener("submit",async(e)=>{
     const workerRaw=String(fd.get("workerUrl")||"").trim();
     const workerUrl=workerRaw?safeWorkerEndpoint(workerRaw):"";
     if(workerRaw&&!workerUrl)return notice("Неверный HTTPS-адрес Cloudflare Worker.");
-    state.settings.provider=provider;state.settings.workerUrl=workerUrl;
+    const bothubModel=String(fd.get("bothubModel")||"claude-sonnet-5.5");
+    if(!["claude-sonnet-5.5","claude-opus-5.5"].includes(bothubModel))return notice("Неизвестная модель BotHub.");
+    state.settings.provider=provider;state.settings.workerUrl=workerUrl;state.settings.bothubModel=bothubModel;
     state.settings.endpoint=url;state.settings.model=String(fd.get("model")||"").trim();
     state.settings.globalInstruction=String(fd.get("globalInstruction")||"").slice(0,8000);
     state.settings.context=Number(fd.get("context"))||4096;
     state.theme=String(fd.get("theme"))||"auto";
-    connectOk=false;connectText=provider==="modelproxy"?"ModelProxy Opus: проверь шлюз в настройках":provider==="bothub"?"BotHub Opus: проверь шлюз в настройках":"Ollama: проверь соединение";
+    connectOk=false;connectText=provider==="modelproxy"?"ModelProxy Opus: проверь шлюз в настройках":provider==="bothub"?"BotHub: проверь шлюз в настройках":"Ollama: проверь соединение";
     await save();render();notice("Настройки сохранены.");}
 });
 document.addEventListener("change",async(e)=>{
+  if(e.target.id==="f-provider"){
+    const row=$("#f-bothub-model-row");if(row)row.hidden=e.target.value!=="bothub";
+    return;
+  }
   if(e.target.id==="f-writing-mode"){
     if(!WRITING_MODES[e.target.value])return;
     const c=chat();if(c){c.mode=e.target.value;await save();}else pendingMode=e.target.value;
@@ -879,6 +900,8 @@ document.addEventListener("keydown",e=>{
     // Migrate existing test settings: Polza is no longer available.
     if(state.settings.provider==="polza")state.settings.provider="modelproxy";}
   catch(e){$("#panel").innerHTML=empty("Хранилище недоступно","Разреши браузеру сохранять данные сайта: "+e.message);return;}
+  state.settings.bothubModel=["claude-sonnet-5.5","claude-opus-5.5"].includes(state.settings.bothubModel)?
+    state.settings.bothubModel:"claude-sonnet-5.5";
   state.feedback=Array.isArray(state.feedback)?state.feedback:[];
   state.drafts=state.drafts&&typeof state.drafts==="object"&&!Array.isArray(state.drafts)?state.drafts:{};
   render();
