@@ -2,13 +2,15 @@
 // Only an authenticated Firebase owner can generate; all paid-provider secrets stay on Cloudflare.
 const PROJECT = "dohody-6d6dd";
 const MODEL = "claude-opus-5-5";
+// Only these BotHub model IDs can be selected from Freitag AI.
+const BOTHUB_MODELS = Object.freeze(["claude-sonnet-5.5", "claude-opus-5.5"]);
 const PROVIDERS = Object.freeze({
   modelproxy: Object.freeze({
     name: "ModelProxy", model: MODEL, secret: "MODELPROXY_API_KEY",
     endpoint: "https://api.modelproxy.org/v1/chat/completions"
   }),
   bothub: Object.freeze({
-    name: "BotHub", model: "claude-opus-5.5", secret: "BOTHUB_API_KEY",
+    name: "BotHub", model: "claude-sonnet-5.5", secret: "BOTHUB_API_KEY",
     endpoint: "https://openai.bothub.chat/v1/chat/completions"
   })
 });
@@ -196,6 +198,9 @@ async function generate(req, env) {
         typeof x.content !== "string" || x.content.length > 130000) ||
       entries.reduce((n, x) => n + x.content.length, 0) > 180000)
     return fail(req, 400, "Неверный формат сообщений.");
+  const model = input.provider === "bothub" ? (input.model || provider.model) : provider.model;
+  if (input.provider === "bothub" && !BOTHUB_MODELS.includes(model))
+    return fail(req, 400, "Эта модель BotHub не разрешена.");
   const messages = entries.map(x => ({ role: x.role, content: x.content }));
   if (input.bookId) {
     try {
@@ -205,7 +210,7 @@ async function generate(req, env) {
   }
   const isDraft = input.mode === "draft";
   const body = {
-    model: provider.model, messages, stream: true,
+    model, messages, stream: true,
     max_tokens: isDraft ? 4500 : input.mode === "canon" ? 750 : 900
   };
   let upstream;
@@ -244,6 +249,34 @@ async function generate(req, env) {
   });
 }
 
+// Owner-only preflight checks the actual key/model catalog without generating text.
+async function bothubPreflight(req, env) {
+  if (!await verifyOwner(req, env)) return fail(req, 401, "Требуется вход владельца в Мастерскую.");
+  if (!env.BOTHUB_API_KEY) return fail(req, 503, "В Cloudflare не задан BOTHUB_API_KEY.");
+  const model = new URL(req.url).searchParams.get("model") || "claude-sonnet-5.5";
+  if (!BOTHUB_MODELS.includes(model)) return fail(req, 400, "Неизвестная модель BotHub.");
+  let upstream;
+  try {
+    upstream = await fetch("https://openai.bothub.chat/v1/models", {
+      headers: { Authorization: "Bearer " + env.BOTHUB_API_KEY },
+      signal: AbortSignal.timeout(8000)
+    });
+  } catch { return fail(req, 502, "BotHub не ответил на проверку каталога моделей."); }
+  if (!upstream.ok) {
+    if (upstream.status === 401 || upstream.status === 403)
+      return fail(req, 401, "BotHub отклонил API-ключ. Проверь его в Cloudflare.");
+    return fail(req, 502, "Не удалось проверить каталог BotHub (HTTP " + upstream.status + ").");
+  }
+  let data;
+  try { data = await upstream.json(); }
+  catch { return fail(req, 502, "BotHub вернул некорректный список моделей."); }
+  if (!Array.isArray(data.data)) return fail(req, 502, "BotHub не вернул список моделей.");
+  const item = data.data.find(x => x?.id === model);
+  return json(req, 200, { ok: !!item, model,
+    message: item ? "Модель доступна по API-ключу. Платная генерация не запускалась." :
+      "Модель отсутствует в списке, доступном этому API-ключу." });
+}
+
 export default {
   async fetch(req, env) {
     const origin = req.headers.get("Origin");
@@ -260,6 +293,7 @@ export default {
             bothub: !!env.BOTHUB_API_KEY && !!env.OWNER_UID
           },
           booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY) });
+      if (path === "/preflight" && req.method === "GET") return await bothubPreflight(req, env);
       if (path === "/snapshot" && req.method === "GET") return await snapshotStatus(req, env);
       if (path === "/chat" && req.method === "POST") return await generate(req, env);
       return fail(req, 404, "Адрес не найден.");
