@@ -266,6 +266,13 @@ function renderChat(){
       (busy?'<button type="button" class="f-btn danger" data-action="stop">Остановить</button>':
             '<button type="submit" class="f-btn primary">Отправить <span aria-hidden="true">↗</span></button>')+
       '</div></div>'+
+      (p&&state.settings.provider==="bothub"&&activeBotHubModel()==="claude-opus-5.5"?
+        '<div class="f-row"><button type="button" class="f-btn" data-action="send-batch-chapter">Целая глава через Batch API (без 524)</button></div>':"")+
+      (c?.batch?.batchId&&c.batch.status!=="completed"?
+        '<div class="f-row"><span class="f-mini">Batch: '+esc(c.batch.status||"отправлен")+'</span>'+
+        '<button type="button" class="f-btn" data-action="check-batch-chapter">Проверить готовность главы</button></div>':"")+
+      (!c?.batch?.batchId&&c?.messages?.at(-1)?.role==="assistant"&&/HTTP 524|вернул 524/.test(c.messages.at(-1).content)&&p?
+        '<div class="f-row"><button type="button" class="f-btn" data-action="retry-batch-chapter">Эту главу — через Batch API</button></div>':"")+
       '<details class="f-extra-tools"><summary>Инструменты и подключение</summary><div class="f-row">'+
       '<button type="button" class="f-btn" data-action="export-context">Скопировать контекст</button>'+
       '<button type="button" class="f-btn" data-action="paste-external">Добавить внешний ответ</button>'+
@@ -655,6 +662,91 @@ async function saveFeedback(i,kind){
     finalText:v.finalText.trim().slice(0,18000),source:response.provider||"Qwen",at:stamp()});
   await save();notice(kind==="good"?"Пример добавлен в память стиля.":"Отказ и причина сохранены для следующих заданий.");
 }
+
+async function sendBatchChapter(text){
+  if(busy||preparingPaid||!text?.trim())return;
+  const p=project();
+  if(!p)return notice("Для Batch-главы выбери проект книги.");
+  if(state.settings.provider!=="bothub"||activeBotHubModel()!=="claude-opus-5.5")
+    return notice("Batch-глава поддерживается для Claude Opus 5.5 через BotHub.");
+  if(!confirm("BotHub Batch API принимает целую главу отдельной задачей (окно выполнения — до 24 часов). Запрос платный, но не зависит от открытого соединения и ошибки 524. Отправить один раз?"))
+    return;
+  const gateway=claudeGateway(state.settings.workerUrl);
+  if(!gateway)return notice("Не настроен шлюз Freitag AI.");
+  busy=true;preparingPaid=true;
+  const prevDraft=draftKey(),c=ensureChat(),msg=text.trim();
+  c.mode="draft";
+  c.messages.push({role:"user",content:msg,at:stamp()});
+  if(c.title==="Новый чат")c.title=msg.slice(0,65);
+  const messages=modelproxyMessages(c);
+  const assistant={role:"assistant",provider:"Claude Opus 5.5 · Batch",
+    content:"Отправка главы в Batch API BotHub…",at:stamp()};
+  const assistantIndex=c.messages.length;
+  c.messages.push(assistant);c.updated=stamp();
+  clearTimeout(draftSaveTimer);
+  if(state.drafts){delete state.drafts[prevDraft];delete state.drafts[draftKey()];}
+  await save();render();
+  try{
+    await master.init();
+    if(!master.user)throw Error("Сначала войди в Мастерскую.");
+    const token=await master.idToken();
+    const headers={Authorization:"Bearer "+token};
+    // Check Batch support before uploading anything (free).
+    const ready=await fetch(gateway+"/batch-models",{headers,cache:"no-store"});
+    const availability=await ready.json().catch(()=>({}));
+    if(!ready.ok||!availability.ok)
+      throw Error(availability.error||availability.message||
+        "Batch API недоступен. Нужна публикация новой версии Cloudflare Worker.");
+    const response=await fetch(gateway+"/batch-start",{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
+        mode:"draft",messages,bookId:p.masterBookId||null,
+        outputTokenLimit:Number(state.settings.sceneOutputTokens)||14000})
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok||!result.ok||!result.batchId)
+      throw Error(result.error||"BotHub не подтвердил Batch. Не отправляй запрос снова вслепую.");
+    c.batch={batchId:result.batchId,status:result.status||"submitted",
+      assistantIndex,model:result.model,createdAt:stamp()};
+    assistant.content="Глава отправлена через BotHub Batch API. ID: "+result.batchId+
+      (result.reused?"\nРанее отправленная задача найдена — повторного запуска нет.":"")+
+      "\nМожно закрыть вкладку: задача выполняется у провайдера. Вернись в этот чат и нажми «Проверить готовность главы».";
+    notice("Batch принят. Проверка статуса не запускает новую платную генерацию.");
+  }catch(e){assistant.content="Batch не запущен: "+e.message;notice(assistant.content);}
+  finally{busy=false;preparingPaid=false;c.updated=stamp();await save();render();}
+}
+async function checkBatchChapter(){
+  const c=chat(),job=c?.batch;
+  if(!job?.batchId||busy)return;
+  const gateway=claudeGateway(state.settings.workerUrl);
+  if(!gateway)return notice("Не настроен шлюз Freitag AI.");
+  busy=true;
+  try{
+    await master.init();
+    const token=await master.idToken();
+    const response=await fetch(gateway+"/batch-status?id="+encodeURIComponent(job.batchId),
+      {headers:{Authorization:"Bearer "+token},cache:"no-store"});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw Error(result.error||"Статус Batch недоступен.");
+    job.status=result.status||"unknown";
+    const assistant=c.messages[job.assistantIndex];
+    if(!assistant)throw Error("Ответ Batch не найден в этом чате.");
+    if(job.status==="completed"&&result.ok&&typeof result.content==="string"){
+      assistant.content=result.content+
+        (result.finishReason==="length"?"\n\n[Достигнут лимит ответа: глава может быть неполной.]":"");
+      job.usage=result.usage||null;
+      notice("Глава получена из BotHub Batch и сохранена в чате.");
+    }else if(result.ok===false||["failed","cancelled","expired"].includes(job.status)){
+      assistant.content="BotHub Batch завершился без главы: "+(result.error||job.status)+
+        ". Не отправляй дубликат автоматически.";
+    }else{
+      assistant.content="Глава обрабатывается через BotHub Batch. Статус: "+job.status+
+        ". Нажми «Проверить готовность главы» позже.";
+      notice("Batch: "+job.status);
+    }
+  }catch(e){notice("Batch: "+e.message);}
+  finally{busy=false;c.updated=stamp();await save();render();}
+}
 async function sendMessage(text){
   if(busy||preparingPaid||!text.trim())return;
   const isPaidProvider=["modelproxy","bothub","apimira"].includes(state.settings.provider);
@@ -857,6 +949,17 @@ document.addEventListener("click",async(e)=>{
     catch{notice("Не удалось скопировать. Выдели текст ответа вручную.");}
   }
   if(a==="stop")currentController?.abort();
+  if(a==="send-batch-chapter"){
+    const text=$("#f-message-input")?.value||"";
+    if(!text.trim())return notice("Вставь привычный полный промпт главы.");
+    await sendBatchChapter(text);return;
+  }
+  if(a==="retry-batch-chapter"){
+    const c=chat(),last=[...(c?.messages||[])].reverse().find(m=>m.role==="user");
+    if(!last)return notice("Исходный промпт не найден.");
+    await sendBatchChapter(last.content);return;
+  }
+  if(a==="check-batch-chapter"){await checkBatchChapter();return;}
   if(a==="test-connection")await testConnection();
   if(a==="ask-local"){const v=$("#f-message-input")?.value||"";if(v.trim()){await sendMessage(v);}else notice("Напиши задачу.");}
   if(a==="export-context"){const v=$("#f-message-input")?.value||"";if(v.trim()){await prepareExternal(v);}else notice("Сначала напиши задачу, чтобы подготовить контекст книги.");}
