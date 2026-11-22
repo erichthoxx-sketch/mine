@@ -1,0 +1,12 @@
+{
+  "name": "masterskaya-gptunnel-books",
+  "main": "gptunnel-books-worker.js",
+  "compatibility_date": "2026-11-22",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": { "GPTUNNEL_BOOK_ID": "SET_BOOK_ID" },
+  "kv_namespaces": [{ "binding": "BOOKS", "id": "SET_KV_NAMESPACE_ID" }],
+  "durable_objects": { "bindings": [{ "name": "MCP_SESSIONS", "class_name": "GptunnelSseSession" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GptunnelSseSession"] }]
+}
