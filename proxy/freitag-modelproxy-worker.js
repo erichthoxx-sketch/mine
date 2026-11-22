@@ -214,9 +214,10 @@ function runBookTool(book,name,args){
     const result=[],needle=q.toLocaleLowerCase("ru");
     for(let i=0;i<book.chapters.length && result.length<12;i++){
       const chapter=book.chapters[i],text=chapter.text;
+      const lower=text.toLocaleLowerCase("ru");
       let from=0,found=0;
       while(found<3&&result.length<12){
-        const at=text.toLocaleLowerCase("ru").indexOf(needle,from);
+        const at=lower.indexOf(needle,from);
         if(at<0)break;
         result.push({chapter:i+1,title:chapter.title,
           offset:at,excerpt:text.slice(Math.max(0,at-180),Math.min(text.length,at+needle.length+220))});
@@ -242,13 +243,13 @@ const visibleCompletion=message=>{
   return "";
 };
 async function bookToolsCompletion(req,env,provider,model,messages,book,maxTokens){
-  const history=[...messages,{
+  const history=[{
     role:"system",
     content:"У тебя есть инструменты Мастерской для чтения выбранного романа. "+
       "Если требуется проверить факт или прежнюю сцену, вызови list_chapters, "+
       "read_chapter или search_book. Не придумывай содержание непрочитанных глав. "+
       "Инструменты только для чтения одной выбранной книги."
-  }];
+  },...messages];
   let rounds=0;
   while(rounds<=MAX_BOOK_TOOL_ROUNDS){
     let upstream;
@@ -468,7 +469,7 @@ async function bothubPreflight(req, env) {
       headers: { Authorization: "Bearer " + key },
       signal: AbortSignal.timeout(8000)
     });
-  } catch { return fail(req, 502, "BotHub не ответил на проверку каталога моделей."); }
+  } catch { return fail(req, 502, "Провайдер не ответил на проверку каталога моделей."); }
   if (!upstream.ok) {
     if (upstream.status === 401 || upstream.status === 403)
       return fail(req, 401, "API-провайдер отклонил ключ. Проверь его в Cloudflare.");
