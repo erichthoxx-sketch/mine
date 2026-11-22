@@ -2,7 +2,7 @@
 // The original manuscript/legend belongs to Masterskaya, never edited here.
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 export function projectHomeHtml(p,chats,docs,userInstruction){
-  const history=chats.filter(x=>x.projectId===p.id).sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||"")).slice(0,10);
+  const history=chats.filter(x=>x.projectId===p.id).sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||""))).slice(0,10);
   const materials=docs.filter(d=>d.projectId===p.id);
   return '<div class="f-content f-project-home">'+
     '<button type="button" class="f-project-back" data-action="projects-back">← Все проекты</button>'+
@@ -32,7 +32,7 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
       (p.masterBookId?'<button class="f-btn" data-action="sync-current-book" data-id="'+esc(p.id)+'" type="button">Обновить Google Docs</button>':"")+
     '</div>'+
     '<p class="f-muted">Google не запрашивает повторную авторизацию при каждом сообщении. Для переноса новых правок из Google Docs есть отдельное обновление.</p>'+
-    (p.masterSyncedAt?'<p class="f-muted">Последнее обновление из Google Docs: '+esc(new Date(p.masterSyncedAt).toLocaleString("ru-RU"))+'</p>':"")+
+    (p.masterSyncedAt?'<p class="f-muted">Последняя синхронизация данных проекта: '+esc(new Date(p.masterSyncedAt).toLocaleString("ru-RU"))+'</p>':"")+
     (materials.length?'<p class="f-muted">Локальные материалы: '+materials.map(m=>esc(m.name)).join(", ")+'</p>':"")+
     '</section>'+
     '<section class="f-project-recent"><h2>Чаты проекта</h2>'+
