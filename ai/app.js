@@ -623,75 +623,23 @@ async function saveFeedback(i,kind){
     finalText:v.finalText.trim().slice(0,18000),source:response.provider||"Qwen",at:stamp()});
   await save();notice(kind==="good"?"Пример добавлен в память стиля.":"Отказ и причина сохранены для следующих заданий.");
 }
-let approvedSnapshot = "";
 async function sendMessage(text){
   if(busy||preparingPaid||!text.trim())return;
   const isPaidProvider=["modelproxy","bothub","apimira"].includes(state.settings.provider);
   const endpoint=safeEndpoint(state.settings.endpoint);
   const gateway=claudeGateway(state.settings.workerUrl);
-  if(isPaidProvider && !gateway)return notice("Для Claude укажи адрес защищенного Worker в настройках.");
-  if(isPaidProvider && !master.user)return notice("Сначала войди в аккаунт Мастерской: раздел «Книги».");
-  if(!isPaidProvider && !endpoint)return notice("Проверь адрес Ollama в настройках.");
+  if(isPaidProvider&&!gateway)return notice("Не настроен API-шлюз Claude.");
+  if(!isPaidProvider&&!endpoint)return notice("Проверь адрес Ollama в настройках.");
   let idToken="",sourceRevision="";
   if(isPaidProvider){
     preparingPaid=true;
-    const selectedProject=project(state.activeProjectId);
-    const selectedBookId=selectedProject?.masterBookId||"";
-    try{
-      // MUST run first, directly from the Send click: Google's OAuth popup
-      // gets blocked if we await network calls before requesting permission.
-      await ensureDriveAccess(selectedBookId);
+    try {
+      // Firebase session persists in the browser. This is silent, unlike
+      // Google Drive OAuth: no repeated popups, book-upload or consent dialog.
+      await master.init();
+      if(!master.user)throw Error("Один раз войди в Мастерскую в разделе «Книги». Затем книги доступны через MCP без повторных входов.");
       idToken=await master.idToken();
-      const check=await fetch(gateway+"/health",{cache:"no-store"});
-      if(!check.ok)throw Error("Шлюз недоступен: HTTP "+check.status);
-      const health=await check.json();
-      if(health.provider!=="ModelProxy"||health.model!=="claude-opus-5-5")
-        throw Error("Шлюз устарел. Обнови тестовую версию Cloudflare Worker.");
-      if(state.settings.provider==="apimira"&&!health.apimiraConfigured)
-        throw Error("ApiMira пока не подключена: нужен APIMIRA_API_KEY в Cloudflare.");
-      if(state.settings.provider==="bothub"&&!health.bothubConfigured)
-        throw Error("BotHub пока не подключен: нужен BOTHUB_API_KEY в Cloudflare.");
-      if(state.settings.provider==="modelproxy"&&!health.configured)
-        throw Error("ModelProxy пока не подключен: нужен MODELPROXY_API_KEY в Cloudflare.");
-      if(!health.mcpConfigured)
-        throw Error("MCP Мастерской не подключен: добавь секрет MCP_READ_KEY в Cloudflare.");
-      if(selectedBookId){
-        if(!health.autoSyncSupported)
-          throw Error("В Cloudflare Worker нет обновления из Google Docs. Обнови Worker и проверь BOOKS.");
-        // A network read from Firestore + a fresh Google Doc, then an
-        // authenticated KV update. NEVER silently fall back to an older book.
-        const {status,canon}=await refreshLinkedBook({
-          bookId:selectedBookId,gateway,idToken
-        });
-        if(project(state.activeProjectId)?.id!==selectedProject.id)
-          throw Error("Активная книга изменилась во время обновления. Повтори отправку.");
-        selectedProject.masterCanon=canon;
-        selectedProject.masterSyncedAt=status.updatedAt;
-        await save();
-        sourceRevision=status.updatedAt;
-        // Consent once per provider/book per browser session, not every time
-        // refreshed timestamps change. Source data always updates anyway.
-        const marker=state.settings.provider+"|"+selectedBookId;
-        if(marker!==approvedSnapshot){
-          const chapters=(status.lastChapters||[]).map(ch=>ch.slot+": "+ch.title).join("\n");
-          const message="Прочитана свежая рукопись из Google Docs:\n"
-            +status.chapterCount+" частей, обновлено: "+status.updatedAt
-            +"\nПоследние:\n"+chapters
-            +"\n\nРазрешить "+(state.settings.provider==="bothub"?"BotHub":state.settings.provider==="apimira"?"ApiMira":"ModelProxy")
-            +" при необходимости читать эту книгу и данные других подключенных приложений через MCP?";
-          if(!confirm(message))return;
-          approvedSnapshot=marker;
-        }
-      }else{
-        const marker=state.settings.provider+"|all";
-        if(marker!==approvedSnapshot){
-          if(!confirm("Разрешить "+activeProviderLabel()+
-              " при необходимости читать через MCP книги, маркетинг, доходы "+
-              "и статистику подключенных приложений? Секреты и право записи не передаются."))return;
-          approvedSnapshot=marker;
-        }
-      }
-    }catch(e){return notice("Подключение Мастерской: "+e.message);}
+    }catch(e){return notice("Авторизация: "+e.message);}
     finally{preparingPaid=false;}
   }
   const previousDraft=draftKey();
