@@ -90,6 +90,7 @@ try{
   await desktop.locator('dialog input[name="name"]').fill("Тестовый отрывок");
   await desktop.locator('dialog textarea[name="text"]').fill("Проверка материалов. Тестовый текст, не рукопись автора.");
   await desktop.locator('dialog button[value="save"]').click();
+  await desktop.locator("#panel").getByText("Тестовый отрывок").waitFor({timeout:6000});
   assert.match(await desktop.locator("#panel").innerText(),/Тестовый отрывок/);
   await desktop.screenshot({path:OUT+"/materials.png",fullPage:true});
 
