@@ -63,12 +63,13 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     chapters:[{title:"Пролог",text:"начало"},
       {title:"Глава 14",text:"события 14"},
       {title:"Глава 15",text:"события 15"}]};
-  const written=[];
+  const written=[],batchCache=new Map(),batchInputs=[];
   let staleMcpRevision=false;
   const env = {OWNER_UID:"owner",MODELPROXY_API_KEY:"mp-test",BOTHUB_API_KEY:"bh-test",APIMIRA_API_KEY:"am-test",
     BOOKS_MCP_URL:"https://masterskaya-ai.erichtho-xx.workers.dev/mcp",MCP_READ_KEY:"read-key-".repeat(8),BOOKS:{
-    get:async()=>book,
+    get:async(key)=>key.startsWith("freitag:opus-batch:")?(batchCache.get(key)||null):book,
     put:async(key,raw,opts)=>{
+      if(key.startsWith("freitag:opus-batch:")){batchCache.set(key,JSON.parse(raw));return;}
       assert.equal(key,"book:test");
       const data=JSON.parse(raw);
       Object.assign(book,data);
@@ -84,6 +85,26 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
       return Response.json({keys:[jwk]});
     if (String(input) === "https://openai.bothub.chat/v1/models")
       return Response.json({object:"list",data:[{id:"claude-sonnet-5.5",kind:"chat",endpoints:["/v1/chat/completions"]},{id:"claude-opus-5.5",kind:"chat"}]});
+    if (String(input) === "https://openai.bothub.chat/v1/batches/models")
+      return Response.json({data:[{id:"claude-opus-5.5:batch"}]});
+    if (String(input) === "https://openai.bothub.chat/v1/files" && init.method==="POST"){
+      assert.equal(init.headers.Authorization,"Bearer bh-test");
+      assert.equal(init.body.get("purpose"),"batch");
+      const row=JSON.parse((await init.body.get("file").text()).trim());
+      batchInputs.push(row);
+      return Response.json({id:"file-upload-test"});
+    }
+    if (String(input) === "https://openai.bothub.chat/v1/batches" && init.method==="POST"){
+      const data=JSON.parse(init.body);
+      assert.equal(data.input_file_id,"file-upload-test");
+      assert.equal(data.completion_window,"24h");
+      return Response.json({id:"batch-chapter-test",status:"in_progress"});
+    }
+    if (String(input).includes("/v1/batches/batch-chapter-test?include_usage=true"))
+      return Response.json({id:"batch-chapter-test",status:"completed",output_file_id:"file-answer-test"});
+    if (String(input) === "https://openai.bothub.chat/v1/files/file-answer-test/content")
+      return new Response(JSON.stringify({custom_id:"freitag-abcdef",
+        response:{status_code:200,body:{choices:[{message:{content:"Готовая глава целиком."},finish_reason:"stop"}],usage:{prompt_tokens:999,completion_tokens:333}}}})+"\n");
     if (String(input) === "https://apimira.com/v1/models")
       return Response.json({object:"list",data:[{id:"anthropic/claude-opus-5.5",object:"model"}]});
     if(String(input)==="https://masterskaya-ai.erichtho-xx.workers.dev/mcp"){
@@ -243,6 +264,37 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(chapterCall.messages.find(m=>m.content===masterPrompt)?.content,masterPrompt);
     assert.equal(chapterCall.messages.at(-1).content,authorPrompt);
     assert.match(chapterCall.messages.find(m=>m.content.includes("Справочные материалы выбранного романа"))?.content||"",/новая глава/);
+    const readyBatch=await gateway.fetch(new Request(url("batch-models"),{headers}),env);
+    assert.equal(readyBatch.status,200);
+    assert.equal((await readyBatch.json()).model,"claude-opus-5.5:batch");
+    const batchRequest={bookId:"test",provider:"bothub",model:"claude-opus-5.5",
+      mode:"draft",outputTokenLimit:14000,messages:[
+        {role:"system",content:masterPrompt},{role:"user",content:authorPrompt}
+      ]};
+    const batchStart=await gateway.fetch(new Request(url("batch-start"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify(batchRequest)
+    }),env);
+    assert.equal(batchStart.status,200);
+    assert.equal((await batchStart.json()).batchId,"batch-chapter-test");
+    assert.equal(batchInputs.length,1);
+    assert.equal(batchInputs[0].body.model,"claude-opus-5.5:batch");
+    assert.equal(batchInputs[0].body.stream,false);
+    assert.equal(batchInputs[0].body.max_tokens,14000);
+    assert.equal(batchInputs[0].body.messages.at(-1).content,authorPrompt);
+    assert.ok(batchInputs[0].body.messages.some(m=>m.content===masterPrompt));
+    assert.match(batchInputs[0].body.messages.find(m=>m.content.includes("Справочные материалы выбранного романа")).content,/новая глава/);
+    const beforeDuplicate=batchInputs.length;
+    const duplicate=await gateway.fetch(new Request(url("batch-start"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify(batchRequest)
+    }),env);
+    assert.equal(duplicate.status,200);
+    assert.equal((await duplicate.json()).reused,true);
+    assert.equal(batchInputs.length,beforeDuplicate,"Batch idempotency prevents duplicate paid chapters");
+    const resultBatch=await gateway.fetch(new Request(url("batch-status?id=batch-chapter-test"),{headers}),env);
+    assert.equal(resultBatch.status,200);
+    assert.equal((await resultBatch.json()).content,"Готовая глава целиком.");
     const beforeToolCalls=calls.length;
     const toolResponse=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
