@@ -107,6 +107,10 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
         response:{status_code:200,body:{choices:[{message:{content:"Готовая глава целиком."},finish_reason:"stop"}],usage:{prompt_tokens:999,completion_tokens:333}}}})+"\n");
     if (String(input) === "https://apimira.com/v1/models")
       return Response.json({object:"list",data:[{id:"anthropic/claude-opus-5.5",object:"model"}]});
+    if (String(input) === "https://apimira.com/v1/account/balance"){
+      assert.equal(init.headers.Authorization,"Bearer am-test");
+      return Response.json({object:"account.balance",balance_usd:3.45,currency:"USD"});
+    }
     if(String(input)==="https://masterskaya-ai.erichtho-xx.workers.dev/mcp"){
       assert.equal(init.headers.Authorization,"Bearer "+"read-key-".repeat(8));
       const rpc=JSON.parse(init.body);
@@ -350,7 +354,24 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.equal(JSON.parse(calls.at(-1).init.body).model,"anthropic/claude-opus-5.5");
     const apiPreflight=await gateway.fetch(new Request(url("preflight?provider=apimira&model=anthropic%2Fclaude-opus-5.5"),{headers}),env);
     assert.equal(apiPreflight.status,200);
-    assert.equal((await apiPreflight.json()).ok,true);
+    const apimiraInfo=await apiPreflight.json();
+    assert.equal(apimiraInfo.ok,true);
+    assert.equal(apimiraInfo.balanceUsd,3.45,"free preflight reads ApiMira balance");
+    // ApiMira uses the same one-call streamed long-chapter path as BotHub.
+    const apimiraChapter=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({bookId:"test",provider:"apimira",mode:"draft",outputTokenLimit:14000,
+        messages:[{role:"system",content:masterPrompt},{role:"user",content:authorPrompt}]})
+    }),env);
+    assert.equal(apimiraChapter.status,200);
+    assert.match(await apimiraChapter.text(),/data: \[DONE\]/);
+    const apimiraCalls=calls.filter(c=>String(c.input)==="https://apimira.com/v1/chat/completions");
+    const apimiraPayload=JSON.parse(apimiraCalls.at(-1).init.body);
+    assert.equal(apimiraPayload.stream,true);
+    assert.equal(apimiraPayload.max_tokens,14000);
+    assert.equal(apimiraPayload.model,"anthropic/claude-opus-5.5");
+    assert.equal(apimiraPayload.messages.at(-1).content,authorPrompt);
+    assert.ok(apimiraPayload.messages.some(m=>m.content===masterPrompt));
     const income=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
