@@ -163,139 +163,175 @@ async function getBookMaterial(env, id, mode = "dialog", requiredRevision = "") 
   ].join("\n\n").slice(0, 180000);
 }
 
-// Read-only manuscript tools. These use exactly the same owner's KV book
-// snapshots as the Masterskaya MCP worker, and only the book explicitly selected
-// in Freitag AI. The model cannot select other book IDs or call write/finance tools.
-const BOOK_TOOLS = Object.freeze([
-  {type:"function",function:{name:"get_book_context",
-    description:"Прочитать утвержденный канон, персонажей и сюжетную легенду выбранного романа.",
-    parameters:{type:"object",properties:{},additionalProperties:false}}},
-  {type:"function",function:{name:"list_chapters",
-    description:"Получить названия и номера всех глав выбранного романа перед чтением.",
-    parameters:{type:"object",properties:{},additionalProperties:false}}},
-  {type:"function",function:{name:"read_chapter",
-    description:"Прочитать точный текст выбранной главы, можно по частям через offset.",
-    parameters:{type:"object",properties:{
-      chapter:{type:"integer",minimum:1},offset:{type:"integer",minimum:0},
-      limit:{type:"integer",minimum:1000,maximum:16000}
-    },required:["chapter"],additionalProperties:false}}},
-  {type:"function",function:{name:"search_book",
-    description:"Найти факт, имя или фразу в написанных главах романа.",
-    parameters:{type:"object",properties:{
-      query:{type:"string",minLength:2,maxLength:120}
-    },required:["query"],additionalProperties:false}}}
+// The Cloudflare gateway is an actual, authenticated MCP client for the
+// existing "Мастерская" remote MCP server. No duplicated implementations.
+// Capabilities come from MCP tools/list; results come from MCP tools/call.
+// Allow only already-audited read-only operations; /sync and writes are never
+// exposed. A user-verified Firebase token is required before this code runs.
+const MCP_READ_TOOLS=new Set([
+  "list_books","get_book_context","list_chapters","read_chapter","search_book",
+  "get_system_status","get_marketing_overview","get_book_marketing",
+  "get_income_overview","get_book_sales","get_direct_overview",
+  "get_direct_campaign","get_direct_report","get_direct_search_queries",
+  "get_metrika_sources","get_part_reads","get_cohorts","get_direct_live"
 ]);
-const MAX_BOOK_TOOL_ROUNDS=3;
-function runBookTool(book,name,args){
-  if (!book || !Array.isArray(book.chapters)) throw Error("Нет обновленной книги.");
-  if (!args || typeof args!=="object" || Array.isArray(args)) throw Error("Неверные аргументы.");
-  if (name==="get_book_context"){
-    return JSON.stringify({title:book.title,updatedAt:book.updatedAt,
-      context:String(book.context||"").slice(0,30000)});
-  }
-  if (name==="list_chapters"){
-    return JSON.stringify({title:book.title,updatedAt:book.updatedAt,
-      chapters:book.chapters.map((c,i)=>({chapter:i+1,title:c.title,characters:c.text.length}))});
-  }
-  if (name==="read_chapter"){
-    const n=Number(args.chapter),offset=args.offset===undefined?0:Number(args.offset);
-    if(!Number.isInteger(n)||n<1||n>book.chapters.length ||
-       !Number.isInteger(offset)||offset<0)throw Error("Неверный номер главы или offset.");
-    const chapter=book.chapters[n-1];
-    const limit=Math.min(16000,Math.max(1000,Number.isInteger(args.limit)?args.limit:12000));
-    return JSON.stringify({chapter:n,title:chapter.title,offset,
-      totalChars:chapter.text.length,
-      nextOffset:offset+limit<chapter.text.length?offset+limit:null,
-      text:chapter.text.slice(offset,offset+limit)});
-  }
-  if (name==="search_book"){
-    const q=String(args.query||"").trim();
-    if(q.length<2||q.length>120)throw Error("Уточни фразу для поиска.");
-    const result=[],needle=q.toLocaleLowerCase("ru");
-    for(let i=0;i<book.chapters.length && result.length<12;i++){
-      const chapter=book.chapters[i],text=chapter.text;
-      const lower=text.toLocaleLowerCase("ru");
-      let from=0,found=0;
-      while(found<3&&result.length<12){
-        const at=lower.indexOf(needle,from);
-        if(at<0)break;
-        result.push({chapter:i+1,title:chapter.title,
-          offset:at,excerpt:text.slice(Math.max(0,at-180),Math.min(text.length,at+needle.length+220))});
-        from=at+needle.length;found++;
-      }
-    }
-    return JSON.stringify({query:q,found:result});
-  }
-  throw Error("Действие не разрешено.");
+const MCP_BOOK_TOOLS=new Set([
+  "get_book_context","list_chapters","read_chapter","search_book",
+  "get_book_marketing","get_part_reads"
+]);
+const MCP_MAX_ROUNDS=3, MCP_MAX_CALLS=8;
+const MCP_URL="https://masterskaya-ai.erichtho-xx.workers.dev/mcp";
+const mcpConfigured=env=>!!env.MCP_READ_KEY &&
+  String(env.MCP_READ_KEY).length>=32 && env.BOOKS_MCP_URL===MCP_URL;
+let rpcSequence=0;
+async function mcpRequest(env,method,params){
+  if(!mcpConfigured(env))throw Error("Требуется секрет MCP_READ_KEY и корректный BOOKS_MCP_URL в Cloudflare.");
+  const id=++rpcSequence;
+  let res;
+  try {
+    res=await fetch(MCP_URL,{
+      method:"POST",
+      headers:{
+        Authorization:"Bearer "+env.MCP_READ_KEY,
+        "Content-Type":"application/json",
+        Accept:"application/json, text/event-stream"
+      },
+      body:JSON.stringify({jsonrpc:"2.0",id,method,...(params?{params}:{})}),
+      signal:AbortSignal.timeout(25000)
+    });
+  } catch { throw Error("Нет связи с MCP-сервером Мастерской."); }
+  if(!res.ok)throw Error(res.status===401||res.status===403?
+    "MCP-сервер отверг ключ. Проверь MCP_READ_KEY.":"MCP-сервер вернул HTTP "+res.status+".");
+  const raw=await res.text();
+  if(utf8(raw).length>380000)throw Error("Ответ MCP слишком велик.");
+  let data;
+  try{data=JSON.parse(raw);}catch{throw Error("MCP вернул некорректный JSON-RPC.");}
+  if(data.jsonrpc!=="2.0"||data.id!==id||data.error)
+    throw Error("Ошибка протокола MCP: "+String(data.error?.message||"неверный ответ"));
+  return data.result;
 }
-const toolResultSSE=text=> new ReadableStream({
-  start(controller){
-    const encoder=new TextEncoder();
-    const data={choices:[{index:0,delta:{content:text},finish_reason:null}]};
-    controller.enqueue(encoder.encode("data: "+JSON.stringify(data)+"\n\n"));
-    controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-    controller.close();
-  }
-});
-const visibleCompletion=message=>{
+async function mcpDiscover(env){
+  const init=await mcpRequest(env,"initialize",{
+    protocolVersion:"2025-03-26",
+    capabilities:{},clientInfo:{name:"Freitag AI",version:"1.0.0"}
+  });
+  if(init?.serverInfo?.name!=="masterskaya-ai" || !init.capabilities?.tools)
+    throw Error("Неожиданный MCP-сервер или инструменты отключены.");
+  const result=await mcpRequest(env,"tools/list");
+  if(!Array.isArray(result?.tools))throw Error("MCP не предоставил каталог инструментов.");
+  // A strict allowlist prevents future additions to MCP from silently
+  // granting writing, deleting or credential access to model providers.
+  const safe=result.tools.filter(t=>MCP_READ_TOOLS.has(t?.name) &&
+    t.inputSchema?.type==="object" && typeof t.description==="string");
+  if(!safe.length)throw Error("MCP не предоставил инструменты только для чтения.");
+  return safe;
+}
+function toProviderTools(tools){
+  return tools.map(t=>({type:"function",function:{
+    name:t.name,description:t.description,parameters:t.inputSchema
+  }}));
+}
+function safeMcpArguments(name,raw,bookId){
+  if(!MCP_READ_TOOLS.has(name))throw Error("MCP-инструмент не разрешен.");
+  if(typeof raw!=="string"||raw.length>10000)throw Error("Некорректные аргументы инструмента.");
+  let args;
+  try{args=JSON.parse(raw||"{}");}catch{throw Error("Аргументы инструмента не JSON.");}
+  if(!args||typeof args!=="object"||Array.isArray(args))
+    throw Error("Ожидается объект аргументов.");
+  if(bookId&&MCP_BOOK_TOOLS.has(name))args={...args,book_id:bookId};
+  if(bookId&&name==="get_book_sales")args={...args,book:bookId};
+  return args;
+}
+async function mcpCallTool(env,name,args){
+  if(!MCP_READ_TOOLS.has(name))throw Error("Этот инструмент недоступен.");
+  const data=await mcpRequest(env,"tools/call",{name,arguments:args});
+  if(!data||!Array.isArray(data.content))throw Error("Некорректный ответ MCP.");
+  const txt=data.content.filter(c=>c?.type==="text"&&typeof c.text==="string")
+    .map(c=>c.text).join("\n");
+  if(data.isError)throw Error("Мастерская: "+String(txt||"ошибка инструмента").slice(0,180));
+  if(!txt)throw Error("MCP вернул пустой результат.");
+  // Clamp tool outputs to keep private data exposure and API spend bounded.
+  return txt.length>32000?txt.slice(0,32000)+"\n[Содержимое сокращено]":txt;
+}
+const toolResultSSE=text=>new ReadableStream({start(controller){
+  const encoder=new TextEncoder();
+  controller.enqueue(encoder.encode("data: "+JSON.stringify({
+    choices:[{index:0,delta:{content:text},finish_reason:null}]
+  })+"\n\n"));
+  controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+  controller.close();
+}});
+function visibleCompletion(message){
   if(typeof message?.content==="string")return message.content;
-  if(Array.isArray(message?.content))return message.content.map(x=>x?.text||"").join("");
+  if(Array.isArray(message?.content))
+    return message.content.map(x=>x?.text||"").join("");
   return "";
-};
-async function bookToolsCompletion(req,env,provider,model,messages,book,maxTokens){
+}
+async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxTokens){
+  const catalog=await mcpDiscover(env);
+  const allowed=new Set(catalog.map(t=>t.name));
   const history=[{
     role:"system",
-    content:"У тебя есть инструменты Мастерской для чтения выбранного романа. "+
-      "Если требуется проверить факт или прежнюю сцену, вызови list_chapters, "+
-      "read_chapter или search_book. Не придумывай содержание непрочитанных глав. "+
-      "Инструменты только для чтения одной выбранной книги."
+    content:"Подключена настоящая Мастерская через MCP: доступны только чтение "+
+      "книг, канона, маркетинга, доходов, статистики Литнета, Директа и Метрики. "+
+      "Когда для ответа нужны данные, вызывай MCP-инструменты, не придумывай их. "+
+      "Актуальность зависит от даты источника: get_system_status показывает "+
+      "синхронизацию; некоторые инструменты Директа получают живые данные. "+
+      (bookId?"Текущая книга: "+bookId+
+        ". Чтение художественного текста ограничено этой книгой. ":"")+
+      "Текст ответа должен отличать живые данные от сохраненных снимков."
   },...messages];
-  let rounds=0;
-  while(rounds<=MAX_BOOK_TOOL_ROUNDS){
+  let calls=0;
+  for(let round=0;round<=MCP_MAX_ROUNDS;round++){
     let upstream;
     try{
       upstream=await fetch(provider.endpoint,{
         method:"POST",
-        headers:{Authorization:"Bearer "+env[provider.secret],"Content-Type":"application/json"},
-        body:JSON.stringify({model,messages:history,stream:false,max_tokens:maxTokens,
-          tools:BOOK_TOOLS,tool_choice:"auto"}),
+        headers:{Authorization:"Bearer "+env[provider.secret],
+          "Content-Type":"application/json"},
+        body:JSON.stringify({
+          model,messages:history,stream:false,max_tokens:maxTokens,
+          tools:toProviderTools(catalog),tool_choice:"auto"
+        }),
         signal:AbortSignal.timeout(160000)
       });
-    }catch{return fail(req,502,provider.name+": нет связи или истекло время ответа.");}
+    }catch{return fail(req,502,provider.name+": модель недоступна или истекло время ожидания.");}
     if(!upstream.ok){
-      if(upstream.status===402)return fail(req,402,provider.name+": недостаточно баланса или доступного резерва.");
-      if(upstream.status===429)return fail(req,429,provider.name+": превышен лимит запросов.");
+      if(upstream.status===402)return fail(req,402,provider.name+": недостаточный баланс или резерв.");
+      if(upstream.status===429)return fail(req,429,provider.name+": превышен лимит.");
       return fail(req,upstream.status>=400&&upstream.status<500?upstream.status:502,
         provider.name+" вернул HTTP "+upstream.status+".");
     }
     let data;
-    try{data=await upstream.json();}
-    catch{return fail(req,502,"API провайдера вернул неожиданный формат ответа.");}
-    const message=data?.choices?.[0]?.message;
-    if(!message||!Array.isArray(message.tool_calls)||!message.tool_calls.length){
-      const text=visibleCompletion(message);
-      if(!text)return fail(req,502,provider.name+": модель не вернула текст.");
-      return new Response(toolResultSSE(text),{status:200,
-        headers:{...headers(req),"Content-Type":"text/event-stream; charset=utf-8"}});
+    try{data=await upstream.json();}catch{return fail(req,502,"Некорректный ответ модели.");}
+    const answer=data?.choices?.[0]?.message;
+    if(!answer)return fail(req,502,"Пустой ответ модели.");
+    if(!Array.isArray(answer.tool_calls)||!answer.tool_calls.length){
+      const text=visibleCompletion(answer);
+      if(!text)return fail(req,502,"Модель не вернула текст.");
+      return new Response(toolResultSSE(text),{
+        status:200,headers:{...headers(req),"Content-Type":"text/event-stream; charset=utf-8"}
+      });
     }
-    if(++rounds>MAX_BOOK_TOOL_ROUNDS || message.tool_calls.length>4)
-      return fail(req,424,"Слишком много вызовов инструментов. Уточни запрос и повтори.");
-    if(message.tool_calls.some(call=>typeof call?.id!=="string" ||
-        !["get_book_context","list_chapters","read_chapter","search_book"].includes(call.function?.name)))
-      return fail(req,424,"Модель запросила недопустимый инструмент.");
-    history.push({role:"assistant",content:message.content||null,tool_calls:message.tool_calls});
-    for(const call of message.tool_calls){
-      let response;
+    if(round===MCP_MAX_ROUNDS||calls+answer.tool_calls.length>MCP_MAX_CALLS)
+      return fail(req,424,"Превышен лимит вызовов инструментов. Уточни задачу.");
+    if(answer.tool_calls.some(c=>typeof c?.id!=="string"||
+       !allowed.has(c.function?.name)))
+      return fail(req,424,"Модель запросила неизвестный или запрещенный MCP-инструмент.");
+    history.push({role:"assistant",content:answer.content||null,
+      tool_calls:answer.tool_calls});
+    for(const call of answer.tool_calls){
+      calls++;
+      let output;
       try{
-        const args=JSON.parse(call.function.arguments||"{}");
-        response=runBookTool(book,call.function.name,args);
-      }catch(e){response=JSON.stringify({error:e.message});}
-      history.push({role:"tool",tool_call_id:call.id,content:response.slice(0,35000)});
+        const args=safeMcpArguments(call.function.name,call.function.arguments,bookId);
+        output=await mcpCallTool(env,call.function.name,args);
+      }catch(e){output=JSON.stringify({error:e.message});}
+      history.push({role:"tool",tool_call_id:call.id,content:output});
     }
   }
-  return fail(req,424,"Превышен лимит обращений к книге.");
+  return fail(req,424,"Лимит MCP-инструментов превышен.");
 }
-
 // Owner-only automatic refresh. The client reads a fresh Google Doc with its
 // own Google OAuth session and publishes only the chosen book into the SAME KV
 // namespace as the existing read-only MCP server. No API keys or Google tokens
@@ -395,22 +431,39 @@ async function generate(req, env) {
   if(input.provider==="apimira" && model!=="anthropic/claude-opus-5.5")
     return fail(req,400,"Эта модель ApiMira не разрешена.");
   const messages = entries.map(x => ({ role: x.role, content: x.content }));
-  if (input.bookId) {
-    try {
-      const material = await getBookMaterial(env, input.bookId, input.mode,
-        typeof input.sourceRevision === "string" ? input.sourceRevision : "");
-      messages.unshift({ role: "system", content: material });
-    } catch (e) { return fail(req, 424, e.message); }
+  const useMcp=mcpConfigured(env);
+  if(input.bookId){
+    try{
+      if(!/^[a-z0-9_-]{1,100}$/i.test(input.bookId))
+        throw Error("Некорректный ID выбранной книги.");
+      if(useMcp){
+        // The browser has already refreshed Google Docs and stamped the KV
+        // revision. Do not send old snapshots or all chapters with every call.
+        if(!env.BOOKS||!input.sourceRevision)
+          throw Error("Не подтверждено обновление рукописи.");
+        const book=await env.BOOKS.get("book:"+input.bookId,{type:"json"});
+        if(!book||book.updatedAt!==input.sourceRevision)
+          throw Error("Снимок выбранной книги устарел. Платный запрос остановлен.");
+        messages.unshift({role:"system",content:
+          "Роман: "+String(book.title||"").slice(0,300)+
+          ". Книга обновлена: "+book.updatedAt+". Полный текст и канон доступны "+
+          "через MCP-инструменты; используй их при необходимости."});
+      }else{
+        // Legacy mode remains for ModelProxy, but we do NOT misrepresent it
+        // as connected MCP when the owner has not configured MCP_READ_KEY.
+        if(providerId!=="modelproxy")throw Error("MCP не подключен: нужен MCP_READ_KEY в Cloudflare.");
+        const material=await getBookMaterial(env,input.bookId,input.mode,
+          typeof input.sourceRevision==="string"?input.sourceRevision:"");
+        messages.unshift({role:"system",content:material});
+      }
+    }catch(e){return fail(req,424,e.message);}
   }
   const isDraft = input.mode === "draft";
   const maxTokens=isDraft?4500:input.mode==="canon"?750:900;
-  // Tool calling makes this a real read-only book connector, not merely a
-  // summary of two chapters. A fresh revision was already checked above.
-  if(input.bookId && env.BOOKS && providerId!=="modelproxy"){
-    const book=await env.BOOKS.get("book:"+input.bookId,{type:"json"});
-    if(!book || (input.sourceRevision && book.updatedAt!==input.sourceRevision))
-      return fail(req,424,"Не удалось подтвердить свежую рукопись.");
-    return await bookToolsCompletion(req,env,provider,model,messages,book,maxTokens);
+  if(useMcp){
+    try{return await mcpToolsCompletion(req,env,provider,model,messages,
+      input.bookId||"",maxTokens);}
+    catch(e){return fail(req,502,"MCP: "+e.message);}
   }
   const body = {
     model, messages, stream: true,
@@ -498,7 +551,8 @@ export default {
           configured: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
           bothubConfigured: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
           apimiraConfigured: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
-          bookToolsSupported: !!env.BOOKS,
+          bookToolsSupported: mcpConfigured(env),
+          mcpConfigured: mcpConfigured(env),
           availableProviders: {
             modelproxy: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
             bothub: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
@@ -506,6 +560,13 @@ export default {
           },
           booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY),
           autoSyncSupported: !!env.BOOKS && typeof env.BOOKS.put === "function" });
+      if (path === "/mcp-tools" && req.method === "GET") {
+        if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца.");
+        try{const items=await mcpDiscover(env);
+          return json(req,200,{ok:true,server:"masterskaya-ai",readOnly:true,
+            toolCount:items.length,tools:items.map(t=>t.name)});}
+        catch(e){return fail(req,503,"MCP: "+e.message);}
+      }
       if (path === "/refresh-book" && req.method === "POST") return await refreshBook(req, env);
       if (path === "/preflight" && req.method === "GET") return await bothubPreflight(req, env);
       if (path === "/snapshot" && req.method === "GET") return await snapshotStatus(req, env);
