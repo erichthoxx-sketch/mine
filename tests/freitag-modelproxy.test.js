@@ -344,19 +344,32 @@ test("MCP does not impose hidden editorial persona or special chapter rules",asy
   assert.match(worker,/await mcpCallTool\(env,call\.function\.name,args\)/);
 });
 
-test("full chapter generation is opt-in, bounded and keeps ending on continuation",async()=>{
-  const worker=await readFile(new URL("../proxy/freitag-modelproxy-worker.js",import.meta.url),"utf8");
-  const app=await readFile(new URL("../ai/app.js",import.meta.url),"utf8");
-  assert.match(worker,/const requestedDraftLimit=Number\(input\.outputTokenLimit\|\|4500\)/);
+
+test("book project uses the exact large master instruction and verbatim long chapter prompt",async()=>{
+  const [app,worker]=await Promise.all([
+    readFile(new URL("../ai/app.js",import.meta.url),"utf8"),
+    readFile(new URL("../proxy/freitag-modelproxy-worker.js",import.meta.url),"utf8")
+  ]);
+  const source=app.slice(app.indexOf("function modelproxyMessages(c){"),app.indexOf("function buildMessages(c){"));
+  const masterPrompt="Мастер-промпт с правилами. ".repeat(1450);
+  const chapterPrompt="Глава 14 — текст и поток событий. ".repeat(1450);
+  assert.ok(masterPrompt.length>26000);
+  assert.ok(chapterPrompt.length>40000);
+  const fn=Function("project","state","userInstruction",source+"\nreturn modelproxyMessages;")(
+    ()=>({id:"book-1",instruction:masterPrompt,voice:"",canon:"",scene:""}),
+    {settings:{globalInstruction:""},feedback:[]},
+    v=>String(v||"")
+  );
+  const out=fn({projectId:"book-1",messages:[{role:"user",content:chapterPrompt}]});
+  assert.deepEqual(out,[
+    {role:"system",content:masterPrompt},
+    {role:"user",content:chapterPrompt}
+  ]);
+  assert.match(app,/p\.instruction=String\(fd\.get\("instruction"\)\|\|""\);/);
+  assert.doesNotMatch(source,/slice\(0,26000\)|slice\(0,20000\)|slice\(0,6000\)/);
+  assert.match(app,/if\(c\.projectId\) c\.mode="draft"/);
+  assert.match(app,/outputTokenLimit:c\.mode==="draft"\?14000/);
   assert.match(worker,/\[4500,9000,14000\]\.includes\(requestedDraftLimit\)/);
   assert.match(worker,/maxTokens=isDraft\?requestedDraftLimit/);
-  assert.match(app,/sceneOutputTokens:4500/);
-  assert.match(app,/id="f-chapter-limit"/);
-  assert.match(app,/outputTokenLimit:c\.mode==="draft"/);
-  assert.match(app,/content\.slice\(-24000\)/);
-  assert.match(app,/continueChapter&&content\.length>12000/);
-  assert.match(app,/content\.slice\(0,5000\)/);
-  assert.match(app,/content\.slice\(-12000\)/);
-  // The current user chapter request is sent untruncated to the gateway.
-  assert.match(app,/role:"user",content:last/);
+  assert.match(worker,/mode==="draft"&&bookId/);
 });
