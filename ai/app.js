@@ -191,6 +191,14 @@ function renderChat(){
     '</article>').join("");
   const modeOptions=Object.entries(WRITING_MODES).map(([key,v])=>
     '<option value="'+key+'" '+((c?.mode||pendingMode||(p?"draft":"dialog"))===key?"selected":"")+'>'+esc(v.name)+'</option>').join("");
+  const mobileChats=state.chats.filter(x=>(x.projectId||null)===(p?.id||null))
+    .sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||"")));
+  const mobileHistory=mobileChats.length
+    ?'<div class="f-mobile-history-panel">'+mobileChats.map(x=>
+       '<button type="button" data-action="select-chat" data-id="'+esc(x.id)+
+       '" class="'+(x.id===state.activeChatId?"on":"")+'">'+esc(x.title)+'</button>'
+      ).join("")+'</div>'
+    :'<div class="f-mobile-history-panel"><p>Диалогов пока нет.</p></div>';
   const bookOptions='<option value="">Без книги</option>'+state.projects.map(x=>
     '<option value="'+esc(x.id)+'" '+(x.id===(p?.id||"")?"selected":"")+'>'+esc(x.name)+'</option>').join("");
   $("#panel").innerHTML=
@@ -202,6 +210,8 @@ function renderChat(){
     '<select id="f-chat-project" class="f-select" aria-label="Выбрать книгу">'+bookOptions+'</select></div></div>'+
     '<div class="f-chat-head-actions">'+
     '<button type="button" class="f-btn f-btn-new" data-action="new-chat">＋ Новый чат</button>'+
+    '<details class="f-mobile-history"><summary aria-label="История разговоров">История</summary>'+
+      mobileHistory+'</details>'+
     (c?'<details class="f-chat-more"><summary aria-label="Действия с чатом" title="Действия с чатом">···</summary>'+
       '<div class="f-chat-more-menu"><button type="button" data-action="rename-chat">Переименовать</button>'+
       '<button type="button" class="f-destructive" data-action="delete-chat">Удалить чат</button></div></details>':"")+
