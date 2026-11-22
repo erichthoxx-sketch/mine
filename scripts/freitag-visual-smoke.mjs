@@ -70,10 +70,11 @@ try{
   // The dark theme must really apply after saving settings, not just appear in the menu.
   await desktop.locator("#f-theme").selectOption("dark");
   await desktop.locator('#f-settings button[type="submit"]').click();
-  assert.equal(await desktop.locator("html").getAttribute("data-theme"),"dark");
+  await desktop.waitForFunction(() => document.documentElement.getAttribute("data-theme")==="dark");
   await desktop.screenshot({path:OUT+"/dark.png",fullPage:true});
   await desktop.locator("#f-theme").selectOption("light");
   await desktop.locator('#f-settings button[type="submit"]').click();
+  await desktop.waitForFunction(() => document.documentElement.getAttribute("data-theme")==="light");
 
   // The book library and local materials must be usable without any external account.
   await desktop.locator('.f-nav button[data-nav="projects"]').click();
