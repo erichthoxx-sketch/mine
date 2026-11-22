@@ -1,5 +1,6 @@
 // Freitag AI — персональная литературная среда: сменяемые модели, память и контекст автора.
 import { master } from './master-sync.js';
+import { ensureDriveAccess, refreshLinkedBook } from './live-context.js';
 // Чаты, проекты и текстовые материалы хранятся только в IndexedDB этого браузера.
 // Никаких ключей и рукописей в репозитории.
 const $ = (q) => document.querySelector(q);
@@ -16,7 +17,7 @@ const WRITING_MODES = {
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
   settings:{provider:"ollama",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-sonnet-5.5",globalInstruction:DEFAULT_INSTRUCTION,context:4096}, theme:"auto"});
-let state=blank(), tab="chat", busy=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
+let state=blank(), tab="chat", busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null;
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const getDb=()=>new Promise((resolve,reject)=>{const r=db.transaction("data").objectStore("data").get("state");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -141,7 +142,7 @@ function renderSettings(){
     '<details class="f-settings-fold"><summary>Защищенный API-шлюз · ModelProxy / BotHub</summary>'+
     '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
     '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
-    '<p class="f-muted">В тестовой версии на Cloudflare Pages шлюз выбирается автоматически. Секретный API-ключ вводится только в Cloudflare, не здесь.</p></div></details>'+
+    '<p class="f-muted">В тестовой версии Cloudflare Pages шлюз выбирается автоматически. Для связанной книги перед каждым платным запросом Freitag AI читает свежий Google Документ и обновляет канон. Секретный API-ключ хранится только в Cloudflare.</p></div></details>'+
     '<details class="f-settings-fold"><summary>Локальная Ollama · дополнительные настройки</summary>'+
     '<div class="f-fold-body"><label for="f-endpoint">Адрес Ollama</label>'+
     '<input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
@@ -618,51 +619,62 @@ async function saveFeedback(i,kind){
 }
 let approvedSnapshot = "";
 async function sendMessage(text){
-  if(busy||!text.trim())return;
+  if(busy||preparingPaid||!text.trim())return;
   const isPaidProvider=["modelproxy","bothub"].includes(state.settings.provider);
   const endpoint=safeEndpoint(state.settings.endpoint);
   const gateway=claudeGateway(state.settings.workerUrl);
   if(isPaidProvider && !gateway)return notice("Для Claude укажи адрес защищенного Worker в настройках.");
-  if(isPaidProvider && !master.user)return notice("Сначала войди в аккаунт Мастерской: раздел «Проекты».");
+  if(isPaidProvider && !master.user)return notice("Сначала войди в аккаунт Мастерской: раздел «Книги».");
   if(!isPaidProvider && !endpoint)return notice("Проверь адрес Ollama в настройках.");
-  let idToken="";
+  let idToken="",sourceRevision="";
   if(isPaidProvider){
-    try{idToken=await master.idToken();}catch(e){return notice(e.message);}
-  }
-  if(isPaidProvider){
-    // Fail closed: the old gateway uses Polza. Never silently bill it.
+    preparingPaid=true;
+    const selectedProject=project(state.activeProjectId);
+    const selectedBookId=selectedProject?.masterBookId||"";
     try{
+      // MUST run first, directly from the Send click: Google's OAuth popup
+      // gets blocked if we await network calls before requesting permission.
+      await ensureDriveAccess(selectedBookId);
+      idToken=await master.idToken();
       const check=await fetch(gateway+"/health",{cache:"no-store"});
       if(!check.ok)throw Error("Шлюз недоступен: HTTP "+check.status);
       const health=await check.json();
       if(health.provider!=="ModelProxy"||health.model!=="claude-opus-5-5")
-        throw Error("На сервере старая версия с Polza. Платный запрос не отправлен.");
+        throw Error("Шлюз устарел. Обнови тестовую версию Cloudflare Worker.");
       if(state.settings.provider==="bothub"&&!health.bothubConfigured)
-        throw Error("BotHub не подключен. Нужен BOTHUB_API_KEY в Cloudflare.");
+        throw Error("BotHub пока не подключен: нужен BOTHUB_API_KEY в Cloudflare.");
       if(state.settings.provider==="modelproxy"&&!health.configured)
-        throw Error("В Cloudflare не задан MODELPROXY_API_KEY.");
-      const bookId=project(state.activeProjectId)?.masterBookId;
-      if(bookId){
-        const response=await fetch(gateway+"/snapshot?bookId="+encodeURIComponent(bookId),{
-          headers:{"Authorization":"Bearer "+idToken},cache:"no-store"
+        throw Error("ModelProxy пока не подключен: нужен MODELPROXY_API_KEY в Cloudflare.");
+      if(selectedBookId){
+        if(!health.autoSyncSupported)
+          throw Error("В Cloudflare Worker нет обновления из Google Docs. Обнови Worker и проверь BOOKS.");
+        // A network read from Firestore + a fresh Google Doc, then an
+        // authenticated KV update. NEVER silently fall back to an older book.
+        const {status,canon}=await refreshLinkedBook({
+          bookId:selectedBookId,gateway,idToken
         });
-        if(!response.ok){
-          const info=await response.json().catch(()=>({}));
-          throw Error("Проверка снимка: "+(info.error||"HTTP "+response.status));
-        }
-        const snapshot=await response.json();
-        const marker=state.settings.provider+"|"+bookId+"|"+snapshot.updatedAt;
+        if(project(state.activeProjectId)?.id!==selectedProject.id)
+          throw Error("Активная книга изменилась во время обновления. Повтори отправку.");
+        selectedProject.masterCanon=canon;
+        selectedProject.masterSyncedAt=status.updatedAt;
+        await save();
+        sourceRevision=status.updatedAt;
+        // Consent once per provider/book per browser session, not every time
+        // refreshed timestamps change. Source data always updates anyway.
+        const marker=state.settings.provider+"|"+selectedBookId;
         if(marker!==approvedSnapshot){
-          const chapters=(snapshot.lastChapters||[]).map(ch=>ch.slot+": "+ch.title).join("\n");
-          const message="Бесплатная проверка снимка Мастерской:\n"
-            +snapshot.chapterCount+" частей, обновлен: "+snapshot.updatedAt
+          const chapters=(status.lastChapters||[]).map(ch=>ch.slot+": "+ch.title).join("\n");
+          const message="Прочитана свежая рукопись из Google Docs:\n"
+            +status.chapterCount+" частей, обновлено: "+status.updatedAt
             +"\nПоследние:\n"+chapters
-            +"\n\nЭтот контекст будет отправлен "+(state.settings.provider==="bothub"?"BotHub":"ModelProxy")+". Продолжить платный запрос?";
+            +"\n\nПередать материалы "+(state.settings.provider==="bothub"?"BotHub":"ModelProxy")
+            +" для платного запроса?";
           if(!confirm(message))return;
           approvedSnapshot=marker;
         }
       }
-    }catch(e){return notice(e.message);}
+    }catch(e){return notice("Обновление Мастерской: "+e.message);}
+    finally{preparingPaid=false;}
   }
   const previousDraft=draftKey();
   const c=ensureChat(),msg=text.trim();
@@ -686,7 +698,7 @@ async function sendMessage(text){
     const res=isPaidProvider?await fetch(gateway+"/chat",{
       method:"POST",
       headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
-      body:JSON.stringify({provider:state.settings.provider,model:state.settings.provider==="bothub"?activeBotHubModel():undefined,messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null}),
+      body:JSON.stringify({provider:state.settings.provider,model:state.settings.provider==="bothub"?activeBotHubModel():undefined,messages,mode:c.mode||"dialog",bookId:project(c.projectId)?.masterBookId||null,sourceRevision}),
       signal:currentController.signal
     }):await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",
