@@ -61,7 +61,7 @@ try{
   await desktop.locator(".f-msg.assistant .f-msg-text").filter({hasText:"Тестовый ответ"}).waitFor({timeout:12000});
   await desktop.screenshot({path:OUT+"/conversation.png",fullPage:true});
   assert.equal(await desktop.locator("#f-message-input").inputValue(),"");
-  await desktop.getByRole("button",{name:"Копировать"}).click();
+  assert.equal(await desktop.getByRole("button",{name:"Копировать"}).count(),1);
   await desktop.getByRole("button",{name:"Настройки",exact:true}).first().click();
   await desktop.locator("#f-provider").waitFor();
   await desktop.screenshot({path:OUT+"/settings.png",fullPage:true});
@@ -72,6 +72,25 @@ try{
   await desktop.locator('#f-settings button[type="submit"]').click();
   assert.equal(await desktop.locator("html").getAttribute("data-theme"),"dark");
   await desktop.screenshot({path:OUT+"/dark.png",fullPage:true});
+  await desktop.locator("#f-theme").selectOption("light");
+  await desktop.locator('#f-settings button[type="submit"]').click();
+
+  // The book library and local materials must be usable without any external account.
+  await desktop.locator('.f-nav button[data-nav="projects"]').click();
+  await desktop.getByRole("button",{name:/Новый проект/}).click();
+  await desktop.locator('dialog input[name="name"]').fill("Тестовая книга");
+  await desktop.locator('dialog button[value="save"]').click();
+  await desktop.screenshot({path:OUT+"/books.png",fullPage:true});
+  assert.match(await desktop.locator("#panel").innerText(),/Тестовая книга/);
+
+  await desktop.locator('.f-nav button[data-nav="knowledge"]').click();
+  await desktop.locator("#f-doc-project").selectOption({label:"Тестовая книга"});
+  await desktop.getByRole("button",{name:/Добавить заметку/}).click();
+  await desktop.locator('dialog input[name="name"]').fill("Тестовый отрывок");
+  await desktop.locator('dialog textarea[name="text"]').fill("Проверка материалов. Тестовый текст, не рукопись автора.");
+  await desktop.locator('dialog button[value="save"]').click();
+  assert.match(await desktop.locator("#panel").innerText(),/Тестовый отрывок/);
+  await desktop.screenshot({path:OUT+"/materials.png",fullPage:true});
 
   const mobile=await pageAt(390,844);
   assert.equal(await mobile.locator("#f-chat-project").count(),1);
