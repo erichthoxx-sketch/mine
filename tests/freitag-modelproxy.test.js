@@ -312,7 +312,7 @@ test("browser and Pages bridge preserve authenticated provider routing and optio
   const pages=await readFile(new URL("../functions/api/freitag/[route].js",import.meta.url),"utf8");
   assert.match(app,/await master\.idToken\(\)/);
   assert.match(app,/modelproxyMessages\(c\)/);
-  assert.match(app,/data-action="sync-current-book"/);
+  assert.match(app,/if\(a==="sync-current-book"\)/);
   assert.match(app,/refreshLinkedBook\(\{/);
   assert.match(app,/sourceRevision/);
   assert.match(pages,/route === "snapshot"/);
