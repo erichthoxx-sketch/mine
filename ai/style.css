@@ -276,3 +276,266 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 @media(prefers-reduced-motion:no-preference){
   .f-btn,.f-nav button,.f-list button,.f-icon-btn{transition:background-color .16s ease,color .16s ease,border-color .16s ease}
 }
+
+/* ───── Editorial workspace: comfortable full-width chat, not a narrow card ─── */
+.f-layout{grid-template-columns:252px minmax(0,1fr);max-width:none}
+.f-main{padding:20px clamp(18px,2.6vw,40px) 28px}
+.f-content{max-width:1180px}
+.f-chat{width:100%;max-width:none;min-height:calc(100dvh - 125px)}
+.f-chat-meta{align-items:center;gap:16px;margin-bottom:8px;padding:0}
+.f-chat-identity{display:flex;flex-wrap:wrap;align-items:center;gap:8px 15px;min-width:0}
+.f-chat-meta .f-title{font-size:20px;letter-spacing:-.025em;line-height:1.3;max-width:100%;min-width:0}
+.f-chat-book{margin:0;gap:7px;flex-wrap:wrap}
+.f-chat-book .f-select{width:min(290px,100%);max-width:100%;min-height:35px}
+.f-project-open-link,.f-project-shortcut,.f-project-back{
+  appearance:none;border:0!important;background:transparent!important;
+  color:var(--f-soft-ink)!important;cursor:pointer;font:500 12px/1.4 "Golos Text",sans-serif;
+  text-decoration:underline;text-underline-offset:3px;
+}
+.f-project-shortcut{display:block;margin-top:9px;text-align:left;padding:4px 2px}
+.f-project-open-link:hover,.f-project-back:hover,.f-project-shortcut:hover{color:var(--f-ink)!important}
+.f-chat-body{gap:17px;min-height:100px;padding:14px 0 22px}
+.f-msg{max-width:100%;width:auto}
+.f-msg.user{max-width:min(88%,930px);padding:12px 16px;border-radius:14px 14px 4px 14px}
+.f-msg.assistant{align-self:stretch;width:100%;max-width:100%;padding:2px 0}
+.f-speaker{font-size:11px;margin-bottom:8px}
+.f-msg-text{font-size:16px;line-height:1.72;letter-spacing:0;white-space:normal;overflow-wrap:anywhere;max-width:1200px}
+.f-msg.user .f-msg-text{font-size:15px;line-height:1.65}
+.f-msg-text.pending{white-space:pre-wrap}
+.f-msg-text p{margin:0 0 .85em}
+.f-msg-text p:last-child{margin-bottom:0}
+.f-msg-text h3,.f-msg-text h4,.f-msg-text h5{font:600 17px/1.45 "Golos Text",sans-serif;letter-spacing:-.01em;margin:1.3em 0 .5em}
+.f-msg-text h4{font-size:16px}
+.f-msg-text h5{font-size:15px}
+.f-msg-text strong{font-weight:700}
+.f-msg-text em{font-style:italic}
+.f-msg-text ul,.f-msg-text ol{padding-left:1.5em;margin:.45em 0 1em}
+.f-msg-text li{margin:.28em 0;padding-left:.1em}
+.f-msg-text blockquote{border-left:2px solid var(--f-line-strong);padding:.25em 0 .25em 1em;margin:.9em 0;color:var(--f-soft-ink)}
+.f-msg-text pre{white-space:pre;overflow-x:auto;max-width:100%;padding:15px 17px;border:1px solid var(--f-line);border-radius:11px;background:var(--f-hover);font:13px/1.58 ui-monospace,Consolas,monospace}
+.f-msg-text code{font:13px/1.5 ui-monospace,Consolas,monospace}
+.f-msg-text :not(pre)>code{padding:2px 5px;border-radius:5px;background:var(--f-hover)}
+.f-msg-text a{color:var(--f-ink);text-underline-offset:3px}
+.f-msg-text hr{border:0;border-top:1px solid var(--f-line);margin:1em 0}
+.f-feedback-actions{margin-top:7px}
+.f-compose{padding:8px 0 0}
+.f-compose-surface{padding:10px 14px;border-radius:14px;box-shadow:0 6px 30px rgba(0,0,0,.055)}
+.f-compose .f-textarea{min-height:88px;max-height:40dvh;resize:vertical;padding:13px 2px}
+.f-chat-welcome{padding:20px 0 40px}
+.f-chat-welcome h2{font-size:25px}
+.f-btn-new{display:none}
+.f-project-home{padding-top:3px}
+.f-project-back{display:inline-block;margin:0 0 18px;text-decoration:none}
+.f-project-overview{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+.f-project-overview .f-title{font-size:clamp(25px,2.5vw,34px)}
+.f-project-overview .f-subtitle{font-size:13px}
+.f-project-status{display:flex;align-items:center;gap:9px;margin-bottom:26px;font-size:12px;color:var(--f-soft-ink)}
+.f-status-pip{display:inline-block;flex:none;width:7px;height:7px;background:var(--f-soft-ink);border-radius:50%}
+.f-project-editor,.f-project-source,.f-project-recent{padding:22px 0;border-top:1px solid var(--f-line)}
+.f-project-editor h2,.f-project-source h2,.f-project-recent h2{font:600 19px/1.4 "Golos Text",sans-serif;margin:0 0 8px;letter-spacing:-.02em}
+.f-project-prompt{display:block;width:100%;min-height:190px!important;max-height:55dvh;padding:15px 16px!important;border:1px solid var(--f-line-strong)!important;border-radius:12px;background:var(--f-paper)!important;font-size:14px!important;line-height:1.7!important;resize:vertical}
+.f-project-editor .f-label{margin-top:18px}
+.f-project-editor .f-row{margin-top:16px}
+.f-project-options{border:1px solid var(--f-line);border-radius:10px;padding:14px 16px;margin-top:16px}
+.f-project-options summary{cursor:pointer;font-size:13px}
+.f-project-options .f-textarea{display:block;width:100%;min-height:120px;padding:12px!important}
+.f-project-source .f-spread{align-items:flex-start}
+.f-project-source .f-muted{max-width:800px}
+.f-project-recent .f-list button{padding-left:0;font-size:13px!important}
+@media(max-width:1050px){
+  .f-layout{grid-template-columns:220px minmax(0,1fr)}
+  .f-main{padding:18px 20px 26px}
+  .f-chat-meta .f-title{font-size:18px}
+  .f-msg-text{font-size:15.5px}
+}
+@media(max-width:760px){
+  .f-main{padding:16px 14px calc(88px + env(safe-area-inset-bottom))}
+  .f-chat{min-height:calc(100dvh - 165px)}
+  .f-chat-body{padding:14px 0 18px}
+  .f-msg-text{font-size:15px}
+  .f-msg.user{max-width:96%}
+  .f-chat-meta{align-items:flex-start}
+  .f-chat-identity{gap:6px 10px}
+  .f-chat-meta .f-title{font-size:18px}
+  .f-btn-new{display:inline-flex}
+  .f-project-overview{align-items:flex-start;flex-direction:column}
+  .f-project-source .f-spread{flex-direction:column;align-items:flex-start}
+  .f-project-prompt{min-height:150px!important}
+}
+
+
+/* Visible, persistent model selector in chat */
+.f-writing-bar .f-quick-model{width:auto;min-width:188px;max-width:265px;border:1px solid var(--f-line)!important;border-radius:8px;background:var(--f-bg);font-weight:600}
+@media(max-width:760px){
+  .f-writing-bar .f-quick-model{min-width:145px;max-width:210px;font-size:11px!important}
+}
+@media(max-width:470px){
+  .f-writing-bar{gap:5px}
+  .f-writing-bar .f-quick-model{max-width:175px;min-width:135px}
+}
+
+
+/* ───── Full viewport CHAT: history scrolls, composer does not eat the screen ─────
+   This mode is applied only on the chat route. Project/settings pages remain scrollable. */
+html.app-freitag.f-chat-mode,
+html.app-freitag.f-chat-mode body{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+}
+html.app-freitag.f-chat-mode #app{
+  display:flex;
+  flex-direction:column;
+  height:100dvh;
+  min-height:0;
+  overflow:hidden;
+}
+html.app-freitag.f-chat-mode .f-head{
+  position:relative;
+  top:auto;
+  flex:0 0 70px;
+}
+html.app-freitag.f-chat-mode .f-layout{
+  width:100%;
+  height:calc(100dvh - 70px);
+  flex:1 1 auto;
+  min-height:0;
+  overflow:hidden;
+}
+html.app-freitag.f-chat-mode .f-sidebar{
+  top:0;
+  height:100%;
+  min-height:0;
+}
+html.app-freitag.f-chat-mode .f-main{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  min-height:0;
+  overflow:hidden;
+  padding:12px clamp(14px,2vw,30px) 10px;
+}
+html.app-freitag.f-chat-mode .f-chat{
+  display:flex;
+  flex-direction:column;
+  width:100%;
+  height:100%;
+  min-height:0;
+  max-height:100%;
+  flex:1 1 auto;
+  margin:0;
+}
+html.app-freitag.f-chat-mode .f-chat-meta{
+  flex:0 0 auto;
+  min-height:0;
+  margin:0 0 6px;
+}
+html.app-freitag.f-chat-mode .f-chat-body{
+  flex:1 1 auto;
+  min-height:0;
+  max-height:none;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  padding:10px 4px 14px 0;
+}
+html.app-freitag.f-chat-mode .f-chat-welcome{
+  margin:auto;
+  padding:8px 0 18px;
+}
+html.app-freitag.f-chat-mode .f-compose{
+  position:static;
+  flex:0 0 auto;
+  margin:0;
+  padding:6px 0 0;
+  background:var(--f-bg);
+  min-height:0;
+}
+html.app-freitag.f-chat-mode .f-compose-surface{
+  padding:8px 12px;
+  border-radius:13px;
+}
+html.app-freitag.f-chat-mode .f-writing-bar{
+  min-height:30px;
+  gap:6px 9px;
+  padding-bottom:6px;
+}
+html.app-freitag.f-chat-mode .f-writing-bar .f-select{
+  min-height:30px;
+  padding:4px 8px;
+}
+html.app-freitag.f-chat-mode .f-compose textarea.f-textarea{
+  display:block;
+  box-sizing:border-box;
+  width:100%;
+  height:48px;
+  min-height:48px;
+  max-height:34dvh;
+  line-height:1.5;
+  padding:10px 2px 4px;
+  margin:0;
+  resize:none;
+  overflow-y:auto;
+}
+html.app-freitag.f-chat-mode .f-compose-controls{
+  padding-top:4px;
+  min-height:35px;
+}
+html.app-freitag.f-chat-mode .f-compose-controls .f-btn{
+  min-height:33px;
+}
+html.app-freitag.f-chat-mode .f-extra-tools{
+  padding:0 4px;
+  font-size:11px;
+}
+html.app-freitag.f-chat-mode .f-extra-tools summary{
+  padding:3px 0 0;
+}
+@media(max-width:760px){
+  html.app-freitag.f-chat-mode .f-head{
+    flex-basis:63px;
+  }
+  html.app-freitag.f-chat-mode .f-layout{
+    height:calc(100dvh - 63px - 61px - env(safe-area-inset-bottom));
+    flex:1 1 auto;
+    min-height:0;
+  }
+  html.app-freitag.f-chat-mode .f-main{
+    padding:8px 12px 7px;
+    min-height:0;
+  }
+  html.app-freitag.f-chat-mode .f-chat{
+    height:100%;
+    min-height:0;
+  }
+  html.app-freitag.f-chat-mode .f-chat-body{
+    min-height:0;
+    padding-bottom:10px;
+  }
+  html.app-freitag.f-chat-mode .f-compose{
+    bottom:auto;
+  }
+  html.app-freitag.f-chat-mode .f-compose textarea.f-textarea{
+    height:44px;
+    min-height:44px;
+    max-height:27dvh;
+  }
+  html.app-freitag.f-chat-mode .f-compose-canon{
+    display:none;
+  }
+  html.app-freitag.f-chat-mode .f-mobile-nav{
+    min-height:61px;
+  }
+}
+@media(max-height:650px) and (min-width:761px){
+  html.app-freitag.f-chat-mode .f-head{
+    flex-basis:56px;
+  }
+  html.app-freitag.f-chat-mode .f-layout{
+    height:calc(100dvh - 56px);
+  }
+  html.app-freitag.f-chat-mode .f-chat-welcome{
+    padding:4px 0 8px;
+  }
+}

@@ -55,7 +55,7 @@ test("response copy, clear settings, backups and ModelProxy protection remain pr
     'id="f-test-status"','id="f-chat-form"','data-action="export"']){
     assert.ok(app.includes(text), "Missing behavior or form field: "+text);
   }
-  assert.match(app,/health.provider!=="ModelProxy"/);
+  assert.match(app,/await master\.idToken\(\)/);
   assert.match(app,/refreshLinkedBook\(\{/);
   assert.match(app,/sourceRevision/);
   assert.match(app,/indexedDB.open\("freitag-ai-v1",1\)/);
@@ -66,7 +66,8 @@ test("unsent chapter prompts survive navigation and are cleared only after submi
   assert.match(app,/drafts:\{\}/);
   assert.match(app,/const draftKey=/);
   assert.match(app,/const rememberDraft=/);
-  assert.match(app,/if\(e.target.id==="f-message-input"\)rememberDraft\(e.target.value\)/);
+  assert.match(app,/if\(e.target.id==="f-message-input"\)\{/);
+  assert.match(app,/rememberDraft\(e.target.value\)/);
   assert.match(app,/esc\(state.drafts\?\.\[draftKey\(\)\]\|\|""\)/);
   assert.match(app,/delete state.drafts\[previousDraft\]/);
 });
@@ -92,16 +93,36 @@ test("BotHub offers a compact, persistent model choice without exposing the key 
   assert.doesNotMatch(app,/name="BOTHUB_API_KEY"/);
 });
 
-test("fresh book must be loaded from Google Docs on every paid send, not from cached MCP snapshot",async()=>{
+test("Google Docs refresh is optional; normal Opus MCP messages do not reauthorize",async()=>{
   const live=await load("../ai/live-context.js");
   const app=await load("../ai/app.js");
   const worker=await load("../proxy/freitag-modelproxy-worker.js");
-  assert.match(live,/await master\.refresh\(\)/);
-  assert.match(live,/await bookSnapshot\(current\)/);
+  const send=app.slice(app.indexOf("async function sendMessage("),app.indexOf("function download(",app.indexOf("async function sendMessage(")));
   assert.match(live,/gateway \+ "\/refresh-book"/);
-  assert.match(app,/await ensureDriveAccess\(selectedBookId\)/);
+  assert.match(app,/if\(a==="sync-current-book"\)/);
+  assert.match(app,/await ensureDriveAccess\(p\.masterBookId\)/);
   assert.match(app,/await refreshLinkedBook\(/);
+  assert.doesNotMatch(send,/ensureDriveAccess\(/);
+  assert.doesNotMatch(send,/confirm\(/);
+  assert.match(worker,/if\(input\.sourceRevision\)/);
   assert.match(worker,/path === "\/refresh-book"/);
-  assert.match(worker,/requiredRevision && book\.updatedAt !== requiredRevision/);
-  assert.doesNotMatch(app,/gateway\+"\/snapshot\?bookId="/);
+});
+
+test("chat uses full viewport height and scrolls messages inside it, not whole page",async()=>{
+  const css=await load("../ai/style.css");
+  const app=await load("../ai/app.js");
+  for(const cssRule of [
+    "html.app-freitag.f-chat-mode #app",
+    "height:100dvh",
+    "html.app-freitag.f-chat-mode .f-chat-body",
+    "overflow-y:auto",
+    "html.app-freitag.f-chat-mode .f-compose textarea.f-textarea",
+    "height:48px",
+    "min-height:0"
+  ])assert.ok(css.includes(cssRule),cssRule);
+  assert.match(app,/classList\.toggle\("f-chat-mode",tab==="chat"\)/);
+  assert.match(app,/id="f-message-input" rows="2"/);
+  assert.match(app,/resizeChatInput\(e\.target\)/);
+  assert.match(app,/historyEl\.scrollTop=historyEl\.scrollHeight/);
+  assert.doesNotMatch(app,/lastElementChild\?\.scrollIntoView/);
 });
