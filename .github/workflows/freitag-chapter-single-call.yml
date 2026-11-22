@@ -1,0 +1,26 @@
+name: Freitag AI · single-call chapter regression
+on:
+  push:
+    branches: [fix/freitag-chapter-single-opus-call]
+    paths:
+      - "proxy/freitag-modelproxy-worker.js"
+      - "tests/freitag-*.test.js"
+      - ".github/workflows/freitag-chapter-single-call.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check proxy/freitag-modelproxy-worker.js
+          node --check ai/app.js
+      - name: Full mock-based regression suite
+        run: npm test
