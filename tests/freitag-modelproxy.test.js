@@ -246,7 +246,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     }),env);
     assert.equal(toolResponse.status,200);
     assert.match(await toolResponse.text(),/События главы подтверждены/);
-    assert.equal(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length,3);
+    assert.equal(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length,4);
     const followup=JSON.parse(calls.at(-1).init.body);
     assert.equal(followup.messages.at(-1).role,"tool");
     assert.match(followup.messages.at(-1).content,/новая глава/);
@@ -258,7 +258,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     }),env);
     assert.equal(botRes.status,200);
     assert.match(await botRes.text(),/OK/);
-    assert.equal(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length,4);
+    assert.equal(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length,5);
     const botCall=calls.at(-1);
     assert.equal(String(botCall.input),"https://openai.bothub.chat/v1/chat/completions");
     assert.equal(botCall.init.headers.Authorization,"Bearer bh-test");
