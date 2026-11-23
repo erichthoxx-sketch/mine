@@ -215,7 +215,7 @@ function renderChat(){
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
   const p=project(c?.projectId||state.activeProjectId);
   const draft=state.drafts?.[draftKey()]||"";
-  const canSelectBookContext=p?.masterBookId&&paidProviders.includes(state.settings.provider)&&
+  const canSearchBook=p?.masterBookId&&paidProviders.includes(state.settings.provider)&&
     (c?.mode||pendingMode||"draft")==="draft";
   const previous=$("#f-messages");
   const sameChat=previous?.dataset.key===draftKey();
@@ -279,7 +279,7 @@ function renderChat(){
     '</div>'+
     (p?'<aside class="f-chat-context" aria-label="Контекст книги">'+
       '<h2>Контекст книги</h2><p class="f-context-book">'+esc(p.name)+'</p>'+
-      '<h3>Рукопись</h3><p>'+(p.masterBookId?'По умолчанию загружаются канон и две последние главы. В задании можно выбрать другие главы или найти выписки по всей книге.':'Локальный проект')+'</p>'+
+      '<h3>Рукопись</h3><p>'+(p.masterBookId?'Для главы Freitag берет канон, две последние главы и подбирает короткие выписки по всей рукописи.':'Локальный проект')+'</p>'+
       '<h3>Инструкция проекта</h3><p>'+(userInstruction(p.instruction).trim()?'Сохранена и применяется в чатах книги.':'Пока пустая.')+'</p>'+
       '<button type="button" class="f-btn" data-action="project-home" data-id="'+esc(p.id)+'">Открыть проект ↗</button></aside>':"")+
     '<form id="f-chat-form" class="f-compose">'+
@@ -294,9 +294,9 @@ function renderChat(){
       '<div class="f-compose-controls">'+
       '<div class="f-compose-actions">'+
       '<button type="button" class="f-inline-btn" data-action="expand-draft" '+(busy?"disabled":"")+'>Развернуть</button>'+
-      (canSelectBookContext?'<button type="button" class="f-inline-btn" data-action="select-book-context" '+(busy?"disabled":"")+'>Контекст книги</button>':"")+
       '<span class="f-mini" id="f-draft-size">'+(draft?draft.length.toLocaleString("ru-RU")+' зн.':"")+'</span>'+
       '<details class="f-extra-tools" id="f-chat-tools" '+(toolsOpen?"open":"")+'><summary>Ещё</summary><div class="f-compose-menu">'+
+      (canSearchBook?'<button type="button" data-action="search-book-context" '+(busy?"disabled":"")+'>Найти фразу в книге</button>':"")+
       '<button type="button" data-action="export-context">Скопировать контекст</button>'+
       '<button type="button" data-action="paste-external">Добавить внешний ответ</button>'+
       '<button type="button" data-action="open-settings">Настройки модели</button>'+
@@ -1109,24 +1109,21 @@ document.addEventListener("click",async(e)=>{
     current.dispatchEvent(new Event("input",{bubbles:true}));
     current.focus({preventScroll:true});
   }
-  if(a==="select-book-context"){
+  if(a==="search-book-context"){
     const input=$("#f-message-input"),key=draftKey();
     if(busy||!input)return;
-    const lines=/^(Главы для контекста|Поиск по книге):[ \t]*([^\r\n]*)(?:\r?\n|$)/gim;
-    const existing=Object.fromEntries([...input.value.matchAll(lines)].map(([,name,value])=>[name.toLowerCase(),value.trim()]));
-    const source=await openModal("Контекст для этой главы",[
-      {key:"chapters",label:"Главы целиком вместо последних двух (например 3, 8)"},
-      {key:"query",label:"Поиск по всей книге (одна фраза или две через точку с запятой)"}
-    ],{chapters:existing["главы для контекста"],query:existing["поиск по книге"]},"Сохранить в задании");
+    const lines=/^Поиск по книге:[ \t]*([^\r\n]*)(?:\r?\n|$)/gim;
+    const existing=[...input.value.matchAll(lines)].at(-1)?.[1].trim();
+    const source=await openModal("Найти фразу в книге",[
+      {key:"query",label:"Одна точная фраза или две через точку с запятой"}
+    ],{query:existing},"Сохранить в задании");
     const current=$("#f-message-input");
     if(!source||!current||draftKey()!==key||busy)return;
     const text=current.value.replace(lines,"");
-    const extra=[
-      source.chapters.trim()&&"Главы для контекста: "+source.chapters.trim(),
-      source.query.trim()&&"Поиск по книге: "+source.query.trim()
-    ].filter(Boolean).join("\n");
+    const extra=source.query.trim()&&"Поиск по книге: "+source.query.trim();
     current.value=extra?text+(text&&!text.endsWith("\n\n")?"\n\n":"")+extra:text;
     current.dispatchEvent(new Event("input",{bubbles:true}));
+    $("#f-chat-tools").open=false;
     current.focus({preventScroll:true});
   }
   if(a==="stop")currentController?.abort();

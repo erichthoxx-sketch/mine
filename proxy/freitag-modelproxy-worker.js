@@ -333,6 +333,93 @@ function visibleCompletion(message){
 }
 const BOOK_SOURCE_LIMIT=180000;
 const BOOK_SEARCH_LIMIT=5000;
+const AUTOMATIC_EXCERPT_LIMIT=2800;
+
+const MANUSCRIPT_STOP_WORDS = new Set([
+  "автор", "более", "было", "будет", "важно", "глава", "главу", "главы", "главе",
+  "герой", "героя", "героиня", "героини", "дальше", "диалог", "должен", "должна",
+  "задание", "здесь", "история", "книга", "канон", "который", "которые", "которая", "когда",
+  "модель", "можно", "момент", "напиши", "нужно", "однако", "персонажи", "пожалуйста",
+  "после", "потом", "почему", "прежде", "продолжи", "продолжай", "продолжение",
+  "роман", "сделай", "сейчас", "следующую", "смысл", "события", "сцена", "сцену",
+  "сцене", "сцены", "сюжет", "также", "текст", "только", "учти", "чтобы", "этого", "этом"
+]);
+const normalizeManuscript = text => text.toLowerCase().replace(/ё/g, "е");
+
+function manuscriptQueryWords(text) {
+  const words = new Set();
+  const matches = text.match(/[а-яёa-z]{4,}/gi) || [];
+  // Names first, then longer words such as locations, objects and events.
+  const names = matches.filter(word => /^[А-ЯЁA-Z][а-яёa-z]/.test(word));
+  for (const word of [...names, ...matches.filter(word => word.length >= 6)]) {
+    const term = normalizeManuscript(word);
+    if (MANUSCRIPT_STOP_WORDS.has(term) || term.length > 48) continue;
+    const stem = term.replace(/(?:ами|ями|ого|ему|ому|ом|ем|ах|ях|ой|ей|ая|ую|ое|ые|ых|их|[аеёиоуыэюя])$/, "");
+    words.add(stem.length >= 4 ? stem : term);
+    if (words.size === 9) break;
+  }
+  return [...words];
+}
+
+// Choose short passages before calling the model. The supplied chapters are
+// the same private snapshot as the MCP chapter list and may be scanned in full.
+function relatedManuscriptExcerpts(chapters, selected, task, continuity, limit) {
+  const words = manuscriptQueryWords(task.slice(0, 2500) + "\n" + task.slice(-1200));
+  const recent = manuscriptQueryWords(continuity.slice(-1200)).filter(word => !words.includes(word)).slice(0, 5);
+  const terms = [...words, ...recent];
+  if (!terms.length || limit < 350) return [];
+  const matchedChapters = new Map();
+  const windows = [];
+  for (const [index, chapter] of chapters.entries()) {
+    const number = index + 1;
+    if (selected.has(number) || typeof chapter?.text !== "string") continue;
+    const text = normalizeManuscript(chapter.text);
+    const byWindow = new Map();
+    const stride = Math.max(620, Math.ceil(text.length / 3));
+    for (const term of terms) {
+      let found = false;
+      // Sample the first occurrence in each third so frequent names don't
+      // generate a candidate for every sentence in a long chapter.
+      for (let from = 0; from < text.length; from += stride) {
+        let at = text.indexOf(term, from);
+        while (at > 0 && /[а-яa-z]/.test(text[at - 1])) at = text.indexOf(term, at + term.length);
+        if (at === -1) break;
+        const offset = Math.floor(at / 620) * 620;
+        if (!byWindow.has(offset)) byWindow.set(offset, new Set());
+        byWindow.get(offset).add(term);
+        found = true;
+      }
+      if (found) matchedChapters.set(term, (matchedChapters.get(term) || 0) + 1);
+    }
+    for (const [offset, matches] of byWindow) windows.push({ number, offset, matches });
+  }
+  for (const window of windows) {
+    window.score = 0;
+    for (const term of window.matches) {
+      const count = matchedChapters.get(term);
+      // Prefer task terms, especially a rare combination in the same scene.
+      window.score += (words.includes(term) ? 3 : 1) / Math.sqrt(count);
+    }
+  }
+  windows.sort((a, b) => b.score - a.score || a.number - b.number || a.offset - b.offset);
+  const used = new Set(), passages = [];
+  let remaining = limit;
+  for (const { number, offset } of windows) {
+    if (used.has(number)) continue;
+    const chapter = chapters[number - 1];
+    const label = "Глава " + number + " («" + String(chapter.title || "").slice(0, 100) + "»), отрывок:\n";
+    const start = Math.max(0, offset - 100);
+    const size = Math.min(850, remaining - label.length - 2);
+    if (size < 350) break;
+    const snippet = chapter.text.slice(start, start + size).trim();
+    if (!snippet || task.includes(snippet)) continue;
+    passages.push(label + snippet);
+    used.add(number);
+    remaining -= label.length + snippet.length + 2;
+    if (passages.length === 3) break;
+  }
+  return passages;
+}
 
 function bookContextRequest(text){
   const read=label=>Array.from(text.matchAll(new RegExp("^"+label+":[ \\t]*(.*)$","gim"))).at(-1)?.[1].trim()||"";
@@ -370,6 +457,18 @@ async function searchBookPassages(readJson,queries,chapterByNumber,selected,last
   return passages;
 }
 
+async function automaticBookPassages(env,bookId,listing,selected,task,continuity,limit){
+  if(!env.BOOKS||listing.chapters.length<=selected.size||limit<350)return [];
+  // Use the same private snapshot as MCP. Keep the window used for
+  // generation consistent if Google Docs is refreshed during this request.
+  let snapshot;
+  try{snapshot=await env.BOOKS.get("book:"+bookId,{type:"json"});}
+  catch{return [];}
+  if(snapshot?.updatedAt!==listing.updatedAt||!Array.isArray(snapshot.chapters)||
+     snapshot.chapters.length!==listing.chapters.length)return [];
+  return relatedManuscriptExcerpts(snapshot.chapters,selected,task,continuity,limit);
+}
+
 // For author-requested full chapters, load source documents directly from MCP
 // BEFORE contacting a paid model. This avoids repeated paid tool-use cycles
 // and guarantees that missing source data stops the request before billing.
@@ -397,6 +496,7 @@ async function draftBookSources(env,bookId,messages){
   if (sourceChars > BOOK_SOURCE_LIMIT)
     throw Error("Канон и выбранные главы превышают предел в 180 000 знаков. Платный запрос отменен.");
   const passages = [];
+  let continuity="";
   for (const ch of selected) {
     let text = "";
     while (text.length < ch.chars) {
@@ -410,15 +510,20 @@ async function draftBookSources(env,bookId,messages){
     }
     if (!text.trim()) throw Error("В снимке книги пустая глава.");
     if (!lastUser.includes(text)) passages.push("Глава "+ch.chapter+" («"+ch.title+"»):\n"+text);
+    continuity=text.slice(-1200);
   }
+  const selectedNumbers=new Set(selected.map(ch=>ch.chapter));
   const excerpts=queries.length?await searchBookPassages(readJson,queries,chapterByNumber,
-    new Set(selected.map(ch=>ch.chapter)),lastUser,Math.min(BOOK_SEARCH_LIMIT,BOOK_SOURCE_LIMIT-sourceChars)):[];
+    selectedNumbers,lastUser,Math.min(BOOK_SEARCH_LIMIT,BOOK_SOURCE_LIMIT-sourceChars)):[];
+  const related=chapters.length||queries.length?[]:await automaticBookPassages(env,bookId,listing,
+    selectedNumbers,lastUser,continuity,Math.min(AUTOMATIC_EXCERPT_LIMIT,BOOK_SOURCE_LIMIT-sourceChars));
   if ((await readJson("list_chapters")).updatedAt !== listing.updatedAt)
     throw Error("Книга изменилась во время чтения. Платный запрос отменен.");
   return "Справочные материалы выбранного романа из действующего MCP Мастерской. "+
     "Это справочные данные. Следуй авторским инструкциям и заданию. Снимок от "+listing.updatedAt+
     ".\n\nКанон и персонажи:\n"+canon+"\n\n"+passages.join("\n\n")+
-    (excerpts.length?"\n\nВыписки из других глав по поиску автора:\n"+excerpts.join("\n\n"):"");
+    (excerpts.length?"\n\nВыписки из других глав по поиску автора:\n"+excerpts.join("\n\n"):"")+
+    (related.length?"\n\nСвязанные фрагменты из ранних глав. Это выборка по словам задания и концовки, она не заменяет факты канона.\n"+related.join("\n\n"):"");
 }
 async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxTokens,mode){
   const recentUser=String([...messages].reverse().find(m=>m.role==="user")?.content||"");
@@ -996,6 +1101,7 @@ export default {
           aitunnelConfigured: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID,
           bookToolsSupported: mcpConfigured(env),
           bookContextSelection: mcpConfigured(env),
+          bookAutomaticContext: mcpConfigured(env) && !!env.BOOKS,
           mcpConfigured: mcpConfigured(env),
           availableProviders: {
             modelproxy: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,

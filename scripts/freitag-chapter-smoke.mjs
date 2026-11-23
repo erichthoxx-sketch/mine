@@ -108,26 +108,28 @@ try {
     await page.locator("#f-field-draft").fill("Несохраненная правка");
     await page.getByRole("button",{name:"Отмена"}).click();
     assert.equal(await page.locator("#f-message-input").inputValue(),prompt);
-    const context=page.getByRole("button",{name:"Контекст книги",exact:true});
+    const tools=page.locator("#f-chat-tools summary");
+    const context=page.getByRole("button",{name:"Найти фразу в книге",exact:true});
     await page.locator("#f-message-input").fill("Тест выбора источников");
+    await tools.click();
     await context.click();
-    await page.locator("#f-field-chapters").fill("1, 3");
     await page.locator("#f-field-query").fill("синяя папка");
     await page.getByRole("button",{name:"Сохранить в задании"}).click();
     assert.equal(await page.locator("#f-message-input").inputValue(),
-      "Тест выбора источников\n\nГлавы для контекста: 1, 3\nПоиск по книге: синяя папка");
+      "Тест выбора источников\n\nПоиск по книге: синяя папка");
+    await tools.click();
     await context.click();
-    assert.equal(await page.locator("#f-field-chapters").inputValue(),"1, 3");
+    assert.equal(await page.locator("#f-field-query").inputValue(),"синяя папка");
     await page.locator("#f-field-query").fill("письмо о ключе");
     await page.getByRole("button",{name:"Сохранить в задании"}).click();
     assert.equal(await page.locator("#f-message-input").inputValue(),
-      "Тест выбора источников\n\nГлавы для контекста: 1, 3\nПоиск по книге: письмо о ключе");
+      "Тест выбора источников\n\nПоиск по книге: письмо о ключе");
     await page.evaluate(()=>{window.rejectSource=true;});
     await page.locator('#f-chat-form button[type="submit"]').click();
     await page.getByText("Мастерская не нашла одну из фраз.",{exact:true}).waitFor();
     await page.locator('#f-chat-form button[type="submit"]').waitFor();
     assert.equal(await page.locator("#f-message-input").inputValue(),
-      "Тест выбора источников\n\nГлавы для контекста: 1, 3\nПоиск по книге: письмо о ключе");
+      "Тест выбора источников\n\nПоиск по книге: письмо о ключе");
     assert.equal(await page.locator(".f-msg").count(),0);
     await page.evaluate(()=>{window.rejectSource=false;});
     assert.deepEqual(await page.evaluate(()=>window.submitted),[]);

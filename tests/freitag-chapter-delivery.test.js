@@ -33,11 +33,11 @@ function mockNetwork(t, respond) {
 }
 const chapter = {provider:"bothub",model:"claude-opus-5.5",mode:"draft",
   outputTokenLimit:14000,messages:[{role:"user",content:"  Тестовое задание\n  "}]};
-function request(route,body,signal) {
+function request(route,body,signal,bindings={}) {
   const req=new Request("https://preview.example/api/freitag/"+route,{signal,
     headers:{Authorization:"Bearer "+token},...(body?{method:"POST",body:JSON.stringify(body)}:{})});
   return onRequest({request:req,params:{route:route.split("?")[0]},
-    env:{FREITAG_GATEWAY:{fetch:r=>gateway.fetch(r,env)}}});
+    env:{FREITAG_GATEWAY:{fetch:r=>gateway.fetch(r,{...env,...bindings})}}});
 }
 
 test("AITUNNEL connection check authorizes the key and never calls generation", async t=>{
@@ -263,6 +263,48 @@ test("BotHub can include whole early chapters and bounded excerpts from the rest
   assert.equal((await send("Новая сцена\nПоиск по книге: точного совпадения нет")).status,424);
   assert.equal((await send("Новая сцена\nГлавы для контекста: 1, 2, 3")).status,424);
   assert.equal(paid,1,"source errors must not start a second paid request");
+});
+
+test("a plain chapter request automatically retrieves early passages without another paid call",async t=>{
+  const book={title:"Тестовый роман",updatedAt:"2026-11-22T12:00:00Z",context:"Синопсис всего романа",chapters:[
+    {title:"Первая",text:"Усадьба стояла пустой. ".repeat(90)+"В мастерской Марта спрятала фамильный медальон в синюю папку. "+"Другие события. ".repeat(90)},
+    {title:"Вторая",text:"Незнакомый двор и посторонний разговор. ".repeat(90)},
+    {title:"Третья",text:"Вся предпоследняя глава."},
+    {title:"Четвертая",text:"Вся последняя глава. Глеб вернулся за медальоном."}
+  ]};
+  const task="Продолжи сцену. Вспомни, где Марта спрятала медальон.";
+  let actualSnapshot=book, modelRequests=0;
+  const calls=mockNetwork(t,async(path,init)=>{
+    if(path==="/mcp"){
+      return booksMcp.fetch(new Request(env.BOOKS_MCP_URL,init),{
+        MCP_READ_KEY:env.MCP_READ_KEY,BOOKS:{get:async key=>{
+          assert.equal(key,"book:fixture");
+          return book;
+        }}
+      });
+    }
+    modelRequests++;
+    assert.equal(path,"/api/v2/anthropic/v1/messages");
+    const body=JSON.parse(init.body), sources=body.system[0].text;
+    assert.equal(body.messages.at(-1).content,task);
+    assert.match(sources,/Синопсис всего романа/);
+    assert.match(sources,/Вся предпоследняя глава/);
+    assert.match(sources,/Вся последняя глава/);
+    assert.ok(!sources.includes(book.chapters[0].text));
+    if(actualSnapshot===book){
+      assert.match(sources,/Связанные фрагменты из ранних глав[\s\S]*Марта спрятала фамильный медальон/);
+      assert.ok(sources.split("Связанные фрагменты из ранних глав")[1].length<3000);
+    }else assert.doesNotMatch(sources,/Марта спрятала фамильный медальон/);
+    return new Response("data: [DONE]\n\n",{headers:{"Content-Type":"text/event-stream"}});
+  });
+  const makeRequest=()=>request("chat",{...chapter,bookId:"fixture",messages:[{role:"user",content:task}]},
+    undefined,{BOOKS:{get:async key=>{assert.equal(key,"book:fixture");return actualSnapshot;}}});
+  assert.equal((await makeRequest()).status,200);
+  assert.equal(modelRequests,1);
+  actualSnapshot={...book,updatedAt:"2026-11-21T12:00:00Z"};
+  assert.equal((await makeRequest()).status,200);
+  assert.equal(modelRequests,2);
+  assert.equal(calls.filter(path=>path!=="/mcp").length,2);
 });
 
 test("an incomplete MCP page stops a chapter before either generation or upload",async t=>{
