@@ -423,13 +423,13 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
   } finally {globalThis.fetch=original;}
 });
 
-test("health reports both API configurations separately, without paid requests",async()=>{
+test("health reports API configurations separately, without paid requests",async()=>{
   const env={OWNER_UID:"owner",BOTHUB_API_KEY:"bh-test"};
   const res=await gateway.fetch(new Request(url("health"),{headers:{Origin:ORIGIN}}),env);
   const data=await res.json();
   assert.equal(data.configured,false);
   assert.equal(data.bothubConfigured,true);
-  assert.deepEqual(data.availableProviders,{modelproxy:false,bothub:true,apimira:false});
+  assert.deepEqual(data.availableProviders,{modelproxy:false,bothub:true,apimira:false,aitunnel:false});
 });
 
 test("browser and Pages bridge preserve authenticated provider routing and optional refresh",async()=>{
@@ -493,7 +493,7 @@ test("book project uses the exact large master instruction and verbatim long cha
   assert.match(app,/outputTokenLimit:requestMode==="draft"/);
   assert.match(worker,/\[4500,9000,14000\]\.includes\(requestedDraftLimit\)/);
   assert.match(worker,/maxTokens=greeting\?128:isDraft\?requestedDraftLimit/);
-  assert.match(worker,/if\(useMcp && !isDraft\)/);
+  assert.match(worker,/if\(useMcp && !isDraft && !aitunnel\)/);
 });
 
 
@@ -503,7 +503,7 @@ test("ordinary book greetings stay cheap; genuine chapters retain large prompts"
     readFile(new URL("../proxy/freitag-modelproxy-worker.js",import.meta.url),"utf8")
   ]);
   assert.match(app,/const lightweight=isSimpleGreeting\(msg\)/);
-  assert.match(app,/lightweight\?\[\{role:"user",content:msg\}\]:modelproxyMessages\(c\)/);
+  assert.match(app,/lightweight\?\[\{role:"user",content:msg\}\]:modelproxyMessages\(/);
   assert.match(app,/const bookId=lightweight\?null:/);
   assert.match(worker,/if\(input.bookId&&!greeting\)/);
   assert.match(worker,/const maxTokens=greeting\?128:/);

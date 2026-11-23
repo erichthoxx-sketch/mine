@@ -12,6 +12,7 @@ export async function onRequest(context) {
         (route === "batch-start" && method === "POST") ||
         (route === "batch-status" && method === "GET") ||
         (route === "chat" && method === "POST") ||
+        (route === "quote" && method === "POST") ||
         (route === "refresh-book" && method === "POST"))) {
     return Response.json({ error: "Метод не поддерживается." }, { status: 405 });
   }

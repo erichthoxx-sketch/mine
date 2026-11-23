@@ -32,9 +32,9 @@ test("Paid chats use MCP on send without Google Drive OAuth popups or hidden pro
   const send=app.slice(app.indexOf("async function sendMessage("),app.indexOf("function download(",app.indexOf("async function sendMessage(")));
   assert.ok(!send.includes("ensureDriveAccess("));
   assert.ok(!send.includes("refreshLinkedBook("));
-  assert.ok(!send.includes("confirm("));
+  assert.match(send,/if\(provider==="aitunnel"\)[\s\S]*?\/quote[\s\S]*?confirm\(/);
   assert.match(send,/await master\.idToken\(\)/);
-  assert.match(send,/const messages=isPaidProvider\?\(lightweight\?/);
+  assert.match(send,/messages:lightweight\?/);
   assert.match(app,/function renderProjectHome/);
   assert.match(app,/renderMarkdown\(m\.content\)/);
   assert.match(app,/p\.instruction=String\(fd\.get\("instruction"\)/);

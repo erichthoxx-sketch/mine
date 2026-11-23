@@ -34,7 +34,7 @@ test("book can be changed without desktop sidebar and empty chat accepts text",a
   assert.match(app,/f-mobile-history/);
   assert.match(app,/aria-label="История разговоров"/);
   assert.match(app,/if\(e.target.id==="f-sidebar-project"\|\|e.target.id==="f-chat-project"/);
-  assert.match(app,/const c=ensureChat\(\),msg=text;/);
+  assert.match(app,/const c=ensureChat\(\);/);
   assert.match(app,/if\(a==="new-chat"\)\{state.activeChatId=null;pendingMode=null/);
   assert.match(app,/f-sidebar-project/);
 });
@@ -103,7 +103,7 @@ test("Google Docs refresh is optional; normal Opus MCP messages do not reauthori
   assert.match(app,/await ensureDriveAccess\(p\.masterBookId\)/);
   assert.match(app,/await refreshLinkedBook\(/);
   assert.doesNotMatch(send,/ensureDriveAccess\(/);
-  assert.doesNotMatch(send,/confirm\(/);
+  assert.match(send,/if\(provider==="aitunnel"\)[\s\S]*?\/quote[\s\S]*?confirm\(/);
   assert.match(worker,/if\(input\.sourceRevision\)/);
   assert.match(worker,/path === "\/refresh-book"/);
 });

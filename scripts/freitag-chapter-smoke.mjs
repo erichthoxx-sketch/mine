@@ -23,8 +23,8 @@ try {
       if(u.hostname==="fonts.googleapis.com")return route.fulfill({contentType:"text/css",body:""});
       if(u.origin!==origin)throw Error("Неожиданный сетевой запрос: "+u.origin);
       const api={
-        "/health":{ok:true,model:"claude-opus-5-5",provider:"ModelProxy",apimiraConfigured:true,chapterProtocol:2},
-        "/preflight":{ok:true,balanceUsd:3.45},
+        "/health":{ok:true,model:"claude-opus-5-5",provider:"ModelProxy",apimiraConfigured:true,aitunnelConfigured:true,chapterProtocol:2},
+        "/preflight":u.searchParams.get("provider")==="aitunnel"?{ok:true,balanceRub:200,budgetRub:160}:{ok:true,balanceUsd:3.45},
         "/mcp-tools":{ok:true,toolCount:4}
       };
       if(u.pathname.startsWith("/api/freitag/")){
@@ -44,16 +44,23 @@ try {
     await page.addInitScript(()=>{
       const fetcher=window.fetch;
       window.submitted=[];
+      window.quoted=[];
       window.fetch=(url,opts)=>{
+        if(String(url).endsWith("/api/freitag/quote")){
+          window.quoted.push(JSON.parse(opts.body));
+          return Promise.resolve(Response.json({ok:true,ready:true,estimateRub:136,outputTokenLimit:14000,
+            balanceRub:200,budgetRub:160,fingerprint:"fixture-estimate"}));
+        }
         if(!String(url).endsWith("/api/freitag/chat"))return fetcher(url,opts);
         window.submitted.push(JSON.parse(opts.body));
         const bytes=new TextEncoder();
         return Promise.resolve(new Response(new ReadableStream({start(controller){
           const data=value=>controller.enqueue(bytes.encode("data: "+JSON.stringify(value)+"\r\n\r\n"));
           window.fragment=text=>data({choices:[{delta:{content:text}}]});
-          window.finish=reason=>{
+          window.finish=(reason,cost)=>{
             if(reason){
               data({choices:[{delta:{},finish_reason:reason}]});
+              if(cost!==undefined)data({choices:[],usage:{cost_rub:cost}});
               controller.enqueue(bytes.encode("data: [DONE]\r\n\r\n"));
             }
             controller.close();
@@ -123,6 +130,29 @@ try {
         await page.evaluate(r=>window.finish(r),reason);
         await page.locator(".assistant").last().filter({hasText:"Генерация не завершена"}).waitFor();
       }
+      await nav("settings");
+      await page.locator("#f-provider").selectOption("aitunnel");
+      await page.locator('[data-action="test-connection"]').click();
+      await page.locator("#f-test-status").filter({hasText:"Остаток бюджета ключа"}).waitFor();
+      await nav("chat");
+      await page.locator("#f-message-input").fill(prompt);
+      const submit=page.locator('#f-chat-form button[type="submit"]');
+      const [dialog]=await Promise.all([page.waitForEvent("dialog").then(async item=>{
+        const message=item.message();await item.dismiss();return message;
+      }),submit.click()]);
+      assert.match(dialog,/136.*14000|136.*14.000/);
+      assert.equal(await page.locator("#f-message-input").inputValue(),prompt);
+      assert.equal(await page.evaluate(()=>window.submitted.length),3);
+      page.once("dialog",item=>item.accept());
+      await submit.click();
+      await page.waitForFunction(()=>window.submitted.length===4);
+      const paid=await page.evaluate(()=>window.submitted.at(-1));
+      assert.equal(paid.provider,"aitunnel");
+      assert.equal(paid.messages.at(-1).content,prompt);
+      assert.deepEqual(paid.aitunnelQuote,{fingerprint:"fixture-estimate",estimateRub:136});
+      await page.evaluate(()=>window.finish("stop",123.45));
+      await page.getByText(/Списано AITUNNEL: 123,45/).waitFor();
+      console.log("Проверены отмена до оплаты, подтверждение и сумма AITUNNEL в чате");
     }
     assert.deepEqual(errors,[]);
     await page.close();

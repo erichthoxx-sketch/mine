@@ -142,7 +142,7 @@ function renderSettings(){
     '<section class="f-settings-card"><div class="f-section-kicker">01 / МОДЕЛЬ</div>'+
     '<h2>Кто отвечает</h2><p class="f-muted">Выбери модель для новых сообщений. Существующие чаты останутся на месте.</p>'+
     '<label for="f-provider">Модель</label><select id="f-provider" name="provider" class="f-select">'+
-    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"],["bothub","BotHub · Claude"],["apimira","ApiMira · Claude Opus 5.5"]].map(x=>
+    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"],["bothub","BotHub · Claude"],["apimira","ApiMira · Claude Opus 5.5"],["aitunnel","AITUNNEL · Claude Opus 5.5"]].map(x=>
       '<option value="'+x[0]+'" '+(x[0]===provider?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
     '<div id="f-bothub-model-row" '+(provider==="bothub"?"":'hidden')+'><label for="f-bothub-model">Модель BotHub</label>'+
     '<select id="f-bothub-model" name="bothubModel" class="f-select">'+
@@ -150,7 +150,7 @@ function renderSettings(){
       '<option value="'+x[0]+'" '+(x[0]===s.bothubModel?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></div>'+
     '<div class="f-row f-connection-row"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button>'+
     '<span id="f-test-status" class="f-muted" role="status">Проверка не выполняет платную генерацию.</span></div>'+
-    '<details class="f-settings-fold"><summary>Защищенный API-шлюз · ModelProxy / BotHub / ApiMira</summary>'+
+    '<details class="f-settings-fold"><summary>Защищенный API-шлюз</summary>'+
     '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
     '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
     '<p class="f-muted">В тестовой версии Cloudflare Pages шлюз выбирается автоматически. Freitag AI напрямую вызывает MCP-инструменты Мастерской для чтения книг, доходов, маркетинга и Директа. Для главы используется последний снимок книги в Мастерской. После правок в рукописи нажми «Обновить Google Docs» в проекте. Секреты хранятся только в Cloudflare.</p></div></details>'+
@@ -193,8 +193,12 @@ function renderSettings(){
 }
 const activeBotHubModel=()=>state.settings.bothubModel==="claude-opus-5.5"?"claude-opus-5.5":"claude-sonnet-5.5";
 const activeClaudeName=()=>activeBotHubModel()==="claude-opus-5.5"?"Claude Opus 5.5":"Claude Sonnet 5.5";
+const paidProviders=["modelproxy","bothub","apimira","aitunnel"];
+const providerNames={modelproxy:"ModelProxy",bothub:"BotHub",apimira:"ApiMira",aitunnel:"AITUNNEL"};
+const rub=value=>new Intl.NumberFormat("ru-RU",{style:"currency",currency:"RUB",maximumFractionDigits:4}).format(value);
 const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":
-  state.settings.provider==="bothub"?activeClaudeName()+" · BotHub":state.settings.provider==="apimira"?"Claude Opus 5.5 · ApiMira":"Локальная Qwen · Ollama";
+  state.settings.provider==="bothub"?activeClaudeName()+" · BotHub":
+  paidProviders.includes(state.settings.provider)?"Claude Opus 5.5 · "+providerNames[state.settings.provider]:"Локальная Qwen · Ollama";
 const currentModelChoice=()=>state.settings.provider==="bothub"?
   "bothub:"+activeBotHubModel():state.settings.provider;
 const isSimpleGreeting = text => /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе (?:утро)|добрый (?:день|вечер)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(String(text||"").trim());
@@ -202,6 +206,7 @@ const modelChoices=()=>[
   ["bothub:claude-opus-5.5","Opus 5.5 · BotHub"],
   ["bothub:claude-sonnet-5.5","Sonnet 5.5 · BotHub"],
   ["apimira","Opus 5.5 · ApiMira"],
+  ["aitunnel","Opus 5.5 · AITUNNEL"],
   ["modelproxy","Opus 5.5 · ModelProxy"],
   ["ollama","Qwen · локально"]
 ].map(([id,label])=>'<option value="'+id+'" '+(currentModelChoice()===id?"selected":"")+'>'+label+'</option>').join("");
@@ -213,6 +218,7 @@ function renderChat(){
     '<article class="f-msg '+esc(m.role)+'"><div class="f-speaker">'+
     (m.role==="user"?"Ты":m.provider==="Claude"?"Claude Opus":String(m.provider||"").startsWith("Claude ") ? esc(m.provider) :m.provider==="Внешняя модель"?"Внешняя модель":"Freitag AI")+
     '</div><div class="f-msg-text">'+(m.role==="assistant"?renderMarkdown(m.content):'<p>'+esc(m.content).replace(/\n/g,"<br>")+'</p>')+'</div>'+
+    (Number.isFinite(m.costRub)?'<p class="f-mini">Списано AITUNNEL: '+esc(rub(m.costRub))+'</p>':"")+
     (m.receiving && !busy?'<p class="f-mini">Получен фрагмент. Завершение главы не подтверждено.</p>':"")+
     (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
       '<div class="f-feedback-actions"><button type="button" class="f-inline-btn" data-action="copy-answer" data-i="'+i+'">Копировать</button>'+
@@ -494,7 +500,7 @@ function claudeGateway(savedUrl){
   return safeWorkerEndpoint(savedUrl);
 }
 async function probeLocalConnection(){
-  if(["modelproxy","bothub","apimira"].includes(state.settings.provider)){
+  if(paidProviders.includes(state.settings.provider)){
     connectOk=false;connectText=activeProviderLabel()+": проверь шлюз в настройках";
     renderHeader();return;
   }
@@ -517,7 +523,7 @@ async function probeLocalConnection(){
   if(mini)mini.textContent=connectOk?"● Ollama подключена":connectText==="Нет соединения"?"Нет связи с Ollama":connectText;
 }
 async function testConnection(){
-  if(["modelproxy","bothub","apimira"].includes($("#f-provider")?.value||state.settings.provider)){
+  if(paidProviders.includes($("#f-provider")?.value||state.settings.provider)){
     const gateway=claudeGateway($("#f-worker")?.value||state.settings.workerUrl);
     if(!gateway)return notice("Укажи HTTPS-адрес личного Cloudflare Worker.");
     try{
@@ -527,11 +533,11 @@ async function testConnection(){
       if(data.provider!=="ModelProxy"||data.model!=="claude-opus-5-5"||data.chapterProtocol!==2)
         throw Error("На сервере прежняя версия шлюза. Обнови Worker без платных запросов.");
       const chosen=$("#f-provider")?.value||state.settings.provider;
-      if(!data.ok || (chosen==="modelproxy"?!data.configured:chosen==="apimira"?!data.apimiraConfigured:!data.bothubConfigured))
-        throw Error(chosen==="bothub"?"BotHub пока не подключен: проверь настройки владельца и BOTHUB_API_KEY.":chosen==="apimira"?"ApiMira пока не подключена: проверь настройки владельца и APIMIRA_API_KEY.":"ModelProxy пока не подключен: проверь настройки владельца и MODELPROXY_API_KEY.");
+      if(!data.ok || !(data.availableProviders?.[chosen] ?? data[chosen==="modelproxy"?"configured":chosen+"Configured"]))
+        throw Error(providerNames[chosen]+": в Cloudflare нужен секрет "+chosen.toUpperCase()+"_API_KEY и настройка владельца.");
       let info;
-      if(chosen==="bothub"||chosen==="apimira"){
-        const model=chosen==="apimira"?"anthropic/claude-opus-5.5":($("#f-bothub-model")?.value||activeBotHubModel());
+      if(chosen!=="modelproxy"){
+        const model=chosen==="aitunnel"?"claude-opus-5.5":chosen==="apimira"?"anthropic/claude-opus-5.5":($("#f-bothub-model")?.value||activeBotHubModel());
         const token=await master.idToken();
         const check=await fetch(gateway+"/preflight?provider="+chosen+"&model="+encodeURIComponent(model),{
           headers:{"Authorization":"Bearer "+token},cache:"no-store"
@@ -553,7 +559,9 @@ async function testConnection(){
       const money=chosen==="apimira"&&typeof info?.balanceUsd==="number"?
         " Баланс ApiMira: $"+info.balanceUsd.toFixed(4)+
         (info.balanceUsd===0?" — средств для платной главы нет.":"")+
-        " Для длинной главы сервис временно резервирует стоимость входного текста и выбранного лимита ответа.":"";
+        " Для длинной главы сервис временно резервирует стоимость входного текста и выбранного лимита ответа.":
+        chosen==="aitunnel"&&Number.isFinite(info?.balanceRub)?" Баланс: "+rub(info.balanceRub)+
+          (info.budgetRub===null?". Задай бюджет API-ключа AITUNNEL перед генерацией.":". Остаток бюджета ключа: "+rub(info.budgetRub)+"."):"";
       if(status)status.textContent=(info?"Модель есть в каталоге. ":"")+"MCP Мастерской подключен напрямую: "+
         mcpInfo.toolCount+" инструментов (книги, маркетинг, доходы, Директ, Метрика). "+
         "Проверка не выполняет платную генерацию."+money;
@@ -779,7 +787,7 @@ async function sendMessage(text){
   if(busy||preparingPaid||!text.trim())return;
   const provider=state.settings.provider, selectedModel=activeBotHubModel();
   const outputLimit=Number(state.settings.sceneOutputTokens)||14000;
-  const isPaidProvider=["modelproxy","bothub","apimira"].includes(provider);
+  const isPaidProvider=paidProviders.includes(provider);
   const endpoint=safeEndpoint(state.settings.endpoint);
   const gateway=claudeGateway(state.settings.workerUrl);
   if(isPaidProvider&&!gateway)return notice("Не настроен API-шлюз Claude.");
@@ -800,23 +808,48 @@ async function sendMessage(text){
     finally{preparingPaid=false;}
   }
   const previousDraft=draftKey();
-  const c=ensureChat(),msg=text;
-  if(c.projectId && !c.mode) c.mode="draft";
+  const msg=text, current=chat()||{projectId:state.activeProjectId,mode:pendingMode,messages:[]};
   const lightweight=isSimpleGreeting(msg);
-  const requestMode=lightweight?"dialog":(c.mode||"dialog");
+  const requestMode=lightweight?"dialog":(current.mode||(current.projectId?"draft":"dialog"));
+  const bookId=lightweight?null:(project(current.projectId)?.masterBookId||null);
+  const userMessage={role:"user",content:msg,at:stamp()};
+  const payload=isPaidProvider?{provider,model:provider==="bothub"?selectedModel:undefined,
+    messages:lightweight?[{role:"user",content:msg}]:modelproxyMessages({...current,messages:[...current.messages,userMessage]}),
+    mode:requestMode,outputTokenLimit:requestMode==="draft"?outputLimit:undefined,bookId,sourceRevision}:null;
+  if(provider==="aitunnel"){
+    preparingPaid=true;
+    const selectedChat=draftKey();
+    notice("AITUNNEL: считаю стоимость без генерации…");
+    try{
+      const res=await fetch(gateway+"/quote",{method:"POST",headers:{Authorization:"Bearer "+idToken,
+        "Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const estimate=await res.json().catch(()=>({}));
+      if(!res.ok||!estimate.ok)throw Error(estimate.error||"Не удалось получить бесплатную оценку.");
+      if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==(Number(state.settings.sceneOutputTokens)||14000))
+        return notice("Чат или настройки изменились. Получи новую оценку.");
+      if(!estimate.ready)throw Error(estimate.budgetRub===null?"Задай бюджет отдельного API-ключа AITUNNEL.":
+        "Оценка "+rub(estimate.estimateRub)+" выше доступного остатка. Генерация не началась.");
+      if(!confirm("AITUNNEL · оценка "+rub(estimate.estimateRub)+" за вход и ответ до "+
+        estimate.outputTokenLimit.toLocaleString("ru-RU")+" токенов. Остаток бюджета ключа: "+
+        rub(estimate.budgetRub)+". Отправить один платный запрос?"))return notice("Генерация отменена. Задание осталось в поле ввода.");
+      payload.aitunnelQuote={fingerprint:estimate.fingerprint,estimateRub:estimate.estimateRub};
+    }catch(e){return notice(e.message);}
+    finally{preparingPaid=false;}
+  }
   clearTimeout(draftSaveTimer);
+  const c=ensureChat();
+  if(c.projectId && !c.mode) c.mode="draft";
   if(state.drafts){
     delete state.drafts[previousDraft];
     delete state.drafts[draftKey()];
   }
-  c.messages.push({role:"user",content:msg,at:stamp()});
+  c.messages.push(userMessage);
   if(c.title==="Новый чат")c.title=msg.slice(0,65);
   c.updated=stamp();
   // Block a second Send while IndexedDB persists the first request.
   busy=true;
-  const messages=isPaidProvider?(lightweight?[{role:"user",content:msg}]:modelproxyMessages(c)):buildMessages(c);
+  const messages=isPaidProvider?payload.messages:buildMessages(c);
   const assistant={role:"assistant",provider:isPaidProvider?(provider==="bothub"?activeClaudeName():"Claude Opus 5.5"):"Qwen",content:"",at:stamp()};
-  const bookId=lightweight?null:(project(c.projectId)?.masterBookId||null);
   await save();render();
   c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
@@ -829,7 +862,7 @@ async function sendMessage(text){
     const res=isPaidProvider?await fetch(gateway+"/chat",{
       method:"POST",
       headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json"},
-      body:JSON.stringify({provider,model:provider==="bothub"?selectedModel:undefined,messages,mode:requestMode,outputTokenLimit:requestMode==="draft"?outputLimit:undefined,bookId,sourceRevision}),
+      body:JSON.stringify(payload),
       signal:currentController.signal
     }):await ollamaRequest(endpoint,"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({model:state.settings.model,stream:true,messages,think:false,keep_alive:"5m",
@@ -849,6 +882,10 @@ async function sendMessage(text){
         if(data==="[DONE]"){streamFinished=true;return true;}
         let obj;try{obj=JSON.parse(data);}catch{throw Error("Поток содержит поврежденный фрагмент.");}
         if(obj?.error)throw Error("Провайдер сообщил об ошибке в потоке. Проверь историю запроса.");
+        if(provider==="aitunnel"&&Number.isFinite(obj?.usage?.cost_rub)){
+          assistant.costRub=obj.usage.cost_rub;
+          if(!obj.choices?.length)return;
+        }
         if(!obj || !Array.isArray(obj.choices))throw Error("Провайдер вернул неизвестный формат потока.");
         const reason=obj.choices?.[0]?.finish_reason;
         if(reason){finishReason=String(reason);streamFinished=true;}
@@ -1043,7 +1080,7 @@ document.addEventListener("submit",async(e)=>{
   if(e.target.id==="f-settings"){e.preventDefault();const fd=new FormData(e.target);
     const url=safeEndpoint(String(fd.get("endpoint")||""));if(!url)return notice("Неверный адрес Ollama.");
     const provider=String(fd.get("provider")||"ollama");
-    if(!["ollama","modelproxy","bothub","apimira"].includes(provider))return notice("Неверный провайдер.");
+    if(provider!=="ollama"&&!paidProviders.includes(provider))return notice("Неверный провайдер.");
     const workerRaw=String(fd.get("workerUrl")||"").trim();
     const workerUrl=workerRaw?safeWorkerEndpoint(workerRaw):"";
     if(workerRaw&&!workerUrl)return notice("Неверный HTTPS-адрес Cloudflare Worker.");
@@ -1054,14 +1091,14 @@ document.addEventListener("submit",async(e)=>{
     state.settings.globalInstruction=String(fd.get("globalInstruction")||"");
     state.settings.context=Number(fd.get("context"))||4096;
     state.theme=String(fd.get("theme"))||"auto";
-    connectOk=false;connectText=provider==="modelproxy"?"ModelProxy Opus: проверь шлюз в настройках":provider==="bothub"?"BotHub: проверь шлюз в настройках":provider==="apimira"?"ApiMira: проверь шлюз в настройках":"Ollama: проверь соединение";
+    connectOk=false;connectText=activeProviderLabel()+" · проверь соединение в настройках";
     await save();render();notice("Настройки сохранены.");}
 });
 document.addEventListener("change",async(e)=>{
   if(e.target.id==="f-quick-model"){
     const val=String(e.target.value||"");
     const provider=val.startsWith("bothub:")?"bothub":val;
-    if(!["bothub","apimira","modelproxy","ollama"].includes(provider))return;
+    if(provider!=="ollama"&&!paidProviders.includes(provider))return;
     if(provider==="bothub"){
       const model=val.slice(7);
       if(!["claude-opus-5.5","claude-sonnet-5.5"].includes(model))return;
@@ -1076,7 +1113,7 @@ document.addEventListener("change",async(e)=>{
   if(e.target.id==="f-provider"||e.target.id==="f-bothub-model"){
     const provider=$("#f-provider")?.value||"bothub";
     const model=$("#f-bothub-model")?.value||"claude-opus-5.5";
-    if(!["ollama","modelproxy","bothub","apimira"].includes(provider) ||
+    if((provider!=="ollama"&&!paidProviders.includes(provider)) ||
        !["claude-sonnet-5.5","claude-opus-5.5"].includes(model))return;
     state.settings.provider=provider;state.settings.bothubModel=model;
     connectOk=false;connectText=activeProviderLabel()+" · не проверено";

@@ -2,6 +2,9 @@
 // Only an authenticated Firebase owner can generate; all paid-provider secrets stay on Cloudflare.
 const PROJECT = "dohody-6d6dd";
 const MODEL = "claude-opus-5-5";
+const AITUNNEL_API = "https://api.aitunnel.ru/v1";
+const AITUNNEL_MODEL = "claude-opus-5.5";
+const AITUNNEL_UPSTREAM = "amazon-bedrock";
 // Only these BotHub model IDs can be selected from Freitag AI.
 const BOTHUB_MODELS = Object.freeze(["claude-sonnet-5.5", "claude-opus-5.5"]);
 const PROVIDERS = Object.freeze({
@@ -16,6 +19,10 @@ const PROVIDERS = Object.freeze({
   apimira: Object.freeze({
     name: "ApiMira", model: "anthropic/claude-opus-5.5", secret: "APIMIRA_API_KEY",
     endpoint: "https://apimira.com/v1/chat/completions"
+  }),
+  aitunnel: Object.freeze({
+    name: "AITUNNEL", model: AITUNNEL_MODEL, secret: "AITUNNEL_API_KEY",
+    endpoint: `${AITUNNEL_API}/chat/completions`
   })
 });
 const ORIGINS = new Set(["https://erichthoxx-sketch.github.io", "https://freitag-ai-test.pages.dev", "http://localhost:8765", "http://127.0.0.1:8765"]);
@@ -53,7 +60,8 @@ const providerCodes = new Set([
   "invalid_api_key", "account_suspended", "key_schedule_blocked", "insufficient_balance",
   "rate_limited", "spend_limit_exceeded", "model_not_found", "invalid_request",
   "context_length_exceeded", "unsupported_parameter", "upstream_invalid_request",
-  "provider_not_configured", "upstream_error", "upstream_timeout", "request_timeout"
+  "provider_not_configured", "upstream_error", "upstream_timeout", "request_timeout",
+  "budget_exceeded", "model_not_allowed", "no_available_provider"
 ]);
 async function providerFailure(req, response, stage) {
   const status = response.status;
@@ -504,7 +512,53 @@ async function snapshotStatus(req, env) {
 
 const isGreeting = text => /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый (?:день|вечер)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(text.trim());
 
-async function generate(req, env) {
+const aitunnelHeaders = (env) => ({ Authorization: "Bearer " + env.AITUNNEL_API_KEY,
+  "Content-Type":"application/json", "X-AITunnel-Log":"off" });
+async function aitunnelRead(env, path, signal, init = {}) {
+  return fetch(path.startsWith("https://") ? path : AITUNNEL_API + path, {
+    ...init, headers:path.startsWith("https://") ? {} : aitunnelHeaders(env), redirect:"error",
+    signal:AbortSignal.any([signal, AbortSignal.timeout(15000)])
+  });
+}
+const money = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
+async function aitunnelQuote(req, env, body, confirmation) {
+  const prepared = JSON.stringify(body);
+  const fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",utf8(prepared))),
+    n=>n.toString(16).padStart(2,"0")).join("");
+  if (confirmation && confirmation.fingerprint !== fingerprint)
+    return fail(req,409,"Запрос или снимок изменился. Получи новую оценку перед отправкой.");
+  const system = body.messages.filter(m=>m.role==="system").map(m=>m.content).join("\n\n");
+  const lookup = [
+    ["счет", "/aitunnel/balance"],
+    ["тариф", `https://api.aitunnel.ru/public/aitunnel/models/chat/${AITUNNEL_MODEL}/providers`],
+    ["оценка токенов", "/messages/count_tokens", {method:"POST",body:JSON.stringify({
+      model:body.model, ...(system?{system}:{}), messages:body.messages.filter(m=>m.role!=="system")
+    })}]
+  ];
+  try {
+    const results = await Promise.all(lookup.map(([,path,init])=>aitunnelRead(env,path,req.signal,init)));
+    const failed = results.findIndex(r=>!r.ok);
+    if (failed>=0) return providerFailure(req,results[failed],"AITUNNEL · "+lookup[failed][0]);
+    const [account,catalog,tokens] = await Promise.all(results.map(r=>r.json()));
+    const model = catalog.providers?.find(row=>row.slug===AITUNNEL_UPSTREAM && row.service_tier==null);
+    if (!catalog.token_prices || !money(account.balance) || !money(model?.prompt_cost) || !money(model?.completion_cost) ||
+        !Number.isSafeInteger(tokens.input_tokens) || tokens.input_tokens < 1)
+      return fail(req,502,"AITUNNEL не подтвердил оценку стоимости.");
+    const inputRub = tokens.input_tokens * model.prompt_cost / 1000000;
+    const outputRub = body.max_tokens * model.completion_cost / 1000000;
+    const estimateRub = Math.ceil((inputRub + outputRub) * 100) / 100;
+    const budgetRub = money(account.budget) ? account.budget : null;
+    const ready = budgetRub !== null && Math.min(account.balance,budgetRub)>=estimateRub;
+    if (!confirmation) return json(req,200,{ok:true,ready,estimateRub,inputTokens:tokens.input_tokens,
+      outputTokenLimit:body.max_tokens,balanceRub:account.balance,budgetRub,fingerprint});
+    if (!ready) return fail(req,402,"Остатка счета или отдельного бюджета ключа AITUNNEL не хватает на оценку. Генерация не началась.");
+    if (!money(confirmation.estimateRub) || estimateRub>confirmation.estimateRub)
+      return fail(req,409,"Оценка выросла. Подтверди новую сумму перед отправкой.");
+    return null;
+  } catch { return fail(req,502,"AITUNNEL не ответил на бесплатную оценку. Генерация не началась."); }
+}
+
+async function generate(req, env, estimateOnly = false) {
   if (!await verifyOwner(req, env)) return fail(req, 401, "Требуется вход владельца в Мастерскую.");
   const raw = await req.text();
   if (utf8(raw).length > 340000) return fail(req, 413, "Слишком большой запрос.");
@@ -512,9 +566,13 @@ async function generate(req, env) {
   try { input = JSON.parse(raw); } catch { return fail(req, 400, "Неверный JSON."); }
   // Whitelisted provider IDs; never accept arbitrary endpoints/models from the browser.
   const providerId=input.provider||"modelproxy";
-  const provider = PROVIDERS[providerId];
+  const provider = Object.hasOwn(PROVIDERS,providerId) && PROVIDERS[providerId];
   if (!provider) return fail(req, 400, "Неизвестный API-провайдер.");
+  const aitunnel = providerId === "aitunnel";
+  if (estimateOnly && !aitunnel) return fail(req,400,"Бесплатная оценка доступна для AITUNNEL.");
   if (!env[provider.secret]) return fail(req, 503, "В Cloudflare не задан секрет " + provider.secret + ".");
+  if (aitunnel && !estimateOnly && (!input.aitunnelQuote || typeof input.aitunnelQuote !== "object"))
+    return fail(req,409,"Сначала подтверди бесплатную оценку AITUNNEL.");
   const entries = input.messages;
   if (!Array.isArray(entries) || entries.length < 1 || entries.length > 16 ||
       entries.some(x => !["system", "user", "assistant"].includes(x?.role) ||
@@ -562,7 +620,7 @@ async function generate(req, env) {
           if(mcpList?.updatedAt!==input.sourceRevision)
             throw Error("MCP еще не видит обновленную рукопись. Повтори позже.");
         }
-        if(isDraft){
+        if(isDraft || aitunnel){
           const sources=await draftBookSources(env,input.bookId,messages);
           messages.unshift({role:"system",content:sources});
         }else messages.unshift({role:"system",content:
@@ -579,21 +637,28 @@ async function generate(req, env) {
       }
     }catch(e){return fail(req,424,e.message);}
   }
-  if(useMcp && !isDraft){
+  if(useMcp && !isDraft && !aitunnel){
     try{return await mcpToolsCompletion(req,env,provider,model,messages,
       greeting?"":(input.bookId||""),maxTokens,greeting?"dialog":input.mode);}
     catch(e){return fail(req,502,"MCP: "+e.message);}
   }
   const body = {
     model, messages, stream: true,
-    max_tokens: maxTokens
+    max_tokens: maxTokens,
+    ...(aitunnel ? { stream_options:{include_usage:true},
+      provider:{only:[AITUNNEL_UPSTREAM],data_collection:"deny",zdr:true,allow_fallbacks:false} } : {})
   };
+  if (aitunnel) {
+    const quote = await aitunnelQuote(req,env,body,estimateOnly ? null : input.aitunnelQuote);
+    if (quote) return quote;
+  }
   let upstream;
   try {
     upstream = await fetch(provider.endpoint, {
       method: "POST",
-      headers: { Authorization: "Bearer " + env[provider.secret], Accept:"text/event-stream",
-        "Content-Type": "application/json" },
+      headers: { ...(aitunnel?aitunnelHeaders(env):{Authorization:"Bearer "+env[provider.secret],
+        "Content-Type":"application/json"}), Accept:"text/event-stream" },
+      ...(aitunnel?{redirect:"error"}:{}),
       // Глава приходит постепенно и может писаться дольше пяти минут.
       body: JSON.stringify(body), signal:req.signal
     });
@@ -761,6 +826,23 @@ async function batchStatus(req,env){
 async function bothubPreflight(req, env) {
   if (!await verifyOwner(req, env)) return fail(req, 401, "Требуется вход владельца в Мастерскую.");
   const params=new URL(req.url).searchParams;
+  if (params.get("provider")==="aitunnel") {
+    if (!env.AITUNNEL_API_KEY) return fail(req,503,"В Cloudflare не задан секрет AITUNNEL_API_KEY.");
+    if (params.get("model") && params.get("model")!==AITUNNEL_MODEL)
+      return fail(req,400,"Неизвестная модель AITUNNEL.");
+    try {
+      const [balance, models] = await Promise.all([
+        aitunnelRead(env,"/aitunnel/balance",req.signal),aitunnelRead(env,"/models",req.signal)
+      ]);
+      if (!balance.ok) return providerFailure(req,balance,"AITUNNEL · проверка счета");
+      if (!models.ok) return providerFailure(req,models,"AITUNNEL · каталог ключа");
+      const [account,catalog] = await Promise.all([balance.json(),models.json()]);
+      if (!money(account.balance) || !Array.isArray(catalog.data)) return fail(req,502,"AITUNNEL вернул некорректный ответ проверки.");
+      if (!catalog.data.some(item=>item?.id===AITUNNEL_MODEL)) return fail(req,403,"Ключ AITUNNEL не видит модель Claude Opus 5.5.");
+      return json(req,200,{ok:true,model:AITUNNEL_MODEL,balanceRub:account.balance,
+        budgetRub:money(account.budget)?account.budget:null});
+    } catch { return fail(req,502,"AITUNNEL не ответил на проверку подключения."); }
+  }
   const provider=params.get("provider")==="apimira"?"apimira":"bothub";
   const model=params.get("model")||(provider==="apimira"?"anthropic/claude-opus-5.5":"claude-sonnet-5.5");
   if(provider==="bothub"&&!BOTHUB_MODELS.includes(model))
@@ -816,12 +898,14 @@ export default {
           configured: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
           bothubConfigured: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
           apimiraConfigured: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
+          aitunnelConfigured: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID,
           bookToolsSupported: mcpConfigured(env),
           mcpConfigured: mcpConfigured(env),
           availableProviders: {
             modelproxy: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
             bothub: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
-            apimira: !!env.APIMIRA_API_KEY && !!env.OWNER_UID
+            apimira: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
+            aitunnel: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID
           },
           booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY),
           autoSyncSupported: !!env.BOOKS && typeof env.BOOKS.put === "function" });
@@ -839,6 +923,7 @@ export default {
       if (path === "/preflight" && req.method === "GET") return await bothubPreflight(req, env);
       if (path === "/snapshot" && req.method === "GET") return await snapshotStatus(req, env);
       if (path === "/chat" && req.method === "POST") return await generate(req, env);
+      if (path === "/quote" && req.method === "POST") return await generate(req, env, true);
       return fail(req, 404, "Адрес не найден.");
     } catch (error) {
       // Never log user input or secrets. Return a CORS-visible error instead of

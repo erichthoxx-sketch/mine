@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import gateway from "../proxy/freitag-modelproxy-worker.js";
 import {onRequest} from "../functions/api/freitag/[route].js";
 
-const env = {OWNER_UID:"fixture", BOTHUB_API_KEY:"fixture-b", APIMIRA_API_KEY:"fixture-a",
+const env = {OWNER_UID:"fixture", BOTHUB_API_KEY:"fixture-b", APIMIRA_API_KEY:"fixture-a", AITUNNEL_API_KEY:"fixture-t",
   BOOKS_MCP_URL:"https://masterskaya-ai.erichtho-xx.workers.dev/mcp", MCP_READ_KEY:"x".repeat(32)};
 let token, jwk;
 before(async () => {
@@ -38,6 +38,62 @@ function request(route,body,signal) {
   return onRequest({request:req,params:{route:route.split("?")[0]},
     env:{FREITAG_GATEWAY:{fetch:r=>gateway.fetch(r,env)}}});
 }
+
+test("AITUNNEL connection check authorizes the key and never calls generation", async t=>{
+  const calls=mockNetwork(t,(path,init)=>{
+    assert.equal(init.headers.Authorization,"Bearer fixture-t");
+    if(path==="/v1/models")return Response.json({data:[{id:"claude-opus-5.5"}]});
+    if(path==="/v1/aitunnel/balance")return Response.json({balance:200,budget:175});
+    assert.fail(path);
+  });
+  const response=await request("preflight?provider=aitunnel");
+  assert.equal(response.status,200);
+  assert.deepEqual(await response.json(),{ok:true,model:"claude-opus-5.5",balanceRub:200,budgetRub:175});
+  assert.deepEqual(calls.sort(),["/v1/aitunnel/balance","/v1/models"]);
+});
+
+test("AITUNNEL quotes the exact payload and produces one private stream only after confirmation", async t=>{
+  const input={...chapter,provider:"aitunnel",messages:[{role:"system",content:"  Инструкция\n"},...chapter.messages]};
+  let paid=0,budget=200;
+  const routes=mockNetwork(t,(path,init)=>{
+    if(path==="/v1/aitunnel/balance")return Response.json({balance:225,budget});
+    if(path.endsWith("/providers")){
+      assert.equal(init.headers.Authorization,undefined);
+      return Response.json({token_prices:true,providers:[{slug:"amazon-bedrock",service_tier:null,prompt_cost:800,completion_cost:4000}]});
+    }
+    if(path==="/v1/messages/count_tokens"){
+      assert.equal(init.headers["X-AITunnel-Log"],"off");
+      assert.deepEqual(JSON.parse(init.body),{model:"claude-opus-5.5",system:input.messages[0].content,messages:chapter.messages});
+      return Response.json({input_tokens:100000});
+    }
+    assert.equal(path,"/v1/chat/completions");
+    paid++;
+    assert.equal(init.redirect,"error");
+    assert.equal(init.headers["X-AITunnel-Log"],"off");
+    const body=JSON.parse(init.body);
+    assert.deepEqual(body.messages,input.messages);
+    assert.deepEqual(body.provider,{only:["amazon-bedrock"],data_collection:"deny",zdr:true,allow_fallbacks:false});
+    assert.equal(body.tools,undefined);
+    assert.equal(body.max_tokens,14000);
+    assert.equal(body.stream_options.include_usage,true);
+    return new Response('data: {"choices":[],"usage":{"cost_rub":123.45}}\n\ndata: [DONE]\n\n',{headers:{"Content-Type":"text/event-stream"}});
+  });
+  assert.equal((await request("chat",input)).status,409);
+  assert.deepEqual(routes,[]);
+  const estimate=await (await request("quote",input)).json();
+  assert.equal(estimate.estimateRub,136);
+  assert.equal(estimate.ready,true);
+  const confirmed={...input,aitunnelQuote:{fingerprint:estimate.fingerprint,estimateRub:estimate.estimateRub}};
+  assert.equal((await request("chat",{...confirmed,outputTokenLimit:9000})).status,409);
+  budget=100;
+  assert.equal((await request("chat",confirmed)).status,402);
+  assert.equal(paid,0);
+  budget=200;
+  const stream=await request("chat",confirmed);
+  assert.equal(stream.status,200);
+  assert.match(await stream.text(),/123\.45/);
+  assert.equal(paid,1);
+});
 
 test("a 403 creating a Batch is separate from its catalog and file upload",async t=>{
   const calls=mockNetwork(t,path=>{
