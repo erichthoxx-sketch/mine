@@ -5,6 +5,7 @@ const MODEL = "claude-opus-5-5";
 const AITUNNEL_API = "https://api.aitunnel.ru/v1";
 const AITUNNEL_MODEL = "claude-opus-5.5";
 const AITUNNEL_UPSTREAM = "amazon-bedrock";
+const BOTHUB_ANTHROPIC = "https://bothub.chat/api/v2/anthropic/v1";
 // Only these BotHub model IDs can be selected from Freitag AI.
 const BOTHUB_MODELS = Object.freeze(["claude-sonnet-5.5", "claude-opus-5.5"]);
 const PROVIDERS = Object.freeze({
@@ -599,6 +600,7 @@ async function generate(req, env, estimateOnly = false) {
   if(isDraft && ![4500,9000,14000].includes(requestedDraftLimit))
     return fail(req,400,"Недопустимый лимит ответа. Выбери 4500, 9000 или 14000.");
   const maxTokens=greeting?128:isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
+  const bothubChapter = providerId === "bothub" && isDraft;
   if(input.bookId&&!greeting){
     try{
       if(!/^[a-z0-9_-]{1,100}$/i.test(input.bookId))
@@ -642,7 +644,11 @@ async function generate(req, env, estimateOnly = false) {
       greeting?"":(input.bookId||""),maxTokens,greeting?"dialog":input.mode);}
     catch(e){return fail(req,502,"MCP: "+e.message);}
   }
-  const body = {
+  const body = bothubChapter ? {
+    model, stream:true, max_tokens:maxTokens, thinking:{type:"adaptive"}, output_config:{effort:"low"},
+    system:messages.filter(m=>m.role==="system").map(m=>({type:"text",text:m.content})),
+    messages:messages.filter(m=>m.role!=="system")
+  } : {
     model, messages, stream: true,
     max_tokens: maxTokens,
     ...(aitunnel ? { stream_options:{include_usage:true},
@@ -654,23 +660,62 @@ async function generate(req, env, estimateOnly = false) {
   }
   let upstream;
   try {
-    upstream = await fetch(provider.endpoint, {
+    upstream = await fetch(bothubChapter ? BOTHUB_ANTHROPIC + "/messages" : provider.endpoint, {
       method: "POST",
       headers: { ...(aitunnel?aitunnelHeaders(env):{Authorization:"Bearer "+env[provider.secret],
-        "Content-Type":"application/json"}), Accept:"text/event-stream" },
-      ...(aitunnel?{redirect:"error"}:{}),
+        "Content-Type":"application/json"}), Accept:"text/event-stream",
+        ...(bothubChapter?{"anthropic-version":"2023-06-01"}:{}) },
+      ...(aitunnel||bothubChapter?{redirect:"error"}:{}),
       // Глава приходит постепенно и может писаться дольше пяти минут.
       body: JSON.stringify(body), signal:req.signal
     });
   } catch { return fail(req, 502, "Нет связи с " + provider.name + "."); }
-  if (!upstream.ok) return providerFailure(req,upstream,provider.name+" · генерация");
-  return chapterStream(req,upstream,provider);
+  if (!upstream.ok) return providerFailure(req,upstream,provider.name+(bothubChapter?" · Anthropic Messages":" · генерация"));
+  return chapterStream(req,upstream,provider,bothubChapter);
 }
 
-function chapterStream(req,upstream,provider) {
+function anthropicChapterStream(body) {
+  const encode = new TextEncoder();
+  let pending = "", stopReason, stopped = false;
+  const send = (controller,data) => controller.enqueue(encode.encode("data: " + JSON.stringify(data) + "\n\n"));
+  const chunk = (controller,delta,reason = null) => send(controller,{choices:[{delta,finish_reason:reason}]});
+  const line = (source,controller) => {
+    if (stopped || !source.startsWith("data:")) return;
+    const data = source.slice(5).trim();
+    if (!data || data==="[DONE]") return;
+    const event = JSON.parse(data);
+    if (event.type === "message_start" || event.type === "ping" || event.delta?.type === "thinking_delta")
+      controller.enqueue(encode.encode(": keep-alive\n\n"));
+    if (event.type === "content_block_start" && event.content_block?.type === "text" && event.content_block.text)
+      chunk(controller,{content:event.content_block.text});
+    if (event.type === "content_block_delta" && event.delta?.type === "text_delta" && typeof event.delta.text === "string")
+      chunk(controller,{content:event.delta.text});
+    if (event.type === "message_delta" && event.delta?.stop_reason) stopReason=event.delta.stop_reason;
+    if (event.type === "error") {
+      stopped=true;
+      send(controller,{error:{code:"upstream_error"}});
+    }
+    if (event.type === "message_stop") {
+      stopped=true;
+      const reason = ["end_turn","stop_sequence"].includes(stopReason) ? "stop" : stopReason==="max_tokens" ? "length" : "incomplete";
+      chunk(controller,{},reason);
+      controller.enqueue(encode.encode("data: [DONE]\n\n"));
+    }
+  };
+  return body.pipeThrough(new TextDecoderStream()).pipeThrough(new TransformStream({
+    transform(text,controller) {
+      const lines=(pending+text).split("\n");
+      pending=lines.pop();
+      for (const item of lines) line(item,controller);
+    },
+    flush(controller) { if(pending) line(pending,controller); }
+  }));
+}
+
+function chapterStream(req,upstream,provider,bothubChapter = false) {
   if (!upstream.body || !/^text\/event-stream(?:\s*;|$)/i.test(upstream.headers.get("Content-Type") || ""))
     return fail(req,502,provider.name+" не вернул поток текста. Проверь историю расходов перед новой попыткой.");
-  return new Response(upstream.body, {
+  return new Response(bothubChapter ? anthropicChapterStream(upstream.body) : upstream.body, {
     status: 200,
     headers: { ...headers(req), "Content-Type": "text/event-stream; charset=utf-8",
       "X-Accel-Buffering": "no" }
@@ -853,12 +898,13 @@ async function bothubPreflight(req, env) {
   if(!key)return fail(req,503,provider==="apimira"?"ApiMira API не настроен.":"BotHub API не настроен.");
   let upstream;
   try {
-    upstream = await fetch(provider==="apimira"?"https://apimira.com/v1/models":"https://openai.bothub.chat/v1/models", {
-      headers: { Authorization: "Bearer " + key },
+    upstream = await fetch(provider==="apimira"?"https://apimira.com/v1/models":BOTHUB_ANTHROPIC+"/models", {
+      headers: { Authorization: "Bearer " + key, ...(provider==="bothub"?{"anthropic-version":"2023-06-01"}:{}) },
+      redirect:"error",
       signal: AbortSignal.timeout(8000)
     });
   } catch { return fail(req, 502, "Провайдер не ответил на проверку каталога моделей."); }
-  if (!upstream.ok) return providerFailure(req,upstream,PROVIDERS[provider].name+" · каталог моделей");
+  if (!upstream.ok) return providerFailure(req,upstream,PROVIDERS[provider].name+(provider==="bothub"?" · каталог Anthropic Messages":" · каталог моделей"));
   let data;
   try { data = await upstream.json(); }
   catch { return fail(req, 502, "Провайдер вернул некорректный список моделей."); }
@@ -881,6 +927,7 @@ async function bothubPreflight(req, env) {
     if(balanceUsd === null)return fail(req,502,"Модель есть в каталоге ApiMira. Проверить ключ и доступный баланс не удалось.");
   }
   return json(req, 200, { ok: !!item, model,
+    ...(provider === "bothub" ? {chapterApi:"anthropic-messages"} : {}),
     ...(balanceUsd !== null ? {balanceUsd} : {}),
     message: item ? "Модель есть в каталоге. Платная генерация не запускалась." :
       "Модель отсутствует в каталоге провайдера." });
@@ -897,6 +944,7 @@ export default {
         return json(req, 200, { ok: true, chapterProtocol:2, provider: "ModelProxy", model: MODEL,
           configured: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
           bothubConfigured: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
+          bothubChapterApi: "anthropic-messages",
           apimiraConfigured: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
           aitunnelConfigured: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID,
           bookToolsSupported: mcpConfigured(env),

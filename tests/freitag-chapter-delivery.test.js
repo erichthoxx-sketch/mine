@@ -120,7 +120,40 @@ test("a 524 before any chapter bytes reports the upstream and never resubmits",a
   assert.equal(detail.upstreamStatus,524);
   assert.match(detail.error,/BotHub.*524/);
   assert.doesNotMatch(JSON.stringify(detail),/private/);
-  assert.deepEqual(calls,["/v1/chat/completions"]);
+  assert.deepEqual(calls,["/api/v2/anthropic/v1/messages"]);
+});
+
+test("BotHub Chapters ignore reasoning and keep a truncated Anthropic stream incomplete", async t=>{
+  const calls=mockNetwork(t,(path,init)=>{
+    assert.equal(path,"/api/v2/anthropic/v1/messages");
+    assert.equal(init.headers.Authorization,"Bearer fixture-b");
+    assert.equal(init.headers["anthropic-version"],"2023-06-01");
+    const raw=[{type:"ping"},{type:"content_block_delta",delta:{type:"thinking_delta",thinking:"внутренний текст"}},
+      {type:"content_block_delta",delta:{type:"text_delta",text:"Начало главы"}},
+      {type:"message_delta",delta:{stop_reason:"end_turn"}}];
+    return new Response(raw.map(data=>`event: ${data.type}\r\ndata: ${JSON.stringify(data)}\r\n\r\n`).join(""),
+      {headers:{"Content-Type":"text/event-stream"}});
+  });
+  const res=await request("chat",chapter);
+  assert.equal(res.status,200);
+  const out=await res.text();
+  assert.match(out,/keep-alive/);
+  assert.match(out,/Начало главы/);
+  assert.doesNotMatch(out,/внутренний текст|finish_reason":"stop|\[DONE\]/);
+  assert.deepEqual(calls,["/api/v2/anthropic/v1/messages"]);
+});
+
+test("BotHub preflight checks only the Anthropic model catalog with the saved key", async t=>{
+  const calls=mockNetwork(t,(path,init)=>{
+    assert.equal(path,"/api/v2/anthropic/v1/models");
+    assert.equal(init.headers.Authorization,"Bearer fixture-b");
+    assert.equal(init.method,undefined);
+    return Response.json({data:[{id:"claude-opus-5.5"}]});
+  });
+  const answer=await request("preflight?provider=bothub&model=claude-opus-5.5");
+  assert.equal(answer.status,200);
+  assert.equal((await answer.json()).chapterApi,"anthropic-messages");
+  assert.deepEqual(calls,["/api/v2/anthropic/v1/models"]);
 });
 
 test("ApiMira public listing cannot validate a key rejected by the balance endpoint",async t=>{

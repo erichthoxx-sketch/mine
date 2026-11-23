@@ -562,7 +562,8 @@ async function testConnection(){
         " Для длинной главы сервис временно резервирует стоимость входного текста и выбранного лимита ответа.":
         chosen==="aitunnel"&&Number.isFinite(info?.balanceRub)?" Баланс: "+rub(info.balanceRub)+
           (info.budgetRub===null?". Задай бюджет API-ключа AITUNNEL перед генерацией.":". Остаток бюджета ключа: "+rub(info.budgetRub)+"."):"";
-      if(status)status.textContent=(info?"Модель есть в каталоге. ":"")+"MCP Мастерской подключен напрямую: "+
+      const modelStatus=info?.chapterApi==="anthropic-messages"?"Ключ BotHub видит модель в Anthropic Messages. ":info?"Модель есть в каталоге. ":"";
+      if(status)status.textContent=modelStatus+"MCP Мастерской подключен напрямую: "+
         mcpInfo.toolCount+" инструментов (книги, маркетинг, доходы, Директ, Метрика). "+
         "Проверка не выполняет платную генерацию."+money;
       notice("Защищенный шлюз найден. Оплата за проверку соединения не списывается.");

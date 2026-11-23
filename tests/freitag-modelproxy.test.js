@@ -83,8 +83,12 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     calls.push({input,init});
     if (String(input).includes("googleapis.com"))
       return Response.json({keys:[jwk]});
-    if (String(input) === "https://openai.bothub.chat/v1/models")
+    if (String(input) === "https://bothub.chat/api/v2/anthropic/v1/models")
       return Response.json({object:"list",data:[{id:"claude-sonnet-5.5",kind:"chat",endpoints:["/v1/chat/completions"]},{id:"claude-opus-5.5",kind:"chat"}]});
+    if (String(input) === "https://bothub.chat/api/v2/anthropic/v1/messages")
+      return new Response('data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"OK"}}\n\n'+
+        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}\n\n'+
+        'data: {"type":"message_stop"}\n\n',{headers:{"Content-Type":"text/event-stream"}});
     if (String(input) === "https://openai.bothub.chat/v1/batches/models")
       return Response.json({data:[{id:"claude-opus-5.5:batch"}]});
     if (String(input) === "https://openai.bothub.chat/v1/files" && init.method==="POST"){
@@ -249,7 +253,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     const authorPrompt="Глава 15, заметки и полная глава 14. ".repeat(1450);
     assert.ok(masterPrompt.length>24000);
     assert.ok(authorPrompt.length>40000);
-    const paidBefore=calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length;
+    const paidBefore=calls.filter(c=>String(c.input).includes("bothub.chat/")).length;
     const fullChapter=await gateway.fetch(new Request(url("chat"),{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({bookId:"test",provider:"bothub",model:"claude-opus-5.5",
@@ -262,15 +266,16 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     const chapterEvents=await fullChapter.text();
     assert.match(chapterEvents,/OK/);
     assert.match(chapterEvents,/data: \[DONE\]/);
-    const paidAfter=calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length;
+    const paidAfter=calls.filter(c=>String(c.input).includes("bothub.chat/")).length;
     assert.equal(paidAfter-paidBefore,1,"full chapter must take only one paid generation");
-    const chapterCall=JSON.parse(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).at(-1).init.body);
+    const chapterCall=JSON.parse(calls.findLast(c=>String(c.input)==="https://bothub.chat/api/v2/anthropic/v1/messages").init.body);
     assert.equal(chapterCall.max_tokens,14000);
     assert.equal(chapterCall.stream,true,"full chapter must stream from BotHub; nonstreaming can time out at Cloudflare");
     assert.equal(chapterCall.tools,undefined,"no iterative MCP tool calls during full chapter");
-    assert.equal(chapterCall.messages.find(m=>m.content===masterPrompt)?.content,masterPrompt);
+    assert.equal(chapterCall.system.find(m=>m.text===masterPrompt)?.text,masterPrompt);
+    assert.deepEqual(chapterCall.output_config,{effort:"low"});
     assert.equal(chapterCall.messages.at(-1).content,authorPrompt);
-    assert.match(chapterCall.messages.find(m=>m.content.includes("Справочные материалы выбранного романа"))?.content||"",/новая глава/);
+    assert.match(chapterCall.system.find(m=>m.text.includes("Справочные материалы выбранного романа"))?.text||"",/новая глава/);
     const readyBatch=await gateway.fetch(new Request(url("batch-models"),{headers}),env);
     assert.equal(readyBatch.status,200);
     assert.equal((await readyBatch.json()).model,"claude-opus-5.5:batch");
@@ -310,7 +315,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     }),env);
     assert.equal(toolResponse.status,200);
     assert.match(await toolResponse.text(),/События главы подтверждены/);
-    assert.equal(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length,4);
+    assert.equal(calls.slice(beforeToolCalls).filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length,2);
     const followup=JSON.parse(calls.at(-1).init.body);
     assert.equal(followup.messages.at(-1).role,"tool");
     assert.match(followup.messages.at(-1).content,/новая глава/);
@@ -322,7 +327,7 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     }),env);
     assert.equal(botRes.status,200);
     assert.match(await botRes.text(),/OK/);
-    assert.equal(calls.filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length,5);
+    assert.equal(calls.slice(beforeBotHubCalls).filter(c=>String(c.input).includes("bothub.chat/v1/chat/completions")).length,1);
     const botCall=calls.at(-1);
     assert.equal(String(botCall.input),"https://openai.bothub.chat/v1/chat/completions");
     assert.equal(botCall.init.headers.Authorization,"Bearer bh-test");
