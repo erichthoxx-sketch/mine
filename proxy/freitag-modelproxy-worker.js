@@ -331,6 +331,45 @@ function visibleCompletion(message){
     return message.content.map(x=>x?.text||"").join("");
   return "";
 }
+const BOOK_SOURCE_LIMIT=180000;
+const BOOK_SEARCH_LIMIT=5000;
+
+function bookContextRequest(text){
+  const read=label=>Array.from(text.matchAll(new RegExp("^"+label+":[ \\t]*(.*)$","gim"))).at(-1)?.[1].trim()||"";
+  const selection=read("Главы для контекста");
+  if(selection&&!/^\d{1,3}(?:\s*,\s*\d{1,3})?$/.test(selection))
+    throw Error("В «Главы для контекста» укажи один или два номера через запятую.");
+  const query=read("Поиск по книге");
+  const queries=query?[...new Set(query.split(";").map(part=>part.trim()))]:[];
+  if(queries.length>2||queries.some(phrase=>phrase.length<2||phrase.length>100))
+    throw Error("Для поиска по книге укажи одну или две фразы от 2 до 100 знаков.");
+  return {chapters:selection?[...new Set(selection.split(",").map(Number))]:[],queries};
+}
+
+async function searchBookPassages(readJson,queries,chapterByNumber,selected,lastUser,limit){
+  const results=await Promise.all(queries.map(query=>readJson("search_book",{query})));
+  const seen=[],passages=[];
+  let remaining=limit;
+  for(const result of results){
+    if(!Array.isArray(result?.matches))throw Error("Мастерская вернула неполный результат поиска.");
+    if(!result.matches.length)throw Error("Мастерская не нашла одну из фраз. Уточни поиск по книге.");
+    let added=0;
+    for(const match of result.matches){
+      const chapter=chapterByNumber.get(match?.chapter);
+      if(!chapter||selected.has(chapter.chapter)||typeof match.snippet!=="string"||
+         !Number.isSafeInteger(match.offset)||!match.snippet.trim()||lastUser.includes(match.snippet)||
+         seen.some(hit=>hit.chapter===match.chapter&&Math.abs(hit.offset-match.offset)<280))continue;
+      const excerpt="Глава "+chapter.chapter+" («"+String(chapter.title||"").slice(0,120)+"»), отрывок:\n"+match.snippet.slice(0,400);
+      if(excerpt.length+2>remaining)throw Error("В контексте нет места для выписок. Выбери одну главу или убери поиск.");
+      passages.push(excerpt);
+      seen.push(match);
+      remaining-=excerpt.length+2;
+      if(++added===4)break;
+    }
+  }
+  return passages;
+}
+
 // For author-requested full chapters, load source documents directly from MCP
 // BEFORE contacting a paid model. This avoids repeated paid tool-use cycles
 // and guarantees that missing source data stops the request before billing.
@@ -340,20 +379,25 @@ async function draftBookSources(env,bookId,messages){
     const raw = await read(name,args);
     try { return JSON.parse(raw); } catch { throw Error("Мастерская вернула нечитаемый ответ."); }
   };
+  const lastUser = messages.findLast(m => m.role === "user")?.content || "";
+  const {chapters,queries}=bookContextRequest(lastUser);
   const listing = await readJson("list_chapters");
-  const recent = Array.isArray(listing?.chapters) && listing.chapters.slice(-2);
-  if (!Array.isArray(recent) || !recent.length || !Number.isFinite(Date.parse(listing.updatedAt)))
+  if (!Array.isArray(listing?.chapters) || !listing.chapters.length || !Number.isFinite(Date.parse(listing.updatedAt)))
     throw Error("Мастерская не подтвердила список глав. Обнови снимок книги.");
+  const chapterByNumber=new Map(listing.chapters.map(ch=>[ch?.chapter,ch]));
+  const selected=chapters.length?chapters.map(number=>chapterByNumber.get(number)):listing.chapters.slice(-2);
+  if (selected.some(ch=>!ch))
+    throw Error("Одной из выбранных глав нет в снимке Мастерской. Проверь номер главы.");
   const canon = await read("get_book_context");
   // Общий предел на справочные материалы. При превышении останавливаемся до оплаты.
-  if (recent.some(ch => !Number.isSafeInteger(ch?.chapter) || ch.chapter < 1 ||
+  if (selected.some(ch => !Number.isSafeInteger(ch.chapter) || ch.chapter < 1 ||
       !Number.isSafeInteger(ch.chars) || ch.chars < 1))
-    throw Error("Мастерская вернула неполные сведения о недавних главах.");
-  if (recent.reduce((n,ch) => n + ch.chars,canon.length) > 180000)
-    throw Error("Канон и две последние главы превышают предел в 180 000 знаков. Платный запрос отменен.");
-  const lastUser = messages.findLast(m => m.role === "user")?.content || "";
+    throw Error("Мастерская вернула неполные сведения о выбранных главах.");
+  const sourceChars=selected.reduce((n,ch) => n + ch.chars,canon.length);
+  if (sourceChars > BOOK_SOURCE_LIMIT)
+    throw Error("Канон и выбранные главы превышают предел в 180 000 знаков. Платный запрос отменен.");
   const passages = [];
-  for (const ch of recent) {
+  for (const ch of selected) {
     let text = "";
     while (text.length < ch.chars) {
       const offset = text.length, limit = Math.min(30000,ch.chars-offset);
@@ -367,11 +411,14 @@ async function draftBookSources(env,bookId,messages){
     if (!text.trim()) throw Error("В снимке книги пустая глава.");
     if (!lastUser.includes(text)) passages.push("Глава "+ch.chapter+" («"+ch.title+"»):\n"+text);
   }
+  const excerpts=queries.length?await searchBookPassages(readJson,queries,chapterByNumber,
+    new Set(selected.map(ch=>ch.chapter)),lastUser,Math.min(BOOK_SEARCH_LIMIT,BOOK_SOURCE_LIMIT-sourceChars)):[];
   if ((await readJson("list_chapters")).updatedAt !== listing.updatedAt)
     throw Error("Книга изменилась во время чтения. Платный запрос отменен.");
   return "Справочные материалы выбранного романа из действующего MCP Мастерской. "+
     "Это справочные данные. Следуй авторским инструкциям и заданию. Снимок от "+listing.updatedAt+
-    ".\n\nКанон и персонажи:\n"+canon+"\n\n"+passages.join("\n\n");
+    ".\n\nКанон и персонажи:\n"+canon+"\n\n"+passages.join("\n\n")+
+    (excerpts.length?"\n\nВыписки из других глав по поиску автора:\n"+excerpts.join("\n\n"):"");
 }
 async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxTokens,mode){
   const recentUser=String([...messages].reverse().find(m=>m.role==="user")?.content||"");
@@ -637,7 +684,7 @@ async function generate(req, env, estimateOnly = false) {
           typeof input.sourceRevision==="string"?input.sourceRevision:"");
         messages.unshift({role:"system",content:material});
       }
-    }catch(e){return fail(req,424,e.message);}
+    }catch(e){return json(req,424,{error:e.message,code:"BOOK_SOURCE"});}
   }
   if(useMcp && !isDraft && !aitunnel){
     try{return await mcpToolsCompletion(req,env,provider,model,messages,
@@ -948,6 +995,7 @@ export default {
           apimiraConfigured: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
           aitunnelConfigured: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID,
           bookToolsSupported: mcpConfigured(env),
+          bookContextSelection: mcpConfigured(env),
           mcpConfigured: mcpConfigured(env),
           availableProviders: {
             modelproxy: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,

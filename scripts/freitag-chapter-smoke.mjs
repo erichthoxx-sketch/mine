@@ -60,6 +60,9 @@ try {
             balanceRub:200,budgetRub:160,fingerprint:"fixture-estimate"}));
         }
         if(!String(url).endsWith("/api/freitag/chat"))return fetcher(url,opts);
+        if(window.rejectSource)return Promise.resolve(Response.json({
+          code:"BOOK_SOURCE",error:"Мастерская не нашла одну из фраз."
+        },{status:424}));
         window.submitted.push(JSON.parse(opts.body));
         const bytes=new TextEncoder();
         return Promise.resolve(new Response(new ReadableStream({start(controller){
@@ -105,6 +108,30 @@ try {
     await page.locator("#f-field-draft").fill("Несохраненная правка");
     await page.getByRole("button",{name:"Отмена"}).click();
     assert.equal(await page.locator("#f-message-input").inputValue(),prompt);
+    const context=page.getByRole("button",{name:"Контекст книги",exact:true});
+    await page.locator("#f-message-input").fill("Тест выбора источников");
+    await context.click();
+    await page.locator("#f-field-chapters").fill("1, 3");
+    await page.locator("#f-field-query").fill("синяя папка");
+    await page.getByRole("button",{name:"Сохранить в задании"}).click();
+    assert.equal(await page.locator("#f-message-input").inputValue(),
+      "Тест выбора источников\n\nГлавы для контекста: 1, 3\nПоиск по книге: синяя папка");
+    await context.click();
+    assert.equal(await page.locator("#f-field-chapters").inputValue(),"1, 3");
+    await page.locator("#f-field-query").fill("письмо о ключе");
+    await page.getByRole("button",{name:"Сохранить в задании"}).click();
+    assert.equal(await page.locator("#f-message-input").inputValue(),
+      "Тест выбора источников\n\nГлавы для контекста: 1, 3\nПоиск по книге: письмо о ключе");
+    await page.evaluate(()=>{window.rejectSource=true;});
+    await page.locator('#f-chat-form button[type="submit"]').click();
+    await page.getByText("Мастерская не нашла одну из фраз.",{exact:true}).waitFor();
+    await page.locator('#f-chat-form button[type="submit"]').waitFor();
+    assert.equal(await page.locator("#f-message-input").inputValue(),
+      "Тест выбора источников\n\nГлавы для контекста: 1, 3\nПоиск по книге: письмо о ключе");
+    assert.equal(await page.locator(".f-msg").count(),0);
+    await page.evaluate(()=>{window.rejectSource=false;});
+    assert.deepEqual(await page.evaluate(()=>window.submitted),[]);
+    await page.locator("#f-message-input").fill(prompt);
     const submitBounds=await page.locator('#f-chat-form button[type="submit"]').boundingBox();
     const navBounds=await page.locator(".f-mobile-nav").boundingBox();
     assert.ok(submitBounds.y+submitBounds.height<=(navBounds?.y??900),"Send button must remain above the bottom navigation");

@@ -215,6 +215,8 @@ function renderChat(){
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
   const p=project(c?.projectId||state.activeProjectId);
   const draft=state.drafts?.[draftKey()]||"";
+  const canSelectBookContext=p?.masterBookId&&paidProviders.includes(state.settings.provider)&&
+    (c?.mode||pendingMode||"draft")==="draft";
   const previous=$("#f-messages");
   const sameChat=previous?.dataset.key===draftKey();
   const scrollTop=sameChat&&!nearEnd(previous)?previous.scrollTop:null;
@@ -277,7 +279,7 @@ function renderChat(){
     '</div>'+
     (p?'<aside class="f-chat-context" aria-label="Контекст книги">'+
       '<h2>Контекст книги</h2><p class="f-context-book">'+esc(p.name)+'</p>'+
-      '<h3>Рукопись</h3><p>'+(p.masterBookId?'Мастерская. Для новой главы подключаются канон и две последние главы.':'Локальный проект')+'</p>'+
+      '<h3>Рукопись</h3><p>'+(p.masterBookId?'По умолчанию загружаются канон и две последние главы. В задании можно выбрать другие главы или найти выписки по всей книге.':'Локальный проект')+'</p>'+
       '<h3>Инструкция проекта</h3><p>'+(userInstruction(p.instruction).trim()?'Сохранена и применяется в чатах книги.':'Пока пустая.')+'</p>'+
       '<button type="button" class="f-btn" data-action="project-home" data-id="'+esc(p.id)+'">Открыть проект ↗</button></aside>':"")+
     '<form id="f-chat-form" class="f-compose">'+
@@ -292,6 +294,7 @@ function renderChat(){
       '<div class="f-compose-controls">'+
       '<div class="f-compose-actions">'+
       '<button type="button" class="f-inline-btn" data-action="expand-draft" '+(busy?"disabled":"")+'>Развернуть</button>'+
+      (canSelectBookContext?'<button type="button" class="f-inline-btn" data-action="select-book-context" '+(busy?"disabled":"")+'>Контекст книги</button>':"")+
       '<span class="f-mini" id="f-draft-size">'+(draft?draft.length.toLocaleString("ru-RU")+' зн.':"")+'</span>'+
       '<details class="f-extra-tools" id="f-chat-tools" '+(toolsOpen?"open":"")+'><summary>Ещё</summary><div class="f-compose-menu">'+
       '<button type="button" data-action="export-context">Скопировать контекст</button>'+
@@ -903,6 +906,12 @@ async function sendMessage(text){
       signal:currentController.signal});
     if(!res.ok){
       const error=await res.json().catch(()=>null);
+      if(res.status===424&&error?.code==="BOOK_SOURCE"){
+        c.messages.splice(c.messages.indexOf(userMessage),2);
+        if(chat(c.id)===c)state.drafts["chat:"+c.id]=msg;
+        notice(error.error||"Мастерская не предоставила материал для главы.");
+        return;
+      }
       throw Error(typeof error?.error==="string"?error.error:"Сервер вернул HTTP "+res.status+".");
     }
     if(!res.body)throw Error("Сервер не вернул поток ответа");
@@ -1097,6 +1106,26 @@ document.addEventListener("click",async(e)=>{
     const current=$("#f-message-input");
     if(!result||!current||draftKey()!==key||busy)return;
     current.value=result.draft;
+    current.dispatchEvent(new Event("input",{bubbles:true}));
+    current.focus({preventScroll:true});
+  }
+  if(a==="select-book-context"){
+    const input=$("#f-message-input"),key=draftKey();
+    if(busy||!input)return;
+    const lines=/^(Главы для контекста|Поиск по книге):[ \t]*([^\r\n]*)(?:\r?\n|$)/gim;
+    const existing=Object.fromEntries([...input.value.matchAll(lines)].map(([,name,value])=>[name.toLowerCase(),value.trim()]));
+    const source=await openModal("Контекст для этой главы",[
+      {key:"chapters",label:"Главы целиком вместо последних двух (например 3, 8)"},
+      {key:"query",label:"Поиск по всей книге (одна фраза или две через точку с запятой)"}
+    ],{chapters:existing["главы для контекста"],query:existing["поиск по книге"]},"Сохранить в задании");
+    const current=$("#f-message-input");
+    if(!source||!current||draftKey()!==key||busy)return;
+    const text=current.value.replace(lines,"");
+    const extra=[
+      source.chapters.trim()&&"Главы для контекста: "+source.chapters.trim(),
+      source.query.trim()&&"Поиск по книге: "+source.query.trim()
+    ].filter(Boolean).join("\n");
+    current.value=extra?text+(text&&!text.endsWith("\n\n")?"\n\n":"")+extra:text;
     current.dispatchEvent(new Event("input",{bubbles:true}));
     current.focus({preventScroll:true});
   }

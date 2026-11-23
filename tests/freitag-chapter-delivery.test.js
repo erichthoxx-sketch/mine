@@ -1,6 +1,7 @@
 import {before, test} from "node:test";
 import assert from "node:assert/strict";
 import gateway from "../proxy/freitag-modelproxy-worker.js";
+import booksMcp from "../proxy/books-mcp-worker.js";
 import {onRequest} from "../functions/api/freitag/[route].js";
 
 const env = {OWNER_UID:"fixture", BOTHUB_API_KEY:"fixture-b", APIMIRA_API_KEY:"fixture-a", AITUNNEL_API_KEY:"fixture-t",
@@ -218,6 +219,50 @@ test("complete MCP pages arrive before one streaming request, which stays cancel
   stream.close();await reader.cancel();
   assert.equal(calls.at(-1),"/v1/chat/completions");
   assert.equal(paid,1);
+});
+
+test("BotHub can include whole early chapters and bounded excerpts from the rest of the same book",async t=>{
+  const early="Первая строка ранней главы. "+"Абзац ранней главы. ".repeat(1600)+" Последняя строка ранней главы.";
+  const book={title:"Тестовый роман",updatedAt:"2026-11-22T12:00:00Z",context:"Тестовый канон",chapters:[
+    {title:"Первая",text:early},
+    {title:"Вторая",text:"Далекий пролог главы. "+"Переходный абзац. ".repeat(80)+" В синей папке лежало письмо о ключе. "+"Не относящийся к запросу конец. ".repeat(80)},
+    {title:"Третья",text:"Текст третьей главы."},
+    {title:"Четвертая",text:"Текст четвертой главы."}
+  ]};
+  let paid=0;
+  const tools=[];
+  mockNetwork(t,async(path,init)=>{
+    if(path==="/mcp"){
+      const rpc=JSON.parse(init.body);
+      assert.equal(rpc.params.arguments.book_id,"fixture");
+      tools.push(rpc.params.name);
+      return booksMcp.fetch(new Request(env.BOOKS_MCP_URL,init),{
+        MCP_READ_KEY:env.MCP_READ_KEY,BOOKS:{get:async key=>{
+          assert.equal(key,"book:fixture");
+          return book;
+        }}
+      });
+    }
+    paid++;
+    assert.equal(path,"/api/v2/anthropic/v1/messages");
+    const body=JSON.parse(init.body);
+    const sources=body.system[0].text;
+    assert.ok(sources.includes(early),"both pages of the explicitly chosen chapter must arrive");
+    assert.match(sources,/Выписки из других глав[\s\S]*В синей папке лежало письмо о ключе/);
+    assert.doesNotMatch(sources,/Текст третьей главы|Текст четвертой главы|Далекий пролог главы/);
+    assert.equal(body.tools,undefined);
+    return new Response("data: [DONE]\n\n",{headers:{"Content-Type":"text/event-stream"}});
+  });
+  const send=text=>request("chat",{...chapter,bookId:"fixture",messages:[{role:"user",content:text}]});
+  const response=await send("Продолжи сцену\n\nГлавы для контекста: 1\nПоиск по книге: письмо о ключе");
+  assert.equal(response.status,200);
+  await response.text();
+  assert.equal(paid,1);
+  assert.deepEqual(tools,["list_chapters","get_book_context","read_chapter","read_chapter","search_book","list_chapters"]);
+  assert.equal((await send("Новая сцена\nГлавы для контекста: 99")).status,424);
+  assert.equal((await send("Новая сцена\nПоиск по книге: точного совпадения нет")).status,424);
+  assert.equal((await send("Новая сцена\nГлавы для контекста: 1, 2, 3")).status,424);
+  assert.equal(paid,1,"source errors must not start a second paid request");
 });
 
 test("an incomplete MCP page stops a chapter before either generation or upload",async t=>{
