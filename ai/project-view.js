@@ -4,6 +4,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 export function projectHomeHtml(p,chats,docs,userInstruction){
   const history=chats.filter(x=>x.projectId===p.id).sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||""))).slice(0,10);
   const materials=docs.filter(d=>d.projectId===p.id);
+  const notes=Array.isArray(p.memoryNotes)?p.memoryNotes.slice().reverse():[];
   return '<div class="f-content f-project-home">'+
     '<button type="button" class="f-project-back" data-action="projects-back">← Все проекты</button>'+
     '<div class="f-project-overview">'+
@@ -18,6 +19,10 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
       '<h2><label for="f-project-instruction">Инструкция проекта</label></h2>'+
       '<p class="f-muted">Сохраненный текст применяется в чатах этой книги.</p>'+
       '<textarea id="f-project-instruction" name="instruction" class="f-textarea f-project-prompt" placeholder="Вставь мастер-промпт целиком.">\n'+esc(userInstruction(p.instruction))+'</textarea>'+
+      '<details class="f-project-options"><summary>Сюжетная карта</summary>'+
+        '<label class="f-label" for="f-project-story-map">Хронология, арки, кто что знает и открытые линии</label>'+
+        '<textarea id="f-project-story-map" name="storyMap" class="f-textarea" placeholder="Что уже произошло и что важно помнить дальше…">\n'+esc(p.storyMap||"")+'</textarea>'+
+      '</details>'+
       '<details class="f-project-options"><summary>Мои дополнения к канону, голосу и текущей сцене</summary>'+
         '<label class="f-label" for="f-project-voice">Голос и стиль</label><textarea id="f-project-voice" name="voice" class="f-textarea">\n'+esc(p.voice||"")+'</textarea>'+
         '<label class="f-label" for="f-project-canon">Дополнительные факты канона</label><textarea id="f-project-canon" name="canon" class="f-textarea">\n'+esc(p.canon||"")+'</textarea>'+
@@ -35,6 +40,14 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
       '<div id="f-book-check" class="f-book-check" role="status"></div>':
       '<p class="f-muted">Подключи рукопись из списка книг в Мастерской.</p>')+
     (materials.length?'<h3>Локальные материалы</h3><ul class="f-material-names">'+materials.map(m=>'<li>'+esc(m.name)+'</li>').join("")+'</ul>':"")+
+    '</section>'+
+    '<section class="f-project-recent f-project-memory"><h2>Память проекта</h2>'+
+      '<p class="f-muted">Утвержденные решения и образцы стиля доступны в новых чатах этой книги. Freitag подбирает выписки из старых диалогов и материалов по заданию.</p>'+
+      '<button type="button" class="f-btn" data-action="add-project-memory">Закрепить решение</button>'+
+      (notes.length?'<ul class="f-memory-list">'+notes.map(note=>
+        '<li><strong>'+esc(note.title)+'</strong><p>'+esc(String(note.text||"").slice(0,190))+(note.text?.length>190?"…":"")+'</p>'+
+        '<div class="f-row"><button type="button" class="f-inline-btn" data-action="edit-project-memory" data-id="'+esc(note.id)+'">Изменить</button>'+
+        '<button type="button" class="f-inline-btn" data-action="remove-project-memory" data-id="'+esc(note.id)+'">Убрать</button></div></li>').join("")+'</ul>':"")+
     '</section>'+
     '<section class="f-project-recent"><h2>Чаты проекта</h2>'+
       (history.length?'<ul class="f-list">'+history.map(c=>'<li><button data-action="select-chat" data-id="'+esc(c.id)+'">'+esc(c.title)+'</button></li>').join("")+'</ul>':

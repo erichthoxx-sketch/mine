@@ -2,6 +2,7 @@
 import { master } from './master-sync.js';
 import { renderMarkdown } from './markdown.js';
 import { projectHomeHtml } from './project-view.js';
+import { projectMemoryContext } from './project-context.js';
 import { ensureDriveAccess, refreshLinkedBook } from './live-context.js';
 // Чаты, проекты и текстовые материалы хранятся только в IndexedDB этого браузера.
 // Никаких ключей и рукописей в репозитории.
@@ -237,6 +238,7 @@ function renderChat(){
     (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
       '<div class="f-feedback-actions"><button type="button" class="f-inline-btn" data-action="copy-answer" data-i="'+i+'">Копировать</button>'+
       '<button type="button" class="f-inline-btn" data-action="download-answer" data-i="'+i+'">Скачать TXT</button>'+
+      (p?'<button type="button" class="f-inline-btn" data-action="remember-decision" data-i="'+i+'">В память проекта</button>':"")+
       '<button type="button" class="f-inline-btn" data-action="feedback-good" data-i="'+i+'">В образцы</button>'+
       '<button type="button" class="f-inline-btn" data-action="feedback-bad" data-i="'+i+'">Не то</button></div>':"")+
     '</article>';
@@ -440,11 +442,15 @@ function pinnedExcerpt(raw,question,maxLength){
   }
   return result.slice(0,maxLength);
 }
+function memoryForProject(p,c,task,recent,budget,docs=state.docs){
+  return projectMemoryContext({project:p,chats:state.chats,docs,feedback:state.feedback,
+    current:c.id,recent,task,terms:searchTerms(task.slice(0,2400)+" "+task.slice(-700)).slice(0,14),budget});
+}
 function modelproxyMessages(c){
   // Claude Projects-style workflow: one editable instruction, an unchanged
   // full user request in every chapter chat and no injected style templates.
   const p=project(c.projectId);
-  const messages=c.messages.filter(m=>m.role==="user"||m.role==="assistant");
+  const messages=c.messages.filter(m=>(m.role==="user"||m.role==="assistant")&&typeof m.content==="string");
   const latest=messages.at(-1)?.content||"";
   const projectInstructions=[
     userInstruction(state.settings.globalInstruction),
@@ -459,11 +465,24 @@ function modelproxyMessages(c){
   // a paid provider call rather than silently dropping author material.
   // A retry after HTTP 524 must not bill the same 40k-character prompt twice
   // inside its own history. Keep the latest author request verbatim.
-  const history=messages.slice(-7,-1)
+  const previous=messages.slice(-7,-1)
     .filter(m=>!(m.role==="user"&&m.content===latest) &&
-      !(m.role==="assistant"&&/^(?:Ошибка Claude:|Ответ остановлен\.|Ошибка Ollama:|Отправка Batch:|Batch не запущен:)/.test(m.content)))
-    .map(m=>({role:m.role,content:m.content}));
-  return [...(projectInstructions?[{role:"system",content:projectInstructions}]:[]),
+      !(m.role==="assistant"&&/^(?:Ошибка Claude:|Ответ остановлен\.|Ошибка Ollama:|Отправка Batch:|Batch не запущен:)/.test(m.content)));
+  let remaining=p?Math.max(0,Math.min(14000,180000-projectInstructions.length-latest.length)):Infinity;
+  const history=[];
+  const marker="[Фрагмент из недавней переписки]\n";
+  for(const message of previous.slice().reverse()){
+    if(remaining<marker.length+100)break;
+    const size=p?Math.min(5200,remaining):remaining;
+    const content=message.content.length>size?marker+message.content.slice(-(size-marker.length)):message.content;
+    history.unshift({role:message.role,content});
+    remaining-=content.length;
+  }
+  const headroom=Math.min(130000-projectInstructions.length,
+    180000-projectInstructions.length-latest.length-history.reduce((n,m)=>n+m.content.length,0));
+  const memory=p?memoryForProject(p,c,latest,history.length?previous.slice(-history.length):[],Math.min(4000,headroom-2)):"";
+  const instructions=[projectInstructions,memory].filter(Boolean).join("\n\n");
+  return [...(instructions?[{role:"system",content:instructions}]:[]),
     ...history,{role:"user",content:latest}];
 }
 function buildMessages(c){
@@ -477,6 +496,8 @@ function buildMessages(c){
     {total:6000,global:500,extra:450,canon:1700,voice:500,scene:750,docs:1100,history:6500}:
     {total:3850,global:330,extra:280,canon:1100,voice:300,scene:420,docs:850,history:2800};
   const lastUser=[...c.messages].reverse().find(m=>m.role==="user")?.content||"";
+  const history=c.messages.filter(m=>m.role==="user"||m.role==="assistant").slice(-7).map(m=>({role:m.role,content:m.content.slice(-1800)}));
+  const memory=p?memoryForProject(p,c,lastUser,history,Math.min(1250,Math.floor(budget.total*.32)),[]):"";
   const parts=[
     s.globalInstruction.slice(0,budget.global),
     "Режим «"+mode.name+"». "+mode.instruction,
@@ -485,6 +506,7 @@ function buildMessages(c){
     p?.canon?"ДОПОЛНЕНИЯ АВТОРА К КАНОНУ:\n"+pinnedExcerpt(p.canon,lastUser,p.masterCanon?Math.round(budget.canon*.4):budget.canon):"",
     p?.voice?"Голос автора и ограничения:\n"+p.voice.slice(0,budget.voice):"",
     p?.scene?"ТЕКУЩАЯ СЦЕНА/ПОСЛЕДНИЕ СОБЫТИЯ:\n"+p.scene.slice(0,budget.scene):"",
+    memory,
     "Выдержки не равны полной рукописи. Если данных недостаточно, скажи об этом.",
     relevantNotes(lastUser,c.projectId,budget.docs)
   ].filter(Boolean);
@@ -494,7 +516,6 @@ function buildMessages(c){
     // инструкции, затем хвост истории. При обычном бюджете лимит не достигается.
     sys=sys.slice(0,budget.total);
   }
-  const history=c.messages.filter(m=>m.role==="user"||m.role==="assistant").slice(-7).map(m=>({role:m.role,content:m.content.slice(-1800)}));
   while(history.reduce((n,m)=>n+m.content.length,0)>budget.history&&history.length>1)history.shift();
   return [{role:"system",content:sys},...history];
 }
@@ -708,6 +729,22 @@ async function saveFeedback(i,kind){
     prompt:preceding?.content?.slice(0,10000)||"",answer:response.content.slice(0,18000),
     finalText:v.finalText.trim().slice(0,18000),source:response.provider||"Qwen",at:stamp()});
   await save();notice(kind==="good"?"Пример добавлен в память стиля.":"Отказ и причина сохранены для следующих заданий.");
+}
+async function editProjectMemory(p,id,source){
+  if(!p)return;
+  const notes=Array.isArray(p.memoryNotes)?p.memoryNotes:[];
+  const previous=notes.find(note=>note.id===id);
+  if(id&&!previous)return;
+  const values=await openModal(previous?"Уточнить решение":"Закрепить решение автора",[
+    {key:"title",label:"Название",required:true},
+    {key:"text",label:"Факт, открытая линия или правило для следующих глав",multi:true,required:true}
+  ],previous||{title:"",text:source?.content?.slice(0,1600)||""});
+  if(!values||project(p.id)!==p)return;
+  const title=values.title.trim(),text=values.text.trim();
+  if(text.length>12000)return notice("Для записи в памяти используй до 12 000 знаков. Большой текст можно сохранить в материалах.");
+  const note={id:previous?.id||uid(),title,text,updated:stamp()};
+  p.memoryNotes=[...notes.filter(item=>item.id!==note.id),note];
+  await save();render();notice("Решение сохранено в памяти проекта.");
 }
 
 async function checkBatchAvailability(){
@@ -1144,6 +1181,18 @@ document.addEventListener("click",async(e)=>{
   if(a==="export-context"){const v=$("#f-message-input")?.value||"";if(v.trim()){await prepareExternal(v);}else notice("Сначала напиши задачу, чтобы подготовить контекст книги.");}
   if(a==="paste-external")await saveExternalAnswer();
   if(a==="feedback-good"||a==="feedback-bad")await saveFeedback(Number(b.dataset.i),a==="feedback-good"?"good":"bad");
+  if(a==="remember-decision"){
+    const c=chat();
+    if(c?.projectId)await editProjectMemory(project(c.projectId),null,c.messages[Number(b.dataset.i)]);
+  }
+  if(a==="edit-project-memory")await editProjectMemory(project(projectHomeId),id);
+  if(a==="add-project-memory")await editProjectMemory(project(projectHomeId));
+  if(a==="remove-project-memory"){
+    const p=project(projectHomeId);
+    if(!p?.memoryNotes?.some(note=>note.id===id)||!confirm("Убрать это решение из памяти проекта?"))return;
+    p.memoryNotes=p.memoryNotes.filter(note=>note.id!==id);
+    await save();render();notice("Решение убрано из памяти проекта.");
+  }
   if(a==="open-settings"){tab="settings";render();}
   if(a==="cloud-save"){
     if(!confirm("Сохранить проекты, канон и одобренные/отклонённые примеры в твой Firebase? Чаты не загружаются."))return;
@@ -1174,6 +1223,7 @@ document.addEventListener("submit",async(e)=>{
     p.voice=String(fd.get("voice")||"");
     p.canon=String(fd.get("canon")||"");
     p.scene=String(fd.get("scene")||"");
+    p.storyMap=String(fd.get("storyMap")||"");
     await save();notice("Твои инструкции сохранены в проекте.");
     return;
   }

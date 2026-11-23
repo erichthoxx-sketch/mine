@@ -341,6 +341,9 @@ html.app-freitag.f-chat-mode #f-flash{top:78px;right:16px;bottom:auto;left:auto;
 .f-project-source h3{margin:14px 0 4px;font-size:12px}
 .f-material-names{margin:0;padding-left:16px;font-size:12px;color:var(--f-muted);overflow-wrap:anywhere}
 .f-project-recent .f-list button{padding-left:0;font-size:13px!important}
+.f-memory-list{list-style:none;padding:0;margin:10px 0 0}
+.f-memory-list li{padding:12px 0;border-top:1px solid var(--f-line);overflow-wrap:anywhere}
+.f-memory-list li p{font-size:13px;color:var(--f-soft-ink);margin:4px 0}
 @media(max-width:1050px){
   .f-layout{grid-template-columns:220px minmax(0,1fr)}
   .f-main{padding:18px 20px 26px}

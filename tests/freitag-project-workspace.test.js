@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import {renderMarkdown} from "../ai/markdown.js";
 import {projectHomeHtml} from "../ai/project-view.js";
+import {projectMemoryContext} from "../ai/project-context.js";
 const read=path=>readFile(new URL(path,import.meta.url),"utf8");
 
 test("Markdown displays paragraphs, bold text, lists and code without HTML execution",()=>{
@@ -26,6 +27,34 @@ test("Project view exposes editable author instructions, MCP source and new chat
   assert.match(html,/MCP вызывается автоматически/);
   assert.match(html,/Обновить Google Docs/);
   assert.match(html,/Книга &lt;3/);
+});
+
+test("Project memory keeps the author's decisions and finds relevant text across the same book",()=>{
+  const project={id:"book",storyMap:"Хронология с начала романа.",
+    memoryNotes:[{title:"Ключ",text:"Марта прячет медальон. Глеб пока об этом не знает."}]};
+  const full="Другие события. ".repeat(400)+" Архивная находка. Медальон лежал в фамильной шкатулке. "+ "Другая сцена. ".repeat(400);
+  const options={project,task:"Вспомни про медальон",terms:["медальон"],budget:4000,current:"current",
+    recent:[{role:"user",content:"Медальон уже в запросе"}],
+    chats:[
+      {id:"current",projectId:"book",title:"Сегодня",messages:[{role:"user",content:"Медальон уже в запросе"}]},
+      {id:"old",projectId:"book",title:"Ранние сцены",messages:[{role:"assistant",content:full}]},
+      {id:"other",projectId:"other-book",title:"Чужая книга",messages:[{role:"user",content:"Медальон. Секрет другого романа."}]}
+    ],
+    docs:[{projectId:"book",name:"Опись",text:"Медальон достался героине от бабушки."}],
+    feedback:[
+      {id:"style",projectId:"book",kind:"good",reason:"Держать авторскую интонацию.",finalText:"Ровный авторский голос."},
+      {id:"other-style",projectId:"other-book",kind:"good",reason:"Стиль другого проекта."}
+    ]};
+  const result=projectMemoryContext(options);
+  assert.match(result,/Сюжетная карта автора\nХронология с начала романа/);
+  assert.match(result,/Утвержденные решения автора[\s\S]*Глеб пока об этом не знает/);
+  assert.match(result,/Ровный авторский голос/);
+  assert.match(result,/решения автора[\s\S]*Выписки из рабочего архива[\s\S]*Ранние сцены[\s\S]*фамильной шкатулке/i);
+  assert.match(result,/Медальон достался героине от бабушки/);
+  assert.doesNotMatch(result,/Секрет другого романа|Стиль другого проекта|Медальон уже в запросе/);
+  assert.ok(result.length<=4000);
+  assert.ok(projectMemoryContext({...options,budget:600}).length<=600);
+  assert.equal(options.chats[1].messages[0].content,full);
 });
 test("Paid chats use MCP on send without Google Drive OAuth popups or hidden prompts",async()=>{
   const [app,worker]=await Promise.all([read("../ai/app.js"),read("../proxy/freitag-modelproxy-worker.js")]);

@@ -472,10 +472,11 @@ test("book project uses the exact large master instruction and verbatim long cha
   const chapterPrompt="Глава 14 — текст и поток событий. ".repeat(1450);
   assert.ok(masterPrompt.length>26000);
   assert.ok(chapterPrompt.length>40000);
-  const fn=Function("project","state","userInstruction",source+"\nreturn modelproxyMessages;")(
+  const fn=Function("project","state","userInstruction","memoryForProject",source+"\nreturn modelproxyMessages;")(
     ()=>({id:"book-1",instruction:masterPrompt,voice:"",canon:"",scene:""}),
     {settings:{globalInstruction:""},feedback:[]},
-    v=>String(v||"")
+    v=>String(v||""),
+    ()=>""
   );
   const out=fn({projectId:"book-1",messages:[{role:"user",content:chapterPrompt}]});
   assert.deepEqual(out,[

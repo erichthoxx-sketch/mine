@@ -217,6 +217,49 @@ try {
       await page.evaluate(()=>window.finish("stop",123.45));
       await page.getByText(/Списано AITUNNEL: 123,45/).waitFor();
       console.log("Проверены отмена до оплаты, подтверждение и сумма AITUNNEL в чате");
+
+      await page.getByRole("button",{name:"В память проекта",exact:true}).last().click();
+      await page.locator("#f-field-title").fill("Происхождение медальона");
+      await page.locator("#f-field-text").fill("Марта унаследовала медальон от бабушки.");
+      await page.locator('dialog button[value="save"]').click();
+      await nav("projects");
+      await page.getByRole("button",{name:"Открыть проект",exact:true}).click();
+      await page.getByText("Происхождение медальона",{exact:true}).waitFor();
+      await page.getByText("Сюжетная карта",{exact:true}).click();
+      await page.locator("#f-project-story-map").fill("Сюжет от пролога до текущей главы");
+      await page.locator('#f-project-instructions button[type="submit"]').click();
+      await page.getByText("Твои инструкции сохранены в проекте.",{exact:true}).waitFor();
+      await page.reload();
+      await nav("projects");
+      await page.getByRole("button",{name:"Открыть проект",exact:true}).click();
+      for(const provider of ["bothub", "apimira"]){
+        await page.locator('[data-action="new-project-chat"]').click();
+        await page.locator("#f-quick-model").selectOption(provider==="bothub"?"bothub:claude-opus-5.5":"apimira");
+        await page.locator("#f-message-input").fill("Продолжи сцену с медальоном");
+        const count=await page.evaluate(()=>window.submitted.length);
+        await page.locator('#f-chat-form button[type="submit"]').click();
+        await page.waitForFunction(n=>window.submitted.length===n,count+1);
+        const payload=await page.evaluate(()=>window.submitted.at(-1));
+        assert.equal(payload.provider,provider);
+        assert.equal(payload.bookId,"fixture");
+        assert.match(payload.messages[0].content,/Сюжет от пролога до текущей главы/);
+        assert.match(payload.messages[0].content,/Марта унаследовала медальон от бабушки/);
+        assert.equal(payload.messages.at(-1).content,"Продолжи сцену с медальоном");
+        await page.evaluate(()=>window.finish("stop"));
+        await page.locator('#f-chat-form button[type="submit"]').waitFor();
+        await nav("projects");
+        await page.getByRole("button",{name:"Открыть проект",exact:true}).click();
+      }
+      console.log("Память проекта доступна в новых чатах BotHub и ApiMira");
+      await nav("settings");
+      await page.getByText("Резервные копии и мои данные",{exact:true}).click();
+      const [backup]=await Promise.all([page.waitForEvent("download"),
+        page.getByRole("button",{name:"Скачать архив JSON",exact:true}).click()]);
+      const archive=JSON.parse(await readFile(await backup.path(),"utf8"));
+      assert.equal(archive.data.projects[0].storyMap,"Сюжет от пролога до текущей главы");
+      assert.equal(archive.data.projects[0].memoryNotes[0].text,"Марта унаследовала медальон от бабушки.");
+      assert.equal(archive.data.chats.length,3);
+      assert.ok(archive.data.chats.some(c=>c.messages.some(m=>m.content==="Начало. "+rest)));
     }
     assert.deepEqual(errors,[]);
     await page.close();
