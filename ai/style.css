@@ -209,6 +209,7 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 .f-transfer #f-external-brief{min-height:220px;max-height:49dvh;font:12px/1.65 ui-monospace,Consolas,monospace!important}
 .f-transfer-actions{margin:14px 0}
 #f-flash{position:fixed;z-index:120;left:50%;bottom:26px;transform:translateX(-50%);width:max-content;max-width:min(440px,calc(100vw - 32px));border:1px solid var(--f-line);border-left:3px solid var(--f-soft-ink);border-radius:11px;padding:12px 17px;background:var(--f-paper);box-shadow:var(--f-shadow);font-size:12px;color:var(--f-ink)}
+html.app-freitag.f-chat-mode #f-flash{top:78px;right:16px;bottom:auto;left:auto;transform:none;margin:0;pointer-events:none}
 .f-mobile-nav{display:none}
 @media(max-width:1050px){
   .f-layout{grid-template-columns:218px minmax(0,1fr)}
@@ -563,6 +564,7 @@ html.app-freitag.f-chat-mode .f-compose-controls .f-btn{
     height:44px;
     min-height:44px;
     max-height:27dvh;
+    font-size:16px!important;
   }
   .f-chat-meta .f-chat-book .f-select{min-width:0;width:100%}
   .f-chat-meta .f-chat-book label{flex:none}
