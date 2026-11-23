@@ -665,7 +665,7 @@ async function generate(req, env, estimateOnly = false) {
       headers: { ...(aitunnel?aitunnelHeaders(env):{Authorization:"Bearer "+env[provider.secret],
         "Content-Type":"application/json"}), Accept:"text/event-stream",
         ...(bothubChapter?{"anthropic-version":"2023-06-01"}:{}) },
-      ...(aitunnel||bothubChapter?{redirect:"error"}:{}),
+      ...(aitunnel?{redirect:"error"}:bothubChapter?{redirect:"manual"}:{}),
       // Глава приходит постепенно и может писаться дольше пяти минут.
       body: JSON.stringify(body), signal:req.signal
     });
@@ -900,7 +900,7 @@ async function bothubPreflight(req, env) {
   try {
     upstream = await fetch(provider==="apimira"?"https://apimira.com/v1/models":BOTHUB_ANTHROPIC+"/models", {
       headers: { Authorization: "Bearer " + key, ...(provider==="bothub"?{"anthropic-version":"2023-06-01"}:{}) },
-      redirect:"error",
+      ...(provider==="bothub"?{redirect:"manual"}:{}),
       signal: AbortSignal.timeout(8000)
     });
   } catch { return fail(req, 502, "Провайдер не ответил на проверку каталога моделей."); }

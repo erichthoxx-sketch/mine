@@ -128,6 +128,7 @@ test("BotHub Chapters ignore reasoning and keep a truncated Anthropic stream inc
     assert.equal(path,"/api/v2/anthropic/v1/messages");
     assert.equal(init.headers.Authorization,"Bearer fixture-b");
     assert.equal(init.headers["anthropic-version"],"2023-06-01");
+    assert.equal(init.redirect,"manual");
     const raw=[{type:"ping"},{type:"content_block_delta",delta:{type:"thinking_delta",thinking:"внутренний текст"}},
       {type:"content_block_delta",delta:{type:"text_delta",text:"Начало главы"}},
       {type:"message_delta",delta:{stop_reason:"end_turn"}}];
@@ -148,6 +149,7 @@ test("BotHub preflight checks only the Anthropic model catalog with the saved ke
     assert.equal(path,"/api/v2/anthropic/v1/models");
     assert.equal(init.headers.Authorization,"Bearer fixture-b");
     assert.equal(init.method,undefined);
+    assert.equal(init.redirect,"manual");
     return Response.json({data:[{id:"claude-opus-5.5"}]});
   });
   const answer=await request("preflight?provider=bothub&model=claude-opus-5.5");
