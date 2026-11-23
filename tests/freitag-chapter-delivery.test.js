@@ -111,13 +111,17 @@ test("AITUNNEL quotes the exact payload and produces one private stream only aft
 });
 
 test("a 403 creating a Batch is separate from its catalog and file upload",async t=>{
-  const calls=mockNetwork(t,path=>{
+  const calls=mockNetwork(t,async(path,init)=>{
     if(path.endsWith("/models"))return Response.json({data:[{id:"claude-opus-5.5"}]});
-    if(path.endsWith("/files"))return Response.json({id:"fixture-file"});
+    if(path.endsWith("/files")){
+      const file=await init.body.get("file").text();
+      assert.equal(JSON.parse(file).body.max_tokens,32000);
+      return Response.json({id:"fixture-file"});
+    }
     return Response.json({error:{code:"FORBIDDEN",message:"private prompt and credential"}},
       {status:403,headers:{"cf-ray":"9012345678abcdef-FRA"}});
   });
-  const r=await request("batch-start",chapter);
+  const r=await request("batch-start",{...chapter,outputTokenLimit:32000});
   assert.equal(r.status,403);
   const detail=await r.json();
   assert.equal(detail.upstreamStatus,403);
@@ -125,6 +129,25 @@ test("a 403 creating a Batch is separate from its catalog and file upload",async
   assert.match(detail.error,/создание Batch.+FORBIDDEN/);
   assert.doesNotMatch(JSON.stringify(detail),/private prompt|credential/);
   assert.deepEqual(calls,["/v1/batches/models","/v1/files","/v1/batches"]);
+});
+
+test("expanded chapter limits stay within BotHub and reach both Claude models",async t=>{
+  const sent=[];
+  mockNetwork(t,(path,init)=>{
+    assert.equal(path,"/api/v2/anthropic/v1/messages");
+    const {model,max_tokens}=JSON.parse(init.body);
+    sent.push([model,max_tokens]);
+    return new Response("data: [DONE]\n\n",{headers:{"Content-Type":"text/event-stream"}});
+  });
+  const cases=[["claude-opus-5.5",20000],["claude-opus-5.5",32000],["claude-sonnet-5.5",32000]];
+  for(const [model,outputTokenLimit] of cases){
+    const reply=await request("chat",{...chapter,model,outputTokenLimit});
+    assert.equal(reply.status,200);
+    await reply.text();
+  }
+  assert.equal((await request("chat",{...chapter,outputTokenLimit:64000})).status,400);
+  assert.equal((await request("chat",{...chapter,provider:"apimira",outputTokenLimit:32000})).status,400);
+  assert.deepEqual(sent,cases);
 });
 
 test("a 524 before any chapter bytes reports the upstream and never resubmits",async t=>{

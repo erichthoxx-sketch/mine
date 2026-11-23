@@ -254,12 +254,22 @@ try {
       for(const provider of ["bothub", "apimira"]){
         await page.locator('[data-action="new-project-chat"]').click();
         await page.locator("#f-quick-model").selectOption(provider==="bothub"?"bothub:claude-opus-5.5":"apimira");
+        const limit=page.locator("#f-chapter-limit");
+        if(provider==="bothub"){
+          assert.equal(await limit.inputValue(),"14000");
+          await limit.selectOption("20000");
+          await limit.selectOption("32000");
+        }else{
+          await limit.locator('option[value="32000"]').waitFor({state:"detached"});
+          assert.equal(await limit.inputValue(),"14000");
+        }
         await page.locator("#f-message-input").fill("Продолжи сцену с медальоном");
         const count=await page.evaluate(()=>window.submitted.length);
         await page.locator('#f-chat-form button[type="submit"]').click();
         await page.waitForFunction(n=>window.submitted.length===n,count+1);
         const payload=await page.evaluate(()=>window.submitted.at(-1));
         assert.equal(payload.provider,provider);
+        assert.equal(payload.outputTokenLimit,provider==="bothub"?32000:14000);
         assert.equal(payload.bookId,"fixture");
         assert.match(payload.messages[0].content,/Сюжет от пролога до текущей главы/);
         assert.match(payload.messages[0].content,/Марта унаследовала медальон от бабушки/);

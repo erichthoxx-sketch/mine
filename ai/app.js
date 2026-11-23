@@ -12,6 +12,9 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":
 const uid = () => (globalThis.crypto?.randomUUID?.() || "id-" + Date.now() + "-" + Math.random().toString(36).slice(2));
 const stamp = () => new Date().toISOString();
 const userInstruction = v => typeof v === "string" ? v : "";
+const DEFAULT_CHAPTER_LIMIT=14000;
+const CHAPTER_LIMITS=[4500,9000,DEFAULT_CHAPTER_LIMIT];
+const BOTHUB_CHAPTER_LIMITS=[...CHAPTER_LIMITS,20000,32000];
 const WRITING_MODES = {
   dialog: {name:"Диалог",instruction:"Отвечай кратко и конкретно. При нехватке сведений сообщи, каких именно.",maxTokens:320},
   draft: {name:"Написать сцену",instruction:"Ты работаешь над художественной сценой. Пиши сразу прозу, не вступай с объяснениями. Соблюдай канон, POV, время, место, характеры, заданный стиль и последнюю сцену. Не изобретай события и родственные связи без запроса. Если нет нужной завязки, задай один конкретный вопрос.",maxTokens:700},
@@ -20,7 +23,7 @@ const WRITING_MODES = {
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
-  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",sceneOutputTokens:14000,globalInstruction:"",context:4096}, theme:"auto"});
+  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",sceneOutputTokens:DEFAULT_CHAPTER_LIMIT,globalInstruction:"",context:4096}, theme:"auto"});
 let state=blank(), tab="chat", projectHomeId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null, batchCheck=null;
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -232,6 +235,11 @@ function renderSettings(){
     '</form></div>';
 }
 const activeBotHubModel=()=>state.settings.bothubModel==="claude-opus-5.5"?"claude-opus-5.5":"claude-sonnet-5.5";
+const chapterLimitsFor=provider=>provider==="bothub"?BOTHUB_CHAPTER_LIMITS:CHAPTER_LIMITS;
+function chapterOutputLimit(provider){
+  const limit=Number(state.settings.sceneOutputTokens);
+  return chapterLimitsFor(provider).includes(limit)?limit:DEFAULT_CHAPTER_LIMIT;
+}
 const activeClaudeName=()=>activeBotHubModel()==="claude-opus-5.5"?"Claude Opus 5.5":"Claude Sonnet 5.5";
 const paidProviders=["modelproxy","bothub","apimira","aitunnel"];
 const providerNames={modelproxy:"ModelProxy",bothub:"BotHub",apimira:"ApiMira",aitunnel:"AITUNNEL"};
@@ -251,6 +259,9 @@ const modelChoices=()=>[
   ["ollama","Qwen · локально"]
 ].map(([id,label])=>'<option value="'+id+'" '+(currentModelChoice()===id?"selected":"")+'>'+label+'</option>').join("");
 function renderChat(){
+  const provider=state.settings.provider, outputLimit=chapterOutputLimit(provider);
+  const chapterOptions=chapterLimitsFor(provider).map(limit=>'<option value="'+limit+'" '+
+    (limit===outputLimit?"selected":"")+'>'+limit.toLocaleString("ru-RU")+'</option>').join("");
   const c=chat();
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
   const p=project(c?.projectId||state.activeProjectId);
@@ -328,7 +339,9 @@ function renderChat(){
       '<div class="f-compose-surface"><div class="f-writing-bar">'+
       '<label class="f-compact-label" for="f-quick-model">Модель</label>'+
       '<select id="f-quick-model" class="f-select f-quick-model" aria-label="Модель для следующего ответа" '+(busy?"disabled":"")+'>'+modelChoices()+'</select>'+
-      (p?'<span id="f-chapter-limit-wrap"><label class="f-compact-label" for="f-chapter-limit">Лимит главы</label>'+'<select class="f-select" id="f-chapter-limit" title="Максимум выходных токенов. Это верхний предел, не заданная длина главы.">'+[[4500,"4 500"],[9000,"9 000"],[14000,"14 000"]].map(([n,label])=>'<option value="'+n+'" '+(Number(state.settings.sceneOutputTokens||14000)===n?"selected":"")+'>'+label+'</option>').join("")+'</select></span>':'<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
+      (p?'<span id="f-chapter-limit-wrap"><label class="f-compact-label" for="f-chapter-limit">Лимит главы</label>'+
+      '<select class="f-select" id="f-chapter-limit" title="Верхняя граница ответа в токенах" '+(busy?"disabled":"")+'>'+chapterOptions+'</select></span>':
+      '<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
       '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>')+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
@@ -813,6 +826,7 @@ async function sendBatchChapter(text){
     return notice("В этом чате уже ожидается результат Batch. Проверь готовность главы.");
   if(state.settings.provider!=="bothub"||activeBotHubModel()!=="claude-opus-5.5")
     return notice("Batch-глава поддерживается для Claude Opus 5.5 через BotHub.");
+  const outputLimit=chapterOutputLimit("bothub");
   if(!confirm("Отправить главу в BotHub как платную фоновую задачу? После принятия появится номер задачи. Окно выполнения — до 24 часов."))
     return;
   const gateway=claudeGateway(state.settings.workerUrl);
@@ -845,7 +859,7 @@ async function sendBatchChapter(text){
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
         mode:"draft",messages,bookId:p.masterBookId||null,
-        outputTokenLimit:Number(state.settings.sceneOutputTokens)||14000})
+        outputTokenLimit:outputLimit})
     });
     const result=await response.json().catch(()=>({}));
     if(!response.ok||!result.ok||!result.batchId)
@@ -896,7 +910,7 @@ async function checkBatchChapter(){
 async function sendMessage(text){
   if(busy||preparingPaid||!text.trim())return;
   const provider=state.settings.provider, selectedModel=activeBotHubModel();
-  const outputLimit=Number(state.settings.sceneOutputTokens)||14000;
+  const outputLimit=chapterOutputLimit(provider);
   const isPaidProvider=paidProviders.includes(provider);
   const endpoint=safeEndpoint(state.settings.endpoint);
   const gateway=claudeGateway(state.settings.workerUrl);
@@ -912,8 +926,9 @@ async function sendMessage(text){
       await master.init();
       if(!master.user)throw Error("Один раз войди в Мастерскую в разделе «Книги». Затем книги доступны через MCP без повторных входов.");
       idToken=await master.idToken();
-      if(selectedChat!==draftKey() || provider!==state.settings.provider || selectedModel!==activeBotHubModel())
-        return notice("Выбор чата или модели изменился. Отправь задание из нужного чата.");
+      if(selectedChat!==draftKey() || provider!==state.settings.provider || selectedModel!==activeBotHubModel() ||
+        outputLimit!==chapterOutputLimit(provider))
+        return notice("Чат, модель или лимит изменились. Проверь параметры и отправь задание снова.");
     }catch(e){return notice("Авторизация: "+e.message);}
     finally{preparingPaid=false;}
   }
@@ -935,7 +950,7 @@ async function sendMessage(text){
         "Content-Type":"application/json"},body:JSON.stringify(payload)});
       const estimate=await res.json().catch(()=>({}));
       if(!res.ok||!estimate.ok)throw Error(estimate.error||"Не удалось получить бесплатную оценку.");
-      if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==(Number(state.settings.sceneOutputTokens)||14000))
+      if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==chapterOutputLimit(provider))
         return notice("Чат или настройки изменились. Получи новую оценку.");
       if(!estimate.ready)throw Error(estimate.budgetRub===null?"Задай бюджет отдельного API-ключа AITUNNEL.":
         "Оценка "+rub(estimate.estimateRub)+" выше доступного остатка. Генерация не началась.");
@@ -1426,7 +1441,7 @@ document.addEventListener("change",async(e)=>{
   }
   if(e.target.id==="f-chapter-limit"){
     const limit=Number(e.target.value);
-    if(![4500,9000,14000].includes(limit))return;
+    if(!chapterLimitsFor(state.settings.provider).includes(limit))return;
     state.settings.sceneOutputTokens=limit;
     await save();return;
   }

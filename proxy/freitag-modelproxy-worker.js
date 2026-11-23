@@ -8,6 +8,8 @@ const AITUNNEL_UPSTREAM = "amazon-bedrock";
 const BOTHUB_ANTHROPIC = "https://bothub.chat/api/v2/anthropic/v1";
 // Only these BotHub model IDs can be selected from Freitag AI.
 const BOTHUB_MODELS = Object.freeze(["claude-sonnet-5.5", "claude-opus-5.5"]);
+const CHAPTER_LIMITS = [4500, 9000, 14000];
+const BOTHUB_CHAPTER_LIMITS = [...CHAPTER_LIMITS, 20000, 32000];
 const PROVIDERS = Object.freeze({
   modelproxy: Object.freeze({
     name: "ModelProxy", model: MODEL, secret: "MODELPROXY_API_KEY",
@@ -740,7 +742,7 @@ async function generate(req, env, estimateOnly = false) {
   const lastMessage=entries.at(-1);
   const greeting=lastMessage?.role==="user" && isGreeting(lastMessage.content);
   // A greeting in an open manuscript project must not bill the full master
-  // prompt, long chat history, canon or 14k-token chapter allocation.
+  // prompt, long chat history, canon or tokens reserved for a chapter.
   const messages = greeting?[{role:"user",content:lastMessage.content}]:
     entries.map(x => ({ role: x.role, content: x.content }));
   const useMcp=mcpConfigured(env);
@@ -749,8 +751,9 @@ async function generate(req, env, estimateOnly = false) {
   // ceiling permits a full chapter; it never starts automatic continuations.
   // Reject arbitrary values rather than letting the browser request unlimited output.
   const requestedDraftLimit=Number(input.outputTokenLimit||4500);
-  if(isDraft && ![4500,9000,14000].includes(requestedDraftLimit))
-    return fail(req,400,"Недопустимый лимит ответа. Выбери 4500, 9000 или 14000.");
+  const chapterLimits=providerId==="bothub"?BOTHUB_CHAPTER_LIMITS:CHAPTER_LIMITS;
+  if(isDraft && !chapterLimits.includes(requestedDraftLimit))
+    return fail(req,400,"Выбери доступный лимит ответа в токенах ("+chapterLimits.join(", ")+").");
   const maxTokens=greeting?128:isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
   const bothubChapter = providerId === "bothub" && isDraft;
   if(input.bookId&&!greeting){
@@ -917,9 +920,9 @@ async function batchStart(req,env){
     if(utf8(raw).length>340000)return fail(req,413,"Запрос слишком велик.");
     input=JSON.parse(raw);
   }catch{return fail(req,400,"Некорректный JSON запроса.");}
-  const entries=input?.messages, bookId=input?.bookId||"";
+  const entries=input?.messages, bookId=input?.bookId||"",outputLimit=Number(input?.outputTokenLimit);
   if(input?.provider!=="bothub"||input.model!=="claude-opus-5.5"||input.mode!=="draft"||
-     ![4500,9000,14000].includes(Number(input.outputTokenLimit))||
+     !BOTHUB_CHAPTER_LIMITS.includes(outputLimit)||
      !Array.isArray(entries)||!entries.length||entries.length>16||
      entries.some(m=>!["system","user","assistant"].includes(m?.role)||
        typeof m.content!=="string"||m.content.length>130000)||
@@ -941,7 +944,7 @@ async function batchStart(req,env){
       messages.unshift({role:"system",content:source});
     }catch(e){return fail(req,424,"Не удалось загрузить главу: "+e.message);}
   }
-  const body={model:selected,messages,max_tokens:Number(input.outputTokenLimit),stream:false};
+  const body={model:selected,messages,max_tokens:outputLimit,stream:false};
   // One JSONL row, one model completion; the provider processes it outside
   // Cloudflare's 125s synchronous read timeout.
   const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",
@@ -1097,6 +1100,7 @@ export default {
           configured: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
           bothubConfigured: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
           bothubChapterApi: "anthropic-messages",
+          bothubChapterOutputLimits: BOTHUB_CHAPTER_LIMITS,
           apimiraConfigured: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
           aitunnelConfigured: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID,
           bookToolsSupported: mcpConfigured(env),
