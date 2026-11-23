@@ -41,8 +41,21 @@ try {
         }
         return route.fulfill({json:data});
       }
-      if(u.pathname==="/ai/master-sync.js")return route.fulfill({contentType:"text/javascript",body:
-        'export const master={ready:true,user:{},books:[{id:"fixture",title:"Тестовая книга"}],init:async()=>{},refresh:async()=>{},canonicalText:()=>"",idToken:async()=>"test"};'});
+      if(u.pathname==="/ai/master-sync.js")return route.fulfill({contentType:"text/javascript",body:`
+        const store={
+          status:async()=>({current:window.testCloud?.manifest||null}),
+          save:async(value,expected)=>{
+            if((window.testCloud?.manifest.id||null)!==expected)throw Error("Unexpected archive version");
+            const manifest={id:"fixture-current",savedAt:"2026-11-23T10:00:00Z"};
+            window.testCloud={value:structuredClone(value),manifest,currentId:manifest.id,usedPrevious:false};
+            return manifest;
+          },
+          load:async()=>structuredClone(window.testCloud)
+        };
+        export const master={ready:true,user:{uid:"fixture"},books:[{id:"fixture",title:"Тестовая книга"}],
+          init:async()=>{},refresh:async()=>{},canonicalText:()=>"",idToken:async()=>"test",
+          openFullArchive:async()=>({uid:"fixture",store})};
+      `});
       let path=u.pathname==="/ai/"?"ai/index.html":u.pathname.slice(1);
       if(path==="workshop/bear.svg")path="writer/bear.svg";
       assert.match(path,/^(ai|writer|js|css)\//);
@@ -187,12 +200,18 @@ try {
     assert.deepEqual(await page.evaluate(()=>window.submitted),[]);
     if(width===1440){
       for(const reason of ["length",null,"content_filter"]){
-        await page.locator("#f-message-input").fill("Второй тест");
+        await page.locator("#f-message-input").fill(reason==="length"?"Второй тест. Не менее 18 000 знаков.":"Второй тест");
         await page.locator('#f-chat-form button[type="submit"]').click();
         await page.waitForFunction(n=>window.submitted.length===n,["length",null,"content_filter"].indexOf(reason)+1);
         await page.locator(".assistant .f-msg-text").last().filter({hasText:"Начало."}).waitFor();
         await page.evaluate(r=>window.finish(r),reason);
         await page.locator(".assistant").last().filter({hasText:"Генерация не завершена"}).waitFor();
+        if(reason==="length"){
+          const stats=await page.locator(".assistant").last().locator(".f-draft-delivery").innerText();
+          assert.match(stats,/Задано 18\s000/);
+          assert.match(stats,/Не хватает 17\s993/);
+          assert.match(stats,/Достигнут лимит 14\s000 токенов/);
+        }
       }
       await nav("settings");
       await page.locator("#f-provider").selectOption("aitunnel");
@@ -260,6 +279,30 @@ try {
       assert.equal(archive.data.projects[0].memoryNotes[0].text,"Марта унаследовала медальон от бабушки.");
       assert.equal(archive.data.chats.length,3);
       assert.ok(archive.data.chats.some(c=>c.messages.some(m=>m.content==="Начало. "+rest)));
+
+      const modelCalls=await page.evaluate(()=>window.submitted.length);
+      await page.getByRole("button",{name:"Включить облачную копию",exact:true}).click();
+      await page.locator("#f-cloud-status").filter({hasText:"Проверенная копия в Firebase"}).waitFor();
+      const cloud=await page.evaluate(()=>window.testCloud.value);
+      assert.deepEqual(cloud.data.chats,archive.data.chats);
+      assert.deepEqual(cloud.data.projects,archive.data.projects);
+      assert.equal(cloud.data.settings.globalInstruction,instruction);
+      assert.equal(cloud.data.settings.workerUrl,undefined);
+      assert.equal(cloud.data.settings.endpoint,undefined);
+      await page.locator("#f-global").fill("Редакция только на этом компьютере.");
+      await page.getByRole("button",{name:"Сохранить настройки",exact:true}).click();
+      await page.getByText("Резервные копии и мои данные",{exact:true}).click();
+      page.once("dialog",dialog=>dialog.accept());
+      await page.getByRole("button",{name:"Восстановить из облака",exact:true}).click();
+      await page.locator("#f-flash").filter({hasText:"Восстановлена копия от"}).waitFor();
+      assert.equal(await page.locator("#f-global").inputValue(),instruction);
+      await page.getByText("Резервные копии и мои данные",{exact:true}).click();
+      page.once("dialog",dialog=>dialog.accept());
+      await page.getByRole("button",{name:"Вернуть данные до восстановления",exact:true}).click();
+      await page.locator("#f-flash").filter({hasText:"Локальный архив возвращён"}).waitFor();
+      assert.equal(await page.locator("#f-global").inputValue(),"Редакция только на этом компьютере.");
+      assert.equal(await page.evaluate(()=>window.submitted.length),modelCalls);
+      console.log("Полный архив, восстановление и возврат локальных данных проверены на тестовом Firebase");
     }
     assert.deepEqual(errors,[]);
     await page.close();

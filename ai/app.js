@@ -3,6 +3,7 @@ import { master } from './master-sync.js';
 import { renderMarkdown } from './markdown.js';
 import { projectHomeHtml } from './project-view.js';
 import { projectMemoryContext } from './project-context.js';
+import { draftDelivery, draftDeliveryLabel } from './draft-delivery.js';
 import { ensureDriveAccess, refreshLinkedBook } from './live-context.js';
 // Чаты, проекты и текстовые материалы хранятся только в IndexedDB этого браузера.
 // Никаких ключей и рукописей в репозитории.
@@ -23,8 +24,12 @@ const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, ac
 let state=blank(), tab="chat", projectHomeId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null, batchCheck=null;
 const MAX_DOC=2*1024*1024;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
-const getDb=()=>new Promise((resolve,reject)=>{const r=db.transaction("data").objectStore("data").get("state");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
-const putDb=(v)=>new Promise((resolve,reject)=>{const t=db.transaction("data","readwrite");t.objectStore("data").put(v,"state");t.oncomplete=resolve;t.onerror=()=>reject(t.error);});
+const getDb=(key="state")=>new Promise((resolve,reject)=>{const r=db.transaction("data").objectStore("data").get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+const putDb=(v,rollback)=>new Promise((resolve,reject)=>{
+  const t=db.transaction("data","readwrite"),store=t.objectStore("data");
+  if(rollback)store.put(rollback,"before-cloud-restore");
+  store.put(v,"state");t.oncomplete=resolve;t.onabort=()=>reject(t.error);t.onerror=()=>reject(t.error);
+});
 let saveChain=Promise.resolve();
 const save=()=>{const snapshot=structuredClone(state); saveChain=saveChain.catch(()=>{}).then(()=>putDb(snapshot)).catch(e=>notice("Не удалось сохранить данные: "+e.message));return saveChain;};
 const notice=(msg)=>{let el=$("#f-flash");if(!el){el=document.createElement("div");el.id="f-flash";el.className="f-notice f-flash";document.body.appendChild(el);}el.textContent=msg;el.hidden=false;clearTimeout(notice.timer);notice.timer=setTimeout(()=>el.hidden=true,7000);};
@@ -43,6 +48,31 @@ const rememberDraft=(text)=>{
 const setTheme=()=>{document.documentElement.setAttribute("data-theme",state.theme==="auto"?(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"):state.theme);};
 const titleLine=(title,sub="",right="")=>'<div class="f-heading"><div><h1 class="f-title">'+esc(title)+'</h1>'+(sub?'<p class="f-subtitle">'+esc(sub)+'</p>':"")+'</div>'+right+'</div>';
 const empty=(title,sub)=>'<div class="f-empty"><strong>'+esc(title)+'</strong>'+esc(sub)+'</div>';
+const CLOUD_PREFS_KEY="freitag-cloud-archive";
+const ARCHIVE_INTERVAL=60*60*1000;
+let cloudPrefs={},cloudPending=false,cloudStatus="",lastArchiveCheck=0;
+try{cloudPrefs=JSON.parse(localStorage.getItem(CLOUD_PREFS_KEY))||{};}catch{}
+function cloudBackupEnabled(){
+  return cloudPrefs.enabled===true&&cloudPrefs.uid===master.user?.uid;
+}
+function setCloudPrefs(prefs){
+  cloudPrefs=prefs;
+  try{localStorage.setItem(CLOUD_PREFS_KEY,JSON.stringify(prefs));return true;}
+  catch{return false;}
+}
+function cloudBackupStatus(){
+  if(cloudStatus)return cloudStatus;
+  if(!cloudBackupEnabled())return "Автокопия на этом устройстве выключена.";
+  return "Последняя копия в Firebase: "+new Date(cloudPrefs.savedAt).toLocaleString("ru-RU")+".";
+}
+function updateCloudControls(){
+  const status=$("#f-cloud-status"),button=$('[data-action="archive-save"]'),pause=$('[data-action="archive-pause"]');
+  if(status)status.textContent=cloudBackupStatus();
+  if(button)button.textContent=cloudBackupEnabled()?"Сохранить сейчас":"Включить облачную копию";
+  if(pause)pause.hidden=!cloudBackupEnabled();
+  for(const control of document.querySelectorAll('[data-action^="archive-"]'))control.disabled=cloudPending;
+  const undo=$('[data-action="archive-undo"]');if(undo)undo.hidden=!cloudPrefs.undo;
+}
 function renderSidebar(){
   const el=$("#sidebar-content");
   if(tab==="chat"){
@@ -181,13 +211,22 @@ function renderSettings(){
       '<option value="'+x[0]+'" '+(x[0]===state.theme?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></section>'+
     '<details class="f-settings-card f-settings-storage"><summary>Резервные копии и мои данные</summary>'+
     '<div class="f-fold-body">'+
-    '<p class="f-muted">Чаты и заметки хранятся в этом браузере. Полный JSON-архив можно скачать. Память проектов и образцы можно вручную сохранить в Firebase.</p>'+
+    '<h2>Облачная копия Firebase</h2>'+
+    '<p class="f-muted">В твоём аккаунте Firebase сохраняются проекты, чаты, черновики, материалы и память. Сохраняются две последние версии. Пока Freitag открыта, автокопия проверяет изменения раз в час.</p>'+
+    '<p class="f-muted" id="f-cloud-status" role="status">'+esc(cloudBackupStatus())+'</p>'+
+    '<div class="f-row"><button type="button" class="f-btn primary" data-action="archive-save" '+(cloudPending?"disabled":"")+'>'+(cloudBackupEnabled()?"Сохранить сейчас":"Включить облачную копию")+'</button>'+
+    '<button type="button" class="f-btn" data-action="archive-load" '+(cloudPending?"disabled":"")+'>Восстановить из облака</button>'+
+    '<button type="button" class="f-inline-btn" data-action="archive-load-previous" '+(cloudPending?"disabled":"")+'>Предыдущая версия</button>'+
+    '<button type="button" class="f-inline-btn" data-action="archive-pause" '+(cloudBackupEnabled()?"":"hidden")+' '+(cloudPending?"disabled":"")+'>Выключить автокопию</button>'+
+    '<button type="button" class="f-inline-btn" data-action="archive-undo" '+(cloudPrefs.undo?"":"hidden")+' '+(cloudPending?"disabled":"")+'>Вернуть данные до восстановления</button></div>'+
+    '<p class="f-muted">Связанные Google Docs хранятся в Мастерской. Архив сохраняет ссылки на них.</p>'+
     '<p class="f-muted">Принятых образцов: '+state.feedback.filter(x=>x.kind==="good").length+
     ' · отклоненных: '+state.feedback.filter(x=>x.kind==="bad").length+'</p>'+
     '<div class="f-row"><button type="button" class="f-btn" data-action="export">Скачать архив JSON</button>'+
     '<label class="f-btn f-file-label">Импортировать JSON<input id="f-import" type="file" accept=".json,application/json" hidden></label></div>'+
-    '<div class="f-row"><button type="button" class="f-btn" data-action="cloud-save">Сохранить память в Firebase</button>'+
-    '<button type="button" class="f-btn" data-action="cloud-load">Восстановить из Firebase</button></div>'+
+    '<details class="f-settings-fold"><summary>Копии только памяти</summary>'+
+    '<div class="f-row"><button type="button" class="f-btn" data-action="cloud-save">Сохранить память и образцы</button>'+
+    '<button type="button" class="f-btn" data-action="cloud-load">Восстановить память и образцы</button></div></details>'+
     '</div></details>'+
     '<div class="f-settings-save"><button type="submit" class="f-btn primary">Сохранить настройки</button></div>'+
     '</form></div>';
@@ -234,6 +273,7 @@ function renderChat(){
     (longPrompt?'<details class="f-prompt" data-index="'+i+'" '+(expanded.has(String(i))?"open":"")+'><summary>Задание <span>'+text.length.toLocaleString("ru-RU")+' зн.</span></summary>'+
         message+'</details>':message)+
     (Number.isFinite(m.costRub)?'<p class="f-mini">Списано AITUNNEL: '+esc(rub(m.costRub))+'</p>':"")+
+    (Number.isSafeInteger(m.delivery?.characters)?'<p class="f-mini f-draft-delivery">'+esc(draftDeliveryLabel(m.delivery))+'</p>':"")+
     (m.receiving && !busy?'<p class="f-mini">Получен фрагмент. Завершение главы не подтверждено.</p>':"")+
     (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
       '<div class="f-feedback-actions"><button type="button" class="f-inline-btn" data-action="copy-answer" data-i="'+i+'">Копировать</button>'+
@@ -998,6 +1038,7 @@ async function sendMessage(text){
     pending+=decoder.decode();
     if(pending.trim())consume(pending.trimEnd());
     if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты у провайдера.");
+    if(isPaidProvider&&requestMode==="draft")assistant.delivery=draftDelivery(msg,assistant.content,finishReason,outputLimit);
     if(isPaidProvider&&(!streamFinished||(finishReason&&finishReason!=="stop"))){
       // Preserve the paid partial chapter rather than pretending that a broken
       // stream or max_tokens cutoff is a complete manuscript.
@@ -1018,6 +1059,83 @@ async function sendMessage(text){
 function download(name,content,type="application/json;charset=utf-8"){
   const blob=new Blob([content],{type}),url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+function archiveSettings(settings={}){
+  const keys=["provider","model","bothubModel","sceneOutputTokens","globalInstruction","context"];
+  return Object.fromEntries(keys.filter(key=>["string","number"].includes(typeof settings[key]))
+    .map(key=>[key,settings[key]]));
+}
+function fullArchiveValue(){
+  const {projects,chats,docs,feedback,drafts,activeProjectId,activeChatId,theme,settings}=state;
+  return {app:"FreitagAI",version:1,data:{projects,chats,docs,feedback,drafts,activeProjectId,activeChatId,theme,
+    settings:archiveSettings(settings)}};
+}
+async function saveCloudArchive(manual){
+  if(cloudPending||busy||preparingPaid){
+    if(manual)notice("Дождись завершения текущей операции.");
+    return;
+  }
+  if(!manual&&(!cloudBackupEnabled()||!navigator.onLine||
+    Date.now()-Math.max(lastArchiveCheck,Date.parse(cloudPrefs.savedAt)||0)<ARCHIVE_INTERVAL))return;
+  lastArchiveCheck=Date.now();
+  cloudPending=true;cloudStatus="Сохраняю и проверяю копию в Firebase…";updateCloudControls();
+  try{
+    const {uid,store}=await master.openFullArchive();
+    if(!manual&&uid!==cloudPrefs.uid){cloudStatus="Вход изменился. Автокопия приостановлена.";return;}
+    let expected=cloudPrefs.uid===uid?cloudPrefs.id||null:null;
+    if(manual){
+      const remote=await store.status(),id=remote.current?.id||null;
+      if(id&&id!==expected&&!confirm("В Firebase есть копия с другого устройства от "+
+        new Date(remote.current.savedAt).toLocaleString("ru-RU")+
+        ". Сделать текущие данные новой копией? Прежняя будет доступна для восстановления.")){
+        cloudStatus="Копия в Firebase сохранена без изменений.";return;
+      }
+      expected=id;
+    }
+    const saved=await store.save(structuredClone(fullArchiveValue()),expected);
+    const persisted=setCloudPrefs({uid,id:saved.id,savedAt:saved.savedAt,enabled:true,undo:!!cloudPrefs.undo});
+    cloudStatus="Проверенная копия в Firebase от "+new Date(saved.savedAt).toLocaleString("ru-RU")+".";
+    if(!persisted)cloudStatus+=" Автокопия включена до закрытия вкладки.";
+    if(manual)notice(cloudStatus);
+  }catch(err){
+    if(err.code==="archive-conflict")setCloudPrefs({...cloudPrefs,enabled:false});
+    cloudStatus="Облако: "+err.message;
+    if(manual)notice(cloudStatus);
+  }finally{cloudPending=false;updateCloudControls();}
+}
+async function applyArchive(next,rollback){
+  const app=$("#app");
+  app.inert=true;
+  clearTimeout(draftSaveTimer);
+  try{
+    await saveChain;
+    await putDb(next,rollback);
+    state=next;projectHomeId=null;pendingMode=null;
+  }finally{app.inert=false;}
+}
+async function restoreCloudArchive(previous){
+  if(cloudPending||busy||preparingPaid)return notice("Дождись завершения текущей операции.");
+  cloudPending=true;cloudStatus="Проверяю облачную копию…";updateCloudControls();
+  try{
+    const {uid,store}=await master.openFullArchive();
+    const {value,manifest,currentId,usedPrevious}=await store.load(previous);
+    if(busy||preparingPaid)throw Error("Сначала дождись завершения генерации.");
+    const source=new Date(manifest.savedAt).toLocaleString("ru-RU");
+    const data=value.data;
+    const label=previous?"Выбрана предыдущая версия от ":usedPrevious?
+      "Последняя версия недоступна. Найдена предыдущая от ":"Найдена копия от ";
+    const message=label+source+
+      " · "+data.chats.length+" чатов, "+data.projects.length+" проектов. Восстановить её на этом устройстве?"+
+      " Freitag сохранит текущие данные для отмены восстановления.";
+    if(!confirm(message)){cloudStatus="Восстановление отменено.";return;}
+    const next={...blank(),...data,settings:{...state.settings,...archiveSettings(data.settings)}};
+    await applyArchive(next,structuredClone(state));
+    setCloudPrefs({uid,id:currentId,savedAt:manifest.savedAt,
+      enabled:!usedPrevious&&cloudPrefs.uid===uid&&cloudPrefs.enabled===true,undo:true});
+    cloudStatus="Восстановлена копия от "+source+".";
+    render();notice(cloudStatus);
+  }catch(err){cloudStatus="Облако: "+err.message;notice(cloudStatus);}
+  finally{cloudPending=false;updateCloudControls();}
 }
 async function readTextFile(file){
   if(!file||file.size>MAX_DOC)throw new Error("Файл слишком большой (максимум 2 МБ).");
@@ -1194,6 +1312,28 @@ document.addEventListener("click",async(e)=>{
     await save();render();notice("Решение убрано из памяти проекта.");
   }
   if(a==="open-settings"){tab="settings";render();}
+  if(a==="archive-save")await saveCloudArchive(true);
+  if(a==="archive-load")await restoreCloudArchive();
+  if(a==="archive-load-previous")await restoreCloudArchive(true);
+  if(a==="archive-pause"){
+    setCloudPrefs({...cloudPrefs,enabled:false});
+    cloudStatus="Автокопия выключена. Копии в Firebase доступны для восстановления.";updateCloudControls();
+  }
+  if(a==="archive-undo"){
+    if(cloudPending||busy||preparingPaid)return notice("Дождись завершения текущей операции.");
+    cloudPending=true;updateCloudControls();
+    try{
+      const old=await getDb("before-cloud-restore");
+      if(!old)throw Error("Предыдущий локальный архив недоступен.");
+      if(busy||preparingPaid)throw Error("Сначала дождись завершения генерации.");
+      if(!confirm("Вернуть сохранённые локальные данные? Для отмены этого действия можно снова восстановить копию Firebase."))return;
+      await applyArchive(old,structuredClone(state));
+      setCloudPrefs({...cloudPrefs,enabled:false,undo:false});
+      cloudStatus="Локальный архив возвращён. Автокопия выключена.";
+      render();notice(cloudStatus);
+    }catch(err){notice(err.message);}
+    finally{cloudPending=false;updateCloudControls();}
+  }
   if(a==="cloud-save"){
     if(!confirm("Сохранить проекты, канон и одобренные/отклонённые примеры в твой Firebase? Чаты не загружаются."))return;
     try{const res=await master.saveMemory(state.projects,state.feedback);notice("Память сохранена в Firebase: "+res.projectIds.length+" проектов, "+res.feedbackIds.length+" примеров.");}
@@ -1334,7 +1474,8 @@ document.addEventListener("keydown",e=>{
   render();
   // Reuse an existing Firebase session and silently load the books list.
   // This never starts Google Drive OAuth and does not send a paid model request.
-  master.init().then(async()=>{if(master.user){await master.refresh();if(tab==="projects")render();}}).catch(()=>{});
+  master.init().then(async()=>{updateCloudControls();if(master.user){await master.refresh();if(tab==="projects")render();}}).catch(()=>{});
+  setInterval(()=>void saveCloudArchive(false),60000);
   // Не требуем от пользователя вручную проверять уже настроенную Ollama
   // при каждом обновлении страницы. Это тихая проверка без всплывающих окон.
   probeLocalConnection().catch(()=>{});

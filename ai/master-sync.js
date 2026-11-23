@@ -3,6 +3,7 @@
 // Firebase client config публичен; доступ контролируется Firestore rules + UID.
 import { firebaseConfig } from "../js/firebase-config.js";
 import { legendContext } from "../writer/js/legend.js";
+import { fullArchiveStore } from "./cloud-archive.js";
 const base = "https://www.gstatic.com/firebasejs/10.12.2/";
 const state = { ready:false, user:null, books:[], error:"", auth:null, db:null, mods:null };
 let loading;
@@ -58,8 +59,14 @@ export const master = {
       state.error="";return state.books;
     }catch(e){state.error=e?.message||String(e);throw e;}
   },
-  // Резервная копия только памяти (проекты + авторские примеры).
-  // Рукописи в Мастерской не меняем. Чаты остаются в IndexedDB и JSON-экспорте.
+  async openFullArchive(){
+    await this.init();
+    const currentUid=()=>state.auth.currentUser?.uid;
+    const uid=currentUid();
+    if(!uid)throw Error("Войди в аккаунт Мастерской через раздел «Книги».");
+    return {uid,store:fullArchiveStore({db:state.db,api:state.mods.F,uid,currentUid})};
+  },
+  // Старые резервные копии памяти доступны для прежних установок.
   async saveMemory(projects,feedback){
     await this.init();
     const user=state.auth.currentUser;

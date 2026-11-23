@@ -2,6 +2,7 @@ import {before, test} from "node:test";
 import assert from "node:assert/strict";
 import gateway from "../proxy/freitag-modelproxy-worker.js";
 import booksMcp from "../proxy/books-mcp-worker.js";
+import {draftDelivery,draftDeliveryLabel} from "../ai/draft-delivery.js";
 import {onRequest} from "../functions/api/freitag/[route].js";
 
 const env = {OWNER_UID:"fixture", BOTHUB_API_KEY:"fixture-b", APIMIRA_API_KEY:"fixture-a", AITUNNEL_API_KEY:"fixture-t",
@@ -39,6 +40,19 @@ function request(route,body,signal,bindings={}) {
   return onRequest({request:req,params:{route:route.split("?")[0]},
     env:{FREITAG_GATEWAY:{fetch:r=>gateway.fetch(r,{...env,...bindings})}}});
 }
+
+test("chapter delivery distinguishes character shortfalls and the provider token limit",()=>{
+  const finished=draftDelivery("Объём главы — 18к символов.", "а".repeat(13000),"stop",14000);
+  assert.equal(finished.characters,13000);
+  assert.equal(finished.target,18000);
+  assert.match(draftDeliveryLabel(finished),/Не хватает 5\s000 · Модель завершила ответ/);
+  const truncated=draftDelivery("Не менее 18\u00a0000 знаков без пробелов.","а б\n в","length",9000);
+  assert.equal(truncated.characters,3);
+  assert.equal(truncated.target,18000);
+  assert.match(draftDeliveryLabel(truncated),/Достигнут лимит 9\s000 токенов/);
+  assert.equal(draftDelivery("Напиши до 18000 знаков.","Роман.","stop",14000).target,null);
+  assert.equal(draftDelivery("Варианты 12000 и 18000 знаков. В прошлый раз было 13000 знаков.","Роман.","stop",14000).target,null);
+});
 
 test("AITUNNEL connection check authorizes the key and never calls generation", async t=>{
   const calls=mockNetwork(t,(path,init)=>{
