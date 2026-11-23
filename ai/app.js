@@ -187,7 +187,7 @@ function renderSettings(){
     '<details class="f-settings-fold"><summary>Защищенный API-шлюз</summary>'+
     '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
     '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
-    '<p class="f-muted">В тестовой версии Cloudflare Pages шлюз выбирается автоматически. Freitag AI напрямую вызывает MCP-инструменты Мастерской для чтения книг, доходов, маркетинга и Директа. Для главы используется последний снимок книги в Мастерской. После правок в рукописи нажми «Обновить Google Docs» в проекте. Секреты хранятся только в Cloudflare.</p></div></details>'+
+    '<p class="f-muted">По рабочему адресу Freitag AI шлюз выбирается автоматически. Freitag AI напрямую вызывает MCP-инструменты Мастерской для чтения книг, доходов, маркетинга и Директа. Для главы используется последний снимок книги в Мастерской. После правок в рукописи нажми «Обновить Google Docs» в проекте. Секреты хранятся только в Cloudflare.</p></div></details>'+
     '<details class="f-settings-fold"><summary>Локальная Ollama · дополнительные настройки</summary>'+
     '<div class="f-fold-body"><label for="f-endpoint">Адрес Ollama</label>'+
     '<input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
@@ -1477,6 +1477,17 @@ document.addEventListener("keydown",e=>{
     e.preventDefault();if(!busy)e.target.closest("form")?.requestSubmit();
   }
 });
+const workingLink=$("#f-working-link");
+if(workingLink){
+  const isWorking=location.origin===workingLink.origin;
+  const isPreview=/(?:^|\.)freitag-ai-test\.pages\.dev$/.test(location.hostname)&&!isWorking;
+  if(isWorking)$("#f-workspace-mode").textContent="Рабочая версия";
+  if(isPreview){
+    $("#f-workspace-mode").textContent="Тестовая копия · чаты отдельно";
+    $("#f-workshop-link").hidden=true;
+    workingLink.hidden=false;
+  }
+}
 (async()=>{
   try{db=await openDb();const loaded=await getDb();if(loaded&&Array.isArray(loaded.projects)&&Array.isArray(loaded.chats))state={...blank(),...loaded,settings:{...blank().settings,...loaded.settings}};
     // Migrate existing test settings: Polza is no longer available.

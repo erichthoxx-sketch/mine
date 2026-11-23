@@ -34,7 +34,7 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
     '<div class="f-project-reference"><section class="f-project-source"><h2>Рукопись и материалы</h2>'+
     (p.masterBookId?
       '<p class="f-muted">Для главы Freitag берет канон, две последние главы и подбирает короткие выписки из ранних сцен по заданию.</p>'+
-      '<div class="f-source-actions"><a class="f-btn" href="../workshop/#/book/'+encodeURIComponent(p.masterBookId)+'" target="_blank" rel="noopener">Открыть книгу в Мастерской ↗</a>'+
+      '<div class="f-source-actions"><a class="f-btn" href="https://erichthoxx-sketch.github.io/mine/workshop/#/book/'+encodeURIComponent(p.masterBookId)+'" target="_blank" rel="noopener">Открыть книгу в Мастерской ↗</a>'+
       '<button class="f-btn" data-action="check-book-source" data-id="'+esc(p.id)+'" type="button">Проверить источник бесплатно</button>'+
       '<button class="f-btn" data-action="sync-current-book" data-id="'+esc(p.id)+'" type="button">Обновить Google Docs</button></div>'+
       '<div id="f-book-check" class="f-book-check" role="status"></div>':

@@ -4,7 +4,7 @@ import {mkdir, readFile} from "node:fs/promises";
 import {chromium} from "playwright";
 
 const browser = await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE_PATH});
-const origin = "https://fixture.freitag-ai-test.pages.dev";
+const workingOrigin = "https://codex-freitag-aitunnel.freitag-ai-test.pages.dev";
 const appRoot = new URL("../",import.meta.url);
 const instruction = "\n  Тестовая общая инструкция. ".repeat(600)+"  ";
 const project = "\n  Указания для тестовой книги. ".repeat(400)+"  ";
@@ -16,6 +16,8 @@ if(screenshots)await mkdir(screenshots,{recursive:true});
 
 try {
   for(const width of [1440,390]){
+    const working=width===1440;
+    const origin=working?workingOrigin:"https://fixture.freitag-ai-test.pages.dev";
     const page=await browser.newPage({viewport:{width,height:900},serviceWorkers:"block"});
     const errors=[];
     page.on("pageerror",e=>errors.push(e.message));
@@ -94,6 +96,12 @@ try {
       };
     });
     await page.goto(origin+"/ai/");
+    assert.equal(await page.locator("#f-workspace-mode").innerText(),
+      working?"Рабочая версия":"Тестовая копия · чаты отдельно");
+    const workingLink=page.locator("#f-working-link");
+    assert.equal(await workingLink.getAttribute("href"),workingOrigin+"/ai/");
+    assert.equal(await workingLink.isVisible(),!working);
+    assert.equal(await page.locator("#f-workshop-link").isVisible(),working);
     const nav=async name=>page.locator('[data-nav="'+name+'"]:visible').first().click();
     await nav("settings");
     await page.locator("#f-provider").selectOption("apimira");
