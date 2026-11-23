@@ -1,6 +1,6 @@
 // Все запросы браузера перехватываются. Книги и ответы модели вымышлены.
 import assert from "node:assert/strict";
-import {readFile} from "node:fs/promises";
+import {mkdir, readFile} from "node:fs/promises";
 import {chromium} from "playwright";
 
 const browser = await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE_PATH});
@@ -11,6 +11,8 @@ const project = "\n  Указания для тестовой книги. ".repe
 const prompt = "  \nЗадание для проверки. ".repeat(1700)+"  ";
 const ending = "Последняя строка.";
 const rest = "Вымышленный текст. ".repeat(1400)+ending;
+const screenshots = process.env.FREITAG_SCREENSHOT_DIR;
+if(screenshots)await mkdir(screenshots,{recursive:true});
 
 try {
   for(const width of [1440,390]){
@@ -25,12 +27,18 @@ try {
       const api={
         "/health":{ok:true,model:"claude-opus-5-5",provider:"ModelProxy",apimiraConfigured:true,aitunnelConfigured:true,chapterProtocol:2},
         "/preflight":u.searchParams.get("provider")==="aitunnel"?{ok:true,balanceRub:200,budgetRub:160}:{ok:true,balanceUsd:3.45},
-        "/mcp-tools":{ok:true,toolCount:4}
+        "/mcp-tools":{ok:true,toolCount:4,tools:["list_books","get_book_context","list_chapters","read_chapter"]},
+        "/snapshot":{ok:true,chapterCount:15,updatedAt:"2026-11-22T17:00:00Z",
+          lastChapters:[{slot:14,title:"Тестовая глава 14"},{slot:15,title:"Тестовая глава 15"}]}
       };
       if(u.pathname.startsWith("/api/freitag/")){
         const data=api[u.pathname.replace("/api/freitag","")];
         assert.ok(data,"unexpected API route "+u.pathname);
         assert.equal(route.request().method(),"GET");
+        if(u.pathname.endsWith("/snapshot")){
+          assert.equal(u.searchParams.get("bookId"),"fixture");
+          assert.equal(route.request().headers().authorization,"Bearer test");
+        }
         return route.fulfill({json:data});
       }
       if(u.pathname==="/ai/master-sync.js")return route.fulfill({contentType:"text/javascript",body:
@@ -80,9 +88,27 @@ try {
     await nav("projects");
     await page.locator('[data-action="master-import"]').click();
     await page.locator("#f-project-instruction").fill(project);
+    await page.getByRole("button",{name:"Проверить источник бесплатно"}).click();
+    await page.getByRole("status").filter({hasText:"Глав в снимке: 15"}).waitFor();
+    assert.match(await page.locator("#f-book-check").innerText(),/Тестовая глава 15/);
+    assert.equal(await page.locator("#f-project-instruction").inputValue(),project);
+    assert.deepEqual(await page.evaluate(()=>window.submitted),[]);
+    if(screenshots)await page.screenshot({path:screenshots+"/project-"+width+".png",fullPage:true});
     await page.locator('#f-project-instructions button[type="submit"]').click();
     await page.locator('[data-action="new-project-chat"]').click();
-    await page.locator("#f-message-input").fill(prompt);
+    await page.locator('.f-source-tag.linked').filter({hasText:"Мастерская"}).waitFor();
+    await page.getByRole("button",{name:"Развернуть"}).click();
+    await page.locator("#f-field-draft").fill(prompt);
+    await page.getByRole("button",{name:"Готово"}).click();
+    assert.equal(await page.locator("#f-message-input").inputValue(),prompt);
+    await page.getByRole("button",{name:"Развернуть"}).click();
+    await page.locator("#f-field-draft").fill("Несохраненная правка");
+    await page.getByRole("button",{name:"Отмена"}).click();
+    assert.equal(await page.locator("#f-message-input").inputValue(),prompt);
+    const submitBounds=await page.locator('#f-chat-form button[type="submit"]').boundingBox();
+    const navBounds=await page.locator(".f-mobile-nav").boundingBox();
+    assert.ok(submitBounds.y+submitBounds.height<=(navBounds?.y??900),"Send button must remain above the bottom navigation");
+    if(screenshots)await page.screenshot({path:screenshots+"/chat-"+width+".png",fullPage:true});
     await page.locator('#f-chat-form button[type="submit"]').click();
     await page.locator(".assistant .f-msg-text").filter({hasText:"Начало."}).waitFor();
     const requests=await page.evaluate(()=>window.submitted);
@@ -119,6 +145,15 @@ try {
     await page.reload();
     await page.locator(".assistant .f-msg-text").filter({hasText:ending}).waitFor();
     assert.equal(await page.locator(".assistant .f-msg-text").first().innerText(),"Начало. "+rest);
+    const task=page.locator(".f-prompt").first();
+    assert.equal(await task.getAttribute("open"),null);
+    await task.locator("summary").click();
+    assert.equal(await task.locator(".f-msg-text").textContent(),prompt);
+    await task.locator("summary").click();
+    const [file]=await Promise.all([page.waitForEvent("download"),page.getByRole("button",{name:"Скачать TXT"}).click()]);
+    assert.match(file.suggestedFilename(),/\.txt$/);
+    assert.equal(await readFile(await file.path(),"utf8"),"Начало. "+rest);
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     assert.equal(await page.getByText("Получен фрагмент. Завершение главы не подтверждено.").count(),width===390?1:0);
     assert.deepEqual(await page.evaluate(()=>window.submitted),[]);
     if(width===1440){

@@ -50,25 +50,25 @@ function renderSidebar(){
       .sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||"")));
     el.innerHTML=
       '<button type="button" class="f-btn primary f-new-chat" data-action="new-chat"><span aria-hidden="true">＋</span> Новый чат</button>'+
-      '<div class="f-side-section"><label for="f-sidebar-project" class="f-side-label">ПРОЕКТ</label>'+
+      '<div class="f-side-section"><label for="f-sidebar-project" class="f-side-label">Диалоги по книге</label>'+
       '<select id="f-sidebar-project" class="f-select" aria-label="Активная книга"><option value="">Без книги</option>'+
       state.projects.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===selected?"selected":"")+'>'+esc(x.name)+'</option>').join("")+
-      '</select>'+(selected?'<button type="button" class="f-project-shortcut" data-action="project-home" data-id="'+esc(selected)+'">Инструкции проекта ↗</button>':"")+'</div>'+
-      '<div class="f-side-section f-side-history"><div class="f-side-label f-side-count">ИСТОРИЯ <span>'+arr.length+'</span></div>'+
+      '</select></div>'+
+      '<div class="f-side-section f-side-history">'+
       (arr.length?'<ul class="f-list f-chat-list">'+arr.map(x=>
         '<li><button type="button" class="'+(x.id===state.activeChatId?"on":"")+
         '" data-action="select-chat" data-id="'+esc(x.id)+'" title="'+esc(x.title)+'"><span>'+esc(x.title)+'</span></button></li>'
       ).join("")+'</ul>':'<p class="f-sidebar-empty">Здесь появятся диалоги по выбранной книге.</p>')+
       '</div>';
   }else if(tab==="projects"){
-    el.innerHTML='<div class="f-side-label">ТВОЯ БИБЛИОТЕКА</div>'+
+    el.innerHTML='<div class="f-side-label">Библиотека</div>'+
       '<p class="f-sidebar-empty">'+state.projects.length+' книг в работе</p>'+
       '<button type="button" data-action="add-project" class="f-btn f-new-chat">＋ Добавить книгу</button>';
   }else if(tab==="knowledge"){
-    el.innerHTML='<div class="f-side-label">ЛОКАЛЬНЫЕ МАТЕРИАЛЫ</div>'+
+    el.innerHTML='<div class="f-side-label">Локальные материалы</div>'+
       '<p class="f-sidebar-empty">'+state.docs.length+' текстов и заметок. Хранятся в этом браузере.</p>';
   }else{
-    el.innerHTML='<div class="f-side-label">ПОДКЛЮЧЕНИЯ</div>'+
+    el.innerHTML='<div class="f-side-label">Подключения</div>'+
       '<p class="f-sidebar-empty">Здесь настраиваются модели, внешний вид и резервные копии.</p>';
   }
 }
@@ -214,17 +214,31 @@ function renderChat(){
   const c=chat();
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
   const p=project(c?.projectId||state.activeProjectId);
-  const body=(c?.messages||[]).map((m,i)=>
-    '<article class="f-msg '+esc(m.role)+'"><div class="f-speaker">'+
+  const draft=state.drafts?.[draftKey()]||"";
+  const previous=$("#f-messages");
+  const sameChat=previous?.dataset.key===draftKey();
+  const scrollTop=sameChat&&!nearEnd(previous)?previous.scrollTop:null;
+  const expanded=new Set(sameChat?[...previous.querySelectorAll(".f-prompt[open]")].map(el=>el.dataset.index):[]);
+  const toolsOpen=sameChat&&$("#f-chat-tools")?.open;
+  const body=(c?.messages||[]).map((m,i)=>{
+    const text=String(m.content??"");
+    const longPrompt=m.role==="user"&&(text.length>440||text.split("\n",7).length>6);
+    const content=m.role==="assistant"?renderMarkdown(m.content):esc(text);
+    const message='<div class="f-msg-text">'+content+'</div>';
+    return '<article class="f-msg '+esc(m.role)+'"><div class="f-speaker">'+
     (m.role==="user"?"Ты":m.provider==="Claude"?"Claude Opus":String(m.provider||"").startsWith("Claude ") ? esc(m.provider) :m.provider==="Внешняя модель"?"Внешняя модель":"Freitag AI")+
-    '</div><div class="f-msg-text">'+(m.role==="assistant"?renderMarkdown(m.content):'<p>'+esc(m.content).replace(/\n/g,"<br>")+'</p>')+'</div>'+
+    '</div>'+
+    (longPrompt?'<details class="f-prompt" data-index="'+i+'" '+(expanded.has(String(i))?"open":"")+'><summary>Задание <span>'+text.length.toLocaleString("ru-RU")+' зн.</span></summary>'+
+        message+'</details>':message)+
     (Number.isFinite(m.costRub)?'<p class="f-mini">Списано AITUNNEL: '+esc(rub(m.costRub))+'</p>':"")+
     (m.receiving && !busy?'<p class="f-mini">Получен фрагмент. Завершение главы не подтверждено.</p>':"")+
     (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
       '<div class="f-feedback-actions"><button type="button" class="f-inline-btn" data-action="copy-answer" data-i="'+i+'">Копировать</button>'+
+      '<button type="button" class="f-inline-btn" data-action="download-answer" data-i="'+i+'">Скачать TXT</button>'+
       '<button type="button" class="f-inline-btn" data-action="feedback-good" data-i="'+i+'">В образцы</button>'+
       '<button type="button" class="f-inline-btn" data-action="feedback-bad" data-i="'+i+'">Не то</button></div>':"")+
-    '</article>').join("");
+    '</article>';
+  }).join("");
   const modeOptions=Object.entries(WRITING_MODES).map(([key,v])=>
     '<option value="'+key+'" '+((c?.mode||pendingMode||(p?"draft":"dialog"))===key?"selected":"")+'>'+esc(v.name)+'</option>').join("");
   const mobileChats=state.chats.filter(x=>(x.projectId||null)===(p?.id||null))
@@ -237,13 +251,14 @@ function renderChat(){
     :'<div class="f-mobile-history-panel"><p>Диалогов пока нет.</p></div>';
   const bookOptions='<option value="">Без книги</option>'+state.projects.map(x=>
     '<option value="'+esc(x.id)+'" '+(x.id===(p?.id||"")?"selected":"")+'>'+esc(x.name)+'</option>').join("");
+  const source=p?.masterBookId?"Мастерская":p?"Локальный проект":"Обычный чат";
   $("#panel").innerHTML=
     '<section class="f-chat" aria-label="Литературный чат">'+
     '<div class="f-chat-meta"><div class="f-chat-identity">'+
     '<h1 class="f-title">'+esc(c?.title&&c.title!=="Новый чат"?c.title:"Новый диалог")+'</h1>'+
     '<div class="f-chat-book"><label for="f-chat-project">Книга</label>'+
     '<select id="f-chat-project" class="f-select" aria-label="Выбрать книгу">'+bookOptions+'</select>'+
-      (p?'<button type="button" class="f-project-open-link" data-action="project-home" data-id="'+esc(p.id)+'">Инструкции проекта</button>':"")+'</div></div>'+
+    '</div></div>'+
     '<div class="f-chat-head-actions">'+
     '<button type="button" class="f-btn f-btn-new" data-action="new-chat">＋ Новый чат</button>'+
     '<details class="f-mobile-history"><summary aria-label="История разговоров">История</summary>'+
@@ -251,43 +266,57 @@ function renderChat(){
     (c?'<details class="f-chat-more"><summary aria-label="Действия с чатом" title="Действия с чатом">···</summary>'+
       '<div class="f-chat-more-menu"><button type="button" data-action="rename-chat">Переименовать</button>'+
       '<button type="button" class="f-destructive" data-action="delete-chat">Удалить чат</button></div></details>':"")+
+    '</div><div class="f-chat-source">'+
+      '<span class="f-source-tag'+(p?.masterBookId?' linked':'')+'"><span aria-hidden="true"></span>'+source+'</span>'+
+      (p?'<button type="button" class="f-project-open-link" data-action="project-home" data-id="'+esc(p.id)+'">Инструкции проекта ↗</button>':"")+
     '</div></div>'+
-    '<div class="f-chat-body" id="f-messages" role="log" aria-live="polite" aria-relevant="additions text">'+
+    '<div class="f-chat-body" id="f-messages" data-key="'+esc(draftKey())+'" role="log" aria-live="polite" aria-relevant="additions">'+
       (body||'<div class="f-chat-welcome"><span class="f-welcome-mark" aria-hidden="true"><img src="../workshop/bear.svg" alt="" width="55" height="55"></span>'+
-        '<h2>Место для твоих историй.</h2><p>Выбери книгу, задай вопрос или начни новую сцену.</p></div>')+
+        (p?'<h2>'+esc(p.name)+'</h2><p>Вставь задание на главу или фрагмент для правки.</p>':
+           '<h2>Новый диалог</h2><p>Для работы над главой выбери книгу вверху.</p>')+'</div>')+
     '</div>'+
+    (p?'<aside class="f-chat-context" aria-label="Контекст книги">'+
+      '<h2>Контекст книги</h2><p class="f-context-book">'+esc(p.name)+'</p>'+
+      '<h3>Рукопись</h3><p>'+(p.masterBookId?'Мастерская. Для новой главы подключаются канон и две последние главы.':'Локальный проект')+'</p>'+
+      '<h3>Инструкция проекта</h3><p>'+(userInstruction(p.instruction).trim()?'Сохранена и применяется в чатах книги.':'Пока пустая.')+'</p>'+
+      '<button type="button" class="f-btn" data-action="project-home" data-id="'+esc(p.id)+'">Открыть проект ↗</button></aside>':"")+
     '<form id="f-chat-form" class="f-compose">'+
       '<div class="f-compose-surface"><div class="f-writing-bar">'+
       '<label class="f-compact-label" for="f-quick-model">Модель</label>'+
       '<select id="f-quick-model" class="f-select f-quick-model" aria-label="Модель для следующего ответа" '+(busy?"disabled":"")+'>'+modelChoices()+'</select>'+
       (p?'<span id="f-chapter-limit-wrap"><label class="f-compact-label" for="f-chapter-limit">Лимит главы</label>'+'<select class="f-select" id="f-chapter-limit" title="Максимум выходных токенов. Это верхний предел, не заданная длина главы.">'+[[4500,"4 500"],[9000,"9 000"],[14000,"14 000"]].map(([n,label])=>'<option value="'+n+'" '+(Number(state.settings.sceneOutputTokens||14000)===n?"selected":"")+'>'+label+'</option>').join("")+'</select></span>':'<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
       '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>')+
-      '<span class="f-compose-canon">'+(p?.masterBookId?"MCP Мастерская · автоматически":p?"Инструкции проекта":"Обычный чат")+'</span>'+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
-      '<textarea class="f-textarea" id="f-message-input" rows="2" placeholder="Напиши задачу или вставь фрагмент текста…" '+(busy?"disabled":"")+'>\n'+esc(state.drafts?.[draftKey()]||"")+'</textarea>'+
+      '<textarea class="f-textarea" id="f-message-input" rows="2" placeholder="'+(p?"Задание для главы или фрагмент текста…":"Что нужно сделать?")+'" '+(busy?"disabled":"")+'>\n'+esc(draft)+'</textarea>'+
       '<div class="f-compose-controls">'+
-      '<span class="f-mini" title="'+esc(connectText)+'">'+esc(activeProviderLabel())+
-      (connectOk?' · подключено':"")+'</span>'+
+      '<div class="f-compose-actions">'+
+      '<button type="button" class="f-inline-btn" data-action="expand-draft" '+(busy?"disabled":"")+'>Развернуть</button>'+
+      '<span class="f-mini" id="f-draft-size">'+(draft?draft.length.toLocaleString("ru-RU")+' зн.':"")+'</span>'+
+      '<details class="f-extra-tools" id="f-chat-tools" '+(toolsOpen?"open":"")+'><summary>Ещё</summary><div class="f-compose-menu">'+
+      '<button type="button" data-action="export-context">Скопировать контекст</button>'+
+      '<button type="button" data-action="paste-external">Добавить внешний ответ</button>'+
+      '<button type="button" data-action="open-settings">Настройки модели</button>'+
+      (p&&state.settings.provider==="bothub"&&activeBotHubModel()==="claude-opus-5.5"?
+        '<button type="button" data-action="check-batch-availability">Проверить Batch бесплатно</button>'+
+        (batchCheck===true?'<button type="button" data-action="send-batch-chapter">Отправить через Batch (платно)</button>':""):"")+
+      '</div></details></div>'+
       (busy?'<button type="button" class="f-btn danger" data-action="stop">Остановить</button>':
             '<button type="submit" class="f-btn primary">Отправить <span aria-hidden="true">↗</span></button>')+
       '</div></div>'+
-      (p&&state.settings.provider==="bothub"&&activeBotHubModel()==="claude-opus-5.5"?
-        '<div class="f-row"><button type="button" class="f-btn" data-action="check-batch-availability">Проверить Batch бесплатно</button>'+(batchCheck===true?'<span class="f-mini">Opus 5.5 есть в каталоге Batch; разрешение запуска не проверено</span>':batchCheck===false?'<span class="f-mini">Batch недоступен</span>':"")+'</div>'+(batchCheck===true?'<div class="f-row"><button type="button" class="f-btn" data-action="send-batch-chapter">Целая глава через Batch API (платно)</button></div>':""):"")+
       (c?.batch?.batchId&&c.batch.status!=="completed"?
         '<div class="f-row"><span class="f-mini">Batch: '+esc(c.batch.status||"отправлен")+'</span>'+
         '<button type="button" class="f-btn" data-action="check-batch-chapter">Проверить готовность главы</button></div>':"")+
       (state.settings.provider==="bothub"&&activeBotHubModel()==="claude-opus-5.5"&&!c?.batch?.batchId&&c?.messages?.at(-1)?.role==="assistant"&&/HTTP 524|вернул 524/.test(c.messages.at(-1).content)&&p?
         '<div class="f-row"><button type="button" class="f-btn" data-action="retry-batch-chapter">Эту главу — через Batch API</button></div>':"")+
-      '<details class="f-extra-tools"><summary>Инструменты и подключение</summary><div class="f-row">'+
-      '<button type="button" class="f-btn" data-action="export-context">Скопировать контекст</button>'+
-      '<button type="button" class="f-btn" data-action="paste-external">Добавить внешний ответ</button>'+
-      '<button type="button" class="f-btn" data-action="open-settings">Настройки модели</button></div>'+
-      '<p class="f-muted">Текст отправляется выбранной модели только после нажатия «Отправить». Проектные материалы сохраняются в браузере.</p></details>'+
     '</form></section>';
-  const historyEl=$("#f-messages");
-  if(historyEl&&c?.messages?.length)historyEl.scrollTop=historyEl.scrollHeight;
   resizeChatInput($("#f-message-input"));
+  const historyEl=$("#f-messages");
+  if(scrollTop!==null)historyEl.scrollTop=scrollTop;
+  else if(c?.messages?.length)historyEl.scrollTop=historyEl.scrollHeight;
+}
+function nearEnd(log){
+  return log.scrollHeight-log.clientHeight-log.scrollTop<72;
 }
 // Keep the input one/two lines tall for ordinary prompts. Grow only when typed
 // content needs it, and cap height so the reader's conversation stays visible.
@@ -854,8 +883,11 @@ async function sendMessage(text){
   await save();render();
   c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
-  el.innerHTML='<span class="f-speaker">'+(isPaidProvider?esc(assistant.provider):"Freitag AI")+'</span><div class="f-msg-text pending">Генерация ответа…</div>';
-  $("#f-messages")?.append(el);const target=el.querySelector(".f-msg-text");
+  el.innerHTML='<span class="f-speaker">'+(isPaidProvider?esc(assistant.provider):"Freitag AI")+'</span><div class="f-msg-text streaming pending">Генерация ответа…</div>';
+  const log=$("#f-messages"),follow=log&&nearEnd(log);
+  log?.append(el);
+  if(follow)log.scrollTop=log.scrollHeight;
+  const target=el.querySelector(".f-msg-text");
   currentController=new AbortController();
   let checkpointTimer=null,firstFragment=true;
   if(isPaidProvider)assistant.receiving=true;
@@ -899,7 +931,9 @@ async function sendMessage(text){
         if(obj.message?.content)assistant.content+=obj.message.content;
       }
       if(assistant.content){
+        const follow=log&&nearEnd(log);
         target.classList.remove("pending");target.textContent=assistant.content;
+        if(follow)log.scrollTop=log.scrollHeight;
         // Persist long chapters during streaming; closing the tab must not erase paid text.
         if(firstFragment){firstFragment=false;void save();}
         else if(checkpointTimer===null)checkpointTimer=setTimeout(()=>{checkpointTimer=null;void save();},1000);
@@ -935,8 +969,8 @@ async function sendMessage(text){
     busy=false;currentController=null;c.updated=stamp();await save();render();
   }
 }
-function download(name,content){
-  const blob=new Blob([content],{type:"application/json;charset=utf-8"}),url=URL.createObjectURL(blob);
+function download(name,content,type="application/json;charset=utf-8"){
+  const blob=new Blob([content],{type}),url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
 async function readTextFile(file){
@@ -975,6 +1009,33 @@ document.addEventListener("click",async(e)=>{
     state.activeProjectId=p.id;state.activeChatId=null;projectHomeId=p.id;await save();render();notice("Книга «"+p.name+"» связана с Freitag AI.");
   }
   if(a==="edit-active-project"){const selected=project(chat()?.projectId||state.activeProjectId);if(selected)await editProject(selected.id);}
+  if(a==="check-book-source"){
+    const p=project(id),out=$("#f-book-check");
+    if(!p?.masterBookId||!out)return;
+    b.disabled=true;out.textContent="Проверяю Мастерскую…";
+    try{
+      const gateway=claudeGateway(state.settings.workerUrl);
+      if(!gateway)throw Error("Не настроен API-шлюз.");
+      const options={headers:{Authorization:"Bearer "+await master.idToken()},cache:"no-store"};
+      const read=async path=>{
+        const res=await fetch(gateway+path,options),data=await res.json().catch(()=>({}));
+        if(!res.ok||!data.ok)throw Error(data.error||"Мастерская не ответила.");
+        return data;
+      };
+      const [catalog,book]=await Promise.all([
+        read("/mcp-tools"),read("/snapshot?bookId="+encodeURIComponent(p.masterBookId))
+      ]);
+      const required=["get_book_context","list_chapters","read_chapter"];
+      if(!required.every(name=>catalog.tools?.includes(name)))throw Error("В MCP не хватает инструментов чтения книги.");
+      if(!Number.isInteger(book.chapterCount)||!Array.isArray(book.lastChapters))
+        throw Error("Снимок книги вернул неполные сведения.");
+      const last=book.lastChapters.slice(-2).map(ch=>ch.slot+". "+ch.title).join("\n");
+      out.textContent="MCP отвечает. Глав в снимке: "+book.chapterCount+
+        "\nОбновлено: "+new Date(book.updatedAt).toLocaleString("ru-RU")+
+        (last?"\nПоследние главы:\n"+last:"");
+    }catch(err){out.textContent=err.message;}
+    finally{b.disabled=false;}
+  }
   if(a==="sync-current-book"){
     const p=project(id);
     if(!p?.masterBookId)return notice("Сначала свяжи проект с книгой Мастерской.");
@@ -1021,6 +1082,23 @@ document.addEventListener("click",async(e)=>{
     if(message?.role!=="assistant" || !message.content)return;
     try{await navigator.clipboard.writeText(message.content);notice("Ответ скопирован.");}
     catch{notice("Не удалось скопировать. Выдели текст ответа вручную.");}
+  }
+  if(a==="download-answer"){
+    const c=chat(),message=c?.messages[Number(b.dataset.i)];
+    if(message?.role!=="assistant"||!message.content)return;
+    const title=String(c.title||"Ответ").replace(/[<>:"/\\|?*\u0000-\u001f]/g," ").trim().slice(0,80);
+    download((title||"Ответ")+".txt",message.content,"text/plain;charset=utf-8");
+  }
+  if(a==="expand-draft"){
+    const input=$("#f-message-input"),key=draftKey();
+    if(busy||!input)return;
+    const result=await openModal("Задание для модели",[{key:"draft",label:"Текст задания",multi:true}],
+      {draft:input.value},"Готово");
+    const current=$("#f-message-input");
+    if(!result||!current||draftKey()!==key||busy)return;
+    current.value=result.draft;
+    current.dispatchEvent(new Event("input",{bubbles:true}));
+    current.focus({preventScroll:true});
   }
   if(a==="stop")currentController?.abort();
   if(a==="check-batch-availability"){await checkBatchAvailability();return;}
@@ -1159,6 +1237,8 @@ document.addEventListener("input",e=>{
   if(e.target.id==="f-message-input"){
     resizeChatInput(e.target);
     rememberDraft(e.target.value);
+    const count=e.target.value.length;
+    $("#f-draft-size").textContent=count?count.toLocaleString("ru-RU")+" зн.":"";
   }
 });
 document.addEventListener("keydown",e=>{
