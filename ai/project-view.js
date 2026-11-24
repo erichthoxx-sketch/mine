@@ -39,7 +39,8 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
       '<button class="f-btn" data-action="sync-current-book" data-id="'+esc(p.id)+'" type="button">Обновить Google Docs</button></div>'+
       '<div id="f-book-check" class="f-book-check" role="status"></div>':
       '<p class="f-muted">Подключи рукопись из списка книг в Мастерской.</p>')+
-    (materials.length?'<h3>Локальные материалы</h3><ul class="f-material-names">'+materials.map(m=>'<li>'+esc(m.name)+'</li>').join("")+'</ul>':"")+
+    '<div class="f-source-actions"><button class="f-btn" data-action="open-project-materials" data-id="'+esc(p.id)+'" type="button">Материалы проекта'+
+      (materials.length?' · '+materials.length.toLocaleString("ru-RU"):"")+'</button></div>'+
     '</section>'+
     '<section class="f-project-recent f-project-memory"><h2>Память проекта</h2>'+
       '<p class="f-muted">Утвержденные решения и образцы стиля доступны в новых чатах этой книги. Freitag подбирает выписки из старых диалогов и материалов по заданию.</p>'+

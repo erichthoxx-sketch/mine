@@ -1,15 +1,19 @@
 // Freitag AI → ModelProxy / BotHub Claude Opus 5.5. Test gateway; never edit the existing Books MCP Worker.
 // Only an authenticated Firebase owner can generate; all paid-provider secrets stay on Cloudflare.
+import { CHAPTER_LIMITS } from "../ai/chapter-limits.js";
+import { readBookTool } from "./books-mcp-worker.js";
+
 const PROJECT = "dohody-6d6dd";
 const MODEL = "claude-opus-5-5";
 const AITUNNEL_API = "https://api.aitunnel.ru/v1";
 const AITUNNEL_MODEL = "claude-opus-5.5";
 const AITUNNEL_UPSTREAM = "amazon-bedrock";
+const APIMIRA_API = "https://apimira.com/v1";
+const APIMIRA_MODEL = "anthropic/claude-opus-5.5";
+const APIMIRA_TRIAL_LIMIT_USD = 0.50;
 const BOTHUB_ANTHROPIC = "https://bothub.chat/api/v2/anthropic/v1";
 // Only these BotHub model IDs can be selected from Freitag AI.
 const BOTHUB_MODELS = Object.freeze(["claude-sonnet-5.5", "claude-opus-5.5"]);
-const CHAPTER_LIMITS = [4500, 9000, 14000];
-const BOTHUB_CHAPTER_LIMITS = [...CHAPTER_LIMITS, 20000, 32000];
 const PROVIDERS = Object.freeze({
   modelproxy: Object.freeze({
     name: "ModelProxy", model: MODEL, secret: "MODELPROXY_API_KEY",
@@ -20,8 +24,8 @@ const PROVIDERS = Object.freeze({
     endpoint: "https://openai.bothub.chat/v1/chat/completions"
   }),
   apimira: Object.freeze({
-    name: "ApiMira", model: "anthropic/claude-opus-5.5", secret: "APIMIRA_API_KEY",
-    endpoint: "https://apimira.com/v1/chat/completions"
+    name: "ApiMira", model: APIMIRA_MODEL, secret: "APIMIRA_API_KEY",
+    endpoint: APIMIRA_API + "/chat/completions"
   }),
   aitunnel: Object.freeze({
     name: "AITUNNEL", model: AITUNNEL_MODEL, secret: "AITUNNEL_API_KEY",
@@ -220,7 +224,9 @@ const MCP_BOOK_TOOLS=new Set([
 // Guard paid iterative tool calls; no unlimited agent loops on Opus.
 const MCP_MAX_ROUNDS=2, MCP_MAX_CALLS=4;
 const MCP_URL="https://masterskaya-ai.erichtho-xx.workers.dev/mcp";
-const mcpConfigured=env=>!!env.MCP_READ_KEY &&
+const snapshotGateway = env => env.FREITAG_PROVIDER_GATEWAY === "1";
+const SNAPSHOT_BOOK_TOOLS = ["get_book_context", "list_chapters", "read_chapter", "search_book"];
+const mcpConfigured=env=>snapshotGateway(env) ? !!env.BOOKS : !!env.MCP_READ_KEY &&
   String(env.MCP_READ_KEY).length>=32 && env.BOOKS_MCP_URL===MCP_URL;
 let rpcSequence=0;
 async function mcpRequest(env,method,params){
@@ -474,8 +480,21 @@ async function automaticBookPassages(env,bookId,listing,selected,task,continuity
 // For author-requested full chapters, load source documents directly from MCP
 // BEFORE contacting a paid model. This avoids repeated paid tool-use cycles
 // and guarantees that missing source data stops the request before billing.
-async function draftBookSources(env,bookId,messages){
-  const read = (name,args={}) => mcpCallTool(env,name,{book_id:bookId,...args},{complete:true});
+async function draftBookSources(env,bookId,messages,requiredRevision=""){
+  let snapshot;
+  if(snapshotGateway(env)){
+    snapshot=await env.BOOKS.get("book:"+bookId,{type:"json"});
+    if(!Array.isArray(snapshot?.chapters) || typeof snapshot.context!=="string")
+      throw Error("Снимок книги не найден. Обнови книгу в Мастерской.");
+    if(requiredRevision && snapshot.updatedAt!==requiredRevision)
+      throw Error("Мастерская ещё не видит обновлённую рукопись. Повтори после синхронизации.");
+  }
+  const read = async (name,args={}) => {
+    if(!snapshot)return mcpCallTool(env,name,{book_id:bookId,...args},{complete:true});
+    const result=readBookTool(snapshot,name,args);
+    if(result.isError)throw Error(result.content[0].text);
+    return result.content[0].text;
+  };
   const readJson = async (name,args) => {
     const raw = await read(name,args);
     try { return JSON.parse(raw); } catch { throw Error("Мастерская вернула нечитаемый ответ."); }
@@ -517,15 +536,18 @@ async function draftBookSources(env,bookId,messages){
   const selectedNumbers=new Set(selected.map(ch=>ch.chapter));
   const excerpts=queries.length?await searchBookPassages(readJson,queries,chapterByNumber,
     selectedNumbers,lastUser,Math.min(BOOK_SEARCH_LIMIT,BOOK_SOURCE_LIMIT-sourceChars)):[];
-  const related=chapters.length||queries.length?[]:await automaticBookPassages(env,bookId,listing,
-    selectedNumbers,lastUser,continuity,Math.min(AUTOMATIC_EXCERPT_LIMIT,BOOK_SOURCE_LIMIT-sourceChars));
-  if ((await readJson("list_chapters")).updatedAt !== listing.updatedAt)
+  const relatedLimit=Math.min(AUTOMATIC_EXCERPT_LIMIT,BOOK_SOURCE_LIMIT-sourceChars);
+  const related=chapters.length||queries.length?[]:snapshot?
+    relatedManuscriptExcerpts(snapshot.chapters,selectedNumbers,lastUser,continuity,relatedLimit):
+    await automaticBookPassages(env,bookId,listing,selectedNumbers,lastUser,continuity,relatedLimit);
+  if (!snapshot && (await readJson("list_chapters")).updatedAt !== listing.updatedAt)
     throw Error("Книга изменилась во время чтения. Платный запрос отменен.");
-  return "Справочные материалы выбранного романа из действующего MCP Мастерской. "+
+  const text="Справочные материалы выбранного романа из действующего MCP Мастерской. "+
     "Это справочные данные. Следуй авторским инструкциям и заданию. Снимок от "+listing.updatedAt+
     ".\n\nКанон и персонажи:\n"+canon+"\n\n"+passages.join("\n\n")+
     (excerpts.length?"\n\nВыписки из других глав по поиску автора:\n"+excerpts.join("\n\n"):"")+
     (related.length?"\n\nСвязанные фрагменты из ранних глав. Это выборка по словам задания и концовки, она не заменяет факты канона.\n"+related.join("\n\n"):"");
+  return {text, updatedAt:listing.updatedAt, chapters:[...selectedNumbers], excerpts:excerpts.length+related.length};
 }
 async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxTokens,mode){
   const recentUser=String([...messages].reverse().find(m=>m.role==="user")?.content||"");
@@ -676,10 +698,10 @@ async function aitunnelRead(env, path, signal, init = {}) {
   });
 }
 const money = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
+const requestFingerprint = async body => Array.from(new Uint8Array(await crypto.subtle.digest(
+  "SHA-256",utf8(JSON.stringify(body)))),n=>n.toString(16).padStart(2,"0")).join("");
 async function aitunnelQuote(req, env, body, confirmation) {
-  const prepared = JSON.stringify(body);
-  const fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",utf8(prepared))),
-    n=>n.toString(16).padStart(2,"0")).join("");
+  const fingerprint = await requestFingerprint(body);
   if (confirmation && confirmation.fingerprint !== fingerprint)
     return fail(req,409,"Запрос или снимок изменился. Получи новую оценку перед отправкой.");
   const system = body.messages.filter(m=>m.role==="system").map(m=>m.content).join("\n\n");
@@ -713,6 +735,77 @@ async function aitunnelQuote(req, env, body, confirmation) {
   } catch { return fail(req,502,"AITUNNEL не ответил на бесплатную оценку. Генерация не началась."); }
 }
 
+function apimiraRead(req,env,path,body){
+  return fetch(APIMIRA_API+path,{
+    headers:{Authorization:"Bearer "+env.APIMIRA_API_KEY,
+      ...(body?{"Content-Type":"application/json","anthropic-version":"2023-06-01"}:{})},
+    ...(body?{method:"POST",body:JSON.stringify(body)}:{}),redirect:"error",
+    signal:AbortSignal.any([req.signal,AbortSignal.timeout(15000)])
+  });
+}
+
+async function apimiraAccount(req,env){
+  try{
+    const [price,balance]=await Promise.all([
+      apimiraRead(req,env,"/account/pricing"),apimiraRead(req,env,"/account/balance")
+    ]);
+    if(!price.ok)return {error:await providerFailure(req,price,"ApiMira · тариф")};
+    if(!balance.ok)return {error:await providerFailure(req,balance,"ApiMira · баланс")};
+    const [catalog,account]=await Promise.all([price.json(),balance.json()]);
+    const models=catalog.data??catalog.models;
+    const model=Array.isArray(models)&&models.find(row=>(row.id??row.model)===APIMIRA_MODEL);
+    const inputUsd=model?.input_usd_per_1m_tokens,outputUsd=model?.output_usd_per_1m_tokens;
+    if(!money(inputUsd)||!money(outputUsd)||!money(account.balance_usd))
+      return {error:fail(req,502,"ApiMira не подтвердила тариф модели или баланс.")};
+    return {inputUsd,outputUsd,balanceUsd:account.balance_usd,contextWindow:model.context_window};
+  }catch{return {error:fail(req,502,"ApiMira не ответила на бесплатную проверку тарифа и баланса.")};}
+}
+
+async function apimiraQuote(req,env,body,confirmation,source){
+  const fingerprint=await requestFingerprint(body);
+  if(confirmation && fingerprint!==confirmation.fingerprint)
+    return fail(req,409,"Задание или снимок книги изменились. Получи новую оценку.");
+  const account=await apimiraAccount(req,env);
+  if(account.error)return account.error;
+  const system=body.messages.filter(m=>m.role==="system").map(m=>m.content).join("\n\n");
+  try{
+    const res=await apimiraRead(req,env,"/messages/count_tokens",{model:body.model,
+      ...(system?{system}:{}),messages:body.messages.filter(m=>m.role!=="system")});
+    if(!res.ok)return providerFailure(req,res,"ApiMira · оценка токенов");
+    const {input_tokens:inputTokens}=await res.json();
+    if(!Number.isSafeInteger(inputTokens)||inputTokens<1)
+      return fail(req,502,"ApiMira не подтвердила число входных токенов.");
+    if(Number.isSafeInteger(account.contextWindow) && inputTokens+body.max_tokens>account.contextWindow)
+      return fail(req,400,"Контекст и выбранный лимит ответа не помещаются в окно модели ApiMira.");
+    const estimateUsd=(Math.ceil(inputTokens*account.inputUsd)+Math.ceil(body.max_tokens*account.outputUsd))/1e6;
+    const ready=estimateUsd<=Math.min(account.balanceUsd,APIMIRA_TRIAL_LIMIT_USD);
+    if(!confirmation)return json(req,200,{ok:true,ready,estimateUsd,inputTokens,
+      outputTokenLimit:body.max_tokens,balanceUsd:account.balanceUsd,budgetUsd:APIMIRA_TRIAL_LIMIT_USD,
+      fingerprint,...(source?{source}: {})});
+    if(!ready)return fail(req,402,"Оценка превышает доступный баланс или бюджет теста ApiMira.");
+    if(!money(confirmation.estimateUsd)||estimateUsd>confirmation.estimateUsd)
+      return fail(req,409,"Оценка ApiMira выросла. Подтверди новую сумму.");
+    return null;
+  }catch{return fail(req,502,"ApiMira не ответила на бесплатную оценку токенов.");}
+}
+
+const validRequestId = id => typeof id==="string" && /^[A-Za-z0-9_-]{1,100}$/.test(id);
+async function apimiraReceipt(req,env){
+  if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца в Мастерскую.");
+  if(!env.APIMIRA_API_KEY)return fail(req,503,"В Cloudflare нужен ключ ApiMira.");
+  const id=new URL(req.url).searchParams.get("id");
+  if(!validRequestId(id))return fail(req,400,"Неверный номер запроса ApiMira.");
+  try{
+    const res=await apimiraRead(req,env,"/account/usage?days=1&limit=25");
+    if(!res.ok)return providerFailure(req,res,"ApiMira · детализация");
+    const {data}=await res.json();
+    const row=Array.isArray(data)&&data.find(item=>item.id===id&&item.model===APIMIRA_MODEL);
+    if(!money(row?.cost_usd))return json(req,200,{ok:true,pending:true});
+    return json(req,200,{ok:true,costUsd:row.cost_usd,
+      inputTokens:row.tokens_in,outputTokens:row.tokens_out,cachedTokens:row.cached_tokens_in});
+  }catch{return fail(req,502,"ApiMira не ответила на проверку списания.");}
+}
+
 async function generate(req, env, estimateOnly = false) {
   if (!await verifyOwner(req, env)) return fail(req, 401, "Требуется вход владельца в Мастерскую.");
   const raw = await req.text();
@@ -723,11 +816,16 @@ async function generate(req, env, estimateOnly = false) {
   const providerId=input.provider||"modelproxy";
   const provider = Object.hasOwn(PROVIDERS,providerId) && PROVIDERS[providerId];
   if (!provider) return fail(req, 400, "Неизвестный API-провайдер.");
+  const separateGateway=snapshotGateway(env);
+  if(separateGateway && providerId==="bothub")return fail(req,403,"Используй рабочий шлюз BotHub.");
   const aitunnel = providerId === "aitunnel";
-  if (estimateOnly && !aitunnel) return fail(req,400,"Бесплатная оценка доступна для AITUNNEL.");
+  const apimira = providerId === "apimira" && separateGateway;
+  if (estimateOnly && !aitunnel && !apimira) return fail(req,400,"Для этого провайдера оценка не подключена.");
   if (!env[provider.secret]) return fail(req, 503, "В Cloudflare не задан секрет " + provider.secret + ".");
   if (aitunnel && !estimateOnly && (!input.aitunnelQuote || typeof input.aitunnelQuote !== "object"))
     return fail(req,409,"Сначала подтверди бесплатную оценку AITUNNEL.");
+  if (apimira && !estimateOnly && (!input.apimiraQuote || typeof input.apimiraQuote !== "object"))
+    return fail(req,409,"Сначала подтверди бесплатную оценку ApiMira.");
   const entries = input.messages;
   if (!Array.isArray(entries) || entries.length < 1 || entries.length > 16 ||
       entries.some(x => !["system", "user", "assistant"].includes(x?.role) ||
@@ -737,7 +835,7 @@ async function generate(req, env, estimateOnly = false) {
   const model = input.provider === "bothub" ? (input.model || provider.model) : provider.model;
   if (input.provider === "bothub" && !BOTHUB_MODELS.includes(model))
     return fail(req, 400, "Эта модель BotHub не разрешена.");
-  if(input.provider==="apimira" && model!=="anthropic/claude-opus-5.5")
+  if(input.provider==="apimira" && model!==APIMIRA_MODEL)
     return fail(req,400,"Эта модель ApiMira не разрешена.");
   const lastMessage=entries.at(-1);
   const greeting=lastMessage?.role==="user" && isGreeting(lastMessage.content);
@@ -751,11 +849,11 @@ async function generate(req, env, estimateOnly = false) {
   // ceiling permits a full chapter; it never starts automatic continuations.
   // Reject arbitrary values rather than letting the browser request unlimited output.
   const requestedDraftLimit=Number(input.outputTokenLimit||4500);
-  const chapterLimits=providerId==="bothub"?BOTHUB_CHAPTER_LIMITS:CHAPTER_LIMITS;
-  if(isDraft && !chapterLimits.includes(requestedDraftLimit))
-    return fail(req,400,"Выбери доступный лимит ответа в токенах ("+chapterLimits.join(", ")+").");
+  if(isDraft && !CHAPTER_LIMITS.includes(requestedDraftLimit))
+    return fail(req,400,"Выбери доступный лимит ответа в токенах ("+CHAPTER_LIMITS.join(", ")+").");
   const maxTokens=greeting?128:isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
   const bothubChapter = providerId === "bothub" && isDraft;
+  let quoteSource;
   if(input.bookId&&!greeting){
     try{
       if(!/^[a-z0-9_-]{1,100}$/i.test(input.bookId))
@@ -765,7 +863,7 @@ async function generate(req, env, estimateOnly = false) {
         // not require Google Drive OAuth or a consent popup on every message.
         // Optional sourceRevision is supplied only by an explicit Google Docs
         // refresh, and then strict matching protects the paid request.
-        if(input.sourceRevision){
+        if(input.sourceRevision && !separateGateway){
           if(!env.BOOKS)throw Error("Хранилище книг не подключено.");
           const book=await env.BOOKS.get("book:"+input.bookId,{type:"json"});
           if(!book||book.updatedAt!==input.sourceRevision)
@@ -777,9 +875,10 @@ async function generate(req, env, estimateOnly = false) {
           if(mcpList?.updatedAt!==input.sourceRevision)
             throw Error("MCP еще не видит обновленную рукопись. Повтори позже.");
         }
-        if(isDraft || aitunnel){
-          const sources=await draftBookSources(env,input.bookId,messages);
-          messages.unshift({role:"system",content:sources});
+        if(isDraft || aitunnel || separateGateway){
+          const {text,...source}=await draftBookSources(env,input.bookId,messages,input.sourceRevision);
+          quoteSource=source;
+          messages.unshift({role:"system",content:text});
         }else messages.unshift({role:"system",content:
           "Выбранная книга: "+input.bookId+". "+
           "Канон и главы получай через MCP. "+
@@ -787,6 +886,7 @@ async function generate(req, env, estimateOnly = false) {
       }else{
         // Legacy mode remains for ModelProxy, but we do NOT misrepresent it
         // as connected MCP when the owner has not configured MCP_READ_KEY.
+        if(separateGateway)throw Error("Источник книг не подключён к шлюзу.");
         if(providerId!=="modelproxy")throw Error("MCP не подключен: нужен MCP_READ_KEY в Cloudflare.");
         const material=await getBookMaterial(env,input.bookId,input.mode,
           typeof input.sourceRevision==="string"?input.sourceRevision:"");
@@ -794,7 +894,7 @@ async function generate(req, env, estimateOnly = false) {
       }
     }catch(e){return json(req,424,{error:e.message,code:"BOOK_SOURCE"});}
   }
-  if(useMcp && !isDraft && !aitunnel){
+  if(useMcp && !isDraft && !aitunnel && !separateGateway){
     try{return await mcpToolsCompletion(req,env,provider,model,messages,
       greeting?"":(input.bookId||""),maxTokens,greeting?"dialog":input.mode);}
     catch(e){return fail(req,502,"MCP: "+e.message);}
@@ -813,6 +913,10 @@ async function generate(req, env, estimateOnly = false) {
     const quote = await aitunnelQuote(req,env,body,estimateOnly ? null : input.aitunnelQuote);
     if (quote) return quote;
   }
+  if (apimira) {
+    const quote=await apimiraQuote(req,env,body,estimateOnly?null:input.apimiraQuote,quoteSource);
+    if(quote)return quote;
+  }
   let upstream;
   try {
     upstream = await fetch(bothubChapter ? BOTHUB_ANTHROPIC + "/messages" : provider.endpoint, {
@@ -820,7 +924,7 @@ async function generate(req, env, estimateOnly = false) {
       headers: { ...(aitunnel?aitunnelHeaders(env):{Authorization:"Bearer "+env[provider.secret],
         "Content-Type":"application/json"}), Accept:"text/event-stream",
         ...(bothubChapter?{"anthropic-version":"2023-06-01"}:{}) },
-      ...(aitunnel?{redirect:"error"}:bothubChapter?{redirect:"manual"}:{}),
+      ...(aitunnel||apimira?{redirect:"error"}:bothubChapter?{redirect:"manual"}:{}),
       // Глава приходит постепенно и может писаться дольше пяти минут.
       body: JSON.stringify(body), signal:req.signal
     });
@@ -870,10 +974,13 @@ function anthropicChapterStream(body) {
 function chapterStream(req,upstream,provider,bothubChapter = false) {
   if (!upstream.body || !/^text\/event-stream(?:\s*;|$)/i.test(upstream.headers.get("Content-Type") || ""))
     return fail(req,502,provider.name+" не вернул поток текста. Проверь историю расходов перед новой попыткой.");
+  const requestId=provider.model===APIMIRA_MODEL?upstream.headers.get("X-Request-Id"):null;
   return new Response(bothubChapter ? anthropicChapterStream(upstream.body) : upstream.body, {
     status: 200,
     headers: { ...headers(req), "Content-Type": "text/event-stream; charset=utf-8",
-      "X-Accel-Buffering": "no" }
+      "X-Accel-Buffering": "no",...(validRequestId(requestId)?{
+        "X-Freitag-Request-Id":requestId,"Access-Control-Expose-Headers":"X-Freitag-Request-Id"
+      }:{}) }
   });
 }
 
@@ -922,7 +1029,7 @@ async function batchStart(req,env){
   }catch{return fail(req,400,"Некорректный JSON запроса.");}
   const entries=input?.messages, bookId=input?.bookId||"",outputLimit=Number(input?.outputTokenLimit);
   if(input?.provider!=="bothub"||input.model!=="claude-opus-5.5"||input.mode!=="draft"||
-     !BOTHUB_CHAPTER_LIMITS.includes(outputLimit)||
+     !CHAPTER_LIMITS.includes(outputLimit)||
      !Array.isArray(entries)||!entries.length||entries.length>16||
      entries.some(m=>!["system","user","assistant"].includes(m?.role)||
        typeof m.content!=="string"||m.content.length>130000)||
@@ -940,7 +1047,7 @@ async function batchStart(req,env){
   if(bookId){
     if(!mcpConfigured(env))return fail(req,424,"MCP Мастерской не настроен. Платный запрос отменен.");
     try{
-      const source=await draftBookSources(env,bookId,messages);
+      const {text:source}=await draftBookSources(env,bookId,messages);
       messages.unshift({role:"system",content:source});
     }catch(e){return fail(req,424,"Не удалось загрузить главу: "+e.message);}
   }
@@ -1044,13 +1151,18 @@ async function bothubPreflight(req, env) {
     } catch { return fail(req,502,"AITUNNEL не ответил на проверку подключения."); }
   }
   const provider=params.get("provider")==="apimira"?"apimira":"bothub";
-  const model=params.get("model")||(provider==="apimira"?"anthropic/claude-opus-5.5":"claude-sonnet-5.5");
+  const model=params.get("model")||(provider==="apimira"?APIMIRA_MODEL:"claude-sonnet-5.5");
   if(provider==="bothub"&&!BOTHUB_MODELS.includes(model))
     return fail(req,400,"Неизвестная модель BotHub.");
-  if(provider==="apimira"&&model!=="anthropic/claude-opus-5.5")
+  if(provider==="apimira"&&model!==APIMIRA_MODEL)
     return fail(req,400,"Неизвестная модель ApiMira.");
   const key=provider==="apimira"?env.APIMIRA_API_KEY:env.BOTHUB_API_KEY;
   if(!key)return fail(req,503,provider==="apimira"?"ApiMira API не настроен.":"BotHub API не настроен.");
+  if(snapshotGateway(env)){
+    if(provider!=="apimira")return fail(req,403,"Используй рабочий шлюз BotHub.");
+    const account=await apimiraAccount(req,env);
+    return account.error||json(req,200,{ok:true,model,...account,budgetUsd:APIMIRA_TRIAL_LIMIT_USD});
+  }
   let upstream;
   try {
     upstream = await fetch(provider==="apimira"?"https://apimira.com/v1/models":BOTHUB_ANTHROPIC+"/models", {
@@ -1095,12 +1207,17 @@ export default {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: headers(req) });
     try {
       const path = new URL(req.url).pathname;
+      const separate=snapshotGateway(env);
+      const bothubConfigured=!separate && !!env.BOTHUB_API_KEY && !!env.OWNER_UID;
+      if(separate && !["/health","/preflight","/mcp-tools","/quote","/chat","/receipt"].includes(path))
+        return fail(req,404,"Адрес не найден.");
       if (path === "/health" && req.method === "GET")
         return json(req, 200, { ok: true, chapterProtocol:2, provider: "ModelProxy", model: MODEL,
+          ...(separate?{providerGateway:true,chapterOutputLimits:CHAPTER_LIMITS}:{}),
           configured: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
-          bothubConfigured: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
+          bothubConfigured,
           bothubChapterApi: "anthropic-messages",
-          bothubChapterOutputLimits: BOTHUB_CHAPTER_LIMITS,
+          bothubChapterOutputLimits: CHAPTER_LIMITS,
           apimiraConfigured: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
           aitunnelConfigured: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID,
           bookToolsSupported: mcpConfigured(env),
@@ -1109,14 +1226,19 @@ export default {
           mcpConfigured: mcpConfigured(env),
           availableProviders: {
             modelproxy: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
-            bothub: !!env.BOTHUB_API_KEY && !!env.OWNER_UID,
+            bothub: bothubConfigured,
             apimira: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
             aitunnel: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID
           },
           booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY),
-          autoSyncSupported: !!env.BOOKS && typeof env.BOOKS.put === "function" });
+          autoSyncSupported: !separate && !!env.BOOKS && typeof env.BOOKS.put === "function" });
       if (path === "/mcp-tools" && req.method === "GET") {
         if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца.");
+        if(separate){
+          if(!env.BOOKS)return fail(req,503,"Снимки книг Мастерской не подключены.");
+          return json(req,200,{ok:true,server:"masterskaya-ai",readOnly:true,
+            toolCount:SNAPSHOT_BOOK_TOOLS.length,tools:SNAPSHOT_BOOK_TOOLS});
+        }
         try{const items=await mcpDiscover(env);
           return json(req,200,{ok:true,server:"masterskaya-ai",readOnly:true,
             toolCount:items.length,tools:items.map(t=>t.name)});}
@@ -1130,6 +1252,7 @@ export default {
       if (path === "/snapshot" && req.method === "GET") return await snapshotStatus(req, env);
       if (path === "/chat" && req.method === "POST") return await generate(req, env);
       if (path === "/quote" && req.method === "POST") return await generate(req, env, true);
+      if (separate && path === "/receipt" && req.method === "GET") return await apimiraReceipt(req,env);
       return fail(req, 404, "Адрес не найден.");
     } catch (error) {
       // Never log user input or secrets. Return a CORS-visible error instead of

@@ -593,6 +593,10 @@ async function callTool(env, name, a) {
   if (name === 'list_books') return msg(await indexOf(env.BOOKS));
   if (!validId(a?.book_id)) return msg('Укажите book_id из list_books.', true);
   const b = await env.BOOKS.get(bookKey(a.book_id), { type: 'json' });
+  return readBookTool(b, name, a);
+}
+
+export function readBookTool(b, name, a) {
   if (!b) return msg('Книга недоступна или доступ отозван.', true);
   if (name === 'get_book_context') return msg([b.context, '', 'Обновлено: ' + b.updatedAt, 'Глав: ' + b.chapters.length].join('\n'));
   if (name === 'list_chapters') return msg({ book: b.title, updatedAt: b.updatedAt, chapters: b.chapters.map((c, i) => ({ chapter: i + 1, title: c.title, chars: c.text.length })) });

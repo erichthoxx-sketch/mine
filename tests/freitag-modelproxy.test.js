@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { webcrypto } from "node:crypto";
 import gateway from "../proxy/freitag-modelproxy-worker.js";
+import { CHAPTER_LIMITS } from "../ai/chapter-limits.js";
 
 const ORIGIN = "https://freitag-ai-test.pages.dev";
 const url = path => "https://freitag-opus-gateway.example/" + path;
@@ -497,9 +498,9 @@ test("book project uses the exact large master instruction and verbatim long cha
   assert.doesNotMatch(source,/slice\(0,26000\)|slice\(0,20000\)|slice\(0,6000\)/);
   assert.match(app,/if\(c\.projectId && !c\.mode\) c\.mode="draft"/);
   assert.match(app,/outputTokenLimit:requestMode==="draft"/);
-  assert.match(worker,/chapterLimits\.includes\(requestedDraftLimit\)/);
+  assert.match(worker,/CHAPTER_LIMITS\.includes\(requestedDraftLimit\)/);
   assert.match(worker,/maxTokens=greeting\?128:isDraft\?requestedDraftLimit/);
-  assert.match(worker,/if\(useMcp && !isDraft && !aitunnel\)/);
+  assert.match(worker,/if\(useMcp && !isDraft && !aitunnel && !separateGateway\)/);
 });
 
 
@@ -514,5 +515,5 @@ test("ordinary book greetings stay cheap; genuine chapters retain large prompts"
   assert.match(worker,/if\(input.bookId&&!greeting\)/);
   assert.match(worker,/const maxTokens=greeting\?128:/);
   assert.match(app,/void save\(\)/);
-  assert.match(app,/const CHAPTER_LIMITS=\[4500,9000,DEFAULT_CHAPTER_LIMIT\]/);
+  assert.deepEqual(CHAPTER_LIMITS,[4500,9000,14000,20000,32000]);
 });

@@ -1,6 +1,7 @@
 // Все запросы браузера перехватываются. Книги и ответы модели вымышлены.
 import assert from "node:assert/strict";
 import {mkdir, readFile} from "node:fs/promises";
+import {runInNewContext} from "node:vm";
 import {chromium} from "playwright";
 
 const browser = await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE_PATH});
@@ -13,6 +14,12 @@ const ending = "Последняя строка.";
 const rest = "Вымышленный текст. ".repeat(1400)+ending;
 const screenshots = process.env.FREITAG_SCREENSHOT_DIR;
 if(screenshots)await mkdir(screenshots,{recursive:true});
+const Zip=runInNewContext(await readFile(new URL("js/vendor/jszip.min.js",appRoot),"utf8")+"; JSZip",{setImmediate,clearImmediate,setTimeout,clearTimeout});
+const word=new Zip();
+word.file("word/document.xml",'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+
+  '<w:p><w:r><w:t>Первая строка.</w:t></w:r></w:p><w:p><w:r><w:t>Вторая строка.</w:t><w:br/><w:t>Конец главы.</w:t></w:r></w:p>'+
+  '</w:body></w:document>');
+const wordBytes=Buffer.from(await word.generateAsync({type:"uint8array"}));
 
 try {
   for(const width of [1440,390]){
@@ -28,13 +35,14 @@ try {
       if(u.origin!==origin)throw Error("Неожиданный сетевой запрос: "+u.origin);
       const api={
         "/health":{ok:true,model:"claude-opus-5-5",provider:"ModelProxy",apimiraConfigured:true,aitunnelConfigured:true,chapterProtocol:2},
-        "/preflight":u.searchParams.get("provider")==="aitunnel"?{ok:true,balanceRub:200,budgetRub:160}:{ok:true,balanceUsd:3.45},
+        "/preflight":u.searchParams.get("provider")==="aitunnel"?{ok:true,balanceRub:200,budgetRub:160}:{ok:true,balanceUsd:3.45,inputUsd:1.25,outputUsd:5.20},
+        "/receipt":{ok:true,costUsd:.013,inputTokens:3200,outputTokens:1700},
         "/mcp-tools":{ok:true,toolCount:4,tools:["list_books","get_book_context","list_chapters","read_chapter"]},
         "/snapshot":{ok:true,chapterCount:15,updatedAt:"2026-11-22T17:00:00Z",
           lastChapters:[{slot:14,title:"Тестовая глава 14"},{slot:15,title:"Тестовая глава 15"}]}
       };
       if(u.pathname.startsWith("/api/freitag/")){
-        const data=api[u.pathname.replace("/api/freitag","")];
+        const data=api[u.pathname.replace(/^\/api\/freitag(?:\/providers)?/,"")];
         assert.ok(data,"unexpected API route "+u.pathname);
         assert.equal(route.request().method(),"GET");
         if(u.pathname.endsWith("/snapshot")){
@@ -69,16 +77,25 @@ try {
       window.submitted=[];
       window.quoted=[];
       window.fetch=(url,opts)=>{
-        if(String(url).endsWith("/api/freitag/quote")){
-          window.quoted.push(JSON.parse(opts.body));
+        if(/\/api\/freitag\/providers\/quote$/.test(String(url))){
+          const body=JSON.parse(opts.body);
+          window.quoted.push(body);
+          if(window.rejectSource)return Promise.resolve(Response.json({
+            code:"BOOK_SOURCE",error:"Мастерская не нашла одну из фраз."
+          },{status:424}));
+          if(body.provider==="apimira")return Promise.resolve(Response.json({ok:true,ready:true,estimateUsd:.20,
+            outputTokenLimit:body.outputTokenLimit,budgetUsd:.50,fingerprint:"fixture-apimira",source:{chapters:[14,15]}}));
           return Promise.resolve(Response.json({ok:true,ready:true,estimateRub:136,outputTokenLimit:14000,
             balanceRub:200,budgetRub:160,fingerprint:"fixture-estimate"}));
         }
-        if(!String(url).endsWith("/api/freitag/chat"))return fetcher(url,opts);
+        if(!/\/api\/freitag(?:\/providers)?\/chat$/.test(String(url)))return fetcher(url,opts);
         if(window.rejectSource)return Promise.resolve(Response.json({
           code:"BOOK_SOURCE",error:"Мастерская не нашла одну из фраз."
         },{status:424}));
-        window.submitted.push(JSON.parse(opts.body));
+        const body=JSON.parse(opts.body);
+        if(body.provider==="bothub" ? String(url).includes("/providers/") : !String(url).includes("/providers/"))
+          throw Error("Неверный шлюз для "+body.provider);
+        window.submitted.push(body);
         const bytes=new TextEncoder();
         return Promise.resolve(new Response(new ReadableStream({start(controller){
           const data=value=>controller.enqueue(bytes.encode("data: "+JSON.stringify(value)+"\r\n\r\n"));
@@ -92,7 +109,7 @@ try {
             controller.close();
           };
           window.fragment("Начало. ");
-        }}),{headers:{"Content-Type":"text/event-stream"}}));
+        }}),{headers:{"Content-Type":"text/event-stream",...(body.provider==="apimira"?{"X-Freitag-Request-Id":"fixture-charge"}:{})}}));
       };
     });
     await page.goto(origin+"/ai/");
@@ -106,7 +123,7 @@ try {
     await nav("settings");
     await page.locator("#f-provider").selectOption("apimira");
     await page.locator('[data-action="test-connection"]').click();
-    await page.locator("#f-test-status").filter({hasText:"$3.4500"}).waitFor();
+    await page.locator("#f-test-status").filter({hasText:/Баланс ApiMira 3,45/}).waitFor();
     await page.locator("#f-global").fill(instruction);
     await page.locator('#f-settings button[type="submit"]').click();
     await nav("projects");
@@ -119,6 +136,17 @@ try {
     assert.deepEqual(await page.evaluate(()=>window.submitted),[]);
     if(screenshots)await page.screenshot({path:screenshots+"/project-"+width+".png",fullPage:true});
     await page.locator('#f-project-instructions button[type="submit"]').click();
+    await page.getByRole("button",{name:"Материалы проекта"}).click();
+    await page.locator("#f-upload").setInputFiles({name:"Рукопись.docx",mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",buffer:wordBytes});
+    const manuscript=page.getByRole("button",{name:"Рукопись.docx"});
+    await manuscript.click();
+    assert.equal(await page.getByRole("textbox",{name:"Текст материала"}).inputValue(),"Первая строка.\nВторая строка.\nКонец главы.");
+    await page.getByRole("button",{name:"Закрыть",exact:true}).click();
+    await page.getByRole("checkbox",{name:"Подбирать отрывки из Рукопись.docx"}).uncheck();
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
+    if(screenshots)await page.screenshot({path:screenshots+"/materials-"+width+".png",fullPage:true});
+    await nav("projects");
+    await page.getByRole("button",{name:"Открыть проект",exact:true}).click();
     await page.locator('[data-action="new-project-chat"]').click();
     await page.locator('.f-source-tag.linked').filter({hasText:"Мастерская"}).waitFor();
     await page.getByRole("button",{name:"Развернуть"}).click();
@@ -159,7 +187,9 @@ try {
     const navBounds=await page.locator(".f-mobile-nav").boundingBox();
     assert.ok(submitBounds.y+submitBounds.height<=(navBounds?.y??900),"Send button must remain above the bottom navigation");
     if(screenshots)await page.screenshot({path:screenshots+"/chat-"+width+".png",fullPage:true});
-    await page.locator('#f-chat-form button[type="submit"]').click();
+    await Promise.all([page.waitForEvent("dialog").then(async dialog=>{
+      const message=dialog.message();await dialog.accept();assert.match(message,/ApiMira.*оценка.*0,20[\s\S]*главы 14, 15/);
+    }),page.locator('#f-chat-form button[type="submit"]').click()]);
     await page.locator(".assistant .f-msg-text").filter({hasText:"Начало."}).waitFor();
     const requests=await page.evaluate(()=>window.submitted);
     assert.equal(requests.length,1);
@@ -167,6 +197,7 @@ try {
     assert.equal(request.provider,"apimira");
     assert.equal(request.bookId,"fixture");
     assert.equal(request.outputTokenLimit,14000);
+    assert.deepEqual(request.apimiraQuote,{fingerprint:"fixture-apimira",estimateUsd:.20});
     assert.deepEqual(request.messages,[{role:"system",content:instruction+"\n\n"+project},{role:"user",content:prompt}]);
     await page.evaluate(text=>window.fragment(text),rest);
     await page.locator(".assistant .f-msg-text").filter({hasText:ending}).waitFor();
@@ -209,6 +240,7 @@ try {
     if(width===1440){
       for(const reason of ["length",null,"content_filter"]){
         await page.locator("#f-message-input").fill(reason==="length"?"Второй тест. Не менее 18 000 знаков.":"Второй тест");
+        page.once("dialog",dialog=>dialog.accept());
         await page.locator('#f-chat-form button[type="submit"]').click();
         await page.waitForFunction(n=>window.submitted.length===n,["length",null,"content_filter"].indexOf(reason)+1);
         await page.locator(".assistant .f-msg-text").last().filter({hasText:"Начало."}).waitFor();
@@ -268,8 +300,8 @@ try {
           await limit.selectOption("20000");
           await limit.selectOption("32000");
         }else{
-          await limit.locator('option[value="32000"]').waitFor({state:"detached"});
-          assert.equal(await limit.inputValue(),"14000");
+          assert.equal(await limit.inputValue(),"32000");
+          page.once("dialog",dialog=>dialog.accept());
         }
         await page.locator("#f-message-input").fill("Продолжи сцену с медальоном");
         const count=await page.evaluate(()=>window.submitted.length);
@@ -277,7 +309,7 @@ try {
         await page.waitForFunction(n=>window.submitted.length===n,count+1);
         const payload=await page.evaluate(()=>window.submitted.at(-1));
         assert.equal(payload.provider,provider);
-        assert.equal(payload.outputTokenLimit,provider==="bothub"?32000:14000);
+        assert.equal(payload.outputTokenLimit,32000);
         assert.equal(payload.bookId,"fixture");
         assert.match(payload.messages[0].content,/Сюжет от пролога до текущей главы/);
         assert.match(payload.messages[0].content,/Марта унаследовала медальон от бабушки/);
@@ -304,6 +336,8 @@ try {
       const cloud=await page.evaluate(()=>window.testCloud.value);
       assert.deepEqual(cloud.data.chats,archive.data.chats);
       assert.deepEqual(cloud.data.projects,archive.data.projects);
+      assert.deepEqual(cloud.data.docs,archive.data.docs);
+      assert.equal(cloud.data.docs.find(d=>d.name==="Рукопись.docx")?.includeInContext,false);
       assert.equal(cloud.data.settings.globalInstruction,instruction);
       assert.equal(cloud.data.settings.workerUrl,undefined);
       assert.equal(cloud.data.settings.endpoint,undefined);

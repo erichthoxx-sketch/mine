@@ -86,7 +86,7 @@ export function projectMemoryContext({project, chats = [], docs = [], feedback =
   if (remaining < 230 || !terms.length) return sections.join("\n\n");
   const sources = [];
   for (const doc of docs) {
-    if (doc.projectId === project.id)
+    if (doc.projectId === project.id && doc.includeInContext !== false)
       sources.push({title:"Материал «" + singleLine(doc.name) + "»", source:textOf(doc.text), group:doc});
   }
   for (const chat of chats) {

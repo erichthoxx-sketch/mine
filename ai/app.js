@@ -5,6 +5,8 @@ import { projectHomeHtml } from './project-view.js';
 import { projectMemoryContext } from './project-context.js';
 import { draftDelivery, draftDeliveryLabel } from './draft-delivery.js';
 import { ensureDriveAccess, refreshLinkedBook } from './live-context.js';
+import { DEFAULT_CHAPTER_LIMIT, CHAPTER_LIMITS } from './chapter-limits.js';
+import { MAX_MATERIAL_LENGTH, readMaterial } from './materials.js';
 // Чаты, проекты и текстовые материалы хранятся только в IndexedDB этого браузера.
 // Никаких ключей и рукописей в репозитории.
 const $ = (q) => document.querySelector(q);
@@ -12,9 +14,6 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":
 const uid = () => (globalThis.crypto?.randomUUID?.() || "id-" + Date.now() + "-" + Math.random().toString(36).slice(2));
 const stamp = () => new Date().toISOString();
 const userInstruction = v => typeof v === "string" ? v : "";
-const DEFAULT_CHAPTER_LIMIT=14000;
-const CHAPTER_LIMITS=[4500,9000,DEFAULT_CHAPTER_LIMIT];
-const BOTHUB_CHAPTER_LIMITS=[...CHAPTER_LIMITS,20000,32000];
 const WRITING_MODES = {
   dialog: {name:"Диалог",instruction:"Отвечай кратко и конкретно. При нехватке сведений сообщи, каких именно.",maxTokens:320},
   draft: {name:"Написать сцену",instruction:"Ты работаешь над художественной сценой. Пиши сразу прозу, не вступай с объяснениями. Соблюдай канон, POV, время, место, характеры, заданный стиль и последнюю сцену. Не изобретай события и родственные связи без запроса. Если нет нужной завязки, задай один конкретный вопрос.",maxTokens:700},
@@ -24,8 +23,8 @@ const WRITING_MODES = {
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
   settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",sceneOutputTokens:DEFAULT_CHAPTER_LIMIT,globalInstruction:"",context:4096}, theme:"auto"});
-let state=blank(), tab="chat", projectHomeId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null, batchCheck=null;
-const MAX_DOC=2*1024*1024;
+let state=blank(), tab="chat", projectHomeId=null, materialsProjectId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null, batchCheck=null;
+let importingMaterials=false;
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const getDb=(key="state")=>new Promise((resolve,reject)=>{const r=db.transaction("data").objectStore("data").get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const putDb=(v,rollback)=>new Promise((resolve,reject)=>{
@@ -34,10 +33,12 @@ const putDb=(v,rollback)=>new Promise((resolve,reject)=>{
   store.put(v,"state");t.oncomplete=resolve;t.onabort=()=>reject(t.error);t.onerror=()=>reject(t.error);
 });
 let saveChain=Promise.resolve();
-const save=()=>{const snapshot=structuredClone(state); saveChain=saveChain.catch(()=>{}).then(()=>putDb(snapshot)).catch(e=>notice("Не удалось сохранить данные: "+e.message));return saveChain;};
+const save=()=>{const snapshot=structuredClone(state); saveChain=saveChain.catch(()=>{}).then(()=>putDb(snapshot))
+  .then(()=>true).catch(e=>{notice("Не удалось сохранить данные: "+e.message);return false;});return saveChain;};
 const notice=(msg)=>{let el=$("#f-flash");if(!el){el=document.createElement("div");el.id="f-flash";el.className="f-notice f-flash";document.body.appendChild(el);}el.textContent=msg;el.hidden=false;clearTimeout(notice.timer);notice.timer=setTimeout(()=>el.hidden=true,7000);};
 const project=(id=state.activeProjectId)=>state.projects.find(p=>p.id===id);
 const chat=(id=state.activeChatId)=>state.chats.find(c=>c.id===id);
+const materialsProject=()=>project(materialsProjectId)||project(chat()?.projectId)||project()||state.projects[0];
 // Drafts are private to each conversation or to the initial composer for a book.
 // They are persisted in the existing IndexedDB, never sent to a provider until submission.
 const draftKey=()=>chat()?"chat:"+chat().id:"new:"+(state.activeProjectId||"none");
@@ -99,8 +100,7 @@ function renderSidebar(){
       '<p class="f-sidebar-empty">'+state.projects.length+' книг в работе</p>'+
       '<button type="button" data-action="add-project" class="f-btn f-new-chat">＋ Добавить книгу</button>';
   }else if(tab==="knowledge"){
-    el.innerHTML='<div class="f-side-label">Локальные материалы</div>'+
-      '<p class="f-sidebar-empty">'+state.docs.length+' текстов и заметок. Хранятся в этом браузере.</p>';
+    el.replaceChildren();
   }else{
     el.innerHTML='<div class="f-side-label">Подключения</div>'+
       '<p class="f-sidebar-empty">Здесь настраиваются модели, внешний вид и резервные копии.</p>';
@@ -149,22 +149,31 @@ function renderProjects(){
     '<p class="f-muted f-bottom-note">Чаты и рабочие заметки пока хранятся в этом браузере — для резервной копии используй экспорт в настройках.</p></div>';
 }
 function renderKnowledge(){
-  const docs=state.docs.filter(d=>!state.activeProjectId||d.projectId===state.activeProjectId);
-  const examples=state.feedback.filter(f=>!state.activeProjectId||f.projectId===state.activeProjectId).slice().reverse();
-  $("#panel").innerHTML='<div class="f-content">'+titleLine("Материалы","Тексты, заметки и авторские образцы.")+
-  '<div class="f-notice">Канон из «Мастерской» и загруженные главы — источники. Авторские образцы и замечания — правила стиля. Ни один из этих материалов сам по себе не меняет веса модели.</div>'+
-  '<div class="f-section"><label class="f-label">Проект</label><select class="f-select" id="f-doc-project"><option value="">Выбери проект</option>'+
-    state.projects.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===state.activeProjectId?"selected":"")+'>'+esc(p.name)+'</option>').join("")+'</select></div>'+
-  (state.activeProjectId?'<div class="f-section"><h2>Добавить материал</h2><p class="f-muted">Только .txt, .md или .json, до 2 МБ за файл. Содержимое остаётся в твоём браузере и не публикуется на GitHub.</p><input id="f-upload" class="f-upload" type="file" accept=".txt,.md,.json,text/plain,application/json"><div class="f-row" style="margin-top:10px"><button class="f-btn" data-action="add-note">+ Добавить заметку</button></div></div>':'<div class="f-notice">Сначала создай или выбери проект.</div>')+
-  '<div class="f-section"><h2>Материалы'+(state.activeProjectId?" проекта":"")+'</h2>'+
-    (docs.length?'<ul class="f-list">'+docs.map(d=>'<li class="f-spread"><div><strong>'+esc(d.name)+'</strong><p class="f-muted">'+(d.text.length).toLocaleString("ru-RU")+' знаков</p></div><button class="f-btn danger" data-action="delete-doc" data-id="'+esc(d.id)+'">Удалить</button></li>').join("")+'</ul>':empty("Материалов нет","Добавь главу или текстовую заметку."))+'</div>'+
-  '<div class="f-section"><div class="f-spread"><div><h2>Мой стиль · память соавтора</h2><p class="f-muted">Одобренные сцены, твои правки и причины отказов. Они будут учитываться в заданиях для выбранной модели.</p></div>'+
-    (state.activeProjectId?'<button class="f-btn" data-action="add-style">+ Мой образец</button>':"")+'</div>'+
+  const p=materialsProject();
+  const docs=state.docs.filter(d=>d.projectId===p?.id);
+  const examples=state.feedback.filter(f=>f.projectId===p?.id).slice().reverse();
+  $("#panel").innerHTML='<div class="f-content f-materials-page">'+titleLine("Материалы")+
+  (p?'<section class="f-materials-toolbar"><div class="f-material-project"><label class="f-label" for="f-doc-project">Проект</label><select class="f-select" id="f-doc-project">'+
+    state.projects.map(item=>'<option value="'+esc(item.id)+'" '+(item.id===p.id?"selected":"")+'>'+esc(item.name)+'</option>').join("")+
+    '</select></div><div class="f-row"><button class="f-btn primary" type="button" data-action="choose-materials" '+(importingMaterials?'disabled':'')+'>'+
+    (importingMaterials?'Читаю файлы…':'Загрузить файлы')+'</button><input id="f-upload" type="file" accept=".docx,.txt,.md,.json" multiple hidden>'+
+    '<button class="f-btn" type="button" data-action="add-note">Добавить заметку</button></div></section>'+
+    '<p class="f-material-hint f-muted">Word (.docx) до 10 МБ · TXT, Markdown и JSON до 2 МБ. Freitag хранит текст целиком и подбирает отрывки по заданию.</p>'+
+    (docs.length?'<ul class="f-material-list">'+docs.map(d=>{
+      const format=d.format||/\.(docx|txt|md|json)$/i.exec(d.name)?.[1]||"заметка";
+      return '<li><div class="f-material-title"><button type="button" data-action="open-doc" data-id="'+esc(d.id)+'">'+esc(d.name)+'</button>'+
+        '<p class="f-muted">'+esc(format==='заметка'?'Заметка':format.toUpperCase())+' · '+String(d.text||"").length.toLocaleString("ru-RU")+' знаков</p></div>'+
+        '<label class="f-material-use"><input type="checkbox" data-doc-context="'+esc(d.id)+'" '+(d.includeInContext!==false?'checked':'')+
+        ' aria-label="Подбирать отрывки из '+esc(d.name)+'">Учитывать по задаче</label></li>';
+    }).join("")+'</ul>':empty("Материалов пока нет","Загрузи текст или добавь заметку к проекту."))+
+    '<details class="f-material-style"><summary>Образцы стиля'+(examples.length?' · '+examples.length:'')+'</summary>'+
+    '<div class="f-row"><button class="f-btn" type="button" data-action="add-style">Добавить образец</button></div>'+
     (examples.length?'<div class="f-examples">'+examples.map(x=>'<article class="f-example"><div class="f-spread"><strong>'+(x.kind==="good"?"Одобрено":"Не повторять")+' · '+esc(x.source||"Автор")+'</strong>'+
       '<button class="f-btn danger" data-action="delete-feedback" data-id="'+esc(x.id)+'">Удалить</button></div>'+
       '<p>'+esc(x.reason||"")+'</p><p class="f-muted">'+esc(String(x.finalText||x.answer||"").slice(0,260))+'</p></article>').join("")+'</div>':
-      empty("Примеров пока нет","Добавь любимый абзац или сохрани ответ кнопкой «В образцы»."))+
-    '</div></div>';
+      '<p class="f-muted">Сюда можно добавить свой текст или сохранить удачный ответ из чата.</p>')+'</details>':
+    empty("Выбери проект для материалов","Файлы и заметки привязываются к книге.")+
+    '<button class="f-btn primary" type="button" data-action="add-project">Новый проект</button>')+'</div>';
 }
 function renderSettings(){
   const s=state.settings;
@@ -235,15 +244,15 @@ function renderSettings(){
     '</form></div>';
 }
 const activeBotHubModel=()=>state.settings.bothubModel==="claude-opus-5.5"?"claude-opus-5.5":"claude-sonnet-5.5";
-const chapterLimitsFor=provider=>provider==="bothub"?BOTHUB_CHAPTER_LIMITS:CHAPTER_LIMITS;
-function chapterOutputLimit(provider){
+function chapterOutputLimit(){
   const limit=Number(state.settings.sceneOutputTokens);
-  return chapterLimitsFor(provider).includes(limit)?limit:DEFAULT_CHAPTER_LIMIT;
+  return CHAPTER_LIMITS.includes(limit)?limit:DEFAULT_CHAPTER_LIMIT;
 }
 const activeClaudeName=()=>activeBotHubModel()==="claude-opus-5.5"?"Claude Opus 5.5":"Claude Sonnet 5.5";
 const paidProviders=["modelproxy","bothub","apimira","aitunnel"];
 const providerNames={modelproxy:"ModelProxy",bothub:"BotHub",apimira:"ApiMira",aitunnel:"AITUNNEL"};
 const rub=value=>new Intl.NumberFormat("ru-RU",{style:"currency",currency:"RUB",maximumFractionDigits:4}).format(value);
+const usd=value=>new Intl.NumberFormat("ru-RU",{style:"currency",currency:"USD",maximumFractionDigits:6}).format(value);
 const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":
   state.settings.provider==="bothub"?activeClaudeName()+" · BotHub":
   paidProviders.includes(state.settings.provider)?"Claude Opus 5.5 · "+providerNames[state.settings.provider]:"Локальная Qwen · Ollama";
@@ -259,8 +268,8 @@ const modelChoices=()=>[
   ["ollama","Qwen · локально"]
 ].map(([id,label])=>'<option value="'+id+'" '+(currentModelChoice()===id?"selected":"")+'>'+label+'</option>').join("");
 function renderChat(){
-  const provider=state.settings.provider, outputLimit=chapterOutputLimit(provider);
-  const chapterOptions=chapterLimitsFor(provider).map(limit=>'<option value="'+limit+'" '+
+  const outputLimit=chapterOutputLimit();
+  const chapterOptions=CHAPTER_LIMITS.map(limit=>'<option value="'+limit+'" '+
     (limit===outputLimit?"selected":"")+'>'+limit.toLocaleString("ru-RU")+'</option>').join("");
   const c=chat();
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
@@ -284,6 +293,10 @@ function renderChat(){
     (longPrompt?'<details class="f-prompt" data-index="'+i+'" '+(expanded.has(String(i))?"open":"")+'><summary>Задание <span>'+text.length.toLocaleString("ru-RU")+' зн.</span></summary>'+
         message+'</details>':message)+
     (Number.isFinite(m.costRub)?'<p class="f-mini">Списано AITUNNEL: '+esc(rub(m.costRub))+'</p>':"")+
+    (Number.isFinite(m.apimiraCostUsd)?'<p class="f-mini">Списано ApiMira: '+esc(usd(m.apimiraCostUsd))+
+      (Number.isSafeInteger(m.apimiraTokens?.input)&&Number.isSafeInteger(m.apimiraTokens?.output)?
+        ' · '+m.apimiraTokens.input.toLocaleString("ru-RU")+' токенов на входе · '+m.apimiraTokens.output.toLocaleString("ru-RU")+' на выходе':"")+'</p>':
+      m.apimiraRequestId&&!busy?'<button class="f-inline-btn" type="button" data-action="apimira-receipt" data-i="'+i+'">Проверить списание ApiMira</button>':"")+
     (Number.isSafeInteger(m.delivery?.characters)?'<p class="f-mini f-draft-delivery">'+esc(draftDeliveryLabel(m.delivery))+'</p>':"")+
     (m.receiving && !busy?'<p class="f-mini">Получен фрагмент. Завершение главы не подтверждено.</p>':"")+
     (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
@@ -422,12 +435,20 @@ async function editProject(id){
   else{const q={id:uid(),...details};state.projects.unshift(q);state.activeProjectId=q.id;state.activeChatId=null;projectHomeId=q.id;}
   await save();render();
 }
-async function addNote(){
-  if(!state.activeProjectId)return notice("Сначала выбери проект.");
-  const v=await openModal("Новая заметка",[{key:"name",label:"Название",required:true},{key:"text",label:"Текст",multi:true}]);
-  if(!v||!v.text.trim())return;
-  state.docs.unshift({id:uid(),projectId:state.activeProjectId,name:v.name.trim(),text:v.text.slice(0,MAX_DOC),added:stamp()});
-  await save();render();notice("Заметка сохранена только в этом браузере.");
+async function editMaterial(doc){
+  const p=doc?project(doc.projectId):materialsProject();
+  if(!p)return notice("Сначала выбери проект.");
+  const v=await openModal(doc?"Изменить материал":"Новая заметка",
+    [{key:"name",label:"Название",required:true},{key:"text",label:"Текст",multi:true,required:true}],doc);
+  if(!v||!project(p.id))return;
+  if(v.text.length>MAX_MATERIAL_LENGTH)return notice("В материале больше двух миллионов знаков.");
+  const newDoc={...doc,id:doc?.id||uid(),projectId:p.id,name:v.name.trim(),text:v.text,added:doc?.added||stamp()};
+  state.docs=doc?state.docs.map(d=>d.id===doc.id?newDoc:d):[newDoc,...state.docs];
+  if(!await save()){
+    state.docs=doc?state.docs.map(d=>d===newDoc?doc:d):state.docs.filter(d=>d!==newDoc);
+    return;
+  }
+  render();notice("Материал сохранён.");
 }
 // Поиск по материалам полностью локальный: отбираем короткие отрывки, а не
 // отправляем в маленькую модель весь роман. Для продолжения сцены добавляем
@@ -441,7 +462,7 @@ function searchTerms(question) {
 }
 function relevantNotes(question,projectId,maxLength=2200){
   if(!projectId)return "";
-  const docs=state.docs.filter(d=>d.projectId===projectId);
+  const docs=state.docs.filter(d=>d.projectId===projectId&&d.includeInContext!==false);
   const terms=searchTerms(question);
   if(!docs.length||!terms.length)return "";
   const scored=[];
@@ -598,11 +619,11 @@ const safeWorkerEndpoint=(value)=>{
 // The Pages-hosted test uses a same-origin Function so the browser never
 // calls a cross-origin Worker directly. The Function forwards only via
 // Cloudflare Service binding, and the Worker checks the Firebase token.
-function claudeGateway(savedUrl){
+function claudeGateway(savedUrl,provider){
   const host=location.hostname.toLowerCase();
   if (host==="freitag-ai-test.pages.dev" ||
       /^[a-z0-9-]+\.freitag-ai-test\.pages\.dev$/.test(host))
-    return location.origin+"/api/freitag";
+    return location.origin+"/api/freitag"+(paidProviders.includes(provider)&&provider!=="bothub"?"/providers":"");
   return safeWorkerEndpoint(savedUrl);
 }
 async function probeLocalConnection(){
@@ -629,8 +650,9 @@ async function probeLocalConnection(){
   if(mini)mini.textContent=connectOk?"● Ollama подключена":connectText==="Нет соединения"?"Нет связи с Ollama":connectText;
 }
 async function testConnection(){
-  if(paidProviders.includes($("#f-provider")?.value||state.settings.provider)){
-    const gateway=claudeGateway($("#f-worker")?.value||state.settings.workerUrl);
+  const chosen=$("#f-provider")?.value||state.settings.provider;
+  if(paidProviders.includes(chosen)){
+    const gateway=claudeGateway($("#f-worker")?.value||state.settings.workerUrl,chosen);
     if(!gateway)return notice("Укажи HTTPS-адрес личного Cloudflare Worker.");
     try{
       const response=await fetch(gateway+"/health",{cache:"no-store"});
@@ -638,7 +660,6 @@ async function testConnection(){
       const data=await response.json();
       if(data.provider!=="ModelProxy"||data.model!=="claude-opus-5-5"||data.chapterProtocol!==2)
         throw Error("На сервере прежняя версия шлюза. Обнови Worker без платных запросов.");
-      const chosen=$("#f-provider")?.value||state.settings.provider;
       if(!data.ok || !(data.availableProviders?.[chosen] ?? data[chosen==="modelproxy"?"configured":chosen+"Configured"]))
         throw Error(providerNames[chosen]+": в Cloudflare нужен секрет "+chosen.toUpperCase()+"_API_KEY и настройка владельца.");
       let info;
@@ -660,19 +681,20 @@ async function testConnection(){
       if(!mcpRes.ok || !mcpInfo.ok)
         throw Error(mcpInfo.error||"Прямое MCP-подключение не работает.");
       connectOk=true;
-      connectText="Мастерская MCP · "+mcpInfo.toolCount+" инструментов · "+activeProviderLabel();
+      const sourceLabel=data.providerGateway?"Книги Мастерской":"Мастерская MCP";
+      connectText=sourceLabel+" · "+activeProviderLabel();
       const status=$("#f-test-status");
       const money=chosen==="apimira"&&typeof info?.balanceUsd==="number"?
-        " Баланс ApiMira: $"+info.balanceUsd.toFixed(4)+
-        (info.balanceUsd===0?" — средств для платной главы нет.":"")+
-        " Для длинной главы сервис временно резервирует стоимость входного текста и выбранного лимита ответа.":
+        " Баланс ApiMira "+usd(info.balanceUsd)+"."+
+        (Number.isFinite(info.inputUsd)&&Number.isFinite(info.outputUsd)?
+          " Тариф за 1 млн токенов: вход "+usd(info.inputUsd)+", выход "+usd(info.outputUsd)+".":""):
         chosen==="aitunnel"&&Number.isFinite(info?.balanceRub)?" Баланс: "+rub(info.balanceRub)+
           (info.budgetRub===null?". Задай бюджет API-ключа AITUNNEL перед генерацией.":". Остаток бюджета ключа: "+rub(info.budgetRub)+"."):"";
       const modelStatus=info?.chapterApi==="anthropic-messages"?"Ключ BotHub видит модель в Anthropic Messages. ":info?"Модель есть в каталоге. ":"";
-      if(status)status.textContent=modelStatus+"MCP Мастерской подключен напрямую: "+
-        mcpInfo.toolCount+" инструментов (книги, маркетинг, доходы, Директ, Метрика). "+
-        "Проверка не выполняет платную генерацию."+money;
-      notice("Защищенный шлюз найден. Оплата за проверку соединения не списывается.");
+      const sourceStatus=data.providerGateway?"Доступно чтение закрытых снимков книг Мастерской. ":
+        "MCP Мастерской подключён напрямую · "+mcpInfo.toolCount+" инструментов. ";
+      if(status)status.textContent=modelStatus+sourceStatus+"Проверка бесплатна."+money;
+      notice("Защищенный шлюз найден. Проверка бесплатна.");
     }catch(e){connectOk=false;connectText=e.message;const status=$("#f-test-status");
       if(status)status.textContent=e.message;notice("Claude: "+e.message);}
     renderHeader();return;
@@ -826,7 +848,7 @@ async function sendBatchChapter(text){
     return notice("В этом чате уже ожидается результат Batch. Проверь готовность главы.");
   if(state.settings.provider!=="bothub"||activeBotHubModel()!=="claude-opus-5.5")
     return notice("Batch-глава поддерживается для Claude Opus 5.5 через BotHub.");
-  const outputLimit=chapterOutputLimit("bothub");
+  const outputLimit=chapterOutputLimit();
   if(!confirm("Отправить главу в BotHub как платную фоновую задачу? После принятия появится номер задачи. Окно выполнения — до 24 часов."))
     return;
   const gateway=claudeGateway(state.settings.workerUrl);
@@ -907,13 +929,27 @@ async function checkBatchChapter(){
   }catch(e){notice("Batch: "+e.message);}
   finally{busy=false;c.updated=stamp();await save();render();}
 }
+async function readApimiraReceipt(message,gateway,idToken){
+  const res=await fetch(gateway+"/receipt?id="+encodeURIComponent(message.apimiraRequestId),{
+    headers:{Authorization:"Bearer "+idToken},cache:"no-store"
+  });
+  const info=await res.json().catch(()=>({}));
+  if(!res.ok||!info.ok)throw Error(info.error||"ApiMira не ответила на проверку списания.");
+  if(!Number.isFinite(info.costUsd))return false;
+  message.apimiraCostUsd=info.costUsd;
+  if(Number.isSafeInteger(info.inputTokens)&&Number.isSafeInteger(info.outputTokens))
+    message.apimiraTokens={input:info.inputTokens,output:info.outputTokens,
+      ...(Number.isSafeInteger(info.cachedTokens)?{cached:info.cachedTokens}:{})};
+  await save();render();
+  return true;
+}
 async function sendMessage(text){
   if(busy||preparingPaid||!text.trim())return;
   const provider=state.settings.provider, selectedModel=activeBotHubModel();
-  const outputLimit=chapterOutputLimit(provider);
+  const outputLimit=chapterOutputLimit();
   const isPaidProvider=paidProviders.includes(provider);
   const endpoint=safeEndpoint(state.settings.endpoint);
-  const gateway=claudeGateway(state.settings.workerUrl);
+  const gateway=claudeGateway(state.settings.workerUrl,provider);
   if(isPaidProvider&&!gateway)return notice("Не настроен API-шлюз Claude.");
   if(!isPaidProvider&&!endpoint)return notice("Проверь адрес Ollama в настройках.");
   let idToken="",sourceRevision="";
@@ -927,7 +963,7 @@ async function sendMessage(text){
       if(!master.user)throw Error("Один раз войди в Мастерскую в разделе «Книги». Затем книги доступны через MCP без повторных входов.");
       idToken=await master.idToken();
       if(selectedChat!==draftKey() || provider!==state.settings.provider || selectedModel!==activeBotHubModel() ||
-        outputLimit!==chapterOutputLimit(provider))
+        outputLimit!==chapterOutputLimit())
         return notice("Чат, модель или лимит изменились. Проверь параметры и отправь задание снова.");
     }catch(e){return notice("Авторизация: "+e.message);}
     finally{preparingPaid=false;}
@@ -941,23 +977,34 @@ async function sendMessage(text){
   const payload=isPaidProvider?{provider,model:provider==="bothub"?selectedModel:undefined,
     messages:lightweight?[{role:"user",content:msg}]:modelproxyMessages({...current,messages:[...current.messages,userMessage]}),
     mode:requestMode,outputTokenLimit:requestMode==="draft"?outputLimit:undefined,bookId,sourceRevision}:null;
-  if(provider==="aitunnel"){
+  if(provider==="aitunnel"||provider==="apimira"){
+    const isMira=provider==="apimira", label=providerNames[provider];
     preparingPaid=true;
     const selectedChat=draftKey();
-    notice("AITUNNEL: считаю стоимость без генерации…");
+    const draftBeforeQuote=$("#f-message-input")?.value;
+    notice(label+" · считаю стоимость без генерации…");
     try{
       const res=await fetch(gateway+"/quote",{method:"POST",headers:{Authorization:"Bearer "+idToken,
         "Content-Type":"application/json"},body:JSON.stringify(payload)});
       const estimate=await res.json().catch(()=>({}));
       if(!res.ok||!estimate.ok)throw Error(estimate.error||"Не удалось получить бесплатную оценку.");
-      if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==chapterOutputLimit(provider))
-        return notice("Чат или настройки изменились. Получи новую оценку.");
-      if(!estimate.ready)throw Error(estimate.budgetRub===null?"Задай бюджет отдельного API-ключа AITUNNEL.":
-        "Оценка "+rub(estimate.estimateRub)+" выше доступного остатка. Генерация не началась.");
-      if(!confirm("AITUNNEL · оценка "+rub(estimate.estimateRub)+" за вход и ответ до "+
-        estimate.outputTokenLimit.toLocaleString("ru-RU")+" токенов. Остаток бюджета ключа: "+
-        rub(estimate.budgetRub)+". Отправить один платный запрос?"))return notice("Генерация отменена. Задание осталось в поле ввода.");
-      payload.aitunnelQuote={fingerprint:estimate.fingerprint,estimateRub:estimate.estimateRub};
+      if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==chapterOutputLimit()||
+        draftBeforeQuote!==$("#f-message-input")?.value)
+        return notice("Задание или настройки изменились. Получи новую оценку.");
+      const amount=isMira?usd(estimate.estimateUsd):rub(estimate.estimateRub);
+      const budget=isMira?usd(estimate.budgetUsd):rub(estimate.budgetRub);
+      if(!estimate.ready)throw Error(!isMira&&estimate.budgetRub===null?"Задай бюджет отдельного API-ключа AITUNNEL.":
+        "Оценка "+amount+" выше доступного остатка или бюджета "+budget+". Генерация не началась.");
+      const source=estimate.source;
+      const updated=Number.isFinite(Date.parse(source?.updatedAt))?" · снимок от "+new Date(source.updatedAt).toLocaleString("ru-RU"):"";
+      const book=source?.chapters?.length?"\nМастерская: канон, главы "+source.chapters.join(", ")+
+        (source.excerpts?", выписок из ранних глав — "+source.excerpts:"")+updated+".":"";
+      if(!confirm(label+" · оценка "+amount+" за вход и ответ до "+
+        estimate.outputTokenLimit.toLocaleString("ru-RU")+" токенов. "+
+        (isMira?"Бюджет теста ":"Остаток бюджета ключа: ")+budget+"."+book+
+        "\nОтправить один платный запрос?"))return notice("Генерация отменена. Задание осталось в поле ввода.");
+      if(isMira)payload.apimiraQuote={fingerprint:estimate.fingerprint,estimateUsd:estimate.estimateUsd};
+      else payload.aitunnelQuote={fingerprint:estimate.fingerprint,estimateRub:estimate.estimateRub};
     }catch(e){return notice(e.message);}
     finally{preparingPaid=false;}
   }
@@ -1007,6 +1054,10 @@ async function sendMessage(text){
       throw Error(typeof error?.error==="string"?error.error:"Сервер вернул HTTP "+res.status+".");
     }
     if(!res.body)throw Error("Сервер не вернул поток ответа");
+    if(provider==="apimira"){
+      const requestId=res.headers.get("X-Freitag-Request-Id");
+      if(requestId)assistant.apimiraRequestId=requestId;
+    }
     const reader=res.body.getReader(),decoder=new TextDecoder();let pending="",streamFinished=false,finishReason="";
     const consume=(line)=>{
       if(!line.trim())return;
@@ -1069,6 +1120,7 @@ async function sendMessage(text){
   }finally{
     clearTimeout(checkpointTimer);delete assistant.receiving;
     busy=false;currentController=null;c.updated=stamp();await save();render();
+    if(assistant.apimiraRequestId)void readApimiraReceipt(assistant,gateway,idToken).catch(()=>{});
   }
 }
 function download(name,content,type="application/json;charset=utf-8"){
@@ -1152,10 +1204,56 @@ async function restoreCloudArchive(previous){
   }catch(err){cloudStatus="Облако: "+err.message;notice(cloudStatus);}
   finally{cloudPending=false;updateCloudControls();}
 }
-async function readTextFile(file){
-  if(!file||file.size>MAX_DOC)throw new Error("Файл слишком большой (максимум 2 МБ).");
-  if(!/\.(txt|md|json)$/i.test(file.name))throw new Error("Поддерживаются только .txt, .md и .json");
-  return file.text();
+function openMaterial(doc){
+  const dialog=document.createElement("dialog");dialog.className="f-dialog f-material-dialog";
+  dialog.innerHTML='<form method="dialog"><h2>'+esc(doc.name)+'</h2>'+
+    '<textarea class="f-textarea" aria-label="Текст материала" readonly></textarea>'+
+    '<div class="f-row"><button class="f-btn" value="close">Закрыть</button>'+
+    '<button class="f-btn" type="button" data-material-action="download">Скачать TXT</button>'+
+    '<button class="f-btn" value="edit">Изменить</button>'+
+    '<button class="f-inline-btn" value="remove">Удалить</button></div></form>';
+  dialog.querySelector("textarea").value=doc.text;
+  dialog.querySelector('[data-material-action="download"]').addEventListener("click",()=>{
+    const name=doc.name.replace(/\.(docx|txt|md|json)$/i,"").replace(/[\\/:*?"<>|]/g,"_").replace(/ё/g,"е").replace(/Ё/g,"Е");
+    download((name||"Материал")+".txt",doc.text,"text/plain;charset=utf-8");
+  });
+  dialog.addEventListener("close",async()=>{
+    const action=dialog.returnValue;dialog.remove();
+    if(action==="edit")await editMaterial(doc);
+    if(action==="remove"&&confirm("Удалить материал «"+doc.name+"»?")){
+      state.docs=state.docs.filter(d=>d.id!==doc.id);
+      if(!await save())state.docs.unshift(doc);
+      render();
+    }
+  },{once:true});
+  document.body.append(dialog);dialog.showModal();
+}
+async function importMaterials(files,projectId){
+  if(!files.length||importingMaterials)return;
+  if(!projectId)return notice("Сначала выбери проект.");
+  importingMaterials=true;render();
+  const added=[],errors=[];
+  let duplicate=0;
+  try{
+    for(const file of files){
+      try{
+        const {text,format}=await readMaterial(file);
+        if([...state.docs,...added].some(d=>d.projectId===projectId&&d.name===file.name&&d.text===text)){
+          duplicate++;continue;
+        }
+        added.push({id:uid(),projectId,name:file.name,text,format,added:stamp()});
+      }catch(err){errors.push(file.name+" — "+err.message);}
+    }
+    if(!project(projectId))return notice("Проект удалён во время загрузки.");
+    if(added.length){
+      state.docs=[...added,...state.docs];
+      if(!await save()){
+        const ids=new Set(added.map(d=>d.id));state.docs=state.docs.filter(d=>!ids.has(d.id));return;
+      }
+    }
+    notice([added.length?"Загружено файлов: "+added.length+".":"",duplicate?"Уже в проекте: "+duplicate+".":"",
+      ...errors.slice(0,2),errors.length>2?"Других ошибок: "+(errors.length-2)+".":""].filter(Boolean).join(" "));
+  }finally{importingMaterials=false;render();}
 }
 document.addEventListener("click",async(e)=>{
   const nav=e.target.closest("[data-nav]");if(nav){tab=nav.dataset.nav;if(tab==="projects")projectHomeId=null;render();return;}
@@ -1230,20 +1328,25 @@ document.addEventListener("click",async(e)=>{
     }catch(err){notice("Обновление Google Docs: "+err.message);}
   }
   if(a==="open-project"||a==="project-home"){projectHomeId=id;state.activeProjectId=id;tab="projects";await save();render();}
+  if(a==="open-project-materials"){materialsProjectId=id;tab="knowledge";render();}
   if(a==="projects-back"){projectHomeId=null;tab="projects";render();}
   if(a==="new-project-chat"){state.activeProjectId=id;state.activeChatId=null;projectHomeId=null;pendingMode=null;await save();tab="chat";render();$("#f-message-input")?.focus();}
   if(a==="delete-project"){const p=project(id);if(!p||!confirm("Удалить проект «"+p.name+"» и все его чаты и материалы?"))return;
     state.projects=state.projects.filter(x=>x.id!==id);state.chats=state.chats.filter(x=>x.projectId!==id);state.docs=state.docs.filter(x=>x.projectId!==id);
     if(state.activeProjectId===id){state.activeProjectId=null;state.activeChatId=null;}await save();render();}
-  if(a==="add-note")await addNote();
+  if(a==="choose-materials")$("#f-upload")?.click();
+  if(a==="open-doc"){
+    const doc=state.docs.find(d=>d.id===id);if(doc)openMaterial(doc);
+  }
+  if(a==="add-note")await editMaterial();
   if(a==="add-style"){
-    if(!state.activeProjectId)return notice("Выбери проект.");
+    const p=materialsProject();if(!p)return notice("Выбери проект.");
     const v=await openModal("Мой образец письма",[
       {key:"reason",label:"Что мне нравится в этом фрагменте / правило стиля",multi:true,required:true},
       {key:"finalText",label:"Фрагмент моего окончательного текста",multi:true,required:true}
     ]);
-    if(v?.reason?.trim()&&v?.finalText?.trim()){
-      state.feedback.push({id:uid(),projectId:state.activeProjectId,chatId:null,kind:"good",
+    if(v?.reason?.trim()&&v?.finalText?.trim()&&project(p.id)){
+      state.feedback.push({id:uid(),projectId:p.id,chatId:null,kind:"good",
         reason:v.reason.trim().slice(0,1500),prompt:"",answer:"",
         finalText:v.finalText.trim().slice(0,18000),source:"Автор",at:stamp()});
       await save();render();notice("Твой авторский образец сохранён в памяти Freitag AI.");
@@ -1253,7 +1356,6 @@ document.addEventListener("click",async(e)=>{
     if(!confirm("Удалить этот пример из памяти стиля?"))return;
     state.feedback=state.feedback.filter(x=>x.id!==id);await save();render();
   }
-  if(a==="delete-doc"){if(!confirm("Удалить материал?"))return;state.docs=state.docs.filter(d=>d.id!==id);await save();render();}
   if(a==="rename-chat"){const c=chat();if(!c)return;const v=await openModal("Название чата",[{key:"title",label:"Название",required:true}],{title:c.title});if(v){c.title=v.title.trim();await save();render();}}
   if(a==="delete-chat"){const c=chat();if(!c||!confirm("Удалить этот чат?"))return;if(state.drafts)delete state.drafts["chat:"+c.id];state.chats=state.chats.filter(x=>x.id!==c.id);state.activeChatId=null;await save();render();}
   if(a==="copy-answer"){
@@ -1327,6 +1429,16 @@ document.addEventListener("click",async(e)=>{
     await save();render();notice("Решение убрано из памяти проекта.");
   }
   if(a==="open-settings"){tab="settings";render();}
+  if(a==="apimira-receipt"){
+    const message=chat()?.messages[Number(b.dataset.i)];
+    if(!message?.apimiraRequestId)return;
+    b.disabled=true;
+    try{
+      const ready=await readApimiraReceipt(message,claudeGateway(state.settings.workerUrl,"apimira"),await master.idToken());
+      if(!ready)notice("Списание пока не появилось в детализации ApiMira.");
+    }catch(err){notice(err.message);}
+    finally{b.disabled=false;}
+  }
   if(a==="archive-save")await saveCloudArchive(true);
   if(a==="archive-load")await restoreCloudArchive();
   if(a==="archive-load-previous")await restoreCloudArchive(true);
@@ -1441,17 +1553,26 @@ document.addEventListener("change",async(e)=>{
   }
   if(e.target.id==="f-chapter-limit"){
     const limit=Number(e.target.value);
-    if(!chapterLimitsFor(state.settings.provider).includes(limit))return;
+    if(!CHAPTER_LIMITS.includes(limit))return;
     state.settings.sceneOutputTokens=limit;
     await save();return;
   }
-  if(e.target.id==="f-sidebar-project"||e.target.id==="f-chat-project"||e.target.id==="f-doc-project"){
+  if(e.target.id==="f-doc-project"){
+    materialsProjectId=e.target.value;render();return;
+  }
+  if(e.target.dataset.docContext){
+    const doc=state.docs.find(d=>d.id===e.target.dataset.docContext);if(!doc)return;
+    const before=doc.includeInContext;
+    doc.includeInContext=e.target.checked;
+    if(!await save()){doc.includeInContext=before;e.target.checked=before!==false;}
+    return;
+  }
+  if(e.target.id==="f-sidebar-project"||e.target.id==="f-chat-project"){
     state.activeProjectId=e.target.value||null;state.activeChatId=null;pendingMode=null;await save();render();return;
   }
   if(e.target.id==="f-upload"){
-    try{const file=e.target.files?.[0];if(!file)return;if(!state.activeProjectId)return notice("Выбери проект.");
-      const text=await readTextFile(file);state.docs.unshift({id:uid(),projectId:state.activeProjectId,name:file.name,text,added:stamp()});await save();render();notice("Материал сохранен локально.");
-    }catch(err){notice(err.message);}return;
+    const files=Array.from(e.target.files||[]);e.target.value="";
+    await importMaterials(files,materialsProject()?.id);return;
   }
   if(e.target.id==="f-import"){
     const file=e.target.files?.[0];if(!file)return;

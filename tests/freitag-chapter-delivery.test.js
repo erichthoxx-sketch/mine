@@ -131,10 +131,10 @@ test("a 403 creating a Batch is separate from its catalog and file upload",async
   assert.deepEqual(calls,["/v1/batches/models","/v1/files","/v1/batches"]);
 });
 
-test("expanded chapter limits stay within BotHub and reach both Claude models",async t=>{
+test("the common chapter ceiling reaches the provider while arbitrary lengths are rejected",async t=>{
   const sent=[];
   mockNetwork(t,(path,init)=>{
-    assert.equal(path,"/api/v2/anthropic/v1/messages");
+    assert.ok(["/api/v2/anthropic/v1/messages","/v1/chat/completions"].includes(path));
     const {model,max_tokens}=JSON.parse(init.body);
     sent.push([model,max_tokens]);
     return new Response("data: [DONE]\n\n",{headers:{"Content-Type":"text/event-stream"}});
@@ -146,8 +146,60 @@ test("expanded chapter limits stay within BotHub and reach both Claude models",a
     await reply.text();
   }
   assert.equal((await request("chat",{...chapter,outputTokenLimit:64000})).status,400);
-  assert.equal((await request("chat",{...chapter,provider:"apimira",outputTokenLimit:32000})).status,400);
-  assert.deepEqual(sent,cases);
+  const alternative=await request("chat",{...chapter,provider:"apimira",outputTokenLimit:32000});
+  assert.equal(alternative.status,200);
+  await alternative.text();
+  assert.deepEqual(sent,[...cases,["anthropic/claude-opus-5.5",32000]]);
+});
+
+test("ApiMira quotes the current book and authentic price before one bounded chapter",async t=>{
+  const snapshot={title:"Тестовая книга",context:"Утверждённый канон.",updatedAt:"2026-11-24T12:00:00Z",
+    chapters:[{title:"Глава 1",text:"Текст первой главы."},{title:"Глава 2",text:"Вторая глава."}]};
+  const bindings={FREITAG_PROVIDER_GATEWAY:"1",BOOKS:{async get(key){
+    assert.equal(key,"book:fixture");return structuredClone(snapshot);
+  }}};
+  const input={...chapter,provider:"apimira",bookId:"fixture",outputTokenLimit:32000};
+  let price=5;
+  const sent=[];
+  const calls=mockNetwork(t,(path,init)=>{
+    assert.equal(init.headers.Authorization,"Bearer fixture-a");
+    if(path==="/v1/account/pricing")return Response.json({data:[{id:"anthropic/claude-opus-5.5",
+      input_usd_per_1m_tokens:1.25,output_usd_per_1m_tokens:price,context_window:266000}]});
+    if(path==="/v1/account/balance")return Response.json({balance_usd:1.20});
+    if(path==="/v1/messages/count_tokens"){
+      const body=JSON.parse(init.body);
+      assert.match(body.system,/Утверждённый канон/);
+      assert.match(body.system,/Вторая глава/);
+      assert.deepEqual(body.messages,input.messages);
+      return Response.json({input_tokens:32000});
+    }
+    assert.equal(path,"/v1/chat/completions");
+    sent.push(JSON.parse(init.body));
+    return new Response("data: [DONE]\n\n",{headers:{"Content-Type":"text/event-stream","X-Request-Id":"fixture-charge"}});
+  });
+  const quote=(await (await request("quote",input,undefined,bindings)).json());
+  assert.equal(quote.ready,true);
+  assert.equal(quote.estimateUsd,.20);
+  assert.equal(quote.budgetUsd,.50);
+  assert.deepEqual(quote.source.chapters,[1,2]);
+  assert.doesNotMatch(JSON.stringify(quote),/Вторая глава|Утверждённый канон/);
+  assert.equal((await request("chat",input,undefined,bindings)).status,409);
+  const confirmed={...input,apimiraQuote:{fingerprint:quote.fingerprint,estimateUsd:quote.estimateUsd}};
+  const revision=snapshot.updatedAt;
+  snapshot.updatedAt="2026-11-24T12:01:00Z";
+  assert.equal((await request("chat",confirmed,undefined,bindings)).status,409);
+  snapshot.updatedAt=revision;
+  price=30;
+  assert.equal((await request("chat",confirmed,undefined,bindings)).status,402);
+  assert.deepEqual(sent,[]);
+  price=5;
+  const reply=await request("chat",confirmed,undefined,bindings);
+  assert.equal(reply.status,200);
+  await reply.text();
+  assert.equal(sent.length,1);
+  assert.equal(sent[0].max_tokens,32000);
+  assert.equal(sent[0].tools,undefined);
+  assert.ok(calls.filter(path=>path==="/v1/chat/completions").length===1);
 });
 
 test("a 524 before any chapter bytes reports the upstream and never resubmits",async t=>{

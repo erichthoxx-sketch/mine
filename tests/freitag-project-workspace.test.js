@@ -40,7 +40,8 @@ test("Project memory keeps the author's decisions and finds relevant text across
       {id:"old",projectId:"book",title:"Ранние сцены",messages:[{role:"assistant",content:full}]},
       {id:"other",projectId:"other-book",title:"Чужая книга",messages:[{role:"user",content:"Медальон. Секрет другого романа."}]}
     ],
-    docs:[{projectId:"book",name:"Опись",text:"Медальон достался героине от бабушки."}],
+    docs:[{projectId:"book",name:"Опись",text:"Медальон достался героине от бабушки."},
+      {projectId:"book",name:"Архивная копия",text:"Медальон из отключённого материала.",includeInContext:false}],
     feedback:[
       {id:"style",projectId:"book",kind:"good",reason:"Держать авторскую интонацию.",finalText:"Ровный авторский голос."},
       {id:"other-style",projectId:"other-book",kind:"good",reason:"Стиль другого проекта."}
@@ -51,7 +52,7 @@ test("Project memory keeps the author's decisions and finds relevant text across
   assert.match(result,/Ровный авторский голос/);
   assert.match(result,/решения автора[\s\S]*Выписки из рабочего архива[\s\S]*Ранние сцены[\s\S]*фамильной шкатулке/i);
   assert.match(result,/Медальон достался героине от бабушки/);
-  assert.doesNotMatch(result,/Секрет другого романа|Стиль другого проекта|Медальон уже в запросе/);
+  assert.doesNotMatch(result,/Секрет другого романа|Стиль другого проекта|Медальон уже в запросе|отключённого материала/);
   assert.ok(result.length<=4000);
   assert.ok(projectMemoryContext({...options,budget:600}).length<=600);
   assert.equal(options.chats[1].messages[0].content,full);
@@ -61,7 +62,7 @@ test("Paid chats use MCP on send without Google Drive OAuth popups or hidden pro
   const send=app.slice(app.indexOf("async function sendMessage("),app.indexOf("function download(",app.indexOf("async function sendMessage(")));
   assert.ok(!send.includes("ensureDriveAccess("));
   assert.ok(!send.includes("refreshLinkedBook("));
-  assert.match(send,/if\(provider==="aitunnel"\)[\s\S]*?\/quote[\s\S]*?confirm\(/);
+  assert.match(send,/if\(provider==="aitunnel"\|\|provider==="apimira"\)[\s\S]*?\/quote[\s\S]*?confirm\(/);
   assert.match(send,/await master\.idToken\(\)/);
   assert.match(send,/messages:lightweight\?/);
   assert.match(app,/function renderProjectHome/);
@@ -72,6 +73,6 @@ test("Paid chats use MCP on send without Google Drive OAuth popups or hidden pro
   assert.doesNotMatch(instructions,/ТЕКУЩАЯ СЦЕНА\/ПОСЛЕДНИЕ СОБЫТИЯ/);
   assert.match(instructions,/userInstruction\(p\?\.instruction\)/);
   assert.doesNotMatch(worker,/const editorialStyle=/);
-  assert.match(worker,/if\(input\.sourceRevision\)/);
+  assert.match(worker,/if\(input\.sourceRevision && !separateGateway\)/);
   assert.match(worker,/mcpToolsCompletion/);
 });
