@@ -23,14 +23,12 @@ import { competitorsView } from './views/competitors.js';
 import { autoSyncKeywordLibrary } from './key-sync.js';
 import { campaignView } from './views/campaign.js';
 import './views/learn.js'; // «Разбор» кампании (auditItemsHtml) — сам раздел «Учёба» убран
-import { runAutoRules } from './sync.js';
 import { resolvedLaunches, goalSwitch } from './views/launchctx.js';
 import { syncWatch } from './watch.js';
 import { pultView, pultModel } from './views/pult.js';
 import { weekView } from './views/week.js';
 import { hooksView } from './views/hooks.js';
 import { marketView } from './views/market.js';
-import { readyGoalActs } from './views/pult.js';
 import { autoMarket } from './marketscan.js';
 import { autoMarketIntel } from './marketnews.js';
 import { autoMarketMail } from './marketmail.js';
@@ -89,8 +87,6 @@ export async function reload({ quiet = false } = {}) {
     // идут ли кампании — чтобы Планер Мастерской по понедельникам звал на «Разбор недели»
     const liveNow = (app.snap('main')?.campaigns || []).some((x) => x.state === 'ON' && x.status === 'ACCEPTED'), t0 = todayISO();
     if (!demo.on && !d().sandbox && liveNow && d().liveOn !== t0) await store.saveSettings({ direct: { ...d(), liveOn: t0 } });
-    // автоправила (включённые галочками на Пульте): минус-слова, площадки, выгоревшие объявления, смена цели
-    try { const acts0 = readyGoalActs(app); const did = await runAutoRules(app, acts0); if (did.length) toast(`Автоправила: сделано ${(d().autoLast || []).length} — см. «Что меняли»`); } catch (e) { console.warn('Автоправила:', e); }
     if (!d().sandbox) syncWatch(app).catch(() => {}); // задание круглосуточному сторожу (если включён)
     if (!quiet) toast(app.snap('stats')?.incomeError ? 'Директ обновлён. Расход пока не передан в «Доходы».' : 'Данные обновлены');
   } catch (e) {

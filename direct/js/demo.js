@@ -82,7 +82,7 @@ export function demoSnapshot(today) {
     ['любовное фэнтези читать онлайн', 701, 801, 820, 41, 352], ['читать любовное фэнтези бесплатно полностью', 701, 801, 640, 33, 281],
     ['роман про истинную пару дракона', 701, 801, 410, 26, 240], ['книги про драконов и любовь скачать бесплатно', 701, 801, 300, 14, 120],
     ['попаданка в академию читать', 701, 801, 380, 19, 171], ['литнет любовное фэнтези новинки', 701, 802, 520, 30, 315],
-    ['истинная пара фильм', 701, 801, 150, 6, 52], ['читать романы онлайн', 701, 802, 900, 4, 30], ['фэнтези про драконов epub', 701, 801, 120, 5, 41],
+    ['истинная пара фильм', 701, 801, 150, 6, 52], ['читать романы онлайн', 701, 802, 900, 4, 30], ['фэнтези про драконов epub', 701, 801, 420, 22, 165],
   ];
   const queries = Q.map(([query, cid, gid, impr, clicks, cost]) => ({ query, cid, gid, kw: '', impr, clicks, cost }));
   // покупки по цели 9001 (пример счётчика Метрики): примерно 1 из 25 кликов на поиске
@@ -97,7 +97,7 @@ export function demoSnapshot(today) {
     segments.push({ cid: 701, net: 's', dev, gen, age, impr: clicks * 22, clicks, cost, goals: { 9002: Math.round(clicks * 0.1 * gq * aq * (dev === 'DESKTOP' ? 1.2 : 0.95)) } });
   }
   const at = new Date().toISOString();
-  return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, mAt: at, demo: true, daily, adDaily, kw, queries, conv, kwConv, mrows, segments }];
+  return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, mAt: at, queryGoalsReady: true, demo: true, daily, adDaily, kw, queries, conv, kwConv, mrows, segments }];
 }
 
 // Пример Метрики: 8 недель по дням (с ритмом недели), источники, устройства, страницы входа

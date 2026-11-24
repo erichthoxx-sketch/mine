@@ -4,6 +4,7 @@ import { rub, num } from '../../../js/format.js';
 import { EXPERIMENT_TYPES, compareExperiment } from '../experimentcalc.js';
 import { purchaseGoal } from '../launchcalc.js';
 import { resolvedLaunch } from './launchctx.js';
+import { logView } from './log.js';
 import { metrikaOf } from './metrika.js';
 const app=()=>window.__app;
 const money=x=>rub(x,0);
@@ -43,6 +44,7 @@ export function experimentsView(a){
     <div class="card ex-panel"><div class="row between"><h2 style="margin:0">Журнал рекламных решений</h2><button data-act="go" data-to="/quality">Контроль трафика</button></div>
       <p>Записывай, что хочешь изменить и почему. После фактического изменения сравним две недели по расходам, покупкам и доходу книги.</p>
       <p class="small muted">Журнал не меняет рекламу. Рост продаж после изменения не означает, что его вызвала именно реклама.</p></div>
+    ${logView(a, null, { recommendationsOnly: true }).html}
     <div class="card ex-panel"><h2>Новая гипотеза</h2><form class="settings-form ex-form" data-form="ex.add">
       <label>Книга</label><input name="book" value="${esc(fl.book||'Развод для черной вдовы')}" maxlength="180" required>
       <label>Кампания</label><select name="cid"><option value="">Пока нет — выберу при выполнении</option>

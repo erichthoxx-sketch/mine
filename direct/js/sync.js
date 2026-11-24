@@ -87,14 +87,14 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   const day = await report(s, { name: 'days', fields: ['Date', 'CampaignId', 'CampaignName', 'Impressions', 'Clicks', 'Cost'], from, to: today });
   const daily = mergeDaily(old?.daily || [], dailyRows(day), 400, today, from);
   // по объявлениям и площадкам (поиск / сети) — чтобы заметить выгорание; сбой здесь не ломает загрузку
-  let adDaily = old?.adDaily || [];
+  let adDaily = old?.adDaily || [], adGoalsAt = null;
   try {
     onStep('Объявления по дням…');
     const afrom = adDaily.length ? addDays(today, -14) : addDays(today, -89);
     const adFields = ['Date', 'CampaignId', 'AdId', 'AdNetworkType', 'Impressions', 'Clicks', 'Cost'];
     let adReport;
     if (goalIds.length) {
-      try { adReport = await report(s, { name: 'ads-goals', fields: [...adFields, 'Conversions'], goals: goalIds, from: afrom, to: today }); }
+      try { adReport = await report(s, { name: 'ads-goals', fields: [...adFields, 'Conversions'], goals: goalIds, from: afrom, to: today }); adGoalsAt = new Date().toISOString(); }
       catch (e) { if (e.transient) throw e; adReport = await report(s, { name: 'ads', fields: adFields, from: afrom, to: today }); }
     } else adReport = await report(s, { name: 'ads', fields: adFields, from: afrom, to: today });
     adDaily = mergeAdDaily(adDaily, adRows(adReport), 120, today, afrom);
@@ -202,7 +202,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   const at = new Date().toISOString();
   await putSnap(app, [
     { id: 'main', at, sandbox: !!s.direct?.sandbox, campaigns, groups, keywords, ads },
-    { id: 'stats', at, daily, adDaily, kw, queries, conv, kwConv, mrows, mrowsErr, mrowsAt, mErr, mAt, convFrom, convTo, goalIds, keywordGoalsReady, queryGoalsReady, placements, placementAt, placementErr, segments, segAt, segErr, incomeAt, incomeError },
+    { id: 'stats', at, daily, adDaily, adGoalsAt, kw, queries, conv, kwConv, mrows, mrowsErr, mrowsAt, mErr, mAt, convFrom, convTo, goalIds, keywordGoalsReady, queryGoalsReady, placements, placementAt, placementErr, segments, segAt, segErr, incomeAt, incomeError },
   ]);
 }
 
@@ -465,14 +465,5 @@ export async function execPlan(app, plan, by = 'auto') {
       done.push(p.key, ...(p.keys || []));
     } catch (e) { console.warn('Автоправило', p.rule, e); lastPlanErrors.push(String(e.message || e)); }
   }
-  return done;
-}
-export async function runAutoRules(app, goalActs = []) {
-  const c = app.ctx(), d = c.settings.direct || {}, on = d.auto || {};
-  if (isDemo() || d.sandbox || !Object.values(on).some(Boolean)) return [];
-  const { autoPlan } = await import('./autorules.js');
-  const plan = autoPlan({ main: snap(app, 'main') || {}, stats: snap(app, 'stats') || {}, on, today: c.today, goalActs, done: d.autoDone || [] });
-  const done = await execPlan(app, plan, 'auto');
-  if (done.length) await app.store.saveSettings({ direct: { ...(app.ctx().settings.direct || {}), autoDone: [...(d.autoDone || []), ...done].slice(-400), autoAt: new Date().toISOString(), autoLast: plan.filter((p) => done.includes(p.key)).map((p) => p.text).slice(0, 6) } });
   return done;
 }

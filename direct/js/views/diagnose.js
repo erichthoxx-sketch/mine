@@ -1,14 +1,13 @@
 // Вкладка «Диагноз» кампании: оценка, экономика добавления, воронка, узкое место, динамика, разрезы и план на неделю (расчёты — ../diagnose.js)
-import { esc, acts, toast, ask, openSheet } from '../../../js/ui.js';
+import { esc, acts, openSheet } from '../../../js/ui.js';
 import { rub, num, fmtShort } from '../../../js/format.js';
 import { outageSet } from '../../../js/calc.js';
 import { diagnose, SEG_NAME } from '../diagnose.js';
 import { placementRows } from '../qualitycalc.js';
 import { logOf } from '../demo.js';
-import { execPlan } from '../sync.js';
+import './recommendations.js';
 import { pultModel } from './pult.js';
-import { actBtn, q } from './common.js';
-import { demo } from '../demo.js';
+import { q } from './common.js';
 
 const app = () => window.__app;
 const pc = (v) => (v == null ? '—' : (Math.round(v * 1000) / 10).toString().replace('.', ',') + ' %');
@@ -57,7 +56,8 @@ function groupHtml(g, list) {
 
 export function diagHtml(a, camp) {
   const row = pultModel(a).rows.find((r) => r.camp.id === camp.id);
-  if (row && !row.convReady) return '<p class="muted">Для диагноза нужен свежий отчёт по целям кампании. Расход и клики показаны в карточке выше.</p>';
+  const button = `<div class="row" style="margin-bottom:10px"><button class="primary" data-act="dg.recommend" data-cid="${camp.id}">Предложить изменения</button></div>`;
+  if (row && !row.convReady) return button + '<p class="muted">Для диагноза нужен свежий отчёт по целям кампании. Расход и клики показаны в карточке выше.</p>';
   const D = diagOf(a, camp, row);
   if (!D) return '<p class="muted">Нет данных по кампании.</p>';
   const u = D.unit;
@@ -71,12 +71,9 @@ export function diagHtml(a, camp) {
   const funnel = `<h3>Воронка: неделя против трёх до неё ${q('funnel')}</h3><div class="dg-funnel">${D.funnel.map((x) => `<div class="dg-fs"><div class="small muted">${x.label}</div><b>${x.fmt(x.now)}</b><div class="small ${x.tone === 'bad' ? 'down' : x.tone === 'good' ? 'up' : 'muted'}">${x.d == null ? 'не с чем сравнить' : `${sign(x.d)} · было ${x.fmt(x.was)}`}</div></div>`).join('')}</div>`;
   const neck = `<div class="dg-neck dg-${D.neck.k}"><div class="small muted">Узкое место ${q('neck')}</div><b>${esc(D.neck.title)}</b><p class="small" style="margin:4px 0 0">${esc(D.neck.text)}</p><p class="small" style="margin:6px 0 0"><b>Что сделать:</b> ${esc(D.neck.fix)}</p></div>`;
   const groups = Object.entries(D.groups).map(([g, list]) => groupHtml(g, list)).join('');
-  const plan = D.plan.length ? `<h3>План на неделю</h3><div class="list">${D.plan.map((p, i) => `<div class="item dg-plan"><div class="row between" style="gap:10px;align-items:flex-start"><div style="min-width:0"><b>${i + 1}. ${esc(p.text)}</b><div class="small muted">${esc(p.why)}</div></div>
-      ${p.where === 'app' && p.g === 'place' ? `<button data-act="dg.place" data-cid="${camp.id}" data-p="${esc(p.key)}">Исключить</button>` : p.where === 'app' && p.g === 'ad' ? actBtn({ do: 'pause', target: 'ad', ids: [Number(p.key)], why: 'Диагноз: добавление заметно дороже' }, 'Остановить', '') : p.where === 'cabinet' ? '<a class="small" href="https://direct.yandex.ru/dna/grid/campaigns" target="_blank" rel="noopener">в кабинете →</a>' : ''}</div></div>`).join('')}</div>
-    <p class="small muted">Ставки по полу, возрасту и устройствам меняются в кабинете: кампания → «Корректировки ставок». Приложение их не трогает — как и бюджет.</p>` : '';
-  return `<div class="dg-wrap"><div class="row between" style="margin-bottom:6px"><span></span><button class="link small" data-act="dg.guide">Как читать диагноз</button></div>${head}${econ}${funnel}${neck}<h3>Цена добавления по дням ${q('trend')}</h3>${trendSvg(D)}
+  return `<div class="dg-wrap">${button}<div class="row between" style="margin-bottom:6px"><span></span><button class="link small" data-act="dg.guide">Как читать диагноз</button></div>${head}${econ}${funnel}${neck}<h3>Цена добавления по дням ${q('trend')}</h3>${trendSvg(D)}
     ${groups ? `<h3>Где деньги работают, а где утекают ${q('segment')} <span class="small muted" style="font-weight:400">· 30 дней</span></h3>${groups}<p class="small muted">«Утечка» и «работает лучше» — только когда разница с остальными заметна наверняка (95 %); где кликов мало — «мало данных».</p>` : ''}
-    ${duelHtml(D.duel)}${plan}</div>`;
+    ${duelHtml(D.duel)}</div>`;
 }
 
 // «Тест объявлений»: победитель — только когда разница не случайна; проигравшее можно остановить, если в группе останется другое
@@ -86,10 +83,8 @@ function duelHtml(T) {
   const rows = T.list.slice(0, 6).map((x) => `<div class="dg-row"><div class="dg-rl"><span class="dg-name">${esc(x.title)}</span>${T.status === 'win' && x === T.best ? '<span class="small up">победитель</span>' : T.status === 'win' && x === T.loser ? '<span class="small down">проигрывает</span>' : ''}</div>
     <div class="dg-rv small"><span>${num(lib ? x.clicks : x.impr)} ${lib ? 'кликов' : 'показов'}</span><span>${m(x)}</span></div></div>`).join('');
   const verdict = T.status === 'win'
-    ? `<p class="small" style="margin:8px 0 0"><b class="up">Есть победитель.</b> «${esc(T.best.title)}»: ${lib ? `из 100 кликов добавляют ${pc(T.best.cr)} против ${pc(T.loser.cr)}` : `кликают ${pc(T.best.ctr)} против ${pc(T.loser.ctr)}`} у «${esc(T.loser.title)}» — разница не случайна (${T.sure === 'high' ? '99' : '95'} %).${lib ? '' : ' Но CTR — ещё не добавления: остановите проигравшее и посмотрите неделю.'}</p>
-      ${T.canStop ? `<div style="margin-top:8px">${actBtn({ do: 'pause', target: 'ad', ids: [Number(T.loser.k)], why: `Тест объявлений: «${T.best.title}» ${lib ? 'добавляют' : 'кликают'} заметно чаще` }, 'Остановить проигравшее', '')}</div><p class="small muted" style="margin:6px 0 0">Вместо него напишите новое с другим крючком — так тест идёт дальше.</p>`
-        : '<p class="small muted" style="margin:6px 0 0">Останавливать не советую: в группе не останется другого объявления. Сначала добавьте новое, потом остановите это.</p>'}`
-    : `<p class="small muted" style="margin:8px 0 0"><b>Тест ещё идёт.</b> Разница пока может быть случайной${T.need ? ` — нужно ещё ≈ ${num(T.need)} ${T.unit} на каждое` : ''}. Не останавливайте по первым цифрам.</p>`;
+    ? `<p class="small" style="margin:8px 0 0">«${esc(T.best.title)}» показывает лучший результат по ${lib ? 'добавлениям' : 'кликабельности'}.</p>`
+    : '<p class="small muted" style="margin:8px 0 0">Тест ещё идёт. Разница пока может быть случайной.</p>';
   return `<h3>Тест объявлений ${q('adtest')} <span class="small muted" style="font-weight:400">· ${lib ? 'по добавлениям' : 'по кликабельности'}, 30 дней</span></h3>${rows}${verdict}`;
 }
 
@@ -101,17 +96,10 @@ const GUIDE = [
   ['График', 'Помогло ли изменение: риски — ваши правки. Первые 5–7 дней после правки стратегия переучивается, цена скачет — это нормально.'],
   ['Разрезы', 'Куда утекают деньги: площадки и объявления можно отключить здесь, ставки по полу, возрасту и устройствам — в кабинете Директа.'],
   ['Тест объявлений', 'Какой крючок работает. Проигравшее — остановить и заменить новым: так объявления постоянно улучшаются.'],
-  ['План', 'Что сделать на этой неделе — по пользе в рублях, сверху самое выгодное. Сделали — отметьте и через неделю сравните оценку.'],
+  ['Предложения', 'Нажмите «Предложить изменения», чтобы проверить кампанию и выбрать правки. Результат появится в журнале.'],
 ];
 acts['dg.guide'] = () => { openSheet('Как читать диагноз', `<ol class="dg-guide">${GUIDE.map(([t, x]) => `<li><b>${t}.</b> ${x}</li>`).join('')}</ol><p class="small muted">Знак «?» у любой цифры объясняет, что она значит и что с ней делать.</p>`, null); return false; };
 
-acts['dg.place'] = async (d) => {
-  if (demo.on) { toast('Это пример данных — в настоящем кабинете площадка исключится'); return false; }
-  if (!(await ask(`Исключить площадку «${d.p}» из кампании? Объявления перестанут там показываться.`, 'Исключить'))) return false;
-  const done = await execPlan(app(), [{ key: 'dg:' + d.cid + ':' + d.p, rule: 'places', cid: Number(d.cid), places: [d.p] }], 'app');
-  toast(done.length ? 'Площадка исключена — записано в «Что меняли»' : 'Директ не принял — подробности в «Что меняли»');
-  return false;
-};
 // строка «Диагноз» в карточке Пульта: оценка, вывод и узкое место — подробности во вкладке кампании
 export function diagStrip(a, r) {
   let D; try { D = diagOf(a, r.camp, r); } catch (e) { console.error(e); return ''; }

@@ -1,6 +1,6 @@
 // «Пульт» — главная «Директа»: что требует внимания и одна карточка на кампанию (состояние, деньги, цена цели, окупаемость, вывод).
 // Расчёты — direct/js/pult.js. Бюджеты приложение не меняет: только подсказывает и даёт кнопки минус-фраз, паузы, привязки счётчика.
-import { esc, more, openSheet } from '../../../js/ui.js';
+import { esc, more, openSheet, ask } from '../../../js/ui.js';
 import { rub, num } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { goalsOf, campaignBookLinks, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget, campaignLevers, campaignPayback, campaignStage, NEED_BUYS } from '../pult.js';
@@ -17,10 +17,9 @@ import { actBtn, q } from './common.js';
 import { ic } from '../../../js/icons.js';
 import { litTagInfo } from '../../../js/littag.js';
 import { weekKeyOf } from '../weekreview.js';
-import { AUTO_RULES, approvalQueue, retargetItems, newAdItems, winnerQueryItems, litTagItems } from '../autorules.js';
+import { approvalQueue, retargetItems, newAdItems, winnerQueryItems, litTagItems } from '../autorules.js';
 import { spoilerHits, spoilerList } from '../../../js/spoilers.js';
 import { execPlan, lastPlanErrors } from '../sync.js';
-import { starterMinusMissing } from '../dcalc.js';
 import { resolvedLaunches, goalSwitch, siteBooks } from './launchctx.js';
 import { acts, toast } from '../../../js/ui.js';
 import { syncWatch } from '../watch.js';
@@ -179,7 +178,7 @@ function todayCard(a, M, tasks, wkOpen) {
     ${!n ? '<p class="small muted" style="margin:8px 0 0">Ничего срочного. Приложение само проверяет кампании при каждом обновлении — раз в 15 минут, пока открыто.</p>' : ''}
     ${week.length || steps.length ? sec('Шаги кампаний') + `<div class="list">${[...week, ...steps].join('')}</div>` : ''}
     ${tasks.length ? sec('Требует внимания') + `<div class="list">${more('pult-todo', tasks, 4)}</div>` : ''}
-    ${q.length ? sec('Могу сделать сама — отметьте нужное') + `<div class="list">${q.map((x) => `<label class="item d-check" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer"><input type="checkbox" data-pq="${esc(x.key)}" checked style="margin-top:4px">
+    ${q.length ? sec('Могу сделать сама — отметьте нужное') + `<div class="list">${q.map((x) => `<label class="item d-check" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer"><input type="checkbox" data-pq="${esc(x.key)}" style="margin-top:4px">
       <span><b>${esc(x.text.charAt(0).toUpperCase() + x.text.slice(1))}</b><span class="small muted" style="display:block">${x.camp ? `«${esc(x.camp)}» · ` : ''}${esc(x.why)}</span></span></label>`).join('')}</div>
       <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap"><button class="primary" data-act="pq.yes">Применить отмеченное</button><button class="small-btn" data-act="pq.no">Отмеченное — не надо</button></div>
       <p class="small muted" style="margin:8px 0 0">Цену цели и бюджет ничто из этого не меняет; всё записывается в «Что меняли».</p>` : ''}</div>`;
@@ -187,9 +186,6 @@ function todayCard(a, M, tasks, wkOpen) {
 // Очередь предложений: всё, что приложение может сделать в кабинете само, — списком с галочками. Отмеченное — «Применить» или «Не надо».
 function queueOf(a) {
   const c = a.ctx(), d = c.settings.direct || {}, main = a.snap('main') || {};
-  const negOf = (camp) => [...(camp.negatives || []), ...(main.groups || []).filter((g) => g.cid === camp.id).flatMap((g) => g.negatives || [])];
-  const starter = (main.campaigns || []).filter((x) => x.state === 'ON').map((camp) => ({ camp, miss: starterMinusMissing(negOf(camp)) })).filter((x) => x.miss.length >= 5)
-    .map((x) => ({ do: 'minus', campaign: x.camp.id, phrases: x.miss, why: 'по таким запросам ищут файл, озвучку или экранизацию, а не книгу на Литнете' }));
   let goalActs = [];
   goalActs = readyGoalActs(a);
   const wbooks = c.data.w_books || [], extra = demo.on ? [] : [
@@ -198,7 +194,7 @@ function queueOf(a) {
     ...retargetItems({ main, goals: goalsOf(metrikaOf(c) || {}), saved: d.retarget || {}, buys: Object.fromEntries(pultModel(a).rows.map((r) => [r.camp.id, r.stage?.buy7 ?? 0])) }),
     ...newAdItems({ main, bookOf: (camp) => { const b = bookOfCampaign(camp, main.ads || [], wbooks, campaignBookLinks(c)); return b ? wbooks.find((x) => x.id === b.id) : null; }, hits: (t, wb) => spoilerHits(t, spoilerList(wb)) }),
   ];
-  return approvalQueue({ main, stats: a.snap('stats') || {}, on: d.auto || {}, today: c.today, goalActs, done: d.autoDone || [], no: d.queueNo || [], starter, extra });
+  return approvalQueue({ main, stats: a.snap('stats') || {}, on: { minus: true, places: true, fatigue: true }, today: c.today, goalActs, done: d.autoDone || [], no: d.queueNo || [], extra });
 }
 const pqPicked = () => new Set([...document.querySelectorAll('#pq input[data-pq]:checked')].map((x) => x.dataset.pq));
 let pqBusy = false;
@@ -211,6 +207,8 @@ acts['pq.yes'] = async (d0, el) => {
   // сразу видно, что нажалось (19.11.2026: «кнопка не нажимается» — ответа Директа не было видно); не дольше минуты
   const btn = el?.closest?.('button') || el; if (btn) { btn.disabled = true; btn.textContent = 'Отправляю в Директ…'; }
   try {
+    const goals = plan.filter((x) => x.rule === 'goal');
+    if (goals.length && !(await ask('Подтвердить смену цели в Яндекс Директе? ' + goals.map((x) => x.text).join('. '), 'Подтвердить смену цели'))) return false;
     const done = await execPlan(a, plan, 'app'), n = plan.filter((x) => done.includes(x.key)).length, d = a.ctx().settings.direct || {};
     if (done.length) await a.store.saveSettings({ direct: { ...d, autoDone: [...(d.autoDone || []), ...done].slice(-400) } });
     toast(n === plan.length ? `Готово: сделано ${n} — всё записано в «Что меняли»` : `Сделано ${n} из ${plan.length}. Остальное Директ не принял${lastPlanErrors[0] ? `: ${lastPlanErrors[0]}` : ''}`);
@@ -235,10 +233,9 @@ function cohortLine(d) {
 // «Автоправила»: что приложение делает в кабинете само. Каждое — своей галочкой; цену цели и бюджет не меняет ни одно.
 function autoCard(c) {
   const d = c.settings.direct || {}, on = d.auto || {};
-  return `<div class="card"><div class="row between"><h2 style="margin:0">Автоправила</h2><span class="small muted">${Object.values(on).some(Boolean) ? (d.autoAt ? `последнее действие ${d.autoAt.slice(8, 10)}.${d.autoAt.slice(5, 7)}` : 'включены') : 'выключены'}</span></div>
-    <p class="small muted" style="margin:6px 0 8px">Рутина таргетолога — сама, после каждого обновления данных. Всё записывается в «Что меняли». Цену цели и бюджет правила не трогают.</p>
-    ${AUTO_RULES.map(([k, t, how]) => `<label class="d-check" style="display:flex;gap:10px;align-items:flex-start;margin:10px 0"><input type="checkbox" data-chg="ar.set" data-k="${k}"${on[k] ? ' checked' : ''}> <span><b>${esc(t)}</b><span class="small muted" style="display:block">${esc(how)}</span></span></label>`).join('')}
+  return `<div class="card"><h2>Контроль кампаний</h2>
+    <p class="small muted">Изменения на основе отчётов доступны на вкладке «Диагноз» каждой кампании.</p>
     <label class="d-check" style="display:flex;gap:10px;align-items:flex-start;margin:10px 0"><input type="checkbox" data-chg="ar.set" data-k="watch"${on.watch ? ' checked' : ''}> <span><b>Круглосуточный сторож — письмо, если что-то сломалось</b><span class="small muted" style="display:block">${on.watch && d.watchInfo?.old ? 'Не включился: обновите программу сервиса писем (Мастерская → Сайт → Почта → «Скопировать программу») и поставьте галочку ещё раз.' : on.watch && d.watchInfo?.err ? esc('Сервис ответил: ' + d.watchInfo.err) : on.watch ? `Работает${d.watchInfo?.at ? ` · проверял ${new Date(d.watchInfo.at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}${(d.watchInfo?.last || []).length ? ` · ${esc(d.watchInfo.last[0])}` : ''}` : 'Раз в 3 часа ваш сервис писем проверяет кампании и пишет, если показы пропали, кампания остановилась или объявление отклонено. Ключ Директа для этого хранится в вашем Яндекс Облаке.'}</span></span></label>
-    ${(d.autoLast || []).length && Object.values(on).some(Boolean) ? `<p class="small" style="margin:8px 0 0">Сделано в последний раз: ${esc(d.autoLast.join(' · '))}</p>` : ''}</div>`;
+    </div>`;
 }
 changes['ar.set'] = async (v, el) => { const a = window.__app, d = a.ctx().settings.direct || {}; await a.store.saveSettings({ direct: { ...d, auto: { ...(d.auto || {}), [el.dataset.k]: !!el.checked } } }); if (el.dataset.k === 'watch') syncWatch(a, { force: true }).catch(() => {}); };
