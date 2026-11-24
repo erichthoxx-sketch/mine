@@ -6,6 +6,7 @@ import {chromium} from "playwright";
 
 const browser = await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE_PATH});
 const workingOrigin = "https://codex-freitag-aitunnel.freitag-ai-test.pages.dev";
+const providerOrigin = "https://freitag-api-gateway.erichtho-xx.workers.dev";
 const appRoot = new URL("../",import.meta.url);
 const instruction = "\n  Тестовая общая инструкция. ".repeat(600)+"  ";
 const project = "\n  Указания для тестовой книги. ".repeat(400)+"  ";
@@ -32,24 +33,28 @@ try {
     await page.route("**/*",async route=>{
       const u=new URL(route.request().url());
       if(u.hostname==="fonts.googleapis.com")return route.fulfill({contentType:"text/css",body:""});
-      if(u.origin!==origin)throw Error("Неожиданный сетевой запрос: "+u.origin);
+      const providerRoute=u.origin===providerOrigin;
+      if(u.origin!==origin&&!providerRoute)throw Error("Неожиданный сетевой запрос: "+u.origin);
+      const cors=providerRoute?{"Access-Control-Allow-Origin":origin,"Access-Control-Allow-Headers":"Authorization, Content-Type"}:{};
       const api={
-        "/health":{ok:true,model:"claude-opus-5-5",provider:"ModelProxy",apimiraConfigured:true,aitunnelConfigured:true,chapterProtocol:2},
+        "/health":{ok:true,model:"claude-opus-5-5",provider:"ModelProxy",providerGateway:providerRoute,apimiraConfigured:true,aitunnelConfigured:true,chapterProtocol:2},
         "/preflight":u.searchParams.get("provider")==="aitunnel"?{ok:true,balanceRub:200,budgetRub:160}:{ok:true,balanceUsd:3.45,inputUsd:1.25,outputUsd:5.20},
         "/receipt":{ok:true,costUsd:.013,inputTokens:3200,outputTokens:1700},
         "/mcp-tools":{ok:true,toolCount:4,tools:["list_books","get_book_context","list_chapters","read_chapter"]},
         "/snapshot":{ok:true,chapterCount:15,updatedAt:"2026-11-22T17:00:00Z",
           lastChapters:[{slot:14,title:"Тестовая глава 14"},{slot:15,title:"Тестовая глава 15"}]}
       };
-      if(u.pathname.startsWith("/api/freitag/")){
-        const data=api[u.pathname.replace(/^\/api\/freitag(?:\/providers)?/,"")];
+      if(providerRoute||u.pathname.startsWith("/api/freitag/")){
+        if(route.request().method()==="OPTIONS")return route.fulfill({status:204,
+          headers:{...cors,"Access-Control-Allow-Methods":"GET, POST, OPTIONS"}});
+        const data=api[providerRoute?u.pathname:u.pathname.replace("/api/freitag","")];
         assert.ok(data,"unexpected API route "+u.pathname);
         assert.equal(route.request().method(),"GET");
         if(u.pathname.endsWith("/snapshot")){
           assert.equal(u.searchParams.get("bookId"),"fixture");
           assert.equal(route.request().headers().authorization,"Bearer test");
         }
-        return route.fulfill({json:data});
+        return route.fulfill({json:data,headers:cors});
       }
       if(u.pathname==="/ai/master-sync.js")return route.fulfill({contentType:"text/javascript",body:`
         const store={
@@ -72,12 +77,12 @@ try {
       const types={html:"text/html",js:"text/javascript",css:"text/css",svg:"image/svg+xml",webmanifest:"application/manifest+json"};
       return route.fulfill({contentType:types[path.split(".").at(-1)],body:await readFile(new URL(path,appRoot))});
     });
-    await page.addInitScript(()=>{
+    await page.addInitScript(apiOrigin=>{
       const fetcher=window.fetch;
       window.submitted=[];
       window.quoted=[];
       window.fetch=(url,opts)=>{
-        if(/\/api\/freitag\/providers\/quote$/.test(String(url))){
+        if(String(url)===apiOrigin+"/quote"){
           const body=JSON.parse(opts.body);
           window.quoted.push(body);
           if(window.rejectSource)return Promise.resolve(Response.json({
@@ -88,12 +93,14 @@ try {
           return Promise.resolve(Response.json({ok:true,ready:true,estimateRub:136,outputTokenLimit:14000,
             balanceRub:200,budgetRub:160,fingerprint:"fixture-estimate"}));
         }
-        if(!/\/api\/freitag(?:\/providers)?\/chat$/.test(String(url)))return fetcher(url,opts);
+        const providerRoute=String(url)===apiOrigin+"/chat";
+        const workingRoute=String(url)===location.origin+"/api/freitag/chat";
+        if(!providerRoute&&!workingRoute)return fetcher(url,opts);
         if(window.rejectSource)return Promise.resolve(Response.json({
           code:"BOOK_SOURCE",error:"Мастерская не нашла одну из фраз."
         },{status:424}));
         const body=JSON.parse(opts.body);
-        if(body.provider==="bothub" ? String(url).includes("/providers/") : !String(url).includes("/providers/"))
+        if(body.provider==="bothub" ? !workingRoute : !providerRoute)
           throw Error("Неверный шлюз для "+body.provider);
         window.submitted.push(body);
         const bytes=new TextEncoder();
@@ -111,7 +118,7 @@ try {
           window.fragment("Начало. ");
         }}),{headers:{"Content-Type":"text/event-stream",...(body.provider==="apimira"?{"X-Freitag-Request-Id":"fixture-charge"}:{})}}));
       };
-    });
+    },providerOrigin);
     await page.goto(origin+"/ai/");
     assert.equal(await page.locator("#f-workspace-mode").innerText(),
       working?"Рабочая версия":"Тестовая копия · чаты отдельно");

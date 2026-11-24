@@ -616,14 +616,14 @@ const safeWorkerEndpoint=(value)=>{
   if(url.protocol!=="https:" && !["localhost","127.0.0.1","[::1]"].includes(url.hostname))return null;
   return endpoint;
 };
-// The Pages-hosted test uses a same-origin Function so the browser never
-// calls a cross-origin Worker directly. The Function forwards only via
-// Cloudflare Service binding, and the Worker checks the Firebase token.
+// BotHub keeps its Pages service binding. The separate gateway accepts only
+// approved Freitag origins and validates the same Firebase owner token.
 function claudeGateway(savedUrl,provider){
   const host=location.hostname.toLowerCase();
   if (host==="freitag-ai-test.pages.dev" ||
       /^[a-z0-9-]+\.freitag-ai-test\.pages\.dev$/.test(host))
-    return location.origin+"/api/freitag"+(paidProviders.includes(provider)&&provider!=="bothub"?"/providers":"");
+    return paidProviders.includes(provider)&&provider!=="bothub"?
+      "https://freitag-api-gateway.erichtho-xx.workers.dev":location.origin+"/api/freitag";
   return safeWorkerEndpoint(savedUrl);
 }
 async function probeLocalConnection(){
