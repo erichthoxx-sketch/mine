@@ -311,6 +311,13 @@ export function campaignDailySpend(c, reports, cap = null) {
     if (cap && r.start > cap) continue;
     // отчёт, конец которого ещё в будущем, — его сумма за уже прошедшие дни
     const e = cap && r.end > cap ? cap : r.end;
+    if (r.src === 'direct' && r.dailySpend && typeof r.dailySpend === 'object') {
+      for (const d of eachDay(r.start, e)) {
+        out[d] = (out[d] || 0) + (Number(r.dailySpend[d]) || 0);
+        covered.add(d);
+      }
+      continue;
+    }
     const n = countDays(r.start, e);
     if (n <= 0) continue;
     for (const d of eachDay(r.start, e)) { out[d] = (out[d] || 0) + Number(r.spend) / n; covered.add(d); }
@@ -527,8 +534,9 @@ export function campaignMetrics(c, ctx) {
   // дни сбоя (реклама не крутилась не по моей вине) не портят ни базу, ни средний доход во время рекламы
   const out = ctx.outages || outageSet(ctx.days || []);
   const duringOk = during.filter((x) => !out.has(x.date));
-  const avgDuring = avgSeries(duringOk.length ? duringOk : during, 'royalty', false);
-  const qtyDuring = during.reduce((a, x) => a + x.qty, 0);
+  const unlinkedDirect = c.src === 'direct' && c.scope !== 'all' && !bookId;
+  const avgDuring = unlinkedDirect ? null : avgSeries(duringOk.length ? duringOk : during, 'royalty', false);
+  const qtyDuring = unlinkedDirect ? 0 : during.reduce((a, x) => a + x.qty, 0);
   const others = (ctx.campaigns || []).filter((o) => o.id !== c.id && o.start && !o.oneOff); // разовые расходы — не кампании
   const adOn = (d) => others.some((o) => d >= o.start && d <= (o.end || '9999-12-31'));
 
@@ -559,6 +567,8 @@ export function campaignMetrics(c, ctx) {
     baseFrom = picked.reduce((a, x) => (x.date < a ? x.date : a), picked[0].date);
     baseTo = picked.reduce((a, x) => (x.date > a ? x.date : a), picked[0].date);
   }
+
+  if (unlinkedDirect) { baseline = null; baseQty = null; }
 
   // расход по дням (факт из отчётов, иначе бюджет ÷ дни)
   const cap = ctx.today || null; // отчёт с будущим концом обрезаем только по «сегодня»

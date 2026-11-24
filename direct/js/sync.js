@@ -5,6 +5,8 @@ import { call, report, metrika } from './api.js';
 import { MICRO, dailyRows, mergeDaily, adRows, mergeAdDaily, toRequest, resultOf, describe, convRows, kwConvRows, queryConvRows, metrikaRows, withGoal, moneyOf, withLitref } from './dcalc.js';
 import { demoSnapshot, demoMetrikaSnap, demoSiteSnap, isDemo, snap, putSnap, putLog } from './demo.js';
 import { todayISO, addDays, weekStart, bookIdFor } from '../../js/calc.js';
+import { segRows } from './diagnose.js';
+import { matchingSaleName } from './bookeconomics.js';
 import { bookOfCampaign } from './pult.js';
 import { SESSION_METRICS, goalMetric, mkRows, SITE_COUNTER, siteGoalIds } from './mcalc.js';
 import { reportId } from '../../js/parse.js';
@@ -20,11 +22,11 @@ async function getSafe(s, service, full, basic) {
 }
 
 export async function refresh(app, { onStep = () => {} } = {}) {
-  const s = app.ctx().settings;
+  const s = app.ctx().settings, user = app.store.user?.uid;
   if (isDemo()) { await putSnap(app, [...demoSnapshot(todayISO()), demoMetrikaSnap(todayISO()), demoSiteSnap(todayISO())]); return; }
   const today = todayISO();
   onStep('Кампании…');
-  const BASE = ['Id', 'Name', 'State', 'Status', 'StartDate', 'DailyBudget', 'NegativeKeywords', 'Type'];
+  const BASE = ['Id', 'Name', 'State', 'Status', 'StartDate', 'DailyBudget', 'NegativeKeywords', 'Type', 'EndDate'];
   // счётчики Метрики и приоритетные цели кампании; если Директ не примет — без них, потом совсем просто
   let cr;
   try { cr = await call(s, 'campaigns', 'get', { SelectionCriteria: {}, FieldNames: BASE, TextCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals'], UnifiedCampaignFieldNames: ['BiddingStrategy', 'CounterIds', 'PriorityGoals', 'TrackingParams'] }, 2, undefined, V); } catch (e) {
@@ -50,6 +52,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
       id: c.Id, name: c.Name, state: c.State, status: c.Status, type: c.Type || '', start: c.StartDate || '',
       daily: rub(c.DailyBudget?.Amount), negatives: c.NegativeKeywords?.Items || [],
       strategy: { search: st.Search?.BiddingStrategyType || '', network: st.Network?.BiddingStrategyType || '' },
+      ...(c.EndDate ? { end: c.EndDate } : {}),
       ...(goalOfStrategy(st) ? { goal: goalOfStrategy(st) } : {}),
       ...(cpaOf(st) ? { cpa: cpaOf(st) } : {}),
       ...((budgetOf(st.Search) || budgetOf(st.Network)) ? { budget: budgetOf(st.Search) || budgetOf(st.Network) } : {}),
@@ -79,9 +82,10 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   }
   const old = snap(app, 'stats');
   onStep('Расход по дням…');
-  const from = old?.daily?.length ? addDays(today, -14) : addDays(today, -89);
+  const from = old?.daily?.length && old.at && Date.parse(old.at) > Date.now() - 23 * 86400000
+    ? weekStart(addDays(today, -29)) : weekStart(addDays(today, -89));
   const day = await report(s, { name: 'days', fields: ['Date', 'CampaignId', 'CampaignName', 'Impressions', 'Clicks', 'Cost'], from, to: today });
-  const daily = mergeDaily(old?.daily || [], dailyRows(day), 400, today);
+  const daily = mergeDaily(old?.daily || [], dailyRows(day), 400, today, from);
   // по объявлениям и площадкам (поиск / сети) — чтобы заметить выгорание; сбой здесь не ломает загрузку
   let adDaily = old?.adDaily || [];
   try {
@@ -93,13 +97,13 @@ export async function refresh(app, { onStep = () => {} } = {}) {
       try { adReport = await report(s, { name: 'ads-goals', fields: [...adFields, 'Conversions'], goals: goalIds, from: afrom, to: today }); }
       catch (e) { if (e.transient) throw e; adReport = await report(s, { name: 'ads', fields: adFields, from: afrom, to: today }); }
     } else adReport = await report(s, { name: 'ads', fields: adFields, from: afrom, to: today });
-    adDaily = mergeAdDaily(adDaily, adRows(adReport), 120, today);
+    adDaily = mergeAdDaily(adDaily, adRows(adReport), 120, today, afrom);
   } catch (e) { if (e.transient) throw e; console.warn('объявления', e); }
   onStep('Фразы и поисковые запросы…');
   const kwRows = await report(s, { name: 'kw', fields: ['CampaignId', 'CriterionId', 'Criterion', 'Impressions', 'Clicks', 'Cost'] });
   const kw = {};
   for (const r of kwRows) { const x = (kw[r.CriterionId] ||= { impr: 0, clicks: 0, cost: 0 }); x.impr += r.Impressions; x.clicks += r.Clicks; x.cost = Math.round((x.cost + r.Cost) * 100) / 100; }
-  let queries = [];
+  let queries = [], queryGoalsReady = false;
   try {
     queries = (await report(s, { name: 'queries', type: 'SEARCH_QUERY_PERFORMANCE_REPORT', fields: ['Query', 'CampaignId', 'AdGroupId', 'Criterion', 'Impressions', 'Clicks', 'Cost'] }))
       .map((r) => ({ query: r.Query, cid: r.CampaignId, gid: r.AdGroupId, kw: r.Criterion, impr: r.Impressions, clicks: r.Clicks, cost: r.Cost }))
@@ -108,7 +112,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   // Качество трафика: отдельный отчет по реальным площадкам и отказам (30 дней).
   // Не запрашиваем чаще раза в 6 часов: Директ ограничивает частоту API.
   // При ошибке сохраняем прежний отчет и дату его получения, без ложного «свежего» статуса.
-  let placements = old?.placements || [], placementAt = old?.placementAt || null, placementErr = '';
+  let placements = old?.placements || [], placementAt = old?.placementAt || null, placementErr = old?.placementErr || '';
   if (cids.length && (!placementAt || Date.now() - Date.parse(placementAt) > 6 * 3600000)) {
     try {
       onStep('Качество трафика: площадки…');
@@ -126,6 +130,7 @@ export async function refresh(app, { onStep = () => {} } = {}) {
         placements = await report(s, { name: 'traffic-placements', fields: baseFields, from: addDays(today, -29), to: today });
         placementErr = 'В Метрике не выбраны цели: автоисключение площадок недоступно.';
       }
+      if (goalIds.length && placements.some((r) => Object.keys(r).some((k) => /^Conversions_/.test(k)))) placementErr = '';
       placementAt = new Date().toISOString();
     } catch (e) {
       placementErr = 'Директ не отдал отчет по площадкам: ' + (e.message || String(e));
@@ -134,47 +139,71 @@ export async function refresh(app, { onStep = () => {} } = {}) {
   }
   // Кто кликает и добавляет: устройство, пол, возраст, поиск/сети за 30 дней (для «Диагноза» кампании) — раз в 6 часов, как площадки.
   // Не вышло — остаётся прошлый отчёт, остальное не страдает.
-  let segments = old?.segments || [], segAt = old?.segAt || null;
+  let segments = old?.segments || [], segAt = old?.segAt || null, segErr = old?.segErr || '';
   if (cids.length && (!segAt || Date.now() - Date.parse(segAt) > 6 * 3600000)) {
     try {
       onStep('Кто кликает: устройства, пол, возраст…');
       const f = ['CampaignId', 'AdNetworkType', 'Device', 'Gender', 'Age', 'Impressions', 'Clicks', 'Cost'];
       const raw = goalIds.length ? await report(s, { name: 'segments-goals', fields: [...f, 'Conversions'], goals: goalIds, from: addDays(today, -29), to: today })
         : await report(s, { name: 'segments', fields: f, from: addDays(today, -29), to: today });
-      segments = segRows(raw); segAt = new Date().toISOString();
-    } catch (e) { if (e.transient) console.warn('сегменты: сбой Яндекса'); else console.warn('сегменты', e); }
+      segments = segRows(raw); segAt = new Date().toISOString(); segErr = '';
+    } catch (e) { segErr = e.message || String(e); console.warn('сегменты:', e); }
   }
   // Цели Метрики: конверсии по дням и по фразам (Директ считает их сам) + поведение на странице книги.
   // Любая неудача здесь не ломает загрузку: остаются прошлые данные, причина — в mErr
   // цели из настроек Метрики + цели стратегий кампаний (за них платим — их и считаем)
-  let conv = old?.conv || [], kwConv = old?.kwConv || {}, mrows = old?.mrows || [], mErr = '', mAt = old?.mAt || null;
+  let conv = old?.conv || [], kwConv = {}, mrows = old?.mrows || [], mErr = '', mAt = old?.mAt || null;
+  let mrowsErr = '', mrowsAt = old?.mrowsAt || null;
+  let convFrom = old?.convFrom || null, convTo = old?.convTo || null, keywordGoalsReady = false;
+  if (old?.goalIds && old.goalIds.join(',') !== goalIds.join(',')) { conv = []; convFrom = null; convTo = null; }
   if (goalIds.length && cids.length) {
     try {
       onStep('Покупки по целям Метрики…');
-      const cfrom = old?.conv?.length ? addDays(today, -14) : addDays(today, -89);
-      conv = mergeDaily(conv, convRows(await report(s, { name: 'conv', fields: ['Date', 'CampaignId', 'Conversions'], from: cfrom, to: today, goals: goalIds })), 400, today);
-      kwConv = kwConvRows(await report(s, { name: 'kwconv', fields: ['CriterionId', 'Conversions'], goals: goalIds }));
+      const cfrom = convFrom && convTo >= addDays(today, -28) ? addDays(today, -29) : addDays(today, -89);
+      conv = mergeDaily(conv, convRows(await report(s, { name: 'conv', fields: ['Date', 'CampaignId', 'Conversions'], from: cfrom, to: today, goals: goalIds })), 400, today, cfrom);
+      convFrom = convFrom && convTo >= addDays(cfrom, -1) && convFrom < cfrom ? convFrom : cfrom;
+      convTo = today;
+      mAt = new Date().toISOString();
+      try {
+        kwConv = kwConvRows(await report(s, { name: 'kwconv', fields: ['CriterionId', 'Conversions'], goals: goalIds }));
+        keywordGoalsReady = true;
+      } catch (e) { console.warn('конверсии по фразам', e); }
       // какие поисковые запросы приводят к добавлениям и покупкам (отдельно: не вышло — остальное не страдает)
       if (queries.length) try {
         const qc = queryConvRows(await report(s, { name: 'qconv', type: 'SEARCH_QUERY_PERFORMANCE_REPORT', fields: ['Query', 'CampaignId', 'Conversions'], goals: goalIds }));
+        queryGoalsReady = true;
         queries = queries.map((q) => { const c = qc[`${q.cid}|${String(q.query || '').toLowerCase()}`]; return c ? { ...q, conv: c } : q; });
       } catch (e) { console.warn('конверсии по запросам', e); }
-      mAt = new Date().toISOString();
     } catch (e) { mErr = e.transient ? 'Директ временно не отдал конверсии (сбой у Яндекса) — показаны прошлые.' : 'Конверсии по целям: ' + (e.message || e); }
   }
+  if (!goalIds.length || !cids.length) { mAt = null; conv = []; convFrom = null; convTo = null; }
   if (m.counterId) {
     try {
       onStep('Метрика: что делают на странице книги…');
       mrows = metrikaRows(await metrika(s, 'stat/v1/data', { ids: m.counterId, metrics: 'ym:s:visits,ym:s:bounceRate,ym:s:pageDepth,ym:s:avgVisitDurationSeconds', dimensions: 'ym:s:lastsignDirectClickOrder', date1: '30daysAgo', date2: 'today', limit: 100 }));
-    } catch (e) { mErr = [mErr, e.transient ? 'Метрика временно недоступна (сбой у Яндекса) — показаны прошлые данные.' : e.message].filter(Boolean).join(' '); }
+      mrowsAt = new Date().toISOString();
+    } catch (e) { mrowsErr = e.message || String(e); }
+  }
+  const current = app.ctx().settings;
+  if (user !== app.store.user?.uid || s.directToken !== current.directToken ||
+    Boolean(s.direct?.sandbox) !== Boolean(current.direct?.sandbox) ||
+    s.direct?.clientLogin !== current.direct?.clientLogin || s.direct?.proxy !== current.direct?.proxy ||
+    m.counterId !== current.direct?.metrika?.counterId) {
+    throw new Error('Настройки подключения изменились во время загрузки. Обновите данные ещё раз.');
+  }
+  let incomeAt = old?.incomeAt || null, incomeError = '';
+  if (!s.direct?.sandbox) {
+    try {
+      const links = await autoLinkIncome(app, campaigns, ads, daily);
+      await pushToIncome(app, daily, links, from);
+      incomeAt = new Date().toISOString();
+    } catch (e) { incomeError = e.message || String(e); }
   }
   const at = new Date().toISOString();
   await putSnap(app, [
     { id: 'main', at, sandbox: !!s.direct?.sandbox, campaigns, groups, keywords, ads },
-    { id: 'stats', at, daily, adDaily, kw, queries, conv, kwConv, mrows, mErr, mAt, placements, placementAt, placementErr, segments, segAt },
+    { id: 'stats', at, daily, adDaily, kw, queries, conv, kwConv, mrows, mrowsErr, mrowsAt, mErr, mAt, convFrom, convTo, goalIds, keywordGoalsReady, queryGoalsReady, placements, placementAt, placementErr, segments, segAt, segErr, incomeAt, incomeError },
   ]);
-  await autoLinkIncome(app, campaigns, ads, daily);
-  await pushToIncome(app, daily);
 }
 
 // Директ → «Доходы» сам (12.11.2026, «чтобы всё со всем синхронизировалось»): у кампании Директа с расходом появляется своя кампания
@@ -182,40 +211,62 @@ export async function refresh(app, { onStep = () => {} } = {}) {
 // сама убрала («не связана» — пустое значение в links), не возвращаем.
 export function incomeCampaignFor(camp, ads = [], wbooks = [], sales = []) {
   const book = bookOfCampaign(camp, ads, wbooks);
-  const sold = book?.title ? sales.find((x) => String(x.book || '').toLowerCase().startsWith(book.title.toLowerCase()))?.book : null;
-  return { name: 'Директ: ' + (book?.title ? `«${book.title}»` : camp.name), bookId: sold ? bookIdFor(sold) : '', scope: sold ? 'book' : 'all', channel: 'own', start: camp.start || '', end: '', budget: null, paidAt: '', baseMode: 'auto', src: 'direct' };
+  const sold = matchingSaleName(book?.title, sales);
+  return { name: 'Директ: ' + (book?.title ? `«${book.title}»` : camp.name), bookId: sold || book?.title ? bookIdFor(sold || book.title) : '', scope: 'book', channel: 'own', start: camp.start || '', end: camp.end || '', budget: null, paidAt: '', baseMode: 'auto', src: 'direct' };
 }
 async function autoLinkIncome(app, campaigns, ads, daily) {
   const c = app.ctx(), d = c.settings.direct || {}, links = { ...(d.links || {}) };
   let changed = false;
   for (const camp of campaigns) {
-    if (String(camp.id) in links || !daily.some((x) => x.cid === camp.id && x.cost > 0)) continue;
-    const id = 'k' + uid();
-    await app.store.put('campaigns', { id, ...incomeCampaignFor(camp, ads, c.data.w_books || [], c.data.sales || []), start: camp.start || c.today });
+    if (String(camp.id) in links) {
+      const existing = (c.data.campaigns || []).find((x) => x.id === links[camp.id]);
+      if (existing?.src === 'direct' && app.store.patch) {
+        const linked = incomeCampaignFor(camp, ads, c.data.w_books, c.data.sales);
+        const inferred = incomeCampaignFor(camp, ads, c.data.w_books);
+        const patch = {};
+        if (linked.bookId && existing.bookId !== linked.bookId && (!existing.bookId || existing.bookId === inferred.bookId)) {
+          patch.bookId = linked.bookId;
+          patch.scope = 'book';
+        }
+        if (camp.end && !existing.end) patch.end = camp.end;
+        if (Object.keys(patch).length) await app.store.patch('campaigns', existing.id, patch);
+      }
+      continue;
+    }
+    if (!daily.some((x) => x.cid === camp.id && x.cost > 0)) continue;
+    const id = 'direct_' + camp.id;
+    if (!(c.data.campaigns || []).some((x) => x.id === id)) await app.store.put('campaigns', { id, ...incomeCampaignFor(camp, ads, c.data.w_books || [], c.data.sales || []), start: camp.start || c.today });
     links[camp.id] = id; changed = true;
   }
-  if (changed) await app.store.saveSettings({ direct: { ...(app.ctx().settings.direct || {}), links } });
+  if (changed) await app.store.saveSettings({ direct: { ...(app.ctx().settings.direct || {}), links: { ...links, ...(app.ctx().settings.direct?.links || {}) } } });
+  return app.ctx().settings.direct?.links || links;
 }
 
 // Связанные кампании → недельные отчёты в «Доходах» (расход, показы, клики): там видно, окупается ли реклама
-export async function pushToIncome(app, daily) {
-  const c = app.ctx(), links = c.settings.direct?.links || {};
+export async function pushToIncome(app, daily, links = app.ctx().settings.direct?.links || {}, replaceFrom = null) {
+  const c = app.ctx();
+  if (c.settings.direct?.sandbox) return;
   const items = [];
   for (const [dcid, incomeId] of Object.entries(links)) {
-    if (!incomeId || !c.data.campaigns.some((k) => k.id === incomeId)) continue;
+    if (!incomeId || (!(c.data.campaigns || []).some((k) => k.id === incomeId) && incomeId !== 'direct_' + dcid)) continue;
     const weeks = {};
     for (const x of daily) {
       if (String(x.cid) !== String(dcid)) continue;
-      const w = weekStart(x.date), r = (weeks[w] ||= { start: w, end: x.date, spend: 0, impressions: 0, clicks: 0 });
+      const w = weekStart(x.date), r = (weeks[w] ||= { start: w, end: x.date, spend: 0, impressions: 0, clicks: 0, dailySpend: {} });
       if (x.date > r.end) r.end = x.date;
-      r.spend += x.cost; r.impressions += x.impr; r.clicks += x.clicks;
+      r.spend += x.cost; r.dailySpend[x.date] = x.cost; r.impressions += x.impr; r.clicks += x.clicks;
     }
     for (const r of Object.values(weeks)) {
-      if (!r.spend && !r.impressions) continue;
-      items.push({ id: reportId(incomeId, r.start), campaignId: incomeId, start: r.start, end: r.end, spend: Math.round(r.spend * 100) / 100, impressions: r.impressions, clicks: r.clicks, src: 'direct' });
+      if (!r.spend && !r.impressions && !c.data.reports.some((x) => x.id === reportId(incomeId, r.start) && x.src === 'direct')) continue;
+      items.push({ id: reportId(incomeId, r.start), campaignId: incomeId, start: r.start, end: r.end, spend: Math.round(r.spend * 100) / 100, impressions: r.impressions, clicks: r.clicks, dailySpend: r.dailySpend, src: 'direct' });
     }
   }
-  const same = (a, b) => a && a.end === b.end && a.spend === b.spend && a.clicks === b.clicks;
+  if (replaceFrom) for (const r of c.data.reports) {
+    if (r.src === 'direct' && r.start >= replaceFrom && r.end <= c.today && Object.values(links).includes(r.campaignId) && (r.spend || r.impressions || r.clicks || !r.dailySpend) && !items.some((x) => x.id === r.id)) {
+      items.push({ ...r, spend: 0, clicks: 0, impressions: 0, dailySpend: {} });
+    }
+  }
+  const same = (a, b) => a && a.end === b.end && a.spend === b.spend && a.clicks === b.clicks && a.impressions === b.impressions && JSON.stringify(a.dailySpend) === JSON.stringify(b.dailySpend);
   const changed = items.filter((x) => !same(c.data.reports.find((r) => r.id === x.id), x));
   if (changed.length) await app.store.putMany('reports', changed);
 }
@@ -417,7 +468,7 @@ export async function execPlan(app, plan, by = 'auto') {
 }
 export async function runAutoRules(app, goalActs = []) {
   const c = app.ctx(), d = c.settings.direct || {}, on = d.auto || {};
-  if (isDemo() || !Object.values(on).some(Boolean)) return [];
+  if (isDemo() || d.sandbox || !Object.values(on).some(Boolean)) return [];
   const { autoPlan } = await import('./autorules.js');
   const plan = autoPlan({ main: snap(app, 'main') || {}, stats: snap(app, 'stats') || {}, on, today: c.today, goalActs, done: d.autoDone || [] });
   const done = await execPlan(app, plan, 'auto');

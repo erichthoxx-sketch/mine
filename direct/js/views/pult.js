@@ -4,7 +4,8 @@ import { esc, more, openSheet } from '../../../js/ui.js';
 import { rub, num } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
 import { goalsOf, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget, campaignLevers, campaignPayback, campaignStage, NEED_BUYS } from '../pult.js';
-import { royaltyPerSale, goalTotals30 } from '../mcalc.js';
+import { royaltyPerSale, litnetPage } from '../mcalc.js';
+import { matchingSaleName } from '../bookeconomics.js';
 import { libraryValue } from '../launchcalc.js';
 import { placementRows, qualityAlerts } from '../qualitycalc.js';
 import { metrikaOf } from './metrika.js';
@@ -31,28 +32,31 @@ const ORDER = { idle: 0, rejected: 0, capped: 1, on: 2, soon: 3, moderation: 4, 
 
 // Всё, что нужно для расчёта по кампаниям — один раз на экран
 export function pultModel(a) {
-  const c = a.ctx(), main = a.snap('main') || {}, stats = a.snap('stats') || {}, mk = a.snap('mk');
+  const c = a.ctx(), main = a.snap('main') || {}, stats = a.snap('stats') || {}, cohorts = a.snap('cohorts');
   const t = c.today, m = metrikaOf(c) || {}, skip = outageSet(c.data.days || []);
   const daily = stats.daily || [], conv = stats.conv || [], ads = main.ads || [];
   const ev = conversionEvidence(stats, t);
-  const perAll = royaltyPerSale(c.data.sales || [], t)?.perSale ?? null;
-  // доля «библиотека → покупка» по Метрике автора за 90 дней — сколько стоит одно добавление
-  const g0 = goalsOf(m), tot = mk?.daily ? goalTotals30(mk.daily, addDays(t, -89), t) : null;
-  const lv = tot && g0.lib ? libraryValue({ libN: tot.goals[g0.lib] || 0, buyN: g0.buy.reduce((s, id) => s + (tot.goals[id] || 0), 0), royalty: perAll || 0 }) : null;
+  const cohortsReady = !demo.on && !c.settings.direct?.sandbox && !c.settings.direct?.cohortsErr && cohorts?.to >= addDays(t, -3) && cohorts.to < t;
   const rows = (main.campaigns || []).filter((x) => x.state !== 'ARCHIVED').map((camp) => {
     const goals = goalsOf(m, camp), book = bookOfCampaign(camp, ads, c.data.w_books || []);
-    const sold = book?.title ? royaltyPerSale(c.data.sales || [], t, { book: (c.data.sales || []).find((x) => String(x.book || '').toLowerCase().startsWith(book.title.toLowerCase()))?.book || null }) : null;
-    const perSale = sold?.qty >= 5 ? sold.perSale : perAll;
+    const saleName = matchingSaleName(book?.title, c.data.sales);
+    const sold = saleName ? royaltyPerSale(c.data.sales || [], t, { book: saleName }) : null;
+    const landingId = litnetPage(book?.href).bookId;
+    const mature = cohortsReady && landingId ? cohorts.campBooks?.[camp.id]?.[landingId]?.libToBuy?.[30] : null;
+    const lv = libraryValue({ royalty: sold?.perSale, cohortRate: mature?.rate, cohortEligible: mature?.eligible });
+    const verified = ev.ready && (!m.counterId || !camp.counters || camp.counters.map(String).includes(String(m.counterId))) &&
+      (!stats.goalIds || [goals.lib, ...goals.buy].filter(Boolean).every((id) => stats.goalIds.includes(id)));
+    const perSale = sold?.qty >= 5 ? sold.perSale : null;
     const st = campaignState(camp, { daily, ads, today: t });
-    const econ = campaignEcon(camp, { daily, conv, today: t, goals, perSale, libShare: lv?.share ?? null, skip, convVerified: ev.ready });
+    const econ = campaignEcon(camp, { daily, conv, today: t, goals, perSale, libShare: lv?.share ?? null, skip, convVerified: verified });
     const wk0 = weekBudget(camp, daily, t);
     // старт подписки книги: Мастерская («О книге») или сайт
     const wb = book ? (c.data.w_books || []).find((x) => x.id === book.id) : null, sbk = book && !demo.on ? siteBooks(a).find((x) => String(x.title || '').toLowerCase() === String(book.title || '').toLowerCase()) : null;
     const subStart = wb?.subStart || sbk?.startDate || '';
-    const stage = campaignStage(camp, { econ, st, goals, conv, today: t, subStart, perSale, skip, convVerified: ev.ready, wk: wk0 });
-    return { camp, goals, book, st, econ, perSale, stage, subStart, ownSales: sold?.qty >= 5, libMeasured: false, convReady: ev.ready && econ.usable, pay: campaignPayback(camp, { daily, conv, today: t, goals, perSale, libValue: econ.libValue, skip, convVerified: ev.ready }), wk: wk0, lev: campaignLevers(camp, st, { ...econ, libValue: null }, wk0, { ads, daily, today: t }), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
+    const stage = campaignStage(camp, { econ, st, goals, conv, today: t, subStart, perSale, skip, convVerified: verified, wk: wk0 });
+    return { camp, goals, book, st, econ, perSale, stage, subStart, convReady: verified && econ.usable, pay: campaignPayback(camp, { daily, conv, today: t, goals, perSale, libValue: econ.libValue, skip, convVerified: verified }), wk: wk0, lev: campaignLevers(camp, st, { ...econ, libValue: null }, wk0, { ads, daily, today: t }), alerts: campaignAlerts(camp, st, econ, { daily, conv, today: t, goals }) };
   }).sort((x, y) => (ORDER[x.st.key] ?? 9) - (ORDER[y.st.key] ?? 9));
-  return { c, main, stats, m, rows, lv, conversionEvidence: ev };
+  return { c, main, stats, m, rows, conversionEvidence: ev };
 }
 
 const money = (v) => (v == null ? '—' : rub(v, 0));
@@ -103,12 +107,27 @@ function card(r) {
     </div>
     ${wk ? `<div class="progress ${wk.share >= 0.9 ? 'warn' : ''}"><i style="width:${Math.min(100, wk.share * 100).toFixed(1)}%"></i></div>` : ''}
     <p class="small ${TONE[e.verdict.kind]}" style="margin:10px 0 0">${esc(e.verdict.text.charAt(0).toUpperCase() + e.verdict.text.slice(1))}${e.revenue != null && e.buy30 ? ` · роялти с покупок ≈ ${money(e.revenue)}` : ''}</p>
-    ${e.libValue != null && r.perSale ? `<p class="small muted" style="margin:4px 0 0">≈ ${money(e.libValue)} за добавление — это оценка, а не деньги этой кампании: средний доход с одной покупки (${money(r.perSale)}${r.ownSales ? ', по этой книге' : ', по вашим книгам за 60 дней'}) × доля добавивших, которые потом покупают (${Math.round(e.libValue / r.perSale * 100)} %${r.libMeasured ? ', общая статистика целей за 90 дней, не когорта' : ' — предварительное допущение, не проверенная когорта'}). Настоящие покупки появятся в плитке «Покупки», когда откроется подписка.</p>` : ''}
+    ${e.libValue != null && r.perSale ? `<p class="small muted" style="margin:4px 0 0">≈ ${money(e.libValue)} за добавление — это оценка, а не деньги этой кампании: среднее роялти по книге × ${Math.round(e.libShare * 100)} % купивших в течение 30 дней после добавления. Учтены читательницы, пришедшие на эту книгу из кампании. Цель покупки может относиться и к другой книге автора.</p>` : ''}
     ${pay && pay.total != null ? `<p class="small" style="margin:6px 0 0"><b>С начала (${pay.days} дн.):</b> потрачено ${money(pay.cost)} · вернулось с покупок ${money(pay.back || 0)} → <span class="${pay.ret >= 1 ? 'up' : 'warnc'}">атрибутированные покупки: на 1 ₽ ≈ ${pay.ret.toFixed(2).replace('.', ',')} ₽ (оценка по средней цене продажи, не прибыль)</span></p>` : ''}
     ${r.stage ? stageHtml(r) : ''}
     ${lev?.forecast ? `<p class="small muted" style="margin:4px 0 0">При таком темпе за неделю: ≈ ${num(Math.round(lev.forecast.lib))} добавлений за ${money(lev.forecast.cost)}${lev.forecast.royalty != null ? ` → ожидаемое роялти ≈ ${money(lev.forecast.royalty)}` : ''}</p>` : ''}
     ${lev?.levers.length ? `<div class="pult-lev"><div class="small muted" style="margin:12px 0 2px">Как заработать больше</div>${more('lev-' + camp.id, lev.levers.map((x, i) => `<div class="item"><b>${i + 1}. ${esc(x.title)}</b><div class="small muted">${esc(x.how)}</div></div>`), 2)}</div>` : ''}
     <div class="row dl-row"><button class="dl" data-act="go" data-to="/c/${camp.id}">Открыть кампанию</button>${book?.id ? `<button class="dl" data-act="go" data-to="/book/${esc(book.id)}">Книга</button>` : ''}</div></div>`;
+}
+
+function syncStatus(a, M) {
+  const { c, stats } = M, d = c.settings.direct || {}, sales = c.data.sales || [];
+  const mk = a.snap('mk');
+  const time = (iso) => iso ? new Date(iso).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'ожидает загрузки';
+  const lastSale = sales.reduce((last, row) => row.date > last ? row.date : last, '');
+  const lines = [
+    ['Расход', d.lastError ? d.lastError.text : time(stats.at)],
+    ['Цели рекламы', M.conversionEvidence.ready ? time(stats.mAt) : M.conversionEvidence.reason],
+    ['Метрика автора', d.metrikaError || mk?.errors?.[0] || time(mk?.at)],
+    ['Передача в «Доходы»', stats.incomeError || (d.sandbox ? 'Песочница' : time(stats.incomeAt))],
+    ['Продажи из «Доходов»', lastSale ? 'последняя дата продаж ' + lastSale.split('-').reverse().join('.') : 'нет загруженных продаж'],
+  ];
+  return `<details class="card"><summary>Синхронизация данных</summary><div class="list">${lines.map(([name, value]) => `<div class="item"><b>${esc(name)}</b><div class="small muted">${esc(value)}</div></div>`).join('')}</div></details>`;
 }
 
 export function pultView(a) {
@@ -117,7 +136,7 @@ export function pultView(a) {
   const M = pultModel(a), stats = M.stats;
   // требует внимания: состояние кампаний, цена цели, площадки-сливы, потом общие подсказки (минус-слова, фразы без покупок, выгорание…)
   const alerts = M.rows.flatMap((r) => r.alerts).map((x) => `<div class="item"><b class="${TONE[x.tone]}">${esc(x.title)}</b><div class="small muted">${esc(x.how)}</div></div>`);
-  const flags = qualityAlerts(placementRows(stats.placements || [], main.campaigns || []), { maxItems: 3 })
+  const flags = qualityAlerts(placementRows(stats.placementErr || !M.conversionEvidence.ready ? [] : stats.placements || [], main.campaigns || []), { maxItems: 3 })
     .map((x) => `<div class="item"><b>Площадка ${esc(x.place)}: отказы ${Math.round(x.bounce)} %</b><div class="small muted">${num(x.clicks)} кликов, ${rub(x.cost, 0)} за 30 дней. Если по ней нет добавлений — исключите её в кабинете Директа: настройки кампании → «Запрещённые площадки».</div></div>`);
   // «Требует внимания» — только то, где нужно действие; удачные фразы — не тревога
   // метка «Мой Литнет»: за 2 дня до конца срока (меняется одной кнопкой в Мастерской → Сайт — сразу и на сайте, и в Директе)
@@ -130,6 +149,7 @@ export function pultView(a) {
   const rest = M.rows.filter((r) => !live.includes(r));
   return {
     html: `${!M.m?.counterId ? `<div class="alert">Подключите Метрику автора (⚙ Настройки) — без неё не видно добавлений в библиотеку и покупок, а значит, и окупаемости.</div>` : ''}
+    ${!demo.on ? syncStatus(a, M) : ''}
     ${todayCard(a, M, tasks, wkOpen)}
     ${live.map(card).join('') || '<div class="card"><p class="muted">Сейчас нет идущих кампаний.</p></div>'}
     ${rest.length ? `<div class="card"><h2>Остальные кампании</h2><div class="list">${rest.map((r) => `<a class="item" href="#" data-act="go" data-to="/c/${r.camp.id}"><div class="row between"><b>${esc(r.camp.name)}</b><span class="small muted">${esc(r.st.text)}</span></div>${r.econ.d30.cost ? `<div class="small muted">за 30 дней ${money(r.econ.d30.cost)}${r.econ.lib30 ? ` · в библиотеку ${num(r.econ.lib30)}` : ''}</div>` : ''}</a>`).join('')}</div></div>` : ''}
@@ -190,8 +210,7 @@ acts['pq.yes'] = async (d0, el) => {
   // сразу видно, что нажалось (19.11.2026: «кнопка не нажимается» — ответа Директа не было видно); не дольше минуты
   const btn = el?.closest?.('button') || el; if (btn) { btn.disabled = true; btn.textContent = 'Отправляю в Директ…'; }
   try {
-    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('Директ не ответил за минуту')), 60000));
-    const done = await Promise.race([execPlan(a, plan, 'app'), timeout]), n = plan.filter((x) => done.includes(x.key)).length, d = a.ctx().settings.direct || {};
+    const done = await execPlan(a, plan, 'app'), n = plan.filter((x) => done.includes(x.key)).length, d = a.ctx().settings.direct || {};
     if (done.length) await a.store.saveSettings({ direct: { ...d, autoDone: [...(d.autoDone || []), ...done].slice(-400) } });
     toast(n === plan.length ? `Готово: сделано ${n} — всё записано в «Что меняли»` : `Сделано ${n} из ${plan.length}. Остальное Директ не принял${lastPlanErrors[0] ? `: ${lastPlanErrors[0]}` : ''}`);
   } catch (e) { toast(`Не получилось: ${e.message || e}. Проверьте «Что меняли» чуть позже.`); }

@@ -11,13 +11,20 @@ import { pultModel } from './pult.js';
 import { diagOf } from './diagnose.js';
 import { compareRows, KIND_TEXT } from '../compare.js';
 import { adBoard } from '../../../js/adroi.js';
+import { conversionEvidence, missingConversionsDuringSpend } from '../evidence.js';
+import { outageSet } from '../../../js/calc.js';
 import { q } from './common.js';
 import { demo } from '../demo.js';
 
 export function moneyView(a) {
   const c = a.ctx(), stats = a.snap('stats') || {}, m = metrikaOf(c) || {};
   const perSale = royaltyPerSale(c.data.sales || [], c.today)?.perSale ?? null;
-  const rows = directMonths({ daily: stats.daily || [], conv: stats.conv || [], goals: goalsOf(m), perSale, libValue: null });
+  const daily = stats.daily || [], goals = goalsOf(m), skip = outageSet(c.data.days || []);
+  const ready = conversionEvidence(stats, c.today).ready &&
+    (!stats.goalIds || [goals.lib, ...goals.buy].filter(Boolean).every((id) => stats.goalIds.includes(id)));
+  const conversionsFor = (from, to) => ready && (!stats.convFrom || from >= stats.convFrom) &&
+    !missingConversionsDuringSpend(daily, from, to, skip);
+  const rows = directMonths({ daily, conv: stats.conv || [], goals, perSale, conversionsFor });
   const dirCard = rows.length ? `<div class="card"><div class="row between"><h2 style="margin:0">Яндекс Директ по месяцам</h2><span class="small muted">${perSale != null ? `покупка ≈ ${rub(perSale, 0)} роялти` : ''}</span></div>
     <div class="list">${rows.map((r) => `<div class="item"><div class="row between"><b>${esc(fmtMonth(r.month))}</b><span>${rub(r.cost, 0)}</span></div>
       <div class="small">${[`кликов ${num(r.clicks)}`, r.lib != null ? `в библиотеку ${num(r.lib)}${r.lib ? ` по ${rub(r.cost / r.lib, 0)}` : ''}` : '', r.buy != null ? `покупок ${num(r.buy)}${r.buy ? ` по ${rub(r.cost / r.buy, 0)}` : ''}` : ''].filter(Boolean).join(' · ')}</div>

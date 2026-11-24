@@ -3,16 +3,17 @@ import assert from 'node:assert/strict';
 import { autoPlan, AUTO_MAX } from '../direct/js/autorules.js';
 
 const main = { campaigns: [{ id: 7, name: 'ЕПК', state: 'ON', negatives: ['фильм'] }, { id: 8, name: 'Стоит', state: 'OFF', negatives: [] }], groups: [{ cid: 7, negatives: ['аудиокнига'] }], ads: [], keywords: [] };
+const today = new Date().toISOString().slice(0, 10), at = new Date().toISOString();
 const stats = {
-  queries: [{ query: 'развод роман скачать fb2', cid: 7, impr: 40, clicks: 4, cost: 3 }, { query: 'роман слушать аудиокнига', cid: 7, impr: 30, clicks: 5, cost: 2 }, { query: 'роман скачать', cid: 8, impr: 30, clicks: 5, cost: 2 }, { query: 'любовный роман фильм', cid: 7, impr: 9, clicks: 3, cost: 1 }],
-  placementAt: '2026-11-12T09:00:00Z', mAt: '2026-11-12T09:00:00Z',
+  queryGoalsReady: true, queries: [{ query: 'развод роман скачать fb2', cid: 7, impr: 40, clicks: 4, cost: 3 }, { query: 'роман слушать аудиокнига', cid: 7, impr: 30, clicks: 5, cost: 2 }, { query: 'роман скачать', cid: 8, impr: 30, clicks: 5, cost: 2 }, { query: 'любовный роман фильм', cid: 7, impr: 9, clicks: 3, cost: 1 }],
+  placementAt: at, mAt: at,
   placements: [{ CampaignId: 7, Placement: 'game.app.com', AdNetworkType: 'AD_NETWORK', Impressions: 900, Clicks: 180, Cost: 5, BounceRate: 91, Conversions_548467215_LSCCD: 0 }, { CampaignId: 7, Placement: 'dzen.ru', AdNetworkType: 'AD_NETWORK', Impressions: 900, Clicks: 60, Cost: 9, BounceRate: 12 }],
 };
 const goal = { do: 'goal', campaign: 7, goal: 548467220, goalName: 'Покупка книги', why: 'началась подписка' };
 
 test('автоправила: только включённые, только идущие кампании, без повторов', () => {
-  assert.deepEqual(autoPlan({ main, stats, on: {}, today: '2026-11-12', goalActs: [goal] }), []);
-  const all = autoPlan({ main, stats, on: { minus: true, places: true, fatigue: true, goal: true }, today: '2026-11-12', goalActs: [goal] });
+  assert.deepEqual(autoPlan({ main, stats, on: {}, today, goalActs: [goal] }), []);
+  const all = autoPlan({ main, stats, on: { minus: true, places: true, fatigue: true, goal: true }, today, goalActs: [goal] });
   assert.ok(!all.some((x) => x.rule === 'goal')); // опасное переключение только вручную
   const minus = all.filter((x) => x.rule === 'minus');
   assert.ok(minus.length >= 1 && minus.every((x) => x.act.campaign === 7 && x.act.do === 'minus')); // остановленная кампания не трогается
@@ -20,7 +21,7 @@ test('автоправила: только включённые, только и
   const pl = all.find((x) => x.rule === 'places');
   assert.deepEqual(pl.places, ['game.app.com']); assert.equal(pl.cid, 7);
   // уже сделанное не повторяется
-  const again = autoPlan({ main, stats, on: { minus: true, places: true, goal: true }, today: '2026-11-12', goalActs: [goal], done: [...all.map((x) => x.key), ...all.flatMap((x) => x.keys || [])] });
+  const again = autoPlan({ main, stats, on: { minus: true, places: true, goal: true }, today, goalActs: [goal], done: [...all.map((x) => x.key), ...all.flatMap((x) => x.keys || [])] });
   assert.deepEqual(again, []);
   assert.ok(all.length <= AUTO_MAX);
 });
@@ -28,16 +29,16 @@ test('автоправила: только включённые, только и
 test('очередь предложений: только выключенные правила, без «Не надо», со стартовыми минус-словами', async () => {
   const { approvalQueue } = await import('../direct/js/autorules.js');
   const main = { campaigns: [{ id: 1, name: 'ЕПК', state: 'ON', negatives: [] }], groups: [], ads: [], keywords: [] };
-  const stats = { queries: [{ cid: 1, query: 'черная вдова скачать fb2', clicks: 3, cost: 30, impr: 50 }, { cid: 1, query: 'скачать роман бесплатно', clicks: 2, cost: 20, impr: 40 }] };
+  const stats = { queryGoalsReady: true, mAt: at, queries: [{ cid: 1, query: 'черная вдова скачать fb2', clicks: 3, cost: 30, impr: 50 }, { cid: 1, query: 'скачать роман бесплатно', clicks: 2, cost: 20, impr: 40 }] };
   const starter = [{ do: 'minus', campaign: 1, phrases: ['скачать', 'fb2', 'торрент', 'аудиокнига', 'фильм'] }];
-  const q = approvalQueue({ main, stats, on: {}, today: '2026-11-12', starter });
+  const q = approvalQueue({ main, stats, on: {}, today, starter });
   assert.equal(q[0].key, 'starter:1'); assert.equal(q[0].camp, 'ЕПК');
   assert.ok(q.some((x) => x.rule === 'minus'));
   // правило включено галочкой — его действия делаются сами и в очередь не идут
-  assert.ok(!approvalQueue({ main, stats, on: { minus: true }, today: '2026-11-12' }).some((x) => x.rule === 'minus'));
+  assert.ok(!approvalQueue({ main, stats, on: { minus: true }, today }).some((x) => x.rule === 'minus'));
   // «Не надо» — больше не предлагаем
   const no = q.map((x) => x.key);
-  assert.equal(approvalQueue({ main, stats, on: {}, today: '2026-11-12', starter, no }).length, 0);
+  assert.equal(approvalQueue({ main, stats, on: {}, today, starter, no }).length, 0);
 });
 
 test('очередь: аудитория «добавили, но не купили», подключение к группам, новое объявление без спойлеров', async () => {
@@ -64,9 +65,9 @@ test('очередь: аудитория «добавили, но не купи�
   const ads = newAdItems({ main, bookOf: () => wb, hits: (t, b) => spoilerHits(t, spoilerList(b)) });
   assert.equal(ads.length, 1);
   assert.deepEqual(ads[0].ad, { Title: 'Вдова с характером', Title2: 'Новый роман', Text: 'Криминал, юмор и очень опасный мужчина. Читать на Литнете', Href: 'https://litnet.com/ru/book/x-b1?utm_litref=a', Mobile: 'NO' });
-  const q = approvalQueue({ main, stats: {}, on: {}, today: '2026-11-12', extra: [...first, ...ads] });
+  const q = approvalQueue({ main, stats: {}, on: {}, today, extra: [...first, ...ads] });
   assert.deepEqual(q.map((x) => x.rule), ['audience', 'newad']); assert.ok(q[0].why && q[1].why.includes('модерацию'));
-  assert.equal(approvalQueue({ main, stats: {}, on: {}, today: '2026-11-12', extra: ads, done: [ads[0].key] }).length, 0);
+  assert.equal(approvalQueue({ main, stats: {}, on: {}, today, extra: ads, done: [ads[0].key] }).length, 0);
 });
 
 test('очередь: запрос, который уже привёл читательниц, — добавить фразой', async () => {

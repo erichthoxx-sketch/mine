@@ -19,13 +19,15 @@ export function autoPlan({ main = {}, stats = {}, on = {}, today, goalActs = [],
   const push = (x) => { if (!was.has(x.key) && out.length < AUTO_MAX) out.push(x); };
   // Смена цели требует проверки её цены и ручного решения. В автоисполнении запрещена.
   // Готовые goalActs остаются предложениями в approvalQueue.
-  if (on.minus) {
+  if (on.minus && stats.queryGoalsReady && conversionEvidence(stats, today).ready) {
     const neg = Object.fromEntries((main.campaigns || []).map((c) => [c.id, [...(c.negatives || []), ...(main.groups || []).filter((g) => g.cid === c.id).flatMap((g) => g.negatives || [])]]));
     for (const h of queryHints((stats.queries || []).filter((q) => live.has(q.cid) &&
       // Даже очевидное минус-слово не блокируем, если запрос уже приносил цели.
-      !Object.values(q.conv || {}).some((n) => Number(n) > 0)), neg)) if (h.clicks >= 2 || h.queries.length >= 2) push({ rule: 'minus', key: `minus:${h.cid}:${h.word}`, act: { do: 'minus', campaign: h.cid, phrases: [h.word], why: `автоправило: запросы вроде «${h.queries[0]}»` }, text: `минус-слово «${h.word}»` });
+      !Object.values(q.conv || {}).some((n) => Number(n) > 0)), neg)) if (h.word !== 'бесплатно' && (h.clicks >= 2 || h.queries.length >= 2) &&
+      !(stats.queries || []).some((q) => q.cid === h.cid && q.query?.toLowerCase().includes(h.word) &&
+        Object.values(q.conv || {}).some((n) => n > 0))) push({ rule: 'minus', key: `minus:${h.cid}:${h.word}`, act: { do: 'minus', campaign: h.cid, phrases: [h.word], why: `автоправило: запросы вроде «${h.queries[0]}»` }, text: `минус-слово «${h.word}»` });
   }
-  if (on.fatigue) for (const h of fatigueHints({ main, stats, today })) if (h.act && live.has(h.cid)) push({ rule: 'fatigue', key: `fatigue:${h.aid}`, act: { ...h.act, why: 'автоправило: ' + h.act.why }, text: h.title });
+  if (on.fatigue && conversionEvidence(stats, today).ready) for (const h of fatigueHints({ main, stats, today })) if (h.act && live.has(h.cid)) push({ rule: 'fatigue', key: `fatigue:${h.aid}`, act: { ...h.act, why: 'автоправило: ' + h.act.why }, text: h.title });
   if (on.places && !stats.placementErr && conversionEvidence(stats, today).ready) {
     const by = {};
     for (const p of autoPlacementCandidates(placementRows(stats.placements || [], main.campaigns || []),

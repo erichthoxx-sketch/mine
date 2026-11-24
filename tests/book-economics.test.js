@@ -50,7 +50,7 @@ const inputs=()=>({
   metrika:{goals:[{id:215,name:'Добавление в библиотеку'}, {id:220,name:'Покупка книги'}]},
   cohorts:{at:'2026-11-14T15:00:00Z',from:'2026-08-15',to:'2026-11-13',
     camps:{715:{n:50,lib:20,buy:3}}, campBooks:{715:{639097:{n:30,lib:15,buy:2,libToBuy:{7:{eligible:20,buyers:2,rate:0.1}}}}}},
-  today:'2026-11-14'
+  today:'2026-11-14', now: Date.parse('2026-11-14T16:00:00Z')
 });
 test('Экономика: расходы от кампании, роялти только целевой книги, когорты по книге входа', () => {
   const [r]=campaignBookEconomics(inputs());

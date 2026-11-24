@@ -7,10 +7,13 @@ const M = { goals: [{ id: 548467215, name: 'Добавление книги в �
 const camp = { id: 7, name: 'Единая перфоманс-кампания №18', state: 'ON', status: 'ACCEPTED', start: '2026-11-01', goal: 548467215, cpa: 8, budget: { kind: 'week', amount: 1700 } };
 const day = (date, cost, impr = 500, clicks = 20) => ({ date, cid: 7, impr, clicks, cost });
 
-test('цели: библиотека и покупка по названиям, цель стратегии — главная для «библиотеки»', () => {
+test('цели: библиотека и покупка по названиям, цель чтения или начала покупки не подменяет библиотеку и оплату', () => {
   const g = goalsOf(M, camp);
   assert.equal(g.lib, '548467215');
-  assert.deepEqual(g.buy, ['548467220']); // «Начало покупки» — не покупка
+  assert.deepEqual(g.buy, ['548467220']);
+  assert.deepEqual(goalsOf({ ...M, main: [548467217] }, { goal: 548467220 }), {
+    lib: '548467215', buy: ['548467220'], own: '548467220',
+  }); // «Начало покупки» — не покупка
 });
 
 test('книга кампании — по ссылке объявления на Литнете, а не по названию кампании', () => {
@@ -25,10 +28,11 @@ test('состояние: модерация, старт, нет показов,
   assert.equal(campaignState({ ...camp, status: 'MODERATION' }, { today: T }).key, 'moderation');
   assert.equal(campaignState({ ...camp, start: '2026-11-20' }, { today: T }).key, 'soon');
   assert.equal(campaignState(camp, { daily: [day('2026-11-10', 100)], today: T }).key, 'idle');
-  assert.equal(campaignState(camp, { daily: [day('2026-11-10', 900), day('2026-11-11', 700), day('2026-11-12', 50)], today: T }).key, 'capped');
+  assert.equal(campaignState(camp, { daily: [day('2026-11-10', 900), day('2026-11-11', 1100), day('2026-11-12', 50)], today: T }).key, 'capped');
   assert.equal(campaignState(camp, { daily: [day('2026-11-11', 100), day('2026-11-12', 50)], today: T }).key, 'on');
   const wk = weekBudget(camp, [day('2026-11-08', 999), day('2026-11-10', 300)], T); // воскресенье — прошлая неделя
   assert.equal(wk.spent, 300);
+  assert.equal(wk.limit, 2074);
 });
 
 test('экономика: цена добавления против цели, окупаемость покупками, ожидание на малых числах', () => {
@@ -96,7 +100,7 @@ test('как заработать больше: рычаги по кампани
   const econ = campaignEcon(c, { daily, conv, today, goals: g, perSale: 100, libShare: 0.3 });
   const L = campaignLevers(c, st, econ, wk, { ads, daily, today });
   assert.deepEqual(L.levers.map((x) => x.k), ['ads', 'pace', 'page']);
-  assert.match(L.levers[1].title, /на 28 %/);
+  assert.match(L.levers[1].title, /на 23 %/);
   assert.match(L.levers[1].how, /После 17\.11 поднимите цену цели с 8 до 11 ₽/); // учится — менять после 7 дней, не больше трети
   assert.equal(Math.round(L.forecast.cost), 478); assert.ok(L.forecast.royalty > L.forecast.cost);
   // добавление приносит меньше, чем стоит, — совет снизить цену цели
@@ -126,7 +130,7 @@ test('Директ → «Доходы»: кампания создаётся с�
   assert.equal(k.name, 'Директ: «Развод для черной вдовы»');
   assert.equal(k.bookId, bookIdFor('Развод для черной вдовы (подписка)')); assert.equal(k.scope, 'book'); assert.equal(k.channel, 'own');
   const any = incomeCampaignFor(camp, [], [], []);
-  assert.equal(any.name, 'Директ: ' + camp.name); assert.equal(any.scope, 'all');
+  assert.equal(any.name, 'Директ: ' + camp.name); assert.equal(any.scope, 'book'); assert.equal(any.bookId, '');
 });
 
 test('когорты: сводка «когда покупают» — доли только по созревшим, Директ отдельно', async () => {

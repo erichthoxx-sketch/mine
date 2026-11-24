@@ -1,11 +1,11 @@
 // Кампания: итоги, связь с «Доходами» и вкладки — запросы, фразы, объявления, минус-фразы
-import { esc, acts, forms, changes, openSheet, opt, toast, N, uid } from '../../../js/ui.js';
+import { esc, acts, forms, changes, openSheet, opt, toast, N } from '../../../js/ui.js';
 import { rub, num, fmtShort, fmtDate } from '../../../js/format.js';
-import { addDays, outageSet } from '../../../js/calc.js';
+import { addDays } from '../../../js/calc.js';
 import { lineChart } from '../../../js/charts.js';
-import { totals, spendSeries, JUNK, hasNegative, goalTotals, metrikaFor, sumGoals, DEFAULT_MAX_BID } from '../dcalc.js';
+import { totals, spendSeries, JUNK, hasNegative, metrikaFor, sumGoals, DEFAULT_MAX_BID } from '../dcalc.js';
 import { metrikaOf } from './metrika.js';
-import { pushToIncome } from '../sync.js';
+import { incomeCampaignFor, pushToIncome } from '../sync.js';
 import { demo } from '../demo.js';
 import { auditItemsHtml } from './learn.js';
 import { logView } from './log.js';
@@ -23,7 +23,7 @@ function queriesTab(camp, stats) {
   if (!rows.length) return '<p class="muted">Запросов пока нет: они появляются, когда объявления показываются на поиске.</p>';
   return `<p class="small muted">Что люди написали в Яндексе, когда увидели объявление, за 30 дней ${q('query')}. Лишнее — в минус: объявление перестанет показываться по таким запросам.</p>
   <div class="list">${rows.map((r) => {
-    const low = r.query.toLowerCase(), j = JUNK.find(([stem, w]) => low.includes(stem) && !hasNegative(camp.negatives, w));
+    const low = r.query.toLowerCase(), j = stats.queryGoalsReady && !Object.values(r.conv || {}).some((n) => n > 0) && JUNK.find(([stem, w]) => w !== 'бесплатно' && low.includes(stem) && !hasNegative(camp.negatives, w));
     return `<div class="item"><div class="row between"><span>${esc(r.query)}${j ? ` <span class="small warnc" title="${esc(j[2])}">● ${esc(j[1])}</span>` : ''}</span><button class="link" data-act="d.minusQ" data-cid="${camp.id}" data-q="${esc(r.query)}" data-w="${esc(j ? j[1] : '')}">в минус</button></div>
       <div class="small muted">${statLine(r)}</div></div>`;
   }).join('')}</div>`;
@@ -95,6 +95,7 @@ forms['d.minus'] = async (fd, f) => {
 // Связь с кампанией в «Доходах»: туда уходит расход по неделям, там видна окупаемость
 function incomeLink(camp, c) {
   if (demo.on) return '<p class="small muted">Свяжите кампанию с «Доходами» — там будет видно, окупается ли она продажами.</p>';
+  if (c.settings.direct?.sandbox) return '<p class="small muted">Расход песочницы остаётся в «Директе».</p>';
   const links = c.settings.direct?.links || {}, cur = links[camp.id] || '';
   const own = c.data.campaigns.filter((k) => !k.oneOff).sort((a, b) => (b.start || '').localeCompare(a.start || ''));
   return `<div class="row d-link"><label class="small" for="dl${camp.id}">В «Доходах»:</label><select id="dl${camp.id}" data-chg="d.link" data-cid="${camp.id}"><option value="">не связана</option>${own.map((k) => opt(k.id, k.name, cur)).join('')}<option value="+">+ Создать там кампанию</option></select></div>
@@ -102,10 +103,18 @@ function incomeLink(camp, c) {
 }
 changes['d.link'] = async (v, el) => {
   const a = app(), c = a.ctx(), cid = el.dataset.cid, camp = a.snap('main').campaigns.find((x) => String(x.id) === cid);
+  if (c.settings.direct?.sandbox) return;
+  if (v && v !== '+' && Object.entries(c.settings.direct?.links || {}).some(([key, value]) => key !== cid && value === v)) {
+    toast('Эта запись в «Доходах» уже связана с другой кампанией.');
+    a.rerender();
+    return;
+  }
   let id = v;
   if (v === '+') {
-    id = 'k' + uid();
-    await a.store.put('campaigns', { id, name: 'Директ: ' + camp.name, bookId: '', scope: 'all', channel: 'own', start: camp.start || c.today, end: '', budget: null, paidAt: '', baseMode: 'auto' });
+    id = 'direct_' + camp.id;
+    if (!c.data.campaigns.some((x) => x.id === id)) {
+      await a.store.put('campaigns', { id, ...incomeCampaignFor(camp, a.snap('main').ads, c.data.w_books, c.data.sales), start: camp.start || c.today });
+    }
   }
   await a.store.saveSettings({ direct: { ...(c.settings.direct || {}), links: { ...(c.settings.direct?.links || {}), [cid]: id } } });
   await pushToIncome(a, a.snap('stats')?.daily || []);
@@ -113,20 +122,18 @@ changes['d.link'] = async (v, el) => {
 };
 
 // Покупки по целям и поведение на странице книги (Метрика) — за 30 дней
-function goalLine(camp, c, daily, stats) {
+function goalLine(camp, c, stats, econ) {
   const mk = metrikaOf(c);
   if (!mk?.counterId) return '';
   if (Array.isArray(camp.counters) && !camp.counters.map(Number).includes(Number(mk.counterId))) return `<p class="small warnc">Счётчик Метрики не привязан к кампании — Директ не видит покупки. ${actBtn({ do: 'counter', campaign: camp.id, counter: mk.counterId, why: 'чтобы Директ видел покупки' }, 'Привязать')}</p>`;
-  const t = c.today, g = goalTotals(daily, stats?.conv || [], addDays(t, -29), t, { cid: camp.id, goals: mk.main, skip: outageSet(c.data.days || []) });
-  const mr = metrikaFor(stats?.mrows || [], camp);
-  return `<div class="small">За 30 дней: покупок ${q('conv')} <b>${num(g.conv)}</b>${g.cpa != null ? ` · цена покупки ${q('cpa')} <b>${rub(g.cpa, 0)}</b>` : ''}${g.cr != null && g.conv ? ` · из 100 кликов ${String(Math.round(g.cr * 1000) / 10).replace('.', ',')}` : ''}</div>
+  const mr = stats?.mrowsErr ? null : metrikaFor(stats?.mrows || [], camp);
+  return `${econ?.buy30 != null ? `<div class="small">За 30 дней: целевых визитов «Покупка» ${q('conv')} <b>${num(econ.buy30)}</b>${econ.cpaBuy != null ? ` · цена цели <b>${rub(econ.cpaBuy, 0)}</b>` : ''}</div>` : '<p class="small muted">Отчёт по покупкам пока не подтверждён.</p>'}
     ${mr ? `<div class="small muted">На странице книги (Метрика): визитов ${num(mr.visits)} · отказы ${q('bounce')} ${Math.round(mr.bounce * 100)} % · ${String(mr.depth).replace('.', ',')} стр. · ${Math.floor(mr.dur / 60)} мин ${mr.dur % 60} с</div>` : ''}`;
 }
 
 // Итог кампании: состояние, вывод, воронка за 30 дней «показы → клики → в библиотеку → покупки» (расчёт — pult.js)
 const TONE = { good: 'up', bad: 'down', warn: 'warnc', even: '', wait: 'muted', muted: 'muted' };
-function verdictBlock(a, camp) {
-  const r = pultModel(a).rows.find((x) => x.camp.id === camp.id);
+function verdictBlock(camp, r) {
   if (!r) return '';
   const e = r.econ, d = e.d30, steps = [['Показы', d.impr], ['Клики', d.clicks], ['В библиотеку', e.lib30], ['Покупки', e.buy30]].filter(([, n]) => n != null);
   const rate = (n, p) => (p ? `${String(Math.round(n / p * 1000) / 10).replace('.', ',')} %` : '');
@@ -142,15 +149,16 @@ export function campaignView(a, id) {
   const camp = main?.campaigns?.find((x) => x.id === id);
   if (!camp) return { html: '<div class="card"><p>Кампания не найдена.</p><button data-act="go" data-to="/">К рекламе</button></div>' };
   const t = c.today, daily = stats?.daily || [], tab = TABS.some(([k]) => k === a.ui.cTab) ? a.ui.cTab : 'diag';
+  const r = pultModel(a).rows.find((x) => x.camp.id === camp.id);
   const w = totals(daily, addDays(t, -6), t, id), m = totals(daily, addDays(t, -29), t, id);
   return {
     html: `<p><button class="link" data-act="go" data-to="/">← Пульт</button></p>
     <div class="card"><div class="row between"><h2 style="margin:0">${esc(camp.name)}</h2>${stateDot(camp)}</div>
-      <div class="small muted">${[camp.start && 'старт ' + fmtDate(camp.start), camp.daily && `лимит ${rub(camp.daily, 0)} в день`, strategyText(camp.strategy)].filter(Boolean).join(' · ')}</div>
-      ${verdictBlock(a, camp)}
+      <div class="small muted">${[camp.start && 'старт ' + fmtDate(camp.start), camp.end && 'окончание ' + fmtDate(camp.end), camp.daily && `лимит ${rub(camp.daily, 0)} в день`, strategyText(camp.strategy)].filter(Boolean).join(' · ')}</div>
+      ${verdictBlock(camp, r)}
       ${tiles(w, 'за 7 дней')}
       <div class="small muted">За 30 дней: ${rub(m.cost, 0)} · кликов ${num(m.clicks)}${m.cpc != null ? ` · клик ${rub(m.cpc, 1)}` : ''}</div>
-      ${goalLine(camp, c, daily, stats)}
+      ${goalLine(camp, c, stats, r?.econ)}
       <div class="chart" id="dCamp"></div>
       ${incomeLink(camp, c)}
       <div class="row">${camp.state === 'SUSPENDED' ? actBtn({ do: 'resume', target: 'campaign', ids: [camp.id] }, 'Запустить кампанию', '') : camp.state === 'ON' ? actBtn({ do: 'pause', target: 'campaign', ids: [camp.id] }, 'Остановить кампанию', '') : ''}</div></div>

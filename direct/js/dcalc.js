@@ -35,8 +35,8 @@ export function dailyRows(rows) {
   return rows.map((r) => ({ date: r.Date, cid: r.CampaignId, name: r.CampaignName || '', impr: r.Impressions, clicks: r.Clicks, cost: r2(r.Cost) }));
 }
 // Склеить новые дни со старыми (свежие заменяют) и обрезать историю до keep дней
-export function mergeDaily(old = [], fresh = [], keep = 400, today = null) {
-  const m = new Map(old.map((x) => [`${x.date}_${x.cid}`, x]));
+export function mergeDaily(old = [], fresh = [], keep = 400, today = null, replaceFrom = null) {
+  const m = new Map(old.filter((x) => !replaceFrom || x.date < replaceFrom || x.date > today).map((x) => [`${x.date}_${x.cid}`, x]));
   for (const x of fresh) m.set(`${x.date}_${x.cid}`, x);
   const from = today ? addDays(today, -keep) : '';
   return [...m.values()].filter((x) => x.date >= from).sort((a, b) => a.date.localeCompare(b.date) || a.cid - b.cid);
@@ -437,8 +437,8 @@ export function adRows(rows) {
       ...(cols.length ? { goalMeasured: true, goals: Object.fromEntries(cols.map((k) => [goalIdOf(k), r[k] || 0])) } : {}) };
   });
 }
-export function mergeAdDaily(old = [], fresh = [], keep = 120, today = null) {
-  const k = (x) => `${x.date}_${x.aid}_${x.net}`, m = new Map(old.map((x) => [k(x), x]));
+export function mergeAdDaily(old = [], fresh = [], keep = 120, today = null, replaceFrom = null) {
+  const k = (x) => `${x.date}_${x.aid}_${x.net}`, m = new Map(old.filter((x) => !replaceFrom || x.date < replaceFrom || x.date > today).map((x) => [k(x), x]));
   for (const x of fresh) m.set(k(x), x);
   const from = today ? addDays(today, -keep) : '';
   return [...m.values()].filter((x) => x.date >= from).sort((a, b) => a.date.localeCompare(b.date) || a.aid - b.aid);

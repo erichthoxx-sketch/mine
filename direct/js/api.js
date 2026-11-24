@@ -45,7 +45,7 @@ function apiError(e) {
 
 // Обычный запрос: call(s, 'campaigns', 'get', {…}) → result
 export async function call(s, service, method, params, retry = 2, wait = sleep, version = 'v5') {
-  const res = await post(apiBase(s, version) + service, s, { method, params });
+  const res = await post(apiBase(s, version) + service, s, { method, params }, undefined, method === 'get' ? 1 : 0);
   let data = null;
   try { data = await res.json(); } catch { /* не JSON */ }
   if (data?.error) {
@@ -80,7 +80,14 @@ export async function report(s, { name, type = 'CUSTOM_REPORT', fields, range = 
   let rateRetries = 0;
   for (let i = 0; i < 20; i++) {
     const res = await post(apiBase(s) + 'reports', s, body, extra);
-    if (res.status === 200) return parseTsv(await res.text());
+    if (res.status === 200) {
+      const tsv = await res.text();
+      const columns = (tsv.trimStart().split(/\r?\n/, 1)[0] || '').trim().split('\t');
+      if (!fields.every((field) => field === 'Conversions' && goals?.length
+        ? goals.slice(0, 10).every((id) => columns.includes('Conversions_' + id + '_LSCCD'))
+        : columns.includes(field))) throw new Error('В отчёте «' + name + '» отсутствуют запрошенные столбцы.');
+      return parseTsv(tsv);
+    }
     if (res.status === 201 || res.status === 202) { await wait(Math.min(Number(res.headers.get('retryIn')) || 5, 20) * 1000); continue; }
     let data = null;
     try { data = await res.json(); } catch { /* не JSON */ }

@@ -21,8 +21,9 @@ export function diagOf(a, camp, row = null) {
   if (!r) return null;
   const stats = a.snap('stats') || {}, main = a.snap('main') || {}, c = a.ctx();
   return diagnose({
-    camp, daily: stats.daily || [], conv: stats.conv || [], adDaily: stats.adDaily || [], ads: main.ads || [],
-    places: placementRows(stats.placements || [], main.campaigns || []), segments: stats.segments || [],
+    camp, daily: stats.daily || [], conv: r.convReady ? stats.conv || [] : [], adDaily: r.convReady ? stats.adDaily || [] : [], ads: main.ads || [],
+    places: r.convReady && !stats.placementErr ? placementRows(stats.placements || [], main.campaigns || []) : [],
+    segments: r.convReady && !stats.segErr ? stats.segments || [] : [],
     goals: r.goals, today: c.today, libValue: r.econ.libValue, perSale: r.perSale, skip: outageSet(c.data.days || []), log: logOf(a) || [],
   });
 }
@@ -55,7 +56,9 @@ function groupHtml(g, list) {
 }
 
 export function diagHtml(a, camp) {
-  const D = diagOf(a, camp);
+  const row = pultModel(a).rows.find((r) => r.camp.id === camp.id);
+  if (row && !row.convReady) return '<p class="muted">Для диагноза нужен свежий отчёт по целям кампании. Расход и клики показаны в карточке выше.</p>';
+  const D = diagOf(a, camp, row);
   if (!D) return '<p class="muted">Нет данных по кампании.</p>';
   const u = D.unit;
   const head = `<div class="dg-head"><div class="dg-score dg-${D.grade}">${D.score ?? '…'}</div><div><div class="dg-grade">${esc(D.gradeText)} ${q('score')}</div>

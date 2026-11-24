@@ -19,7 +19,7 @@ export const FIRST_LAUNCH = {
 };
 
 export const firstLaunchOf = (settings = {}) => ({ ...FIRST_LAUNCH, ...(settings.direct?.firstLaunch || {}) });
-const paidName = (name = '') =>
+export const paidName = (name = '') =>
   /покуп|оплат|купил|purchase|payment|paid/i.test(name)
   && !/начал|начат|start|begin|корзин/i.test(name);
 

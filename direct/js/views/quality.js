@@ -5,6 +5,8 @@ import { addDays } from '../../../js/calc.js';
 import { goalTotals } from '../dcalc.js';
 import { qualitySummary, MIN_PLACEMENT_CLICKS, HIGH_BOUNCE_PCT, AUTO_PLACEMENT_MIN_CLICKS, AUTO_PLACEMENT_BOUNCE } from '../qualitycalc.js';
 import { purchaseGoal } from '../launchcalc.js';
+import { conversionEvidence, missingConversionsDuringSpend } from '../evidence.js';
+import { outageSet } from '../../../js/calc.js';
 import { metrikaOf } from './metrika.js';
 
 const money = v => rub(v, 0);
@@ -16,7 +18,9 @@ export function qualityView(a) {
   const selected = a.ui.qualityCid || '';
   const campaigns = selected ? all.filter(x => String(x.id) === selected) : all;
   const goal = purchaseGoal(metrikaOf(c));
-  const goalFresh = !!goal && !!stats.mAt && !stats.mErr && Date.now() - Date.parse(stats.mAt) < 48*3600000;
+  const goalFresh = !!goal && conversionEvidence(stats, to).ready &&
+    (!stats.goalIds || stats.goalIds.includes(String(goal.id))) &&
+    !missingConversionsDuringSpend(stats.daily, from, to, outageSet(c.data.days || []), campaigns.length === 1 ? campaigns[0].id : null);
   const summary = qualitySummary({
     campaigns, daily: stats.daily || [], conv: stats.conv || [],
     placeRows: stats.placements || [], goalId: goalFresh ? goal.id : null,

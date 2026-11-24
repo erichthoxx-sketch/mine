@@ -94,7 +94,7 @@ export async function autoCohorts(store, { days = 90 } = {}) {
   let id = null;
   try {
     const today = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
-    const to = addD(today, -1), from = addD(to, -(days - 1)); // Logs API — только до вчерашнего дня
+    const to = addD(today, -1), from = addD(to, -days); // Logs API — только до вчерашнего дня
     const q = { date1: from, date2: to, fields: LOG_FIELDS.join(','), attribution: 'LAST' };
     const ev = (await call('evaluate', q)).log_request_evaluation || {};
     if (!ev.possible) throw Error('Метрика говорит, что выгрузить логи за ' + days + ' дней сейчас нельзя (квота или права доступа к счётчику).');
@@ -157,6 +157,6 @@ export function cohortSummary(data, today) {
   return { from: data?.from || '', to: data?.to || '', groups: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, fin(g)])), camps: Object.fromEntries(Object.entries(camps).map(([k, g]) => [k, fin(g)])),
     campBooks: Object.fromEntries(Object.entries(campBooks).map(([cid, byBook]) =>
       [cid, Object.fromEntries(Object.entries(byBook).map(([bid, g]) => [bid, fin(g)]))])),
-    note: 'Когорта — первый наблюдаемый визит за 90 дней. Цели библиотеки и покупки относятся к любой книге автора. Книга входа известна лишь по первой странице; ID добавленной и купленной книги в цели не передается.',
+    note: 'Когорта — первый наблюдаемый визит за период выгрузки. Цели библиотеки и покупки относятся к любой книге автора. Книга входа известна лишь по первой странице; ID добавленной и купленной книги в цели не передается.',
     schema: 2 };
 }

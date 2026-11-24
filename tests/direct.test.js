@@ -118,9 +118,10 @@ test('переходник: пускает только свой сайт и т�
 test('загрузка из Директа: поля, отчёты в очереди, расход по неделям уходит в «Доходы»', async () => {
   const { refresh, apply } = await import('../direct/js/sync.js');
   const { report } = await import('../direct/js/api.js');
-  const today = new Date().toISOString().slice(0, 10);
+  const { todayISO, campaignDailySpend } = await import('../js/calc.js');
+  const today = todayISO();
   const sent = [];
-  let queued = 1;
+  let queued = 1, activeCost = 45.5;
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body), svc = url.split('/').pop();
     sent.push({ svc, body, headers: init.headers });
@@ -134,7 +135,12 @@ test('загрузка из Директа: поля, отчёты в очере
       if (queued-- > 0) return new Response('', { status: 202, headers: { retryIn: '1' } });
       const f = body.params.FieldNames.join('\t');
       if (body.params.ReportType === 'SEARCH_QUERY_PERFORMANCE_REPORT') return new Response(`${f}\nчитать бесплатно\t7\t8\tроман\t50\t2\t20\n`, { status: 200 });
-      if (f.startsWith('Date')) return new Response(`${f}\n${today}\t7\tКнига\t100\t5\t45.5\n`, { status: 200 });
+      if (body.params.ReportName.startsWith('segments')) return new Response(`${f}\n7\tSEARCH\tDESKTOP\tGENDER_FEMALE\tAGE_25_34\t100\t5\t45.5\n`);
+      if (body.params.ReportName.startsWith('days')) {
+        const cost = url.includes('/sandbox/') ? 123 : activeCost;
+        return new Response(cost ? `${f}\n${today}\t7\tКнига\t100\t5\t${cost}\n` : f);
+      }
+      if (f.startsWith('Date')) return new Response(f);
       return new Response(`${f}\n7\t9\tроман\t100\t5\t45.5\n`, { status: 200 });
     }
     return new Response('{}', { status: 404 });
@@ -158,6 +164,22 @@ test('загрузка из Директа: поля, отчёты в очере
   assert.equal(stats.queries[0].query, 'читать бесплатно');
   const rep = data.reports[0];
   assert.equal(rep.campaignId, 'k1'); assert.equal(rep.spend, 45.5); assert.equal(rep.clicks, 5); assert.equal(rep.end, today);
+  assert.deepEqual(rep.dailySpend, { [today]: 45.5 });
+  assert.equal(campaignDailySpend(data.campaigns[0], data.reports)[today], 45.5);
+  assert.equal(stats.segments[0].dev, 'DESKTOP');
+  assert.equal(stats.segErr, '');
+
+  data.settings.direct.sandbox = true;
+  await refresh(app);
+  assert.equal(data.reports[0].spend, 45.5);
+  assert.equal(data.d_snap.find((x) => x.id === 'sandbox-stats').daily[0].cost, 123);
+  assert.equal(data.d_snap.find((x) => x.id === 'stats').daily[0].cost, 45.5);
+
+  data.settings.direct.sandbox = false;
+  activeCost = 0;
+  await refresh(app);
+  assert.deepEqual(data.d_snap.find((x) => x.id === 'stats').daily, []);
+  assert.equal(data.reports[0].spend, 0);
   // минус-фраза: перечитали текущие и дописали, в историю записали
   const r = await apply(app, { do: 'minus', campaign: 7, phrases: ['бесплатно'], why: 'тест' });
   assert.equal(r.errors.length, 0);

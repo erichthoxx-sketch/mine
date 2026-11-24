@@ -3,13 +3,13 @@
 // Всё связывается само: кампания — из плана запуска, привязки слов или по названию; реклама «Доходов» — по книге.
 import { esc, acts } from '../../../js/ui.js';
 import { rub, num, pct, fmtShort } from '../../../js/format.js';
-import { addDays, outageSet, bookIdFor } from '../../../js/calc.js';
-import { totals, goalTotals } from '../dcalc.js';
+import { addDays, bookIdFor } from '../../../js/calc.js';
 import { byBook } from '../mcalc.js';
 import { sameBook } from '../launchcalc.js';
 import { resolvedLaunches } from './launchctx.js';
 import { launchStrip } from './launch.js';
 import { metrikaOf } from './metrika.js';
+import { pultModel } from './pult.js';
 import { stateDot } from './common.js';
 import { keywordsView } from './keywords.js';
 import { demo } from '../demo.js';
@@ -24,16 +24,17 @@ const nameHas = (name, title) => { const n = norm(name), t = norm(title), two = 
 
 // Всё о книге из всех приложений
 export function bookAds(a, b) {
-  const c = a.ctx(), t = c.today, m = metrikaOf(c), skip = outageSet(c.data.days || []);
-  const main = a.snap('main') || {}, stats = a.snap('stats') || {}, daily = stats.daily || [];
+  const c = a.ctx(), t = c.today, m = metrikaOf(c);
   const L = resolvedLaunches(a).find((x) => x.id === String(b.id)) || null;
   const bind = (c.data.d_kw_bindings || []).find((x) => String(x.bookId) === String(b.id));
   const ids = new Set([L?.fl.campaignId, bind?.campaignId].filter(Boolean).map(String));
-  const camps = (main.campaigns || []).filter((x) => x.state !== 'ARCHIVED' && (ids.has(String(x.id)) || nameHas(x.name, b.title))).map((x) => ({
-    ...x, w: totals(daily, addDays(t, -6), t, x.id), g: m?.counterId ? goalTotals(daily, stats.conv || [], addDays(t, -29), t, { cid: x.id, goals: m.main, skip }) : null }));
+  const camps = pultModel(a).rows.filter(({ camp, book }) =>
+    ids.has(String(camp.id)) || String(book?.id || '') === String(b.id)).map(({ camp, econ }) => ({
+    ...camp, w: econ.d7, g: econ.buy30 == null ? null : { conv: econ.buy30, cpa: econ.cpaBuy },
+  }));
   // книга в «Доходах» названа по выгрузке Литнета — часто длиннее («Альпийский развод. Он оставил меня умирать»): сравниваем по началу
   const bid = new Set([bookIdFor(b.title), ...(c.data.books || []).filter((x) => sameTitle(x.title, b.title)).map((x) => x.id)]);
-  const others = (c.data.campaigns || []).filter((k) => !k.oneOff && (bid.has(k.bookId) || k.scope === 'all' || !k.bookId)).map((k) => ({ ...k, all: !bid.has(k.bookId) }))
+  const others = (c.data.campaigns || []).filter((k) => !k.oneOff && (bid.has(k.bookId) || k.scope === 'all' || (!k.bookId && k.src !== 'direct'))).map((k) => ({ ...k, all: !bid.has(k.bookId) }))
     .sort((x, y) => (x.all - y.all) || (y.start || '').localeCompare(x.start || ''));
   // таргетологи из «Связей» Мастерской, которые ведут эту книгу
   const people = (c.data.w_links || []).filter((x) => x.kind === 'target' && (x.bookIds || []).map(String).includes(String(b.id)));

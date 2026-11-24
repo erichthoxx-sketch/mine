@@ -8,6 +8,8 @@ import { royaltyPerSale } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { stateDot, tiles, actBtn, q } from './common.js';
 import { demo } from '../demo.js';
+import { conversionEvidence, missingConversionsDuringSpend } from '../evidence.js';
+import { goalsOf } from '../pult.js';
 import { OUTAGE_TEXT } from '../api.js';
 import { resolvedLaunches, goalSwitch } from './launchctx.js';
 import { readyGoalActs } from './pult.js';
@@ -71,7 +73,14 @@ function goalTodo(main, stats, ctx) {
   // Без этой даты не выдаём старые бесплатные дни за провал рекламы на покупку.
   const paidSince = Object.fromEntries(resolvedLaunches(app()).filter((x) => x.plan?.picked?.id && x.plan?.subDate && x.plan.subDate <= ctx.today)
     .map((x) => [String(x.plan.picked.id), x.plan.subDate]));
-  const hs = goalHints({ campaigns: main.campaigns, keywords: main.keywords, kw: stats.kw, kwConv: stats.kwConv, daily: stats.daily, conv: stats.conv, mrows: stats.mrows, m, today: ctx.today, skip: outageSet(ctx.data.days || []), paidSince });
+  const ready = conversionEvidence(stats, ctx.today).ready, { buy } = goalsOf(m);
+  const skip = outageSet(ctx.data.days || []), from = addDays(ctx.today, -29);
+  const hasGoals = (ids) => ids.length && (!stats.goalIds || ids.every((id) => stats.goalIds.includes(String(id))));
+  const campaigns = (main.campaigns || []).filter((c) => (
+    ready && hasGoals(c.goal ? [c.goal] : buy) &&
+    !missingConversionsDuringSpend(stats.daily, from, ctx.today, skip, c.id)
+  ) || (Array.isArray(c.counters) && !c.counters.map(String).includes(String(m.counterId))));
+  const hs = goalHints({ campaigns, keywords: stats.keywordGoalsReady ? main.keywords : [], kw: stats.kw, kwConv: stats.kwConv, daily: stats.daily, conv: stats.conv, mrows: stats.mrowsErr ? [] : stats.mrows, m: { ...m, main: buy }, today: ctx.today, skip: outageSet(ctx.data.days || []), paidSince });
   const out = [];
   for (const h of hs.slice(0, 4)) {
     const head = { counter: `Кампания «${esc(h.name)}»: привязать счётчик`, zero: `«${esc(h.name)}»: клики есть, конверсий нет`, learning: `«${esc(h.name)}»: новая подписка — тестируем покупки`, early: `«${esc(h.name)}»: недостаточно покупок для оценки`, bounce: `«${esc(h.name)}»: много уходят сразу`, noconv: `«${esc(h.phrase)}» тратит без покупок`, winner: `«${esc(h.phrase)}» приводит покупателей` }[h.kind];
@@ -93,15 +102,17 @@ export function todo(main, stats, ctx = null) {
   if (ctx) out.push(...goalTodo(main, stats, ctx));
   // расход: урезать или вернуть прежний — по окупаемости за 14 дней
   const mm = ctx && metrikaOf(ctx);
-  if (mm?.counterId) {
+  const purchase = goalsOf(mm || {}).buy;
+  if (mm?.counterId && purchase.length && conversionEvidence(stats, ctx.today).ready && (!stats.goalIds || purchase.every((id) => stats.goalIds.includes(id)))) {
     const value = Number(ctx.settings.direct?.econ?.rev) || royaltyPerSale(ctx.data.sales || [], ctx.today)?.perSale || null;
     for (const camp of (main.campaigns || []).filter((x) => x.state === 'ON')) {
-      const h = spendHint(camp, spendAdvice({ camp, daily: stats.daily || [], conv: stats.conv || [], today: ctx.today, goals: mm.main, skip: outageSet(ctx.data.days || []), value }));
+      if (missingConversionsDuringSpend(stats.daily, addDays(ctx.today, -29), ctx.today, outageSet(ctx.data.days || []), camp.id)) continue;
+      const h = spendHint(camp, spendAdvice({ camp, daily: stats.daily || [], conv: stats.conv || [], today: ctx.today, goals: purchase, skip: outageSet(ctx.data.days || []), value }));
       if (h?.status === 'fix') out.push(`<div class="item"><b>${esc(h.title)}</b><div class="small">${esc(h.why)}</div><div class="small muted">${esc(h.how)}${lessonLink(h.lesson)}</div></div>`);
     }
   }
   // выгорание: сначала то, что уже выгорает, потом «пора готовить замену»
-  if (ctx) for (const h of fatigueHints({ main, stats, today: ctx.today, goals: metrikaOf(ctx)?.main || null, skip: outageSet(ctx.data.days || []) }).slice(0, 2)) {
+  if (ctx && conversionEvidence(stats, ctx.today).ready) for (const h of fatigueHints({ main, stats, today: ctx.today, goals: metrikaOf(ctx)?.main || null, skip: outageSet(ctx.data.days || []) }).slice(0, 2)) {
     out.push(`<div class="item"><div class="row between"><b>${esc(h.title)}</b>${h.act ? actBtn(h.act, h.actLabel, 'small-btn') : ''}</div><div class="small muted">${esc(h.how)}${lessonLink(h.lesson)}</div></div>`);
   }
   // старт подписки — сменить цель кампании запуска на покупку
@@ -113,13 +124,17 @@ export function todo(main, stats, ctx = null) {
     if (miss.length >= 5) out.push(`<div class="item"><div class="row between"><b>«${esc(camp.name)}»: нет стартовых минус-слов</b>${actBtn({ do: 'minus', campaign: camp.id, phrases: miss, why: 'по таким запросам ищут файл, озвучку или экранизацию, а не книгу на Литнете' }, 'Добавить', 'small-btn')}</div><div class="small muted">${esc(miss.join(', '))} — деньги на такие запросы уходят впустую.</div></div>`);
   }
   const neg = Object.fromEntries((main.campaigns || []).map((c) => [c.id, negOf(main, c)]));
-  for (const h of queryHints(stats.queries, neg).slice(0, 3)) {
+  const queries = stats.queryGoalsReady && conversionEvidence(stats, ctx?.today).ready ? stats.queries || [] : [];
+  const converts = (q) => Object.values(q.conv || {}).some((n) => n > 0);
+  const candidates = queryHints(queries.filter((q) => !converts(q)), neg).filter((h) =>
+    h.word !== 'бесплатно' && !queries.some((q) => q.cid === h.cid && q.query?.toLowerCase().includes(h.word) && converts(q)));
+  for (const h of candidates.slice(0, 3)) {
     out.push(`<div class="item"><div class="row between"><b>Минус-слово «${esc(h.word)}»</b>${actBtn({ do: 'minus', campaign: h.cid, phrases: [h.word], why: `${h.why}; ушло ${rub(h.cost, 0)} на ${h.queries.length} запр.` }, 'В минус', 'small-btn')}</div>
       <div class="small muted">${esc(h.why)} · ${rub(h.cost, 0)} за 30 дней · например: «${esc(h.queries[0])}»</div></div>`);
   }
   const kws = withAvgCpc(main.keywords || [], stats.kw || {});
   for (const h of keywordHints(kws, stats.kw || {}).slice(0, 2)) {
-    out.push(`<div class="item"><div class="row between"><b>«${esc(h.phrase)}»</b>${actBtn({ do: 'pause', target: 'keyword', ids: [h.id], why: h.why }, 'Остановить фразу', 'small-btn')}</div>
+    out.push(`<div class="item"><div class="row between"><b>«${esc(h.phrase)}»</b></div>
       <div class="small muted">${esc(h.why)} · показов ${num(h.impr)}, кликов ${num(h.clicks)}, ${rub(h.cost, 0)}</div></div>`);
   }
   for (const a of (main.ads || []).filter((x) => x.status === 'REJECTED' && x.state !== 'ARCHIVED').slice(0, 2)) {

@@ -6,9 +6,16 @@ export const demo = { on: false, docs: {}, log: [] };
 export const isDemo = () => demo.on;
 
 // Документ d_snap: из примера или из базы
-export function snap(app, id) { return demo.on ? demo.docs[id] : app.ctx().data.d_snap.find((x) => x.id === id); }
+const inSandbox = (app) => !!app.ctx().settings.direct?.sandbox;
+const scopedSnap = (app, id) => inSandbox(app) && ['main', 'stats'].includes(id) ? 'sandbox-' + id : id;
+export function snap(app, id) {
+  if (demo.on) return demo.docs[id];
+  const data = app.ctx().data.d_snap;
+  if (!inSandbox(app) && ['main', 'stats'].includes(id) && data.some((x) => x.id === 'main' && x.sandbox)) return undefined;
+  return data.find((x) => x.id === scopedSnap(app, id));
+}
 export async function putSnap(app, docs) {
-  if (!demo.on) return app.store.putMany('d_snap', docs);
+  if (!demo.on) return app.store.putMany('d_snap', docs.map((d) => ({ ...d, id: scopedSnap(app, d.id) })));
   for (const d of docs) demo.docs[d.id] = d;
   app.rerender();
 }
@@ -90,7 +97,7 @@ export function demoSnapshot(today) {
     segments.push({ cid: 701, net: 's', dev, gen, age, impr: clicks * 22, clicks, cost, goals: { 9002: Math.round(clicks * 0.1 * gq * aq * (dev === 'DESKTOP' ? 1.2 : 0.95)) } });
   }
   const at = new Date().toISOString();
-  return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, demo: true, daily, adDaily, kw, queries, conv, kwConv, mrows, segments }];
+  return [{ id: 'main', at, demo: true, campaigns, groups, keywords, ads }, { id: 'stats', at, mAt: at, demo: true, daily, adDaily, kw, queries, conv, kwConv, mrows, segments }];
 }
 
 // Пример Метрики: 8 недель по дням (с ритмом недели), источники, устройства, страницы входа

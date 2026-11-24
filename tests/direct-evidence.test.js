@@ -7,10 +7,11 @@ import { campaignEcon, campaignPayback } from '../direct/js/pult.js';
 import { marketInsights } from '../js/market.js';
 
 test('Свежесть конверсий — нельзя выдавать старые или ошибочные цели за актуальные', () => {
-  assert.equal(conversionEvidence({ mAt: '2026-11-14T12:00:00Z' }, '2026-11-14').ready, true);
-  assert.equal(conversionEvidence({ mAt: '2026-11-10T12:00:00Z' }, '2026-11-14').ready, false);
-  assert.equal(conversionEvidence({ mAt: '2026-11-14T12:00:00Z', mErr: '500 Яндекс' }, '2026-11-14').ready, false);
-  assert.equal(conversionEvidence({}, '2026-11-14').ready, false);
+  const now = Date.parse('2026-11-14T22:00:00Z');
+  assert.equal(conversionEvidence({ mAt: '2026-11-14T12:00:00Z' }, '2026-11-14', { now }).ready, true);
+  assert.equal(conversionEvidence({ mAt: '2026-11-10T12:00:00Z' }, '2026-11-14', { now }).ready, false);
+  assert.equal(conversionEvidence({ mAt: '2026-11-14T12:00:00Z', mErr: '500 Яндекс' }, '2026-11-14', { now }).ready, false);
+  assert.equal(conversionEvidence({}, '2026-11-14', { now }).ready, false);
   assert.equal(missingConversionsDuringSpend([{ date: '2026-10-21', cid: 7, cost: 100 }], '2026-10-01', '2026-10-31', new Set(['2026-10-21']), 7), true);
 });
 
@@ -35,13 +36,21 @@ test('Площадка с 90 % отказов, но хотя бы одной п�
   assert.equal(autoPlacementCandidates(placementRows([placement({ Clicks: 75 })], campaigns), { reportAt: at, today }).length, 0);
 });
 
-test('Минус-слова включены для бесплатных поисков, но запрос с конверсией сохраняется', () => {
+test('Минус-слова требуют подтверждённого отчёта и не блокируют конвертирующие запросы', () => {
   const main = { campaigns: [{ id: 7, state: 'ON', negatives: [] }], groups: [], ads: [] };
   const query = (text, conv) => ({ cid: 7, query: text, impr: 70, clicks: 5, cost: 14, ...(conv ? { conv } : {}) });
-  const stats = { queries: [query('скачать книгу бесплатно', { '548467220': 1 }), query('слушать аудиокнигу бесплатно')] };
-  const plan = autoPlan({ main, stats, on: { minus: true }, today: '2026-11-14' });
+  const today = new Date().toISOString().slice(0, 10);
+  const stats = { mAt: new Date().toISOString(), queryGoalsReady: true, queries: [
+    query('скачать книгу бесплатно', { '548467220': 1 }),
+    query('скачать книгу полностью'),
+    query('слушать аудиокнигу бесплатно'),
+    query('фильм по роману'),
+  ] };
+  const plan = autoPlan({ main, stats, on: { minus: true }, today });
   assert.equal(plan.some((p) => p.rule === 'minus' && p.act.phrases.includes('скачать')), false);
-  assert.ok(plan.some((p) => p.rule === 'minus' && p.act.phrases.includes('бесплатно')));
+  assert.ok(!plan.some((p) => p.act.phrases.includes('бесплатно')));
+  assert.ok(plan.some((p) => p.act.phrases.includes('фильм')));
+  assert.deepEqual(autoPlan({ main, stats: { ...stats, queryGoalsReady: false }, on: { minus: true }, today }), []);
 });
 
 test('Смена цели — только в очереди ручного подтверждения', () => {
@@ -74,4 +83,14 @@ test('Рынок: несопоставимые источники не созд�
   } });
   assert.equal(m.prevDate, null);
   assert.equal(m.movers.length, 0);
+});
+
+test('Исправление отчёта на ноль удаляет старую покупку в обновлённом периоде', async () => {
+  const { convRows, mergeDaily } = await import('../direct/js/dcalc.js');
+  const old = [
+    { date: '2026-10-01', cid: 7, conv: { 21: 2 } },
+    { date: '2026-11-08', cid: 7, conv: { 21: 5 } },
+  ];
+  const fresh = convRows([{ Date: '2026-11-08', CampaignId: 7, Conversions_21_LSCCD: 0 }]);
+  assert.deepEqual(mergeDaily(old, fresh, 400, '2026-11-10', '2026-11-01'), [old[0]]);
 });

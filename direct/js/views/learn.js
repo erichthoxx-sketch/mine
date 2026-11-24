@@ -1,3 +1,5 @@
+import { conversionEvidence, missingConversionsDuringSpend } from '../evidence.js';
+import { goalsOf } from '../pult.js';
 // «Учёба»: наставник по ходу теста. Три вкладки:
 //  • Сейчас — этап теста и что делать сегодня, разбор динамики (неделя к неделе, что изменилось после правок);
 //  • Настройка — подключение шаг за шагом;
@@ -197,8 +199,10 @@ const ST = { fix: ['Улучшить', 'warnc'], wait: ['Подождать', 'm
 // Разбор одной кампании — пункты «улучшить / подождать / на заметку / хорошо» с кнопками; показывается в самой кампании
 export function auditItemsHtml(a, camp) {
   const L = live(a);
-  const goalHs = L.m?.counterId ? goalHints({ campaigns: L.main.campaigns, keywords: L.main.keywords, kw: L.stats.kw, kwConv: L.stats.kwConv, daily: L.daily, conv: L.stats.conv, mrows: L.stats.mrows, m: L.m, today: L.t, skip: L.skip }) : [];
-  const r = auditCampaign({ camp, main: L.main, stats: L.stats, log: logOf(a), today: L.t, econ: { ...(L.d.econ || {}), perSale: royaltyPerSale(a.ctx().data.sales || [], L.t)?.perSale }, m: L.m, goalHs, skip: L.skip });
+  const ready = conversionEvidence(L.stats, L.t).ready && !missingConversionsDuringSpend(L.stats.daily, addDays(L.t, -29), L.t, L.skip, camp.id);
+  const m = ready && L.m?.counterId && goalsOf(L.m).buy.length ? { ...L.m, main: goalsOf(L.m).buy } : null;
+  const goalHs = m ? goalHints({ campaigns: L.main.campaigns, keywords: L.stats.keywordGoalsReady ? L.main.keywords : [], kw: L.stats.kw, kwConv: L.stats.kwConv, daily: L.daily, conv: L.stats.conv, mrows: L.stats.mrows, m, today: L.t, skip: L.skip }) : [];
+  const r = auditCampaign({ camp, main: L.main, stats: ready ? L.stats : { ...L.stats, conv: [], adDaily: [], queries: [] }, log: logOf(a), today: L.t, econ: { ...(L.d.econ || {}), perSale: royaltyPerSale(a.ctx().data.sales || [], L.t)?.perSale }, m, goalHs, skip: L.skip });
   return { r, html: `<div class="list">${r.items.map((x) => `<div class="item"><div class="row between"><span><span class="small ${ST[x.status][1]}">● ${ST[x.status][0]} · ${esc(x.area)}</span><br><b>${esc(x.title)}</b></span>${x.act ? actBtn(x.act, x.actLabel || 'Применить', 'small-btn') : x.href ? `<a class="btn small-btn" href="${x.href}" target="_blank" rel="noopener" style="white-space:nowrap">${esc(x.hrefLabel || 'Открыть')} ↗</a>` : ''}</div>
       ${x.why ? `<div class="small">${esc(x.why)}</div>` : ''}${x.how ? `<div class="small muted">Как: ${esc(x.how)}</div>` : ''}
       ${x.lesson && MODULES.some((mm) => mm.id === x.lesson) ? `<div class="small"><button class="link l-why" data-act="l.lesson" data-k="${x.lesson}" title="${esc(MODULES.find((mm) => mm.id === x.lesson).t)}">Почему так →</button></div>` : ''}</div>`).join('')}</div>` };

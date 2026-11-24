@@ -3,6 +3,7 @@
 import { addDays } from '../../js/calc.js';
 import { totals, goalTotals, convTotal } from './dcalc.js';
 import { missingConversionsDuringSpend } from './evidence.js';
+import { paidName } from './launchcalc.js';
 import { litnetPage, matchBook, reach } from './mcalc.js';
 
 const r0 = (v) => Math.round(v);
@@ -12,18 +13,23 @@ const weekStartOf = (d) => addDays(d, -((new Date(d + 'T00:00:00Z').getUTCDay() 
 // Цели: «добавление в библиотеку» и «покупка» — по названиям целей Метрики; цель стратегии кампании главнее
 export function goalsOf(metrika = {}, camp = null) {
   const gs = metrika?.goals || [];
-  const lib = gs.find((g) => /библиотек/i.test(g.name))?.id;
-  const buy = (metrika?.main || []).length ? metrika.main.map(String) : gs.filter((g) => /^(?!.*начал).*(покупк|купил|оплат)/i.test(g.name)).map((g) => String(g.id));
   const own = camp?.goal ? String(camp.goal) : null;
-  return { lib: own && !buy.includes(own) ? own : lib ? String(lib) : null, buy, own };
+  const libraries = gs.filter((g) => /библиотек/i.test(g.name));
+  const lib = libraries.find((g) => String(g.id) === own) || libraries[0];
+  const purchases = gs.filter((g) => paidName(g.name));
+  const selected = purchases.find((g) => (metrika.main || []).map(String).includes(String(g.id)));
+  const buy = selected || (purchases.length === 1 ? purchases[0] : null);
+  return { lib: lib ? String(lib.id) : null, buy: buy ? [String(buy.id)] : [], own };
 }
 
 // Книга кампании: по ссылке объявления на Литнете (номер книги или адрес), иначе по названию кампании
 export function bookOfCampaign(camp, ads = [], wbooks = []) {
   const hrefs = ads.filter((x) => x.cid === camp.id).map((x) => x.href).filter(Boolean);
+  const ids = new Set(hrefs.map((h) => litnetPage(h).bookId).filter(Boolean));
+  if (ids.size > 1) return null;
   for (const h of hrefs) {
     const p = litnetPage(h);
-    if (p.type !== 'book') continue;
+    if (p.type !== 'book' || !p.bookId) continue;
     const byLink = wbooks.find((b) => [b.direct?.link, b.litnetUrl].some((u) => u && litnetPage(u).bookId === p.bookId));
     if (byLink) return { id: byLink.id, title: byLink.title, href: h };
     const t = matchBook(p.slug, wbooks.map((b) => b.title));
@@ -56,7 +62,8 @@ export function campaignState(camp, { daily = [], ads = [], today }) {
 export function weekBudget(camp, daily, today) {
   if (camp.budget?.kind !== 'week' || !(camp.budget.amount > 0)) return null;
   const spent = totals(daily, weekStartOf(today), today, camp.id).cost;
-  return { limit: camp.budget.amount, spent, share: spent / camp.budget.amount };
+  const limit = r0(camp.budget.amount * VAT * 100) / 100;
+  return { limit, spent, share: spent / limit };
 }
 
 // Деньги и цели кампании за 7 и 30 дней + вывод.
@@ -79,13 +86,13 @@ export function campaignEcon(camp, { daily = [], conv = [], today, goals, perSal
   else if (!d30.cost) verdict = { kind: 'wait', text: 'расхода пока нет' };
   else if (buy30 >= 3 && revenue != null) {
     const ret = revenue / d30.cost;
-    verdict = ret >= 1.2 ? { kind: 'good', text: `окупается: на 1 ₽ — ${ret.toFixed(2).replace('.', ',')} ₽ роялти с покупок`, ret }
-      : ret >= 0.9 ? { kind: 'even', text: `в ноль: на 1 ₽ — ${ret.toFixed(2).replace('.', ',')} ₽ роялти`, ret }
-        : { kind: 'bad', text: `не окупается покупками: на 1 ₽ — ${ret.toFixed(2).replace('.', ',')} ₽ роялти`, ret };
+    verdict = ret >= 1.2 ? { kind: 'good', text: `оценка окупаемости: на 1 ₽ — ${ret.toFixed(2).replace('.', ',')} ₽ роялти с покупок`, ret }
+      : ret >= 0.9 ? { kind: 'even', text: `оценка близка к нулю: на 1 ₽ — ${ret.toFixed(2).replace('.', ',')} ₽ роялти`, ret }
+        : { kind: 'bad', text: `оценка ниже безубыточности: на 1 ₽ — ${ret.toFixed(2).replace('.', ',')} ₽ роялти`, ret };
   } else if (lib30 >= 5 && cpaLib != null) {
-    const over = target ? cpaLib / target : null;
+    const over = target ? cpaLib / (target * VAT) : null;
     const worth = libValue != null ? cpaLib <= libValue : null;
-    verdict = over != null && over > 1.5 ? { kind: 'bad', text: `добавление по ${r0(cpaLib)} ₽ — дороже вашей цены ${r0(target)} ₽ в ${over.toFixed(1).replace('.', ',')} раза` }
+    verdict = over != null && over > 1.5 ? { kind: 'bad', text: `добавление по ${r0(cpaLib)} ₽ — дороже цели ${r0(target * VAT)} ₽ с НДС в ${over.toFixed(1).replace('.', ',')} раза` }
       : worth === false ? { kind: 'warn', text: `добавление по ${r0(cpaLib)} ₽, а приносит в среднем ≈ ${r0(libValue)} ₽ — пока дороже, чем окупается` }
         : { kind: 'even', text: `добавление по ${r0(cpaLib)} ₽${target ? ` при цене цели ${r0(target)} ₽` : ''}; будущая окупаемость требует проверки по когортам` };
   } else verdict = { kind: 'wait', text: ran < 7 ? `учится (день ${ran}) — выводы после 7 дней и 5 добавлений` : 'мало добавлений для выводов — нужно хотя бы 5 за 30 дней' };
@@ -260,10 +267,10 @@ export function campaignAlerts(camp, st, econ, { daily = [], conv = [], today, g
   if (st.key === 'capped') out.push({ tone: 'warn', title: `«${camp.name}»: недельный бюджет почти потрачен`, how: 'До понедельника показов почти не будет. Перед увеличением бюджета проверьте подтвержденные покупки и актуальность целей.' });
   if (econ.usable === false) return out;
   // цена добавления за 3 последних дня — против цели
-  if (econ.target && goals.lib) {
+  if (econ.target && goals.lib && (!camp.goal || String(camp.goal) === goals.lib)) {
     const from = addDays(today, -2), g = goalTotals(daily, conv, from, today, { cid: camp.id, goals: [goals.lib] });
-    if (g.conv >= 3 && g.cpa > econ.target * 1.5) out.push({ tone: 'warn', title: `«${camp.name}»: добавление подорожало до ${r0(g.cpa)} ₽`, how: `За 3 дня — ${g.conv} добавл. при цели ${r0(econ.target)} ₽. Посмотрите запросы и площадки: обычно дорожает из-за мусорного трафика.` });
-    if (econ.ran >= 4 && econ.d7.impr > 300 && !econ.lib7) out.push({ tone: 'warn', title: `«${camp.name}»: показы есть, добавлений нет`, how: 'Проверьте, что ссылка ведёт на книгу и счётчик в кампании — ваш (108714441). При оплате за конверсии деньги не тратятся, но и читательниц нет: возможно, цена цели слишком низкая.' });
+    if (g.conv >= 3 && g.cpa > econ.target * VAT * 1.5) out.push({ tone: 'warn', title: `«${camp.name}»: добавление подорожало до ${r0(g.cpa)} ₽`, how: `За 3 дня — ${g.conv} добавл. при цели ${r0(econ.target * VAT)} ₽ с НДС. Посмотрите запросы и площадки: обычно дорожает из-за мусорного трафика.` });
+    if (econ.ran >= 4 && econ.d7.impr > 300 && !econ.lib7) out.push({ tone: 'warn', title: `«${camp.name}»: показы есть, добавлений нет`, how: 'Проверьте, что ссылка ведёт на книгу и к кампании привязан нужный счётчик Метрики. При оплате за конверсии деньги не тратятся, но и читательниц нет: возможно, цена цели слишком низкая.' });
   }
   return out;
 }
@@ -276,12 +283,13 @@ export function siteCampaigns(campaigns = [], ads = [], host = 'lanafreitag.ru')
 
 // Директ по месяцам: последние 6 месяцев с расходом
 // libValue — сколько в среднем приносит одно добавление в библиотеку: месяц, где реклама шла на добавления, по одним покупкам выглядел бы нулевым
-export function directMonths({ daily = [], conv = [], goals, perSale = null, libValue = null, n = 6 }) {
+export function directMonths({ daily = [], conv = [], goals, perSale = null, libValue = null, n = 6, conversionsFor = () => true }) {
   const by = {};
   for (const x of daily) { const k = x.date.slice(0, 7); const m = (by[k] ||= { month: k, cost: 0, clicks: 0 }); m.cost += x.cost; m.clicks += x.clicks; }
   return Object.values(by).filter((m) => m.cost > 0).sort((a, b) => b.month.localeCompare(a.month)).slice(0, n).map((m) => {
     const from = m.month + '-01', to = m.month + '-31';
-    const lib = goals.lib ? convTotal(conv, from, to, null, [goals.lib]) : null, buy = goals.buy?.length ? convTotal(conv, from, to, null, goals.buy) : null;
+    const ready = conversionsFor(from, to);
+    const lib = ready && goals.lib ? convTotal(conv, from, to, null, [goals.lib]) : null, buy = ready && goals.buy?.length ? convTotal(conv, from, to, null, goals.buy) : null;
     const rev = perSale != null && buy != null ? buy * perSale : null;
     const exp = libValue != null && lib ? Math.max(0, lib * libValue - (rev || 0)) : null; // что ещё принесут добавившие
     return { ...m, cost: Math.round(m.cost), lib, buy, rev, ret: rev != null && m.cost ? rev / m.cost : null, exp, retExp: exp != null && m.cost ? ((rev || 0) + exp) / m.cost : null };

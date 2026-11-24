@@ -39,7 +39,7 @@ function campBlock(a, r, wk, done) {
     </div>
     <div class="list" style="margin-top:10px">${R.notes.map((x) => `<div class="item ${TONE[x.tone] || ''}" style="padding:8px 0">${esc(x.text)}</div>`).join('')}</div>
     ${todo ? `<h3 style="margin:16px 0 2px">Что сделать на этой неделе</h3>${todo}` : ''}
-    ${(() => { const wb = (c.data.w_books || []).find((x) => x.id === r.book?.id), ce = chapterEffect({ camp: r.camp, conv: stats.conv, goals: r.goals, book: wb, today: c.today, retention: wb?.reads?.parts?.length ? partRetention(wb.reads, addDays(c.today, -29), c.today) : [] });
+    ${(() => { const wb = (c.data.w_books || []).find((x) => x.id === r.book?.id), ce = r.convReady && chapterEffect({ camp: r.camp, conv: stats.conv, goals: r.goals, book: wb, today: c.today, retention: wb?.reads?.parts?.length ? partRetention(wb.reads, addDays(c.today, -29), c.today) : [] });
       return ce ? `<h3 style="margin:16px 0 2px">Реклама и главы</h3><div class="list">${ce.notes.map((t) => `<div class="item" style="padding:8px 0">${esc(t)}</div>`).join('')}</div>` : ''; })()}
     ${fold('wk-f-' + id, 'Воронка', table(['Шаг', 'Сколько', 'Доля'], [['Показы', num(n.impr), ''], ['Клики', num(n.clicks), `${p1(n.ctr)} от показов`], ['В библиотеку', n.lib == null ? '—' : num(n.lib), n.toLib == null ? '' : `${p1(n.toLib)} от кликов`], ['Покупки', n.buy == null ? '—' : num(n.buy), n.toBuy == null ? '' : `${p1(n.toBuy)} от добавивших`]])
       + how('Это сводка по целевым визитам, а не путь одних и тех же людей. Доля покупок к добавлениям не равна реальной конверсии библиотеки в подписку. Для последовательности действий смотрите «Деньги → Когда покупают».'), { sub: n.toLib != null ? `в библиотеку ${p1(n.toLib)} кликов` : '' })}

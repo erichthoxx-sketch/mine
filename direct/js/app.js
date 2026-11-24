@@ -15,6 +15,7 @@ import { demo, snap, demoLog } from './demo.js';
 import { navSide } from './views/navside.js';
 import { booksAdsView, bookAdView } from './views/bookads.js';
 import { launchView } from './views/launch.js';
+import { experimentsView } from './views/experiments.js';
 import { qualityView } from './views/quality.js';
 import { litnetView } from './views/litnet.js';
 import { keywordsView } from './views/keywords.js';
@@ -75,15 +76,23 @@ export async function reload({ quiet = false } = {}) {
   // последняя ошибка загрузки хранится в настройках — по ней «Настройка шаг за шагом» подсказывает, что не так
   const d = () => store.data.settings.direct || {};
   try {
-    await refresh(app, { onStep: (t) => { ui.busy = t; render(); } });
+    const pull = () => refresh(app, { onStep: (t) => { ui.busy = t; render(); } });
+    if (store.user?.uid && navigator.locks) {
+      const ran = await navigator.locks.request('direct-refresh:' + store.user.uid, { ifAvailable: true }, async (lock) => {
+        if (!lock) return false;
+        await pull();
+        return true;
+      });
+      if (!ran) { ui.busy = ''; render(); return; }
+    } else await pull();
     if (d().lastError && !demo.on) await store.saveSettings({ direct: { ...d(), lastError: null } });
     // идут ли кампании — чтобы Планер Мастерской по понедельникам звал на «Разбор недели»
     const liveNow = (app.snap('main')?.campaigns || []).some((x) => x.state === 'ON' && x.status === 'ACCEPTED'), t0 = todayISO();
-    if (!demo.on && liveNow && d().liveOn !== t0) await store.saveSettings({ direct: { ...d(), liveOn: t0 } });
+    if (!demo.on && !d().sandbox && liveNow && d().liveOn !== t0) await store.saveSettings({ direct: { ...d(), liveOn: t0 } });
     // автоправила (включённые галочками на Пульте): минус-слова, площадки, выгоревшие объявления, смена цели
     try { const acts0 = readyGoalActs(app); const did = await runAutoRules(app, acts0); if (did.length) toast(`Автоправила: сделано ${(d().autoLast || []).length} — см. «Что меняли»`); } catch (e) { console.warn('Автоправила:', e); }
-    syncWatch(app).catch(() => {}); // задание круглосуточному сторожу (если включён)
-    if (!quiet) toast('Данные обновлены');
+    if (!d().sandbox) syncWatch(app).catch(() => {}); // задание круглосуточному сторожу (если включён)
+    if (!quiet) toast(app.snap('stats')?.incomeError ? 'Директ обновлён. Расход пока не передан в «Доходы».' : 'Данные обновлены');
   } catch (e) {
     console.error(e);
     // при ограничении по частоте повторяем позже, не заставляя владелицу вручную обновлять страницу
@@ -92,7 +101,14 @@ export async function reload({ quiet = false } = {}) {
     if (!demo.on) await store.saveSettings({ direct: { ...d(), lastError: { code: e.code || null, text: e.message || String(e), transient: !!e.transient, at: new Date().toISOString() } } }).catch(() => {});
   }
   // Метрика — отдельно: работает, даже если Директ ещё не одобрил заявку или отказал
-  try { ui.busy = 'Метрика…'; render(); await refreshMetrika(app); } catch (e) { console.warn(e); if (!quiet) toast(e.transient ? OUTAGE_TEXT : e.message || String(e)); }
+  try {
+    ui.busy = 'Метрика…'; render(); await refreshMetrika(app);
+    if (d().metrikaError && !demo.on) await store.saveSettings({ direct: { ...d(), metrikaError: '' } });
+  } catch (e) {
+    console.warn(e);
+    if (!demo.on) await store.saveSettings({ direct: { ...d(), metrikaError: e.message || String(e) } }).catch(() => {});
+    if (!quiet) toast(e.transient ? OUTAGE_TEXT : e.message || String(e));
+  }
   // сайт автора — свой счётчик; ошибка здесь не мешает остальному
   try { await refreshSite(app); } catch (e) { console.warn('Сайт:', e); }
   finally { try { await autoSyncKeywordLibrary(app); } catch(e){console.warn('Keyword library sync:',e);} ui.busy = ''; render(); }
@@ -103,7 +119,7 @@ acts['d.reload'] = () => { reload(); return false; };
 // Четыре раздела (10.11.2026, владелица: «максимум аналитики, полезных действий и контроля за кампаниями и их прибыльностью»):
 // Пульт (что требует внимания + карточка на кампанию), Кампания, Деньги, Сайт. Остальные экраны открываются изнутри.
 const TABS = [['/', 'gauge', 'Пульт'], ['/c', 'trend', 'Кампания'], ['/money', 'coins', 'Деньги'], ['/site', 'bear', 'Сайт'], ['/market', 'globe', 'Рынок']];
-const TAB_OF = { launch: '/', week: '/', hooks: '/', quality: '/c', ai: '/', log: '/c', settings: '/', litnet: '/', an: '/', book: '/', books: '/', keywords: '/', competitors: '/' };
+const TAB_OF = { launch: '/', week: '/', hooks: '/', quality: '/c', experiments: '/c', ai: '/', log: '/c', settings: '/', litnet: '/', an: '/', book: '/', books: '/', keywords: '/', competitors: '/' };
 // «Кампания» без номера: одна идущая — сразу она, несколько — выбор
 function campaignsView(x) {
   const camps = (x.snap('main')?.campaigns || []).filter((k) => k.state !== 'ARCHIVED');
@@ -120,7 +136,7 @@ function route() {
   if (a === 'book' && b) return { tab: '/', view: (x) => bookAdView(x, decodeURIComponent(b)) };
   if (a === 'launch' && b) return { tab: '/', view: (x) => launchView(x, decodeURIComponent(b)) };
   if (a === 'an' && b === 'site') return { tab: '/site', view: siteView }; // старая ссылка «Статистика» из Мастерской
-  const map = { books: booksAdsView, '': pultView, c: campaignsView, money: moneyView, site: siteView, launch: launchView, quality: qualityView, week: weekView, hooks: hooksView, market: marketView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, ai: aiView, log: logView, settings: settingsView };
+  const map = { books: booksAdsView, '': pultView, c: campaignsView, money: moneyView, site: siteView, launch: launchView, quality: qualityView, experiments: experimentsView, week: weekView, hooks: hooksView, market: marketView, litnet: litnetView, keywords: keywordsView, competitors: competitorsView, an: analyticsView, ai: aiView, log: logView, settings: settingsView };
   return { tab: TAB_OF[a] || '/' + (a || ''), view: map[a || ''] || pultView };
 }
 
