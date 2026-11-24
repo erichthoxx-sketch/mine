@@ -62,13 +62,13 @@ test("Paid chats use MCP on send without Google Drive OAuth popups or hidden pro
   const send=app.slice(app.indexOf("async function sendMessage("),app.indexOf("function download(",app.indexOf("async function sendMessage(")));
   assert.ok(!send.includes("ensureDriveAccess("));
   assert.ok(!send.includes("refreshLinkedBook("));
-  assert.match(send,/if\(provider==="aitunnel"\|\|provider==="apimira"\)[\s\S]*?\/quote[\s\S]*?confirm\(/);
+  assert.match(send,/if\(isPaidProvider&&\(priced\|\|requestMode==="draft"\)\)[\s\S]*?\/quote[\s\S]*?confirm\(/);
   assert.match(send,/await master\.idToken\(\)/);
   assert.match(send,/messages:lightweight\?/);
   assert.match(app,/function renderProjectHome/);
   assert.match(app,/renderMarkdown\(m\.content\)/);
   assert.match(app,/p\.instruction=String\(fd\.get\("instruction"\)/);
-  const instructions=app.slice(app.indexOf("function modelproxyMessages(c){"),app.indexOf("function buildMessages(c){"));
+  const instructions=app.slice(app.indexOf("function modelproxyMessages("),app.indexOf("function buildMessages(c){"));
   assert.doesNotMatch(instructions,/mode\.instruction/);
   assert.doesNotMatch(instructions,/ТЕКУЩАЯ СЦЕНА\/ПОСЛЕДНИЕ СОБЫТИЯ/);
   assert.match(instructions,/userInstruction\(p\?\.instruction\)/);

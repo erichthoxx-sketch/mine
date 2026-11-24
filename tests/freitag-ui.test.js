@@ -104,7 +104,7 @@ test("Google Docs refresh is optional; normal Opus MCP messages do not reauthori
   assert.match(app,/await ensureDriveAccess\(p\.masterBookId\)/);
   assert.match(app,/await refreshLinkedBook\(/);
   assert.doesNotMatch(send,/ensureDriveAccess\(/);
-  assert.match(send,/if\(provider==="aitunnel"\|\|provider==="apimira"\)[\s\S]*?\/quote[\s\S]*?confirm\(/);
+  assert.match(send,/if\(isPaidProvider&&\(priced\|\|requestMode==="draft"\)\)[\s\S]*?\/quote[\s\S]*?confirm\(/);
   assert.match(worker,/if\(input\.sourceRevision && !separateGateway\)/);
   assert.match(worker,/path === "\/refresh-book"/);
 });

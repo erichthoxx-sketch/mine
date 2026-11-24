@@ -468,7 +468,7 @@ test("book project uses the exact large master instruction and verbatim long cha
     readFile(new URL("../ai/app.js",import.meta.url),"utf8"),
     readFile(new URL("../proxy/freitag-modelproxy-worker.js",import.meta.url),"utf8")
   ]);
-  const source=app.slice(app.indexOf("function modelproxyMessages(c){"),app.indexOf("function buildMessages(c){"));
+  const source=app.slice(app.indexOf("function modelproxyMessages("),app.indexOf("function buildMessages(c){"));
   const masterPrompt="Мастер-промпт с правилами. ".repeat(1450);
   const chapterPrompt="Глава 14 — текст и поток событий. ".repeat(1450);
   assert.ok(masterPrompt.length>26000);
@@ -500,7 +500,7 @@ test("book project uses the exact large master instruction and verbatim long cha
   assert.match(app,/outputTokenLimit:requestMode==="draft"/);
   assert.match(worker,/CHAPTER_LIMITS\.includes\(requestedDraftLimit\)/);
   assert.match(worker,/maxTokens=greeting\?128:isDraft\?requestedDraftLimit/);
-  assert.match(worker,/if\(useMcp && !isDraft && !aitunnel && !separateGateway\)/);
+  assert.match(worker,/if\(useMcp && !isDraft && !aitunnel && !separateGateway && !estimateOnly\)/);
 });
 
 

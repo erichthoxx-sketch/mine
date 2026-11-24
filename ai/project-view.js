@@ -35,6 +35,7 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
     (p.masterBookId?
       '<p class="f-muted">Для главы Freitag берет канон, две последние главы и подбирает короткие выписки из ранних сцен по заданию.</p>'+
       '<div class="f-source-actions"><a class="f-btn" href="https://erichthoxx-sketch.github.io/mine/workshop/#/book/'+encodeURIComponent(p.masterBookId)+'" target="_blank" rel="noopener">Открыть книгу в Мастерской ↗</a>'+
+      '<button class="f-btn" data-action="open-story-map" data-id="'+esc(p.id)+'" type="button">Карта романа</button>'+
       '<button class="f-btn" data-action="check-book-source" data-id="'+esc(p.id)+'" type="button">Проверить источник бесплатно</button>'+
       '<button class="f-btn" data-action="sync-current-book" data-id="'+esc(p.id)+'" type="button">Обновить Google Docs</button></div>'+
       '<div id="f-book-check" class="f-book-check" role="status"></div>':
@@ -46,11 +47,15 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
       '<p class="f-muted">Утвержденные решения и образцы стиля доступны в новых чатах этой книги. Freitag подбирает выписки из старых диалогов и материалов по заданию.</p>'+
       '<button type="button" class="f-btn" data-action="add-project-memory">Закрепить решение</button>'+
       (notes.length?'<ul class="f-memory-list">'+notes.map(note=>
-        '<li><strong>'+esc(note.title)+'</strong><p>'+esc(String(note.text||"").slice(0,190))+(note.text?.length>190?"…":"")+'</p>'+
+        '<li><strong>'+esc(note.title)+'</strong>'+(Number.isSafeInteger(note.anchor?.chapter)?
+          '<button class="f-inline-btn" type="button" data-action="open-story-map" data-id="'+esc(p.id)+'" data-chapter="'+note.anchor.chapter+'">Глава '+
+            note.anchor.chapter+(note.anchor.scene?' · сцена '+esc(note.anchor.scene):'')+'</button>':'')+
+          '<p>'+esc(String(note.text||"").slice(0,190))+(note.text?.length>190?"…":"")+'</p>'+
         '<div class="f-row"><button type="button" class="f-inline-btn" data-action="edit-project-memory" data-id="'+esc(note.id)+'">Изменить</button>'+
         '<button type="button" class="f-inline-btn" data-action="remove-project-memory" data-id="'+esc(note.id)+'">Убрать</button></div></li>').join("")+'</ul>':"")+
     '</section>'+
     '<section class="f-project-recent"><h2>Чаты проекта</h2>'+
+      '<button class="f-btn" type="button" data-action="open-chapter-jobs">Фоновые главы</button>'+
       (history.length?'<ul class="f-list">'+history.map(c=>'<li><button data-action="select-chat" data-id="'+esc(c.id)+'">'+esc(c.title)+'</button></li>').join("")+'</ul>':
       '<p class="f-muted">Чатов пока нет.</p>')+
     '</section></div></div></div>';

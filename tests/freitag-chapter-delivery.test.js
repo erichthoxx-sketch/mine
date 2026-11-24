@@ -202,6 +202,45 @@ test("ApiMira quotes the current book and authentic price before one bounded cha
   assert.ok(calls.filter(path=>path==="/v1/chat/completions").length===1);
 });
 
+test("chapter previews are free and the confirmed request is handed to the private queue once",async t=>{
+  const calls=mockNetwork(t,()=>{throw Error("The model must not start in the browser request");});
+  const accepted=[];
+  const bindings={CHAPTER_JOBS:{idFromName:uid=>uid,get:uid=>({async fetch(target,opt){
+    assert.equal(uid,"fixture");assert.equal(target,"https://freitag-jobs.internal/");
+    accepted.push(JSON.parse(opt.body));
+    return Response.json({ok:true},{status:202});
+  }})}};
+  const quote=await request("quote",chapter,undefined,bindings);
+  assert.equal(quote.status,200);
+  const estimate=await quote.json();
+  assert.equal(estimate.approximate,true);
+  assert.ok(estimate.estimateRub>0);
+  assert.equal(estimate.outputTokenLimit,14000);
+  const job={id:"a-job",chatId:"a-chat",projectId:"a-book",projectName:"Тест"};
+  assert.equal((await request("chapter-jobs",{...chapter,job,apimiraQuote:{}},undefined,bindings)).status,409);
+  assert.equal((await request("chapter-jobs",{...chapter,job,contextQuote:"stale"},undefined,bindings)).status,409);
+  assert.equal((await request("chapter-jobs",{...chapter,job,contextQuote:estimate.fingerprint},undefined,bindings)).status,202);
+  assert.equal(accepted.length,1);
+  assert.equal(accepted[0].prepared.body.messages.at(-1).content,chapter.messages.at(-1).content);
+  assert.doesNotMatch(JSON.stringify(accepted[0]),/Bearer|fixture-b/);
+  assert.deepEqual(calls,[]);
+});
+
+test("a BotHub receipt reports charges only for an exact transaction identifier",async t=>{
+  const calls=mockNetwork(t,(path,init)=>{
+    assert.equal(path,"/api/v2/transaction/list");
+    assert.equal(init.headers.Authorization,"Bearer fixture-b");
+    return Response.json({data:[
+      {id:"same-id",type:"REPLINSH",status:"SUCCEDED",actual:300,currency:"RUB"},
+      {id:"old-id",externalId:"other-message",type:"WRITE_OFF",status:"SUCCEDED",amount:-8000,currency:"BOTHUB_TOKEN"},
+      {id:"billing-id",externalId:"message-id",type:"WRITE_OFF",status:"SUCCEDED",amount:-4212,rubAmount:2.31,currency:"BOTHUB_TOKEN"}
+    ]});
+  });
+  assert.deepEqual(await (await request("receipt?id=unknown&also=message-id")).json(),{ok:true,costRub:2.31,costCaps:4212});
+  assert.deepEqual(await (await request("receipt?id=same-id")).json(),{ok:true,pending:true});
+  assert.equal(calls.length,2);
+});
+
 test("a 524 before any chapter bytes reports the upstream and never resubmits",async t=>{
   const calls=mockNetwork(t,()=>new Response("private error page",{status:524}));
   const r=await request("chat",chapter);

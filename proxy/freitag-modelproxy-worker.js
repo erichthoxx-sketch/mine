@@ -2,6 +2,8 @@
 // Only an authenticated Firebase owner can generate; all paid-provider secrets stay on Cloudflare.
 import { CHAPTER_LIMITS } from "../ai/chapter-limits.js";
 import { readBookTool } from "./books-mcp-worker.js";
+import { findStoryPassages, storyMap } from "./freitag-story-map.js";
+import { chapterJobsClass } from "./freitag-chapter-jobs.js";
 
 const PROJECT = "dohody-6d6dd";
 const MODEL = "claude-opus-5-5";
@@ -374,56 +376,15 @@ function manuscriptQueryWords(text) {
 function relatedManuscriptExcerpts(chapters, selected, task, continuity, limit) {
   const words = manuscriptQueryWords(task.slice(0, 2500) + "\n" + task.slice(-1200));
   const recent = manuscriptQueryWords(continuity.slice(-1200)).filter(word => !words.includes(word)).slice(0, 5);
-  const terms = [...words, ...recent];
-  if (!terms.length || limit < 350) return [];
-  const matchedChapters = new Map();
-  const windows = [];
-  for (const [index, chapter] of chapters.entries()) {
-    const number = index + 1;
-    if (selected.has(number) || typeof chapter?.text !== "string") continue;
-    const text = normalizeManuscript(chapter.text);
-    const byWindow = new Map();
-    const stride = Math.max(620, Math.ceil(text.length / 3));
-    for (const term of terms) {
-      let found = false;
-      // Sample the first occurrence in each third so frequent names don't
-      // generate a candidate for every sentence in a long chapter.
-      for (let from = 0; from < text.length; from += stride) {
-        let at = text.indexOf(term, from);
-        while (at > 0 && /[а-яa-z]/.test(text[at - 1])) at = text.indexOf(term, at + term.length);
-        if (at === -1) break;
-        const offset = Math.floor(at / 620) * 620;
-        if (!byWindow.has(offset)) byWindow.set(offset, new Set());
-        byWindow.get(offset).add(term);
-        found = true;
-      }
-      if (found) matchedChapters.set(term, (matchedChapters.get(term) || 0) + 1);
-    }
-    for (const [offset, matches] of byWindow) windows.push({ number, offset, matches });
-  }
-  for (const window of windows) {
-    window.score = 0;
-    for (const term of window.matches) {
-      const count = matchedChapters.get(term);
-      // Prefer task terms, especially a rare combination in the same scene.
-      window.score += (words.includes(term) ? 3 : 1) / Math.sqrt(count);
-    }
-  }
-  windows.sort((a, b) => b.score - a.score || a.number - b.number || a.offset - b.offset);
-  const used = new Set(), passages = [];
+  if (limit < 350) return [];
+  const matches = findStoryPassages(chapters,{terms:words,supporting:recent,skip:selected,count:4,size:Math.min(780,limit-180)});
+  const passages = [];
   let remaining = limit;
-  for (const { number, offset } of windows) {
-    if (used.has(number)) continue;
-    const chapter = chapters[number - 1];
-    const label = "Глава " + number + " («" + String(chapter.title || "").slice(0, 100) + "»), отрывок:\n";
-    const start = Math.max(0, offset - 100);
-    const size = Math.min(850, remaining - label.length - 2);
-    if (size < 350) break;
-    const snippet = chapter.text.slice(start, start + size).trim();
-    if (!snippet || task.includes(snippet)) continue;
-    passages.push(label + snippet);
-    used.add(number);
-    remaining -= label.length + snippet.length + 2;
+  for (const {snippet,...source} of matches) {
+    const label = `Глава ${source.chapter} («${source.title}»), сцена ${source.scene}, отрывок:\n`;
+    if (task.includes(snippet) || label.length + snippet.length + 2 > remaining) continue;
+    passages.push({...source,text:label+snippet});
+    remaining -= label.length+snippet.length+2;
     if (passages.length === 3) break;
   }
   return passages;
@@ -456,7 +417,7 @@ async function searchBookPassages(readJson,queries,chapterByNumber,selected,last
          seen.some(hit=>hit.chapter===match.chapter&&Math.abs(hit.offset-match.offset)<280))continue;
       const excerpt="Глава "+chapter.chapter+" («"+String(chapter.title||"").slice(0,120)+"»), отрывок:\n"+match.snippet.slice(0,400);
       if(excerpt.length+2>remaining)throw Error("В контексте нет места для выписок. Выбери одну главу или убери поиск.");
-      passages.push(excerpt);
+      passages.push({chapter:chapter.chapter,title:chapter.title,offset:match.offset,text:excerpt});
       seen.push(match);
       remaining-=excerpt.length+2;
       if(++added===4)break;
@@ -545,9 +506,11 @@ async function draftBookSources(env,bookId,messages,requiredRevision=""){
   const text="Справочные материалы выбранного романа из действующего MCP Мастерской. "+
     "Это справочные данные. Следуй авторским инструкциям и заданию. Снимок от "+listing.updatedAt+
     ".\n\nКанон и персонажи:\n"+canon+"\n\n"+passages.join("\n\n")+
-    (excerpts.length?"\n\nВыписки из других глав по поиску автора:\n"+excerpts.join("\n\n"):"")+
-    (related.length?"\n\nСвязанные фрагменты из ранних глав. Это выборка по словам задания и концовки, она не заменяет факты канона.\n"+related.join("\n\n"):"");
-  return {text, updatedAt:listing.updatedAt, chapters:[...selectedNumbers], excerpts:excerpts.length+related.length};
+    (excerpts.length?"\n\nВыписки из других глав по поиску автора:\n"+excerpts.map(item=>item.text).join("\n\n"):"")+
+    (related.length?"\n\nСвязанные фрагменты из ранних глав. Это выборка по словам задания и концовки, она не заменяет факты канона.\n"+related.map(item=>item.text).join("\n\n"):"");
+  const references=[...excerpts,...related].map(({text,...source})=>source);
+  return {text, updatedAt:listing.updatedAt, chapters:[...selectedNumbers], excerpts:references.length,references,
+    chapterTitles:selected.map(ch=>({chapter:ch.chapter,title:ch.title}))};
 }
 async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxTokens,mode){
   const recentUser=String([...messages].reverse().find(m=>m.role==="user")?.content||"");
@@ -700,7 +663,7 @@ async function aitunnelRead(env, path, signal, init = {}) {
 const money = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
 const requestFingerprint = async body => Array.from(new Uint8Array(await crypto.subtle.digest(
   "SHA-256",utf8(JSON.stringify(body)))),n=>n.toString(16).padStart(2,"0")).join("");
-async function aitunnelQuote(req, env, body, confirmation) {
+async function aitunnelQuote(req, env, body, confirmation, source) {
   const fingerprint = await requestFingerprint(body);
   if (confirmation && confirmation.fingerprint !== fingerprint)
     return fail(req,409,"Запрос или снимок изменился. Получи новую оценку перед отправкой.");
@@ -727,7 +690,7 @@ async function aitunnelQuote(req, env, body, confirmation) {
     const budgetRub = money(account.budget) ? account.budget : null;
     const ready = budgetRub !== null && Math.min(account.balance,budgetRub)>=estimateRub;
     if (!confirmation) return json(req,200,{ok:true,ready,estimateRub,inputTokens:tokens.input_tokens,
-      outputTokenLimit:body.max_tokens,balanceRub:account.balance,budgetRub,fingerprint});
+      outputTokenLimit:body.max_tokens,balanceRub:account.balance,budgetRub,fingerprint,...(source?{source}:{})});
     if (!ready) return fail(req,402,"Остатка счета или отдельного бюджета ключа AITUNNEL не хватает на оценку. Генерация не началась.");
     if (!money(confirmation.estimateRub) || estimateRub>confirmation.estimateRub)
       return fail(req,409,"Оценка выросла. Подтверди новую сумму перед отправкой.");
@@ -806,7 +769,91 @@ async function apimiraReceipt(req,env){
   }catch{return fail(req,502,"ApiMira не ответила на проверку списания.");}
 }
 
-async function generate(req, env, estimateOnly = false) {
+async function bothubReceipt(req,env){
+  if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца в Мастерскую.");
+  if(!env.BOTHUB_API_KEY)return fail(req,503,"Ключ BotHub недоступен.");
+  const params=new URL(req.url).searchParams;
+  const ids=[params.get("id"),params.get("also")].filter(validRequestId);
+  if(!ids.length)return fail(req,400,"Неверный номер запроса BotHub.");
+  try{
+    const res=await fetch("https://bothub.chat/api/v2/transaction/list?page=1&withDeveloperKey=true",{
+      headers:{Authorization:"Bearer "+env.BOTHUB_API_KEY,Accept:"application/json"},redirect:"manual",
+      signal:AbortSignal.any([req.signal,AbortSignal.timeout(12000)])
+    });
+    if(!res.ok)return providerFailure(req,res,"BotHub · детализация");
+    const {data}=await res.json();
+    const row=Array.isArray(data)&&data.find(item=>item.type==="WRITE_OFF"&&
+      ["SUCCEDED","SUCCEEDED"].includes(item.status)&&(ids.includes(item.id)||ids.includes(item.externalId)));
+    if(!row)return json(req,200,{ok:true,pending:true});
+    const rub=row.currency==="RUB"?row.amount:row.rubAmount||null;
+    const caps=row.currency==="BOTHUB_TOKEN"?row.amount:row.meta?.billing?.totalCaps;
+    return json(req,200,{ok:true,...(Number.isFinite(rub)?{costRub:Math.abs(rub)}:{}),
+      ...(Number.isFinite(caps)?{costCaps:Math.abs(caps)}:{})});
+  }catch{return fail(req,502,"BotHub не ответил на проверку списания.");}
+}
+
+// Public reference rates, checked 2026-11-24. These cannot predict Caps charged by a personal plan.
+const PUBLIC_RATES={
+  "claude-opus-5.5":{input:471.43,output:2357.14,currency:"RUB",tariff:"Публичный тариф BotHub ECO"},
+  "claude-sonnet-5.5":{input:235.71,output:1178.57,currency:"RUB",tariff:"Публичный тариф BotHub ECO"},
+  "claude-opus-5-5":{input:.30,output:1.50,currency:"USD",tariff:"Публичный тариф ModelProxy"}
+};
+function publicEstimate(model,messages,maxTokens){
+  const rate=PUBLIC_RATES[model];
+  if(!rate)return {};
+  const inputTokens=Math.ceil(messages.reduce((n,m)=>{
+    const cyrillic=m.content.match(/[\u0400-\u04ff]/g)?.length||0;
+    return n+8+cyrillic/2+(m.content.length-cyrillic)/3.2;
+  },0));
+  const estimate=(inputTokens*rate.input+maxTokens*rate.output)/1e6;
+  return {inputTokens, approximate:true, tariff:rate.tariff, tariffDate:"2026-11-24",
+    ...(rate.currency==="RUB"?{estimateRub:Math.ceil(estimate*100)/100}:{estimateUsd:Math.ceil(estimate*1e6)/1e6})};
+}
+
+const resourceId = id => typeof id === "string" && /^[a-z0-9_-]{1,100}$/i.test(id);
+function ownerJobs(env){
+  return env.CHAPTER_JOBS.get(env.CHAPTER_JOBS.idFromName(env.OWNER_UID));
+}
+async function chapterJobs(req,env){
+  if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца в Мастерскую.");
+  if(!env.CHAPTER_JOBS)return fail(req,503,"Фоновые главы пока недоступны.");
+  const id=new URL(req.url).searchParams.get("id");
+  if(id&&!resourceId(id))return fail(req,400,"Неверный номер фонового задания.");
+  const result=await ownerJobs(env).fetch("https://freitag-jobs.internal/"+(id?"?id="+encodeURIComponent(id):""));
+  return json(req,result.status,await result.json());
+}
+
+async function startChapterJob(req,env,input,prepared,source){
+  if(!env.CHAPTER_JOBS)return fail(req,503,"Фоновые главы пока недоступны.");
+  const {id,chatId,projectId,projectName}=input.job||{};
+  const prompt=input.messages.at(-1);
+  if(!resourceId(id)||!resourceId(chatId)||(projectId&&!resourceId(projectId))||prompt?.role!=="user"||!prompt.content.trim())
+    return fail(req,400,"Укажи чат и задание для фоновой главы.");
+  const job={id,chatId,projectId:projectId||null,bookId:input.bookId||null,
+    projectName:typeof projectName==="string"?projectName.slice(0,120):"",
+    prompt:prompt.content,model:prepared.body.model,provider:prepared.providerId,limit:prepared.body.max_tokens,
+    fingerprint:await requestFingerprint(prepared),...(source?{source}:{})};
+  const result=await ownerJobs(env).fetch("https://freitag-jobs.internal/",{
+    method:"POST",body:JSON.stringify({job,prepared})
+  });
+  return json(req,result.status,await result.json());
+}
+
+async function readStoryMap(req,env){
+  if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца в Мастерскую.");
+  const params=new URL(req.url).searchParams, id=params.get("bookId");
+  const chapter=Number(params.get("chapter")||0),query=(params.get("q")||"").trim();
+  if(!resourceId(id)||!Number.isSafeInteger(chapter)||chapter<0||(query&&(query.length<2||query.length>100)))
+    return fail(req,400,"Выбери книгу, номер главы или фразу от 2 до 100 знаков.");
+  if(!env.BOOKS)return fail(req,503,"Снимки книг Мастерской недоступны.");
+  const snapshot=await env.BOOKS.get("book:"+id,{type:"json"});
+  if(!Array.isArray(snapshot?.chapters)||!snapshot.chapters.length||snapshot.chapters.some(ch=>typeof ch?.text!=="string"))
+    return fail(req,404,"Снимок книги не найден. Обнови книгу в Мастерской.");
+  if(chapter>snapshot.chapters.length)return fail(req,404,"Главы нет в этом снимке книги.");
+  return json(req,200,{ok:true, updatedAt:snapshot.updatedAt, ...storyMap(snapshot,{chapter,query})});
+}
+
+async function generate(req, env, estimateOnly = false, background = false) {
   if (!await verifyOwner(req, env)) return fail(req, 401, "Требуется вход владельца в Мастерскую.");
   const raw = await req.text();
   if (utf8(raw).length > 340000) return fail(req, 413, "Слишком большой запрос.");
@@ -820,7 +867,6 @@ async function generate(req, env, estimateOnly = false) {
   if(separateGateway && providerId==="bothub")return fail(req,403,"Используй рабочий шлюз BotHub.");
   const aitunnel = providerId === "aitunnel";
   const apimira = providerId === "apimira" && separateGateway;
-  if (estimateOnly && !aitunnel && !apimira) return fail(req,400,"Для этого провайдера оценка не подключена.");
   if (!env[provider.secret]) return fail(req, 503, "В Cloudflare не задан секрет " + provider.secret + ".");
   if (aitunnel && !estimateOnly && (!input.aitunnelQuote || typeof input.aitunnelQuote !== "object"))
     return fail(req,409,"Сначала подтверди бесплатную оценку AITUNNEL.");
@@ -845,6 +891,8 @@ async function generate(req, env, estimateOnly = false) {
     entries.map(x => ({ role: x.role, content: x.content }));
   const useMcp=mcpConfigured(env);
   const isDraft = input.mode === "draft" && !greeting;
+  if(background && (!isDraft || !(apimira ? input.apimiraQuote : aitunnel ? input.aitunnelQuote : input.contextQuote)))
+    return fail(req,409,"Для фоновой главы сначала подтверди контекст и оценку стоимости.");
   // Author explicitly chooses a ceiling for paid long-form writing. A higher
   // ceiling permits a full chapter; it never starts automatic continuations.
   // Reject arbitrary values rather than letting the browser request unlimited output.
@@ -875,7 +923,7 @@ async function generate(req, env, estimateOnly = false) {
           if(mcpList?.updatedAt!==input.sourceRevision)
             throw Error("MCP еще не видит обновленную рукопись. Повтори позже.");
         }
-        if(isDraft || aitunnel || separateGateway){
+        if(isDraft || aitunnel || separateGateway || estimateOnly){
           const {text,...source}=await draftBookSources(env,input.bookId,messages,input.sourceRevision);
           quoteSource=source;
           messages.unshift({role:"system",content:text});
@@ -894,7 +942,7 @@ async function generate(req, env, estimateOnly = false) {
       }
     }catch(e){return json(req,424,{error:e.message,code:"BOOK_SOURCE"});}
   }
-  if(useMcp && !isDraft && !aitunnel && !separateGateway){
+  if(useMcp && !isDraft && !aitunnel && !separateGateway && !estimateOnly){
     try{return await mcpToolsCompletion(req,env,provider,model,messages,
       greeting?"":(input.bookId||""),maxTokens,greeting?"dialog":input.mode);}
     catch(e){return fail(req,502,"MCP: "+e.message);}
@@ -906,17 +954,31 @@ async function generate(req, env, estimateOnly = false) {
   } : {
     model, messages, stream: true,
     max_tokens: maxTokens,
-    ...(aitunnel ? { stream_options:{include_usage:true},
+    ...(aitunnel || apimira || separateGateway ? {stream_options:{include_usage:true}} : {}),
+    ...(aitunnel ? {
       provider:{only:[AITUNNEL_UPSTREAM],data_collection:"deny",zdr:true,allow_fallbacks:false} } : {})
   };
+  if(input.contextQuote && input.contextQuote!==await requestFingerprint(body))
+    return fail(req,409,"Задание или снимок книги изменились. Получи новую оценку.");
   if (aitunnel) {
-    const quote = await aitunnelQuote(req,env,body,estimateOnly ? null : input.aitunnelQuote);
+    const quote = await aitunnelQuote(req,env,body,estimateOnly ? null : input.aitunnelQuote,quoteSource);
     if (quote) return quote;
   }
   if (apimira) {
     const quote=await apimiraQuote(req,env,body,estimateOnly?null:input.apimiraQuote,quoteSource);
     if(quote)return quote;
   }
+  if(estimateOnly)return json(req,200,{ok:true,ready:true,outputTokenLimit:maxTokens,
+    ...publicEstimate(model,messages,maxTokens),fingerprint:await requestFingerprint(body),...(quoteSource?{source:quoteSource}:{})});
+  const prepared={providerId,bothubChapter,body};
+  if(background)return startChapterJob(req,env,input,prepared,quoteSource);
+  return openProviderStream(req,env,prepared);
+}
+
+async function openProviderStream(req,env,{providerId,bothubChapter,body}){
+  const provider=PROVIDERS[providerId];
+  const aitunnel=providerId==="aitunnel",apimira=providerId==="apimira"&&snapshotGateway(env);
+  if(!provider || !env[provider.secret])return fail(req,503,"Ключ выбранного провайдера недоступен.");
   let upstream;
   try {
     upstream = await fetch(bothubChapter ? BOTHUB_ANTHROPIC + "/messages" : provider.endpoint, {
@@ -933,9 +995,13 @@ async function generate(req, env, estimateOnly = false) {
   return chapterStream(req,upstream,provider,bothubChapter);
 }
 
+export const ChapterJobs = chapterJobsClass((prepared,env,signal)=>
+  openProviderStream(new Request("https://freitag-jobs.internal/",{signal}),env,prepared));
+
 function anthropicChapterStream(body) {
   const encode = new TextEncoder();
   let pending = "", stopReason, stopped = false;
+  const usage={};
   const send = (controller,data) => controller.enqueue(encode.encode("data: " + JSON.stringify(data) + "\n\n"));
   const chunk = (controller,delta,reason = null) => send(controller,{choices:[{delta,finish_reason:reason}]});
   const line = (source,controller) => {
@@ -943,6 +1009,13 @@ function anthropicChapterStream(body) {
     const data = source.slice(5).trim();
     if (!data || data==="[DONE]") return;
     const event = JSON.parse(data);
+    if(event.type==="message_start"&&validRequestId(event.message?.id))
+      send(controller,{choices:[],request_id:event.message.id});
+    const counts=event.message?.usage||event.usage;
+    if(Number.isSafeInteger(counts?.input_tokens))usage.prompt_tokens=counts.input_tokens+
+      (Number.isSafeInteger(counts.cache_read_input_tokens)?counts.cache_read_input_tokens:0)+
+      (Number.isSafeInteger(counts.cache_creation_input_tokens)?counts.cache_creation_input_tokens:0);
+    if(Number.isSafeInteger(counts?.output_tokens))usage.completion_tokens=counts.output_tokens;
     if (event.type === "message_start" || event.type === "ping" || event.delta?.type === "thinking_delta")
       controller.enqueue(encode.encode(": keep-alive\n\n"));
     if (event.type === "content_block_start" && event.content_block?.type === "text" && event.content_block.text)
@@ -958,6 +1031,7 @@ function anthropicChapterStream(body) {
       stopped=true;
       const reason = ["end_turn","stop_sequence"].includes(stopReason) ? "stop" : stopReason==="max_tokens" ? "length" : "incomplete";
       chunk(controller,{},reason);
+      if(Object.keys(usage).length)send(controller,{choices:[],usage});
       controller.enqueue(encode.encode("data: [DONE]\n\n"));
     }
   };
@@ -974,7 +1048,7 @@ function anthropicChapterStream(body) {
 function chapterStream(req,upstream,provider,bothubChapter = false) {
   if (!upstream.body || !/^text\/event-stream(?:\s*;|$)/i.test(upstream.headers.get("Content-Type") || ""))
     return fail(req,502,provider.name+" не вернул поток текста. Проверь историю расходов перед новой попыткой.");
-  const requestId=provider.model===APIMIRA_MODEL?upstream.headers.get("X-Request-Id"):null;
+  const requestId=upstream.headers.get("X-Request-Id")||upstream.headers.get("request-id");
   return new Response(bothubChapter ? anthropicChapterStream(upstream.body) : upstream.body, {
     status: 200,
     headers: { ...headers(req), "Content-Type": "text/event-stream; charset=utf-8",
@@ -1209,11 +1283,12 @@ export default {
       const path = new URL(req.url).pathname;
       const separate=snapshotGateway(env);
       const bothubConfigured=!separate && !!env.BOTHUB_API_KEY && !!env.OWNER_UID;
-      if(separate && !["/health","/preflight","/mcp-tools","/quote","/chat","/receipt"].includes(path))
+      if(separate && !["/health","/preflight","/mcp-tools","/quote","/chat","/receipt","/story-map","/chapter-jobs"].includes(path))
         return fail(req,404,"Адрес не найден.");
       if (path === "/health" && req.method === "GET")
         return json(req, 200, { ok: true, chapterProtocol:2, provider: "ModelProxy", model: MODEL,
           ...(separate?{providerGateway:true,chapterOutputLimits:CHAPTER_LIMITS}:{}),
+          contextPreview:true, storyMap:!!env.BOOKS, backgroundChapters:!!env.CHAPTER_JOBS,
           configured: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
           bothubConfigured,
           bothubChapterApi: "anthropic-messages",
@@ -1252,7 +1327,10 @@ export default {
       if (path === "/snapshot" && req.method === "GET") return await snapshotStatus(req, env);
       if (path === "/chat" && req.method === "POST") return await generate(req, env);
       if (path === "/quote" && req.method === "POST") return await generate(req, env, true);
-      if (separate && path === "/receipt" && req.method === "GET") return await apimiraReceipt(req,env);
+      if (path === "/story-map" && req.method === "GET") return await readStoryMap(req,env);
+      if (path === "/chapter-jobs" && req.method === "GET") return await chapterJobs(req,env);
+      if (path === "/chapter-jobs" && req.method === "POST") return await generate(req,env,false,true);
+      if (path === "/receipt" && req.method === "GET") return await (separate?apimiraReceipt(req,env):bothubReceipt(req,env));
       return fail(req, 404, "Адрес не найден.");
     } catch (error) {
       // Never log user input or secrets. Return a CORS-visible error instead of

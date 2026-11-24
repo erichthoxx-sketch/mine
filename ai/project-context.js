@@ -28,7 +28,7 @@ function bestExcerpt(text, terms, size, title = "") {
   return best;
 }
 
-export function projectMemoryContext({project, chats = [], docs = [], feedback = [], current, recent = [], task, terms = [], budget}) {
+export function projectMemoryContext({project, chats = [], docs = [], feedback = [], current, recent = [], task, terms = [], budget, onUse}) {
   if (!project?.id || budget < 150) return "";
   const included = new Set([textOf(task), ...recent.map(m => textOf(m.content))]);
   const sections = [];
@@ -41,6 +41,7 @@ export function projectMemoryContext({project, chats = [], docs = [], feedback =
     for (const item of items) {
       if (included.has(item.source) || item.text.length + used + 2 > available) continue;
       entries.push(item.text);
+      onUse?.(item);
       included.add(item.source);
       used += item.text.length + 2;
     }
@@ -68,7 +69,10 @@ export function projectMemoryContext({project, chats = [], docs = [], feedback =
       const source = textOf(note?.text);
       const title = singleLine(note?.title);
       const excerpt = bestExcerpt(source, terms, size, title);
-      return {source, ...excerpt, text:[title, excerpt.text].filter(Boolean).join("\n")};
+      const anchor = note?.anchor;
+      const location = Number.isSafeInteger(anchor?.chapter) ?
+        "Источник решения: глава " + anchor.chapter + (anchor.scene ? ", сцена " + anchor.scene : "") : "";
+      return {source, ...excerpt, decision:title, text:[title, location, excerpt.text].filter(Boolean).join("\n")};
     })
     .filter(item => item.source && !included.has(item.source))
     .sort((a, b) => b.score - a.score)
@@ -87,7 +91,7 @@ export function projectMemoryContext({project, chats = [], docs = [], feedback =
   const sources = [];
   for (const doc of docs) {
     if (doc.projectId === project.id && doc.includeInContext !== false)
-      sources.push({title:"Материал «" + singleLine(doc.name) + "»", source:textOf(doc.text), group:doc});
+      sources.push({title:"Материал «" + singleLine(doc.name) + "»", source:textOf(doc.text), group:doc, material:singleLine(doc.name)});
   }
   for (const chat of chats) {
     if (chat.projectId !== project.id) continue;

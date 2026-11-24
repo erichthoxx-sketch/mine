@@ -7,6 +7,7 @@ import { draftDelivery, draftDeliveryLabel } from './draft-delivery.js';
 import { ensureDriveAccess, refreshLinkedBook } from './live-context.js';
 import { DEFAULT_CHAPTER_LIMIT, CHAPTER_LIMITS } from './chapter-limits.js';
 import { MAX_MATERIAL_LENGTH, readMaterial } from './materials.js';
+import { chapterPreview, openStoryMap, openChapterJobs } from './author-workflow.js';
 // Чаты, проекты и текстовые материалы хранятся только в IndexedDB этого браузера.
 // Никаких ключей и рукописей в репозитории.
 const $ = (q) => document.querySelector(q);
@@ -85,6 +86,7 @@ function renderSidebar(){
       .sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||"")));
     el.innerHTML=
       '<button type="button" class="f-btn primary f-new-chat" data-action="new-chat"><span aria-hidden="true">＋</span> Новый чат</button>'+
+      '<button type="button" class="f-btn f-new-chat" data-action="open-chapter-jobs">Фоновые главы</button>'+
       '<div class="f-side-section"><label for="f-sidebar-project" class="f-side-label">Диалоги по книге</label>'+
       '<select id="f-sidebar-project" class="f-select" aria-label="Активная книга"><option value="">Без книги</option>'+
       state.projects.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===selected?"selected":"")+'>'+esc(x.name)+'</option>').join("")+
@@ -297,6 +299,13 @@ function renderChat(){
       (Number.isSafeInteger(m.apimiraTokens?.input)&&Number.isSafeInteger(m.apimiraTokens?.output)?
         ' · '+m.apimiraTokens.input.toLocaleString("ru-RU")+' токенов на входе · '+m.apimiraTokens.output.toLocaleString("ru-RU")+' на выходе':"")+'</p>':
       m.apimiraRequestId&&!busy?'<button class="f-inline-btn" type="button" data-action="apimira-receipt" data-i="'+i+'">Проверить списание ApiMira</button>':"")+
+    (Number.isFinite(m.bothubCostRub)||Number.isFinite(m.bothubCostCaps)?'<p class="f-mini">Списано BotHub: '+esc([
+      Number.isFinite(m.bothubCostRub)?rub(m.bothubCostRub):"",Number.isFinite(m.bothubCostCaps)?m.bothubCostCaps.toLocaleString("ru-RU")+" Caps":""
+    ].filter(Boolean).join(" · "))+'</p>':m.apiProvider==="bothub"&&(m.apiRequestId||m.providerRequestId)&&!busy?
+      '<button class="f-inline-btn" type="button" data-action="bothub-receipt" data-i="'+i+'">Проверить списание BotHub</button>':"")+
+    (m.apiUsage&&!m.apimiraTokens?'<p class="f-mini">'+esc(apiUsageLabel(m.apiUsage,m.apiRequestId,
+      Number.isFinite(m.costRub)||Number.isFinite(m.apimiraCostUsd)||Number.isFinite(m.bothubCostRub)||Number.isFinite(m.bothubCostCaps)))+'</p>':"")+
+    (m.jobError?'<p class="f-mini">'+esc(m.jobError)+'</p>':"")+
     (Number.isSafeInteger(m.delivery?.characters)?'<p class="f-mini f-draft-delivery">'+esc(draftDeliveryLabel(m.delivery))+'</p>':"")+
     (m.receiving && !busy?'<p class="f-mini">Получен фрагмент. Завершение главы не подтверждено.</p>':"")+
     (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
@@ -365,6 +374,10 @@ function renderChat(){
       '<span class="f-mini" id="f-draft-size">'+(draft?draft.length.toLocaleString("ru-RU")+' зн.':"")+'</span>'+
       '<details class="f-extra-tools" id="f-chat-tools" '+(toolsOpen?"open":"")+'><summary>Ещё</summary><div class="f-compose-menu">'+
       (canSearchBook?'<button type="button" data-action="search-book-context" '+(busy?"disabled":"")+'>Найти фразу в книге</button>':"")+
+      (paidProviders.includes(state.settings.provider)?'<button type="button" data-action="preview-chapter" '+(busy?"disabled":"")+'>Контекст и цена</button>':"")+
+      (paidProviders.includes(state.settings.provider)&&(c?.mode||pendingMode||(p?"draft":"dialog"))==="draft"?
+        '<button type="button" data-action="send-background-chapter" '+(busy?"disabled":"")+'>Написать в фоне</button>':"")+
+      '<button type="button" data-action="open-chapter-jobs">Фоновые главы</button>'+
       '<button type="button" data-action="export-context">Скопировать контекст</button>'+
       '<button type="button" data-action="paste-external">Добавить внешний ответ</button>'+
       '<button type="button" data-action="open-settings">Настройки модели</button>'+
@@ -516,11 +529,11 @@ function pinnedExcerpt(raw,question,maxLength){
   }
   return result.slice(0,maxLength);
 }
-function memoryForProject(p,c,task,recent,budget,docs=state.docs){
+function memoryForProject(p,c,task,recent,budget,docs=state.docs,onUse){
   return projectMemoryContext({project:p,chats:state.chats,docs,feedback:state.feedback,
-    current:c.id,recent,task,terms:searchTerms(task.slice(0,2400)+" "+task.slice(-700)).slice(0,14),budget});
+    current:c.id,recent,task,terms:searchTerms(task.slice(0,2400)+" "+task.slice(-700)).slice(0,14),budget,onUse});
 }
-function modelproxyMessages(c){
+function modelproxyMessages(c, manifest){
   // Claude Projects-style workflow: one editable instruction, an unchanged
   // full user request in every chapter chat and no injected style templates.
   const p=project(c.projectId);
@@ -554,7 +567,10 @@ function modelproxyMessages(c){
   }
   const headroom=Math.min(130000-projectInstructions.length,
     180000-projectInstructions.length-latest.length-history.reduce((n,m)=>n+m.content.length,0));
-  const memory=p?memoryForProject(p,c,latest,history.length?previous.slice(-history.length):[],Math.min(4000,headroom-2)):"";
+  const memory=p?memoryForProject(p,c,latest,history.length?previous.slice(-history.length):[],Math.min(4000,headroom-2),state.docs,item=>{
+    if(item.material)manifest?.materials.push(item.material);
+    if(item.decision)manifest?.decisions.push(item.decision);
+  }):"";
   const instructions=[projectInstructions,memory].filter(Boolean).join("\n\n");
   return [...(instructions?[{role:"system",content:instructions}]:[]),
     ...history,{role:"user",content:latest}];
@@ -813,11 +829,12 @@ async function editProjectMemory(p,id,source){
   const values=await openModal(previous?"Уточнить решение":"Закрепить решение автора",[
     {key:"title",label:"Название",required:true},
     {key:"text",label:"Факт, открытая линия или правило для следующих глав",multi:true,required:true}
-  ],previous||{title:"",text:source?.content?.slice(0,1600)||""});
+  ],previous||{title:source?.title||"",text:source?.content?.slice(0,1600)||""});
   if(!values||project(p.id)!==p)return;
   const title=values.title.trim(),text=values.text.trim();
   if(text.length>12000)return notice("Для записи в памяти используй до 12 000 знаков. Большой текст можно сохранить в материалах.");
-  const note={id:previous?.id||uid(),title,text,updated:stamp()};
+  const anchor=previous?.anchor||source?.anchor;
+  const note={id:previous?.id||uid(),title,text,updated:stamp(),...(anchor?{anchor}:{})};
   p.memoryNotes=[...notes.filter(item=>item.id!==note.id),note];
   await save();render();notice("Решение сохранено в памяти проекта.");
 }
@@ -943,7 +960,113 @@ async function readApimiraReceipt(message,gateway,idToken){
   await save();render();
   return true;
 }
-async function sendMessage(text){
+function apiUsageLabel(usage,id,charged){
+  const parts=[];
+  if(Number.isFinite(usage.prompt_tokens))parts.push(usage.prompt_tokens.toLocaleString("ru-RU")+" токенов на входе");
+  if(Number.isFinite(usage.completion_tokens))parts.push(usage.completion_tokens.toLocaleString("ru-RU")+" на выходе");
+  if(!charged)parts.push("Списание в кабинете провайдера");
+  if(id&&!charged)parts.push("Запрос "+id);
+  return parts.join(" · ");
+}
+
+async function readOwnerJson(gateway,path,idToken){
+  if(!gateway)throw Error("Открой рабочую Freitag AI для доступа к Мастерской.");
+  const res=await fetch(gateway+path,{headers:{Authorization:"Bearer "+idToken},cache:"no-store",signal:AbortSignal.timeout(18000)});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok||!data.ok)throw Error(data.error||"Шлюз не ответил. Попробуй обновить список.");
+  return data;
+}
+
+async function readBothubReceipt(message,gateway,idToken){
+  const params=new URLSearchParams({id:message.apiRequestId||message.providerRequestId});
+  if(message.apiRequestId&&message.providerRequestId&&message.apiRequestId!==message.providerRequestId)
+    params.set("also",message.providerRequestId);
+  const info=await readOwnerJson(gateway,"/receipt?"+params,idToken);
+  if(!Number.isFinite(info.costRub)&&!Number.isFinite(info.costCaps))return false;
+  if(Number.isFinite(info.costRub))message.bothubCostRub=info.costRub;
+  if(Number.isFinite(info.costCaps))message.bothubCostCaps=info.costCaps;
+  await save();render();return true;
+}
+
+async function saveBackgroundChapter(job, item){
+  if(busy||preparingPaid)return notice("Дождись завершения текущей операции.");
+  if(!job.text)return false;
+  let p=project(job.projectId)||state.projects.find(entry=>job.bookId&&entry.masterBookId===job.bookId);
+  if(!p&&job.projectId){
+    p={id:job.projectId,name:job.projectName||"Проект",instruction:"",canon:"",voice:"",scene:"",
+      ...(job.bookId?{masterBookId:job.bookId}:{})};
+    state.projects.unshift(p);
+  }
+  let c=chat(job.chatId);
+  if(!c){
+    c={id:job.chatId,projectId:p?.id||null,title:job.prompt.slice(0,65)||"Фоновая глава",mode:"draft",messages:[]};
+    state.chats.unshift(c);
+  }
+  if(!c.messages.some(m=>m.role==="user"&&m.jobId===job.id))
+    c.messages.push({role:"user",content:job.prompt,jobId:job.id,at:job.createdAt});
+  let message=c.messages.find(m=>m.role==="assistant"&&m.jobId===job.id);
+  if(!message){message={role:"assistant",jobId:job.id,at:job.createdAt};c.messages.push(message);}
+  Object.assign(message,{content:job.text,provider:"Claude · "+(providerNames[job.provider]||"API"),
+    apiProvider:job.provider,
+    receiving:job.status==="running"||job.status==="queued",jobError:job.error||"",
+    delivery:draftDelivery(job.prompt,job.text,job.finishReason||"",job.limit)});
+  if(job.usage)message.apiUsage=job.usage;
+  if(job.provider==="aitunnel"&&Number.isFinite(job.usage?.cost_rub))message.costRub=job.usage.cost_rub;
+  if(job.requestId)message.apiRequestId=job.requestId;
+  if(job.provider==="apimira"&&job.requestId)message.apimiraRequestId=job.requestId;
+  c.updated=stamp();state.activeProjectId=c.projectId;state.activeChatId=c.id;tab="chat";
+  if(!await save())return false;
+  render();notice(message.receiving?"Фрагмент сохранён в чате.":"Глава сохранена в чате.");
+  if(message.apimiraRequestId)void master.idToken().then(token=>readApimiraReceipt(message,item.gateway,token)).catch(()=>{});
+  if(job.provider==="bothub"&&job.requestId)void master.idToken().then(token=>readBothubReceipt(message,item.gateway,token)).catch(()=>{});
+  return true;
+}
+
+function showBackgroundChapters(){
+  openChapterJobs({
+    list:async()=>{
+      const token=await master.idToken();
+      const gateways=[...new Set([claudeGateway(state.settings.workerUrl,"bothub"),claudeGateway(state.settings.workerUrl,"apimira")].filter(Boolean))];
+      const responses=await Promise.allSettled(gateways.map(gateway=>readOwnerJson(gateway,"/chapter-jobs",token)
+        .then(data=>data.jobs.map(job=>({...job,gateway})))));
+      const jobs=responses.flatMap(result=>result.status==="fulfilled"?result.value:[])
+        .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+      if(!responses.some(r=>r.status==="fulfilled"))throw Error(responses[0]?.reason?.message||"Фоновые главы недоступны.");
+      return {jobs,unavailable:responses.some(r=>r.status==="rejected")};
+    },
+    read:async item=>(await readOwnerJson(item.gateway,"/chapter-jobs?id="+encodeURIComponent(item.id),await master.idToken())).job,
+    save:saveBackgroundChapter
+  });
+}
+
+async function submitBackgroundChapter(payload,gateway,idToken,previousDraft,estimate,userMessage){
+  preparingPaid=true;
+  const c=ensureChat(),p=project(c.projectId);
+  try{
+    const pending=state.chapterSubmission;
+    const reused=pending?.chatId===c.id&&pending?.fingerprint===estimate.fingerprint&&pending?.provider===payload.provider;
+    const id=reused?pending.id:uid();
+    state.chapterSubmission={id,chatId:c.id,fingerprint:estimate.fingerprint,provider:payload.provider};
+    state.drafts??={};state.drafts[draftKey()]=userMessage.content;
+    if(!await save())return;
+    const res=await fetch(gateway+"/chapter-jobs",{method:"POST",headers:{Authorization:"Bearer "+idToken,
+      "Content-Type":"application/json"},body:JSON.stringify({...payload,job:{id,chatId:c.id,
+      projectId:c.projectId,projectName:p?.name||""}})});
+    const result=await res.json().catch(()=>({}));
+    if(!res.ok||!result.ok)throw Error(result.error||"Проверь, появилось ли задание в «Фоновых главах».");
+    if(!c.messages.some(m=>m.jobId===id))c.messages.push({...userMessage,jobId:id});
+    if(c.title==="Новый чат")c.title=userMessage.content.slice(0,65);
+    c.updated=stamp();
+    delete state.chapterSubmission;
+    clearTimeout(draftSaveTimer);
+    delete state.drafts[previousDraft];delete state.drafts["chat:"+c.id];
+    await save();render();notice("Глава принята. Её можно открыть в «Фоновых главах».");
+    showBackgroundChapters();
+  }catch(error){notice(error.message||"Проверь список фоновых глав.");}
+  finally{preparingPaid=false;}
+}
+
+async function sendMessage(text,{previewOnly=false,background=false}={}){
   if(busy||preparingPaid||!text.trim())return;
   const provider=state.settings.provider, selectedModel=activeBotHubModel();
   const outputLimit=chapterOutputLimit();
@@ -973,41 +1096,42 @@ async function sendMessage(text){
   const lightweight=isSimpleGreeting(msg);
   const requestMode=lightweight?"dialog":(current.mode||(current.projectId?"draft":"dialog"));
   const bookId=lightweight?null:(project(current.projectId)?.masterBookId||null);
+  const priced=provider==="apimira"||provider==="aitunnel";
+  if((background||previewOnly&&!priced)&&requestMode!=="draft")return notice("Выбери режим «Написать сцену».");
+  if((background||previewOnly)&&!isPaidProvider)return;
   const userMessage={role:"user",content:msg,at:stamp()};
+  const manifest={materials:[],decisions:[]};
   const payload=isPaidProvider?{provider,model:provider==="bothub"?selectedModel:undefined,
-    messages:lightweight?[{role:"user",content:msg}]:modelproxyMessages({...current,messages:[...current.messages,userMessage]}),
+    messages:lightweight?[{role:"user",content:msg}]:modelproxyMessages({...current,messages:[...current.messages,userMessage]},manifest),
     mode:requestMode,outputTokenLimit:requestMode==="draft"?outputLimit:undefined,bookId,sourceRevision}:null;
-  if(provider==="aitunnel"||provider==="apimira"){
+  let estimate;
+  if(isPaidProvider&&(priced||requestMode==="draft")){
     const isMira=provider==="apimira", label=providerNames[provider];
     preparingPaid=true;
     const selectedChat=draftKey();
     const draftBeforeQuote=$("#f-message-input")?.value;
+    const modeBeforeQuote=$("#f-writing-mode")?.value;
     notice(label+" · считаю стоимость без генерации…");
     try{
       const res=await fetch(gateway+"/quote",{method:"POST",headers:{Authorization:"Bearer "+idToken,
         "Content-Type":"application/json"},body:JSON.stringify(payload)});
-      const estimate=await res.json().catch(()=>({}));
+      estimate=await res.json().catch(()=>({}));
       if(!res.ok||!estimate.ok)throw Error(estimate.error||"Не удалось получить бесплатную оценку.");
       if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==chapterOutputLimit()||
-        draftBeforeQuote!==$("#f-message-input")?.value)
+        draftBeforeQuote!==$("#f-message-input")?.value||modeBeforeQuote!==$("#f-writing-mode")?.value)
         return notice("Задание или настройки изменились. Получи новую оценку.");
-      const amount=isMira?usd(estimate.estimateUsd):rub(estimate.estimateRub);
-      const budget=isMira?usd(estimate.budgetUsd):rub(estimate.budgetRub);
-      if(!estimate.ready)throw Error(!isMira&&estimate.budgetRub===null?"Задай бюджет отдельного API-ключа AITUNNEL.":
-        "Оценка "+amount+" выше доступного остатка или бюджета "+budget+". Генерация не началась.");
-      const source=estimate.source;
-      const updated=Number.isFinite(Date.parse(source?.updatedAt))?" · снимок от "+new Date(source.updatedAt).toLocaleString("ru-RU"):"";
-      const book=source?.chapters?.length?"\nМастерская: канон, главы "+source.chapters.join(", ")+
-        (source.excerpts?", выписок из ранних глав — "+source.excerpts:"")+updated+".":"";
-      if(!confirm(label+" · оценка "+amount+" за вход и ответ до "+
-        estimate.outputTokenLimit.toLocaleString("ru-RU")+" токенов. "+
-        (isMira?"Бюджет теста ":"Остаток бюджета ключа: ")+budget+"."+book+
-        "\nОтправить один платный запрос?"))return notice("Генерация отменена. Задание осталось в поле ввода.");
+      const summary=chapterPreview(estimate,label,manifest,rub,usd);
+      if(previewOnly){alert(summary);return;}
+      if(!estimate.ready){alert(summary+"\n\nДля генерации не хватает средств или бюджета ключа.");return;}
+      if(!confirm(summary+"\n\n"+(background?"Написать главу в фоне?":"Отправить один платный запрос?")))
+        return notice("Задание осталось в поле ввода.");
       if(isMira)payload.apimiraQuote={fingerprint:estimate.fingerprint,estimateUsd:estimate.estimateUsd};
-      else payload.aitunnelQuote={fingerprint:estimate.fingerprint,estimateRub:estimate.estimateRub};
+      else if(provider==="aitunnel")payload.aitunnelQuote={fingerprint:estimate.fingerprint,estimateRub:estimate.estimateRub};
+      else payload.contextQuote=estimate.fingerprint;
     }catch(e){return notice(e.message);}
     finally{preparingPaid=false;}
   }
+  if(background)return submitBackgroundChapter(payload,gateway,idToken,previousDraft,estimate,userMessage);
   clearTimeout(draftSaveTimer);
   const c=ensureChat();
   if(c.projectId && !c.mode) c.mode="draft";
@@ -1021,7 +1145,8 @@ async function sendMessage(text){
   // Block a second Send while IndexedDB persists the first request.
   busy=true;
   const messages=isPaidProvider?payload.messages:buildMessages(c);
-  const assistant={role:"assistant",provider:isPaidProvider?(provider==="bothub"?activeClaudeName():"Claude Opus 5.5"):"Qwen",content:"",at:stamp()};
+  const assistant={role:"assistant",provider:isPaidProvider?(provider==="bothub"?activeClaudeName():"Claude Opus 5.5"):"Qwen",
+    ...(isPaidProvider?{apiProvider:provider}:{}),content:"",at:stamp()};
   await save();render();
   c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
@@ -1054,10 +1179,8 @@ async function sendMessage(text){
       throw Error(typeof error?.error==="string"?error.error:"Сервер вернул HTTP "+res.status+".");
     }
     if(!res.body)throw Error("Сервер не вернул поток ответа");
-    if(provider==="apimira"){
-      const requestId=res.headers.get("X-Freitag-Request-Id");
-      if(requestId)assistant.apimiraRequestId=requestId;
-    }
+    const requestId=res.headers.get("X-Freitag-Request-Id");
+    if(requestId){assistant.apiRequestId=requestId;if(provider==="apimira")assistant.apimiraRequestId=requestId;}
     const reader=res.body.getReader(),decoder=new TextDecoder();let pending="",streamFinished=false,finishReason="";
     const consume=(line)=>{
       if(!line.trim())return;
@@ -1067,6 +1190,9 @@ async function sendMessage(text){
         if(data==="[DONE]"){streamFinished=true;return true;}
         let obj;try{obj=JSON.parse(data);}catch{throw Error("Поток содержит поврежденный фрагмент.");}
         if(obj?.error)throw Error("Провайдер сообщил об ошибке в потоке. Проверь историю запроса.");
+      if(provider==="bothub"&&typeof obj?.request_id==="string")assistant.providerRequestId=obj.request_id;
+      if(Number.isFinite(obj?.usage?.prompt_tokens)||Number.isFinite(obj?.usage?.completion_tokens))
+        assistant.apiUsage=Object.fromEntries(["prompt_tokens","completion_tokens"].filter(k=>Number.isFinite(obj.usage[k])).map(k=>[k,obj.usage[k]]));
         if(provider==="aitunnel"&&Number.isFinite(obj?.usage?.cost_rub)){
           assistant.costRub=obj.usage.cost_rub;
           if(!obj.choices?.length)return;
@@ -1121,6 +1247,8 @@ async function sendMessage(text){
     clearTimeout(checkpointTimer);delete assistant.receiving;
     busy=false;currentController=null;c.updated=stamp();await save();render();
     if(assistant.apimiraRequestId)void readApimiraReceipt(assistant,gateway,idToken).catch(()=>{});
+    if(provider==="bothub"&&(assistant.apiRequestId||assistant.providerRequestId))
+      void readBothubReceipt(assistant,gateway,idToken).catch(()=>{});
   }
 }
 function download(name,content,type="application/json;charset=utf-8"){
@@ -1330,6 +1458,25 @@ document.addEventListener("click",async(e)=>{
   if(a==="open-project"||a==="project-home"){projectHomeId=id;state.activeProjectId=id;tab="projects";await save();render();}
   if(a==="open-project-materials"){materialsProjectId=id;tab="knowledge";render();}
   if(a==="projects-back"){projectHomeId=null;tab="projects";render();}
+  if(a==="open-story-map"){
+    const p=project(id);
+    if(!p?.masterBookId)return notice("Свяжи проект с одной книгой из Мастерской.");
+    const gateway=claudeGateway(state.settings.workerUrl,"bothub");
+    openStoryMap({chapter:Number(b.dataset.chapter)||0,
+      load:async(chapter,phrase)=>{
+        const params=new URLSearchParams({bookId:p.masterBookId,...(chapter?{chapter}:{}),...(phrase?{q:phrase}:{})});
+        return readOwnerJson(gateway,"/story-map?"+params,await master.idToken());
+      },
+      pin:(entry,updatedAt)=>editProjectMemory(p,null,{title:"Глава "+entry.chapter+" · "+(entry.heading||"сцена "+entry.scene),
+        content:entry.snippet,anchor:{chapter:entry.chapter,scene:entry.scene,offset:entry.offset,updatedAt}})
+    });
+  }
+  if(a==="open-chapter-jobs")showBackgroundChapters();
+  if(a==="preview-chapter"||a==="send-background-chapter"){
+    const value=$("#f-message-input")?.value;
+    if(!value?.trim())return notice("Введи задание для главы.");
+    await sendMessage(value,{previewOnly:a==="preview-chapter",background:a==="send-background-chapter"});
+  }
   if(a==="new-project-chat"){state.activeProjectId=id;state.activeChatId=null;projectHomeId=null;pendingMode=null;await save();tab="chat";render();$("#f-message-input")?.focus();}
   if(a==="delete-project"){const p=project(id);if(!p||!confirm("Удалить проект «"+p.name+"» и все его чаты и материалы?"))return;
     state.projects=state.projects.filter(x=>x.id!==id);state.chats=state.chats.filter(x=>x.projectId!==id);state.docs=state.docs.filter(x=>x.projectId!==id);
@@ -1436,6 +1583,16 @@ document.addEventListener("click",async(e)=>{
     try{
       const ready=await readApimiraReceipt(message,claudeGateway(state.settings.workerUrl,"apimira"),await master.idToken());
       if(!ready)notice("Списание пока не появилось в детализации ApiMira.");
+    }catch(err){notice(err.message);}
+    finally{b.disabled=false;}
+  }
+  if(a==="bothub-receipt"){
+    const message=chat()?.messages[Number(b.dataset.i)];
+    if(!message?.apiRequestId&&!message?.providerRequestId)return;
+    b.disabled=true;
+    try{
+      const ready=await readBothubReceipt(message,claudeGateway(state.settings.workerUrl,"bothub"),await master.idToken());
+      if(!ready)notice("В истории BotHub пока нет записи с этим номером запроса.");
     }catch(err){notice(err.message);}
     finally{b.disabled=false;}
   }

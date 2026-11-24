@@ -224,6 +224,19 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 .f-material-dialog{width:min(740px,calc(100vw - 30px))}
 .f-material-dialog h2{overflow-wrap:anywhere}
 .f-material-dialog .f-textarea{height:clamp(180px,47dvh,590px);line-height:1.65}
+.f-workflow-dialog{width:min(740px,calc(100vw - 24px))}
+.f-workflow-dialog header{margin-bottom:16px;gap:12px}
+.f-workflow-dialog header h2{margin:0}
+.f-workflow-search{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px}
+.f-workflow-content>.f-muted{margin:12px 0}
+.f-workflow-list{display:grid;gap:8px}
+.f-workflow-card{min-width:0;padding:12px 14px;border:1px solid var(--f-line);border-radius:12px}
+.f-workflow-card h3,.f-workflow-detail h3{font-size:14px;margin:0 0 6px;overflow-wrap:anywhere}
+.f-workflow-card p{margin:0 0 8px;overflow-wrap:anywhere}
+.f-workflow-snippet{font-size:13px;line-height:1.6;white-space:pre-wrap}
+.f-workflow-detail:not(:empty){margin-top:16px}
+.f-workflow-detail .f-job-text{min-height:220px;height:35dvh;margin:4px 0 9px}
+@media(max-width:550px){.f-workflow-search{grid-template-columns:minmax(0,1fr) auto}.f-workflow-search select{grid-column:1/-1}}
 .f-transfer-dialog{width:min(820px,calc(100vw - 30px))}
 .f-transfer #f-external-brief{min-height:220px;max-height:49dvh;font:12px/1.65 ui-monospace,Consolas,monospace!important}
 .f-transfer-actions{margin:14px 0}

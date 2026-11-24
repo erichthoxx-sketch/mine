@@ -28,9 +28,10 @@ try {
     const origin=working?workingOrigin:"https://fixture.freitag-ai-test.pages.dev";
     const page=await browser.newPage({viewport:{width,height:900},serviceWorkers:"block"});
     const errors=[];
+    const backgroundJobs=[];
     page.on("pageerror",e=>errors.push(e.message));
     page.on("console",m=>{if(m.type()==="error")errors.push(m.text());});
-    await page.route("**/*",async route=>{
+    const fixtureRoute=async route=>{
       const u=new URL(route.request().url());
       if(u.hostname==="fonts.googleapis.com")return route.fulfill({contentType:"text/css",body:""});
       const providerRoute=u.origin===providerOrigin;
@@ -47,7 +48,25 @@ try {
       if(providerRoute||u.pathname.startsWith("/api/freitag/")){
         if(route.request().method()==="OPTIONS")return route.fulfill({status:204,
           headers:{...cors,"Access-Control-Allow-Methods":"GET, POST, OPTIONS"}});
-        const data=api[providerRoute?u.pathname:u.pathname.replace("/api/freitag","")];
+        const endpoint=providerRoute?u.pathname:u.pathname.replace("/api/freitag","");
+        if(endpoint==="/story-map")return route.fulfill({json:{ok:true,updatedAt:"2026-11-24T06:00:00Z",
+          chapters:[{chapter:1,title:"Пролог"},{chapter:2,title:"Глава 2"}],
+          ...(u.searchParams.has("q")?{matches:[{chapter:1,scene:2,offset:120,snippet:"Синяя папка лежит в столе."}]}:{})},headers:cors});
+        if(endpoint==="/chapter-jobs"){
+          if(route.request().method()==="POST"){
+            const body=route.request().postDataJSON();
+            assert.equal(body.contextQuote,"fixture-bothub");
+            const job={...body.job,bookId:body.bookId,provider:body.provider,limit:body.outputTokenLimit,
+              prompt:body.messages.at(-1).content,text:"Глава пережила закрытие вкладки.",
+              status:"completed",finishReason:"stop",createdAt:"2026-11-24T06:00:00Z"};
+            backgroundJobs.push(job);
+            return route.fulfill({status:202,json:{ok:true,job:{id:job.id}},headers:cors});
+          }
+          const id=u.searchParams.get("id"),items=providerRoute?[]:backgroundJobs;
+          return route.fulfill({json:id?{ok:true,job:items.find(job=>job.id===id)}:
+            {ok:true,jobs:items.map(({prompt,text,...job})=>({...job,excerpt:prompt,characters:text.length}))},headers:cors});
+        }
+        const data=api[endpoint];
         assert.ok(data,"unexpected API route "+u.pathname);
         assert.equal(route.request().method(),"GET");
         if(u.pathname.endsWith("/snapshot")){
@@ -76,13 +95,14 @@ try {
       assert.match(path,/^(ai|writer|js|css)\//);
       const types={html:"text/html",js:"text/javascript",css:"text/css",svg:"image/svg+xml",webmanifest:"application/manifest+json"};
       return route.fulfill({contentType:types[path.split(".").at(-1)],body:await readFile(new URL(path,appRoot))});
-    });
+    };
+    await page.route("**/*",fixtureRoute);
     await page.addInitScript(apiOrigin=>{
       const fetcher=window.fetch;
       window.submitted=[];
       window.quoted=[];
       window.fetch=(url,opts)=>{
-        if(String(url)===apiOrigin+"/quote"){
+        if(String(url)===apiOrigin+"/quote"||String(url)===location.origin+"/api/freitag/quote"){
           const body=JSON.parse(opts.body);
           window.quoted.push(body);
           if(window.rejectSource)return Promise.resolve(Response.json({
@@ -90,6 +110,9 @@ try {
           },{status:424}));
           if(body.provider==="apimira")return Promise.resolve(Response.json({ok:true,ready:true,estimateUsd:.20,
             outputTokenLimit:body.outputTokenLimit,budgetUsd:.50,fingerprint:"fixture-apimira",source:{chapters:[14,15]}}));
+          if(body.provider==="bothub")return Promise.resolve(Response.json({ok:true,ready:true,estimateRub:40,approximate:true,
+            tariff:"Публичный тариф",tariffDate:"2026-11-24",inputTokens:1000,outputTokenLimit:body.outputTokenLimit,
+            fingerprint:"fixture-bothub",source:{chapters:[14,15],references:[{chapter:1,scene:2}]}}));
           return Promise.resolve(Response.json({ok:true,ready:true,estimateRub:136,outputTokenLimit:14000,
             balanceRub:200,budgetRub:160,fingerprint:"fixture-estimate"}));
         }
@@ -308,10 +331,10 @@ try {
           await limit.selectOption("32000");
         }else{
           assert.equal(await limit.inputValue(),"32000");
-          page.once("dialog",dialog=>dialog.accept());
         }
         await page.locator("#f-message-input").fill("Продолжи сцену с медальоном");
         const count=await page.evaluate(()=>window.submitted.length);
+        page.once("dialog",dialog=>dialog.accept());
         await page.locator('#f-chat-form button[type="submit"]').click();
         await page.waitForFunction(n=>window.submitted.length===n,count+1);
         const payload=await page.evaluate(()=>window.submitted.at(-1));
@@ -362,6 +385,43 @@ try {
       assert.equal(await page.locator("#f-global").inputValue(),"Редакция только на этом компьютере.");
       assert.equal(await page.evaluate(()=>window.submitted.length),modelCalls);
       console.log("Полный архив, восстановление и возврат локальных данных проверены на тестовом Firebase");
+
+      await nav("projects");
+      await page.getByRole("button",{name:"Открыть проект",exact:true}).click();
+      await page.getByRole("button",{name:"Карта романа",exact:true}).click();
+      await page.getByRole("option",{name:/Пролог/}).waitFor({state:"attached"});
+      await page.getByRole("searchbox",{name:"Фраза из рукописи"}).fill("синяя папка");
+      await page.getByRole("button",{name:"Найти",exact:true}).click();
+      const map=page.getByRole("dialog");
+      await map.getByRole("heading",{name:/Глава 1 · сцена 2/}).waitFor();
+      await map.getByRole("button",{name:"Закрепить решение",exact:true}).click();
+      await page.getByRole("dialog").getByRole("button",{name:"Сохранить",exact:true}).click();
+      await page.getByRole("button",{name:"Глава 1 · сцена 2",exact:true}).waitFor();
+      await page.locator('[data-action="new-project-chat"]').click();
+      await page.locator("#f-quick-model").selectOption("bothub:claude-opus-5.5");
+      await page.locator("#f-message-input").fill("Продолжи сцену с синей папкой.");
+      await page.locator("#f-chat-tools summary").click();
+      const [preview]=await Promise.all([page.waitForEvent("dialog").then(async item=>{
+        const message=item.message();await item.accept();return message;
+      }),page.getByRole("button",{name:"Контекст и цена",exact:true}).click()]);
+      assert.match(preview,/BotHub[\s\S]*глава 1, сцена 2/);
+      assert.equal(backgroundJobs.length,0);
+      assert.equal(await page.evaluate(()=>window.submitted.length),modelCalls);
+      page.once("dialog",item=>item.accept());
+      await page.getByRole("button",{name:"Написать в фоне",exact:true}).click();
+      await page.getByRole("dialog").getByRole("heading",{name:/Готово · Тестовая книга/}).waitFor();
+      assert.equal(backgroundJobs.length,1);
+      const secondDevice=await browser.newPage({viewport:{width:390,height:900},serviceWorkers:"block"});
+      await secondDevice.route("**/*",fixtureRoute);
+      await secondDevice.goto(origin+"/ai/");
+      await secondDevice.locator("#f-chat-tools summary").click();
+      await secondDevice.locator('#f-chat-tools [data-action="open-chapter-jobs"]').click();
+      await secondDevice.getByRole("dialog").getByRole("button",{name:"Открыть",exact:true}).click();
+      assert.equal(await secondDevice.getByRole("textbox",{name:"Текст главы"}).inputValue(),"Глава пережила закрытие вкладки.");
+      await secondDevice.getByRole("button",{name:"Сохранить в чате",exact:true}).click();
+      await secondDevice.getByText("Глава пережила закрытие вкладки.",{exact:true}).waitFor();
+      await secondDevice.close();
+      console.log("Карта, бесплатный просмотр контекста и восстановление главы с другого устройства проверены");
     }
     assert.deepEqual(errors,[]);
     await page.close();
