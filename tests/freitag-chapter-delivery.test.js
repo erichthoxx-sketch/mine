@@ -135,21 +135,22 @@ test("the common chapter ceiling reaches the provider while arbitrary lengths ar
   const sent=[];
   mockNetwork(t,(path,init)=>{
     assert.ok(["/api/v2/anthropic/v1/messages","/v1/chat/completions"].includes(path));
-    const {model,max_tokens}=JSON.parse(init.body);
-    sent.push([model,max_tokens]);
+    const {model,max_tokens,output_config,reasoning_effort}=JSON.parse(init.body);
+    sent.push([model,max_tokens,output_config?.effort||reasoning_effort]);
     return new Response("data: [DONE]\n\n",{headers:{"Content-Type":"text/event-stream"}});
   });
-  const cases=[["claude-opus-5.5",20000],["claude-opus-5.5",32000],["claude-sonnet-5.5",32000]];
-  for(const [model,outputTokenLimit] of cases){
-    const reply=await request("chat",{...chapter,model,outputTokenLimit});
+  const cases=[["claude-opus-5.5",20000,"low"],["claude-opus-5.5",32000,"medium"],["claude-sonnet-5.5",32000,"high"]];
+  for(const [model,outputTokenLimit,reasoningEffort] of cases){
+    const reply=await request("chat",{...chapter,model,outputTokenLimit,reasoningEffort});
     assert.equal(reply.status,200);
     await reply.text();
   }
   assert.equal((await request("chat",{...chapter,outputTokenLimit:64000})).status,400);
+  assert.equal((await request("chat",{...chapter,reasoningEffort:"max"})).status,400);
   const alternative=await request("chat",{...chapter,provider:"apimira",outputTokenLimit:32000});
   assert.equal(alternative.status,200);
   await alternative.text();
-  assert.deepEqual(sent,[...cases,["anthropic/claude-opus-5.5",32000]]);
+  assert.deepEqual(sent,[...cases,["anthropic/claude-opus-5.5",32000,undefined]]);
 });
 
 test("ApiMira quotes the current book and authentic price before one bounded chapter",async t=>{
@@ -158,15 +159,15 @@ test("ApiMira quotes the current book and authentic price before one bounded cha
   const bindings={FREITAG_PROVIDER_GATEWAY:"1",BOOKS:{async get(key){
     assert.equal(key,"book:fixture");return structuredClone(snapshot);
   }}};
-  const input={...chapter,provider:"apimira",bookId:"fixture",outputTokenLimit:32000};
-  let price=5;
+  const input={...chapter,provider:"apimira",bookId:"fixture",outputTokenLimit:32000,reasoningEffort:"high"};
+  let price=5,balance=1.20;
   const sent=[];
   const calls=mockNetwork(t,(path,init)=>{
     assert.equal(init.headers.Authorization,"Bearer fixture-a");
     assert.equal(init.redirect,"manual");
     if(path==="/v1/account/pricing")return Response.json({data:[{id:"anthropic/claude-opus-5.5",
       input_usd_per_1m_tokens:1.25,output_usd_per_1m_tokens:price,context_window:266000}]});
-    if(path==="/v1/account/balance")return Response.json({balance_usd:1.20});
+    if(path==="/v1/account/balance")return Response.json({balance_usd:balance});
     if(path==="/v1/messages/count_tokens"){
       const body=JSON.parse(init.body);
       assert.match(body.system,/Утверждённый канон/);
@@ -184,7 +185,8 @@ test("ApiMira quotes the current book and authentic price before one bounded cha
   const quote=(await (await request("quote",input,undefined,bindings)).json());
   assert.equal(quote.ready,true);
   assert.equal(quote.estimateUsd,.20);
-  assert.equal(quote.budgetUsd,.50);
+  assert.equal(quote.approximate,true);
+  assert.deepEqual(quote.costBreakdown,{currency:"USD",input:.04,output:.16});
   assert.deepEqual(quote.source.chapters,[1,2]);
   assert.doesNotMatch(JSON.stringify(quote),/Вторая глава|Утверждённый канон/);
   assert.equal((await request("chat",input,undefined,bindings)).status,409);
@@ -193,15 +195,22 @@ test("ApiMira quotes the current book and authentic price before one bounded cha
   snapshot.updatedAt="2026-11-24T12:01:00Z";
   assert.equal((await request("chat",confirmed,undefined,bindings)).status,409);
   snapshot.updatedAt=revision;
-  price=30;
-  assert.equal((await request("chat",confirmed,undefined,bindings)).status,402);
+  price=20;
+  const larger=await (await request("quote",input,undefined,bindings)).json();
+  assert.equal(larger.estimateUsd,.68);
+  assert.equal(larger.ready,true);
+  assert.equal((await request("chat",confirmed,undefined,bindings)).status,409);
+  const approved={...input,apimiraQuote:{fingerprint:larger.fingerprint,estimateUsd:larger.estimateUsd}};
+  balance=.60;
+  assert.equal((await request("chat",approved,undefined,bindings)).status,402);
   assert.deepEqual(sent,[]);
-  price=5;
-  const reply=await request("chat",confirmed,undefined,bindings);
+  balance=1.20;
+  const reply=await request("chat",approved,undefined,bindings);
   assert.equal(reply.status,200);
   await reply.text();
   assert.equal(sent.length,1);
   assert.equal(sent[0].max_tokens,32000);
+  assert.equal(sent[0].reasoning_effort,"high");
   assert.equal(sent[0].tools,undefined);
   assert.ok(calls.filter(path=>path==="/v1/chat/completions").length===1);
 });

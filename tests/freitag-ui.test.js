@@ -6,7 +6,7 @@ const load=(path)=>readFile(new URL(path,import.meta.url),"utf8");
 test("Freitag AI navigation and branding remain accessible",async()=>{
   const html=await load("../ai/index.html");
   assert.match(html,/<main class="f-main" id="panel"><\/main>/);
-  for(const item of ['data-nav="chat"','data-nav="projects"','data-nav="knowledge"','data-nav="settings"']){
+  for(const item of ['data-nav="chat"','data-nav="projects"','data-nav="expenses"','data-nav="settings"']){
     assert.equal(html.split(item).length-1,2,item+" must exist in desktop and mobile navigation");
   }
   assert.match(html,/class="f-monogram"/);
@@ -104,7 +104,7 @@ test("Google Docs refresh is optional; normal Opus MCP messages do not reauthori
   assert.match(app,/await ensureDriveAccess\(p\.masterBookId\)/);
   assert.match(app,/await refreshLinkedBook\(/);
   assert.doesNotMatch(send,/ensureDriveAccess\(/);
-  assert.match(send,/if\(isPaidProvider&&\(priced\|\|requestMode==="draft"\)\)[\s\S]*?\/quote[\s\S]*?confirm\(/);
+  assert.match(send,/if\(isPaidProvider\)[\s\S]*?\/quote[\s\S]*?await openRequestEstimate\(/);
   assert.match(worker,/if\(input\.sourceRevision && !separateGateway\)/);
   assert.match(worker,/path === "\/refresh-book"/);
 });

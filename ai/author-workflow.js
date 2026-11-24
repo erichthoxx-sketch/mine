@@ -1,3 +1,5 @@
+import { formatExpense, savedEstimate } from "./expenses.js";
+
 const node = (name, text, className) => {
   const element = document.createElement(name);
   if (text) element.textContent = text;
@@ -8,6 +10,7 @@ const date = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLoc
 
 function openSheet(title) {
   const dialog = node("dialog", "", "f-dialog f-workflow-dialog");
+  dialog.setAttribute("aria-label", title);
   const header = node("header", "", "f-spread");
   const heading = node("h2", title);
   const close = node("button", "Закрыть", "f-btn");
@@ -22,26 +25,60 @@ function openSheet(title) {
   return {dialog, content};
 }
 
-export function chapterPreview(estimate, provider, memory, formatRub, formatUsd) {
-  const amount = Number.isFinite(estimate.estimateRub) ? formatRub(estimate.estimateRub) :
-    Number.isFinite(estimate.estimateUsd) ? formatUsd(estimate.estimateUsd) : "цена не получена";
-  const lines = [provider + " · оценка " + (estimate.approximate ? "≈ " : "") + amount +
-    " за вход и ответ до " + estimate.outputTokenLimit.toLocaleString("ru-RU") + " токенов."];
-  if (Number.isSafeInteger(estimate.inputTokens)) lines.push("Вход " + (estimate.approximate ? "≈ " : "") +
-    estimate.inputTokens.toLocaleString("ru-RU") + " токенов.");
-  if (estimate.approximate) lines.push(estimate.tariff + " на " + estimate.tariffDate + ". Сумма зависит от фактических токенов и тарифа аккаунта.");
-  if (Number.isFinite(estimate.budgetUsd)) lines.push("Бюджет теста " + formatUsd(estimate.budgetUsd) + ".");
-  if (Number.isFinite(estimate.budgetRub)) lines.push("Остаток бюджета ключа " + formatRub(estimate.budgetRub) + ".");
+export function openRequestEstimate({estimate, model, memory, effort, recent, previewOnly, background, toolCalls}) {
+  const {dialog, content} = openSheet("Контекст и цена");
+  dialog.classList.add("f-quote-dialog");
+  const cost = savedEstimate(estimate);
+  const fmt = value => formatExpense(value, cost.currency);
+  const number = value => value.toLocaleString("ru-RU");
+  const summary = node("div", "", "f-quote-summary");
+  summary.append(node("span", model), node("strong", cost ? "≈ " + fmt(cost.amount) : "Оценка недоступна"),
+    node("p", "Контекст и ответ до " + number(estimate.outputTokenLimit) + " токенов", "f-muted"));
+  content.append(summary);
+  const breakdown = estimate.costBreakdown?.currency === cost?.currency ? estimate.costBreakdown : null;
+  const figures = node("dl", "", "f-quote-figures");
+  const line = (list, label, value) => {
+    if (value) list.append(node("dt", label), node("dd", value));
+  };
+  const input = Number.isSafeInteger(estimate.inputTokens) ? "≈ " + number(estimate.inputTokens) + " токенов" : "";
+  line(figures, "Вход", [input, Number.isFinite(breakdown?.input) ? fmt(breakdown.input) : ""].filter(Boolean).join(" · "));
+  line(figures, "Ответ до лимита", Number.isFinite(breakdown?.output) ? fmt(breakdown.output) : "");
+  line(figures, "Рассуждения", effort);
+  if (cost) {
+    const balance = estimate.balanceUsd ?? estimate.balanceRub;
+    if (Number.isFinite(balance)) line(figures, "Доступный баланс", fmt(balance));
+    if (Number.isFinite(estimate.budgetRub)) line(figures, "Остаток бюджета ключа", fmt(estimate.budgetRub));
+    if (Number.isFinite(recent?.charges?.[cost.currency]))
+      line(figures, "Предыдущее списание по этой книге", fmt(recent.charges[cost.currency]));
+  }
+  if (figures.childElementCount) content.append(figures);
+  const pricing = estimate.tariff ? estimate.tariff + ". " : "";
+  content.append(node("p", pricing + "Итог зависит от фактического числа токенов и тарифа аккаунта." +
+    (toolCalls ? " Инструменты могут вызвать модель повторно." : ""), "f-quote-hint f-muted"));
+  const details = node("div", "", "f-quote-source");
   const source = estimate.source;
   if (source?.chapters?.length) {
-    lines.push("", "Мастерская: канон, главы " + source.chapters.join(", ") + ".");
-    if (date(source.updatedAt)) lines.push("Снимок от " + date(source.updatedAt) + ".");
-    if (source.references?.length) lines.push("Отрывки: " + source.references.map(ref =>
-      "глава " + ref.chapter + (ref.scene ? ", сцена " + ref.scene : "")).join(" · ") + ".");
+    details.append(node("p", "Мастерская · канон, главы " + source.chapters.join(", ")));
+    if (date(source.updatedAt)) details.append(node("p", "Снимок от " + date(source.updatedAt), "f-muted"));
+    if (source.references?.length) details.append(node("p", "Отрывки · " + source.references.map(ref =>
+      "глава " + ref.chapter + (ref.scene ? ", сцена " + ref.scene : "")).join(" · "), "f-muted"));
   }
-  if (memory.materials.length) lines.push("Материалы: " + memory.materials.join(", ") + ".");
-  if (memory.decisions.length) lines.push("Память: " + memory.decisions.join(", ") + ".");
-  return lines.join("\n");
+  if (memory.materials.length) details.append(node("p", "Материалы · " + memory.materials.join(", ")));
+  if (memory.decisions.length) details.append(node("p", "Память · " + memory.decisions.join(", ")));
+  if (details.childElementCount) content.append(details);
+  if (!estimate.ready) content.append(node("p", "Для этой оценки не хватает баланса или бюджета ключа.", "f-quote-alert"));
+  if (!previewOnly && estimate.ready) {
+    const controls = node("div", "", "f-quote-actions");
+    const cancel = node("button", "Отмена", "f-btn");
+    cancel.type = "button";
+    cancel.onclick = () => dialog.close();
+    const send = node("button", background ? "Написать в фоне" : "Подтвердить запрос", "f-btn primary");
+    send.type = "button";
+    send.onclick = () => dialog.close("confirmed");
+    controls.append(cancel, send);
+    content.append(controls);
+  }
+  return new Promise(resolve => dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirmed"), {once:true}));
 }
 
 export function openStoryMap({load, pin, chapter:initial = 0}) {

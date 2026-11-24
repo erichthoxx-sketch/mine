@@ -40,9 +40,9 @@ try {
       const api={
         "/health":{ok:true,model:"claude-opus-5-5",provider:"ModelProxy",providerGateway:providerRoute,apimiraConfigured:true,aitunnelConfigured:true,chapterProtocol:2},
         "/preflight":u.searchParams.get("provider")==="aitunnel"?{ok:true,balanceRub:200,budgetRub:160}:{ok:true,balanceUsd:3.45,inputUsd:1.25,outputUsd:5.20},
-        "/receipt":{ok:true,costUsd:.013,inputTokens:3200,outputTokens:1700},
+        "/receipt":providerRoute?{ok:true,costUsd:.013,inputTokens:3200,outputTokens:1700}:{ok:true,costRub:42,costCaps:7200},
         "/mcp-tools":{ok:true,toolCount:4,tools:["list_books","get_book_context","list_chapters","read_chapter"]},
-        "/snapshot":{ok:true,chapterCount:15,updatedAt:"2026-11-22T17:00:00Z",
+        "/snapshot":{ok:true,chapterCount:15,outlineAvailable:true,updatedAt:"2026-11-22T17:00:00Z",
           lastChapters:[{slot:14,title:"Тестовая глава 14"},{slot:15,title:"Тестовая глава 15"}]}
       };
       if(providerRoute||u.pathname.startsWith("/api/freitag/")){
@@ -109,9 +109,10 @@ try {
             code:"BOOK_SOURCE",error:"Мастерская не нашла одну из фраз."
           },{status:424}));
           if(body.provider==="apimira")return Promise.resolve(Response.json({ok:true,ready:true,estimateUsd:.20,
-            outputTokenLimit:body.outputTokenLimit,budgetUsd:.50,fingerprint:"fixture-apimira",source:{chapters:[14,15]}}));
+            costBreakdown:{currency:"USD",input:.08,output:.12},inputTokens:1200,
+            outputTokenLimit:body.outputTokenLimit||900,fingerprint:"fixture-apimira",source:{chapters:[14,15]}}));
           if(body.provider==="bothub")return Promise.resolve(Response.json({ok:true,ready:true,estimateRub:40,approximate:true,
-            tariff:"Публичный тариф",tariffDate:"2026-11-24",inputTokens:1000,outputTokenLimit:body.outputTokenLimit,
+            tariff:"Публичный тариф",tariffDate:"2026-11-24",inputTokens:1000,outputTokenLimit:body.outputTokenLimit||900,
             fingerprint:"fixture-bothub",source:{chapters:[14,15],references:[{chapter:1,scene:2}]}}));
           return Promise.resolve(Response.json({ok:true,ready:true,estimateRub:136,outputTokenLimit:14000,
             balanceRub:200,budgetRub:160,fingerprint:"fixture-estimate"}));
@@ -139,7 +140,7 @@ try {
             controller.close();
           };
           window.fragment("Начало. ");
-        }}),{headers:{"Content-Type":"text/event-stream",...(body.provider==="apimira"?{"X-Freitag-Request-Id":"fixture-charge"}:{})}}));
+        }}),{headers:{"Content-Type":"text/event-stream","X-Freitag-Request-Id":crypto.randomUUID()}}));
       };
     },providerOrigin);
     await page.goto(origin+"/ai/");
@@ -150,6 +151,8 @@ try {
     assert.equal(await workingLink.isVisible(),!working);
     assert.equal(await page.locator("#f-workshop-link").isVisible(),working);
     const nav=async name=>page.locator('[data-nav="'+name+'"]:visible').first().click();
+    const quote=page.getByRole("dialog",{name:"Контекст и цена",exact:true});
+    const approve=()=>quote.getByRole("button",{name:"Подтвердить запрос",exact:true}).click();
     await nav("settings");
     await page.locator("#f-provider").selectOption("apimira");
     await page.locator('[data-action="test-connection"]').click();
@@ -161,7 +164,7 @@ try {
     await page.locator("#f-project-instruction").fill(project);
     await page.getByRole("button",{name:"Проверить источник бесплатно"}).click();
     await page.getByRole("status").filter({hasText:"Глав в снимке: 15"}).waitFor();
-    assert.match(await page.locator("#f-book-check").innerText(),/Тестовая глава 15/);
+    assert.match(await page.locator("#f-book-check").innerText(),/Утверждённый каркас есть в снимке[\s\S]*Тестовая глава 15/);
     assert.equal(await page.locator("#f-project-instruction").inputValue(),project);
     assert.deepEqual(await page.evaluate(()=>window.submitted),[]);
     if(screenshots)await page.screenshot({path:screenshots+"/project-"+width+".png",fullPage:true});
@@ -173,6 +176,11 @@ try {
     assert.equal(await page.getByRole("textbox",{name:"Текст материала"}).inputValue(),"Первая строка.\nВторая строка.\nКонец главы.");
     await page.getByRole("button",{name:"Закрыть",exact:true}).click();
     await page.getByRole("checkbox",{name:"Подбирать отрывки из Рукопись.docx"}).uncheck();
+    await page.locator("#f-upload").setInputFiles({name:"Набросок.txt",mimeType:"text/plain",buffer:Buffer.from("Старинный алтарь")});
+    await page.getByRole("searchbox",{name:"Поиск по названию"}).fill("рукопись");
+    assert.equal(await page.getByRole("button",{name:"Набросок.txt"}).count(),0);
+    await page.getByRole("searchbox",{name:"Поиск по названию"}).fill("");
+    await page.getByRole("button",{name:"Набросок.txt"}).waitFor();
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
     if(screenshots)await page.screenshot({path:screenshots+"/materials-"+width+".png",fullPage:true});
     await nav("projects");
@@ -217,9 +225,11 @@ try {
     const navBounds=await page.locator(".f-mobile-nav").boundingBox();
     assert.ok(submitBounds.y+submitBounds.height<=(navBounds?.y??900),"Send button must remain above the bottom navigation");
     if(screenshots)await page.screenshot({path:screenshots+"/chat-"+width+".png",fullPage:true});
-    await Promise.all([page.waitForEvent("dialog").then(async dialog=>{
-      const message=dialog.message();await dialog.accept();assert.match(message,/ApiMira.*оценка.*0,20[\s\S]*главы 14, 15/);
-    }),page.locator('#f-chat-form button[type="submit"]').click()]);
+    await page.locator('#f-chat-form button[type="submit"]').click();
+    assert.match(await quote.innerText(),/ApiMira[\s\S]*0,20[\s\S]*Средний[\s\S]*главы 14, 15/);
+    assert.equal(await page.evaluate(()=>window.submitted.length),0);
+    if(screenshots)await page.screenshot({path:screenshots+"/quote-"+width+".png",fullPage:true});
+    await approve();
     await page.locator(".assistant .f-msg-text").filter({hasText:"Начало."}).waitFor();
     const requests=await page.evaluate(()=>window.submitted);
     assert.equal(requests.length,1);
@@ -227,6 +237,7 @@ try {
     assert.equal(request.provider,"apimira");
     assert.equal(request.bookId,"fixture");
     assert.equal(request.outputTokenLimit,14000);
+    assert.equal(request.reasoningEffort,"medium");
     assert.deepEqual(request.apimiraQuote,{fingerprint:"fixture-apimira",estimateUsd:.20});
     assert.deepEqual(request.messages,[{role:"system",content:instruction+"\n\n"+project},{role:"user",content:prompt}]);
     await page.evaluate(text=>window.fragment(text),rest);
@@ -270,8 +281,8 @@ try {
     if(width===1440){
       for(const reason of ["length",null,"content_filter"]){
         await page.locator("#f-message-input").fill(reason==="length"?"Второй тест. Не менее 18 000 знаков.":"Второй тест");
-        page.once("dialog",dialog=>dialog.accept());
         await page.locator('#f-chat-form button[type="submit"]').click();
+        await approve();
         await page.waitForFunction(n=>window.submitted.length===n,["length",null,"content_filter"].indexOf(reason)+1);
         await page.locator(".assistant .f-msg-text").last().filter({hasText:"Начало."}).waitFor();
         await page.evaluate(r=>window.finish(r),reason);
@@ -290,14 +301,13 @@ try {
       await nav("chat");
       await page.locator("#f-message-input").fill(prompt);
       const submit=page.locator('#f-chat-form button[type="submit"]');
-      const [dialog]=await Promise.all([page.waitForEvent("dialog").then(async item=>{
-        const message=item.message();await item.dismiss();return message;
-      }),submit.click()]);
-      assert.match(dialog,/136.*14000|136.*14.000/);
+      await submit.click();
+      assert.match(await quote.innerText(),/136[\s\S]*14\s000/);
+      await quote.getByRole("button",{name:"Отмена",exact:true}).click();
       assert.equal(await page.locator("#f-message-input").inputValue(),prompt);
       assert.equal(await page.evaluate(()=>window.submitted.length),3);
-      page.once("dialog",item=>item.accept());
       await submit.click();
+      await approve();
       await page.waitForFunction(()=>window.submitted.length===4);
       const paid=await page.evaluate(()=>window.submitted.at(-1));
       assert.equal(paid.provider,"aitunnel");
@@ -306,6 +316,17 @@ try {
       await page.evaluate(()=>window.finish("stop",123.45));
       await page.getByText(/Списано AITUNNEL: 123,45/).waitFor();
       console.log("Проверены отмена до оплаты, подтверждение и сумма AITUNNEL в чате");
+      await nav("expenses");
+      await page.getByRole("heading",{name:"Траты",exact:true}).waitFor();
+      await page.getByRole("button",{name:/Рубли.*123,45/}).waitFor();
+      await page.getByRole("button",{name:/Доллары/}).click();
+      await page.locator(".f-spend-chart").waitFor();
+      await page.locator("#f-expense-provider").selectOption("aitunnel");
+      assert.equal(await page.locator(".f-spend-history li").count(),1);
+      assert.match(await page.locator(".f-spend-history li").innerText(),/123,45[\s\S]*Оценка ≈ 136/);
+      await page.locator("#f-expense-provider").selectOption("");
+      if(screenshots)await page.screenshot({path:screenshots+"/expenses-"+width+".png",fullPage:true});
+      await nav("chat");
 
       await page.getByRole("button",{name:"В память проекта",exact:true}).last().click();
       await page.locator("#f-field-title").fill("Происхождение медальона");
@@ -329,17 +350,19 @@ try {
           assert.equal(await limit.inputValue(),"14000");
           await limit.selectOption("20000");
           await limit.selectOption("32000");
+          await page.locator("#f-chapter-effort").selectOption("high");
         }else{
           assert.equal(await limit.inputValue(),"32000");
         }
         await page.locator("#f-message-input").fill("Продолжи сцену с медальоном");
         const count=await page.evaluate(()=>window.submitted.length);
-        page.once("dialog",dialog=>dialog.accept());
         await page.locator('#f-chat-form button[type="submit"]').click();
+        await approve();
         await page.waitForFunction(n=>window.submitted.length===n,count+1);
         const payload=await page.evaluate(()=>window.submitted.at(-1));
         assert.equal(payload.provider,provider);
         assert.equal(payload.outputTokenLimit,32000);
+        assert.equal(payload.reasoningEffort,"high");
         assert.equal(payload.bookId,"fixture");
         assert.match(payload.messages[0].content,/Сюжет от пролога до текущей главы/);
         assert.match(payload.messages[0].content,/Марта унаследовала медальон от бабушки/);
@@ -365,6 +388,7 @@ try {
       await page.locator("#f-cloud-status").filter({hasText:"Проверенная копия в Firebase"}).waitFor();
       const cloud=await page.evaluate(()=>window.testCloud.value);
       assert.deepEqual(cloud.data.chats,archive.data.chats);
+      assert.deepEqual(cloud.data.expenses,archive.data.expenses);
       assert.deepEqual(cloud.data.projects,archive.data.projects);
       assert.deepEqual(cloud.data.docs,archive.data.docs);
       assert.equal(cloud.data.docs.find(d=>d.name==="Рукопись.docx")?.includeInContext,false);
@@ -401,14 +425,13 @@ try {
       await page.locator("#f-quick-model").selectOption("bothub:claude-opus-5.5");
       await page.locator("#f-message-input").fill("Продолжи сцену с синей папкой.");
       await page.locator("#f-chat-tools summary").click();
-      const [preview]=await Promise.all([page.waitForEvent("dialog").then(async item=>{
-        const message=item.message();await item.accept();return message;
-      }),page.getByRole("button",{name:"Контекст и цена",exact:true}).click()]);
-      assert.match(preview,/BotHub[\s\S]*глава 1, сцена 2/);
+      await page.getByRole("button",{name:"Контекст и цена",exact:true}).click();
+      assert.match(await quote.innerText(),/BotHub[\s\S]*глава 1, сцена 2/);
+      await quote.getByRole("button",{name:"Закрыть",exact:true}).click();
       assert.equal(backgroundJobs.length,0);
       assert.equal(await page.evaluate(()=>window.submitted.length),modelCalls);
-      page.once("dialog",item=>item.accept());
       await page.getByRole("button",{name:"Написать в фоне",exact:true}).click();
+      await quote.getByRole("button",{name:"Написать в фоне",exact:true}).click();
       await page.getByRole("dialog").getByRole("heading",{name:/Готово · Тестовая книга/}).waitFor();
       assert.equal(backgroundJobs.length,1);
       const secondDevice=await browser.newPage({viewport:{width:390,height:900},serviceWorkers:"block"});
@@ -422,6 +445,12 @@ try {
       await secondDevice.getByText("Глава пережила закрытие вкладки.",{exact:true}).waitFor();
       await secondDevice.close();
       console.log("Карта, бесплатный просмотр контекста и восстановление главы с другого устройства проверены");
+    }else{
+      await nav("expenses");
+      await page.getByRole("button",{name:"Сверить списания",exact:true}).click();
+      await page.getByRole("button",{name:/Доллары.*0,013/}).waitFor();
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      if(screenshots)await page.screenshot({path:screenshots+"/expenses-"+width+".png",fullPage:true});
     }
     assert.deepEqual(errors,[]);
     await page.close();

@@ -1,6 +1,6 @@
 // Freitag AI → ModelProxy / BotHub Claude Opus 5.5. Test gateway; never edit the existing Books MCP Worker.
 // Only an authenticated Firebase owner can generate; all paid-provider secrets stay on Cloudflare.
-import { CHAPTER_LIMITS } from "../ai/chapter-limits.js";
+import { CHAPTER_LIMITS, CHAPTER_EFFORTS } from "../ai/chapter-limits.js";
 import { readBookTool } from "./books-mcp-worker.js";
 import { findStoryPassages, storyMap } from "./freitag-story-map.js";
 import { chapterJobsClass } from "./freitag-chapter-jobs.js";
@@ -12,7 +12,6 @@ const AITUNNEL_MODEL = "claude-opus-5.5";
 const AITUNNEL_UPSTREAM = "amazon-bedrock";
 const APIMIRA_API = "https://apimira.com/v1";
 const APIMIRA_MODEL = "anthropic/claude-opus-5.5";
-const APIMIRA_TRIAL_LIMIT_USD = 0.50;
 const BOTHUB_ANTHROPIC = "https://bothub.chat/api/v2/anthropic/v1";
 // Only these BotHub model IDs can be selected from Freitag AI.
 const BOTHUB_MODELS = Object.freeze(["claude-sonnet-5.5", "claude-opus-5.5"]);
@@ -643,6 +642,7 @@ async function snapshotStatus(req, env) {
   return json(req, 200, {
     ok: true, title: book.title || "", updatedAt: book.updatedAt,
     chapterCount: book.chapters.length,
+    outlineAvailable: /^## Каркас по главам[ \t]*$/m.test(book.context || ""),
     lastChapters: book.chapters.slice(-4).map((ch, i) => ({
       slot: book.chapters.length - Math.min(4, book.chapters.length) + i + 1,
       title: String(ch.title || "").slice(0, 100)
@@ -690,6 +690,7 @@ async function aitunnelQuote(req, env, body, confirmation, source) {
     const budgetRub = money(account.budget) ? account.budget : null;
     const ready = budgetRub !== null && Math.min(account.balance,budgetRub)>=estimateRub;
     if (!confirmation) return json(req,200,{ok:true,ready,estimateRub,inputTokens:tokens.input_tokens,
+      approximate:true,costBreakdown:{currency:"RUB",input:inputRub,output:outputRub},
       outputTokenLimit:body.max_tokens,balanceRub:account.balance,budgetRub,fingerprint,...(source?{source}:{})});
     if (!ready) return fail(req,402,"Остатка счета или отдельного бюджета ключа AITUNNEL не хватает на оценку. Генерация не началась.");
     if (!money(confirmation.estimateRub) || estimateRub>confirmation.estimateRub)
@@ -740,12 +741,15 @@ async function apimiraQuote(req,env,body,confirmation,source){
       return fail(req,502,"ApiMira не подтвердила число входных токенов.");
     if(Number.isSafeInteger(account.contextWindow) && inputTokens+body.max_tokens>account.contextWindow)
       return fail(req,400,"Контекст и выбранный лимит ответа не помещаются в окно модели ApiMira.");
-    const estimateUsd=(Math.ceil(inputTokens*account.inputUsd)+Math.ceil(body.max_tokens*account.outputUsd))/1e6;
-    const ready=estimateUsd<=Math.min(account.balanceUsd,APIMIRA_TRIAL_LIMIT_USD);
+    const inputMicros=Math.ceil(inputTokens*account.inputUsd);
+    const outputMicros=Math.ceil(body.max_tokens*account.outputUsd);
+    const estimateUsd=(inputMicros+outputMicros)/1e6;
+    const ready=estimateUsd<=account.balanceUsd;
     if(!confirmation)return json(req,200,{ok:true,ready,estimateUsd,inputTokens,
-      outputTokenLimit:body.max_tokens,balanceUsd:account.balanceUsd,budgetUsd:APIMIRA_TRIAL_LIMIT_USD,
+      approximate:true,costBreakdown:{currency:"USD",input:inputMicros/1e6,output:outputMicros/1e6},
+      outputTokenLimit:body.max_tokens,balanceUsd:account.balanceUsd,
       fingerprint,...(source?{source}: {})});
-    if(!ready)return fail(req,402,"Оценка превышает доступный баланс или бюджет теста ApiMira.");
+    if(!ready)return fail(req,402,"Оценка превышает доступный баланс ApiMira.");
     if(!money(confirmation.estimateUsd)||estimateUsd>confirmation.estimateUsd)
       return fail(req,409,"Оценка ApiMira выросла. Подтверди новую сумму.");
     return null;
@@ -759,7 +763,7 @@ async function apimiraReceipt(req,env){
   const id=new URL(req.url).searchParams.get("id");
   if(!validRequestId(id))return fail(req,400,"Неверный номер запроса ApiMira.");
   try{
-    const res=await apimiraRead(req,env,"/account/usage?days=1&limit=25");
+    const res=await apimiraRead(req,env,"/account/usage?days=90&limit=100");
     if(!res.ok)return providerFailure(req,res,"ApiMira · детализация");
     const {data}=await res.json();
     const row=Array.isArray(data)&&data.find(item=>item.id===id&&item.model===APIMIRA_MODEL);
@@ -805,8 +809,10 @@ function publicEstimate(model,messages,maxTokens){
     const cyrillic=m.content.match(/[\u0400-\u04ff]/g)?.length||0;
     return n+8+cyrillic/2+(m.content.length-cyrillic)/3.2;
   },0));
-  const estimate=(inputTokens*rate.input+maxTokens*rate.output)/1e6;
+  const input=inputTokens*rate.input/1e6, output=maxTokens*rate.output/1e6;
+  const estimate=input+output;
   return {inputTokens, approximate:true, tariff:rate.tariff, tariffDate:"2026-11-24",
+    costBreakdown:{currency:rate.currency,input,output},
     ...(rate.currency==="RUB"?{estimateRub:Math.ceil(estimate*100)/100}:{estimateUsd:Math.ceil(estimate*1e6)/1e6})};
 }
 
@@ -901,6 +907,9 @@ async function generate(req, env, estimateOnly = false, background = false) {
     return fail(req,400,"Выбери доступный лимит ответа в токенах ("+CHAPTER_LIMITS.join(", ")+").");
   const maxTokens=greeting?128:isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
   const bothubChapter = providerId === "bothub" && isDraft;
+  const effort = (bothubChapter || apimira && isDraft) ? input.reasoningEffort : undefined;
+  if(effort!==undefined && !CHAPTER_EFFORTS.includes(effort))
+    return fail(req,400,"Выбери низкий, средний или высокий уровень рассуждений.");
   let quoteSource;
   if(input.bookId&&!greeting){
     try{
@@ -948,12 +957,13 @@ async function generate(req, env, estimateOnly = false, background = false) {
     catch(e){return fail(req,502,"MCP: "+e.message);}
   }
   const body = bothubChapter ? {
-    model, stream:true, max_tokens:maxTokens, thinking:{type:"adaptive"}, output_config:{effort:"low"},
+    model, stream:true, max_tokens:maxTokens, thinking:{type:"adaptive"}, output_config:{effort:effort||"low"},
     system:messages.filter(m=>m.role==="system").map(m=>({type:"text",text:m.content})),
     messages:messages.filter(m=>m.role!=="system")
   } : {
     model, messages, stream: true,
     max_tokens: maxTokens,
+    ...(effort ? {reasoning_effort:effort} : {}),
     ...(aitunnel || apimira || separateGateway ? {stream_options:{include_usage:true}} : {}),
     ...(aitunnel ? {
       provider:{only:[AITUNNEL_UPSTREAM],data_collection:"deny",zdr:true,allow_fallbacks:false} } : {})
@@ -1235,7 +1245,7 @@ async function bothubPreflight(req, env) {
   if(snapshotGateway(env)){
     if(provider!=="apimira")return fail(req,403,"Используй рабочий шлюз BotHub.");
     const account=await apimiraAccount(req,env);
-    return account.error||json(req,200,{ok:true,model,...account,budgetUsd:APIMIRA_TRIAL_LIMIT_USD});
+    return account.error||json(req,200,{ok:true,model,...account});
   }
   let upstream;
   try {
@@ -1294,6 +1304,7 @@ export default {
           bothubChapterApi: "anthropic-messages",
           bothubChapterOutputLimits: CHAPTER_LIMITS,
           apimiraConfigured: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
+          chapterEfforts: CHAPTER_EFFORTS,
           aitunnelConfigured: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID,
           bookToolsSupported: mcpConfigured(env),
           bookContextSelection: mcpConfigured(env),

@@ -200,11 +200,11 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 .f-example .f-muted{white-space:pre-wrap;overflow-wrap:anywhere}
 .f-content.f-materials-page{max-width:980px}
 .f-materials-toolbar{display:flex;align-items:end;flex-wrap:wrap;gap:13px 20px}
-.f-material-project{min-width:0;flex:1 1 260px;max-width:400px}
-.f-material-project .f-label{margin-bottom:7px}
+.f-material-search{min-width:0;flex:1 1 200px;max-width:300px}
 .f-material-hint{margin:13px 0 20px}
 .f-material-list{list-style:none;margin:0;padding:0;background:var(--f-paper);border:1px solid var(--f-line);border-radius:15px;overflow:hidden}
 .f-material-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:9px 20px;padding:13px 16px}
+.f-material-list li[hidden]{display:none}
 .f-material-list li+li{border-top:1px solid var(--f-line)}
 .f-material-title{min-width:0;flex:1 1 220px}
 .f-material-title button{padding:0;border:0;background:none;color:var(--f-ink);font:600 14px/1.5 "Golos Text",sans-serif;text-align:left;cursor:pointer;overflow-wrap:anywhere}
@@ -236,6 +236,57 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 .f-workflow-snippet{font-size:13px;line-height:1.6;white-space:pre-wrap}
 .f-workflow-detail:not(:empty){margin-top:16px}
 .f-workflow-detail .f-job-text{min-height:220px;height:35dvh;margin:4px 0 9px}
+.f-quote-dialog{width:min(600px,calc(100vw - 24px))}
+.f-quote-summary{padding:15px 18px;background:var(--f-bg);border:1px solid var(--f-line);border-radius:13px}
+.f-quote-summary span{font-size:12px;color:var(--f-soft-ink)}
+.f-quote-summary strong{display:block;font:500 clamp(26px,5vw,36px)/1.25 "Jost",sans-serif;font-variant-numeric:tabular-nums}
+.f-quote-summary p,.f-quote-source p{margin:3px 0}
+.f-quote-figures{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 14px;margin:16px 0;font-size:13px}
+.f-quote-figures dt{color:var(--f-soft-ink)}
+.f-quote-figures dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.f-quote-source{border-top:1px solid var(--f-line);padding-top:10px;overflow-wrap:anywhere}
+.f-quote-hint,.f-quote-source,.f-quote-alert{font-size:12px}
+.f-quote-alert{color:var(--f-danger)}
+.f-quote-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:18px}
+.f-spend-page{max-width:1040px}
+.f-spend-filters{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin:0 0 17px}
+.f-spend-filters label{display:grid;gap:4px;flex:1 1 130px;min-width:0;max-width:240px;font-size:12px;color:var(--f-soft-ink)}
+.f-spend-filters .f-select{width:100%;min-width:0}
+.f-spend-overview{padding:19px 22px;background:var(--f-paper);border:1px solid var(--f-line);border-radius:16px}
+.f-spend-totals{display:flex;flex-wrap:wrap;gap:10px}
+.f-spend-totals>*{flex:1 1 130px;min-width:0;color:var(--f-ink);text-align:left;padding:11px 13px;border:1px solid var(--f-line);border-radius:11px;background:transparent}
+.f-spend-totals>button[aria-pressed="true"]{background:var(--f-active);border-color:var(--f-line-strong)}
+.f-spend-totals span{display:block;color:var(--f-soft-ink);font-size:12px}
+.f-spend-totals strong{display:block;font:500 clamp(20px,3vw,29px)/1.25 "Jost",sans-serif;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.f-spend-chart{margin:19px 0 0}
+.f-spend-chart figcaption,.f-spend-axis{font-size:12px;color:var(--f-muted)}
+.f-spend-plot{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px;margin:8px 0 6px}
+.f-spend-scale{display:flex;flex-direction:column;justify-content:space-between;gap:6px;align-items:flex-end;color:var(--f-muted);font-size:11px;text-align:right;overflow-wrap:anywhere}
+.f-spend-bars{display:flex;align-items:stretch;gap:clamp(1px,.5vw,7px);height:130px;border-bottom:1px solid var(--f-line-strong);
+  background:repeating-linear-gradient(to top,transparent 0,transparent calc(25% - 1px),var(--f-line) calc(25% - 1px),var(--f-line) 25%)}
+.f-spend-slot{position:relative;flex:1;min-width:0}
+.f-spend-bar{position:absolute;inset:auto 0 0;height:var(--bar);background:var(--f-accent);border-radius:3px 3px 0 0;opacity:.72}
+.f-spend-slot:hover .f-spend-bar{opacity:1}
+.f-spend-axis{display:flex;justify-content:space-between;gap:10px;margin-left:78px}
+.f-spend-missing{margin:12px 0 0;font-size:12px}
+.f-spend-history{margin-top:24px}
+.f-spend-history h2{font:500 22px/1.3 "Jost",sans-serif;margin:0 0 9px}
+.f-spend-history ul{list-style:none;margin:0;padding:0}
+.f-spend-history li{display:grid;grid-template-columns:minmax(0,1fr) minmax(84px,auto);align-items:start;gap:12px;padding:12px 1px;border-top:1px solid var(--f-line)}
+.f-spend-row-main,.f-spend-row-money{display:grid;justify-items:start;gap:3px;min-width:0}
+.f-spend-row-main time,.f-spend-row-money span,.f-spend-row-main span{font-size:12px;color:var(--f-muted)}
+.f-spend-row-main button,.f-spend-row-main strong{text-align:left;overflow-wrap:anywhere}
+.f-spend-row-money{justify-items:end;text-align:right;font-variant-numeric:tabular-nums}
+.f-spend-row-money strong{font-size:13px}
+.f-effort-choice{display:inline-flex;align-items:center;gap:7px}
+.f-effort-choice[hidden]{display:none}
+@media(max-width:550px){
+  .f-spend-overview{padding:13px}
+  .f-spend-filters label{max-width:none}
+  .f-spend-bars{height:92px}
+  .f-quote-figures{gap:7px;font-size:12px}
+  .f-effort-choice{gap:4px}
+}
 @media(max-width:550px){.f-workflow-search{grid-template-columns:minmax(0,1fr) auto}.f-workflow-search select{grid-column:1/-1}}
 .f-transfer-dialog{width:min(820px,calc(100vw - 30px))}
 .f-transfer #f-external-brief{min-height:220px;max-height:49dvh;font:12px/1.65 ui-monospace,Consolas,monospace!important}

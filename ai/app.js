@@ -5,9 +5,10 @@ import { projectHomeHtml } from './project-view.js';
 import { projectMemoryContext } from './project-context.js';
 import { draftDelivery, draftDeliveryLabel } from './draft-delivery.js';
 import { ensureDriveAccess, refreshLinkedBook } from './live-context.js';
-import { DEFAULT_CHAPTER_LIMIT, CHAPTER_LIMITS } from './chapter-limits.js';
+import { DEFAULT_CHAPTER_LIMIT, CHAPTER_LIMITS, DEFAULT_CHAPTER_EFFORT, CHAPTER_EFFORTS } from './chapter-limits.js';
 import { MAX_MATERIAL_LENGTH, readMaterial } from './materials.js';
-import { chapterPreview, openStoryMap, openChapterJobs } from './author-workflow.js';
+import { openRequestEstimate, openStoryMap, openChapterJobs } from './author-workflow.js';
+import { canReconcileExpense, expenseFromMessage, expenseReport, expensesHtml, mergeExpenses, restoreExpenses, savedEstimate } from './expenses.js';
 // Чаты, проекты и текстовые материалы хранятся только в IndexedDB этого браузера.
 // Никаких ключей и рукописей в репозитории.
 const $ = (q) => document.querySelector(q);
@@ -22,10 +23,13 @@ const WRITING_MODES = {
   plot: {name:"Сюжет",instruction:"Работай как сюжетный редактор. Проверяй причинность, мотивацию, ставки и последствия; предлагай не более трёх конкретных вариантов и указывай слабые места без лести. Отделяй гипотезы от фактов канона.",maxTokens:520},
   canon: {name:"Проверить канон",instruction:"Проверяй факты только по закреплённому канону и приведённым выдержкам. Отвечай с названиями источников. Если подтверждения в предоставленных материалах нет, прямо скажи «в доступном контексте не найдено», не придумывай.",maxTokens:420}
 };
-const blank = () => ({projects:[], chats:[], docs:[], feedback:[], drafts:{}, activeProjectId:null, activeChatId:null,
-  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",sceneOutputTokens:DEFAULT_CHAPTER_LIMIT,globalInstruction:"",context:4096}, theme:"auto"});
+const blank = () => ({projects:[], chats:[], docs:[], feedback:[], expenses:[], drafts:{}, activeProjectId:null, activeChatId:null,
+  settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",sceneOutputTokens:DEFAULT_CHAPTER_LIMIT,
+    chapterEffort:DEFAULT_CHAPTER_EFFORT,globalInstruction:"",context:4096}, theme:"auto"});
 let state=blank(), tab="chat", projectHomeId=null, materialsProjectId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null, batchCheck=null;
 let importingMaterials=false;
+let refreshingExpenses=false;
+const expenseFilters={period:"30",project:"",provider:"",unit:""};
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const getDb=(key="state")=>new Promise((resolve,reject)=>{const r=db.transaction("data").objectStore("data").get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const putDb=(v,rollback)=>new Promise((resolve,reject)=>{
@@ -97,11 +101,11 @@ function renderSidebar(){
         '" data-action="select-chat" data-id="'+esc(x.id)+'" title="'+esc(x.title)+'"><span>'+esc(x.title)+'</span></button></li>'
       ).join("")+'</ul>':'<p class="f-sidebar-empty">Здесь появятся диалоги по выбранной книге.</p>')+
       '</div>';
-  }else if(tab==="projects"){
+  }else if(tab==="projects"||tab==="knowledge"){
     el.innerHTML='<div class="f-side-label">Библиотека</div>'+
       '<p class="f-sidebar-empty">'+state.projects.length+' книг в работе</p>'+
       '<button type="button" data-action="add-project" class="f-btn f-new-chat">＋ Добавить книгу</button>';
-  }else if(tab==="knowledge"){
+  }else if(tab==="expenses"){
     el.replaceChildren();
   }else{
     el.innerHTML='<div class="f-side-label">Подключения</div>'+
@@ -109,7 +113,8 @@ function renderSidebar(){
   }
 }
 function renderHeader(){
-  document.querySelectorAll("[data-nav]").forEach(b=>b.classList.toggle("on",b.dataset.nav===tab));
+  const activeTab=tab==="knowledge"?"projects":tab;
+  document.querySelectorAll("[data-nav]").forEach(b=>b.classList.toggle("on",b.dataset.nav===activeTab));
   $("#connection-label").textContent=connectText;
   $("#status-dot").className="f-status-dot"+(connectOk?" on":connectText==="Нет соединения"?" bad":"");
 }
@@ -121,6 +126,7 @@ function render(){
   setTheme();renderHeader();renderSidebar();
   if(tab==="projects")return projectHomeId?renderProjectHome():renderProjects();
   if(tab==="knowledge")return renderKnowledge();
+  if(tab==="expenses")return renderExpenses();
   if(tab==="settings")return renderSettings();
   renderChat();
 }
@@ -154,20 +160,23 @@ function renderKnowledge(){
   const p=materialsProject();
   const docs=state.docs.filter(d=>d.projectId===p?.id);
   const examples=state.feedback.filter(f=>f.projectId===p?.id).slice().reverse();
-  $("#panel").innerHTML='<div class="f-content f-materials-page">'+titleLine("Материалы")+
-  (p?'<section class="f-materials-toolbar"><div class="f-material-project"><label class="f-label" for="f-doc-project">Проект</label><select class="f-select" id="f-doc-project">'+
-    state.projects.map(item=>'<option value="'+esc(item.id)+'" '+(item.id===p.id?"selected":"")+'>'+esc(item.name)+'</option>').join("")+
-    '</select></div><div class="f-row"><button class="f-btn primary" type="button" data-action="choose-materials" '+(importingMaterials?'disabled':'')+'>'+
+  $("#panel").innerHTML='<div class="f-content f-materials-page">'+
+  (p?'<button type="button" class="f-project-back" data-action="project-home" data-id="'+esc(p.id)+'">← '+esc(p.name)+'</button>':"")+
+  titleLine("Материалы")+
+  (p?'<section class="f-materials-toolbar">'+
+    (docs.length>1?'<input type="search" class="f-text-field f-material-search" id="f-material-search" placeholder="Найти материал" aria-label="Поиск по названию">':"")+
+    '<div class="f-row"><button class="f-btn primary" type="button" data-action="choose-materials" '+(importingMaterials?'disabled':'')+'>'+
     (importingMaterials?'Читаю файлы…':'Загрузить файлы')+'</button><input id="f-upload" type="file" accept=".docx,.txt,.md,.json" multiple hidden>'+
     '<button class="f-btn" type="button" data-action="add-note">Добавить заметку</button></div></section>'+
     '<p class="f-material-hint f-muted">Word (.docx) до 10 МБ · TXT, Markdown и JSON до 2 МБ. Freitag хранит текст целиком и подбирает отрывки по заданию.</p>'+
     (docs.length?'<ul class="f-material-list">'+docs.map(d=>{
       const format=d.format||/\.(docx|txt|md|json)$/i.exec(d.name)?.[1]||"заметка";
-      return '<li><div class="f-material-title"><button type="button" data-action="open-doc" data-id="'+esc(d.id)+'">'+esc(d.name)+'</button>'+
+      return '<li data-material-name="'+esc(d.name)+'"><div class="f-material-title"><button type="button" data-action="open-doc" data-id="'+esc(d.id)+'">'+esc(d.name)+'</button>'+
         '<p class="f-muted">'+esc(format==='заметка'?'Заметка':format.toUpperCase())+' · '+String(d.text||"").length.toLocaleString("ru-RU")+' знаков</p></div>'+
         '<label class="f-material-use"><input type="checkbox" data-doc-context="'+esc(d.id)+'" '+(d.includeInContext!==false?'checked':'')+
         ' aria-label="Подбирать отрывки из '+esc(d.name)+'">Учитывать по задаче</label></li>';
-    }).join("")+'</ul>':empty("Материалов пока нет","Загрузи текст или добавь заметку к проекту."))+
+    }).join("")+'</ul><p id="f-material-no-matches" class="f-muted" hidden>Материалы с таким названием не найдены.</p>':
+      empty("Материалов пока нет","Загрузи текст или добавь заметку к проекту."))+
     '<details class="f-material-style"><summary>Образцы стиля'+(examples.length?' · '+examples.length:'')+'</summary>'+
     '<div class="f-row"><button class="f-btn" type="button" data-action="add-style">Добавить образец</button></div>'+
     (examples.length?'<div class="f-examples">'+examples.map(x=>'<article class="f-example"><div class="f-spread"><strong>'+(x.kind==="good"?"Одобрено":"Не повторять")+' · '+esc(x.source||"Автор")+'</strong>'+
@@ -176,6 +185,15 @@ function renderKnowledge(){
       '<p class="f-muted">Сюда можно добавить свой текст или сохранить удачный ответ из чата.</p>')+'</details>':
     empty("Выбери проект для материалов","Файлы и заметки привязываются к книге.")+
     '<button class="f-btn primary" type="button" data-action="add-project">Новый проект</button>')+'</div>';
+}
+function renderExpenses(){
+  const projects=new Map(state.projects.map(p=>[p.id,p]));
+  for(const row of state.expenses){
+    if(row.projectId&&!projects.has(row.projectId))
+      projects.set(row.projectId,{id:row.projectId,name:row.projectName||"Удалённый проект"});
+  }
+  $("#panel").innerHTML=expensesHtml(expenseReport(state.expenses,expenseFilters),expenseFilters,
+    {esc,projects:[...projects.values()],chats:new Set(state.chats.map(c=>c.id)),providers:providerNames,refreshing:refreshingExpenses});
 }
 function renderSettings(){
   const s=state.settings;
@@ -253,6 +271,9 @@ function chapterOutputLimit(){
 const activeClaudeName=()=>activeBotHubModel()==="claude-opus-5.5"?"Claude Opus 5.5":"Claude Sonnet 5.5";
 const paidProviders=["modelproxy","bothub","apimira","aitunnel"];
 const providerNames={modelproxy:"ModelProxy",bothub:"BotHub",apimira:"ApiMira",aitunnel:"AITUNNEL"};
+const effortLabels={low:"Низкий",medium:"Средний",high:"Высокий"};
+const chapterEffort=()=>CHAPTER_EFFORTS.includes(state.settings.chapterEffort)?state.settings.chapterEffort:DEFAULT_CHAPTER_EFFORT;
+const supportsEffort=provider=>provider==="bothub"||provider==="apimira";
 const rub=value=>new Intl.NumberFormat("ru-RU",{style:"currency",currency:"RUB",maximumFractionDigits:4}).format(value);
 const usd=value=>new Intl.NumberFormat("ru-RU",{style:"currency",currency:"USD",maximumFractionDigits:6}).format(value);
 const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opus 5.5 · ModelProxy":
@@ -273,6 +294,8 @@ function renderChat(){
   const outputLimit=chapterOutputLimit();
   const chapterOptions=CHAPTER_LIMITS.map(limit=>'<option value="'+limit+'" '+
     (limit===outputLimit?"selected":"")+'>'+limit.toLocaleString("ru-RU")+'</option>').join("");
+  const effortOptions=CHAPTER_EFFORTS.map(effort=>'<option value="'+effort+'" '+
+    (effort===chapterEffort()?"selected":"")+'>'+effortLabels[effort]+'</option>').join("");
   const c=chat();
   if(c && c.projectId!==state.activeProjectId)state.activeProjectId=c.projectId||null;
   const p=project(c?.projectId||state.activeProjectId);
@@ -365,6 +388,10 @@ function renderChat(){
       '<select class="f-select" id="f-chapter-limit" title="Верхняя граница ответа в токенах" '+(busy?"disabled":"")+'>'+chapterOptions+'</select></span>':
       '<label class="f-compact-label" for="f-writing-mode">Тип ответа</label>'+
       '<select class="f-select" id="f-writing-mode" '+(busy?"disabled":"")+'>'+modeOptions+'</select>')+
+      (supportsEffort(state.settings.provider)?'<span id="f-effort-wrap" class="f-effort-choice" '+
+        ((c?.mode||pendingMode||(p?"draft":"dialog"))==="draft"?"":"hidden")+'>'+
+        '<label class="f-compact-label" for="f-chapter-effort">Рассуждения</label>'+
+        '<select class="f-select" id="f-chapter-effort" '+(busy?"disabled":"")+'>'+effortOptions+'</select></span>':"")+
       '</div>'+
       '<label class="f-visually-hidden" for="f-message-input">Задание для модели</label>'+
       '<textarea class="f-textarea" id="f-message-input" rows="2" placeholder="'+(p?"Задание для главы или фрагмент текста…":"Что нужно сделать?")+'" '+(busy?"disabled":"")+'>\n'+esc(draft)+'</textarea>'+
@@ -946,20 +973,43 @@ async function checkBatchChapter(){
   }catch(e){notice("Batch: "+e.message);}
   finally{busy=false;c.updated=stamp();await save();render();}
 }
-async function readApimiraReceipt(message,gateway,idToken){
-  const res=await fetch(gateway+"/receipt?id="+encodeURIComponent(message.apimiraRequestId),{
-    headers:{Authorization:"Bearer "+idToken},cache:"no-store"
-  });
-  const info=await res.json().catch(()=>({}));
-  if(!res.ok||!info.ok)throw Error(info.error||"ApiMira не ответила на проверку списания.");
-  if(!Number.isFinite(info.costUsd))return false;
-  message.apimiraCostUsd=info.costUsd;
-  if(Number.isSafeInteger(info.inputTokens)&&Number.isSafeInteger(info.outputTokens))
-    message.apimiraTokens={input:info.inputTokens,output:info.outputTokens,
-      ...(Number.isSafeInteger(info.cachedTokens)?{cached:info.cachedTokens}:{})};
-  await save();render();
+function rememberExpense(message,c){
+  const row=expenseFromMessage(message,c,project(c.projectId)?.name,c.messages.indexOf(message));
+  if(row)state.expenses=mergeExpenses(state.expenses,[row]);
+}
+function receiptAmounts(provider,info){
+  const values=provider==="apimira"?{USD:info.costUsd}:{RUB:info.costRub,CAPS:info.costCaps};
+  return Object.fromEntries(Object.entries(values).filter(([,value])=>Number.isFinite(value)&&value>=0));
+}
+function applyMessageReceipt(message,provider,info,charges){
+  if(provider==="apimira"){
+    message.apimiraCostUsd=charges.USD;
+    if(Number.isSafeInteger(info.inputTokens)&&Number.isSafeInteger(info.outputTokens))
+      message.apimiraTokens={input:info.inputTokens,output:info.outputTokens,
+        ...(Number.isSafeInteger(info.cachedTokens)?{cached:info.cachedTokens}:{})};
+  }else{
+    if(Number.isFinite(charges.RUB))message.bothubCostRub=charges.RUB;
+    if(Number.isFinite(charges.CAPS))message.bothubCostCaps=charges.CAPS;
+  }
+}
+function fetchReceipt(provider,ids,gateway,token){
+  const [id,also]=ids;
+  const params=new URLSearchParams({id,...(provider==="bothub"&&also&&also!==id?{also}:{})});
+  return readOwnerJson(gateway,"/receipt?"+params,token);
+}
+async function readMessageReceipt(message,c,provider,ids,gateway,token){
+  const snapshot=state;
+  const info=await fetchReceipt(provider,ids,gateway,token);
+  const charges=receiptAmounts(provider,info);
+  if(!Object.keys(charges).length||snapshot!==state)return false;
+  applyMessageReceipt(message,provider,info,charges);
+  rememberExpense(message,c);
+  await save();
+  if(!busy&&!preparingPaid)render();
   return true;
 }
+const readApimiraReceipt=(message,c,gateway,token)=>
+  readMessageReceipt(message,c,"apimira",[message.apimiraRequestId],gateway,token);
 function apiUsageLabel(usage,id,charged){
   const parts=[];
   if(Number.isFinite(usage.prompt_tokens))parts.push(usage.prompt_tokens.toLocaleString("ru-RU")+" токенов на входе");
@@ -977,15 +1027,60 @@ async function readOwnerJson(gateway,path,idToken){
   return data;
 }
 
-async function readBothubReceipt(message,gateway,idToken){
-  const params=new URLSearchParams({id:message.apiRequestId||message.providerRequestId});
-  if(message.apiRequestId&&message.providerRequestId&&message.apiRequestId!==message.providerRequestId)
-    params.set("also",message.providerRequestId);
-  const info=await readOwnerJson(gateway,"/receipt?"+params,idToken);
-  if(!Number.isFinite(info.costRub)&&!Number.isFinite(info.costCaps))return false;
-  if(Number.isFinite(info.costRub))message.bothubCostRub=info.costRub;
-  if(Number.isFinite(info.costCaps))message.bothubCostCaps=info.costCaps;
-  await save();render();return true;
+const readBothubReceipt=(message,c,gateway,token)=>
+  readMessageReceipt(message,c,"bothub",[message.apiRequestId,message.providerRequestId].filter(Boolean),gateway,token);
+
+function expensesFromJobs(jobs){
+  return jobs.map(job=>{
+    const c=chat(job.chatId)||{id:job.chatId,projectId:job.projectId,title:"Фоновая глава"};
+    return expenseFromMessage({role:"assistant",jobId:job.id,apiProvider:job.provider,
+      apiRequestId:job.requestId,apiUsage:job.usage,at:job.createdAt,
+      costRub:job.provider==="aitunnel"?job.usage?.cost_rub:undefined},c,project(c.projectId)?.name||job.projectName,0);
+  }).filter(Boolean);
+}
+async function refreshExpenses(id){
+  if(refreshingExpenses)return;
+  const snapshot=state;
+  refreshingExpenses=true;
+  renderExpenses();
+  try{
+    await master.init();
+    const token=await master.idToken();
+    if(!id){
+      const report=await backgroundSummaries(token).catch(()=>null);
+      if(snapshot!==state)return;
+      if(report)state.expenses=mergeExpenses(state.expenses,expensesFromJobs(report.jobs));
+    }
+    const rows=id?state.expenses.filter(row=>row.id===id):expenseReport(state.expenses,expenseFilters).rows;
+    const pending=rows.filter(canReconcileExpense).sort((a,b)=>String(a.checkedAt||"").localeCompare(String(b.checkedAt||""))).slice(0,8);
+    const results=await Promise.allSettled(pending.map(async row=>({
+      row,info:await fetchReceipt(row.provider,row.requestIds,
+        claudeGateway(state.settings.workerUrl,row.provider),token)
+    })));
+    if(snapshot!==state)return;
+    let checked=0;
+    const updates=[];
+    for(const result of results){
+      if(result.status!=="fulfilled")continue;
+      const {row,info}=result.value;
+      const charges=receiptAmounts(row.provider,info);
+      updates.push({...row,charges,checkedAt:stamp(),inputTokens:info.inputTokens??row.inputTokens,
+        outputTokens:info.outputTokens??row.outputTokens});
+      if(!Object.keys(charges).length)continue;
+      checked++;
+      const c=chat(row.chatId);
+      for(const message of c?.messages||[]){
+        if(message.role==="assistant"&&[message.apiRequestId,message.apimiraRequestId,message.providerRequestId]
+          .some(requestId=>row.requestIds.includes(requestId)))applyMessageReceipt(message,row.provider,info,charges);
+      }
+    }
+    state.expenses=mergeExpenses(state.expenses,updates);
+    await save();
+    const failed=results.filter(result=>result.status==="rejected");
+    notice(checked?"Сверено списаний · "+checked+(failed.length?". Часть чеков пока недоступна.":"."):
+      failed[0]?.reason?.message || (pending.length?"Провайдеры пока не вернули новых чеков.":"История обновлена."));
+  }catch(err){notice("Сверка списаний. "+err.message);}
+  finally{refreshingExpenses=false;if(tab==="expenses")renderExpenses();}
 }
 
 async function saveBackgroundChapter(job, item){
@@ -1015,24 +1110,30 @@ async function saveBackgroundChapter(job, item){
   if(job.requestId)message.apiRequestId=job.requestId;
   if(job.provider==="apimira"&&job.requestId)message.apimiraRequestId=job.requestId;
   c.updated=stamp();state.activeProjectId=c.projectId;state.activeChatId=c.id;tab="chat";
+  rememberExpense(message,c);
   if(!await save())return false;
   render();notice(message.receiving?"Фрагмент сохранён в чате.":"Глава сохранена в чате.");
-  if(message.apimiraRequestId)void master.idToken().then(token=>readApimiraReceipt(message,item.gateway,token)).catch(()=>{});
-  if(job.provider==="bothub"&&job.requestId)void master.idToken().then(token=>readBothubReceipt(message,item.gateway,token)).catch(()=>{});
+  if(message.apimiraRequestId)void master.idToken().then(token=>readApimiraReceipt(message,c,item.gateway,token)).catch(()=>{});
+  if(job.provider==="bothub"&&job.requestId)void master.idToken().then(token=>readBothubReceipt(message,c,item.gateway,token)).catch(()=>{});
   return true;
 }
 
+async function backgroundSummaries(token){
+  const gateways=[...new Set([claudeGateway(state.settings.workerUrl,"bothub"),claudeGateway(state.settings.workerUrl,"apimira")].filter(Boolean))];
+  const responses=await Promise.allSettled(gateways.map(gateway=>readOwnerJson(gateway,"/chapter-jobs",token)
+    .then(data=>data.jobs.map(job=>({...job,gateway})))));
+  const jobs=responses.flatMap(result=>result.status==="fulfilled"?result.value:[])
+    .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  if(!responses.some(r=>r.status==="fulfilled"))throw Error(responses[0]?.reason?.message||"Фоновые главы недоступны.");
+  return {jobs,unavailable:responses.some(r=>r.status==="rejected")};
+}
 function showBackgroundChapters(){
   openChapterJobs({
     list:async()=>{
-      const token=await master.idToken();
-      const gateways=[...new Set([claudeGateway(state.settings.workerUrl,"bothub"),claudeGateway(state.settings.workerUrl,"apimira")].filter(Boolean))];
-      const responses=await Promise.allSettled(gateways.map(gateway=>readOwnerJson(gateway,"/chapter-jobs",token)
-        .then(data=>data.jobs.map(job=>({...job,gateway})))));
-      const jobs=responses.flatMap(result=>result.status==="fulfilled"?result.value:[])
-        .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
-      if(!responses.some(r=>r.status==="fulfilled"))throw Error(responses[0]?.reason?.message||"Фоновые главы недоступны.");
-      return {jobs,unavailable:responses.some(r=>r.status==="rejected")};
+      const report=await backgroundSummaries(await master.idToken());
+      state.expenses=mergeExpenses(state.expenses,expensesFromJobs(report.jobs));
+      if(report.jobs.length)await save();
+      return report;
     },
     read:async item=>(await readOwnerJson(item.gateway,"/chapter-jobs?id="+encodeURIComponent(item.id),await master.idToken())).job,
     save:saveBackgroundChapter
@@ -1056,6 +1157,9 @@ async function submitBackgroundChapter(payload,gateway,idToken,previousDraft,est
     if(!res.ok||!result.ok)throw Error(result.error||"Проверь, появилось ли задание в «Фоновых главах».");
     if(!c.messages.some(m=>m.jobId===id))c.messages.push({...userMessage,jobId:id});
     if(c.title==="Новый чат")c.title=userMessage.content.slice(0,65);
+    const row=expenseFromMessage({role:"assistant",apiProvider:payload.provider,jobId:id,
+      at:result.job?.createdAt||userMessage.at,costEstimate:savedEstimate(estimate)},c,p?.name,0);
+    if(row)state.expenses=mergeExpenses(state.expenses,[row]);
     c.updated=stamp();
     delete state.chapterSubmission;
     clearTimeout(draftSaveTimer);
@@ -1070,6 +1174,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
   if(busy||preparingPaid||!text.trim())return;
   const provider=state.settings.provider, selectedModel=activeBotHubModel();
   const outputLimit=chapterOutputLimit();
+  const effort=chapterEffort();
   const isPaidProvider=paidProviders.includes(provider);
   const endpoint=safeEndpoint(state.settings.endpoint);
   const gateway=claudeGateway(state.settings.workerUrl,provider);
@@ -1086,7 +1191,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
       if(!master.user)throw Error("Один раз войди в Мастерскую в разделе «Книги». Затем книги доступны через MCP без повторных входов.");
       idToken=await master.idToken();
       if(selectedChat!==draftKey() || provider!==state.settings.provider || selectedModel!==activeBotHubModel() ||
-        outputLimit!==chapterOutputLimit())
+        outputLimit!==chapterOutputLimit() || effort!==chapterEffort())
         return notice("Чат, модель или лимит изменились. Проверь параметры и отправь задание снова.");
     }catch(e){return notice("Авторизация: "+e.message);}
     finally{preparingPaid=false;}
@@ -1097,37 +1202,42 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
   const requestMode=lightweight?"dialog":(current.mode||(current.projectId?"draft":"dialog"));
   const bookId=lightweight?null:(project(current.projectId)?.masterBookId||null);
   const priced=provider==="apimira"||provider==="aitunnel";
-  if((background||previewOnly&&!priced)&&requestMode!=="draft")return notice("Выбери режим «Написать сцену».");
+  if(background&&requestMode!=="draft")return notice("Выбери режим «Написать сцену».");
   if((background||previewOnly)&&!isPaidProvider)return;
   const userMessage={role:"user",content:msg,at:stamp()};
   const manifest={materials:[],decisions:[]};
+  const reasoningEffort=requestMode==="draft"&&supportsEffort(provider)?effort:undefined;
   const payload=isPaidProvider?{provider,model:provider==="bothub"?selectedModel:undefined,
     messages:lightweight?[{role:"user",content:msg}]:modelproxyMessages({...current,messages:[...current.messages,userMessage]},manifest),
-    mode:requestMode,outputTokenLimit:requestMode==="draft"?outputLimit:undefined,bookId,sourceRevision}:null;
+    mode:requestMode,outputTokenLimit:requestMode==="draft"?outputLimit:undefined,reasoningEffort,bookId,sourceRevision}:null;
   let estimate;
-  if(isPaidProvider&&(priced||requestMode==="draft")){
+  if(isPaidProvider){
     const isMira=provider==="apimira", label=providerNames[provider];
     preparingPaid=true;
     const selectedChat=draftKey();
     const draftBeforeQuote=$("#f-message-input")?.value;
     const modeBeforeQuote=$("#f-writing-mode")?.value;
-    notice(label+" · считаю стоимость без генерации…");
+    const progress=label+" · считаю стоимость без генерации…";
+    notice(progress);
     try{
       const res=await fetch(gateway+"/quote",{method:"POST",headers:{Authorization:"Bearer "+idToken,
         "Content-Type":"application/json"},body:JSON.stringify(payload)});
       estimate=await res.json().catch(()=>({}));
       if(!res.ok||!estimate.ok)throw Error(estimate.error||"Не удалось получить бесплатную оценку.");
-      if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==chapterOutputLimit()||
+      if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==chapterOutputLimit()||effort!==chapterEffort()||
         draftBeforeQuote!==$("#f-message-input")?.value||modeBeforeQuote!==$("#f-writing-mode")?.value)
         return notice("Задание или настройки изменились. Получи новую оценку.");
-      const summary=chapterPreview(estimate,label,manifest,rub,usd);
-      if(previewOnly){alert(summary);return;}
-      if(!estimate.ready){alert(summary+"\n\nДля генерации не хватает средств или бюджета ключа.");return;}
-      if(!confirm(summary+"\n\n"+(background?"Написать главу в фоне?":"Отправить один платный запрос?")))
-        return notice("Задание осталось в поле ввода.");
+      const recent=state.expenses.filter(row=>row.provider===provider&&row.projectId===(current.projectId||"")&&
+        Object.keys(row.charges||{}).length).sort((a,b)=>String(b.at).localeCompare(String(a.at)))[0];
+      const flash=$("#f-flash");
+      if(flash?.textContent===progress)flash.hidden=true;
+      const confirmed=await openRequestEstimate({estimate,model:activeProviderLabel(),memory:manifest,
+        effort:effortLabels[reasoningEffort],recent,previewOnly,background,
+        toolCalls:!priced&&!lightweight&&requestMode!=="draft"});
+      if(!confirmed)return;
       if(isMira)payload.apimiraQuote={fingerprint:estimate.fingerprint,estimateUsd:estimate.estimateUsd};
       else if(provider==="aitunnel")payload.aitunnelQuote={fingerprint:estimate.fingerprint,estimateRub:estimate.estimateRub};
-      else payload.contextQuote=estimate.fingerprint;
+      else if(requestMode==="draft")payload.contextQuote=estimate.fingerprint;
     }catch(e){return notice(e.message);}
     finally{preparingPaid=false;}
   }
@@ -1146,7 +1256,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
   busy=true;
   const messages=isPaidProvider?payload.messages:buildMessages(c);
   const assistant={role:"assistant",provider:isPaidProvider?(provider==="bothub"?activeClaudeName():"Claude Opus 5.5"):"Qwen",
-    ...(isPaidProvider?{apiProvider:provider}:{}),content:"",at:stamp()};
+    ...(isPaidProvider?{apiProvider:provider,expenseId:uid(),costEstimate:savedEstimate(estimate)}:{}),content:"",at:stamp()};
   await save();render();
   c.messages.push(assistant);
   const el=document.createElement("div");el.className="f-msg assistant";
@@ -1179,6 +1289,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
       throw Error(typeof error?.error==="string"?error.error:"Сервер вернул HTTP "+res.status+".");
     }
     if(!res.body)throw Error("Сервер не вернул поток ответа");
+    if(isPaidProvider)assistant.apiAccepted=true;
     const requestId=res.headers.get("X-Freitag-Request-Id");
     if(requestId){assistant.apiRequestId=requestId;if(provider==="apimira")assistant.apimiraRequestId=requestId;}
     const reader=res.body.getReader(),decoder=new TextDecoder();let pending="",streamFinished=false,finishReason="";
@@ -1245,10 +1356,11 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
     connectOk=false;connectText=isPaidProvider?"Ошибка Claude":"Нет соединения";
   }finally{
     clearTimeout(checkpointTimer);delete assistant.receiving;
+    rememberExpense(assistant,c);
     busy=false;currentController=null;c.updated=stamp();await save();render();
-    if(assistant.apimiraRequestId)void readApimiraReceipt(assistant,gateway,idToken).catch(()=>{});
+    if(assistant.apimiraRequestId)void readApimiraReceipt(assistant,c,gateway,idToken).catch(()=>{});
     if(provider==="bothub"&&(assistant.apiRequestId||assistant.providerRequestId))
-      void readBothubReceipt(assistant,gateway,idToken).catch(()=>{});
+      void readBothubReceipt(assistant,c,gateway,idToken).catch(()=>{});
   }
 }
 function download(name,content,type="application/json;charset=utf-8"){
@@ -1256,13 +1368,13 @@ function download(name,content,type="application/json;charset=utf-8"){
   const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
 function archiveSettings(settings={}){
-  const keys=["provider","model","bothubModel","sceneOutputTokens","globalInstruction","context"];
+  const keys=["provider","model","bothubModel","sceneOutputTokens","chapterEffort","globalInstruction","context"];
   return Object.fromEntries(keys.filter(key=>["string","number"].includes(typeof settings[key]))
     .map(key=>[key,settings[key]]));
 }
 function fullArchiveValue(){
-  const {projects,chats,docs,feedback,drafts,activeProjectId,activeChatId,theme,settings}=state;
-  return {app:"FreitagAI",version:1,data:{projects,chats,docs,feedback,drafts,activeProjectId,activeChatId,theme,
+  const {projects,chats,docs,feedback,expenses,drafts,activeProjectId,activeChatId,theme,settings}=state;
+  return {app:"FreitagAI",version:1,data:{projects,chats,docs,feedback,expenses,drafts,activeProjectId,activeChatId,theme,
     settings:archiveSettings(settings)}};
 }
 async function saveCloudArchive(manual){
@@ -1299,6 +1411,7 @@ async function saveCloudArchive(manual){
   }finally{cloudPending=false;updateCloudControls();}
 }
 async function applyArchive(next,rollback){
+  next.expenses=restoreExpenses(next);
   const app=$("#app");
   app.inert=true;
   clearTimeout(draftSaveTimer);
@@ -1387,6 +1500,8 @@ document.addEventListener("click",async(e)=>{
   const nav=e.target.closest("[data-nav]");if(nav){tab=nav.dataset.nav;if(tab==="projects")projectHomeId=null;render();return;}
   const b=e.target.closest("[data-action]");if(!b)return;
   const a=b.dataset.action,id=b.dataset.id;
+  if(a==="expense-unit"){expenseFilters.unit=id;renderExpenses();return;}
+  if(a==="refresh-expenses"||a==="expense-receipt"){await refreshExpenses(a==="expense-receipt"?id:undefined);return;}
   if(a==="theme"){state.theme=state.theme==="auto"?"light":state.theme==="light"?"dark":"auto";save();render();}
   if(a==="new-chat"){state.activeChatId=null;pendingMode=null;await save();tab="chat";render();$("#f-message-input")?.focus();}
   if(a==="select-chat"){state.activeChatId=id;state.activeProjectId=chat(id)?.projectId||null;pendingMode=null;await save();tab="chat";render();}
@@ -1419,7 +1534,7 @@ document.addEventListener("click",async(e)=>{
     if(!p?.masterBookId||!out)return;
     b.disabled=true;out.textContent="Проверяю Мастерскую…";
     try{
-      const gateway=claudeGateway(state.settings.workerUrl);
+      const gateway=claudeGateway(state.settings.workerUrl,"bothub");
       if(!gateway)throw Error("Не настроен API-шлюз.");
       const options={headers:{Authorization:"Bearer "+await master.idToken()},cache:"no-store"};
       const read=async path=>{
@@ -1437,6 +1552,8 @@ document.addEventListener("click",async(e)=>{
       const last=book.lastChapters.slice(-2).map(ch=>ch.slot+". "+ch.title).join("\n");
       out.textContent="MCP отвечает. Глав в снимке: "+book.chapterCount+
         "\nОбновлено: "+new Date(book.updatedAt).toLocaleString("ru-RU")+
+        (typeof book.outlineAvailable==="boolean" ? book.outlineAvailable ?
+          "\nУтверждённый каркас есть в снимке." : "\nВ снимке пока нет утверждённого каркаса." : "")+
         (last?"\nПоследние главы:\n"+last:"");
     }catch(err){out.textContent=err.message;}
     finally{b.disabled=false;}
@@ -1577,21 +1694,21 @@ document.addEventListener("click",async(e)=>{
   }
   if(a==="open-settings"){tab="settings";render();}
   if(a==="apimira-receipt"){
-    const message=chat()?.messages[Number(b.dataset.i)];
+    const c=chat(),message=c?.messages[Number(b.dataset.i)];
     if(!message?.apimiraRequestId)return;
     b.disabled=true;
     try{
-      const ready=await readApimiraReceipt(message,claudeGateway(state.settings.workerUrl,"apimira"),await master.idToken());
+      const ready=await readApimiraReceipt(message,c,claudeGateway(state.settings.workerUrl,"apimira"),await master.idToken());
       if(!ready)notice("Списание пока не появилось в детализации ApiMira.");
     }catch(err){notice(err.message);}
     finally{b.disabled=false;}
   }
   if(a==="bothub-receipt"){
-    const message=chat()?.messages[Number(b.dataset.i)];
+    const c=chat(),message=c?.messages[Number(b.dataset.i)];
     if(!message?.apiRequestId&&!message?.providerRequestId)return;
     b.disabled=true;
     try{
-      const ready=await readBothubReceipt(message,claudeGateway(state.settings.workerUrl,"bothub"),await master.idToken());
+      const ready=await readBothubReceipt(message,c,claudeGateway(state.settings.workerUrl,"bothub"),await master.idToken());
       if(!ready)notice("В истории BotHub пока нет записи с этим номером запроса.");
     }catch(err){notice(err.message);}
     finally{b.disabled=false;}
@@ -1706,6 +1823,7 @@ document.addEventListener("change",async(e)=>{
     if(!WRITING_MODES[e.target.value])return;
     const c=chat();if(c){c.mode=e.target.value;await save();}else pendingMode=e.target.value;
     const lengthRow=$("#f-chapter-limit-wrap");if(lengthRow)lengthRow.hidden=e.target.value!=="draft";
+    const effortRow=$("#f-effort-wrap");if(effortRow)effortRow.hidden=e.target.value!=="draft";
     return;
   }
   if(e.target.id==="f-chapter-limit"){
@@ -1714,8 +1832,15 @@ document.addEventListener("change",async(e)=>{
     state.settings.sceneOutputTokens=limit;
     await save();return;
   }
-  if(e.target.id==="f-doc-project"){
-    materialsProjectId=e.target.value;render();return;
+  if(e.target.id==="f-chapter-effort"){
+    if(!CHAPTER_EFFORTS.includes(e.target.value))return;
+    state.settings.chapterEffort=e.target.value;
+    await save();return;
+  }
+  if(["f-expense-period","f-expense-project","f-expense-provider"].includes(e.target.id)){
+    const id=e.target.id;
+    expenseFilters[id.slice("f-expense-".length)]=e.target.value;
+    renderExpenses();document.getElementById(id)?.focus({preventScroll:true});return;
   }
   if(e.target.dataset.docContext){
     const doc=state.docs.find(d=>d.id===e.target.dataset.docContext);if(!doc)return;
@@ -1738,11 +1863,18 @@ document.addEventListener("change",async(e)=>{
       if(data.app!=="FreitagAI"||!Array.isArray(data.data?.projects)||!Array.isArray(data.data?.chats)||!Array.isArray(data.data?.docs))throw new Error("Это не архив Freitag AI.");
       if(!confirm("Заменить текущие чаты, проекты и материалы импортированным архивом?"))return;
       state={...blank(),...data.data,feedback:Array.isArray(data.data.feedback)?data.data.feedback:[],settings:{...blank().settings,...data.data.settings}};
+      state.expenses=restoreExpenses(state);
       await save();render();notice("Архив импортирован.");
     }catch(err){notice("Ошибка импорта: "+err.message);}
   }
 });
 document.addEventListener("input",e=>{
+  if(e.target.id==="f-material-search"){
+    const term=e.target.value.trim().toLocaleLowerCase("ru-RU");
+    const items=[...document.querySelectorAll("[data-material-name]")];
+    for(const row of items)row.hidden=!row.dataset.materialName.toLocaleLowerCase("ru-RU").includes(term);
+    $("#f-material-no-matches").hidden=items.some(row=>!row.hidden);
+  }
   if(e.target.id==="f-message-input"){
     resizeChatInput(e.target);
     rememberDraft(e.target.value);
@@ -1774,6 +1906,7 @@ if(workingLink){
   state.settings.bothubModel=["claude-sonnet-5.5","claude-opus-5.5"].includes(state.settings.bothubModel)?
     state.settings.bothubModel:"claude-sonnet-5.5";
   state.feedback=Array.isArray(state.feedback)?state.feedback:[];
+  state.expenses=restoreExpenses(state);
   state.drafts=state.drafts&&typeof state.drafts==="object"&&!Array.isArray(state.drafts)?state.drafts:{};
   render();
   // Reuse an existing Firebase session and silently load the books list.
