@@ -8,7 +8,7 @@ import { ic } from '../../../js/icons.js';
 import * as drive from '../drive.js';
 import './legend.js';
 import { openPrompts } from './notebook.js';
-import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats, nextChapterTab, isChapterTitle, pasteText, squeezeBlank } from '../docedit.js';
+import { findTab, contentToBlocks, blocksText, contentEnd, saveRequests, namedStylesOf, textStats, nextChapterTab, isChapterTitle, pasteText } from '../docedit.js';
 import { alNum, chapterList } from '../wcalc.js';
 import { cleanText, cleanedMsg } from '../../../js/cleantext.js';
 import { editorToolbar, editorFindBar } from '../editor-ui.js';
@@ -38,7 +38,7 @@ function blockStyle(st, named, base) {
   if (eff.a && ALIGN[eff.a]) css.push(`text-align:${ALIGN[eff.a]}`);
   if (eff.fi != null) css.push(`text-indent:${em(eff.fi, base)}`);
   if (eff.il != null) css.push(`margin-left:${em(eff.il, base)}`);
-  if (eff.sa != null) css.push(`margin-top:${em(eff.sa, base)}`);
+  if (eff.sa != null) css.push(`--ed-space-before:${em(eff.sa, base)}`, `margin-top:var(--ed-space-before)`);
   if (eff.sb != null) css.push(`margin-bottom:${em(eff.sb, base)}`);
   if (eff.ls != null) css.push(`line-height:${+(eff.ls / 100 * 1.25).toFixed(2)}`);
   return css.join(';');
@@ -110,14 +110,14 @@ let pullAt = 0;
 async function pullFresh(b) {
   if (!ed || ed.status !== 'ready' || ed.saving || Date.now() - pullAt < 20e3 || !drive.hasFreshToken()) return;
   pullAt = Date.now();
-  const key = ed.key;
+  const current = ed;
   try {
     const doc = await drive.getDoc(b.fileId), tab = findTab(doc, ed.tabId || ed.title);
     const content = tab ? tab.documentTab?.body?.content : (doc.tabs ? null : doc.body?.content);
-    if (!content || !ed || ed.key !== key || ed.saving) return;
+    if (!content || ed !== current || ed.saving) return;
     if (blocksText(contentToBlocks(content)) === ed.baseText) return;
     if (ed.dirty) { ed.conflict = true; const st = document.getElementById('edstat'); if (st) st.textContent = 'глава менялась в Документе — сохраните вручную'; return; }
-    await load(key, b, ed.title);
+    await load(current.key, b, current.title, { doc });
   } catch { /* нет сети — в следующий раз */ }
 }
 if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
@@ -125,26 +125,28 @@ if (typeof document !== 'undefined') document.addEventListener('visibilitychange
   const b = app().ctx().wbooksById[ed.bookId]; if (b) { pullAt = 0; pullFresh(b); }
 });
 // ---------- загрузка главы ----------
-async function load(key, b, title) {
-  ed = { key, bookId: b.id, title, status: 'loading' };
+async function load(key, b, title, { authorize = false, doc = null } = {}) {
+  const current = { key, bookId: b.id, title, status: 'loading' };
+  ed = current;
   try {
-    await drive.ensureToken();
-    const doc = await drive.getDoc(b.fileId);
+    if (authorize) await drive.ensureToken();
+    if (ed !== current) return;
+    doc ||= await drive.getDoc(b.fileId);
+    if (ed !== current) return;
     const tab = findTab(doc, title);
     const content = tab ? tab.documentTab?.body?.content : (doc.tabs ? null : doc.body?.content);
     if (!content) throw new Error(`вкладка «${title}» не найдена в документе`);
     const named = tab ? namedStylesOf(tab) : {};
     const blocks = contentToBlocks(content), base = named.NORMAL_TEXT?.run?.z || 12;
     const draft = ls.get(draftKey(key));
-    // невидимые символы (из чатов и сайтов) — убираем сразу, исправленная глава сама сохранится в Документ
-    let cleaned = 0;
-    const clean0 = blocks.map((p) => ({ ...p, runs: p.runs.map((r) => { const x = cleanText(r.t); cleaned += x.n; return x.n ? { ...r, t: x.text } : r; }) }));
-    // абзацы, разделённые пустыми строками (после вставки), — без пустых строк; исправленная глава тоже сохранится сама
-    const sq = squeezeBlank(clean0), clean = sq.blocks;
+    const text = blocksText(blocks);
     ed = { key, bookId: b.id, title, tabId: tab?.tabProperties?.tabId || '', status: 'ready', named, base, font: named.NORMAL_TEXT?.run?.f || '',
-      html: blocksToHtml(clean, named, base), baseText: blocksText(blocks), dirty: cleaned > 0 || sq.n > 0, cleaned, blanks: sq.n, startChars: textStats(blocks).chars,
-      draft: draft && draft.text !== blocksText(blocks) ? draft : null };
-  } catch (e) { ed = { key, bookId: b.id, title, status: 'error', err: e.message }; }
+      html: blocksToHtml(blocks, named, base), baseText: text, dirty: false, startChars: textStats(blocks).chars,
+      draft: draft && draft.text !== text ? draft : null };
+  } catch (e) {
+    if (ed !== current) return;
+    ed = { ...current, status: 'error', auth: e instanceof drive.NeedAuth, err: e.message };
+  }
   if (app().ui.route.startsWith('/ed/')) app().rerender();
 }
 
@@ -156,8 +158,13 @@ export function editorView(a, bookId, title) {
   else pullFresh(b);
   const eb = a.ui.edBack || '', backTo = eb.startsWith('/legend/') ? 'К Легенде' : eb.startsWith('/mk/') ? 'К маркетингу' : 'К книге';
   const back = `<a class="btn back" href="#" data-act="ed.back" data-id="${b.id}">← ${backTo}</a>`;
-  if (ed.status === 'loading') return { html: `<p>${back}</p><div class="card"><p class="muted" style="margin:0">Загружаю «${esc(title)}» из Google Документа…</p></div>` };
-  if (ed.status === 'error') return { html: `<p>${back}</p><div class="card"><p style="margin-top:0">Не получилось открыть главу: ${esc(ed.err)}</p><button data-act="ed.reload">Попробовать ещё раз</button></div>` };
+  const google = b.fileId ? `<a class="btn" href="https://docs.google.com/document/d/${encodeURIComponent(b.fileId)}/edit" target="_blank" rel="noopener noreferrer">Открыть в Google Документах</a>` : '';
+  if (ed.status === 'loading') return { html: `<p>${back}</p><div class="card"><p class="muted" role="status">Загружаю «${esc(title)}» из Google Документа…</p>${google}</div>` };
+  if (ed.status === 'error') {
+    const detail = ed.auth ? 'Обновите доступ к Google, чтобы открыть главу.' : ed.err;
+    return { html: `<p>${back}</p><div class="card"><p role="alert">Не получилось открыть главу. ${esc(detail)}</p>
+      <div class="row"><button class="primary" data-act="ed.reload">${ed.auth ? 'Подключить Google и открыть главу' : 'Попробовать ещё раз'}</button>${google}</div></div>` };
+  }
   const chs = chapterList(b).map((t) => t.title), i = chs.indexOf(title);
   const prev = i > 0 ? chs[i - 1] : null, next = i >= 0 && i < chs.length - 1 ? chs[i + 1] : null;
   const zoom = pref('zoom', 1), auto = pref('auto', true);
@@ -245,12 +252,6 @@ function wire() {
     document.execCommand('insertText', false, pasteText(x.text)); // абзацы без пустых строк между ними
     if (x.n) toast(cleanedMsg(x.n));
   });
-  if (ed.cleaned || ed.blanks) {
-    const nb = ed.blanks, w = nb % 10 === 1 && nb % 100 !== 11 ? 'пустую строку' : [2, 3, 4].includes(nb % 10) && ![12, 13, 14].includes(nb % 100) ? 'пустые строки' : 'пустых строк';
-    toast(`${[ed.cleaned ? cleanedMsg(ed.cleaned) : '', nb ? `${ed.cleaned ? 'убрала' : 'Убрала'} ${nb} ${w} между абзацами` : ''].filter(Boolean).join(', ')} — сохранится в Документ`);
-    ed.cleaned = 0; ed.blanks = 0;
-    if (pref('auto', true)) { clearTimeout(autoTimer); autoTimer = setTimeout(() => save({ auto: true }), 3000); }
-  }
   // курсор в абзаце → показываем его стиль
   document.addEventListener('selectionchange', syncStyle);
   // кнопки панели не забирают фокус у текста
@@ -277,7 +278,7 @@ function selectedBlocks() {
 // а правки копились только черновиком на устройстве
 let tokenAsk = false;
 const freshToken = (e) => {
-  if (!ed || tokenAsk || !/^\/ed\//.test(app()?.ui?.route || '') || !drive.isConnected() || !drive.tokenSoon()) return;
+  if (ed?.status !== 'ready' || tokenAsk || !/^\/ed\//.test(app()?.ui?.route || '') || !drive.isConnected() || !drive.tokenSoon()) return;
   if (e.target.closest?.('[data-act="ed.save"]')) return; // «Сохранить в Документ» берёт доступ сама
   tokenAsk = true;
   drive.connect().then(() => { if (ed?.dirty) save({ auto: true }); }).catch(() => {}).finally(() => { tokenAsk = false; });
@@ -554,7 +555,13 @@ acts['ch.add'] = async (d) => {
 };
 acts['ed.goto'] = (d) => { clearFind(); app().go(`/ed/${ed.bookId}/${encodeURIComponent(d.t)}`); };
 acts['ed.back'] = (d) => { const to = app().ui.edBack; app().ui.edBack = ''; app().go(to || '/book/' + d.id); }; // из Легенды или Маркетинга — обратно туда
-acts['ed.reload'] = () => { const k = ed?.key; ed = null; if (k) app().rerender(); };
+acts['ed.reload'] = () => {
+  const a = app(), b = ed && a.ctx().wbooksById[ed.bookId];
+  if (!b || ed.status !== 'error') return false;
+  load(ed.key, b, ed.title, { authorize: true });
+  a.rerender();
+  return false;
+};
 acts['ed.useDraft'] = () => { ed.html = ed.draft.html; ed.draft = null; ed.dirty = true; app().rerender(); };
 acts['ed.dropDraft'] = () => { ls.del(draftKey(ed.key)); ed.draft = null; app().rerender(); };
 import { changes } from '../../../js/ui.js';

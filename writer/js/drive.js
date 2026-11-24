@@ -37,7 +37,15 @@ export function preload() {
   return (gis ||= new Promise((res, rej) => {
     const s = document.createElement('script');
     s.src = 'https://accounts.google.com/gsi/client';
-    s.onload = res; s.onerror = () => { gis = null; rej(new Error('Не загрузился вход Google. Проверьте интернет.')); };
+    const fail = () => {
+      clearTimeout(timer);
+      s.remove();
+      gis = null;
+      rej(new Error('Не загрузился вход Google. Проверьте интернет и попробуйте ещё раз.'));
+    };
+    const timer = setTimeout(fail, 12000);
+    s.onload = () => { clearTimeout(timer); res(); };
+    s.onerror = fail;
     document.head.appendChild(s);
   }));
 }
@@ -54,21 +62,32 @@ export async function connect() {
   if (isLocalDev) { ls.set('gdrive.mock', '1'); return; }
   if (!window.google?.accounts?.oauth2) await preload();
   await new Promise((res, rej) => {
-    const client = window.google.accounts.oauth2.initTokenClient({
-      client_id: googleClientId,
-      scope: SCOPE,
-      callback: (r) => {
-        if (r.error) { rej(new Error(r.error_description || r.error)); return; }
-        token = { access_token: r.access_token, exp: Date.now() + (Number(r.expires_in) - 60) * 1000 };
-        ls.set('gdrive.token', JSON.stringify(token)); ls.set('gdrive.consented', '1');
-        // запоминаем почту Google — в следующий раз окно не спрашивает, какой аккаунт
-        if (!ls.get('gdrive.email')) fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', { headers: { Authorization: 'Bearer ' + r.access_token } }).then((x) => x.json()).then((j) => { if (j?.user?.emailAddress) ls.set('gdrive.email', j.user.emailAddress); }).catch(() => {});
-        res();
-      },
-      error_callback: (e) => rej(new Error(e?.type === 'popup_closed' ? 'Окно Google закрыто — нажмите ещё раз.' : (e?.message || 'Google не дал доступ'))),
-    });
-    const hint = ls.get('gdrive.email');
-    client.requestAccessToken({ prompt: ls.get('gdrive.consented') ? '' : 'consent', ...(hint ? { login_hint: hint, hint } : {}) });
+    let finished = false;
+    const finish = (error) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      if (error) rej(error); else res();
+    };
+    const timer = setTimeout(() => finish(new Error('Google не завершил вход. Закройте окно входа и попробуйте ещё раз.')), 60000);
+    try {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: googleClientId,
+        scope: SCOPE,
+        callback: (r) => {
+          if (finished) return;
+          if (r.error) { finish(new Error(r.error_description || r.error)); return; }
+          token = { access_token: r.access_token, exp: Date.now() + (Number(r.expires_in) - 60) * 1000 };
+          ls.set('gdrive.token', JSON.stringify(token)); ls.set('gdrive.consented', '1');
+          // запоминаем почту Google — в следующий раз окно не спрашивает, какой аккаунт
+          if (!ls.get('gdrive.email')) fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', { headers: { Authorization: 'Bearer ' + r.access_token } }).then((x) => x.json()).then((j) => { if (j?.user?.emailAddress) ls.set('gdrive.email', j.user.emailAddress); }).catch(() => {});
+          finish();
+        },
+        error_callback: (e) => finish(new Error(e?.type === 'popup_closed' ? 'Окно Google закрыто — нажмите ещё раз.' : (e?.message || 'Google не дал доступ'))),
+      });
+      const hint = ls.get('gdrive.email');
+      client.requestAccessToken({ prompt: ls.get('gdrive.consented') ? '' : 'consent', ...(hint ? { login_hint: hint, hint } : {}) });
+    } catch (e) { finish(e); }
   });
 }
 export function disconnect() {
@@ -293,9 +312,19 @@ export async function fileBlob(file) {
 }
 
 // ---------- редактор главы: прочитать документ со вкладками и записать вкладку ----------
-export async function getDoc(id) {
+export async function getDoc(id, { timeout = 20000 } = {}) {
   if (isLocalDev) return mock.doc(id);
-  return (await gfetch(`https://docs.googleapis.com/v1/documents/${id}?includeTabsContent=true`)).json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await gfetch(`https://docs.googleapis.com/v1/documents/${encodeURIComponent(id)}?includeTabsContent=true`, { signal: controller.signal });
+    return await response.json();
+  } catch (e) {
+    if (controller.signal.aborted) throw new Error('Google Документы не ответили вовремя.');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 export async function docUpdate(id, requests) {
   if (isLocalDev) return mock.update(id, requests);
