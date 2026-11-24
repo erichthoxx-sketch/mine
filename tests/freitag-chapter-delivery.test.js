@@ -83,7 +83,7 @@ test("AITUNNEL quotes the exact payload and produces one private stream only aft
     }
     assert.equal(path,"/v1/chat/completions");
     paid++;
-    assert.equal(init.redirect,"error");
+    assert.equal(init.redirect,"manual");
     assert.equal(init.headers["X-AITunnel-Log"],"off");
     const body=JSON.parse(init.body);
     assert.deepEqual(body.messages,input.messages);
@@ -163,6 +163,7 @@ test("ApiMira quotes the current book and authentic price before one bounded cha
   const sent=[];
   const calls=mockNetwork(t,(path,init)=>{
     assert.equal(init.headers.Authorization,"Bearer fixture-a");
+    assert.equal(init.redirect,"manual");
     if(path==="/v1/account/pricing")return Response.json({data:[{id:"anthropic/claude-opus-5.5",
       input_usd_per_1m_tokens:1.25,output_usd_per_1m_tokens:price,context_window:266000}]});
     if(path==="/v1/account/balance")return Response.json({balance_usd:1.20});
@@ -177,6 +178,9 @@ test("ApiMira quotes the current book and authentic price before one bounded cha
     sent.push(JSON.parse(init.body));
     return new Response("data: [DONE]\n\n",{headers:{"Content-Type":"text/event-stream","X-Request-Id":"fixture-charge"}});
   });
+  const preflight=await request("preflight?provider=apimira",undefined,undefined,bindings);
+  assert.equal(preflight.status,200);
+  assert.equal((await preflight.json()).balanceUsd,1.20);
   const quote=(await (await request("quote",input,undefined,bindings)).json());
   assert.equal(quote.ready,true);
   assert.equal(quote.estimateUsd,.20);
@@ -200,6 +204,19 @@ test("ApiMira quotes the current book and authentic price before one bounded cha
   assert.equal(sent[0].max_tokens,32000);
   assert.equal(sent[0].tools,undefined);
   assert.ok(calls.filter(path=>path==="/v1/chat/completions").length===1);
+});
+
+test("ApiMira rejects upstream redirects without forwarding its key",async t=>{
+  const calls=mockNetwork(t,(path,init)=>{
+    assert.equal(init.redirect,"manual");
+    if(path==="/v1/account/balance")return Response.json({balance_usd:1.20});
+    assert.equal(path,"/v1/account/pricing");
+    return new Response(null,{status:307,headers:{Location:"https://elsewhere.example/"}});
+  });
+  const response=await request("preflight?provider=apimira",undefined,undefined,{FREITAG_PROVIDER_GATEWAY:"1"});
+  assert.equal(response.status,502);
+  assert.equal((await response.json()).upstreamStatus,307);
+  assert.deepEqual(calls,["/v1/account/pricing","/v1/account/balance"]);
 });
 
 test("chapter previews are free and the confirmed request is handed to the private queue once",async t=>{

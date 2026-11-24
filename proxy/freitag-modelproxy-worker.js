@@ -656,7 +656,7 @@ const aitunnelHeaders = (env) => ({ Authorization: "Bearer " + env.AITUNNEL_API_
   "Content-Type":"application/json", "X-AITunnel-Log":"off" });
 async function aitunnelRead(env, path, signal, init = {}) {
   return fetch(path.startsWith("https://") ? path : AITUNNEL_API + path, {
-    ...init, headers:path.startsWith("https://") ? {} : aitunnelHeaders(env), redirect:"error",
+    ...init, headers:path.startsWith("https://") ? {} : aitunnelHeaders(env), redirect:"manual",
     signal:AbortSignal.any([signal, AbortSignal.timeout(15000)])
   });
 }
@@ -702,7 +702,7 @@ function apimiraRead(req,env,path,body){
   return fetch(APIMIRA_API+path,{
     headers:{Authorization:"Bearer "+env.APIMIRA_API_KEY,
       ...(body?{"Content-Type":"application/json","anthropic-version":"2023-06-01"}:{})},
-    ...(body?{method:"POST",body:JSON.stringify(body)}:{}),redirect:"error",
+    ...(body?{method:"POST",body:JSON.stringify(body)}:{}),redirect:"manual",
     signal:AbortSignal.any([req.signal,AbortSignal.timeout(15000)])
   });
 }
@@ -977,7 +977,7 @@ async function generate(req, env, estimateOnly = false, background = false) {
 
 async function openProviderStream(req,env,{providerId,bothubChapter,body}){
   const provider=PROVIDERS[providerId];
-  const aitunnel=providerId==="aitunnel",apimira=providerId==="apimira"&&snapshotGateway(env);
+  const aitunnel=providerId==="aitunnel";
   if(!provider || !env[provider.secret])return fail(req,503,"Ключ выбранного провайдера недоступен.");
   let upstream;
   try {
@@ -986,7 +986,7 @@ async function openProviderStream(req,env,{providerId,bothubChapter,body}){
       headers: { ...(aitunnel?aitunnelHeaders(env):{Authorization:"Bearer "+env[provider.secret],
         "Content-Type":"application/json"}), Accept:"text/event-stream",
         ...(bothubChapter?{"anthropic-version":"2023-06-01"}:{}) },
-      ...(aitunnel||apimira?{redirect:"error"}:bothubChapter?{redirect:"manual"}:{}),
+      ...(aitunnel||providerId==="apimira"||bothubChapter?{redirect:"manual"}:{}),
       // Глава приходит постепенно и может писаться дольше пяти минут.
       body: JSON.stringify(body), signal:req.signal
     });
