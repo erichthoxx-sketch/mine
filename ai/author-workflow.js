@@ -63,6 +63,7 @@ export function openRequestEstimate({estimate, model, memory, effort, recent, pr
     if (source.references?.length) details.append(node("p", "Отрывки · " + source.references.map(ref =>
       "глава " + ref.chapter + (ref.scene ? ", сцена " + ref.scene : "")).join(" · "), "f-muted"));
   }
+  for (const item of memory.sources || []) details.append(node("p",[item.label,item.period,date(item.updatedAt)].filter(Boolean).join(" · ")));
   if (memory.materials.length) details.append(node("p", "Материалы · " + memory.materials.join(", ")));
   if (memory.decisions.length) details.append(node("p", "Память · " + memory.decisions.join(", ")));
   if (details.childElementCount) content.append(details);

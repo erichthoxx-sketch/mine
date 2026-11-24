@@ -1,3 +1,4 @@
+import {projectAccess} from "./freitag-project-access.js";
 const ACTIVE = "active";
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const GENERATION_MS = 13 * 60 * 1000;
@@ -21,7 +22,8 @@ async function receiveChapter(stream, fragment) {
     if (!data || data === "[DONE]") { done ||= data === "[DONE]"; return; }
     const event = JSON.parse(data);
     if (event.error) throw Error("Провайдер прервал выдачу текста.");
-    if (typeof event.request_id === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(event.request_id)) requestId = event.request_id;
+    const eventId=event.request_id||event.id;
+    if (typeof eventId === "string" && /^[a-z0-9_-]{1,100}$/i.test(eventId)) requestId = eventId;
     const choice = event.choices?.[0];
     if (choice?.finish_reason) finishReason = choice.finish_reason;
     if (event.usage) {
@@ -57,6 +59,7 @@ export function chapterJobsClass(runChapter) {
 
     async fetch(req) {
       const url = new URL(req.url);
+      if (url.pathname==="/owner" || url.pathname==="/mcp") return projectAccess(req,this.store,this.env);
       if (req.method === "POST") {
         const {job, prepared} = await req.json();
         return this.state.blockConcurrencyWhile(async () => {
@@ -138,7 +141,7 @@ export function chapterJobsClass(runChapter) {
           }
         });
         job.finishReason = result.finishReason;
-        if(!job.requestId && result.requestId)job.requestId=result.requestId;
+        if(result.requestId){job.providerRequestId=result.requestId;job.requestId ||= result.requestId;}
         costReceipt = result.usage;
         job.status = job.text && result.done && (!result.finishReason || result.finishReason === "stop") ? "completed" : "incomplete";
         if (job.status === "incomplete") job.error = job.text ? "Выдача прервалась или достигла лимита ответа." : "Модель не вернула текст.";

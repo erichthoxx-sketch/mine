@@ -483,3 +483,57 @@ test("a Batch greeting cannot start even the upload",async t=>{
   assert.equal((await request("batch-start",{...chapter,messages:[{role:"user",content:"Привет!"}]})).status,400);
   assert.deepEqual(calls,[]);
 });
+
+test("one free source read survives changing provider and supplies the exact quoted context to the paid adapter",async t=>{
+  const bindings={BOOKS:{get:async key=>{assert.equal(key,"section:income");return {updatedAt:"2026-11-24",
+    data:{sales:[{date:"2026-11-21",qty:2,royalty:61.2,book:"Тест"}]}};}}};
+  const paid=[];
+  mockNetwork(t,(path,init)=>{
+    if(path==="/v1/account/pricing")return Response.json({data:[{id:"anthropic/claude-opus-5.5",input_usd_per_1m_tokens:1.15,output_usd_per_1m_tokens:4.8}]});
+    if(path==="/v1/account/balance")return Response.json({balance_usd:2});
+    if(path==="/v1/messages/count_tokens")return Response.json({input_tokens:90});
+    if(path==="/v1/chat/completions"){
+      const body=JSON.parse(init.body);paid.push(body.messages);
+      assert.equal(body.tools,undefined);
+      return new Response('data: [DONE]\n\n',{headers:{"Content-Type":"text/event-stream"}});
+    }
+    assert.fail(path);
+  });
+  const source=await request("context",{task:"Выручка за 21 ноября?",mode:"dialog"},undefined,bindings);
+  assert.equal(source.status,200);
+  const sources=(await source.json()).sources;
+  assert.equal(JSON.parse(sources[0].text).royalty,61.2);
+  const messages=[{role:"system",content:sources[0].text},{role:"user",content:"Выручка за 21 ноября?"}];
+  const input={mode:"dialog",bookId:"one",messages,freitagContext:true};
+  for(const p of ["bothub","apimira"]){
+    const config=p==="apimira"?{...bindings,FREITAG_PROVIDER_GATEWAY:"1"}:bindings;
+    const body={...input,provider:p};
+    const quote=await request("quote",body,undefined,config);
+    assert.equal(quote.status,200);
+    const estimate=await quote.json();
+    const confirm=p==="bothub"?{contextQuote:estimate.fingerprint}:{apimiraQuote:{fingerprint:estimate.fingerprint,estimateUsd:estimate.estimateUsd}};
+    assert.equal((await request("chat",{...body,...confirm},undefined,config)).status,200);
+  }
+  assert.deepEqual(paid,[messages,messages]);
+});
+
+test("the free ModelProxy check reads only the personal balance and the available model",async t=>{
+  const calls=mockNetwork(t,path=>path==="/v1/models"?Response.json({data:[{id:"claude-opus-5-5"}]}):
+    path==="/v1/available_balance"?Response.json({currency:"USD",available_balance:"0.000000"}):assert.fail(path));
+  const res=await request("preflight?provider=modelproxy",undefined,undefined,{MODELPROXY_API_KEY:"fixture-m"});
+  assert.equal(res.status,200);assert.equal((await res.json()).balanceUsd,0);
+  assert.deepEqual(calls.sort(),["/v1/available_balance","/v1/models"]);
+});
+
+test("the automatic ledger returns billing metadata only and respects provider pagination",async t=>{
+  mockNetwork(t,path=>path==="/v1/account/usage"?Response.json({has_more:true,data:[
+    {id:"txn",model:"anthropic/claude-opus-5.5",created_at:"2026-11-24",cost_usd:"0.609061",tokens_in:22,tokens_out:11,prompt:"private"},
+    {id:"other",model:"not-ours",cost_usd:80}]}):Response.json({pages:2,data:[
+    {id:"api",externalId:"req",developerKeyId:"private-key-id",type:"WRITE_OFF",status:"SUCCEDED",amount:-120,currency:"BOTHUB_TOKEN",meta:{secret:"never"}},
+    {id:"personal",type:"WRITE_OFF",status:"SUCCEDED",amount:-20,currency:"RUB"}]}));
+  const a=await (await request("billing-history?page=0",undefined,undefined,{FREITAG_PROVIDER_GATEWAY:"1"})).json();
+  assert.equal(a.nextPage,1);assert.equal(a.rows.length,1);assert.equal(a.rows[0].charges.USD,.609061);
+  const b=await (await request("billing-history?page=1")).json();
+  assert.equal(b.nextPage,null);assert.equal(b.rows.length,1);assert.deepEqual(b.rows[0].requestIds,["api","req"]);
+  assert.doesNotMatch(JSON.stringify([a,b]),/private|never|personal/);
+});

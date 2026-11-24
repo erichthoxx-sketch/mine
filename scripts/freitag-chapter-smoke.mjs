@@ -30,7 +30,7 @@ try {
     const origin=working?workingOrigin:"https://fixture.freitag-ai-test.pages.dev";
     const page=await browser.newPage({viewport:{width,height:900},serviceWorkers:"block"});
     const errors=[];
-    const backgroundJobs=[];
+    const backgroundJobs=[];let handoffInfo={ok:true,enabled:false};
     page.on("pageerror",e=>errors.push(e.message));
     page.on("console",m=>{if(m.type()==="error")errors.push(m.text());});
     const fixtureRoute=async route=>{
@@ -51,6 +51,27 @@ try {
         if(route.request().method()==="OPTIONS")return route.fulfill({status:204,
           headers:{...cors,"Access-Control-Allow-Methods":"GET, POST, OPTIONS"}});
         const endpoint=providerRoute?u.pathname:u.pathname.replace("/api/freitag","");
+        if(endpoint==="/billing-history")return route.fulfill({json:{ok:true,rows:[],nextPage:null},headers:cors});
+        if(endpoint==="/project-access"){
+          assert.equal(route.request().headers().authorization,"Bearer test");
+          if(route.request().method()==="POST"){
+            const body=route.request().postDataJSON();
+            if(body.action==="revoke")handoffInfo={ok:true,enabled:false};
+            else{
+              assert.ok(body.packet.documents.some(d=>d.id==="project"));
+              assert.ok(body.packet.documents.every(d=>!d.title.includes("Другой проект")));
+              handoffInfo={ok:true,enabled:true,version:crypto.randomUUID(),updatedAt:new Date().toISOString()};
+              return route.fulfill({json:{...handoffInfo,...(body.action==="grant"?{token:"fixture-key"}:{})},headers:cors});
+            }
+          }
+          return route.fulfill({json:handoffInfo,headers:cors});
+        }
+        if(endpoint==="/context"){
+          assert.equal(u.origin,origin);
+          assert.equal(route.request().headers().authorization,"Bearer test");
+          return route.fulfill({json:{ok:true,sources:[{kind:"income",label:"Доходы",period:"2026-11-23 — 2026-11-23",
+            updatedAt:"2026-11-24T06:00:00Z",text:"{\"royalty\":321}"}]},headers:cors});
+        }
         if(endpoint==="/story-map")return route.fulfill({json:{ok:true,updatedAt:"2026-11-24T06:00:00Z",
           chapters:[{chapter:1,title:"Пролог"},{chapter:2,title:"Глава 2"}],
           ...(u.searchParams.has("q")?{matches:[{chapter:1,scene:2,offset:120,snippet:"Синяя папка лежит в столе."}]}:{})},headers:cors});
@@ -164,6 +185,14 @@ try {
     await nav("projects");
     await page.locator('[data-action="master-import"]').click();
     await page.locator("#f-project-instruction").fill(project);
+    await page.getByRole("button",{name:"Передать проект",exact:true}).click();
+    const transfer=page.getByRole("dialog",{name:"Передать проект"});
+    await transfer.getByRole("button",{name:"Включить доступ на чтение"}).click();
+    await transfer.locator("input").last().waitFor();
+    assert.equal(await transfer.locator("input").last().inputValue(),"Bearer fixture-key");
+    await transfer.getByRole("button",{name:"Отозвать доступ"}).click();
+    await transfer.getByRole("button",{name:"Включить доступ на чтение"}).waitFor();
+    await transfer.getByRole("button",{name:"Закрыть"}).click();
     await page.getByRole("button",{name:"Проверить источник бесплатно"}).click();
     await page.getByRole("status").filter({hasText:"Глав в снимке: 15"}).waitFor();
     assert.match(await page.locator("#f-book-check").innerText(),/Утверждённый каркас есть в снимке[\s\S]*Тестовая глава 15/);
@@ -425,6 +454,15 @@ try {
       await page.getByRole("button",{name:"Глава 1 · сцена 2",exact:true}).waitFor();
       await page.locator('[data-action="new-project-chat"]').click();
       await page.locator("#f-quick-model").selectOption("bothub:claude-opus-5.5");
+      for(const model of ["apimira","bothub:claude-opus-5.5"]){
+        await page.locator("#f-quick-model").selectOption(model);
+        await page.locator("#f-message-input").fill("Сколько было продаж за вчера?");
+        if(!await page.locator("#f-chat-tools").evaluate(e=>e.open))await page.locator("#f-chat-tools summary").click();
+        await page.getByRole("button",{name:"Контекст и цена",exact:true}).click();
+        await quote.getByText(/Доходы · 2026-11-23/).waitFor();
+        await quote.getByRole("button",{name:"Закрыть",exact:true}).click();
+        await page.locator("#f-chat-tools summary").click();
+      }
       await page.locator("#f-message-input").fill("Продолжи сцену с синей папкой.");
       await page.locator("#f-chat-tools summary").click();
       await page.getByRole("button",{name:"Контекст и цена",exact:true}).click();
@@ -449,7 +487,7 @@ try {
       console.log("Карта, бесплатный просмотр контекста и восстановление главы с другого устройства проверены");
     }else{
       await nav("expenses");
-      await page.getByRole("button",{name:"Сверить списания",exact:true}).click();
+      // Entering the page is sufficient for automatic reconciliation.
       await page.getByRole("button",{name:/Доллары.*0,013/}).waitFor();
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
       if(screenshots)await page.screenshot({path:screenshots+"/expenses-"+width+".png",fullPage:true});

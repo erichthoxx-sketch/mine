@@ -46,6 +46,7 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
     '<section class="f-project-recent f-project-memory"><h2>Память проекта</h2>'+
       '<p class="f-muted">Утвержденные решения и образцы стиля доступны в новых чатах этой книги. Freitag подбирает выписки из старых диалогов и материалов по заданию.</p>'+
       '<button type="button" class="f-btn" data-action="add-project-memory">Закрепить решение</button>'+
+      '<button type="button" class="f-btn" data-action="project-handoff" data-id="'+esc(p.id)+'">Передать проект</button>'+
       (notes.length?'<ul class="f-memory-list">'+notes.map(note=>
         '<li><strong>'+esc(note.title)+'</strong>'+(Number.isSafeInteger(note.anchor?.chapter)?
           '<button class="f-inline-btn" type="button" data-action="open-story-map" data-id="'+esc(p.id)+'" data-chapter="'+note.anchor.chapter+'">Глава '+

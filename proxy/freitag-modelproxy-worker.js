@@ -1,6 +1,7 @@
 // Freitag AI → ModelProxy / BotHub Claude Opus 5.5. Test gateway; never edit the existing Books MCP Worker.
 // Only an authenticated Firebase owner can generate; all paid-provider secrets stay on Cloudflare.
 import { CHAPTER_LIMITS, CHAPTER_EFFORTS } from "../ai/chapter-limits.js";
+import { collectSources } from "./freitag-sources.js";
 import { readBookTool } from "./books-mcp-worker.js";
 import { findStoryPassages, storyMap } from "./freitag-story-map.js";
 import { chapterJobsClass } from "./freitag-chapter-jobs.js";
@@ -757,43 +758,61 @@ async function apimiraQuote(req,env,body,confirmation,source){
 }
 
 const validRequestId = id => typeof id==="string" && /^[A-Za-z0-9_-]{1,100}$/.test(id);
-async function apimiraReceipt(req,env){
-  if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца в Мастерскую.");
-  if(!env.APIMIRA_API_KEY)return fail(req,503,"В Cloudflare нужен ключ ApiMira.");
-  const id=new URL(req.url).searchParams.get("id");
-  if(!validRequestId(id))return fail(req,400,"Неверный номер запроса ApiMira.");
-  try{
-    const res=await apimiraRead(req,env,"/account/usage?days=90&limit=100");
-    if(!res.ok)return providerFailure(req,res,"ApiMira · детализация");
-    const {data}=await res.json();
-    const row=Array.isArray(data)&&data.find(item=>item.id===id&&item.model===APIMIRA_MODEL);
-    if(!money(row?.cost_usd))return json(req,200,{ok:true,pending:true});
-    return json(req,200,{ok:true,costUsd:row.cost_usd,
-      inputTokens:row.tokens_in,outputTokens:row.tokens_out,cachedTokens:row.cached_tokens_in});
-  }catch{return fail(req,502,"ApiMira не ответила на проверку списания.");}
+const billingAmount = value => (typeof value==="number" || (typeof value==="string" && /^-?\d+(?:\.\d+)?$/.test(value))) &&
+  Number.isFinite(Number(value)) ? Math.abs(Number(value)) : undefined;
+
+async function billingPage(req,env,provider,page) {
+  const mira=provider==="apimira";
+  const res=mira ? await apimiraRead(req,env,"/account/usage?days=90&limit=100&page="+page) :
+    await fetch("https://bothub.chat/api/v2/transaction/list?page="+(page+1)+"&withDeveloperKey=true",
+      {headers:{Authorization:"Bearer "+env.BOTHUB_API_KEY,Accept:"application/json"},redirect:"manual",
+      signal:AbortSignal.any([req.signal,AbortSignal.timeout(12000)])});
+  if(!res.ok)return {error:await providerFailure(req,res,PROVIDERS[provider].name+" · списания")};
+  const response=await res.json();
+  if(!Array.isArray(response.data))throw Error("billing format");
+  const rows=[];
+  for(const item of response.data){
+    if(!validRequestId(item?.id))continue;
+    const requestIds=[item.id,item.externalId,item.meta?.requestId,item.meta?.messageId].filter(validRequestId);
+    const charges={};
+    if(mira){
+      if(item.model!==APIMIRA_MODEL || item.cost_usd==null)continue;
+      const usd=billingAmount(item.cost_usd);
+      if(usd!==undefined)charges.USD=usd;
+    }else{
+      if(item.type!=="WRITE_OFF" || !["SUCCEDED","SUCCEEDED"].includes(item.status))continue;
+      const rub=billingAmount(item.currency==="RUB"?item.amount:item.rubAmount);
+      const caps=billingAmount(item.currency==="BOTHUB_TOKEN"?item.amount:item.meta?.billing?.totalCaps);
+      if(rub!==undefined)charges.RUB=rub;
+      if(caps!==undefined)charges.CAPS=caps;
+    }
+    if(!Object.keys(charges).length)continue;
+    const at=item.created_at||item.createdAt;
+    rows.push({id:"transaction:"+item.id,provider,requestIds:[...new Set(requestIds)],charges,
+      at:Number.isFinite(Date.parse(at))?at:undefined,model:mira?APIMIRA_MODEL:undefined,
+      inputTokens:mira?item.tokens_in:undefined,outputTokens:mira?item.tokens_out:undefined,
+      cachedTokens:mira?item.cached_tokens_in:undefined,api:!!(mira||item.developerKeyId)});
+  }
+  return {rows,more:mira?response.has_more===true:page+1<response.pages};
 }
 
-async function bothubReceipt(req,env){
-  if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца в Мастерскую.");
-  if(!env.BOTHUB_API_KEY)return fail(req,503,"Ключ BotHub недоступен.");
+async function billingRead(req,env,history=false) {
+  if(!await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца.");
+  const provider=snapshotGateway(env)?"apimira":"bothub";
+  if(!env[PROVIDERS[provider].secret])return fail(req,503,"Ключ "+PROVIDERS[provider].name+" недоступен.");
   const params=new URL(req.url).searchParams;
   const ids=[params.get("id"),params.get("also")].filter(validRequestId);
-  if(!ids.length)return fail(req,400,"Неверный номер запроса BotHub.");
-  try{
-    const res=await fetch("https://bothub.chat/api/v2/transaction/list?page=1&withDeveloperKey=true",{
-      headers:{Authorization:"Bearer "+env.BOTHUB_API_KEY,Accept:"application/json"},redirect:"manual",
-      signal:AbortSignal.any([req.signal,AbortSignal.timeout(12000)])
-    });
-    if(!res.ok)return providerFailure(req,res,"BotHub · детализация");
-    const {data}=await res.json();
-    const row=Array.isArray(data)&&data.find(item=>item.type==="WRITE_OFF"&&
-      ["SUCCEDED","SUCCEEDED"].includes(item.status)&&(ids.includes(item.id)||ids.includes(item.externalId)));
-    if(!row)return json(req,200,{ok:true,pending:true});
-    const rub=row.currency==="RUB"?row.amount:row.rubAmount||null;
-    const caps=row.currency==="BOTHUB_TOKEN"?row.amount:row.meta?.billing?.totalCaps;
-    return json(req,200,{ok:true,...(Number.isFinite(rub)?{costRub:Math.abs(rub)}:{}),
-      ...(Number.isFinite(caps)?{costCaps:Math.abs(caps)}:{})});
-  }catch{return fail(req,502,"BotHub не ответил на проверку списания.");}
+  const page=Number(params.get("page")||0);
+  if(history && (!Number.isSafeInteger(page)||page<0||page>9999))return fail(req,400,"Неверная страница.");
+  if(!history && !ids.length)return fail(req,400,"Неверный номер операции.");
+  try {
+    const result=await billingPage(req,env,provider,history?page:0);
+    if(result.error)return result.error;
+    if(history)return json(req,200,{ok:true,rows:result.rows.filter(row=>row.api).map(({api,...row})=>row),nextPage:result.more?page+1:null});
+    const row=result.rows.find(entry=>entry.requestIds.some(i=>ids.includes(i)));
+    return json(req,200,row?{ok:true,costUsd:row.charges.USD,costRub:row.charges.RUB,costCaps:row.charges.CAPS,
+      inputTokens:row.inputTokens,outputTokens:row.outputTokens,cachedTokens:row.cachedTokens}:{ok:true,pending:true});
+  } catch {return fail(req,502,PROVIDERS[provider].name+" не ответил на проверку списания.");}
 }
 
 // Public reference rates, checked 2026-11-24. These cannot predict Caps charged by a personal plan.
@@ -859,6 +878,51 @@ async function readStoryMap(req,env){
   return json(req,200,{ok:true, updatedAt:snapshot.updatedAt, ...storyMap(snapshot,{chapter,query})});
 }
 
+async function handleProjectAccess(req,env,owner) {
+  const url=new URL(req.url);
+  const id=url.searchParams.get("project");
+  if(owner && !await verifyOwner(req,env))return fail(req,401,"Требуется вход владельца.");
+  if(!owner && !/^Bearer frg_[a-f0-9]{64}$/.test(req.headers.get("Authorization")||""))
+    return fail(req,401,"Требуется ключ этого проекта.");
+  if(!resourceId(id))return fail(req,400,"Нужен идентификатор проекта.");
+  if(!env.CHAPTER_JOBS)return fail(req,503,"Хранилище проекта недоступно.");
+  if(!["POST","GET"].includes(req.method))return fail(req,405,"Метод не поддерживается.");
+  const limit=owner?16*1024*1024:16000;
+  let body;
+  if(req.method==="POST"){
+    if(Number(req.headers.get("content-length"))>limit)return fail(req,413,"Пакет проекта слишком велик.");
+    const parts=[];let total=0;
+    const reader=req.body?.getReader();
+    if(!reader)return fail(req,400,"Нужен пакет проекта.");
+    for(;;){const {done,value}=await reader.read();if(done)break;
+      total+=value.length;if(total>limit){await reader.cancel();return fail(req,413,"Пакет проекта слишком велик.");}
+      parts.push(value);
+    }
+    body=new Blob(parts);
+  }
+  const object=env.CHAPTER_JOBS.get(env.CHAPTER_JOBS.idFromName("project:"+env.OWNER_UID+":"+id));
+  const result=await object.fetch("https://freitag.internal/"+(owner?"owner":"mcp"),{method:req.method,body,
+    headers:owner?{}:{Authorization:req.headers.get("Authorization")}});
+  return new Response(result.body,{status:result.status,headers:{...headers(req),
+    "Content-Type":"application/json; charset=utf-8",...(result.status===405?{Allow:"POST"}:{})}});
+}
+
+async function connectedSources(req,env) {
+  if (!await verifyOwner(req,env)) return fail(req,401,"Требуется вход владельца.");
+  if (!env.BOOKS || !mcpConfigured(env) || snapshotGateway(env)) return fail(req,503,"Общий коннектор Freitag недоступен.");
+  const raw=await req.text();
+  if (raw.length>9000) return fail(req,413,"Слишком длинная поисковая задача.");
+  let input;try{input=JSON.parse(raw);}catch{return fail(req,400,"Неверный JSON.");}
+  if (typeof input?.task!=="string" || input.task.length>6000 ||
+      (input.bookId && !resourceId(input.bookId)) || (input.previous && typeof input.previous!=="string"))
+    return fail(req,400,"Неверная задача для поиска источников.");
+  try {
+    const read=async (tool,args)=>JSON.parse(await mcpCallTool(env,tool,args,{complete:true}));
+    const sources=await collectSources({env,input,read,words:manuscriptQueryWords});
+    return json(req,200,{ok:true,sources});
+  } catch (e) {return fail(req,424,e.message);}
+}
+
 async function generate(req, env, estimateOnly = false, background = false) {
   if (!await verifyOwner(req, env)) return fail(req, 401, "Требуется вход владельца в Мастерскую.");
   const raw = await req.text();
@@ -911,7 +975,7 @@ async function generate(req, env, estimateOnly = false, background = false) {
   if(effort!==undefined && !CHAPTER_EFFORTS.includes(effort))
     return fail(req,400,"Выбери низкий, средний или высокий уровень рассуждений.");
   let quoteSource;
-  if(input.bookId&&!greeting){
+  if(input.bookId&&!greeting && (isDraft || !input.freitagContext)){
     try{
       if(!/^[a-z0-9_-]{1,100}$/i.test(input.bookId))
         throw Error("Некорректный ID выбранной книги.");
@@ -951,7 +1015,7 @@ async function generate(req, env, estimateOnly = false, background = false) {
       }
     }catch(e){return json(req,424,{error:e.message,code:"BOOK_SOURCE"});}
   }
-  if(useMcp && !isDraft && !aitunnel && !separateGateway && !estimateOnly){
+  if(!input.freitagContext && useMcp && !isDraft && !aitunnel && !separateGateway && !estimateOnly){
     try{return await mcpToolsCompletion(req,env,provider,model,messages,
       greeting?"":(input.bookId||""),maxTokens,greeting?"dialog":input.mode);}
     catch(e){return fail(req,502,"MCP: "+e.message);}
@@ -964,7 +1028,7 @@ async function generate(req, env, estimateOnly = false, background = false) {
     model, messages, stream: true,
     max_tokens: maxTokens,
     ...(effort ? {reasoning_effort:effort} : {}),
-    ...(aitunnel || apimira || separateGateway ? {stream_options:{include_usage:true}} : {}),
+    ...(aitunnel || apimira || separateGateway || input.freitagContext ? {stream_options:{include_usage:true}} : {}),
     ...(aitunnel ? {
       provider:{only:[AITUNNEL_UPSTREAM],data_collection:"deny",zdr:true,allow_fallbacks:false} } : {})
   };
@@ -1208,7 +1272,7 @@ async function batchStatus(req,env){
     return json(req,200,{ok:false,status:"failed",batchId:id,
       error:"Пакет завершен, но ответ модели отсутствует или содержит ошибку.",
       statusCode:result?.response?.status_code||null});
-  return json(req,200,{ok:true,status:"completed",batchId:id,content,
+  return json(req,200,{ok:true,status:"completed",batchId:id,content,requestId:validRequestId(responseBody.id)?responseBody.id:undefined,
     finishReason:responseBody?.choices?.[0]?.finish_reason||null,
     usage:responseBody?.usage||batch.usage||null});
 }
@@ -1217,6 +1281,20 @@ async function batchStatus(req,env){
 async function bothubPreflight(req, env) {
   if (!await verifyOwner(req, env)) return fail(req, 401, "Требуется вход владельца в Мастерскую.");
   const params=new URL(req.url).searchParams;
+  if(params.get("provider")==="modelproxy"){
+    if(!env.MODELPROXY_API_KEY)return fail(req,503,"В Cloudflare ещё нет ключа ModelProxy.");
+    const options={headers:{Authorization:"Bearer "+env.MODELPROXY_API_KEY},redirect:"manual",
+      signal:AbortSignal.any([req.signal,AbortSignal.timeout(10000)])};
+    const base="https://api.modelproxy.org/v1/";
+    const [models,balance]=await Promise.all([fetch(base+"models",options),fetch(base+"available_balance",options)]);
+    if(!models.ok)return providerFailure(req,models,"ModelProxy · каталог");
+    if(!balance.ok)return providerFailure(req,balance,"ModelProxy · баланс личного ключа");
+    const catalog=await models.json(), account=await balance.json();
+    if(!catalog.data?.some(m=>m.id===MODEL))return fail(req,404,"Opus 5.5 сейчас недоступен ключу ModelProxy.");
+    if(account.available_balance==null || account.currency!=="USD" || !Number.isFinite(Number(account.available_balance)))
+      return fail(req,502,"ModelProxy не подтвердил остаток личного счёта.");
+    return json(req,200,{ok:true,model:MODEL,balanceUsd:Number(account.available_balance)});
+  }
   if (params.get("provider")==="aitunnel") {
     if (!env.AITUNNEL_API_KEY) return fail(req,503,"В Cloudflare не задан секрет AITUNNEL_API_KEY.");
     if (params.get("model") && params.get("model")!==AITUNNEL_MODEL)
@@ -1293,12 +1371,12 @@ export default {
       const path = new URL(req.url).pathname;
       const separate=snapshotGateway(env);
       const bothubConfigured=!separate && !!env.BOTHUB_API_KEY && !!env.OWNER_UID;
-      if(separate && !["/health","/preflight","/mcp-tools","/quote","/chat","/receipt","/story-map","/chapter-jobs"].includes(path))
+      if(separate && !["/health","/preflight","/mcp-tools","/quote","/chat","/receipt","/billing-history","/story-map","/chapter-jobs"].includes(path))
         return fail(req,404,"Адрес не найден.");
       if (path === "/health" && req.method === "GET")
         return json(req, 200, { ok: true, chapterProtocol:2, provider: "ModelProxy", model: MODEL,
           ...(separate?{providerGateway:true,chapterOutputLimits:CHAPTER_LIMITS}:{}),
-          contextPreview:true, storyMap:!!env.BOOKS, backgroundChapters:!!env.CHAPTER_JOBS,
+          contextPreview:true, sourceConnector:!separate && !!env.BOOKS && mcpConfigured(env), automaticReceipts:true, projectHandoff:!separate && !!env.CHAPTER_JOBS, storyMap:!!env.BOOKS, backgroundChapters:!!env.CHAPTER_JOBS,
           configured: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
           bothubConfigured,
           bothubChapterApi: "anthropic-messages",
@@ -1335,13 +1413,16 @@ export default {
       if (path === "/batch-status" && req.method === "GET") return await batchStatus(req,env);
       if (path === "/refresh-book" && req.method === "POST") return await refreshBook(req, env);
       if (path === "/preflight" && req.method === "GET") return await bothubPreflight(req, env);
+      if (path === "/project-access" || path === "/project-mcp") return await handleProjectAccess(req,env,path==="/project-access");
+      if (path === "/context" && req.method === "POST") return await connectedSources(req,env);
       if (path === "/snapshot" && req.method === "GET") return await snapshotStatus(req, env);
       if (path === "/chat" && req.method === "POST") return await generate(req, env);
       if (path === "/quote" && req.method === "POST") return await generate(req, env, true);
       if (path === "/story-map" && req.method === "GET") return await readStoryMap(req,env);
       if (path === "/chapter-jobs" && req.method === "GET") return await chapterJobs(req,env);
       if (path === "/chapter-jobs" && req.method === "POST") return await generate(req,env,false,true);
-      if (path === "/receipt" && req.method === "GET") return await (separate?apimiraReceipt(req,env):bothubReceipt(req,env));
+      if (path === "/receipt" && req.method === "GET") return await billingRead(req,env);
+      if (path === "/billing-history" && req.method === "GET") return await billingRead(req,env,true);
       return fail(req, 404, "Адрес не найден.");
     } catch (error) {
       // Never log user input or secrets. Return a CORS-visible error instead of

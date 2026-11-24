@@ -12,9 +12,11 @@ export async function onRequest(context) {
         (route === "batch-start" && method === "POST") ||
         (route === "batch-status" && method === "GET") ||
         (route === "chat" && method === "POST") ||
+        (route === "project-access" && (method === "GET" || method === "POST")) ||
+        (route === "context" && method === "POST") ||
         (route === "quote" && method === "POST") ||
         (route === "story-map" && method === "GET") ||
-        (route === "receipt" && method === "GET") ||
+        ((route === "receipt" || route === "billing-history") && method === "GET") ||
         (route === "chapter-jobs" && (method === "GET" || method === "POST")) ||
         (route === "refresh-book" && method === "POST"))) {
     return Response.json({ error: "Метод не поддерживается." }, { status: 405 });
@@ -32,7 +34,7 @@ export async function onRequest(context) {
   if (route === "chat") headers.set("Accept", "text/event-stream");
   if (method === "POST") headers.set("Content-Type", "application/json");
   // Pass the query string through for read-only snapshot status. Never include credentials in URLs.
-  const query = ["snapshot", "preflight", "batch-status", "story-map", "chapter-jobs", "receipt"].includes(route) ? new URL(context.request.url).search : "";
+  const query = ["snapshot", "preflight", "batch-status", "story-map", "chapter-jobs", "receipt", "billing-history", "project-access"].includes(route) ? new URL(context.request.url).search : "";
   const target = "https://freitag-opus-gateway.erichtho-xx.workers.dev/" + route + query;
   try {
     const result = await upstream.fetch(new Request(target, {

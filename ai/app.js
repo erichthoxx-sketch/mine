@@ -1,4 +1,6 @@
 // Freitag AI — персональная литературная среда: сменяемые модели, память и контекст автора.
+import { projectAccessClient } from "./handoff.js";
+import { sourcePlan } from "./source-plan.js";
 import { master } from './master-sync.js';
 import { renderMarkdown } from './markdown.js';
 import { projectHomeHtml } from './project-view.js';
@@ -28,7 +30,9 @@ const blank = () => ({projects:[], chats:[], docs:[], feedback:[], expenses:[], 
     chapterEffort:DEFAULT_CHAPTER_EFFORT,globalInstruction:"",context:4096}, theme:"auto"});
 let state=blank(), tab="chat", projectHomeId=null, materialsProjectId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null, batchCheck=null;
 let importingMaterials=false;
-let refreshingExpenses=false;
+let refreshingExpenses=false, lastBillingSync=0, billingIssue="";
+const billingCursor=new Map();
+const billingProviders=["bothub","apimira"];
 const expenseFilters={period:"30",project:"",provider:"",unit:""};
 const openDb=()=>new Promise((resolve,reject)=>{const r=indexedDB.open("freitag-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("data");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const getDb=(key="state")=>new Promise((resolve,reject)=>{const r=db.transaction("data").objectStore("data").get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
@@ -39,7 +43,7 @@ const putDb=(v,rollback)=>new Promise((resolve,reject)=>{
 });
 let saveChain=Promise.resolve();
 const save=()=>{const snapshot=structuredClone(state); saveChain=saveChain.catch(()=>{}).then(()=>putDb(snapshot))
-  .then(()=>true).catch(e=>{notice("Не удалось сохранить данные: "+e.message);return false;});return saveChain;};
+  .then(()=>{handoff.schedule();return true;}).catch(e=>{notice("Не удалось сохранить данные: "+e.message);return false;});return saveChain;};
 const notice=(msg)=>{let el=$("#f-flash");if(!el){el=document.createElement("div");el.id="f-flash";el.className="f-notice f-flash";document.body.appendChild(el);}el.textContent=msg;el.hidden=false;clearTimeout(notice.timer);notice.timer=setTimeout(()=>el.hidden=true,7000);};
 const project=(id=state.activeProjectId)=>state.projects.find(p=>p.id===id);
 const chat=(id=state.activeChatId)=>state.chats.find(c=>c.id===id);
@@ -193,7 +197,7 @@ function renderExpenses(){
       projects.set(row.projectId,{id:row.projectId,name:row.projectName||"Удалённый проект"});
   }
   $("#panel").innerHTML=expensesHtml(expenseReport(state.expenses,expenseFilters),expenseFilters,
-    {esc,projects:[...projects.values()],chats:new Set(state.chats.map(c=>c.id)),providers:providerNames,refreshing:refreshingExpenses});
+    {esc,projects:[...projects.values()],chats:new Set(state.chats.map(c=>c.id)),providers:providerNames,refreshing:refreshingExpenses,issue:billingIssue});
 }
 function renderSettings(){
   const s=state.settings;
@@ -213,6 +217,7 @@ function renderSettings(){
       '<option value="'+x[0]+'" '+(x[0]===s.bothubModel?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></div>'+
     '<div class="f-row f-connection-row"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button>'+
     '<span id="f-test-status" class="f-muted" role="status">Проверка не выполняет платную генерацию.</span></div>'+
+    '<div id="f-modelproxy-funds" '+(provider==="modelproxy"?"":"hidden")+'><a class="f-inline-btn" href="https://modelproxy.org/dashboard/topup?lang=ru" target="_blank" rel="noopener noreferrer">Пополнить в ModelProxy ↗</a> <span class="f-muted">USDT в сети Tron (TRC-20)</span></div>'+
     '<details class="f-settings-fold"><summary>Защищенный API-шлюз</summary>'+
     '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
     '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
@@ -706,8 +711,8 @@ async function testConnection(){
       if(!data.ok || !(data.availableProviders?.[chosen] ?? data[chosen==="modelproxy"?"configured":chosen+"Configured"]))
         throw Error(providerNames[chosen]+": в Cloudflare нужен секрет "+chosen.toUpperCase()+"_API_KEY и настройка владельца.");
       let info;
-      if(chosen!=="modelproxy"){
-        const model=chosen==="aitunnel"?"claude-opus-5.5":chosen==="apimira"?"anthropic/claude-opus-5.5":($("#f-bothub-model")?.value||activeBotHubModel());
+      {
+        const model=chosen==="modelproxy"?"claude-opus-5-5":chosen==="aitunnel"?"claude-opus-5.5":chosen==="apimira"?"anthropic/claude-opus-5.5":($("#f-bothub-model")?.value||activeBotHubModel());
         const token=await master.idToken();
         const check=await fetch(gateway+"/preflight?provider="+chosen+"&model="+encodeURIComponent(model),{
           headers:{"Authorization":"Bearer "+token},cache:"no-store"
@@ -717,25 +722,24 @@ async function testConnection(){
       }
       // Check the REAL MCP server, not the mere existence of a KV binding.
       const token=await master.idToken();
-      const mcpRes=await fetch(gateway+"/mcp-tools",{
+      const mcpRes=await fetch(claudeGateway(state.settings.workerUrl,"bothub")+"/mcp-tools",{
         headers:{"Authorization":"Bearer "+token},cache:"no-store"
       });
       const mcpInfo=await mcpRes.json().catch(()=>({}));
       if(!mcpRes.ok || !mcpInfo.ok)
         throw Error(mcpInfo.error||"Прямое MCP-подключение не работает.");
       connectOk=true;
-      const sourceLabel=data.providerGateway?"Книги Мастерской":"Мастерская MCP";
+      const sourceLabel="Коннектор Freitag";
       connectText=sourceLabel+" · "+activeProviderLabel();
       const status=$("#f-test-status");
-      const money=chosen==="apimira"&&typeof info?.balanceUsd==="number"?
+      const money=chosen==="modelproxy"&&Number.isFinite(info?.balanceUsd)?" Баланс ModelProxy "+usd(info.balanceUsd)+".":chosen==="apimira"&&typeof info?.balanceUsd==="number"?
         " Баланс ApiMira "+usd(info.balanceUsd)+"."+
         (Number.isFinite(info.inputUsd)&&Number.isFinite(info.outputUsd)?
           " Тариф за 1 млн токенов: вход "+usd(info.inputUsd)+", выход "+usd(info.outputUsd)+".":""):
         chosen==="aitunnel"&&Number.isFinite(info?.balanceRub)?" Баланс: "+rub(info.balanceRub)+
           (info.budgetRub===null?". Задай бюджет API-ключа AITUNNEL перед генерацией.":". Остаток бюджета ключа: "+rub(info.budgetRub)+"."):"";
       const modelStatus=info?.chapterApi==="anthropic-messages"?"Ключ BotHub видит модель в Anthropic Messages. ":info?"Модель есть в каталоге. ":"";
-      const sourceStatus=data.providerGateway?"Доступно чтение закрытых снимков книг Мастерской. ":
-        "MCP Мастерской подключён напрямую · "+mcpInfo.toolCount+" инструментов. ";
+      const sourceStatus="Общий коннектор Freitag · "+mcpInfo.toolCount+" инструментов чтения. ";
       if(status)status.textContent=modelStatus+sourceStatus+"Проверка бесплатна."+money;
       notice("Защищенный шлюз найден. Проверка бесплатна.");
     }catch(e){connectOk=false;connectText=e.message;const status=$("#f-test-status");
@@ -961,6 +965,8 @@ async function checkBatchChapter(){
         assistant.content+=result.finishReason==="length"?"\n\n[Достигнут лимит ответа: глава может быть неполной.]":
           "\n\n[Провайдер не подтвердил завершение главы. Полученный текст сохранен.]";
       job.usage=result.usage||null;
+      Object.assign(assistant,{apiProvider:"bothub",apiAccepted:true,apiUsage:job.usage,apiRequestId:result.requestId||job.batchId});
+      rememberExpense(assistant,c);
       notice("Текст из BotHub Batch сохранен в чате.");
     }else if(result.ok===false||["failed","cancelled","expired"].includes(job.status)){
       assistant.content="BotHub Batch завершился без главы: "+(result.error||job.status)+
@@ -994,7 +1000,7 @@ function applyMessageReceipt(message,provider,info,charges){
 }
 function fetchReceipt(provider,ids,gateway,token){
   const [id,also]=ids;
-  const params=new URLSearchParams({id,...(provider==="bothub"&&also&&also!==id?{also}:{})});
+  const params=new URLSearchParams({id,...(also&&also!==id?{also}:{})});
   return readOwnerJson(gateway,"/receipt?"+params,token);
 }
 async function readMessageReceipt(message,c,provider,ids,gateway,token){
@@ -1009,12 +1015,12 @@ async function readMessageReceipt(message,c,provider,ids,gateway,token){
   return true;
 }
 const readApimiraReceipt=(message,c,gateway,token)=>
-  readMessageReceipt(message,c,"apimira",[message.apimiraRequestId],gateway,token);
+  readMessageReceipt(message,c,"apimira",[message.apimiraRequestId,message.providerRequestId].filter(Boolean),gateway,token);
 function apiUsageLabel(usage,id,charged){
   const parts=[];
   if(Number.isFinite(usage.prompt_tokens))parts.push(usage.prompt_tokens.toLocaleString("ru-RU")+" токенов на входе");
   if(Number.isFinite(usage.completion_tokens))parts.push(usage.completion_tokens.toLocaleString("ru-RU")+" на выходе");
-  if(!charged)parts.push("Списание в кабинете провайдера");
+  if(!charged)parts.push("Сумма появится в «Тратах» после сверки");
   if(id&&!charged)parts.push("Запрос "+id);
   return parts.join(" · ");
 }
@@ -1034,52 +1040,80 @@ function expensesFromJobs(jobs){
   return jobs.map(job=>{
     const c=chat(job.chatId)||{id:job.chatId,projectId:job.projectId,title:"Фоновая глава"};
     return expenseFromMessage({role:"assistant",jobId:job.id,apiProvider:job.provider,
-      apiRequestId:job.requestId,apiUsage:job.usage,at:job.createdAt,
+      provider:job.model,apiRequestId:job.requestId,providerRequestId:job.providerRequestId,apiUsage:job.usage,at:job.createdAt,
       costRub:job.provider==="aitunnel"?job.usage?.cost_rub:undefined},c,project(c.projectId)?.name||job.projectName,0);
   }).filter(Boolean);
 }
-async function refreshExpenses(id){
-  if(refreshingExpenses)return;
+async function recentReceipts(provider,token){
+  const gateway=claudeGateway(state.settings.workerUrl,provider);
+  const rows=[];
+  const progress=billingCursor.get(provider)||{};
+  let cursor=progress.next, newest=progress.newest;
+  const cutoff=Date.now()-90*86400000;
+  for (let index=0,page=0;index<4;index++) {
+    const batch=await readOwnerJson(gateway,"/billing-history?page="+page,token);
+    if(!Array.isArray(batch.rows))throw Error("Провайдер вернул неполную историю.");
+    const seenHead=page===0 && cursor===null && progress.newest && batch.rows.some(row=>row.id===progress.newest);
+    if(page===0 && batch.rows.length)newest=batch.rows[0].id;
+    for(const row of batch.rows) if(row.provider===provider && row.requestIds?.length)
+      rows.push({...row,unlinked:true});
+    if(!Number.isSafeInteger(batch.nextPage) || batch.nextPage<=page ||
+        (batch.rows.length && batch.rows.every(row=>Date.parse(row.at)<cutoff)) || seenHead){
+      cursor=null;break;
+    }
+    page=index===0 && cursor>batch.nextPage ? cursor : batch.nextPage;
+    cursor=page;
+  }
+  billingCursor.set(provider,{next:cursor,newest});
+  return rows;
+}
+function assignReceiptsToChats(rows){
+  const byId=new Map();
+  for(const row of rows){
+    if(row.unlinked || !row.requestIds?.length || !Object.keys(row.charges||{}).length)continue;
+    for(const id of row.requestIds)byId.set(row.provider+":"+id,row);
+  }
+  for(const c of state.chats)for(const m of c.messages||[]){
+    const row=[m.apiRequestId,m.apimiraRequestId,m.providerRequestId].map(id=>byId.get((m.apiProvider||(m.apimiraRequestId?"apimira":"bothub"))+":"+id)).find(Boolean);
+    if(row)applyMessageReceipt(m,row.provider,{inputTokens:row.inputTokens,outputTokens:row.outputTokens,cachedTokens:row.cachedTokens},row.charges);
+  }
+}
+async function refreshExpenses(id,automatic=false){
+  if(refreshingExpenses || (automatic && (!master.user || document.hidden || Date.now()-lastBillingSync<60000)))return;
   const snapshot=state;
   refreshingExpenses=true;
-  renderExpenses();
+  if(tab==="expenses")renderExpenses();
   try{
-    await master.init();
     const token=await master.idToken();
+    lastBillingSync=Date.now();
+    const errors=[];
     if(!id){
-      const report=await backgroundSummaries(token).catch(()=>null);
+      const [jobs,...feeds]=await Promise.allSettled([backgroundSummaries(token),...billingProviders.map(p=>recentReceipts(p,token))]);
       if(snapshot!==state)return;
-      if(report)state.expenses=mergeExpenses(state.expenses,expensesFromJobs(report.jobs));
+      const updates=jobs.status==="fulfilled"?expensesFromJobs(jobs.value.jobs):[];
+      feeds.forEach((feed,i)=>{
+        if(feed.status==="fulfilled")updates.push(...feed.value);
+        else errors.push(providerNames[billingProviders[i]]);
+      });
+      state.expenses=mergeExpenses(state.expenses,updates);
     }
-    const rows=id?state.expenses.filter(row=>row.id===id):expenseReport(state.expenses,expenseFilters).rows;
-    const pending=rows.filter(canReconcileExpense).sort((a,b)=>String(a.checkedAt||"").localeCompare(String(b.checkedAt||""))).slice(0,8);
-    const results=await Promise.allSettled(pending.map(async row=>({
-      row,info:await fetchReceipt(row.provider,row.requestIds,
-        claudeGateway(state.settings.workerUrl,row.provider),token)
-    })));
+    const pending=state.expenses.filter(row=>canReconcileExpense(row) && (!id||row.id===id) &&
+      (!automatic || !row.checkedAt || Date.now()-Date.parse(row.checkedAt)>15*60000))
+      .sort((a,b)=>String(a.checkedAt||"").localeCompare(String(b.checkedAt||""))).slice(0,8);
+    const receipts=await Promise.all(pending.map(async row=>{
+      try{
+        const info=await fetchReceipt(row.provider,row.requestIds,claudeGateway(state.settings.workerUrl,row.provider),token);
+        return {...row,checkedAt:stamp(),charges:receiptAmounts(row.provider,info),
+          inputTokens:info.inputTokens??row.inputTokens,outputTokens:info.outputTokens??row.outputTokens};
+      }catch{errors.push(providerNames[row.provider]);return {...row,checkedAt:stamp()};}
+    }));
     if(snapshot!==state)return;
-    let checked=0;
-    const updates=[];
-    for(const result of results){
-      if(result.status!=="fulfilled")continue;
-      const {row,info}=result.value;
-      const charges=receiptAmounts(row.provider,info);
-      updates.push({...row,charges,checkedAt:stamp(),inputTokens:info.inputTokens??row.inputTokens,
-        outputTokens:info.outputTokens??row.outputTokens});
-      if(!Object.keys(charges).length)continue;
-      checked++;
-      const c=chat(row.chatId);
-      for(const message of c?.messages||[]){
-        if(message.role==="assistant"&&[message.apiRequestId,message.apimiraRequestId,message.providerRequestId]
-          .some(requestId=>row.requestIds.includes(requestId)))applyMessageReceipt(message,row.provider,info,charges);
-      }
-    }
-    state.expenses=mergeExpenses(state.expenses,updates);
+    state.expenses=mergeExpenses(state.expenses,receipts);
+    assignReceiptsToChats(state.expenses);
+    billingIssue=errors.length?"Пока недоступна сверка с "+[...new Set(errors)].join(", ")+". Freitag повторит её автоматически.":"";
     await save();
-    const failed=results.filter(result=>result.status==="rejected");
-    notice(checked?"Сверено списаний · "+checked+(failed.length?". Часть чеков пока недоступна.":"."):
-      failed[0]?.reason?.message || (pending.length?"Провайдеры пока не вернули новых чеков.":"История обновлена."));
-  }catch(err){notice("Сверка списаний. "+err.message);}
+    if(!automatic)notice(billingIssue||"Сверка завершена.");
+  }catch(err){billingIssue=err.message;if(!automatic)notice(billingIssue);}
   finally{refreshingExpenses=false;if(tab==="expenses")renderExpenses();}
 }
 
@@ -1108,6 +1142,7 @@ async function saveBackgroundChapter(job, item){
   if(job.usage)message.apiUsage=job.usage;
   if(job.provider==="aitunnel"&&Number.isFinite(job.usage?.cost_rub))message.costRub=job.usage.cost_rub;
   if(job.requestId)message.apiRequestId=job.requestId;
+  if(job.providerRequestId)message.providerRequestId=job.providerRequestId;
   if(job.provider==="apimira"&&job.requestId)message.apimiraRequestId=job.requestId;
   c.updated=stamp();state.activeProjectId=c.projectId;state.activeChatId=c.id;tab="chat";
   rememberExpense(message,c);
@@ -1157,7 +1192,7 @@ async function submitBackgroundChapter(payload,gateway,idToken,previousDraft,est
     if(!res.ok||!result.ok)throw Error(result.error||"Проверь, появилось ли задание в «Фоновых главах».");
     if(!c.messages.some(m=>m.jobId===id))c.messages.push({...userMessage,jobId:id});
     if(c.title==="Новый чат")c.title=userMessage.content.slice(0,65);
-    const row=expenseFromMessage({role:"assistant",apiProvider:payload.provider,jobId:id,
+    const row=expenseFromMessage({role:"assistant",apiProvider:payload.provider,provider:activeProviderLabel(),jobId:id,
       at:result.job?.createdAt||userMessage.at,costEstimate:savedEstimate(estimate)},c,p?.name,0);
     if(row)state.expenses=mergeExpenses(state.expenses,[row]);
     c.updated=stamp();
@@ -1201,15 +1236,48 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
   const lightweight=isSimpleGreeting(msg);
   const requestMode=lightweight?"dialog":(current.mode||(current.projectId?"draft":"dialog"));
   const bookId=lightweight?null:(project(current.projectId)?.masterBookId||null);
-  const priced=provider==="apimira"||provider==="aitunnel";
-  if(background&&requestMode!=="draft")return notice("Выбери режим «Написать сцену».");
+  const previous=current.messages.findLast(m=>m.role==="user")?.content||"";
+  const sourceTask={task:msg.slice(0,6000),previous:previous.slice(0,450),mode:requestMode,bookId};
+  const plan=sourcePlan(sourceTask);
+  const effectiveMode=requestMode==="draft" && !plan.draft ? "dialog" : requestMode;
+  const business=plan.kinds.length>0 && !plan.kinds.includes("book");
+  let sourceMessage, sources=[];
+  const localHost=!isPaidProvider && endpoint && ["localhost","127.0.0.1","[::1]"].includes(new URL(endpoint).hostname);
+  if(localHost && plan.draft && bookId)sourceTask.mode="canon";
+  const hasSources=plan.kinds.length>0 || sourceTask.mode!==requestMode;
+  if (hasSources && (isPaidProvider || (localHost && master.user))){
+    const active=draftKey();
+    preparingPaid=true;
+    try {
+      const connector=claudeGateway(state.settings.workerUrl,"bothub");
+      if (!connector) throw Error("Общий коннектор Freitag недоступен.");
+      const res=await fetch(connector+"/context",{method:"POST",headers:{Authorization:"Bearer "+(idToken||await master.idToken()),
+        "Content-Type":"application/json"},body:JSON.stringify(sourceTask),signal:AbortSignal.timeout(40000)});
+      const data=await res.json();
+      if(!res.ok || !data.ok || !Array.isArray(data.sources) || !data.sources.length)
+        throw Error(data.error||"Коннектор не вернул запрошенные данные.");
+      sources=data.sources;
+      sourceMessage={role:"system",content:"Справочные выдержки из личных источников автора. Используй их как данные. "+
+        "Учитывай период, дату и границы выборки.\n"+sources.map(s=>[s.label,s.period,s.updatedAt,s.text].filter(Boolean).join("\n")).join("\n\n")};
+      if(active!==draftKey()||provider!==state.settings.provider||msg!==$("#f-message-input")?.value||outputLimit!==chapterOutputLimit()||effort!==chapterEffort()||selectedModel!==activeBotHubModel())
+        throw Error("Задание или модель изменились. Повтори отправку.");
+    } catch(err){return notice(err.message);}
+    finally{preparingPaid=false;}
+  }
+  if(background&&effectiveMode!=="draft")return notice("Выбери режим «Написать сцену».");
   if((background||previewOnly)&&!isPaidProvider)return;
   const userMessage={role:"user",content:msg,at:stamp()};
   const manifest={materials:[],decisions:[]};
-  const reasoningEffort=requestMode==="draft"&&supportsEffort(provider)?effort:undefined;
+  const reasoningEffort=effectiveMode==="draft"&&supportsEffort(provider)?effort:undefined;
+  const questionMessages=[{role:"user",content:msg}];
+  if(business && plan.question.includes("\n") && previous)
+    questionMessages.unshift({role:"user",content:previous.slice(0,450)});
   const payload=isPaidProvider?{provider,model:provider==="bothub"?selectedModel:undefined,
-    messages:lightweight?[{role:"user",content:msg}]:modelproxyMessages({...current,messages:[...current.messages,userMessage]},manifest),
-    mode:requestMode,outputTokenLimit:requestMode==="draft"?outputLimit:undefined,reasoningEffort,bookId,sourceRevision}:null;
+    messages:lightweight||business?questionMessages:modelproxyMessages({...current,messages:[...current.messages,userMessage]},manifest),
+    mode:effectiveMode,outputTokenLimit:effectiveMode==="draft"?outputLimit:undefined,reasoningEffort,bookId,sourceRevision,
+    freitagContext:true}:null;
+  if(payload && sourceMessage) payload.messages.unshift(sourceMessage);
+  manifest.sources=sources.map(({label,period,updatedAt})=>({label,period,updatedAt}));
   let estimate;
   if(isPaidProvider){
     const isMira=provider==="apimira", label=providerNames[provider];
@@ -1233,11 +1301,11 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
       if(flash?.textContent===progress)flash.hidden=true;
       const confirmed=await openRequestEstimate({estimate,model:activeProviderLabel(),memory:manifest,
         effort:effortLabels[reasoningEffort],recent,previewOnly,background,
-        toolCalls:!priced&&!lightweight&&requestMode!=="draft"});
+        toolCalls:false});
       if(!confirmed)return;
       if(isMira)payload.apimiraQuote={fingerprint:estimate.fingerprint,estimateUsd:estimate.estimateUsd};
       else if(provider==="aitunnel")payload.aitunnelQuote={fingerprint:estimate.fingerprint,estimateRub:estimate.estimateRub};
-      else if(requestMode==="draft")payload.contextQuote=estimate.fingerprint;
+      else payload.contextQuote=estimate.fingerprint;
     }catch(e){return notice(e.message);}
     finally{preparingPaid=false;}
   }
@@ -1254,7 +1322,12 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
   c.updated=stamp();
   // Block a second Send while IndexedDB persists the first request.
   busy=true;
-  const messages=isPaidProvider?payload.messages:buildMessages(c);
+  const messages=isPaidProvider?payload.messages:business?[{role:"user",content:msg}]:buildMessages(c);
+  if(!isPaidProvider && sourceMessage){
+    const max=Math.max(700,Math.min(6000,(Number(state.settings.context)||4096)-700));
+    messages.unshift({...sourceMessage,content:sourceMessage.content.length<=max?sourceMessage.content:
+      sourceMessage.content.slice(0,max)+"\n[Выдержка сокращена для локальной модели]"});
+  }
   const assistant={role:"assistant",provider:isPaidProvider?(provider==="bothub"?activeClaudeName():"Claude Opus 5.5"):"Qwen",
     ...(isPaidProvider?{apiProvider:provider,expenseId:uid(),costEstimate:savedEstimate(estimate)}:{}),content:"",at:stamp()};
   await save();render();
@@ -1292,6 +1365,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
     if(isPaidProvider)assistant.apiAccepted=true;
     const requestId=res.headers.get("X-Freitag-Request-Id");
     if(requestId){assistant.apiRequestId=requestId;if(provider==="apimira")assistant.apimiraRequestId=requestId;}
+    if(isPaidProvider){rememberExpense(assistant,c);void save();}
     const reader=res.body.getReader(),decoder=new TextDecoder();let pending="",streamFinished=false,finishReason="";
     const consume=(line)=>{
       if(!line.trim())return;
@@ -1301,7 +1375,13 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
         if(data==="[DONE]"){streamFinished=true;return true;}
         let obj;try{obj=JSON.parse(data);}catch{throw Error("Поток содержит поврежденный фрагмент.");}
         if(obj?.error)throw Error("Провайдер сообщил об ошибке в потоке. Проверь историю запроса.");
-      if(provider==="bothub"&&typeof obj?.request_id==="string")assistant.providerRequestId=obj.request_id;
+        if(isPaidProvider){
+          const eventId=obj?.request_id||obj?.id;
+          if(typeof eventId==="string" && /^[a-z0-9_-]{1,100}$/i.test(eventId)) {
+            assistant.providerRequestId=eventId;
+            if(provider==="apimira"&&!assistant.apimiraRequestId)assistant.apimiraRequestId=eventId;
+          }
+        }
       if(Number.isFinite(obj?.usage?.prompt_tokens)||Number.isFinite(obj?.usage?.completion_tokens))
         assistant.apiUsage=Object.fromEntries(["prompt_tokens","completion_tokens"].filter(k=>Number.isFinite(obj.usage[k])).map(k=>[k,obj.usage[k]]));
         if(provider==="aitunnel"&&Number.isFinite(obj?.usage?.cost_rub)){
@@ -1341,7 +1421,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
     pending+=decoder.decode();
     if(pending.trim())consume(pending.trimEnd());
     if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты у провайдера.");
-    if(isPaidProvider&&requestMode==="draft")assistant.delivery=draftDelivery(msg,assistant.content,finishReason,outputLimit);
+    if(isPaidProvider&&effectiveMode==="draft")assistant.delivery=draftDelivery(msg,assistant.content,finishReason,outputLimit);
     if(isPaidProvider&&(!streamFinished||(finishReason&&finishReason!=="stop"))){
       // Preserve the paid partial chapter rather than pretending that a broken
       // stream or max_tokens cutoff is a complete manuscript.
@@ -1363,6 +1443,9 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
       void readBothubReceipt(assistant,c,gateway,idToken).catch(()=>{});
   }
 }
+const handoff=projectAccessClient({master,gateway:()=>claudeGateway(state.settings.workerUrl,"bothub"),
+  getState:()=>state,notify:notice,isBusy:()=>busy||preparingPaid,download});
+
 function download(name,content,type="application/json;charset=utf-8"){
   const blob=new Blob([content],{type}),url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
@@ -1497,7 +1580,7 @@ async function importMaterials(files,projectId){
   }finally{importingMaterials=false;render();}
 }
 document.addEventListener("click",async(e)=>{
-  const nav=e.target.closest("[data-nav]");if(nav){tab=nav.dataset.nav;if(tab==="projects")projectHomeId=null;render();return;}
+  const nav=e.target.closest("[data-nav]");if(nav){tab=nav.dataset.nav;if(tab==="projects")projectHomeId=null;render();if(tab==="expenses")void refreshExpenses(undefined,true);return;}
   const b=e.target.closest("[data-action]");if(!b)return;
   const a=b.dataset.action,id=b.dataset.id;
   if(a==="expense-unit"){expenseFilters.unit=id;renderExpenses();return;}
@@ -1588,6 +1671,7 @@ document.addEventListener("click",async(e)=>{
         content:entry.snippet,anchor:{chapter:entry.chapter,scene:entry.scene,offset:entry.offset,updatedAt}})
     });
   }
+  if(a==="project-handoff"){const p=project(id);if(p)handoff.open(p);return;}
   if(a==="open-chapter-jobs")showBackgroundChapters();
   if(a==="preview-chapter"||a==="send-background-chapter"){
     const value=$("#f-message-input")?.value;
@@ -1596,6 +1680,7 @@ document.addEventListener("click",async(e)=>{
   }
   if(a==="new-project-chat"){state.activeProjectId=id;state.activeChatId=null;projectHomeId=null;pendingMode=null;await save();tab="chat";render();$("#f-message-input")?.focus();}
   if(a==="delete-project"){const p=project(id);if(!p||!confirm("Удалить проект «"+p.name+"» и все его чаты и материалы?"))return;
+    if(handoff.managed(id))try{await handoff.revoke(id);}catch(e){return notice("Отзыв доступа не подтвердился. "+e.message);}
     state.projects=state.projects.filter(x=>x.id!==id);state.chats=state.chats.filter(x=>x.projectId!==id);state.docs=state.docs.filter(x=>x.projectId!==id);
     if(state.activeProjectId===id){state.activeProjectId=null;state.activeChatId=null;}await save();render();}
   if(a==="choose-materials")$("#f-upload")?.click();
@@ -1814,6 +1899,7 @@ document.addEventListener("change",async(e)=>{
     state.settings.provider=provider;state.settings.bothubModel=model;
     connectOk=false;connectText=activeProviderLabel()+" · не проверено";
     await save();
+    const funds=$("#f-modelproxy-funds");if(funds)funds.hidden=provider!=="modelproxy";
     const row=$("#f-bothub-model-row");if(row)row.hidden=provider!=="bothub";
     const status=$("#f-test-status");if(status)status.textContent="Модель сохранена. Проверка не запускает платную генерацию.";
     renderHeader();
@@ -1911,7 +1997,11 @@ if(workingLink){
   render();
   // Reuse an existing Firebase session and silently load the books list.
   // This never starts Google Drive OAuth and does not send a paid model request.
-  master.init().then(async()=>{updateCloudControls();if(master.user){await master.refresh();if(tab==="projects")render();}}).catch(()=>{});
+  master.init().then(async()=>{updateCloudControls();if(master.user){if(tab==="expenses"||state.expenses.some(canReconcileExpense))void refreshExpenses(undefined,true);await master.refresh();if(tab==="projects")render();}}).catch(()=>{});
+  const syncBilling=()=>{if(tab==="expenses"||state.expenses.some(canReconcileExpense))void refreshExpenses(undefined,true);};
+  setInterval(syncBilling,60000);
+  setInterval(()=>void handoff.sync(),60000);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)syncBilling();});
   setInterval(()=>void saveCloudArchive(false),60000);
   // Не требуем от пользователя вручную проверять уже настроенную Ollama
   // при каждом обновлении страницы. Это тихая проверка без всплывающих окон.

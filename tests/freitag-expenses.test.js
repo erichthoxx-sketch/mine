@@ -42,7 +42,7 @@ test("the spend report filters paid and pending requests without summing unlike 
   assert.equal(pending.rows.length,1);
   const html=expensesHtml(pending,{...filters,provider:"apimira",project:"book"},
     {esc:String,projects:[],chats:new Set(),providers:{apimira:"ApiMira"}});
-  assert.match(html,/Чек не получен/);
+  assert.match(html,/Сумма неизвестна/);
   assert.doesNotMatch(html,/f-spend-chart/);
   const all=expenseReport(rows,{...filters,period:"all",unit:"RUB"},now);
   assert.deepEqual(all.points.map(point=>point.value),[32,12.50]);

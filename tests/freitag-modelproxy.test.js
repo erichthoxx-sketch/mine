@@ -497,10 +497,10 @@ test("book project uses the exact large master instruction and verbatim long cha
   assert.match(app,/p\.instruction=String\(fd\.get\("instruction"\)\|\|""\);/);
   assert.doesNotMatch(source,/slice\(0,26000\)|slice\(0,20000\)|slice\(0,6000\)/);
   assert.match(app,/if\(c\.projectId && !c\.mode\) c\.mode="draft"/);
-  assert.match(app,/outputTokenLimit:requestMode==="draft"/);
+  assert.match(app,/outputTokenLimit:effectiveMode==="draft"/);
   assert.match(worker,/CHAPTER_LIMITS\.includes\(requestedDraftLimit\)/);
   assert.match(worker,/maxTokens=greeting\?128:isDraft\?requestedDraftLimit/);
-  assert.match(worker,/if\(useMcp && !isDraft && !aitunnel && !separateGateway && !estimateOnly\)/);
+  assert.match(worker,/if\(!input.freitagContext && useMcp && !isDraft && !aitunnel && !separateGateway && !estimateOnly\)/);
 });
 
 
@@ -510,9 +510,9 @@ test("ordinary book greetings stay cheap; genuine chapters retain large prompts"
     readFile(new URL("../proxy/freitag-modelproxy-worker.js",import.meta.url),"utf8")
   ]);
   assert.match(app,/const lightweight=isSimpleGreeting\(msg\)/);
-  assert.match(app,/lightweight\?\[\{role:"user",content:msg\}\]:modelproxyMessages\(/);
+  assert.match(app,/lightweight\|\|business\?questionMessages:modelproxyMessages\(/);
   assert.match(app,/const bookId=lightweight\?null:/);
-  assert.match(worker,/if\(input.bookId&&!greeting\)/);
+  assert.match(worker,/if\(input.bookId&&!greeting/);
   assert.match(worker,/const maxTokens=greeting\?128:/);
   assert.match(app,/void save\(\)/);
   assert.deepEqual(CHAPTER_LIMITS,[4500,9000,14000,20000,32000]);
