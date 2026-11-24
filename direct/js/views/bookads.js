@@ -26,10 +26,8 @@ const nameHas = (name, title) => { const n = norm(name), t = norm(title), two = 
 export function bookAds(a, b) {
   const c = a.ctx(), t = c.today, m = metrikaOf(c);
   const L = resolvedLaunches(a).find((x) => x.id === String(b.id)) || null;
-  const bind = (c.data.d_kw_bindings || []).find((x) => String(x.bookId) === String(b.id));
-  const ids = new Set([L?.fl.campaignId, bind?.campaignId].filter(Boolean).map(String));
-  const camps = pultModel(a).rows.filter(({ camp, book }) =>
-    ids.has(String(camp.id)) || String(book?.id || '') === String(b.id)).map(({ camp, econ }) => ({
+  const camps = pultModel(a).rows.filter(({ book }) =>
+    String(book?.id || '') === String(b.id)).map(({ camp, econ }) => ({
     ...camp, w: econ.d7, g: econ.buy30 == null ? null : { conv: econ.buy30, cpa: econ.cpaBuy },
   }));
   // книга в «Доходах» названа по выгрузке Литнета — часто длиннее («Альпийский развод. Он оставил меня умирать»): сравниваем по началу
@@ -69,7 +67,7 @@ export function bookAdView(a, id) {
   const ads = `${x.L ? `<div class="card fl-panel"><div class="row between"><h2 style="margin:0">Запуск</h2><button class="primary" data-act="go" data-to="/launch/${esc(b.id)}">План</button></div>${launchStrip(x.L.plan)}</div>` : ''}
     <div class="card"><h2>Яндекс Директ</h2>${x.camps.length ? `<div class="list">${x.camps.map((k) => `<a class="item" href="#" data-act="go" data-to="/c/${k.id}"><div class="row between"><b>${esc(k.name)}</b>${stateDot(k)}</div>
       <div class="small muted">за 7 дней ${rub(k.w.cost, 0)} · кликов ${num(k.w.clicks)}${k.g ? ` · за 30 дней покупок ${num(k.g.conv)}${k.g.cpa != null ? ` по ${rub(k.g.cpa, 0)}` : ''}` : ''}${k.budget?.amount ? ` · бюджет ${rub(k.budget.amount, 0)}${k.budget.kind === 'week' ? ' в неделю' : ''}` : k.daily ? ` · ${rub(k.daily, 0)} в день` : ''}</div></a>`).join('')}</div>`
-      : `<p class="small muted">${demo.on ? 'В примере кампании не привязаны к книгам.' : 'Кампаний этой книги пока нет. Кампания привязывается сама: из плана запуска или по названию книги в имени кампании.'}</p>`}</div>
+      : `<p class="small muted">${demo.on ? 'В примере кампании не привязаны к книгам.' : 'Кампаний этой книги пока нет. Кампания привязывается сама: из плана запуска, по ссылке объявления или названию кампании.'}</p>`}</div>
     ${x.others.length || x.people.length ? `<div class="card"><h2>Другая реклама</h2><p class="small muted">Из «Доходов» (Литнет платит, таргет, соцсети — окупаемость считается там) и таргетологи из «Связей» Мастерской.</p><div class="list">${x.people.map((p) => `<a class="item" href="../workshop/#/link/${esc(p.id)}"><div class="row between"><b>Таргетолог: ${esc(p.name || '')}</b><span class="small ${(p.partnerStatus || 'active') === 'active' ? 'up' : 'muted'}">● ${({ active: 'работаем', paused: 'на паузе', done: 'завершено' })[p.partnerStatus || 'active'] || ''}</span></div>${p.campaignNote ? `<div class="small muted">${esc(p.campaignNote)}</div>` : ''}</a>`).join('')}${x.others.map((k) => `<a class="item" href="../#/ad/${esc(k.id)}"><div class="row between"><b>${esc(k.name)}${k.all ? ' <span class="small muted">· на все книги</span>' : ''}</b><span class="small ${k.start <= t && (!k.end || k.end >= t) ? 'up' : 'muted'}">● ${k.start > t ? 'скоро' : !k.end || k.end >= t ? 'идёт' : 'закончилась'}</span></div>
       <div class="small muted">${esc(CH[k.channel] || '')}${k.start ? ' · ' + fmtShort(k.start) : ''}${k.end ? '–' + fmtShort(k.end) : ''}${k.budget ? ` · ${rub(k.budget, 0)}` : ''}</div></a>`).join('')}</div></div>` : ''}`;
   const readers = x.rd ? `<div class="card"><h2>Читатели за 30 дней</h2><div class="list">

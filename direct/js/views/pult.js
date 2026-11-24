@@ -3,7 +3,7 @@
 import { esc, more, openSheet } from '../../../js/ui.js';
 import { rub, num } from '../../../js/format.js';
 import { addDays, outageSet } from '../../../js/calc.js';
-import { goalsOf, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget, campaignLevers, campaignPayback, campaignStage, NEED_BUYS } from '../pult.js';
+import { goalsOf, campaignBookLinks, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget, campaignLevers, campaignPayback, campaignStage, NEED_BUYS } from '../pult.js';
 import { royaltyPerSale, litnetPage } from '../mcalc.js';
 import { matchingSaleName } from '../bookeconomics.js';
 import { libraryValue } from '../launchcalc.js';
@@ -36,9 +36,10 @@ export function pultModel(a) {
   const t = c.today, m = metrikaOf(c) || {}, skip = outageSet(c.data.days || []);
   const daily = stats.daily || [], conv = stats.conv || [], ads = main.ads || [];
   const ev = conversionEvidence(stats, t);
+  const links = campaignBookLinks(c);
   const cohortsReady = !demo.on && !c.settings.direct?.sandbox && !c.settings.direct?.cohortsErr && cohorts?.to >= addDays(t, -3) && cohorts.to < t;
   const rows = (main.campaigns || []).filter((x) => x.state !== 'ARCHIVED').map((camp) => {
-    const goals = goalsOf(m, camp), book = bookOfCampaign(camp, ads, c.data.w_books || []);
+    const goals = goalsOf(m, camp), book = bookOfCampaign(camp, ads, c.data.w_books || [], links);
     const saleName = matchingSaleName(book?.title, c.data.sales);
     const sold = saleName ? royaltyPerSale(c.data.sales || [], t, { book: saleName }) : null;
     const landingId = litnetPage(book?.href).bookId;
@@ -195,7 +196,7 @@ function queueOf(a) {
     ...litTagItems({ main, code: c.settings.litTag?.code || '', late: !!litTagInfo(c.settings, c.today)?.late }),
     ...winnerQueryItems({ main, stats: a.snap('stats') || {}, goals: goalsOf(metrikaOf(c) || {}) }),
     ...retargetItems({ main, goals: goalsOf(metrikaOf(c) || {}), saved: d.retarget || {}, buys: Object.fromEntries(pultModel(a).rows.map((r) => [r.camp.id, r.stage?.buy7 ?? 0])) }),
-    ...newAdItems({ main, bookOf: (camp) => { const b = bookOfCampaign(camp, main.ads || [], wbooks); return b ? wbooks.find((x) => x.id === b.id) : null; }, hits: (t, wb) => spoilerHits(t, spoilerList(wb)) }),
+    ...newAdItems({ main, bookOf: (camp) => { const b = bookOfCampaign(camp, main.ads || [], wbooks, campaignBookLinks(c)); return b ? wbooks.find((x) => x.id === b.id) : null; }, hits: (t, wb) => spoilerHits(t, spoilerList(wb)) }),
   ];
   return approvalQueue({ main, stats: a.snap('stats') || {}, on: d.auto || {}, today: c.today, goalActs, done: d.autoDone || [], no: d.queueNo || [], starter, extra });
 }

@@ -3,6 +3,7 @@
 import { esc } from '../../../js/ui.js';
 import { rub, num } from '../../../js/format.js';
 import { outageSet } from '../../../js/calc.js';
+import { campaignBookLinks } from '../pult.js';
 import { campaignBookEconomics } from '../bookeconomics.js';
 import { metrikaOf } from './metrika.js';
 
@@ -54,7 +55,7 @@ export function bookEconomicsCard(a) {
     campaigns: main.campaigns || [], ads: main.ads || [], books: c.data.w_books || [],
     sales: c.data.sales || [], daily: stats.daily || [], conv: stats.conv || [], stats,
     cohorts: a.snap('cohorts'), metrika: metrikaOf(c) || {}, today: c.today,
-    outageDays: outageSet(c.data.days || []), cohortError: c.settings.direct?.cohortsErr || ''
+    outageDays: outageSet(c.data.days || []), links: campaignBookLinks(c), cohortError: c.settings.direct?.cohortsErr || ''
   }).filter((r) => r.spend30 > 0 || r.bookTitle);
   if (!rows.length) return '';
   return '<div class="card"><h2 style="margin:0 0 6px">Экономика книг и когорт</h2>' +

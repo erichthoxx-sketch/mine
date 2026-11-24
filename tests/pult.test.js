@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { goalsOf, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget, siteCampaigns } from '../direct/js/pult.js';
+import { goalsOf, campaignBookLinks, bookOfCampaign, campaignState, campaignEcon, campaignAlerts, weekBudget, siteCampaigns } from '../direct/js/pult.js';
 import { directMonths, siteAdRows, siteToLitnet } from '../direct/js/pult.js';
 
 const M = { goals: [{ id: 548467215, name: 'Добавление книги в библиотеку' }, { id: 548467220, name: 'Покупка книги' }, { id: 548467217, name: 'Начало покупки книги' }], main: [] };
@@ -21,6 +21,17 @@ test('книга кампании — по ссылке объявления н�
   const b = bookOfCampaign(camp, ads, [{ id: 'w1', title: 'Альпийский развод' }, { id: 'w2', title: 'Развод для черной вдовы' }]);
   assert.equal(b.id, 'w2');
   assert.equal(bookOfCampaign(camp, ads, [{ id: 'w3', title: 'X', direct: { link: 'https://litnet.com/ru/book/any-b639097' } }]).id, 'w3');
+});
+
+test('Привязка кампании из плана запуска применяется к статистике и финансам', async () => {
+  const { incomeCampaignFor } = await import('../direct/js/sync.js');
+  const book = { id: 'b1', title: 'Роман из Мастерской', litnetUrl: 'https://litnet.com/ru/book/roman-b54545' };
+  const links = campaignBookLinks({ settings: { direct: { launches: { b1: { campaignId: camp.id } } } } });
+  const siteAds = [{ cid: camp.id, href: 'https://lanafreitag.ru/' }];
+  assert.equal(bookOfCampaign(camp, siteAds, [book], links)?.id, book.id);
+  assert.equal(incomeCampaignFor(camp, siteAds, [book], [], links).name, 'Директ: «Роман из Мастерской»');
+  const otherAds = [{ cid: camp.id, href: 'https://litnet.com/ru/book/drugoi-roman-b61616' }];
+  assert.equal(bookOfCampaign(camp, otherAds, [book], links), null);
 });
 
 test('состояние: модерация, старт, нет показов, упёрлась в недельный бюджет, идёт', () => {

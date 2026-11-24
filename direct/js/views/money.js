@@ -63,11 +63,11 @@ export function compareCard(a) {
   if (rows.length < 2) return '';
   const f2 = (v) => v.toFixed(2).replace('.', ',');
   const TONE = { good: 'up', even: '', bad: 'down', wait: 'muted' };
-  return `<div class="card"><div class="row between"><h2 style="margin:0">Все кампании — кто работает лучше</h2><span class="small muted">30 дней</span></div>
+  return `<div class="card"><div class="row between"><h2 style="margin:0">Кампании и оценка отдачи</h2></div>
     ${verdict ? `<p style="margin:8px 0 0">${esc(verdict)}</p>` : ''}
     <div class="list cmp-list">${rows.map((x) => `<div class="item cmp-row${x.src === 'direct' ? ' cmp-go' : ''}"${x.src === 'direct' ? ` data-act="dg.open" data-id="${x.id}"` : ''}>
       <div class="row between" style="gap:10px;align-items:flex-start"><div style="min-width:0"><b class="cmp-n">${esc(x.name)}</b>${x.sub ? ` <span class="small muted">${esc(x.sub)}</span>` : ''}
         <div class="small muted">${esc(x.who)} · ${rub(x.cost, 0)}${x.live ? '' : ' · закончилась'}${x.note ? ` · ${esc(x.note)}` : ''}</div></div>
-        <div class="cmp-r">${x.score != null ? `<span class="dg-score dg-sm dg-${x.grade}" title="Оценка «Диагноза»">${x.score}</span>` : ''}<div><b class="${TONE[x.kind]}">${x.share != null ? f2(x.share) + ' ₽' : '—'}</b><div class="small ${TONE[x.kind]}">${KIND_TEXT[x.kind]}</div></div></div></div></div>`).join('')}</div>
+        <div class="cmp-r">${x.score != null ? `<span class="dg-score dg-sm dg-${x.grade}" title="Оценка «Диагноза»">${x.score}</span>` : ''}<div><b class="${TONE[x.kind]}">${x.share != null ? '≈ ' + f2(x.share) + ' ₽' : '—'}</b><div class="small ${TONE[x.kind]}">${KIND_TEXT[x.kind]}</div></div></div></div></div>`).join('')}</div>
     <p class="small muted" style="margin:8px 0 0">Справа — сколько возвращает 1 ₽ ${q('roi')}: у Директа — ожидаемое от добавлений в библиотеку, у кампаний «Доходов» — прирост дохода против обычных дней. Кружок — оценка «Диагноза» ${q('score')}; нажмите на кампанию Директа, чтобы открыть его.</p></div>`;
 }

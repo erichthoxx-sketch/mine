@@ -1,3 +1,4 @@
+import { weekBudget } from './pult.js';
 // «Диагноз кампании» (19.11.2026, её просьба: «полноценный аналитический инструмент, чтобы стать топовым книжным таргетологом»).
 // Как работает книжный директолог: 1) экономика одного добавления в библиотеку — цена против того, что оно приносит, и точка безубыточности;
 // 2) воронка показ → клик → библиотека → покупка против прошлого периода — где узкое место; 3) разрезы (поиск/сети, устройства, пол, возраст,
@@ -156,7 +157,8 @@ export function diagnose({ camp, daily = [], conv = [], adDaily = [], ads = [], 
     const dCpa = by.cpa.d, trend = dCpa == null ? 12 : dCpa <= -0.15 ? 20 : dCpa <= 0.1 ? 15 : dCpa <= 0.3 ? 8 : 2;
     const clean = Math.max(0, 15 - leakShare * 60);
     const volume = L7 >= 10 ? 10 : L7 >= 5 ? 6 : 2;
-    const budget = camp.budget?.kind === 'week' && camp.budget.amount > 0 ? (t7.cost / camp.budget.amount >= 0.95 ? 7 : t7.cost / camp.budget.amount >= 0.5 ? 10 : 5) : 8;
+    const usage = weekBudget(camp, daily, today)?.share;
+    const budget = usage == null ? 8 : usage >= 0.95 ? 7 : usage >= 0.5 ? 10 : 5;
     score = Math.max(0, Math.min(100, Math.round(econ + trend + clean + volume + budget)));
     grade = score >= 75 ? 'good' : score >= 55 ? 'ok' : score >= 35 ? 'weak' : 'bad';
   }

@@ -60,12 +60,12 @@ test('тест объявлений: по добавлениям, когда о�
   assert.equal(W.by, 'ctr'); assert.equal(W.status, 'wait'); assert.ok(W.need > 0);
 });
 
-test('все кампании в одной таблице: свой Директ и таргетологи по одному мерилу, без двойного счёта Директа из «Доходов»', () => {
+test('все кампании в одной таблице: свой Директ и таргетологи без общего рейтинга и двойного счёта Директа из «Доходов»', () => {
   const income = [
     { c: { id: 'k1', name: 'Иванова, ноябрь', channel: 'own' }, m: { status: 'running', spendTotal: 10000 }, v: { kind: 'bad', share: 0.6 }, live: true },
     { c: { id: 'k2', name: 'Директ: «Вдова»', src: 'direct' }, m: { status: 'running', spendTotal: 5000 }, v: { kind: 'good', share: 2 }, live: true },
   ];
   const { rows, verdict } = compareRows({ direct: [{ id: 7, name: 'Вдова — ЕПК', book: 'Вдова', cost: 8000, score: 81, grade: 'good', share: 1.5, enough: true }], income, partners: [{ id: 'p', name: 'Иванова' }] });
   assert.deepEqual(rows.map((x) => [x.who, x.kind]), [['Мой Директ', 'good'], ['Иванова', 'bad']]);
-  assert.match(verdict, /Лучше всех рубль отдаёт «Вдова»/);
+  assert.match(verdict, /рассчитана разными способами/);
 });

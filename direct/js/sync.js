@@ -7,7 +7,7 @@ import { demoSnapshot, demoMetrikaSnap, demoSiteSnap, isDemo, snap, putSnap, put
 import { todayISO, addDays, weekStart, bookIdFor } from '../../js/calc.js';
 import { segRows } from './diagnose.js';
 import { matchingSaleName } from './bookeconomics.js';
-import { bookOfCampaign } from './pult.js';
+import { bookOfCampaign, campaignBookLinks } from './pult.js';
 import { SESSION_METRICS, goalMetric, mkRows, SITE_COUNTER, siteGoalIds } from './mcalc.js';
 import { reportId } from '../../js/parse.js';
 import { uid } from '../../js/ui.js';
@@ -209,20 +209,21 @@ export async function refresh(app, { onStep = () => {} } = {}) {
 // Директ → «Доходы» сам (12.11.2026, «чтобы всё со всем синхронизировалось»): у кампании Директа с расходом появляется своя кампания
 // в «Доходах» (с книгой — по ссылке объявления), и расход по неделям уходит туда без ручной связи. Связь, которую владелица
 // сама убрала («не связана» — пустое значение в links), не возвращаем.
-export function incomeCampaignFor(camp, ads = [], wbooks = [], sales = []) {
-  const book = bookOfCampaign(camp, ads, wbooks);
+export function incomeCampaignFor(camp, ads = [], wbooks = [], sales = [], links = []) {
+  const book = bookOfCampaign(camp, ads, wbooks, links);
   const sold = matchingSaleName(book?.title, sales);
   return { name: 'Директ: ' + (book?.title ? `«${book.title}»` : camp.name), bookId: sold || book?.title ? bookIdFor(sold || book.title) : '', scope: 'book', channel: 'own', start: camp.start || '', end: camp.end || '', budget: null, paidAt: '', baseMode: 'auto', src: 'direct' };
 }
 async function autoLinkIncome(app, campaigns, ads, daily) {
   const c = app.ctx(), d = c.settings.direct || {}, links = { ...(d.links || {}) };
+  const bookLinks = campaignBookLinks(c);
   let changed = false;
   for (const camp of campaigns) {
     if (String(camp.id) in links) {
       const existing = (c.data.campaigns || []).find((x) => x.id === links[camp.id]);
       if (existing?.src === 'direct' && app.store.patch) {
-        const linked = incomeCampaignFor(camp, ads, c.data.w_books, c.data.sales);
-        const inferred = incomeCampaignFor(camp, ads, c.data.w_books);
+        const linked = incomeCampaignFor(camp, ads, c.data.w_books, c.data.sales, bookLinks);
+        const inferred = incomeCampaignFor(camp, ads, c.data.w_books, [], bookLinks);
         const patch = {};
         if (linked.bookId && existing.bookId !== linked.bookId && (!existing.bookId || existing.bookId === inferred.bookId)) {
           patch.bookId = linked.bookId;
@@ -235,7 +236,7 @@ async function autoLinkIncome(app, campaigns, ads, daily) {
     }
     if (!daily.some((x) => x.cid === camp.id && x.cost > 0)) continue;
     const id = 'direct_' + camp.id;
-    if (!(c.data.campaigns || []).some((x) => x.id === id)) await app.store.put('campaigns', { id, ...incomeCampaignFor(camp, ads, c.data.w_books || [], c.data.sales || []), start: camp.start || c.today });
+    if (!(c.data.campaigns || []).some((x) => x.id === id)) await app.store.put('campaigns', { id, ...incomeCampaignFor(camp, ads, c.data.w_books, c.data.sales, bookLinks), start: camp.start || c.today });
     links[camp.id] = id; changed = true;
   }
   if (changed) await app.store.saveSettings({ direct: { ...(app.ctx().settings.direct || {}), links: { ...links, ...(app.ctx().settings.direct?.links || {}) } } });

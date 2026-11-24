@@ -28,7 +28,7 @@ const rollup = (list, from, to) => list.reduce((t, r) => {
 
 export function campaignBookEconomics({
   campaigns = [], ads = [], books = [], sales = [], daily = [], conv = [], stats = {},
-  cohorts = null, metrika = {}, today, outageDays = null, cohortError = '', now = Date.now()
+  cohorts = null, metrika = {}, today, outageDays = null, cohortError = '', now = Date.now(), links = []
 } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(today || ''))) return [];
   const from7 = addDays(today, -6), from30 = addDays(today, -29), from90 = addDays(today, -89);
@@ -40,7 +40,7 @@ export function campaignBookEconomics({
     const landingIds = [...new Set(campaignAds.map((x) => litnetPage(x.href).bookId).filter(Boolean))];
     // Если внутри одной кампании рекламируют разные книги — никакой фиктивной привязки.
     const mixed = landingIds.length > 1;
-    const book = mixed ? null : bookOfCampaign(campaign, campaignAds, books);
+    const book = mixed ? null : bookOfCampaign(campaign, campaignAds, books, links);
     const title = book?.title || null;
     const saleName = matchingSaleName(title, sales);
     const matchedSales = saleName ? sales.filter((x) => x.book === saleName) : [];

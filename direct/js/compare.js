@@ -27,10 +27,11 @@ export function compareRows({ direct = [], income = [], partners = [] } = {}) {
   const known = rows.filter((x) => x.share != null);
   const f2 = (v) => v.toFixed(2).replace('.', ',');
   let verdict = '';
-  if (known.length >= 2) {
+  if (known.length >= 2 && new Set(known.map((x) => x.src)).size > 1) {
+    verdict = 'Отдача рассчитана разными способами. Сравнивайте её внутри одного источника.';
+  } else if (known.length >= 2) {
     const best = known[0], worst = known[known.length - 1];
-    if (best.share >= worst.share * 1.25) verdict = `Лучше всех рубль отдаёт ${best.name} (${best.who}): ${f2(best.share)} ₽ на 1 ₽, хуже всех — ${worst.name} (${worst.who}): ${f2(worst.share)} ₽.`
-      + (best.kind === 'good' && worst.kind === 'bad' ? ' Свободный бюджет логичнее отдавать туда, где рубль возвращается, а не делить поровну.' : '');
+    if (best.share >= worst.share * 1.25) verdict = `Наибольшая оценка отдачи у ${best.name} (${best.who}) — ${f2(best.share)} ₽ на 1 ₽. Наименьшая у ${worst.name} (${worst.who}) — ${f2(worst.share)} ₽.`;
     else verdict = 'Все кампании с оценкой отдают рубль примерно одинаково — явного лидера нет.';
   }
   return { rows, verdict };

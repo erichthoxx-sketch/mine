@@ -11,6 +11,7 @@ import { auditItemsHtml } from './learn.js';
 import { logView } from './log.js';
 import { ic } from '../../../js/icons.js';
 import { stateDot, strategyText, manualBids, tiles, statLine, actBtn, runAction, q } from './common.js';
+import { campaignBookLinks } from '../pult.js';
 import { pultModel } from './pult.js';
 import { diagHtml } from './diagnose.js';
 
@@ -113,7 +114,7 @@ changes['d.link'] = async (v, el) => {
   if (v === '+') {
     id = 'direct_' + camp.id;
     if (!c.data.campaigns.some((x) => x.id === id)) {
-      await a.store.put('campaigns', { id, ...incomeCampaignFor(camp, a.snap('main').ads, c.data.w_books, c.data.sales), start: camp.start || c.today });
+      await a.store.put('campaigns', { id, ...incomeCampaignFor(camp, a.snap('main').ads, c.data.w_books, c.data.sales, campaignBookLinks(c)), start: camp.start || c.today });
     }
   }
   await a.store.saveSettings({ direct: { ...(c.settings.direct || {}), links: { ...(c.settings.direct?.links || {}), [cid]: id } } });

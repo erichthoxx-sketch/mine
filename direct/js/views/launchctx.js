@@ -9,7 +9,7 @@ import { launchPlan, libraryGoal, buyGoal, launchesOf, budgetCheck } from '../la
 import { goalTotals30, royaltyPerSale } from '../mcalc.js';
 import { metrikaOf } from './metrika.js';
 import { demo } from '../demo.js';
-import { bookOfCampaign } from '../pult.js';
+import { bookOfCampaign, campaignBookLinks } from '../pult.js';
 
 const site = { info: null, loading: false, at: 0 };
 export function siteBooks(a) {
@@ -38,7 +38,8 @@ export function resolvedLaunches(a) {
   const bx = { cpc: d30 && d30.clicks >= 50 ? d30.cpc : null, cpcSrc: 'ваш Директ за 30 дней', crLib: tot?.visits && lib ? (tot.goals[lib.id] || 0) / tot.visits : null, goals };
   // кампания запуска не выбрана — сама: та, чьи объявления ведут на эту книгу (идущая — первой)
   const main = demo.on ? null : a.snap('main'), camps = (main?.campaigns || []).filter((k) => k.state !== 'ARCHIVED').sort((x, y) => (y.state === 'ON') - (x.state === 'ON'));
-  const autoCamp = (id) => camps.find((k) => bookOfCampaign(k, main?.ads || [], c.data.w_books || [])?.id === id)?.id || '';
+  const links = campaignBookLinks(c);
+  const autoCamp = (id) => camps.find((k) => bookOfCampaign(k, main?.ads || [], c.data.w_books || [], links)?.id === id)?.id || '';
   return launchesOf(c.settings, c.data.w_books || []).map(({ id, cfg }) => {
     const fl = cfg.campaignId ? cfg : { ...cfg, campaignId: autoCamp(id) };
     const base = launchPlan(fl, common);

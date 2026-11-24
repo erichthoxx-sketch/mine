@@ -3,7 +3,7 @@
 import { addDays } from '../../js/calc.js';
 import { totals, goalTotals, convTotal } from './dcalc.js';
 import { missingConversionsDuringSpend } from './evidence.js';
-import { paidName } from './launchcalc.js';
+import { paidName, sameBook } from './launchcalc.js';
 import { litnetPage, matchBook, reach } from './mcalc.js';
 
 const r0 = (v) => Math.round(v);
@@ -22,14 +22,31 @@ export function goalsOf(metrika = {}, camp = null) {
   return { lib: lib ? String(lib.id) : null, buy: buy ? [String(buy.id)] : [], own };
 }
 
-// Книга кампании: по ссылке объявления на Литнете (номер книги или адрес), иначе по названию кампании
-export function bookOfCampaign(camp, ads = [], wbooks = []) {
+// Привязка из плана запуска и библиотеки фраз используется на всех экранах кампании.
+export function campaignBookLinks({ settings = {}, data = {} } = {}) {
+  const d = settings.direct || {};
+  const plans = Object.entries(d.launches || {}).map(([bookId, plan]) => ({ bookId, campaignId: plan?.campaignId }));
+  const legacy = (data.w_books || []).filter((b) => d.firstLaunch?.book && !d.launches?.[b.id] && sameBook(b.title, d.firstLaunch.book));
+  return [...(data.d_kw_bindings || []), ...plans, ...legacy.map((b) => ({ bookId: b.id, campaignId: d.firstLaunch.campaignId }))];
+}
+
+// Книга кампании: сохранённая привязка, ссылка объявления на Литнете или название кампании.
+export function bookOfCampaign(camp, ads = [], wbooks = [], links = []) {
   const hrefs = ads.filter((x) => x.cid === camp.id).map((x) => x.href).filter(Boolean);
   const ids = new Set(hrefs.map((h) => litnetPage(h).bookId).filter(Boolean));
   if (ids.size > 1) return null;
+  const saved = new Set(links.filter((x) => x.campaignId && String(x.campaignId) === String(camp.id)).map((x) => String(x.bookId)));
+  if (saved.size > 1) return null;
+  const pinned = wbooks.find((b) => saved.has(String(b.id)));
+  if (pinned) {
+    const url = pinned.litnetUrl || pinned.direct?.link;
+    const id = litnetPage(url).bookId;
+    if (id && ids.size && !ids.has(id)) return null;
+    return { id: pinned.id, title: pinned.title, href: hrefs.find((h) => litnetPage(h).bookId) || url || hrefs[0] || null };
+  }
   for (const h of hrefs) {
     const p = litnetPage(h);
-    if (p.type !== 'book' || !p.bookId) continue;
+    if (!p.bookId) continue;
     const byLink = wbooks.find((b) => [b.direct?.link, b.litnetUrl].some((u) => u && litnetPage(u).bookId === p.bookId));
     if (byLink) return { id: byLink.id, title: byLink.title, href: h };
     const t = matchBook(p.slug, wbooks.map((b) => b.title));
