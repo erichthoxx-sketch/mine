@@ -20,5 +20,5 @@ test('Freitag AI: deploy pipeline includes the app', () => {
   const yaml = readFileSync('.github/workflows/pages.yml', 'utf8'), sh = readFileSync('scripts/build-apps.sh', 'utf8');
   assert.match(yaml, /bash scripts\/build-apps\.sh \$V _site/);
   assert.match(sh, /\$OUT\/ai\/index\.html/);
-  assert.match(sh, /cp ai\/app\.js "\$OUT\/\$V\/ai\/app\.js"/);
+  assert.match(sh, /cp ai\/\*\.js "\$OUT\/\$V\/ai\/"/);
 });

@@ -2,12 +2,14 @@
 import assert from "node:assert/strict";
 import {mkdir, readFile} from "node:fs/promises";
 import {runInNewContext} from "node:vm";
+import {pathToFileURL} from "node:url";
 import {chromium} from "playwright";
 
 const browser = await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE_PATH});
 const workingOrigin = "https://codex-freitag-aitunnel.freitag-ai-test.pages.dev";
 const providerOrigin = "https://freitag-api-gateway.erichtho-xx.workers.dev";
 const appRoot = new URL("../",import.meta.url);
+const assetRoot = process.env.FREITAG_TEST_BUILD ? pathToFileURL(process.env.FREITAG_TEST_BUILD+"/") : appRoot;
 const instruction = "\n  Тестовая общая инструкция. ".repeat(600)+"  ";
 const project = "\n  Указания для тестовой книги. ".repeat(400)+"  ";
 const prompt = "  \nЗадание для проверки. ".repeat(1700)+"  ";
@@ -75,7 +77,7 @@ try {
         }
         return route.fulfill({json:data,headers:cors});
       }
-      if(u.pathname==="/ai/master-sync.js")return route.fulfill({contentType:"text/javascript",body:`
+      if(/^\/(?:vtest\/)?ai\/master-sync\.js$/.test(u.pathname))return route.fulfill({contentType:"text/javascript",body:`
         const store={
           status:async()=>({current:window.testCloud?.manifest||null}),
           save:async(value,expected)=>{
@@ -91,10 +93,10 @@ try {
           openFullArchive:async()=>({uid:"fixture",store})};
       `});
       let path=u.pathname==="/ai/"?"ai/index.html":u.pathname.slice(1);
-      if(path==="workshop/bear.svg")path="writer/bear.svg";
-      assert.match(path,/^(ai|writer|js|css)\//);
+      if(path==="workshop/bear.svg"&&assetRoot===appRoot)path="writer/bear.svg";
+      assert.match(path,/^(?:vtest\/)?(ai|writer|workshop|vendor|js|css)\//);
       const types={html:"text/html",js:"text/javascript",css:"text/css",svg:"image/svg+xml",webmanifest:"application/manifest+json"};
-      return route.fulfill({contentType:types[path.split(".").at(-1)],body:await readFile(new URL(path,appRoot))});
+      return route.fulfill({contentType:types[path.split(".").at(-1)],body:await readFile(new URL(path,assetRoot))});
     };
     await page.route("**/*",fixtureRoute);
     await page.addInitScript(apiOrigin=>{
