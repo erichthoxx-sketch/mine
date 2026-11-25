@@ -430,6 +430,8 @@ function renderChat(){
       (p?.masterBookId && paidProviders.includes(state.settings.provider) && (c?.mode||pendingMode||"draft")==="draft"?
         '<label class="f-book-scope">Рукопись для глав<select id="f-book-scope" class="f-select" '+(busy?'disabled':'')+'>'+
         '<option value="auto">По заданию</option><option value="full" '+(p.manuscriptScope==="full"?'selected':'')+'>Вся рукопись</option></select></label>':"")+
+      (p?.masterBookId&&state.settings.provider==="bothub"?
+        '<button type="button" data-action="bothub-quick-preset" '+(busy||preparingPaid?'disabled':'')+'>Щадящий режим BotHub · по заданию / 14 000 / низкие рассуждения</button>':"")+
       (canSearchBook?'<button type="button" data-action="search-book-context" '+(busy?"disabled":"")+'>Найти фразу в книге</button>':"")+
       (paidProviders.includes(state.settings.provider)?'<button type="button" data-action="preview-chapter" '+(busy?"disabled":"")+'>Контекст и цена</button>':"")+
       (paidProviders.includes(state.settings.provider)&&(c?.mode||pendingMode||(p?"draft":"dialog"))==="draft"?
@@ -1739,6 +1741,24 @@ document.addEventListener("click",async(e)=>{
   }
   if(a==="project-handoff"){const p=project(id);if(p)handoff.open(p);return;}
   if(a==="open-chapter-jobs")showBackgroundChapters();
+  if(a==="bothub-quick-preset"){
+    // Emergency fallback after provider 524: do not mutate the author's
+    // prompt, project instruction, chat history or source manuscript.
+    const p=project(chat()?.projectId||state.activeProjectId);
+    if(!p?.masterBookId||state.settings.provider!=="bothub"||busy||preparingPaid)return;
+    const currentDraft=$("#f-message-input")?.value;
+    if(typeof currentDraft==="string"){
+      state.drafts??={};
+      state.drafts[draftKey()]=currentDraft;
+    }
+    p.manuscriptScope="auto";
+    state.settings.sceneOutputTokens=14000;
+    state.settings.chapterEffort="low";
+    await save();
+    renderChat();
+    notice("Щадящий BotHub: по заданию, до 14 000 токенов, низкие рассуждения. Промпт, инструкция и история не изменены. Повторная отправка платная и может снова завершиться 524.");
+    return;
+  }
   if(a==="preview-chapter"||a==="send-background-chapter"){
     const value=$("#f-message-input")?.value;
     if(!value?.trim())return notice("Введи задание для главы.");
