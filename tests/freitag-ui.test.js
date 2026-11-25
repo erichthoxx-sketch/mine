@@ -153,5 +153,7 @@ test("legacy BotHub transport is opt-in and retains the selected quality paramet
   assert.match(app,/bothubTransport:selectedTransport/);
   assert.match(app,/state\.settings\.bothubTransport=e\.target\.value/);
   assert.match(worker,/input\.bothubTransport==="legacy"/);
+  assert.match(app,/info\.bothubLegacyTransportSupported!==true/);
+  assert.match(worker,/bothubLegacyTransportSupported: !separate/);
   assert.match(worker,/const bothubChapter = providerId === "bothub" && isDraft && !legacyBothub/);
 });
