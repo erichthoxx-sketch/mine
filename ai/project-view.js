@@ -33,7 +33,7 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
     '</form>'+
     '<div class="f-project-reference"><section class="f-project-source"><h2>Рукопись и материалы</h2>'+
     (p.masterBookId?
-      '<p class="f-muted">Для главы Freitag берет канон, две последние главы и подбирает короткие выписки из ранних сцен по заданию.</p>'+
+      '<p class="f-muted">Для глав Freitag берёт канон и '+(p.manuscriptScope==="full"?'всю рукопись.':'ближайшие предыдущие главы с отрывками по заданию.')+' Выбор доступен в чате в меню «Ещё».</p>'+
       '<div class="f-source-actions"><a class="f-btn" href="https://erichthoxx-sketch.github.io/mine/workshop/#/book/'+encodeURIComponent(p.masterBookId)+'" target="_blank" rel="noopener">Открыть книгу в Мастерской ↗</a>'+
       '<button class="f-btn" data-action="open-story-map" data-id="'+esc(p.id)+'" type="button">Карта романа</button>'+
       '<button class="f-btn" data-action="check-book-source" data-id="'+esc(p.id)+'" type="button">Проверить источник бесплатно</button>'+
@@ -44,7 +44,7 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
       (materials.length?' · '+materials.length.toLocaleString("ru-RU"):"")+'</button></div>'+
     '</section>'+
     '<section class="f-project-recent f-project-memory"><h2>Память проекта</h2>'+
-      '<p class="f-muted">Утвержденные решения и образцы стиля доступны в новых чатах этой книги. Freitag подбирает выписки из старых диалогов и материалов по заданию.</p>'+
+      '<p class="f-muted">В чатах книги доступны твои решения, реплики и одобренные ответы. Материалы подбираются по заданию. Память хранится на этом устройстве, личная резервная копия настраивается в разделе «Настройки».</p>'+
       '<button type="button" class="f-btn" data-action="add-project-memory">Закрепить решение</button>'+
       '<button type="button" class="f-btn" data-action="project-handoff" data-id="'+esc(p.id)+'">Передать проект</button>'+
       (notes.length?'<ul class="f-memory-list">'+notes.map(note=>

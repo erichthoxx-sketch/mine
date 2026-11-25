@@ -1,6 +1,7 @@
 // Freitag AI → ModelProxy / BotHub Claude Opus 5.5. Test gateway; never edit the existing Books MCP Worker.
 // Only an authenticated Firebase owner can generate; all paid-provider secrets stay on Cloudflare.
 import { CHAPTER_LIMITS, CHAPTER_EFFORTS } from "../ai/chapter-limits.js";
+import { chapterCues, isAcknowledgement, isSimpleGreeting } from "../ai/source-plan.js";
 import { collectSources } from "./freitag-sources.js";
 import { readBookTool } from "./books-mcp-worker.js";
 import { findStoryPassages, storyMap } from "./freitag-story-map.js";
@@ -8,9 +9,6 @@ import { chapterJobsClass } from "./freitag-chapter-jobs.js";
 
 const PROJECT = "dohody-6d6dd";
 const MODEL = "claude-opus-5-5";
-const AITUNNEL_API = "https://api.aitunnel.ru/v1";
-const AITUNNEL_MODEL = "claude-opus-5.5";
-const AITUNNEL_UPSTREAM = "amazon-bedrock";
 const APIMIRA_API = "https://apimira.com/v1";
 const APIMIRA_MODEL = "anthropic/claude-opus-5.5";
 const BOTHUB_ANTHROPIC = "https://bothub.chat/api/v2/anthropic/v1";
@@ -28,10 +26,6 @@ const PROVIDERS = Object.freeze({
   apimira: Object.freeze({
     name: "ApiMira", model: APIMIRA_MODEL, secret: "APIMIRA_API_KEY",
     endpoint: APIMIRA_API + "/chat/completions"
-  }),
-  aitunnel: Object.freeze({
-    name: "AITUNNEL", model: AITUNNEL_MODEL, secret: "AITUNNEL_API_KEY",
-    endpoint: `${AITUNNEL_API}/chat/completions`
   })
 });
 const ORIGINS = new Set(["https://erichthoxx-sketch.github.io", "https://freitag-ai-test.pages.dev", "http://localhost:8765", "http://127.0.0.1:8765"]);
@@ -86,8 +80,9 @@ async function providerFailure(req, response, stage) {
   const reason = {401:"Сервис отклонил ключ.", 402:"Проверь доступный баланс и резерв.",
     403:"Сервис отказал в доступе к этой операции.", 429:"Сервис ограничил запрос.",
     524:"Шлюз провайдера не дождался ответа вовремя. Проверь историю расходов перед новой попыткой."}[status] || "";
+  const requestId=response.headers.get("x-request-id") || response.headers.get("request-id");
   return json(req, status >= 400 && status < 500 ? status : 502, {
-    upstreamStatus:status, ...(safeCode ? {code:safeCode} : {}), ...(trace ? {trace_id:trace} : {}),
+    upstreamStatus:status, ...(validRequestId(requestId)?{requestId}:{}), ...(safeCode ? {code:safeCode} : {}), ...(trace ? {trace_id:trace} : {}),
     error:[stage + " — HTTP " + status + ".", reason, safeCode, trace && "ID: " + trace].filter(Boolean).join(" ")
   });
 }
@@ -373,15 +368,20 @@ function manuscriptQueryWords(text) {
 
 // Choose short passages before calling the model. The supplied chapters are
 // the same private snapshot as the MCP chapter list and may be scanned in full.
-function relatedManuscriptExcerpts(chapters, selected, task, continuity, limit) {
-  const words = manuscriptQueryWords(task.slice(0, 2500) + "\n" + task.slice(-1200));
+function chapterHeading(ch, useTitle) {
+  const title=String(ch.title||"");
+  if (useTitle && /^(?:глава\s*№?\s*\d+|пролог|эпилог)(?=$|[\s.:—–-])/i.test(title.trim())) return title.trim();
+  return "Глава "+ch.chapter+" («"+title+"»)";
+}
+function relatedManuscriptExcerpts(chapters, selected, task, continuity, limit, useTitle) {
+  const words = manuscriptQueryWords((useTitle && chapterCues(task)) || (task.slice(0, 2500) + "\n" + task.slice(-1200)));
   const recent = manuscriptQueryWords(continuity.slice(-1200)).filter(word => !words.includes(word)).slice(0, 5);
   if (limit < 350) return [];
   const matches = findStoryPassages(chapters,{terms:words,supporting:recent,skip:selected,count:4,size:Math.min(780,limit-180)});
   const passages = [];
   let remaining = limit;
   for (const {snippet,...source} of matches) {
-    const label = `Глава ${source.chapter} («${source.title}»), сцена ${source.scene}, отрывок:\n`;
+    const label = chapterHeading(source,useTitle)+", сцена "+source.scene+", отрывок:\n";
     if (task.includes(snippet) || label.length + snippet.length + 2 > remaining) continue;
     passages.push({...source,text:label+snippet});
     remaining -= label.length+snippet.length+2;
@@ -402,7 +402,23 @@ function bookContextRequest(text){
   return {chapters:selection?[...new Set(selection.split(",").map(Number))]:[],queries};
 }
 
-async function searchBookPassages(readJson,queries,chapterByNumber,selected,lastUser,limit){
+// A chapter number in the author's assignment refers to its title. A prologue
+// may occupy the first storage slot, so a slot number alone is insufficient.
+function draftChapterWindow(list, task) {
+  const intent = task.trimStart().slice(0,500).match(/^(?:мы\s+)?(пишем|напиши|допиши|продолжи|перепиши|отредактируй)\s+(?:(?:новую|мою|текущую)\s+)?главу\s*№?\s*(\d{1,3})(?!\d)/i);
+  if (!intent) return null;
+  const matches = list.filter(ch => {
+    const heading = String(ch.title||"").trim().match(/^(?:глава\s*[№#]?\s*)?(\d{1,3})(?=$|[\s.:—–-])/i);
+    return heading && Number(heading[1]) === Number(intent[2]);
+  });
+  if (matches.length !== 1) return null;
+  const index=list.indexOf(matches[0]);
+  const includeTarget=/^(допиши|продолжи|перепиши|отредактируй)$/i.test(intent[1]);
+  const end=includeTarget?index+1:index;
+  return {chapters:list.slice(Math.max(0,end-2),end), exclude:list.slice(end).map(ch=>ch.chapter)};
+}
+
+async function searchBookPassages(readJson,queries,chapterByNumber,selected,lastUser,limit,useTitle){
   const results=await Promise.all(queries.map(query=>readJson("search_book",{query})));
   const seen=[],passages=[];
   let remaining=limit;
@@ -415,7 +431,7 @@ async function searchBookPassages(readJson,queries,chapterByNumber,selected,last
       if(!chapter||selected.has(chapter.chapter)||typeof match.snippet!=="string"||
          !Number.isSafeInteger(match.offset)||!match.snippet.trim()||lastUser.includes(match.snippet)||
          seen.some(hit=>hit.chapter===match.chapter&&Math.abs(hit.offset-match.offset)<280))continue;
-      const excerpt="Глава "+chapter.chapter+" («"+String(chapter.title||"").slice(0,120)+"»), отрывок:\n"+match.snippet.slice(0,400);
+      const excerpt=chapterHeading({...chapter,title:String(chapter.title||"").slice(0,120)},useTitle)+", отрывок:\n"+match.snippet.slice(0,400);
       if(excerpt.length+2>remaining)throw Error("В контексте нет места для выписок. Выбери одну главу или убери поиск.");
       passages.push({chapter:chapter.chapter,title:chapter.title,offset:match.offset,text:excerpt});
       seen.push(match);
@@ -426,7 +442,7 @@ async function searchBookPassages(readJson,queries,chapterByNumber,selected,last
   return passages;
 }
 
-async function automaticBookPassages(env,bookId,listing,selected,task,continuity,limit){
+async function automaticBookPassages(env,bookId,listing,selected,task,continuity,limit,useTitle){
   if(!env.BOOKS||listing.chapters.length<=selected.size||limit<350)return [];
   // Use the same private snapshot as MCP. Keep the window used for
   // generation consistent if Google Docs is refreshed during this request.
@@ -435,15 +451,27 @@ async function automaticBookPassages(env,bookId,listing,selected,task,continuity
   catch{return [];}
   if(snapshot?.updatedAt!==listing.updatedAt||!Array.isArray(snapshot.chapters)||
      snapshot.chapters.length!==listing.chapters.length)return [];
-  return relatedManuscriptExcerpts(snapshot.chapters,selected,task,continuity,limit);
+  return relatedManuscriptExcerpts(snapshot.chapters,selected,task,continuity,limit,useTitle);
 }
 
 // For author-requested full chapters, load source documents directly from MCP
 // BEFORE contacting a paid model. This avoids repeated paid tool-use cycles
 // and guarantees that missing source data stops the request before billing.
-async function draftBookSources(env,bookId,messages,requiredRevision=""){
+function alreadyInAssignment(chapter, title, normalizedTask) {
+  const normalize = text => text.trim().replace(/\s+/gu," ");
+  if (normalizedTask.includes(normalize(chapter))) return true;
+  const heading = chapter.trimStart().match(/^([^\r\n]+)[\r\n]+/);
+  if (!heading || normalize(heading[1]).toLowerCase() !== normalize(title).toLowerCase()) return false;
+  const body = normalize(chapter.trimStart().slice(heading[0].length));
+  return body.length >= 80 && normalizedTask.includes(body);
+}
+
+async function draftBookSources(env,bookId,messages,requiredRevision="",scope){
+  // An already-open client may still hold a confirmed quote from the previous release.
+  const modern=scope==="auto" || scope==="full", full=scope==="full";
   let snapshot;
-  if(snapshotGateway(env)){
+  if(snapshotGateway(env) || full){
+    if (!env.BOOKS) throw Error("Закрытый снимок для чтения всей рукописи недоступен.");
     snapshot=await env.BOOKS.get("book:"+bookId,{type:"json"});
     if(!Array.isArray(snapshot?.chapters) || typeof snapshot.context!=="string")
       throw Error("Снимок книги не найден. Обнови книгу в Мастерской.");
@@ -461,12 +489,13 @@ async function draftBookSources(env,bookId,messages,requiredRevision=""){
     try { return JSON.parse(raw); } catch { throw Error("Мастерская вернула нечитаемый ответ."); }
   };
   const lastUser = messages.findLast(m => m.role === "user")?.content || "";
-  const {chapters,queries}=bookContextRequest(lastUser);
+  const {chapters,queries}=full?{chapters:[],queries:[]}:bookContextRequest(lastUser);
   const listing = await readJson("list_chapters");
   if (!Array.isArray(listing?.chapters) || !listing.chapters.length || !Number.isFinite(Date.parse(listing.updatedAt)))
     throw Error("Мастерская не подтвердила список глав. Обнови снимок книги.");
   const chapterByNumber=new Map(listing.chapters.map(ch=>[ch?.chapter,ch]));
-  const selected=chapters.length?chapters.map(number=>chapterByNumber.get(number)):listing.chapters.slice(-2);
+  const window = modern && !full && !chapters.length && !queries.length ? draftChapterWindow(listing.chapters,lastUser) : null;
+  const selected=full?listing.chapters:chapters.length?chapters.map(number=>chapterByNumber.get(number)):window?window.chapters:listing.chapters.slice(-2);
   if (selected.some(ch=>!ch))
     throw Error("Одной из выбранных глав нет в снимке Мастерской. Проверь номер главы.");
   const canon = await read("get_book_context");
@@ -474,13 +503,12 @@ async function draftBookSources(env,bookId,messages,requiredRevision=""){
   if (selected.some(ch => !Number.isSafeInteger(ch.chapter) || ch.chapter < 1 ||
       !Number.isSafeInteger(ch.chars) || ch.chars < 1))
     throw Error("Мастерская вернула неполные сведения о выбранных главах.");
-  const sourceChars=selected.reduce((n,ch) => n + ch.chars,canon.length);
-  if (sourceChars > BOOK_SOURCE_LIMIT)
-    throw Error("Канон и выбранные главы превышают предел в 180 000 знаков. Платный запрос отменен.");
-  const passages = [];
+  let sourceChars=canon.length;
+  const normalizedTask=modern?lastUser.trim().replace(/\s+/gu," "):"";
+  const passages = [], inTask = [];
   let continuity="";
   for (const ch of selected) {
-    let text = "";
+    let text = full ? snapshot.chapters[ch.chapter-1].text : "";
     while (text.length < ch.chars) {
       const offset = text.length, limit = Math.min(30000,ch.chars-offset);
       const part = await readJson("read_chapter",{chapter:ch.chapter,offset,limit});
@@ -491,25 +519,37 @@ async function draftBookSources(env,bookId,messages,requiredRevision=""){
       text += part.text;
     }
     if (!text.trim()) throw Error("В снимке книги пустая глава.");
-    if (!lastUser.includes(text)) passages.push("Глава "+ch.chapter+" («"+ch.title+"»):\n"+text);
+    if (modern ? alreadyInAssignment(text,ch.title,normalizedTask) : lastUser.includes(text)) {
+      inTask.push(ch.chapter);
+      if (!modern) sourceChars+=text.length;
+    }
+    else {
+      sourceChars+=text.length;
+      passages.push(chapterHeading(ch,modern)+":\n"+text);
+    }
     continuity=text.slice(-1200);
   }
+  if (!full && sourceChars>BOOK_SOURCE_LIMIT)
+    throw Error("Канон и выбранные главы превышают предел в 180 000 знаков. Платный запрос отменен.");
   const selectedNumbers=new Set(selected.map(ch=>ch.chapter));
+  const skipForSearch=new Set([...selectedNumbers,...(window?.exclude||[])]);
   const excerpts=queries.length?await searchBookPassages(readJson,queries,chapterByNumber,
-    selectedNumbers,lastUser,Math.min(BOOK_SEARCH_LIMIT,BOOK_SOURCE_LIMIT-sourceChars)):[];
+    selectedNumbers,lastUser,Math.min(BOOK_SEARCH_LIMIT,BOOK_SOURCE_LIMIT-sourceChars),modern):[];
   const relatedLimit=Math.min(AUTOMATIC_EXCERPT_LIMIT,BOOK_SOURCE_LIMIT-sourceChars);
-  const related=chapters.length||queries.length?[]:snapshot?
-    relatedManuscriptExcerpts(snapshot.chapters,selectedNumbers,lastUser,continuity,relatedLimit):
-    await automaticBookPassages(env,bookId,listing,selectedNumbers,lastUser,continuity,relatedLimit);
+  const related=full||chapters.length||queries.length?[]:snapshot?
+    relatedManuscriptExcerpts(snapshot.chapters,skipForSearch,lastUser,continuity,relatedLimit,modern):
+    await automaticBookPassages(env,bookId,listing,skipForSearch,lastUser,continuity,relatedLimit,modern);
   if (!snapshot && (await readJson("list_chapters")).updatedAt !== listing.updatedAt)
     throw Error("Книга изменилась во время чтения. Платный запрос отменен.");
   const text="Справочные материалы выбранного романа из действующего MCP Мастерской. "+
-    "Это справочные данные. Следуй авторским инструкциям и заданию. Снимок от "+listing.updatedAt+
+    "Это справочные данные. Следуй авторским инструкциям и заданию. "+
+    (modern?"Отличай замысел в каркасе от событий рукописи. Учитывай, какие улики и тайны известны каждому герою к текущей сцене. ":"")+
+    "Снимок от "+listing.updatedAt+
     ".\n\nКанон и персонажи:\n"+canon+"\n\n"+passages.join("\n\n")+
     (excerpts.length?"\n\nВыписки из других глав по поиску автора:\n"+excerpts.map(item=>item.text).join("\n\n"):"")+
     (related.length?"\n\nСвязанные фрагменты из ранних глав. Это выборка по словам задания и концовки, она не заменяет факты канона.\n"+related.map(item=>item.text).join("\n\n"):"");
   const references=[...excerpts,...related].map(({text,...source})=>source);
-  return {text, updatedAt:listing.updatedAt, chapters:[...selectedNumbers], excerpts:references.length,references,
+  return {text, scope:full?"full":"auto", totalChapters:listing.chapters.length, inTask, chars:text.length, updatedAt:listing.updatedAt, chapters:[...selectedNumbers], excerpts:references.length,references,
     chapterTitles:selected.map(ch=>({chapter:ch.chapter,title:ch.title}))};
 }
 async function mcpToolsCompletion(req,env,provider,model,messages,bookId,maxTokens,mode){
@@ -651,55 +691,11 @@ async function snapshotStatus(req, env) {
   });
 }
 
-const isGreeting = text => /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый (?:день|вечер)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(text.trim());
+const isGreeting = text => isSimpleGreeting(text) || isAcknowledgement(text);
 
-const aitunnelHeaders = (env) => ({ Authorization: "Bearer " + env.AITUNNEL_API_KEY,
-  "Content-Type":"application/json", "X-AITunnel-Log":"off" });
-async function aitunnelRead(env, path, signal, init = {}) {
-  return fetch(path.startsWith("https://") ? path : AITUNNEL_API + path, {
-    ...init, headers:path.startsWith("https://") ? {} : aitunnelHeaders(env), redirect:"manual",
-    signal:AbortSignal.any([signal, AbortSignal.timeout(15000)])
-  });
-}
 const money = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
 const requestFingerprint = async body => Array.from(new Uint8Array(await crypto.subtle.digest(
   "SHA-256",utf8(JSON.stringify(body)))),n=>n.toString(16).padStart(2,"0")).join("");
-async function aitunnelQuote(req, env, body, confirmation, source) {
-  const fingerprint = await requestFingerprint(body);
-  if (confirmation && confirmation.fingerprint !== fingerprint)
-    return fail(req,409,"Запрос или снимок изменился. Получи новую оценку перед отправкой.");
-  const system = body.messages.filter(m=>m.role==="system").map(m=>m.content).join("\n\n");
-  const lookup = [
-    ["счет", "/aitunnel/balance"],
-    ["тариф", `https://api.aitunnel.ru/public/aitunnel/models/chat/${AITUNNEL_MODEL}/providers`],
-    ["оценка токенов", "/messages/count_tokens", {method:"POST",body:JSON.stringify({
-      model:body.model, ...(system?{system}:{}), messages:body.messages.filter(m=>m.role!=="system")
-    })}]
-  ];
-  try {
-    const results = await Promise.all(lookup.map(([,path,init])=>aitunnelRead(env,path,req.signal,init)));
-    const failed = results.findIndex(r=>!r.ok);
-    if (failed>=0) return providerFailure(req,results[failed],"AITUNNEL · "+lookup[failed][0]);
-    const [account,catalog,tokens] = await Promise.all(results.map(r=>r.json()));
-    const model = catalog.providers?.find(row=>row.slug===AITUNNEL_UPSTREAM && row.service_tier==null);
-    if (!catalog.token_prices || !money(account.balance) || !money(model?.prompt_cost) || !money(model?.completion_cost) ||
-        !Number.isSafeInteger(tokens.input_tokens) || tokens.input_tokens < 1)
-      return fail(req,502,"AITUNNEL не подтвердил оценку стоимости.");
-    const inputRub = tokens.input_tokens * model.prompt_cost / 1000000;
-    const outputRub = body.max_tokens * model.completion_cost / 1000000;
-    const estimateRub = Math.ceil((inputRub + outputRub) * 100) / 100;
-    const budgetRub = money(account.budget) ? account.budget : null;
-    const ready = budgetRub !== null && Math.min(account.balance,budgetRub)>=estimateRub;
-    if (!confirmation) return json(req,200,{ok:true,ready,estimateRub,inputTokens:tokens.input_tokens,
-      approximate:true,costBreakdown:{currency:"RUB",input:inputRub,output:outputRub},
-      outputTokenLimit:body.max_tokens,balanceRub:account.balance,budgetRub,fingerprint,...(source?{source}:{})});
-    if (!ready) return fail(req,402,"Остатка счета или отдельного бюджета ключа AITUNNEL не хватает на оценку. Генерация не началась.");
-    if (!money(confirmation.estimateRub) || estimateRub>confirmation.estimateRub)
-      return fail(req,409,"Оценка выросла. Подтверди новую сумму перед отправкой.");
-    return null;
-  } catch { return fail(req,502,"AITUNNEL не ответил на бесплатную оценку. Генерация не началась."); }
-}
-
 function apimiraRead(req,env,path,body){
   return fetch(APIMIRA_API+path,{
     headers:{Authorization:"Bearer "+env.APIMIRA_API_KEY,
@@ -935,11 +931,8 @@ async function generate(req, env, estimateOnly = false, background = false) {
   if (!provider) return fail(req, 400, "Неизвестный API-провайдер.");
   const separateGateway=snapshotGateway(env);
   if(separateGateway && providerId==="bothub")return fail(req,403,"Используй рабочий шлюз BotHub.");
-  const aitunnel = providerId === "aitunnel";
   const apimira = providerId === "apimira" && separateGateway;
   if (!env[provider.secret]) return fail(req, 503, "В Cloudflare не задан секрет " + provider.secret + ".");
-  if (aitunnel && !estimateOnly && (!input.aitunnelQuote || typeof input.aitunnelQuote !== "object"))
-    return fail(req,409,"Сначала подтверди бесплатную оценку AITUNNEL.");
   if (apimira && !estimateOnly && (!input.apimiraQuote || typeof input.apimiraQuote !== "object"))
     return fail(req,409,"Сначала подтверди бесплатную оценку ApiMira.");
   const entries = input.messages;
@@ -954,14 +947,22 @@ async function generate(req, env, estimateOnly = false, background = false) {
   if(input.provider==="apimira" && model!==APIMIRA_MODEL)
     return fail(req,400,"Эта модель ApiMira не разрешена.");
   const lastMessage=entries.at(-1);
-  const greeting=lastMessage?.role==="user" && isGreeting(lastMessage.content);
+  const greeting=lastMessage?.role==="user" && (isSimpleGreeting(lastMessage.content) ||
+    (entries.length===1 && !input.bookId && isAcknowledgement(lastMessage.content)));
   // A greeting in an open manuscript project must not bill the full master
   // prompt, long chat history, canon or tokens reserved for a chapter.
   const messages = greeting?[{role:"user",content:lastMessage.content}]:
     entries.map(x => ({ role: x.role, content: x.content }));
   const useMcp=mcpConfigured(env);
   const isDraft = input.mode === "draft" && !greeting;
-  if(background && (!isDraft || !(apimira ? input.apimiraQuote : aitunnel ? input.aitunnelQuote : input.contextQuote)))
+  const full = input.manuscriptScope === "full";
+  if (input.manuscriptScope && !["full","auto"].includes(input.manuscriptScope))
+    return fail(req,400,"Неизвестный режим рукописи.");
+  if (full && (!isDraft || !input.bookId || !useMcp))
+    return fail(req,424,"Для всей рукописи выбери главу и книгу с подключённой Мастерской.");
+  if (full && !estimateOnly && !(apimira ? input.apimiraQuote : input.contextQuote))
+    return fail(req,409,"Сначала подтверди оценку для всей рукописи.");
+  if(background && (!isDraft || !(apimira ? input.apimiraQuote : input.contextQuote)))
     return fail(req,409,"Для фоновой главы сначала подтверди контекст и оценку стоимости.");
   // Author explicitly chooses a ceiling for paid long-form writing. A higher
   // ceiling permits a full chapter; it never starts automatic continuations.
@@ -996,8 +997,8 @@ async function generate(req, env, estimateOnly = false, background = false) {
           if(mcpList?.updatedAt!==input.sourceRevision)
             throw Error("MCP еще не видит обновленную рукопись. Повтори позже.");
         }
-        if(isDraft || aitunnel || separateGateway || estimateOnly){
-          const {text,...source}=await draftBookSources(env,input.bookId,messages,input.sourceRevision);
+        if(isDraft || separateGateway || estimateOnly){
+          const {text,...source}=await draftBookSources(env,input.bookId,messages,input.sourceRevision,input.manuscriptScope);
           quoteSource=source;
           messages.unshift({role:"system",content:text});
         }else messages.unshift({role:"system",content:
@@ -1015,7 +1016,7 @@ async function generate(req, env, estimateOnly = false, background = false) {
       }
     }catch(e){return json(req,424,{error:e.message,code:"BOOK_SOURCE"});}
   }
-  if(!input.freitagContext && useMcp && !isDraft && !aitunnel && !separateGateway && !estimateOnly){
+  if(!input.freitagContext && useMcp && !isDraft && !separateGateway && !estimateOnly){
     try{return await mcpToolsCompletion(req,env,provider,model,messages,
       greeting?"":(input.bookId||""),maxTokens,greeting?"dialog":input.mode);}
     catch(e){return fail(req,502,"MCP: "+e.message);}
@@ -1028,16 +1029,10 @@ async function generate(req, env, estimateOnly = false, background = false) {
     model, messages, stream: true,
     max_tokens: maxTokens,
     ...(effort ? {reasoning_effort:effort} : {}),
-    ...(aitunnel || apimira || separateGateway || input.freitagContext ? {stream_options:{include_usage:true}} : {}),
-    ...(aitunnel ? {
-      provider:{only:[AITUNNEL_UPSTREAM],data_collection:"deny",zdr:true,allow_fallbacks:false} } : {})
+    ...(apimira || separateGateway || input.freitagContext ? {stream_options:{include_usage:true}} : {})
   };
   if(input.contextQuote && input.contextQuote!==await requestFingerprint(body))
     return fail(req,409,"Задание или снимок книги изменились. Получи новую оценку.");
-  if (aitunnel) {
-    const quote = await aitunnelQuote(req,env,body,estimateOnly ? null : input.aitunnelQuote,quoteSource);
-    if (quote) return quote;
-  }
   if (apimira) {
     const quote=await apimiraQuote(req,env,body,estimateOnly?null:input.apimiraQuote,quoteSource);
     if(quote)return quote;
@@ -1045,22 +1040,23 @@ async function generate(req, env, estimateOnly = false, background = false) {
   if(estimateOnly)return json(req,200,{ok:true,ready:true,outputTokenLimit:maxTokens,
     ...publicEstimate(model,messages,maxTokens),fingerprint:await requestFingerprint(body),...(quoteSource?{source:quoteSource}:{})});
   const prepared={providerId,bothubChapter,body};
+  if (background && full && utf8(JSON.stringify(prepared)).byteLength>2_000_000)
+    return fail(req,413,"Вся рукопись превышает размер одного фонового задания. Используй обычную отправку или подбор по заданию.");
   if(background)return startChapterJob(req,env,input,prepared,quoteSource);
   return openProviderStream(req,env,prepared);
 }
 
 async function openProviderStream(req,env,{providerId,bothubChapter,body}){
   const provider=PROVIDERS[providerId];
-  const aitunnel=providerId==="aitunnel";
   if(!provider || !env[provider.secret])return fail(req,503,"Ключ выбранного провайдера недоступен.");
   let upstream;
   try {
     upstream = await fetch(bothubChapter ? BOTHUB_ANTHROPIC + "/messages" : provider.endpoint, {
       method: "POST",
-      headers: { ...(aitunnel?aitunnelHeaders(env):{Authorization:"Bearer "+env[provider.secret],
-        "Content-Type":"application/json"}), Accept:"text/event-stream",
+      headers: { Authorization:"Bearer "+env[provider.secret],
+        "Content-Type":"application/json", Accept:"text/event-stream",
         ...(bothubChapter?{"anthropic-version":"2023-06-01"}:{}) },
-      ...(aitunnel||providerId==="apimira"||bothubChapter?{redirect:"manual"}:{}),
+      ...(providerId==="apimira"||bothubChapter?{redirect:"manual"}:{}),
       // Глава приходит постепенно и может писаться дольше пяти минут.
       body: JSON.stringify(body), signal:req.signal
     });
@@ -1176,6 +1172,8 @@ async function batchStart(req,env){
     input=JSON.parse(raw);
   }catch{return fail(req,400,"Некорректный JSON запроса.");}
   const entries=input?.messages, bookId=input?.bookId||"",outputLimit=Number(input?.outputTokenLimit);
+  if(input?.manuscriptScope && input.manuscriptScope!=="auto")
+    return fail(req,400,"Для всей рукописи используй обычную отправку с оценкой стоимости.");
   if(input?.provider!=="bothub"||input.model!=="claude-opus-5.5"||input.mode!=="draft"||
      !CHAPTER_LIMITS.includes(outputLimit)||
      !Array.isArray(entries)||!entries.length||entries.length>16||
@@ -1195,7 +1193,7 @@ async function batchStart(req,env){
   if(bookId){
     if(!mcpConfigured(env))return fail(req,424,"MCP Мастерской не настроен. Платный запрос отменен.");
     try{
-      const {text:source}=await draftBookSources(env,bookId,messages);
+      const {text:source}=await draftBookSources(env,bookId,messages,"",input.manuscriptScope);
       messages.unshift({role:"system",content:source});
     }catch(e){return fail(req,424,"Не удалось загрузить главу: "+e.message);}
   }
@@ -1295,23 +1293,7 @@ async function bothubPreflight(req, env) {
       return fail(req,502,"ModelProxy не подтвердил остаток личного счёта.");
     return json(req,200,{ok:true,model:MODEL,balanceUsd:Number(account.available_balance)});
   }
-  if (params.get("provider")==="aitunnel") {
-    if (!env.AITUNNEL_API_KEY) return fail(req,503,"В Cloudflare не задан секрет AITUNNEL_API_KEY.");
-    if (params.get("model") && params.get("model")!==AITUNNEL_MODEL)
-      return fail(req,400,"Неизвестная модель AITUNNEL.");
-    try {
-      const [balance, models] = await Promise.all([
-        aitunnelRead(env,"/aitunnel/balance",req.signal),aitunnelRead(env,"/models",req.signal)
-      ]);
-      if (!balance.ok) return providerFailure(req,balance,"AITUNNEL · проверка счета");
-      if (!models.ok) return providerFailure(req,models,"AITUNNEL · каталог ключа");
-      const [account,catalog] = await Promise.all([balance.json(),models.json()]);
-      if (!money(account.balance) || !Array.isArray(catalog.data)) return fail(req,502,"AITUNNEL вернул некорректный ответ проверки.");
-      if (!catalog.data.some(item=>item?.id===AITUNNEL_MODEL)) return fail(req,403,"Ключ AITUNNEL не видит модель Claude Opus 5.5.");
-      return json(req,200,{ok:true,model:AITUNNEL_MODEL,balanceRub:account.balance,
-        budgetRub:money(account.budget)?account.budget:null});
-    } catch { return fail(req,502,"AITUNNEL не ответил на проверку подключения."); }
-  }
+  if (params.has("provider") && !Object.hasOwn(PROVIDERS,params.get("provider"))) return fail(req,400,"Неизвестный API-провайдер.");
   const provider=params.get("provider")==="apimira"?"apimira":"bothub";
   const model=params.get("model")||(provider==="apimira"?APIMIRA_MODEL:"claude-sonnet-5.5");
   if(provider==="bothub"&&!BOTHUB_MODELS.includes(model))
@@ -1383,7 +1365,6 @@ export default {
           bothubChapterOutputLimits: CHAPTER_LIMITS,
           apimiraConfigured: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
           chapterEfforts: CHAPTER_EFFORTS,
-          aitunnelConfigured: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID,
           bookToolsSupported: mcpConfigured(env),
           bookContextSelection: mcpConfigured(env),
           bookAutomaticContext: mcpConfigured(env) && !!env.BOOKS,
@@ -1391,8 +1372,7 @@ export default {
           availableProviders: {
             modelproxy: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
             bothub: bothubConfigured,
-            apimira: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
-            aitunnel: !!env.AITUNNEL_API_KEY && !!env.OWNER_UID
+            apimira: !!env.APIMIRA_API_KEY && !!env.OWNER_UID
           },
           booksConnected: !!env.BOOKS || (!!env.BOOKS_MCP_URL && !!env.MCP_READ_KEY),
           autoSyncSupported: !separate && !!env.BOOKS && typeof env.BOOKS.put === "function" });

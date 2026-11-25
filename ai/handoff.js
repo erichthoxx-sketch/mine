@@ -1,3 +1,5 @@
+import { feedbackForContext, usableReply } from "./project-context.js";
+
 // Explicitly select one project. Connection settings, provider keys, balances and other projects never enter the packet.
 export function projectPacket(state, project) {
   const documents=[];
@@ -16,10 +18,10 @@ export function projectPacket(state, project) {
   }
   for (const d of state.docs || []) if (d.projectId===project.id && d.includeInContext!==false)
     add("material-"+d.id,"material",d.name,d.text);
-  for (const f of state.feedback||[]) if (f.projectId===project.id)
-    add("style-"+f.id,"style",f.kind==="bad"?"Что исправить":"Образец автора",[f.reason,f.finalText||f.answer].filter(Boolean).join("\n\n"));
+  for (const f of feedbackForContext(state.feedback,project.id))
+    add("style-"+f.id,"style",f.kind==="bad"?"Что исправить":"Образец автора",[f.reason,f.finalText||(f.kind==="good"?f.answer:"")].filter(Boolean).join("\n\n"));
   for (const c of state.chats||[]) if (c.projectId===project.id) {
-    const messages=(c.messages||[]).filter(m=>!m.receiving && ["user","assistant"].includes(m.role) && m.content)
+    const messages=(c.messages||[]).filter(m=>m.content && usableReply(m,c.id,state.feedback))
       .map(m=>(m.role==="user"?"Автор":"Ответ модели")+(m.at?" · "+m.at:"")+"\n"+m.content);
     add("chat-"+c.id,"chat",c.title,messages.join("\n\n"));
   }

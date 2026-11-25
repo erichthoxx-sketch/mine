@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { webcrypto } from "node:crypto";
 import gateway from "../proxy/freitag-modelproxy-worker.js";
+import { usableReply } from "../ai/project-context.js";
+import { chapterCues } from "../ai/source-plan.js";
 import { CHAPTER_LIMITS } from "../ai/chapter-limits.js";
 
 const ORIGIN = "https://freitag-ai-test.pages.dev";
@@ -435,7 +437,7 @@ test("health reports API configurations separately, without paid requests",async
   const data=await res.json();
   assert.equal(data.configured,false);
   assert.equal(data.bothubConfigured,true);
-  assert.deepEqual(data.availableProviders,{modelproxy:false,bothub:true,apimira:false,aitunnel:false});
+  assert.deepEqual(data.availableProviders,{modelproxy:false,bothub:true,apimira:false});
 });
 
 test("browser and Pages bridge preserve authenticated provider routing and optional refresh",async()=>{
@@ -473,11 +475,11 @@ test("book project uses the exact large master instruction and verbatim long cha
   const chapterPrompt="Глава 14 — текст и поток событий. ".repeat(1450);
   assert.ok(masterPrompt.length>26000);
   assert.ok(chapterPrompt.length>40000);
-  const fn=Function("project","state","userInstruction","memoryForProject",source+"\nreturn modelproxyMessages;")(
+  const fn=Function("project","state","userInstruction","memoryForProject","usableReply","chapterCues",source+"\nreturn modelproxyMessages;")(
     ()=>({id:"book-1",instruction:masterPrompt,voice:"",canon:"",scene:""}),
     {settings:{globalInstruction:""},feedback:[]},
     v=>String(v||""),
-    ()=>""
+    ()=>"",usableReply,chapterCues
   );
   const out=fn({projectId:"book-1",messages:[{role:"user",content:chapterPrompt}]});
   assert.deepEqual(out,[
@@ -500,7 +502,7 @@ test("book project uses the exact large master instruction and verbatim long cha
   assert.match(app,/outputTokenLimit:effectiveMode==="draft"/);
   assert.match(worker,/CHAPTER_LIMITS\.includes\(requestedDraftLimit\)/);
   assert.match(worker,/maxTokens=greeting\?128:isDraft\?requestedDraftLimit/);
-  assert.match(worker,/if\(!input.freitagContext && useMcp && !isDraft && !aitunnel && !separateGateway && !estimateOnly\)/);
+  assert.match(worker,/if\(!input.freitagContext && useMcp && !isDraft && !separateGateway && !estimateOnly\)/);
 });
 
 

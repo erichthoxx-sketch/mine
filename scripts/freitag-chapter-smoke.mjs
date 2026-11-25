@@ -40,8 +40,8 @@ try {
       if(u.origin!==origin&&!providerRoute)throw Error("Неожиданный сетевой запрос: "+u.origin);
       const cors=providerRoute?{"Access-Control-Allow-Origin":origin,"Access-Control-Allow-Headers":"Authorization, Content-Type"}:{};
       const api={
-        "/health":{ok:true,model:"claude-opus-5-5",provider:"ModelProxy",providerGateway:providerRoute,apimiraConfigured:true,aitunnelConfigured:true,chapterProtocol:2},
-        "/preflight":u.searchParams.get("provider")==="aitunnel"?{ok:true,balanceRub:200,budgetRub:160}:{ok:true,balanceUsd:3.45,inputUsd:1.25,outputUsd:5.20},
+        "/health":{ok:true,model:"claude-opus-5-5",provider:"ModelProxy",providerGateway:providerRoute,availableProviders:{bothub:!providerRoute,apimira:providerRoute,modelproxy:providerRoute},chapterProtocol:2},
+        "/preflight":{ok:true,balanceUsd:3.45,inputUsd:1.25,outputUsd:5.20},
         "/receipt":providerRoute?{ok:true,costUsd:.013,inputTokens:3200,outputTokens:1700}:{ok:true,costRub:42,costCaps:7200},
         "/mcp-tools":{ok:true,toolCount:4,tools:["list_books","get_book_context","list_chapters","read_chapter"]},
         "/snapshot":{ok:true,chapterCount:15,outlineAvailable:true,updatedAt:"2026-11-22T17:00:00Z",
@@ -131,14 +131,16 @@ try {
           if(window.rejectSource)return Promise.resolve(Response.json({
             code:"BOOK_SOURCE",error:"Мастерская не нашла одну из фраз."
           },{status:424}));
+          const full=body.manuscriptScope==="full";
+          const source=full?{scope:"full",chapters:[1,2,3],totalChapters:3}: {chapters:[14,15]};
           if(body.provider==="apimira")return Promise.resolve(Response.json({ok:true,ready:true,estimateUsd:.20,
             costBreakdown:{currency:"USD",input:.08,output:.12},inputTokens:1200,
-            outputTokenLimit:body.outputTokenLimit||900,fingerprint:"fixture-apimira",source:{chapters:[14,15]}}));
+            outputTokenLimit:body.outputTokenLimit||900,fingerprint:"fixture-apimira",source}));
           if(body.provider==="bothub")return Promise.resolve(Response.json({ok:true,ready:true,estimateRub:40,approximate:true,
             tariff:"Публичный тариф",tariffDate:"2026-11-24",inputTokens:1000,outputTokenLimit:body.outputTokenLimit||900,
-            fingerprint:"fixture-bothub",source:{chapters:[14,15],references:[{chapter:1,scene:2}]}}));
-          return Promise.resolve(Response.json({ok:true,ready:true,estimateRub:136,outputTokenLimit:14000,
-            balanceRub:200,budgetRub:160,fingerprint:"fixture-estimate"}));
+            fingerprint:"fixture-bothub",source:{...source,references:[{chapter:1,scene:2}]}}));
+          return Promise.resolve(Response.json({ok:true,ready:true,estimateUsd:.14,outputTokenLimit:14000,
+            balanceUsd:3.45,inputTokens:1300,fingerprint:"fixture-estimate"}));
         }
         const providerRoute=String(url)===apiOrigin+"/chat";
         const workingRoute=String(url)===location.origin+"/api/freitag/chat";
@@ -206,7 +208,10 @@ try {
     await manuscript.click();
     assert.equal(await page.getByRole("textbox",{name:"Текст материала"}).inputValue(),"Первая строка.\nВторая строка.\nКонец главы.");
     await page.getByRole("button",{name:"Закрыть",exact:true}).click();
-    await page.getByRole("checkbox",{name:"Подбирать отрывки из Рукопись.docx"}).uncheck();
+    const material=page.getByRole("combobox",{name:"Использование материала Рукопись.docx"});
+    assert.equal(await material.inputValue(),"auto");
+    await material.selectOption("priority");
+    await material.selectOption("archive");
     await page.locator("#f-upload").setInputFiles({name:"Набросок.txt",mimeType:"text/plain",buffer:Buffer.from("Старинный алтарь")});
     await page.getByRole("searchbox",{name:"Поиск по названию"}).fill("рукопись");
     assert.equal(await page.getByRole("button",{name:"Набросок.txt"}).count(),0);
@@ -257,7 +262,7 @@ try {
     assert.ok(submitBounds.y+submitBounds.height<=(navBounds?.y??900),"Send button must remain above the bottom navigation");
     if(screenshots)await page.screenshot({path:screenshots+"/chat-"+width+".png",fullPage:true});
     await page.locator('#f-chat-form button[type="submit"]').click();
-    assert.match(await quote.innerText(),/ApiMira[\s\S]*0,20[\s\S]*Средний[\s\S]*главы 14, 15/);
+    assert.match(await quote.innerText(),/ApiMira[\s\S]*0,20[\s\S]*Средний[\s\S]*Главы 14, 15/);
     assert.equal(await page.evaluate(()=>window.submitted.length),0);
     if(screenshots)await page.screenshot({path:screenshots+"/quote-"+width+".png",fullPage:true});
     await approve();
@@ -326,14 +331,15 @@ try {
         }
       }
       await nav("settings");
-      await page.locator("#f-provider").selectOption("aitunnel");
+      assert.equal(await page.locator('#f-provider option[value="aitunnel"]').count(),0);
+      await page.locator("#f-provider").selectOption("modelproxy");
       await page.locator('[data-action="test-connection"]').click();
-      await page.locator("#f-test-status").filter({hasText:"Остаток бюджета ключа"}).waitFor();
+      await page.locator("#f-test-status").filter({hasText:"Баланс ModelProxy"}).waitFor();
       await nav("chat");
       await page.locator("#f-message-input").fill(prompt);
       const submit=page.locator('#f-chat-form button[type="submit"]');
       await submit.click();
-      assert.match(await quote.innerText(),/136[\s\S]*14\s000/);
+      assert.match(await quote.innerText(),/0,14[\s\S]*14\s000/);
       await quote.getByRole("button",{name:"Отмена",exact:true}).click();
       assert.equal(await page.locator("#f-message-input").inputValue(),prompt);
       assert.equal(await page.evaluate(()=>window.submitted.length),3);
@@ -341,21 +347,18 @@ try {
       await approve();
       await page.waitForFunction(()=>window.submitted.length===4);
       const paid=await page.evaluate(()=>window.submitted.at(-1));
-      assert.equal(paid.provider,"aitunnel");
+      assert.equal(paid.provider,"modelproxy");
       assert.equal(paid.messages.at(-1).content,prompt);
-      assert.deepEqual(paid.aitunnelQuote,{fingerprint:"fixture-estimate",estimateRub:136});
-      await page.evaluate(()=>window.finish("stop",123.45));
-      await page.getByText(/Списано AITUNNEL: 123,45/).waitFor();
-      console.log("Проверены отмена до оплаты, подтверждение и сумма AITUNNEL в чате");
+      assert.equal(paid.contextQuote,"fixture-estimate");
+      await page.evaluate(()=>window.finish("stop"));
+      await page.locator(".assistant").last().getByText("Состав запроса").click();
+      await page.locator(".assistant").last().getByText(/Задание автора/).waitFor();
+      console.log("Проверены подтверждение ModelProxy и сохранённый состав запроса");
       await nav("expenses");
       await page.getByRole("heading",{name:"Траты",exact:true}).waitFor();
-      await page.getByRole("button",{name:/Рубли.*123,45/}).waitFor();
       await page.getByRole("button",{name:/Доллары/}).click();
       await page.locator(".f-spend-chart").waitFor();
-      await page.locator("#f-expense-provider").selectOption("aitunnel");
-      assert.equal(await page.locator(".f-spend-history li").count(),1);
-      assert.match(await page.locator(".f-spend-history li").innerText(),/123,45[\s\S]*Оценка ≈ 136/);
-      await page.locator("#f-expense-provider").selectOption("");
+      assert.equal(await page.locator('#f-expense-provider option[value="aitunnel"]').count(),0);
       if(screenshots)await page.screenshot({path:screenshots+"/expenses-"+width+".png",fullPage:true});
       await nav("chat");
 
@@ -464,6 +467,14 @@ try {
         await page.locator("#f-chat-tools summary").click();
       }
       await page.locator("#f-message-input").fill("Продолжи сцену с синей папкой.");
+      await page.locator("#f-chat-tools summary").click();
+      await page.locator("#f-book-scope").selectOption("full");
+      await page.getByRole("button",{name:"Контекст и цена",exact:true}).click();
+      await quote.getByText(/вся рукопись, глав: 3/).waitFor();
+      assert.equal(await page.evaluate(()=>window.quoted.at(-1).manuscriptScope),"full");
+      await quote.getByRole("button",{name:"Закрыть",exact:true}).click();
+      await page.locator("#f-book-scope").selectOption("auto");
+      await page.locator("#f-chat-tools summary").click();
       await page.locator("#f-chat-tools summary").click();
       await page.getByRole("button",{name:"Контекст и цена",exact:true}).click();
       assert.match(await quote.innerText(),/BotHub[\s\S]*глава 1, сцена 2/);

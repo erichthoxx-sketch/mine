@@ -11,6 +11,8 @@ const now=new Date("2026-11-24T22:00:00Z");
 test("routing ignores financial words in fictional instructions and handles a follow-up with Moscow dates",()=>{
   assert.deepEqual(sourcePlan({task:"Напиши сцену. В диалоге звучат выручка и бюджет рекламы.",mode:"draft",bookId:"one"}).kinds,[]);
   assert.deepEqual(sourcePlan({task:"Спасибо!",bookId:"one"}).kinds,[]);
+  assert.deepEqual(sourcePlan({task:"да",mode:"draft"}),{kinds:[],draft:false,question:""});
+  assert.equal(sourcePlan({task:"да",previous:"Мы пишем главу 4",mode:"draft",bookId:"one"}).draft,true);
   assert.deepEqual(sourcePlan({task:"Сколько я потратила на рекламу за неделю?",mode:"draft"}).kinds,["direct"]);
   const follow=sourcePlan({task:"А за вчера?",previous:"Какие продажи за ноябрь?"});
   assert.deepEqual(follow.kinds,["income"]);

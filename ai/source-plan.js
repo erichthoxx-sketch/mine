@@ -1,6 +1,28 @@
 // Both the client and the authenticated gateway use the same routing rules.
 const literary = /глав|рукопис|роман|персонаж|геро|сюжет|сцен|канон|каркас|пролог|эпилог/i;
 const writing = /(?:напиш|допиш|продолж|перепиш|сочин|отредактируй|доработай)[^\n]{0,65}(?:глав|сцен|роман|рукопис|эпизод|текст|диалог)/i;
+export const isSimpleGreeting = text => /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе утро|добрый (?:день|вечер)|hello|hi|спасибо)[!?.\s]*$/i.test(String(text).trim());
+export const isAcknowledgement = text => /^(?:да|нет|ок(?:ей)?|ага|хорошо)[!?.\s]*$/i.test(String(text).trim());
+
+// A pasted chapter can be longer than the author's entire assignment.
+// Extract cues for retrieval only. The author message itself stays verbatim.
+export function chapterCues(task) {
+  const raw=String(task||"");
+  const heading=/^\s*(?:#{1,4}\s*)?(?:(поток(?:\s+по\s+главе)?|сюжетные\s+ориентиры|события\s+главы|задание(?:\s+(?:на|для)\s+глав[уы])?|что\s+должно\s+произойти)\s*[:：]|((?:текст\s+)?предыдущ(?:ая|ей)\s+глав[аы](?:\s+\d+)?|глава\s+\d+\s*[,—–-]?\s*предыдущая)\s*[:：]?)\s*/gimu;
+  let start=0, end=raw.length, found=false;
+  for (const m of raw.matchAll(heading)) {
+    if (m[1]) {start=m.index+m[0].length;end=raw.length;found=true;}
+    else if (end===raw.length) {end=m.index;found=true;}
+  }
+  if (!found || end<=start) return "";
+  let text=raw.slice(start,end).trim();
+  // Long author templates often introduce the specific plot a second time.
+  const declarations=[...text.matchAll(/^(?:мы\s+)?пишем\s+главу\s*\d+[^\n]*/gimu)];
+  const last=declarations.at(-1);
+  if (last && last.index>0 && text.length-last.index>80) text=text.slice(last.index);
+  if (text.length<=1900) return text;
+  return text.slice(0,450).trimEnd()+"\n[…]\n"+text.slice(-1430).trimStart();
+}
 const selectors = [
   ["status", /(?:какие|провер|покажи|статус|состояние).{0,35}(?:источник|коннектор|подключени)/i],
   ["income", /продаж|продал|продан|роялти|выруч|доход|заработ|гонорар/i],
@@ -11,13 +33,13 @@ const selectors = [
 ];
 export function sourcePlan({task, previous = "", bookId = "", mode = "dialog"}) {
   let question = String(task).trim();
-  if (!question || /^(?:привет|здравствуй(?:те)?|добрый (?:день|вечер)|hello|hi|спасибо|ок(?:ей)?)[!?.\s]*$/i.test(question))
+  if (!question || isSimpleGreeting(question) || (!previous && isAcknowledgement(question)))
     return {kinds:[], draft:false, question:""};
   // Only a short elliptical follow-up may inherit the previous author's topic.
-  if (question.length < 110 && /^(?:а (?:за|по|в|если|сколько|что|как|тогда|вчера|сегодня)|а эта|а этот|и за|сравни с|а прошл|а сегодня|а вчера)/i.test(question))
+  if (question.length < 110 && (isAcknowledgement(question) || /^(?:а (?:за|по|в|если|сколько|что|как|тогда|вчера|сегодня)|а эта|а этот|и за|сравни с|а прошл|а сегодня|а вчера)/i.test(question)))
     question = (previous ? previous.slice(0,450) + "\n" : "") + question;
   const instruction = question.split(/\n\s*\n/)[0].slice(0,1000);
-  if (mode === "draft" && (writing.test(instruction) || question.length > 1800))
+  if (mode === "draft" && (writing.test(instruction) || /(?:мы пишем|пишем|работаем над)\s+(?:новой?\s+)?(?:глав|сцен)/i.test(instruction) || question.length > 1800))
     return {kinds:[],draft:true,question:instruction};
   let kinds = selectors.filter(([,pattern]) => pattern.test(instruction)).map(([name]) => name);
   if (!kinds.includes("direct") && /реклам/i.test(instruction) && /бюджет|трат|расход|эффектив|окупаем|клик|кампан/i.test(instruction)) kinds.push("direct");

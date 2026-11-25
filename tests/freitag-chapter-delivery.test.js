@@ -2,6 +2,7 @@ import {before, test} from "node:test";
 import assert from "node:assert/strict";
 import gateway from "../proxy/freitag-modelproxy-worker.js";
 import booksMcp from "../proxy/books-mcp-worker.js";
+import {chapterCues} from "../ai/source-plan.js";
 import {draftDelivery,draftDeliveryLabel} from "../ai/draft-delivery.js";
 import {onRequest} from "../functions/api/freitag/[route].js";
 
@@ -54,60 +55,16 @@ test("chapter delivery distinguishes character shortfalls and the provider token
   assert.equal(draftDelivery("Варианты 12000 и 18000 знаков. В прошлый раз было 13000 знаков.","Роман.","stop",14000).target,null);
 });
 
-test("AITUNNEL connection check authorizes the key and never calls generation", async t=>{
-  const calls=mockNetwork(t,(path,init)=>{
-    assert.equal(init.headers.Authorization,"Bearer fixture-t");
-    if(path==="/v1/models")return Response.json({data:[{id:"claude-opus-5.5"}]});
-    if(path==="/v1/aitunnel/balance")return Response.json({balance:200,budget:175});
-    assert.fail(path);
-  });
-  const response=await request("preflight?provider=aitunnel");
-  assert.equal(response.status,200);
-  assert.deepEqual(await response.json(),{ok:true,model:"claude-opus-5.5",balanceRub:200,budgetRub:175});
-  assert.deepEqual(calls.sort(),["/v1/aitunnel/balance","/v1/models"]);
-});
-
-test("AITUNNEL quotes the exact payload and produces one private stream only after confirmation", async t=>{
-  const input={...chapter,provider:"aitunnel",messages:[{role:"system",content:"  Инструкция\n"},...chapter.messages]};
-  let paid=0,budget=200;
-  const routes=mockNetwork(t,(path,init)=>{
-    if(path==="/v1/aitunnel/balance")return Response.json({balance:225,budget});
-    if(path.endsWith("/providers")){
-      assert.equal(init.headers.Authorization,undefined);
-      return Response.json({token_prices:true,providers:[{slug:"amazon-bedrock",service_tier:null,prompt_cost:800,completion_cost:4000}]});
+test("retired providers cannot reach a paid or free endpoint, including from an old client",async t=>{
+  const calls=mockNetwork(t,path=>assert.fail(path));
+  for(const provider of ["aitunnel","typo","constructor"]){
+    for(const route of ["preflight","quote","chat","chapter-jobs"]){
+      const res=route==="preflight" ? await request("preflight?provider="+provider) :
+        await request(route,{...chapter,provider});
+      assert.equal(res.status,400,route+" "+provider);
     }
-    if(path==="/v1/messages/count_tokens"){
-      assert.equal(init.headers["X-AITunnel-Log"],"off");
-      assert.deepEqual(JSON.parse(init.body),{model:"claude-opus-5.5",system:input.messages[0].content,messages:chapter.messages});
-      return Response.json({input_tokens:100000});
-    }
-    assert.equal(path,"/v1/chat/completions");
-    paid++;
-    assert.equal(init.redirect,"manual");
-    assert.equal(init.headers["X-AITunnel-Log"],"off");
-    const body=JSON.parse(init.body);
-    assert.deepEqual(body.messages,input.messages);
-    assert.deepEqual(body.provider,{only:["amazon-bedrock"],data_collection:"deny",zdr:true,allow_fallbacks:false});
-    assert.equal(body.tools,undefined);
-    assert.equal(body.max_tokens,14000);
-    assert.equal(body.stream_options.include_usage,true);
-    return new Response('data: {"choices":[],"usage":{"cost_rub":123.45}}\n\ndata: [DONE]\n\n',{headers:{"Content-Type":"text/event-stream"}});
-  });
-  assert.equal((await request("chat",input)).status,409);
-  assert.deepEqual(routes,[]);
-  const estimate=await (await request("quote",input)).json();
-  assert.equal(estimate.estimateRub,136);
-  assert.equal(estimate.ready,true);
-  const confirmed={...input,aitunnelQuote:{fingerprint:estimate.fingerprint,estimateRub:estimate.estimateRub}};
-  assert.equal((await request("chat",{...confirmed,outputTokenLimit:9000})).status,409);
-  budget=100;
-  assert.equal((await request("chat",confirmed)).status,402);
-  assert.equal(paid,0);
-  budget=200;
-  const stream=await request("chat",confirmed);
-  assert.equal(stream.status,200);
-  assert.match(await stream.text(),/123\.45/);
-  assert.equal(paid,1);
+  }
+  assert.deepEqual(calls,[]);
 });
 
 test("a 403 creating a Batch is separate from its catalog and file upload",async t=>{
@@ -213,6 +170,71 @@ test("ApiMira quotes the current book and authentic price before one bounded cha
   assert.equal(sent[0].reasoning_effort,"high");
   assert.equal(sent[0].tools,undefined);
   assert.ok(calls.filter(path=>path==="/v1/chat/completions").length===1);
+});
+
+test("BotHub and ApiMira receive the same clues and exact assignment in selected and complete manuscript modes",async t=>{
+  const lastParagraph="В синем чемодане нашли часы, остановившиеся в полночь. ".repeat(24).trim();
+  const chapters=[
+    {title:"Пролог",text:"Начальная сцена. ".repeat(240)+"Инесса спрятала камертон под лестницей. "+"Двор опустел. ".repeat(150)},
+    {title:"Глава 1",text:"Дождь за окном стих к вечеру."},
+    {title:"Глава 2",text:"Маркер второй главы, затерянный переулок."},
+    {title:"Глава 3",text:"Глава 3\n"+lastParagraph},
+    {title:"Глава 4",text:"Концовка черновика четвёртой главы."},
+    {title:"Эпилог",text:"Часы перевёл садовник."}
+  ];
+  const book={title:"Тест",context:"Утверждённый канон детектива",updatedAt:"2026-11-21T10:00:00Z",chapters};
+  const kv={get:async key=>{assert.equal(key,"book:fixture");return book;}};
+  const retained={}, task="Мы пишем главу 4\n"+ "Требования к стилю. ".repeat(400)+
+    "\nПОТОК:\nИнесса должна найти камертон. Факт о часах знает только она."+
+    "\nГлава 3, предыдущая:\n"+lastParagraph.replaceAll(". ",".\r\n\r\n");
+  const messages=[{role:"user",content:task}];
+  let contextWindow=200000;
+  assert.match(chapterCues(task),/Инесса должна найти камертон/);
+  assert.doesNotMatch(chapterCues(task),/Требования|чемодане/);
+  const calls=mockNetwork(t,async(path,init)=>{
+    if(path==="/mcp")return booksMcp.fetch(new Request(env.BOOKS_MCP_URL,init),{MCP_READ_KEY:env.MCP_READ_KEY,BOOKS:kv});
+    if(path==="/v1/account/balance")return Response.json({balance_usd:1});
+    if(path==="/v1/account/pricing")return Response.json({data:[{id:"anthropic/claude-opus-5.5",
+      input_usd_per_1m_tokens:1.15,output_usd_per_1m_tokens:4.8,context_window:contextWindow}]});
+    if(path==="/v1/messages/count_tokens")return Response.json({input_tokens:5000});
+    assert.ok(["/api/v2/anthropic/v1/messages","/v1/chat/completions"].includes(path));
+    const body=JSON.parse(init.body);
+    assert.deepEqual(body.messages.filter(m=>m.role==="user"),messages);
+    retained[path]=body.system?.[0]?.text || body.messages.find(m=>m.role==="system").content;
+    return new Response("data: [DONE]\n\n",{headers:{"Content-Type":"text/event-stream"}});
+  });
+  for(const scope of ["auto","full"]){
+    for(const provider of ["bothub","apimira"]){
+      const input={...chapter,provider,bookId:"fixture",messages,freitagContext:true,manuscriptScope:scope};
+      const bindings={BOOKS:kv,...(provider==="apimira"?{FREITAG_PROVIDER_GATEWAY:"1"}:{})};
+      if(scope==="full")assert.equal((await request("chat",input,undefined,bindings)).status,409);
+      const quote=await (await request("quote",input,undefined,bindings)).json();
+      assert.equal(quote.ready,true,quote.error);
+      assert.equal(quote.source.scope,scope);
+      assert.equal(quote.source.totalChapters,6);
+      assert.deepEqual(quote.source.chapters,scope==="full"?[1,2,3,4,5,6]:[3,4]);
+      assert.deepEqual(quote.source.inTask,[4]);
+      const confirmation=provider==="apimira"?{apimiraQuote:{fingerprint:quote.fingerprint,estimateUsd:quote.estimateUsd}}:
+        {contextQuote:quote.fingerprint};
+      const response=await request("chat",{...input,...confirmation},undefined,bindings);
+      assert.equal(response.status,200);
+      await response.text();
+    }
+    const sources=retained["/api/v2/anthropic/v1/messages"];
+    assert.equal(sources,retained["/v1/chat/completions"]);
+    assert.match(sources,/Утверждённый канон детектива/);
+    assert.match(sources,/Инесса спрятала камертон/);
+    assert.doesNotMatch(sources,/В синем чемодане/);
+    if(scope==="full"){
+      for(const [i,ch] of chapters.entries())if(i!==3)assert.ok(sources.includes(ch.text),ch.title);
+    }else assert.doesNotMatch(sources,/Концовка черновика|Часы перевёл садовник/);
+  }
+  const full={...chapter,provider:"apimira",bookId:"fixture",messages,manuscriptScope:"full"};
+  const bindings={BOOKS:kv,FREITAG_PROVIDER_GATEWAY:"1"};
+  contextWindow=9000;
+  assert.equal((await request("quote",full,undefined,bindings)).status,400);
+  assert.equal((await request("quote",full,undefined,{...bindings,BOOKS:{get:async()=>null}})).status,424);
+  assert.equal(calls.filter(path=>path.endsWith("/messages")||path.endsWith("/completions")).length,4);
 });
 
 test("ApiMira rejects upstream redirects without forwarding its key",async t=>{
@@ -536,4 +558,19 @@ test("the automatic ledger returns billing metadata only and respects provider p
   const b=await (await request("billing-history?page=1")).json();
   assert.equal(b.nextPage,null);assert.equal(b.rows.length,1);assert.deepEqual(b.rows[0].requestIds,["api","req"]);
   assert.doesNotMatch(JSON.stringify([a,b]),/private|never|personal/);
+});
+
+test("already-open BotHub clients can confirm yesterday's exact chapter quote",async t=>{
+  const book={title:"Старая вкладка",updatedAt:"2026-11-24T18:00:00Z",context:"Канон до обновления.",
+    chapters:["Пролог","Глава 1","Глава 2","Глава 3"].map((title,i)=>({title,text:"Часть "+i+"\n"+"Сосны шумели. ".repeat(40)}))};
+  const kv={get:async()=>book};
+  mockNetwork(t,(path,init)=>{
+    assert.equal(path,"/mcp");
+    return booksMcp.fetch(new Request(env.BOOKS_MCP_URL,init),{MCP_READ_KEY:env.MCP_READ_KEY,BOOKS:kv});
+  });
+  const input={...chapter,bookId:"fixture",freitagContext:true,reasoningEffort:"medium",
+    messages:[{role:"user",content:"Мы пишем главу 2\nПОТОК:\nЛида ждёт письмо из архива."}]};
+  const quote=await (await request("quote",input,undefined,{BOOKS:kv})).json();
+  assert.deepEqual(quote.source.chapters,[3,4]);
+  assert.equal(quote.fingerprint,"8493c894a6f70acf593239925a2004d3c5a042209007a3d3c4ab88529097fcbf");
 });

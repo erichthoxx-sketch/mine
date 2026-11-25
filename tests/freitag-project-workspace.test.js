@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import {renderMarkdown} from "../ai/markdown.js";
 import {projectHomeHtml} from "../ai/project-view.js";
-import {projectMemoryContext} from "../ai/project-context.js";
+import {projectMemoryContext, usableReply, materialMode} from "../ai/project-context.js";
 const read=path=>readFile(new URL(path,import.meta.url),"utf8");
 
 test("Markdown displays paragraphs, bold text, lists and code without HTML execution",()=>{
@@ -43,6 +43,7 @@ test("Project memory keeps the author's decisions and finds relevant text across
     docs:[{projectId:"book",name:"Опись",text:"Медальон достался героине от бабушки."},
       {projectId:"book",name:"Архивная копия",text:"Медальон из отключённого материала.",includeInContext:false}],
     feedback:[
+      {id:"approved",projectId:"book",chatId:"old",kind:"good",answer:full.slice(0,18000)},
       {id:"style",projectId:"book",kind:"good",reason:"Держать авторскую интонацию.",finalText:"Ровный авторский голос."},
       {id:"other-style",projectId:"other-book",kind:"good",reason:"Стиль другого проекта."}
     ]};
@@ -57,6 +58,31 @@ test("Project memory keeps the author's decisions and finds relevant text across
   assert.ok(projectMemoryContext({...options,budget:600}).length<=600);
   assert.equal(options.chats[1].messages[0].content,full);
 });
+test("only author-approved answers cross projects' chats and rejecting a former example removes its text",()=>{
+  const fake={role:"assistant",at:"original",content:"Камертон принадлежит незнакомцу."};
+  const unfinished={role:"assistant",content:"Камертон остался у моста.",incomplete:true};
+  const options={project:{id:"p"},current:"new",budget:4000,task:"Где камертон?",terms:["камертон"],
+    chats:[{id:"old",projectId:"p",title:"Вчера",messages:[fake,unfinished]}],feedback:[],docs:[]};
+  assert.equal(projectMemoryContext(options),"");
+  const good={id:"good",chatId:"old",projectId:"p",kind:"good",answer:fake.content,reason:"Кратко.",
+    finalText:"Камертон на витрине."};
+  assert.match(projectMemoryContext({...options,feedback:[good]}),/на витрине/);
+  const bad={id:"bad",chatId:"old",projectId:"p",kind:"bad",messageAt:"original",answer:fake.content,reason:"Перепутана вещь."};
+  const filtered=projectMemoryContext({...options,feedback:[good,bad]});
+  assert.match(filtered,/Перепутана вещь/);
+  assert.doesNotMatch(filtered,/незнакомцу|витрине|моста/);
+  assert.equal(usableReply(fake,"old",[bad]),false);
+  assert.equal(usableReply(unfinished,"old"),false);
+  assert.equal(usableReply({role:"assistant",content:"Ошибка Claude: HTTP 524"},"old"),false);
+  assert.ok(usableReply(fake,"old",[]));
+  const docs=[{projectId:"p",name:"Хронология",text:"На рассвете поезд опоздал.",priority:true},
+    {projectId:"p",name:"Старая версия",text:"Камертон сломан.",includeInContext:false}];
+  assert.deepEqual(docs.map(materialMode),["priority","archive"]);
+  assert.equal(materialMode({}),"auto");
+  assert.match(projectMemoryContext({...options,docs}),/поезд опоздал/);
+  assert.doesNotMatch(projectMemoryContext({...options,docs}),/Камертон сломан/);
+});
+
 test("Paid chats use MCP on send without Google Drive OAuth popups or hidden prompts",async()=>{
   const [app,worker]=await Promise.all([read("../ai/app.js"),read("../proxy/freitag-modelproxy-worker.js")]);
   const send=app.slice(app.indexOf("async function sendMessage("),app.indexOf("function download(",app.indexOf("async function sendMessage(")));

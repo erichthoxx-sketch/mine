@@ -211,7 +211,12 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 .f-material-title button:hover{text-decoration:underline;text-underline-offset:3px}
 .f-material-title p{margin:3px 0 0}
 .f-material-use{display:flex;align-items:center;gap:7px;color:var(--f-soft-ink);font-size:12px;cursor:pointer}
-.f-material-use input{accent-color:var(--f-ink)}
+.f-select.f-material-use{width:auto;max-width:100%;font-size:12px;padding:6px 24px 6px 10px}
+.f-chat-list button:has(.f-chat-version){display:grid;justify-content:stretch;gap:2px}
+.f-chat-version{display:block;color:var(--f-muted);font-size:10px;font-weight:400}
+.f-turn-context{margin:8px 0;color:var(--f-muted);font-size:12px;line-height:1.45}
+.f-turn-context summary{width:fit-content;cursor:pointer}
+.f-turn-context p{margin:4px 0;overflow-wrap:anywhere}
 .f-material-style{border-top:1px solid var(--f-line);margin-top:22px;padding-top:14px}
 .f-material-style summary{color:var(--f-ink);font-size:14px;font-weight:600;cursor:pointer}
 .f-material-style .f-row{margin-top:12px}
@@ -545,6 +550,8 @@ html.app-freitag.f-chat-mode .f-chat-meta{
 .f-compose-menu{position:absolute;z-index:14;bottom:calc(100% + 5px);left:0;display:grid;gap:2px;min-width:220px;max-width:calc(100vw - 46px);border:1px solid var(--f-line);border-radius:12px;padding:5px;background:var(--f-paper);box-shadow:var(--f-shadow)}
 .f-compose-menu button{border:0!important;border-radius:7px;padding:8px 9px;background:transparent!important;color:var(--f-ink)!important;text-align:left;font-size:12px}
 .f-compose-menu button:hover{background:var(--f-hover)!important}
+.f-book-scope{display:grid;gap:4px;padding:6px 9px 9px;border-bottom:1px solid var(--f-line);font-size:12px}
+.f-book-scope select{width:100%;font:inherit}
 .f-dialog:has(#f-field-draft){width:min(840px,calc(100vw - 24px))}
 .f-dialog #f-field-draft{height:clamp(200px,55dvh,720px);min-height:0;line-height:1.7}
 @media(min-width:1160px){

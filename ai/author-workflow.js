@@ -7,6 +7,44 @@ const node = (name, text, className) => {
   return element;
 };
 const date = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString("ru-RU") : "";
+const num = value => value.toLocaleString("ru-RU");
+
+export function bookReceipt(source) {
+  if (!source || !Array.isArray(source.chapters)) return null;
+  return {chapters:source.chapters, chapterTitles:source.chapterTitles||[], inTask:source.inTask||[],
+    scope:source.scope||"", totalChapters:source.totalChapters||0, chars:source.chars||0, updatedAt:source.updatedAt||"",
+    references:(source.references||[]).map(ref=>({chapter:ref.chapter,title:ref.title||"",scene:ref.scene||0}))};
+}
+
+// Shared by the free quote and the local, immutable record of that turn.
+export function contextLines(receipt) {
+  const book=receipt.book;
+  const parts=[];
+  if (receipt.projectName) parts.push(receipt.projectName+" · "+receipt.mode);
+  parts.push("Задание автора · "+num(receipt.taskChars)+" зн.");
+  if (receipt.rules.length) parts.push("Инструкции · "+receipt.rules.join(", "));
+  if (receipt.cues) parts.push("Ориентиры главы · "+num(receipt.cues.length)+" зн. из задания");
+  if (book) {
+    const titles=new Map((book.chapterTitles||[]).map(ch=>[ch.chapter,ch.title]));
+    const names=slots=>slots.map(slot=>titles.get(slot)||String(slot)).join(", ");
+    const coverage=book.scope==="full"?" · вся рукопись, глав: "+book.chapters.length:
+      book.totalChapters?" · целиком "+book.chapters.length+" из "+book.totalChapters:"";
+    parts.push("Мастерская · канон"+coverage+(book.chars?" · добавлено "+num(book.chars)+" зн.":""));
+    if(book.chapters?.length)parts.push((titles.size?"Главы · ":"Главы ")+names(book.chapters));
+    if(book.inTask?.length)parts.push("Уже в задании автора · "+names(book.inTask));
+    if (date(book.updatedAt)) parts.push("Снимок от "+date(book.updatedAt));
+    if (book.references?.length) parts.push("Отрывки · "+book.references.map(ref=>(ref.title||"глава "+ref.chapter)+(ref.scene?", сцена "+ref.scene:"")).join(" · "));
+  }
+  for(const item of receipt.sources) parts.push([item.label,item.period,date(item.updatedAt)].filter(Boolean).join(" · "));
+  if(receipt.available || receipt.archived) parts.push("Материалы · "+receipt.materials.length+" из "+receipt.available+
+    (receipt.materials.length?" · "+receipt.materials.join(", "):"")+(receipt.archived?" · в архиве "+receipt.archived:""));
+  const memory=[...(receipt.storyMap?["сюжетная карта"]:[]),...receipt.decisions,...(receipt.style?["предпочтения по стилю"]:[])];
+  if(memory.length) parts.push("Память · "+memory.join(", "));
+  if(receipt.history) parts.push("Предыдущие реплики этого чата · "+receipt.history);
+  if(receipt.chats.length) parts.push("Из архива чатов · "+[...new Set(receipt.chats)].join(", "));
+  if(receipt.bookOnly)parts.push("Для этого фонового задания сохранились сведения о рукописи. Подбор локальной памяти доступен на устройстве отправки.");
+  return parts;
+}
 
 function openSheet(title) {
   const dialog = node("dialog", "", "f-dialog f-workflow-dialog");
@@ -56,16 +94,12 @@ export function openRequestEstimate({estimate, model, memory, effort, recent, pr
   content.append(node("p", pricing + "Итог зависит от фактического числа токенов и тарифа аккаунта." +
     (toolCalls ? " Инструменты могут вызвать модель повторно." : ""), "f-quote-hint f-muted"));
   const details = node("div", "", "f-quote-source");
-  const source = estimate.source;
-  if (source?.chapters?.length) {
-    details.append(node("p", "Мастерская · канон, главы " + source.chapters.join(", ")));
-    if (date(source.updatedAt)) details.append(node("p", "Снимок от " + date(source.updatedAt), "f-muted"));
-    if (source.references?.length) details.append(node("p", "Отрывки · " + source.references.map(ref =>
-      "глава " + ref.chapter + (ref.scene ? ", сцена " + ref.scene : "")).join(" · "), "f-muted"));
+  for (const text of contextLines(memory)) details.append(node("p",text));
+  if (memory.cues) {
+    const focus=node("details","","f-turn-context");
+    focus.append(node("summary","Показать ориентиры главы"),node("p",memory.cues,"f-workflow-snippet"));
+    details.append(focus);
   }
-  for (const item of memory.sources || []) details.append(node("p",[item.label,item.period,date(item.updatedAt)].filter(Boolean).join(" · ")));
-  if (memory.materials.length) details.append(node("p", "Материалы · " + memory.materials.join(", ")));
-  if (memory.decisions.length) details.append(node("p", "Память · " + memory.decisions.join(", ")));
   if (details.childElementCount) content.append(details);
   if (!estimate.ready) content.append(node("p", "Для этой оценки не хватает баланса или бюджета ключа.", "f-quote-alert"));
   if (!previewOnly && estimate.ready) {

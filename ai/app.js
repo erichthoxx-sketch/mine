@@ -1,15 +1,15 @@
 // Freitag AI — персональная литературная среда: сменяемые модели, память и контекст автора.
 import { projectAccessClient } from "./handoff.js";
-import { sourcePlan } from "./source-plan.js";
+import { chapterCues, isAcknowledgement, isSimpleGreeting, sourcePlan } from "./source-plan.js";
 import { master } from './master-sync.js';
 import { renderMarkdown } from './markdown.js';
 import { projectHomeHtml } from './project-view.js';
-import { projectMemoryContext } from './project-context.js';
+import { feedbackForContext, isServiceReply, materialMode, projectMemoryContext, rejectedReply, usableReply } from './project-context.js';
 import { draftDelivery, draftDeliveryLabel } from './draft-delivery.js';
 import { ensureDriveAccess, refreshLinkedBook } from './live-context.js';
 import { DEFAULT_CHAPTER_LIMIT, CHAPTER_LIMITS, DEFAULT_CHAPTER_EFFORT, CHAPTER_EFFORTS } from './chapter-limits.js';
 import { MAX_MATERIAL_LENGTH, readMaterial } from './materials.js';
-import { openRequestEstimate, openStoryMap, openChapterJobs } from './author-workflow.js';
+import { bookReceipt, contextLines, openRequestEstimate, openStoryMap, openChapterJobs } from './author-workflow.js';
 import { canReconcileExpense, expenseFromMessage, expenseReport, expensesHtml, mergeExpenses, restoreExpenses, savedEstimate } from './expenses.js';
 // Чаты, проекты и текстовые материалы хранятся только в IndexedDB этого браузера.
 // Никаких ключей и рукописей в репозитории.
@@ -102,7 +102,7 @@ function renderSidebar(){
       '<div class="f-side-section f-side-history">'+
       (arr.length?'<ul class="f-list f-chat-list">'+arr.map(x=>
         '<li><button type="button" class="'+(x.id===state.activeChatId?"on":"")+
-        '" data-action="select-chat" data-id="'+esc(x.id)+'" title="'+esc(x.title)+'"><span>'+esc(x.title)+'</span></button></li>'
+        '" data-action="select-chat" data-id="'+esc(x.id)+'" title="'+esc(x.title)+'">'+chatListLabel(x,arr)+'</button></li>'
       ).join("")+'</ul>':'<p class="f-sidebar-empty">Здесь появятся диалоги по выбранной книге.</p>')+
       '</div>';
   }else if(tab==="projects"||tab==="knowledge"){
@@ -158,7 +158,7 @@ function renderProjects(){
      '<form id="f-master-auth" class="f-master-login"><label>Email Мастерской<input class="f-text-field" type="email" name="email" autocomplete="username" required></label>'+
        '<label>Пароль<input class="f-text-field" type="password" name="password" autocomplete="current-password" required></label><button class="f-btn primary" type="submit">Войти и получить книги</button></form>')+
     '</div>'+
-    '<p class="f-muted f-bottom-note">Чаты и рабочие заметки пока хранятся в этом браузере — для резервной копии используй экспорт в настройках.</p></div>';
+    '<p class="f-muted f-bottom-note">Чаты и память хранятся на этом устройстве. Личную облачную копию можно включить в настройках.</p></div>';
 }
 function renderKnowledge(){
   const p=materialsProject();
@@ -172,13 +172,14 @@ function renderKnowledge(){
     '<div class="f-row"><button class="f-btn primary" type="button" data-action="choose-materials" '+(importingMaterials?'disabled':'')+'>'+
     (importingMaterials?'Читаю файлы…':'Загрузить файлы')+'</button><input id="f-upload" type="file" accept=".docx,.txt,.md,.json" multiple hidden>'+
     '<button class="f-btn" type="button" data-action="add-note">Добавить заметку</button></div></section>'+
-    '<p class="f-material-hint f-muted">Word (.docx) до 10 МБ · TXT, Markdown и JSON до 2 МБ. Freitag хранит текст целиком и подбирает отрывки по заданию.</p>'+
+    '<p class="f-material-hint f-muted">Word до 10 МБ · TXT, Markdown и JSON до 2 МБ. Новые материалы участвуют в автоподборе. Для важной заметки выбери «В приоритете». Архив исключён из подбора.</p>'+
     (docs.length?'<ul class="f-material-list">'+docs.map(d=>{
       const format=d.format||/\.(docx|txt|md|json)$/i.exec(d.name)?.[1]||"заметка";
       return '<li data-material-name="'+esc(d.name)+'"><div class="f-material-title"><button type="button" data-action="open-doc" data-id="'+esc(d.id)+'">'+esc(d.name)+'</button>'+
         '<p class="f-muted">'+esc(format==='заметка'?'Заметка':format.toUpperCase())+' · '+String(d.text||"").length.toLocaleString("ru-RU")+' знаков</p></div>'+
-        '<label class="f-material-use"><input type="checkbox" data-doc-context="'+esc(d.id)+'" '+(d.includeInContext!==false?'checked':'')+
-        ' aria-label="Подбирать отрывки из '+esc(d.name)+'">Учитывать по задаче</label></li>';
+        '<select class="f-select f-material-use" data-doc-context="'+esc(d.id)+'" aria-label="Использование материала '+esc(d.name)+'">'+
+        [["auto","Автоподбор"],["priority","В приоритете"],["archive","В архиве"]].map(([value,label])=>
+          '<option value="'+value+'" '+(materialMode(d)===value?"selected":"")+'>'+label+'</option>').join("")+'</select></li>';
     }).join("")+'</ul><p id="f-material-no-matches" class="f-muted" hidden>Материалы с таким названием не найдены.</p>':
       empty("Материалов пока нет","Загрузи текст или добавь заметку к проекту."))+
     '<details class="f-material-style"><summary>Образцы стиля'+(examples.length?' · '+examples.length:'')+'</summary>'+
@@ -197,7 +198,7 @@ function renderExpenses(){
       projects.set(row.projectId,{id:row.projectId,name:row.projectName||"Удалённый проект"});
   }
   $("#panel").innerHTML=expensesHtml(expenseReport(state.expenses,expenseFilters),expenseFilters,
-    {esc,projects:[...projects.values()],chats:new Set(state.chats.map(c=>c.id)),providers:providerNames,refreshing:refreshingExpenses,issue:billingIssue});
+    {esc,projects:[...projects.values()],chats:new Set(state.chats.map(c=>c.id)),providers:state.expenses.some(row=>row.provider==="aitunnel")?{...providerNames,aitunnel:"AITUNNEL"}:providerNames,refreshing:refreshingExpenses,issue:billingIssue});
 }
 function renderSettings(){
   const s=state.settings;
@@ -209,7 +210,7 @@ function renderSettings(){
     '<section class="f-settings-card"><div class="f-section-kicker">01 / МОДЕЛЬ</div>'+
     '<h2>Кто отвечает</h2><p class="f-muted">Выбери модель для новых сообщений. Существующие чаты останутся на месте.</p>'+
     '<label for="f-provider">Модель</label><select id="f-provider" name="provider" class="f-select">'+
-    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"],["bothub","BotHub · Claude"],["apimira","ApiMira · Claude Opus 5.5"],["aitunnel","AITUNNEL · Claude Opus 5.5"]].map(x=>
+    [["ollama","Локальная Ollama · Qwen"],["modelproxy","Claude Opus 5.5 · ModelProxy"],["bothub","BotHub · Claude"],["apimira","ApiMira · Claude Opus 5.5"]].map(x=>
       '<option value="'+x[0]+'" '+(x[0]===provider?"selected":"")+'>'+x[1]+'</option>').join("")+'</select>'+
     '<div id="f-bothub-model-row" '+(provider==="bothub"?"":'hidden')+'><label for="f-bothub-model">Модель BotHub</label>'+
     '<select id="f-bothub-model" name="bothubModel" class="f-select">'+
@@ -274,8 +275,8 @@ function chapterOutputLimit(){
   return CHAPTER_LIMITS.includes(limit)?limit:DEFAULT_CHAPTER_LIMIT;
 }
 const activeClaudeName=()=>activeBotHubModel()==="claude-opus-5.5"?"Claude Opus 5.5":"Claude Sonnet 5.5";
-const paidProviders=["modelproxy","bothub","apimira","aitunnel"];
-const providerNames={modelproxy:"ModelProxy",bothub:"BotHub",apimira:"ApiMira",aitunnel:"AITUNNEL"};
+const paidProviders=["modelproxy","bothub","apimira"];
+const providerNames={modelproxy:"ModelProxy",bothub:"BotHub",apimira:"ApiMira"};
 const effortLabels={low:"Низкий",medium:"Средний",high:"Высокий"};
 const chapterEffort=()=>CHAPTER_EFFORTS.includes(state.settings.chapterEffort)?state.settings.chapterEffort:DEFAULT_CHAPTER_EFFORT;
 const supportsEffort=provider=>provider==="bothub"||provider==="apimira";
@@ -286,15 +287,23 @@ const activeProviderLabel=()=>state.settings.provider==="modelproxy"?"Claude Opu
   paidProviders.includes(state.settings.provider)?"Claude Opus 5.5 · "+providerNames[state.settings.provider]:"Локальная Qwen · Ollama";
 const currentModelChoice=()=>state.settings.provider==="bothub"?
   "bothub:"+activeBotHubModel():state.settings.provider;
-const isSimpleGreeting = text => /^(?:привет(?:ик)?|здравствуй(?:те)?|доброе (?:утро)|добрый (?:день|вечер)|hello|hi|спасибо|ок(?:ей)?|да|нет)[!?.\s]*$/i.test(String(text||"").trim());
 const modelChoices=()=>[
   ["bothub:claude-opus-5.5","Opus 5.5 · BotHub"],
   ["bothub:claude-sonnet-5.5","Sonnet 5.5 · BotHub"],
   ["apimira","Opus 5.5 · ApiMira"],
-  ["aitunnel","Opus 5.5 · AITUNNEL"],
   ["modelproxy","Opus 5.5 · ModelProxy"],
   ["ollama","Qwen · локально"]
 ].map(([id,label])=>'<option value="'+id+'" '+(currentModelChoice()===id?"selected":"")+'>'+label+'</option>').join("");
+function chatListLabel(c,list){
+  let label='<span>'+esc(c.title)+'</span>';
+  if(list.some(other=>other.id!==c.id && other.title===c.title)){
+    const last=c.messages?.findLast(m=>m.role==="assistant");
+    const at=Number.isFinite(Date.parse(c.updated))?new Date(c.updated).toLocaleString("ru-RU",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"";
+    const name=providerNames[last?.apiProvider]||last?.provider||"";
+    label+='<small class="f-chat-version">'+esc([at,name].filter(Boolean).join(" · "))+'</small>';
+  }
+  return label;
+}
 function renderChat(){
   const outputLimit=chapterOutputLimit();
   const chapterOptions=CHAPTER_LIMITS.map(limit=>'<option value="'+limit+'" '+
@@ -312,8 +321,17 @@ function renderChat(){
   const scrollTop=sameChat&&!nearEnd(previous)?previous.scrollTop:null;
   const expanded=new Set(sameChat?[...previous.querySelectorAll(".f-prompt[open]")].map(el=>el.dataset.index):[]);
   const toolsOpen=sameChat&&$("#f-chat-tools")?.open;
+  let preceding;
   const body=(c?.messages||[]).map((m,i)=>{
     const text=String(m.content??"");
+    if(m.role==="user")preceding=m;
+    const failure=isServiceReply(m);
+    const receipt=preceding?.contextReceipt;
+    const diagnostics=m.role==="assistant" && preceding && (m.apiProvider || m.provider?.startsWith("Claude"))?
+      '<details class="f-turn-context"><summary>Состав запроса</summary>'+
+      (receipt?contextLines(receipt).map(t=>'<p>'+esc(t)+'</p>').join("")+
+        (receipt.cues?'<details><summary>Показать ориентиры главы</summary><p class="f-workflow-snippet">'+esc(receipt.cues)+'</p></details>':""):
+        '<p>Задание автора · '+preceding.content.length.toLocaleString("ru-RU")+' зн. Точный состав источников для этой старой записи не сохранён.</p>')+'</details>':"";
     const longPrompt=m.role==="user"&&(text.length>440||text.split("\n",7).length>6);
     const content=m.role==="assistant"?renderMarkdown(m.content):esc(text);
     const message='<div class="f-msg-text">'+content+'</div>';
@@ -336,12 +354,16 @@ function renderChat(){
     (m.jobError?'<p class="f-mini">'+esc(m.jobError)+'</p>':"")+
     (Number.isSafeInteger(m.delivery?.characters)?'<p class="f-mini f-draft-delivery">'+esc(draftDeliveryLabel(m.delivery))+'</p>':"")+
     (m.receiving && !busy?'<p class="f-mini">Получен фрагмент. Завершение главы не подтверждено.</p>':"")+
-    (m.role==="assistant" && m.content && !m.content.startsWith("Не удалось")?
+    diagnostics+
+    (failure && preceding && !busy?'<div class="f-feedback-actions"><button type="button" class="f-inline-btn" data-action="return-task" data-i="'+i+'">Вернуть задание в поле ввода</button>'+
+      '<button type="button" class="f-inline-btn" data-action="open-expenses">Открыть траты</button></div>':"")+
+    (m.role==="assistant" && !failure && m.content && !m.content.startsWith("Не удалось")?
       '<div class="f-feedback-actions"><button type="button" class="f-inline-btn" data-action="copy-answer" data-i="'+i+'">Копировать</button>'+
       '<button type="button" class="f-inline-btn" data-action="download-answer" data-i="'+i+'">Скачать TXT</button>'+
       (p?'<button type="button" class="f-inline-btn" data-action="remember-decision" data-i="'+i+'">В память проекта</button>':"")+
       '<button type="button" class="f-inline-btn" data-action="feedback-good" data-i="'+i+'">В образцы</button>'+
-      '<button type="button" class="f-inline-btn" data-action="feedback-bad" data-i="'+i+'">Не то</button></div>':"")+
+      '<button type="button" class="f-inline-btn" data-action="feedback-bad" data-i="'+i+'">'+
+      (rejectedReply(m,c.id,state.feedback)?'Вернуть в контекст':'Не то')+'</button></div>':"")+
     '</article>';
   }).join("");
   const modeOptions=Object.entries(WRITING_MODES).map(([key,v])=>
@@ -351,7 +373,7 @@ function renderChat(){
   const mobileHistory=mobileChats.length
     ?'<div class="f-mobile-history-panel">'+mobileChats.map(x=>
        '<button type="button" data-action="select-chat" data-id="'+esc(x.id)+
-       '" class="'+(x.id===state.activeChatId?"on":"")+'">'+esc(x.title)+'</button>'
+       '" class="'+(x.id===state.activeChatId?"on":"")+'">'+chatListLabel(x,mobileChats)+'</button>'
       ).join("")+'</div>'
     :'<div class="f-mobile-history-panel"><p>Диалогов пока нет.</p></div>';
   const bookOptions='<option value="">Без книги</option>'+state.projects.map(x=>
@@ -382,7 +404,7 @@ function renderChat(){
     '</div>'+
     (p?'<aside class="f-chat-context" aria-label="Контекст книги">'+
       '<h2>Контекст книги</h2><p class="f-context-book">'+esc(p.name)+'</p>'+
-      '<h3>Рукопись</h3><p>'+(p.masterBookId?'Для главы Freitag берет канон, две последние главы и подбирает короткие выписки по всей рукописи.':'Локальный проект')+'</p>'+
+      '<h3>Рукопись</h3><p>'+(p.masterBookId?(p.manuscriptScope==="full"?'Канон и все главы снимка.':'Канон, главы перед текущей и отрывки по заданию.'):'Локальный проект')+'</p>'+
       '<h3>Инструкция проекта</h3><p>'+(userInstruction(p.instruction).trim()?'Сохранена и применяется в чатах книги.':'Пока пустая.')+'</p>'+
       '<button type="button" class="f-btn" data-action="project-home" data-id="'+esc(p.id)+'">Открыть проект ↗</button></aside>':"")+
     '<form id="f-chat-form" class="f-compose">'+
@@ -405,6 +427,9 @@ function renderChat(){
       '<button type="button" class="f-inline-btn" data-action="expand-draft" '+(busy?"disabled":"")+'>Развернуть</button>'+
       '<span class="f-mini" id="f-draft-size">'+(draft?draft.length.toLocaleString("ru-RU")+' зн.':"")+'</span>'+
       '<details class="f-extra-tools" id="f-chat-tools" '+(toolsOpen?"open":"")+'><summary>Ещё</summary><div class="f-compose-menu">'+
+      (p?.masterBookId && paidProviders.includes(state.settings.provider) && (c?.mode||pendingMode||"draft")==="draft"?
+        '<label class="f-book-scope">Рукопись для глав<select id="f-book-scope" class="f-select" '+(busy?'disabled':'')+'>'+
+        '<option value="auto">По заданию</option><option value="full" '+(p.manuscriptScope==="full"?'selected':'')+'>Вся рукопись</option></select></label>':"")+
       (canSearchBook?'<button type="button" data-action="search-book-context" '+(busy?"disabled":"")+'>Найти фразу в книге</button>':"")+
       (paidProviders.includes(state.settings.provider)?'<button type="button" data-action="preview-chapter" '+(busy?"disabled":"")+'>Контекст и цена</button>':"")+
       (paidProviders.includes(state.settings.provider)&&(c?.mode||pendingMode||(p?"draft":"dialog"))==="draft"?
@@ -562,8 +587,11 @@ function pinnedExcerpt(raw,question,maxLength){
   return result.slice(0,maxLength);
 }
 function memoryForProject(p,c,task,recent,budget,docs=state.docs,onUse){
+  const focused=chapterCues(task)||(task.length>3600?task.slice(0,2400)+"\n"+task.slice(-1200):task);
+  const names=focused.match(/(?<![А-Яа-яЁё])[А-ЯЁ][а-яё]{2,}/gu)||[];
+  const terms=[...new Set([...searchTerms(names.join(" ")).slice(-8),...searchTerms(focused.slice(-1200)).slice(-8),...searchTerms(focused.slice(0,2400)).slice(0,8)])];
   return projectMemoryContext({project:p,chats:state.chats,docs,feedback:state.feedback,
-    current:c.id,recent,task,terms:searchTerms(task.slice(0,2400)+" "+task.slice(-700)).slice(0,14),budget,onUse});
+    current:c.id,recent,task,terms,budget,onUse});
 }
 function modelproxyMessages(c, manifest){
   // Claude Projects-style workflow: one editable instruction, an unchanged
@@ -571,22 +599,29 @@ function modelproxyMessages(c, manifest){
   const p=project(c.projectId);
   const messages=c.messages.filter(m=>(m.role==="user"||m.role==="assistant")&&typeof m.content==="string");
   const latest=messages.at(-1)?.content||"";
-  const projectInstructions=[
+  let cues=p && c.mode==="draft" ? chapterCues(latest) : "";
+  let projectInstructions=[
     userInstruction(state.settings.globalInstruction),
     userInstruction(p?.instruction),
     p?.voice?"Дополнительные инструкции автора о стиле:\n"+p.voice:"",
     p?.canon?"Дополнительные сведения автора:\n"+p.canon:"",
     p?.scene?"Заметки автора о текущей сцене:\n"+p.scene:""
   ].filter(Boolean).join("\n\n");
+  if (cues) {
+    const focus="Ориентиры из текущего задания автора:\n"+cues+
+      "\nСверяй имена, улики, хронологию и знания героев с каноном и текстом сцен. Полное задание автора приведено в последнем сообщении.";
+    const combined=[projectInstructions,focus].filter(Boolean).join("\n\n");
+    if (combined.length<=130000 && combined.length+latest.length<=180000) projectInstructions=combined;
+    else cues="";
+  }
   // The original request, including an entire preceding chapter, stays intact.
   // No truncation, excerpt selection, automatic prompt rewriting or restart.
   // Any request that exceeds the gateway limit produces a visible error before
   // a paid provider call rather than silently dropping author material.
   // A retry after HTTP 524 must not bill the same 40k-character prompt twice
   // inside its own history. Keep the latest author request verbatim.
-  const previous=messages.slice(-7,-1)
-    .filter(m=>!(m.role==="user"&&m.content===latest) &&
-      !(m.role==="assistant"&&/^(?:Ошибка Claude:|Ответ остановлен\.|Ошибка Ollama:|Отправка Batch:|Batch не запущен:)/.test(m.content)));
+  const previous=messages.slice(0,-1)
+    .filter(m=>!(m.role==="user"&&m.content===latest) && usableReply(m,c.id,state.feedback)).slice(-6);
   let remaining=p?Math.max(0,Math.min(14000,180000-projectInstructions.length-latest.length)):Infinity;
   const history=[];
   const marker="[Фрагмент из недавней переписки]\n";
@@ -602,7 +637,15 @@ function modelproxyMessages(c, manifest){
   const memory=p?memoryForProject(p,c,latest,history.length?previous.slice(-history.length):[],Math.min(4000,headroom-2),state.docs,item=>{
     if(item.material)manifest?.materials.push(item.material);
     if(item.decision)manifest?.decisions.push(item.decision);
+    if(item.kind==="map" && manifest)manifest.storyMap=true;
+    if(item.kind==="style" && manifest)manifest.style=true;
+    if(item.archiveChat)manifest?.chats.push(item.archiveChat);
   }):"";
+  if(manifest){
+    manifest.history=history.length;
+    if(cues)manifest.cues=cues;
+    manifest.rules=[state.settings.globalInstruction&&"общая",p?.instruction&&"проекта",p?.voice&&"стиль",p?.canon&&"канон автора",p?.scene&&"текущая сцена"].filter(Boolean);
+  }
   const instructions=[projectInstructions,memory].filter(Boolean).join("\n\n");
   return [...(instructions?[{role:"system",content:instructions}]:[]),
     ...history,{role:"user",content:latest}];
@@ -618,8 +661,9 @@ function buildMessages(c){
     {total:6000,global:500,extra:450,canon:1700,voice:500,scene:750,docs:1100,history:6500}:
     {total:3850,global:330,extra:280,canon:1100,voice:300,scene:420,docs:850,history:2800};
   const lastUser=[...c.messages].reverse().find(m=>m.role==="user")?.content||"";
-  const history=c.messages.filter(m=>m.role==="user"||m.role==="assistant").slice(-7).map(m=>({role:m.role,content:m.content.slice(-1800)}));
-  const memory=p?memoryForProject(p,c,lastUser,history,Math.min(1250,Math.floor(budget.total*.32)),[]):"";
+  const eligible=c.messages.filter(m=>usableReply(m,c.id,state.feedback)).slice(-7);
+  const history=eligible.map((m,i)=>({role:m.role,content:i===eligible.length-1?m.content:m.content.slice(-1800)}));
+  const memory=p?memoryForProject(p,c,lastUser,history,Math.min(1250,Math.floor(budget.total*.32)),state.docs):"";
   const parts=[
     s.globalInstruction.slice(0,budget.global),
     "Режим «"+mode.name+"». "+mode.instruction,
@@ -630,7 +674,6 @@ function buildMessages(c){
     p?.scene?"ТЕКУЩАЯ СЦЕНА/ПОСЛЕДНИЕ СОБЫТИЯ:\n"+p.scene.slice(0,budget.scene):"",
     memory,
     "Выдержки не равны полной рукописи. Если данных недостаточно, скажи об этом.",
-    relevantNotes(lastUser,c.projectId,budget.docs)
   ].filter(Boolean);
   let sys=parts.join("\n\n");
   if(sys.length>budget.total){
@@ -712,7 +755,7 @@ async function testConnection(){
         throw Error(providerNames[chosen]+": в Cloudflare нужен секрет "+chosen.toUpperCase()+"_API_KEY и настройка владельца.");
       let info;
       {
-        const model=chosen==="modelproxy"?"claude-opus-5-5":chosen==="aitunnel"?"claude-opus-5.5":chosen==="apimira"?"anthropic/claude-opus-5.5":($("#f-bothub-model")?.value||activeBotHubModel());
+        const model=chosen==="modelproxy"?"claude-opus-5-5":chosen==="apimira"?"anthropic/claude-opus-5.5":($("#f-bothub-model")?.value||activeBotHubModel());
         const token=await master.idToken();
         const check=await fetch(gateway+"/preflight?provider="+chosen+"&model="+encodeURIComponent(model),{
           headers:{"Authorization":"Bearer "+token},cache:"no-store"
@@ -735,9 +778,7 @@ async function testConnection(){
       const money=chosen==="modelproxy"&&Number.isFinite(info?.balanceUsd)?" Баланс ModelProxy "+usd(info.balanceUsd)+".":chosen==="apimira"&&typeof info?.balanceUsd==="number"?
         " Баланс ApiMira "+usd(info.balanceUsd)+"."+
         (Number.isFinite(info.inputUsd)&&Number.isFinite(info.outputUsd)?
-          " Тариф за 1 млн токенов: вход "+usd(info.inputUsd)+", выход "+usd(info.outputUsd)+".":""):
-        chosen==="aitunnel"&&Number.isFinite(info?.balanceRub)?" Баланс: "+rub(info.balanceRub)+
-          (info.budgetRub===null?". Задай бюджет API-ключа AITUNNEL перед генерацией.":". Остаток бюджета ключа: "+rub(info.budgetRub)+"."):"";
+          " Тариф за 1 млн токенов: вход "+usd(info.inputUsd)+", выход "+usd(info.outputUsd)+".":""):"";
       const modelStatus=info?.chapterApi==="anthropic-messages"?"Ключ BotHub видит модель в Anthropic Messages. ":info?"Модель есть в каталоге. ":"";
       const sourceStatus="Общий коннектор Freitag · "+mcpInfo.toolCount+" инструментов чтения. ";
       if(status)status.textContent=modelStatus+sourceStatus+"Проверка бесплатна."+money;
@@ -769,16 +810,15 @@ async function testConnection(){
 function buildExternalBrief(c){
   const p=project(c.projectId), mode=WRITING_MODES[c.mode]||WRITING_MODES.draft;
   const question=[...c.messages].reverse().find(m=>m.role==="user")?.content||"";
-  const all=state.feedback.filter(f=>f.projectId===c.projectId);
+  const all=feedbackForContext(state.feedback,c.projectId);
   const good=all.filter(f=>f.kind==="good").slice(-3);
   const bad=all.filter(f=>f.kind==="bad").slice(-3);
   const memory=[
     ...good.map((f,i)=>"ОДОБРЕННЫЙ ПРИМЕР "+(i+1)+(f.reason?" — "+f.reason:"")+":\n"+String(f.finalText||f.answer).slice(0,2100)),
     ...bad.map((f,i)=>"НЕ ПОВТОРЯТЬ "+(i+1)+": "+(f.reason||"Автор отклонила фрагмент")+
-      "\nНежелательный пример: "+String(f.answer||"").slice(0,350)+
       (f.finalText?"\nАвторский вариант: "+f.finalText.slice(0,1200):""))
   ].join("\n\n");
-  const recent=c.messages.slice(-9,-1).map(m=>(m.role==="assistant"?"ОТВЕТ":"АВТОР")+": "+String(m.content).slice(0,2200)).join("\n\n").slice(-9000);
+  const recent=c.messages.slice(0,-1).filter(m=>usableReply(m,c.id,state.feedback)).slice(-8).map(m=>(m.role==="assistant"?"ОТВЕТ":"АВТОР")+": "+String(m.content).slice(0,2200)).join("\n\n").slice(-9000);
   const source=p?.masterCanon?
     "УТВЕРЖДЁННЫЙ КАНОН ИЗ «МАСТЕРСКОЙ» (исключены отвергнутые и неутверждённые главы):\n"+
       (p.masterCanon.length>36000?pinnedExcerpt(p.masterCanon,question,36000):p.masterCanon):"";
@@ -840,17 +880,22 @@ async function saveExternalAnswer(){
 async function saveFeedback(i,kind){
   const c=chat(),response=c?.messages[i];
   if(!c||response?.role!=="assistant")return;
-  const title=kind==="good"?"Добавить в образцы":"Сохранить отказ и правку";
+  const rejection=rejectedReply(response,c.id,state.feedback);
+  if(kind==="bad" && rejection){
+    state.feedback=state.feedback.filter(f=>f.id!==rejection.id);
+    await save();render();notice("Ответ снова доступен в этом диалоге.");return;
+  }
+  const title=kind==="good"?"Добавить в образцы":"Исключить ответ из контекста";
   const v=await openModal(title,[
-    {key:"reason",label:kind==="good"?"Что в этом тексте удачно?":"Что не нравится / чего нельзя повторять?",multi:true,required:true},
+    {key:"reason",label:kind==="good"?"Что в этом тексте удачно?":"Что исправить в следующий раз (необязательно)",multi:true,required:kind==="good"},
     {key:"finalText",label:"Твоя окончательная редакция (необязательно)",multi:true}
   ],{reason:"",finalText:kind==="good"?response.content.slice(0,10000):""});
-  if(!v?.reason?.trim())return;
+  if(!v || (kind==="good" && !v.reason.trim()))return;
   const preceding=[...c.messages.slice(0,i)].reverse().find(m=>m.role==="user");
-  state.feedback.push({id:uid(),projectId:c.projectId,chatId:c.id,kind,reason:v.reason.trim().slice(0,1500),
+  state.feedback.push({id:uid(),projectId:c.projectId,chatId:c.id,messageAt:response.at,kind,reason:v.reason.trim().slice(0,1500),
     prompt:preceding?.content?.slice(0,10000)||"",answer:response.content.slice(0,18000),
     finalText:v.finalText.trim().slice(0,18000),source:response.provider||"Qwen",at:stamp()});
-  await save();notice(kind==="good"?"Пример добавлен в память стиля.":"Отказ и причина сохранены для следующих заданий.");
+  await save();render();notice(kind==="good"?"Пример добавлен в память стиля.":"Ответ сохранён в чате и исключён из контекста.");
 }
 async function editProjectMemory(p,id,source){
   if(!p)return;
@@ -891,6 +936,7 @@ async function sendBatchChapter(text){
   if(busy||preparingPaid||!text?.trim())return;
   const p=project();
   if(!p)return notice("Для Batch-главы выбери проект книги.");
+  if(p.manuscriptScope==="full")return notice("Для всей рукописи используй «Отправить» или «Написать в фоне», чтобы сначала проверить стоимость.");
   if(isSimpleGreeting(text))return notice("Для Batch требуется задание на главу.");
   if(chat()?.batch?.batchId && !["completed","failed","cancelled","expired"].includes(chat().batch.status))
     return notice("В этом чате уже ожидается результат Batch. Проверь готовность главы.");
@@ -928,7 +974,7 @@ async function sendBatchChapter(text){
     const response=await fetch(gateway+"/batch-start",{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
-        mode:"draft",messages,bookId:p.masterBookId||null,
+        mode:"draft",messages,bookId:p.masterBookId||null,manuscriptScope:"auto",
         outputTokenLimit:outputLimit})
     });
     const result=await response.json().catch(()=>({}));
@@ -1131,13 +1177,18 @@ async function saveBackgroundChapter(job, item){
     c={id:job.chatId,projectId:p?.id||null,title:job.prompt.slice(0,65)||"Фоновая глава",mode:"draft",messages:[]};
     state.chats.unshift(c);
   }
-  if(!c.messages.some(m=>m.role==="user"&&m.jobId===job.id))
-    c.messages.push({role:"user",content:job.prompt,jobId:job.id,at:job.createdAt});
+  if(!c.messages.some(m=>m.role==="user"&&m.jobId===job.id)){
+    const user={role:"user",content:job.prompt,jobId:job.id,at:job.createdAt};
+    if(job.source)user.contextReceipt={bookOnly:true,book:bookReceipt(job.source),taskChars:job.prompt.length,
+      rules:[],sources:[],materials:[],decisions:[],chats:[]};
+    c.messages.push(user);
+  }
   let message=c.messages.find(m=>m.role==="assistant"&&m.jobId===job.id);
   if(!message){message={role:"assistant",jobId:job.id,at:job.createdAt};c.messages.push(message);}
   Object.assign(message,{content:job.text,provider:"Claude · "+(providerNames[job.provider]||"API"),
     apiProvider:job.provider,
-    receiving:job.status==="running"||job.status==="queued",jobError:job.error||"",
+    receiving:job.status==="running"||job.status==="queued",
+    incomplete:job.status!=="completed"||job.finishReason!=="stop",jobError:job.error||"",
     delivery:draftDelivery(job.prompt,job.text,job.finishReason||"",job.limit)});
   if(job.usage)message.apiUsage=job.usage;
   if(job.provider==="aitunnel"&&Number.isFinite(job.usage?.cost_rub))message.costRub=job.usage.cost_rub;
@@ -1233,13 +1284,14 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
   }
   const previousDraft=draftKey();
   const msg=text, current=chat()||{projectId:state.activeProjectId,mode:pendingMode,messages:[]};
-  const lightweight=isSimpleGreeting(msg);
+  const lightweight=isSimpleGreeting(msg) || (!current.messages.length && isAcknowledgement(msg));
   const requestMode=lightweight?"dialog":(current.mode||(current.projectId?"draft":"dialog"));
   const bookId=lightweight?null:(project(current.projectId)?.masterBookId||null);
   const previous=current.messages.findLast(m=>m.role==="user")?.content||"";
   const sourceTask={task:msg.slice(0,6000),previous:previous.slice(0,450),mode:requestMode,bookId};
   const plan=sourcePlan(sourceTask);
   const effectiveMode=requestMode==="draft" && !plan.draft ? "dialog" : requestMode;
+  const fullBook=Boolean(bookId && effectiveMode==="draft" && project(current.projectId)?.manuscriptScope==="full");
   const business=plan.kinds.length>0 && !plan.kinds.includes("book");
   let sourceMessage, sources=[];
   const localHost=!isPaidProvider && endpoint && ["localhost","127.0.0.1","[::1]"].includes(new URL(endpoint).hostname);
@@ -1267,17 +1319,21 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
   if(background&&effectiveMode!=="draft")return notice("Выбери режим «Написать сцену».");
   if((background||previewOnly)&&!isPaidProvider)return;
   const userMessage={role:"user",content:msg,at:stamp()};
-  const manifest={materials:[],decisions:[]};
+  const projectDocs=state.docs.filter(d=>d.projectId===current.projectId);
+  const manifest={projectName:project(current.projectId)?.name||"",mode:WRITING_MODES[effectiveMode]?.name||"Диалог",
+    taskChars:msg.length,history:0,rules:[],sources:[],materials:[],decisions:[],chats:[],
+    available:projectDocs.filter(d=>materialMode(d)!=="archive").length,archived:projectDocs.filter(d=>materialMode(d)==="archive").length};
   const reasoningEffort=effectiveMode==="draft"&&supportsEffort(provider)?effort:undefined;
   const questionMessages=[{role:"user",content:msg}];
   if(business && plan.question.includes("\n") && previous)
     questionMessages.unshift({role:"user",content:previous.slice(0,450)});
   const payload=isPaidProvider?{provider,model:provider==="bothub"?selectedModel:undefined,
-    messages:lightweight||business?questionMessages:modelproxyMessages({...current,messages:[...current.messages,userMessage]},manifest),
+    messages:lightweight||business?questionMessages:modelproxyMessages({...current,mode:effectiveMode,messages:[...current.messages,userMessage]},manifest),
     mode:effectiveMode,outputTokenLimit:effectiveMode==="draft"?outputLimit:undefined,reasoningEffort,bookId,sourceRevision,
-    freitagContext:true}:null;
+    ...(bookId && effectiveMode==="draft"?{manuscriptScope:fullBook?"full":"auto"}:{}),freitagContext:true}:null;
+  if(business)manifest.history=questionMessages.length-1;
   if(payload && sourceMessage) payload.messages.unshift(sourceMessage);
-  manifest.sources=sources.map(({label,period,updatedAt})=>({label,period,updatedAt}));
+  manifest.sources=sources.map(s=>({label:s.label,period:s.period||"",updatedAt:s.updatedAt||""}));
   let estimate;
   if(isPaidProvider){
     const isMira=provider==="apimira", label=providerNames[provider];
@@ -1292,6 +1348,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
         "Content-Type":"application/json"},body:JSON.stringify(payload)});
       estimate=await res.json().catch(()=>({}));
       if(!res.ok||!estimate.ok)throw Error(estimate.error||"Не удалось получить бесплатную оценку.");
+      if(fullBook && estimate.source?.scope!=="full")throw Error("Шлюз ещё не подтвердил всю рукопись. Обнови Freitag и повтори оценку.");
       if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==chapterOutputLimit()||effort!==chapterEffort()||
         draftBeforeQuote!==$("#f-message-input")?.value||modeBeforeQuote!==$("#f-writing-mode")?.value)
         return notice("Задание или настройки изменились. Получи новую оценку.");
@@ -1299,12 +1356,13 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
         Object.keys(row.charges||{}).length).sort((a,b)=>String(b.at).localeCompare(String(a.at)))[0];
       const flash=$("#f-flash");
       if(flash?.textContent===progress)flash.hidden=true;
+      manifest.book=bookReceipt(estimate.source);
+      userMessage.contextReceipt=manifest;
       const confirmed=await openRequestEstimate({estimate,model:activeProviderLabel(),memory:manifest,
         effort:effortLabels[reasoningEffort],recent,previewOnly,background,
         toolCalls:false});
       if(!confirmed)return;
       if(isMira)payload.apimiraQuote={fingerprint:estimate.fingerprint,estimateUsd:estimate.estimateUsd};
-      else if(provider==="aitunnel")payload.aitunnelQuote={fingerprint:estimate.fingerprint,estimateRub:estimate.estimateRub};
       else payload.contextQuote=estimate.fingerprint;
     }catch(e){return notice(e.message);}
     finally{preparingPaid=false;}
@@ -1353,6 +1411,10 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
       signal:currentController.signal});
     if(!res.ok){
       const error=await res.json().catch(()=>null);
+      if(isPaidProvider && error?.requestId){
+        assistant.apiRequestId=error.requestId;
+        if(provider==="apimira")assistant.apimiraRequestId=error.requestId;
+      }
       if(res.status===424&&error?.code==="BOOK_SOURCE"){
         c.messages.splice(c.messages.indexOf(userMessage),2);
         if(chat(c.id)===c)state.drafts["chat:"+c.id]=msg;
@@ -1384,10 +1446,6 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
         }
       if(Number.isFinite(obj?.usage?.prompt_tokens)||Number.isFinite(obj?.usage?.completion_tokens))
         assistant.apiUsage=Object.fromEntries(["prompt_tokens","completion_tokens"].filter(k=>Number.isFinite(obj.usage[k])).map(k=>[k,obj.usage[k]]));
-        if(provider==="aitunnel"&&Number.isFinite(obj?.usage?.cost_rub)){
-          assistant.costRub=obj.usage.cost_rub;
-          if(!obj.choices?.length)return;
-        }
         if(!obj || !Array.isArray(obj.choices))throw Error("Провайдер вернул неизвестный формат потока.");
         const reason=obj.choices?.[0]?.finish_reason;
         if(reason){finishReason=String(reason);streamFinished=true;}
@@ -1423,6 +1481,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
     if(!assistant.content)throw Error("Модель не вернула текст. Проверь баланс и лимиты у провайдера.");
     if(isPaidProvider&&effectiveMode==="draft")assistant.delivery=draftDelivery(msg,assistant.content,finishReason,outputLimit);
     if(isPaidProvider&&(!streamFinished||(finishReason&&finishReason!=="stop"))){
+      assistant.incomplete=true;
       // Preserve the paid partial chapter rather than pretending that a broken
       // stream or max_tokens cutoff is a complete manuscript.
       assistant.content+="\n\n[Генерация не завершена: "+(finishReason==="length"?"достигнут лимит длины ответа.":finishReason?"провайдер остановил выдачу.":"поток прервался до подтверждения завершения.")+" Уже полученный текст сохранен. Не отправляй запрос повторно автоматически.]";
@@ -1430,6 +1489,8 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
     connectOk=true;connectText=isPaidProvider?activeProviderLabel()+" подключен":"Ollama доступна";
   }catch(e){
     currentController.abort();
+    assistant.noText=!assistant.content;
+    assistant.incomplete=true;
     const prefix=e.name==="AbortError"?"Ответ остановлен.":(isPaidProvider?"Ошибка Claude: ":"Ошибка Ollama: ")+e.message;
     assistant.content=assistant.content?(assistant.content+"\n\n["+prefix+"]"):prefix;
     target.textContent=assistant.content;target.classList.remove("pending");
@@ -1493,7 +1554,12 @@ async function saveCloudArchive(manual){
     if(manual)notice(cloudStatus);
   }finally{cloudPending=false;updateCloudControls();}
 }
+function restoreProviderChoice(settings){
+  if(settings.provider==="polza")settings.provider="modelproxy";
+  if(settings.provider==="aitunnel")settings.provider="bothub";
+}
 async function applyArchive(next,rollback){
+  restoreProviderChoice(next.settings);
   next.expenses=restoreExpenses(next);
   const app=$("#app");
   app.inert=true;
@@ -1764,6 +1830,15 @@ document.addEventListener("click",async(e)=>{
   if(a==="ask-local"){const v=$("#f-message-input")?.value||"";if(v.trim()){await sendMessage(v);}else notice("Напиши задачу.");}
   if(a==="export-context"){const v=$("#f-message-input")?.value||"";if(v.trim()){await prepareExternal(v);}else notice("Сначала напиши задачу, чтобы подготовить контекст книги.");}
   if(a==="paste-external")await saveExternalAnswer();
+  if(a==="open-expenses"){tab="expenses";render();void refreshExpenses();return;}
+  if(a==="return-task" && !busy){
+    const c=chat(), field=$("#f-message-input");
+    const original=c?.messages.slice(0,Number(b.dataset.i)).findLast(m=>m.role==="user");
+    if(!field || !original)return;
+    if(field.value.trim() && field.value!==original.content)return notice("Поле уже содержит черновик. Сохрани его перед возвратом задания.");
+    field.value=original.content;
+    rememberDraft(field.value);await save();resizeChatInput(field);field.focus();notice("Задание возвращено в черновик.");return;
+  }
   if(a==="feedback-good"||a==="feedback-bad")await saveFeedback(Number(b.dataset.i),a==="feedback-good"?"good":"bad");
   if(a==="remember-decision"){
     const c=chat();
@@ -1918,6 +1993,13 @@ document.addEventListener("change",async(e)=>{
     state.settings.sceneOutputTokens=limit;
     await save();return;
   }
+  if(e.target.id==="f-book-scope"){
+    const p=project();
+    if(!p || preparingPaid || busy || !["auto","full"].includes(e.target.value))return;
+    p.manuscriptScope=e.target.value;
+    await save();renderChat();
+    return;
+  }
   if(e.target.id==="f-chapter-effort"){
     if(!CHAPTER_EFFORTS.includes(e.target.value))return;
     state.settings.chapterEffort=e.target.value;
@@ -1930,9 +2012,11 @@ document.addEventListener("change",async(e)=>{
   }
   if(e.target.dataset.docContext){
     const doc=state.docs.find(d=>d.id===e.target.dataset.docContext);if(!doc)return;
-    const before=doc.includeInContext;
-    doc.includeInContext=e.target.checked;
-    if(!await save()){doc.includeInContext=before;e.target.checked=before!==false;}
+    const select=e.target, before=materialMode(doc), value=select.value;
+    if(!["auto","priority","archive"].includes(value))return;
+    const previous={includeInContext:doc.includeInContext,priority:doc.priority};
+    doc.includeInContext=value!=="archive";doc.priority=value==="priority";
+    if(!await save()){Object.assign(doc,previous);select.value=before;}
     return;
   }
   if(e.target.id==="f-sidebar-project"||e.target.id==="f-chat-project"){
@@ -1949,6 +2033,7 @@ document.addEventListener("change",async(e)=>{
       if(data.app!=="FreitagAI"||!Array.isArray(data.data?.projects)||!Array.isArray(data.data?.chats)||!Array.isArray(data.data?.docs))throw new Error("Это не архив Freitag AI.");
       if(!confirm("Заменить текущие чаты, проекты и материалы импортированным архивом?"))return;
       state={...blank(),...data.data,feedback:Array.isArray(data.data.feedback)?data.data.feedback:[],settings:{...blank().settings,...data.data.settings}};
+      restoreProviderChoice(state.settings);
       state.expenses=restoreExpenses(state);
       await save();render();notice("Архив импортирован.");
     }catch(err){notice("Ошибка импорта: "+err.message);}
@@ -1987,7 +2072,7 @@ if(workingLink){
 (async()=>{
   try{db=await openDb();const loaded=await getDb();if(loaded&&Array.isArray(loaded.projects)&&Array.isArray(loaded.chats))state={...blank(),...loaded,settings:{...blank().settings,...loaded.settings}};
     // Migrate existing test settings: Polza is no longer available.
-    if(state.settings.provider==="polza")state.settings.provider="modelproxy";}
+    restoreProviderChoice(state.settings);}
   catch(e){$("#panel").innerHTML=empty("Хранилище недоступно","Разреши браузеру сохранять данные сайта: "+e.message);return;}
   state.settings.bothubModel=["claude-sonnet-5.5","claude-opus-5.5"].includes(state.settings.bothubModel)?
     state.settings.bothubModel:"claude-sonnet-5.5";
