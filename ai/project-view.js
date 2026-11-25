@@ -1,7 +1,10 @@
 // Project overview. Everything editable here is stored only in Freitag AI.
 // The original manuscript/legend belongs to Masterskaya, never edited here.
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-export function projectHomeHtml(p,chats,docs,userInstruction){
+const workshopOrigin="https://erichthoxx-sketch.github.io";
+export function projectHomeHtml(p,chats,docs,userInstruction,origin=""){
+  const refreshInWorkshop=/^https:\/\/(?:[a-z0-9-]+\.)?freitag-ai-test\.pages\.dev$/i.test(origin);
+  const bookUrl=workshopOrigin+"/mine/workshop/#/book/"+encodeURIComponent(p.masterBookId||"");
   const history=chats.filter(x=>x.projectId===p.id).sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||""))).slice(0,10);
   const materials=docs.filter(d=>d.projectId===p.id);
   const notes=Array.isArray(p.memoryNotes)?p.memoryNotes.slice().reverse():[];
@@ -34,10 +37,11 @@ export function projectHomeHtml(p,chats,docs,userInstruction){
     '<div class="f-project-reference"><section class="f-project-source"><h2>Рукопись и материалы</h2>'+
     (p.masterBookId?
       '<p class="f-muted">Для глав Freitag берёт канон и '+(p.manuscriptScope==="full"?'всю рукопись.':'ближайшие предыдущие главы с отрывками по заданию.')+' Выбор доступен в чате в меню «Ещё».</p>'+
-      '<div class="f-source-actions"><a class="f-btn" href="https://erichthoxx-sketch.github.io/mine/workshop/#/book/'+encodeURIComponent(p.masterBookId)+'" target="_blank" rel="noopener">Открыть книгу в Мастерской ↗</a>'+
+      '<div class="f-source-actions"><a class="f-btn" href="'+bookUrl+'" target="_blank" rel="noopener noreferrer">'+(refreshInWorkshop?'Обновить рукопись в Мастерской ↗':'Открыть книгу в Мастерской ↗')+'</a>'+
       '<button class="f-btn" data-action="open-story-map" data-id="'+esc(p.id)+'" type="button">Карта романа</button>'+
       '<button class="f-btn" data-action="check-book-source" data-id="'+esc(p.id)+'" type="button">Проверить источник бесплатно</button>'+
-      '<button class="f-btn" data-action="sync-current-book" data-id="'+esc(p.id)+'" type="button">Обновить Google Docs</button></div>'+
+      (refreshInWorkshop?'':'<button class="f-btn" data-action="sync-current-book" data-id="'+esc(p.id)+'" type="button">Обновить Google Docs</button>')+'</div>'+
+      (refreshInWorkshop?'<p class="f-muted">В карточке книги нажми «Нейросеть» → «Обновить у нейросети». При первом подключении кнопка называется «Подключить книгу».</p>':'')+
       '<div id="f-book-check" class="f-book-check" role="status"></div>':
       '<p class="f-muted">Подключи рукопись из списка книг в Мастерской.</p>')+
     '<div class="f-source-actions"><button class="f-btn" data-action="open-project-materials" data-id="'+esc(p.id)+'" type="button">Материалы проекта'+

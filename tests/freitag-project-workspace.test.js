@@ -20,12 +20,16 @@ test("Project view exposes editable author instructions, MCP source and new chat
   const html=projectHomeHtml({id:"x",name:"Книга <3",instruction:"Пиши свободно",
     masterBookId:"bookid",description:"Мой роман",voice:"",canon:"",scene:""},
     [{id:"c1",projectId:"x",title:"Глава 15",updated:"2026-11-22"}],[],
-    v=>v);
+    v=>v,"https://codex-freitag-aitunnel.freitag-ai-test.pages.dev");
   assert.match(html,/data-action="new-project-chat"/);
   assert.match(html,/id="f-project-instructions"/);
   assert.match(html,/Пиши свободно/);
   assert.match(html,/MCP вызывается автоматически/);
-  assert.match(html,/Обновить Google Docs/);
+  assert.match(html,/href="https:\/\/erichthoxx-sketch\.github\.io\/mine\/workshop\/#\/book\/bookid"[^>]+>Обновить рукопись в Мастерской/);
+  assert.doesNotMatch(html,/data-action="sync-current-book"/);
+  assert.match(html,/Нейросеть» → «Обновить у нейросети/);
+  const sameOrigin=projectHomeHtml({id:"x",masterBookId:"bookid"},[],[],()=>"", "https://erichthoxx-sketch.github.io");
+  assert.match(sameOrigin,/data-action="sync-current-book"/);
   assert.match(html,/Книга &lt;3/);
 });
 

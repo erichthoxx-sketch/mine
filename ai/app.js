@@ -137,7 +137,7 @@ function render(){
 function renderProjectHome(){
   const p=project(projectHomeId);
   if(!p){projectHomeId=null;return renderProjects();}
-  $("#panel").innerHTML=projectHomeHtml(p,state.chats,state.docs,userInstruction);
+  $("#panel").innerHTML=projectHomeHtml(p,state.chats,state.docs,userInstruction,location.origin);
 }
 function renderProjects(){
   $("#panel").innerHTML='<div class="f-content">'+titleLine("Мои книги","Канон, стиль и диалоги — отдельно для каждой истории.",
@@ -222,7 +222,7 @@ function renderSettings(){
     '<details class="f-settings-fold"><summary>Защищенный API-шлюз</summary>'+
     '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
     '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
-    '<p class="f-muted">По рабочему адресу Freitag AI шлюз выбирается автоматически. Freitag AI напрямую вызывает MCP-инструменты Мастерской для чтения книг, доходов, маркетинга и Директа. Для главы используется последний снимок книги в Мастерской. После правок в рукописи нажми «Обновить Google Docs» в проекте. Секреты хранятся только в Cloudflare.</p></div></details>'+
+    '<p class="f-muted">По рабочему адресу Freitag AI шлюз выбирается автоматически. Freitag AI напрямую вызывает MCP-инструменты Мастерской для чтения книг, доходов, маркетинга и Директа. Для главы используется последний снимок книги в Мастерской. После правок обнови рукопись через раздел «Рукопись и материалы» в проекте. Секреты хранятся только в Cloudflare.</p></div></details>'+
     '<details class="f-settings-fold"><summary>Локальная Ollama · дополнительные настройки</summary>'+
     '<div class="f-fold-body"><label for="f-endpoint">Адрес Ollama</label>'+
     '<input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
