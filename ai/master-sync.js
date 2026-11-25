@@ -30,14 +30,14 @@ export const master = {
           unsub=A.onAuthStateChanged(state.auth,u=>{state.user=u?{uid:u.uid,email:u.email}:null;unsub();resolve();},reject);
         });
         state.ready=true;state.error="";
-      }catch(e){state.error=e?.message||String(e);throw e;}
+      }catch(e){loading=null;state.error=e?.message||String(e);throw e;}
     })();
     return loading;
   },
   async idToken(){
     await this.init();
     const current = state.auth.currentUser;
-    if (!current) throw Error("Войди в аккаунт Мастерской в разделе «Проекты».");
+    if (!current) throw Error("Войди в аккаунт Мастерской в разделе «Книги».");
     return state.mods.A.getIdToken(current);
   },
   async login(email,password){

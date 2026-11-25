@@ -179,6 +179,24 @@ try {
     const quote=page.getByRole("dialog",{name:"Контекст и цена",exact:true});
     const approve=()=>quote.getByRole("button",{name:"Подтвердить запрос",exact:true}).click();
     await nav("settings");
+    await page.locator("#f-provider").selectOption("bothub");
+    const checkButton=page.getByRole("button",{name:"Проверить соединение"});
+    let finishDiscovery;
+    const discovery=new Promise(resolve=>{finishDiscovery=resolve;});
+    await page.route("**/mcp-tools",async route=>{
+      await discovery;
+      await route.fulfill({json:{ok:false,error:"Мастерская временно недоступна."}});
+    },{times:1});
+    await checkButton.click();
+    await page.locator("#f-test-status").filter({hasText:"Проверяю коннектор Мастерской"}).waitFor();
+    assert.equal(await checkButton.isDisabled(),true);
+    finishDiscovery();
+    await page.locator("#f-test-status").filter({hasText:/Модель доступна.*Мастерская временно недоступна/}).waitFor();
+    await nav("chat");await nav("settings");
+    assert.match(await page.locator("#f-test-status").innerText(),/Мастерская временно недоступна/);
+    await checkButton.click();
+    await page.locator("#f-test-status").filter({hasText:"4 инструментов чтения"}).waitFor();
+    assert.equal(await page.evaluate(()=>window.submitted.length),0);
     await page.locator("#f-provider").selectOption("apimira");
     await page.locator('[data-action="test-connection"]').click();
     await page.locator("#f-test-status").filter({hasText:/Баланс ApiMira 3,45/}).waitFor();

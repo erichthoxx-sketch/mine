@@ -205,6 +205,7 @@ function renderExpenses(){
   $("#panel").innerHTML=expensesHtml(expenseReport(state.expenses,expenseFilters),expenseFilters,
     {esc,projects:[...projects.values()],chats:new Set(state.chats.map(c=>c.id)),providers:state.expenses.some(row=>row.provider==="aitunnel")?{...providerNames,aitunnel:"AITUNNEL"}:providerNames,refreshing:refreshingExpenses,issue:billingIssue});
 }
+let connectionCheck=null;
 function renderSettings(){
   const s=state.settings;
   const provider=s.provider||"ollama";
@@ -221,8 +222,8 @@ function renderSettings(){
     '<select id="f-bothub-model" name="bothubModel" class="f-select">'+
     [["claude-sonnet-5.5","Sonnet 5.5 · на каждый день"],["claude-opus-5.5","Opus 5.5 · сложные задачи"]].map(x=>
       '<option value="'+x[0]+'" '+(x[0]===s.bothubModel?"selected":"")+'>'+x[1]+'</option>').join("")+'</select></div>'+
-    '<div class="f-row f-connection-row"><button type="button" class="f-btn" data-action="test-connection">Проверить соединение</button>'+
-    '<span id="f-test-status" class="f-muted" role="status">Проверка не выполняет платную генерацию.</span></div>'+
+    '<div class="f-row f-connection-row"><button type="button" class="f-btn" data-action="test-connection" '+(connectionCheck?.pending?'disabled':'')+'>Проверить соединение</button>'+
+    '<span id="f-test-status" class="f-muted" role="status">'+esc(connectionCheck?.text||"Проверка не выполняет платную генерацию.")+'</span></div>'+
     '<div id="f-modelproxy-funds" '+(provider==="modelproxy"?"":"hidden")+'><a class="f-inline-btn" href="https://modelproxy.org/dashboard/topup?lang=ru" target="_blank" rel="noopener noreferrer">Пополнить в ModelProxy ↗</a> <span class="f-muted">USDT в сети Tron (TRC-20)</span></div>'+
     '<details class="f-settings-fold"><summary>Защищенный API-шлюз</summary>'+
     '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
@@ -749,47 +750,70 @@ async function testConnection(){
   const chosen=$("#f-provider")?.value||state.settings.provider;
   if(paidProviders.includes(chosen)){
     const gateway=claudeGateway($("#f-worker")?.value||state.settings.workerUrl,chosen);
-    if(!gateway)return notice("Укажи HTTPS-адрес личного Cloudflare Worker.");
+    if(connectionCheck?.pending)return;
+    const run={pending:true,text:""};
+    connectionCheck=run;
+    const button=$('[data-action="test-connection"]');
+    button.disabled=true;
+    const stage=text=>{
+      if(connectionCheck!==run)return;
+      run.text=text;
+      const status=$("#f-test-status");
+      if(status)status.textContent=text;
+    };
+    const model=chosen==="modelproxy"?"claude-opus-5-5":chosen==="apimira"?"anthropic/claude-opus-5.5":($("#f-bothub-model")?.value||activeBotHubModel());
+    const connector=chosen==="bothub"?gateway:claudeGateway(state.settings.workerUrl,"bothub");
+    let modelVerified=false;
     try{
-      const response=await fetch(gateway+"/health",{cache:"no-store"});
+      stage("Проверяю шлюз…");
+      if(!gateway)throw Error("Укажи HTTPS-адрес личного Cloudflare Worker.");
+      const response=await fetch(gateway+"/health",{cache:"no-store",signal:AbortSignal.timeout(15000)});
       if(!response.ok)throw Error("HTTP "+response.status);
       const data=await response.json();
       if(data.provider!=="ModelProxy"||data.model!=="claude-opus-5-5"||data.chapterProtocol!==2)
         throw Error("На сервере прежняя версия шлюза. Обнови Worker без платных запросов.");
       if(!data.ok || !(data.availableProviders?.[chosen] ?? data[chosen==="modelproxy"?"configured":chosen+"Configured"]))
         throw Error(providerNames[chosen]+": в Cloudflare нужен секрет "+chosen.toUpperCase()+"_API_KEY и настройка владельца.");
-      let info;
-      {
-        const model=chosen==="modelproxy"?"claude-opus-5-5":chosen==="apimira"?"anthropic/claude-opus-5.5":($("#f-bothub-model")?.value||activeBotHubModel());
-        const token=await master.idToken();
-        const check=await fetch(gateway+"/preflight?provider="+chosen+"&model="+encodeURIComponent(model),{
-          headers:{"Authorization":"Bearer "+token},cache:"no-store"
-        });
-        info=await check.json().catch(()=>({}));
-        if(!check.ok||!info.ok)throw Error(info.error||info.message||"Модель недоступна.");
-      }
-      // Check the REAL MCP server, not the mere existence of a KV binding.
-      const token=await master.idToken();
-      const mcpRes=await fetch(claudeGateway(state.settings.workerUrl,"bothub")+"/mcp-tools",{
-        headers:{"Authorization":"Bearer "+token},cache:"no-store"
-      });
+      stage("Проверяю вход в Мастерскую…");
+      let timer;
+      const token=await Promise.race([master.idToken(),new Promise((_,reject)=>{
+        timer=setTimeout(()=>reject(Error("Истекло время ожидания входа в Мастерскую.")),20000);
+      })]).finally(()=>clearTimeout(timer));
+      if(connectionCheck!==run)return;
+      stage("Проверяю доступ к модели "+providerNames[chosen]+"…");
+      const options=()=>({headers:{Authorization:"Bearer "+token},cache:"no-store",signal:AbortSignal.timeout(20000)});
+      const check=await fetch(gateway+"/preflight?provider="+chosen+"&model="+encodeURIComponent(model),options());
+      const info=await check.json().catch(()=>({}));
+      if(!check.ok||!info.ok)throw Error(info.error||info.message||"Каталог моделей: HTTP "+check.status);
+      if(connectionCheck!==run)return;
+      modelVerified=true;
+      stage("Модель доступна. Проверяю коннектор Мастерской…");
+      const mcpRes=await fetch(connector+"/mcp-tools",options());
       const mcpInfo=await mcpRes.json().catch(()=>({}));
-      if(!mcpRes.ok || !mcpInfo.ok)
-        throw Error(mcpInfo.error||"Прямое MCP-подключение не работает.");
+      if(!mcpRes.ok||!mcpInfo.ok)throw Error(mcpInfo.error||"Коннектор Мастерской: HTTP "+mcpRes.status);
+      if(connectionCheck!==run)return;
       connectOk=true;
-      const sourceLabel="Коннектор Freitag";
-      connectText=sourceLabel+" · "+activeProviderLabel();
-      const status=$("#f-test-status");
+      connectText="Коннектор Freitag · "+activeProviderLabel();
       const money=chosen==="modelproxy"&&Number.isFinite(info?.balanceUsd)?" Баланс ModelProxy "+usd(info.balanceUsd)+".":chosen==="apimira"&&typeof info?.balanceUsd==="number"?
         " Баланс ApiMira "+usd(info.balanceUsd)+"."+
         (Number.isFinite(info.inputUsd)&&Number.isFinite(info.outputUsd)?
           " Тариф за 1 млн токенов: вход "+usd(info.inputUsd)+", выход "+usd(info.outputUsd)+".":""):"";
       const modelStatus=info?.chapterApi==="anthropic-messages"?"Ключ BotHub видит модель в Anthropic Messages. ":info?"Модель есть в каталоге. ":"";
       const sourceStatus="Общий коннектор Freitag · "+mcpInfo.toolCount+" инструментов чтения. ";
-      if(status)status.textContent=modelStatus+sourceStatus+"Проверка бесплатна."+money;
+      stage(modelStatus+sourceStatus+"Проверка бесплатна."+money);
       notice("Защищенный шлюз найден. Проверка бесплатна.");
-    }catch(e){connectOk=false;connectText=e.message;const status=$("#f-test-status");
-      if(status)status.textContent=e.message;notice("Claude: "+e.message);}
+    }catch(e){
+      if(connectionCheck!==run)return;
+      const detail=e.name==="TimeoutError"?"Время ожидания истекло.":e.message;
+      stage((modelVerified?"Модель доступна. Проверка коннектора Мастерской. ":run.text+" ")+detail);
+      connectOk=false;connectText=run.text;
+    }finally{
+      run.pending=false;
+      if(connectionCheck===run){
+        const current=$('[data-action="test-connection"]');
+        if(current)current.disabled=false;
+      }
+    }
     renderHeader();return;
   }
   const endpoint=safeEndpoint($("#f-endpoint")?.value||state.settings.endpoint);
@@ -1951,6 +1975,7 @@ document.addEventListener("submit",async(e)=>{
     if(workerRaw&&!workerUrl)return notice("Неверный HTTPS-адрес Cloudflare Worker.");
     const bothubModel=String(fd.get("bothubModel")||"claude-sonnet-5.5");
     if(!["claude-sonnet-5.5","claude-opus-5.5"].includes(bothubModel))return notice("Неизвестная модель BotHub.");
+    connectionCheck=null;
     state.settings.provider=provider;state.settings.workerUrl=workerUrl;state.settings.bothubModel=bothubModel;
     state.settings.endpoint=url;state.settings.model=String(fd.get("model")||"").trim();
     state.settings.globalInstruction=String(fd.get("globalInstruction")||"");
@@ -1969,6 +1994,7 @@ document.addEventListener("change",async(e)=>{
       if(!["claude-opus-5.5","claude-sonnet-5.5"].includes(model))return;
       state.settings.bothubModel=model;
     }
+    connectionCheck=null;
     state.settings.provider=provider;
     const input=$("#f-message-input");
     if(input){if(!state.drafts)state.drafts={};state.drafts[draftKey()]=input.value;}
@@ -1980,6 +2006,8 @@ document.addEventListener("change",async(e)=>{
     const model=$("#f-bothub-model")?.value||"claude-opus-5.5";
     if((provider!=="ollama"&&!paidProviders.includes(provider)) ||
        !["claude-sonnet-5.5","claude-opus-5.5"].includes(model))return;
+    connectionCheck=null;
+    const button=$('[data-action="test-connection"]');if(button)button.disabled=false;
     state.settings.provider=provider;state.settings.bothubModel=model;
     connectOk=false;connectText=activeProviderLabel()+" · не проверено";
     await save();
