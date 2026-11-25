@@ -1367,6 +1367,7 @@ export default {
           configured: !!env.MODELPROXY_API_KEY && !!env.OWNER_UID,
           bothubConfigured,
           bothubChapterApi: "anthropic-messages",
+          bothubLegacyTransportSupported: !separate,
           bothubChapterOutputLimits: CHAPTER_LIMITS,
           apimiraConfigured: !!env.APIMIRA_API_KEY && !!env.OWNER_UID,
           chapterEfforts: CHAPTER_EFFORTS,
