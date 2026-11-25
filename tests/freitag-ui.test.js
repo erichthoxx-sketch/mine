@@ -143,3 +143,15 @@ test("BotHub emergency preset keeps the original author prompt and instructions 
   assert.doesNotMatch(handler,/\.instruction\s*=|\.messages\s*=|sendMessage\(/,
     "preset must not edit project instruction, chat history, or start a paid request");
 });
+
+test("legacy BotHub transport is opt-in and retains the selected quality parameters",async()=>{
+  const app=await load("../ai/app.js");
+  const worker=await load("../proxy/freitag-modelproxy-worker.js");
+  assert.match(app,/data-action="preview-chapter"/);
+  assert.match(app,/id="f-bothub-transport"/);
+  assert.match(app,/value="legacy"/);
+  assert.match(app,/bothubTransport:selectedTransport/);
+  assert.match(app,/state\.settings\.bothubTransport=e\.target\.value/);
+  assert.match(worker,/input\.bothubTransport==="legacy"/);
+  assert.match(worker,/const bothubChapter = providerId === "bothub" && isDraft && !legacyBothub/);
+});
