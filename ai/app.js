@@ -1280,6 +1280,12 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
       await master.init();
       if(!master.user)throw Error("Один раз войди в Мастерскую в разделе «Книги». Затем книги доступны через MCP без повторных входов.");
       idToken=await master.idToken();
+      if(provider==="bothub"&&selectedTransport==="legacy"){
+        const check=await fetch(gateway+"/health",{cache:"no-store"});
+        const info=await check.json().catch(()=>({}));
+        if(!check.ok||info.bothubLegacyTransportSupported!==true)
+          throw Error("Старый маршрут еще не опубликован в Cloudflare Worker. Платный запрос не отправлялся.");
+      }
       if(selectedChat!==draftKey() || provider!==state.settings.provider || selectedModel!==activeBotHubModel() ||
         outputLimit!==chapterOutputLimit() || effort!==chapterEffort() || (provider==="bothub" && selectedTransport!==state.settings.bothubTransport))
         return notice("Чат, модель или лимит изменились. Проверь параметры и отправь задание снова.");
