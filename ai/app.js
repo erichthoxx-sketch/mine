@@ -1368,6 +1368,8 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
         effort:effortLabels[reasoningEffort],recent,previewOnly,background,
         toolCalls:false});
       if(!confirmed)return;
+      if(bookId && effectiveMode==="draft" && fullBook!==usesFullManuscript(project(current.projectId),provider))
+        return notice("Выбор рукописи изменился. Проверь новую оценку.");
       if(provider==="bothub" && fullBook)fullBotHubDraftKey=null;
       if(isMira)payload.apimiraQuote={fingerprint:estimate.fingerprint,estimateUsd:estimate.estimateUsd};
       else payload.contextQuote=estimate.fingerprint;
@@ -2002,7 +2004,7 @@ document.addEventListener("change",async(e)=>{
   }
   if(e.target.id==="f-book-scope"){
     const p=project();
-    if(!p || preparingPaid || busy || !["auto","full"].includes(e.target.value))return;
+    if(!p || busy || !["auto","full"].includes(e.target.value))return;
     if(state.settings.provider==="bothub")fullBotHubDraftKey=e.target.value==="full"?draftKey():null;
     else p.manuscriptScope=e.target.value;
     await save();renderChat();
