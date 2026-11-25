@@ -395,6 +395,7 @@ try {
         await page.waitForFunction(n=>window.submitted.length===n,count+1);
         const payload=await page.evaluate(()=>window.submitted.at(-1));
         assert.equal(payload.provider,provider);
+        if(provider==="bothub")assert.equal(payload.manuscriptScope,undefined,"use the established two-chapter route");
         assert.equal(payload.outputTokenLimit,32000);
         assert.equal(payload.reasoningEffort,"high");
         assert.equal(payload.bookId,"fixture");
@@ -479,12 +480,16 @@ try {
       await page.getByRole("button",{name:"Контекст и цена",exact:true}).click();
       assert.match(await quote.innerText(),/BotHub[\s\S]*глава 1, сцена 2/);
       await quote.getByRole("button",{name:"Закрыть",exact:true}).click();
+      assert.equal(await page.evaluate(()=>window.quoted.at(-1).manuscriptScope),undefined);
+      await page.locator("#f-book-scope").selectOption("full");
       assert.equal(backgroundJobs.length,0);
       assert.equal(await page.evaluate(()=>window.submitted.length),modelCalls);
       await page.getByRole("button",{name:"Написать в фоне",exact:true}).click();
       await quote.getByRole("button",{name:"Написать в фоне",exact:true}).click();
       await page.getByRole("dialog").getByRole("heading",{name:/Готово · Тестовая книга/}).waitFor();
       assert.equal(backgroundJobs.length,1);
+      assert.equal(await page.evaluate(()=>window.quoted.at(-1).manuscriptScope),"full");
+      assert.equal(await page.locator("#f-book-scope").inputValue(),"auto","full manuscript is used once");
       const secondDevice=await browser.newPage({viewport:{width:390,height:900},serviceWorkers:"block"});
       await secondDevice.route("**/*",fixtureRoute);
       await secondDevice.goto(origin+"/ai/");

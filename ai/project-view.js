@@ -2,7 +2,7 @@
 // The original manuscript/legend belongs to Masterskaya, never edited here.
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const workshopOrigin="https://erichthoxx-sketch.github.io";
-export function projectHomeHtml(p,chats,docs,userInstruction,origin=""){
+export function projectHomeHtml(p,chats,docs,userInstruction,origin="",provider=""){
   const refreshInWorkshop=/^https:\/\/(?:[a-z0-9-]+\.)?freitag-ai-test\.pages\.dev$/i.test(origin);
   const bookUrl=workshopOrigin+"/mine/workshop/#/book/"+encodeURIComponent(p.masterBookId||"");
   const history=chats.filter(x=>x.projectId===p.id).sort((a,b)=>String(b.updated||"").localeCompare(String(a.updated||""))).slice(0,10);
@@ -36,7 +36,7 @@ export function projectHomeHtml(p,chats,docs,userInstruction,origin=""){
     '</form>'+
     '<div class="f-project-reference"><section class="f-project-source"><h2>Рукопись и материалы</h2>'+
     (p.masterBookId?
-      '<p class="f-muted">Для глав Freitag берёт канон и '+(p.manuscriptScope==="full"?'всю рукопись.':'ближайшие предыдущие главы с отрывками по заданию.')+' Выбор доступен в чате в меню «Ещё».</p>'+
+      '<p class="f-muted">Для глав Freitag берёт канон и '+(provider==="bothub"?'две последние главы и выписки по заданию. Полную рукопись можно выбрать для одной отправки.':p.manuscriptScope==="full"?'всю рукопись.':'ближайшие предыдущие главы с отрывками по заданию.')+' Выбор доступен в чате в меню «Ещё».</p>'+
       '<div class="f-source-actions"><a class="f-btn" href="'+bookUrl+'" target="_blank" rel="noopener noreferrer">'+(refreshInWorkshop?'Обновить рукопись в Мастерской ↗':'Открыть книгу в Мастерской ↗')+'</a>'+
       '<button class="f-btn" data-action="open-story-map" data-id="'+esc(p.id)+'" type="button">Карта романа</button>'+
       '<button class="f-btn" data-action="check-book-source" data-id="'+esc(p.id)+'" type="button">Проверить источник бесплатно</button>'+

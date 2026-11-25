@@ -71,7 +71,7 @@ export function openRequestEstimate({estimate, model, memory, effort, recent, pr
   const number = value => value.toLocaleString("ru-RU");
   const summary = node("div", "", "f-quote-summary");
   summary.append(node("span", model), node("strong", cost ? "≈ " + fmt(cost.amount) : "Оценка недоступна"),
-    node("p", "Контекст и ответ до " + number(estimate.outputTokenLimit) + " токенов", "f-muted"));
+    node("p", "Контекст и ответ до " + number(estimate.outputTokenLimit) + " токенов на этот ответ", "f-muted"));
   content.append(summary);
   const breakdown = estimate.costBreakdown?.currency === cost?.currency ? estimate.costBreakdown : null;
   const figures = node("dl", "", "f-quote-figures");

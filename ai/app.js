@@ -51,6 +51,11 @@ const materialsProject=()=>project(materialsProjectId)||project(chat()?.projectI
 // Drafts are private to each conversation or to the initial composer for a book.
 // They are persisted in the existing IndexedDB, never sent to a provider until submission.
 const draftKey=()=>chat()?"chat:"+chat().id:"new:"+(state.activeProjectId||"none");
+// BotHub uses the compact chapter route from 23 November. A full manuscript is opt-in for one send.
+let fullBotHubDraftKey=null;
+function usesFullManuscript(p,provider=state.settings.provider){
+  return provider==="bothub"?fullBotHubDraftKey===draftKey():p?.manuscriptScope==="full";
+}
 let draftSaveTimer=null;
 const rememberDraft=(text)=>{
   if(!state.drafts || typeof state.drafts!=="object")state.drafts={};
@@ -137,7 +142,7 @@ function render(){
 function renderProjectHome(){
   const p=project(projectHomeId);
   if(!p){projectHomeId=null;return renderProjects();}
-  $("#panel").innerHTML=projectHomeHtml(p,state.chats,state.docs,userInstruction,location.origin);
+  $("#panel").innerHTML=projectHomeHtml(p,state.chats,state.docs,userInstruction,location.origin,state.settings.provider);
 }
 function renderProjects(){
   $("#panel").innerHTML='<div class="f-content">'+titleLine("Мои книги","Канон, стиль и диалоги — отдельно для каждой истории.",
@@ -404,7 +409,7 @@ function renderChat(){
     '</div>'+
     (p?'<aside class="f-chat-context" aria-label="Контекст книги">'+
       '<h2>Контекст книги</h2><p class="f-context-book">'+esc(p.name)+'</p>'+
-      '<h3>Рукопись</h3><p>'+(p.masterBookId?(p.manuscriptScope==="full"?'Канон и все главы снимка.':'Канон, главы перед текущей и отрывки по заданию.'):'Локальный проект')+'</p>'+
+      '<h3>Рукопись</h3><p>'+(p.masterBookId?(usesFullManuscript(p)?'Канон и все главы снимка.':state.settings.provider==="bothub"?'Канон, две последние главы и отрывки по заданию.':'Канон, главы перед текущей и отрывки по заданию.'):'Локальный проект')+'</p>'+
       '<h3>Инструкция проекта</h3><p>'+(userInstruction(p.instruction).trim()?'Сохранена и применяется в чатах книги.':'Пока пустая.')+'</p>'+
       '<button type="button" class="f-btn" data-action="project-home" data-id="'+esc(p.id)+'">Открыть проект ↗</button></aside>':"")+
     '<form id="f-chat-form" class="f-compose">'+
@@ -429,7 +434,7 @@ function renderChat(){
       '<details class="f-extra-tools" id="f-chat-tools" '+(toolsOpen?"open":"")+'><summary>Ещё</summary><div class="f-compose-menu">'+
       (p?.masterBookId && paidProviders.includes(state.settings.provider) && (c?.mode||pendingMode||"draft")==="draft"?
         '<label class="f-book-scope">Рукопись для глав<select id="f-book-scope" class="f-select" '+(busy?'disabled':'')+'>'+
-        '<option value="auto">По заданию</option><option value="full" '+(p.manuscriptScope==="full"?'selected':'')+'>Вся рукопись</option></select></label>':"")+
+        '<option value="auto">'+(state.settings.provider==="bothub"?'Канон и две главы':'По заданию')+'</option><option value="full" '+(usesFullManuscript(p)?'selected':'')+'>'+ (state.settings.provider==="bothub"?'Вся рукопись один раз':'Вся рукопись')+'</option></select></label>':"")+
       (canSearchBook?'<button type="button" data-action="search-book-context" '+(busy?"disabled":"")+'>Найти фразу в книге</button>':"")+
       (paidProviders.includes(state.settings.provider)?'<button type="button" data-action="preview-chapter" '+(busy?"disabled":"")+'>Контекст и цена</button>':"")+
       (paidProviders.includes(state.settings.provider)&&(c?.mode||pendingMode||(p?"draft":"dialog"))==="draft"?
@@ -599,7 +604,7 @@ function modelproxyMessages(c, manifest){
   const p=project(c.projectId);
   const messages=c.messages.filter(m=>(m.role==="user"||m.role==="assistant")&&typeof m.content==="string");
   const latest=messages.at(-1)?.content||"";
-  let cues=p && c.mode==="draft" ? chapterCues(latest) : "";
+  let cues=p && !c.compactBotHub && c.mode==="draft" ? chapterCues(latest) : "";
   let projectInstructions=[
     userInstruction(state.settings.globalInstruction),
     userInstruction(p?.instruction),
@@ -936,7 +941,7 @@ async function sendBatchChapter(text){
   if(busy||preparingPaid||!text?.trim())return;
   const p=project();
   if(!p)return notice("Для Batch-главы выбери проект книги.");
-  if(p.manuscriptScope==="full")return notice("Для всей рукописи используй «Отправить» или «Написать в фоне», чтобы сначала проверить стоимость.");
+  if(usesFullManuscript(p))return notice("Для всей рукописи используй «Отправить» или «Написать в фоне», чтобы сначала проверить стоимость.");
   if(isSimpleGreeting(text))return notice("Для Batch требуется задание на главу.");
   if(chat()?.batch?.batchId && !["completed","failed","cancelled","expired"].includes(chat().batch.status))
     return notice("В этом чате уже ожидается результат Batch. Проверь готовность главы.");
@@ -952,7 +957,7 @@ async function sendBatchChapter(text){
   c.mode="draft";
   c.messages.push({role:"user",content:msg,at:stamp()});
   if(c.title==="Новый чат")c.title=msg.slice(0,65);
-  const messages=modelproxyMessages(c);
+  const messages=modelproxyMessages({...c,compactBotHub:true});
   const assistant={role:"assistant",provider:"Claude Opus 5.5 · Batch",
     content:"Отправка главы в Batch API BotHub…",at:stamp()};
   const assistantIndex=c.messages.length;
@@ -974,7 +979,7 @@ async function sendBatchChapter(text){
     const response=await fetch(gateway+"/batch-start",{
       method:"POST",headers:{...headers,"Content-Type":"application/json"},
       body:JSON.stringify({provider:"bothub",model:"claude-opus-5.5",
-        mode:"draft",messages,bookId:p.masterBookId||null,manuscriptScope:"auto",
+        mode:"draft",messages,bookId:p.masterBookId||null,
         outputTokenLimit:outputLimit})
     });
     const result=await response.json().catch(()=>({}));
@@ -1291,7 +1296,8 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
   const sourceTask={task:msg.slice(0,6000),previous:previous.slice(0,450),mode:requestMode,bookId};
   const plan=sourcePlan(sourceTask);
   const effectiveMode=requestMode==="draft" && !plan.draft ? "dialog" : requestMode;
-  const fullBook=Boolean(bookId && effectiveMode==="draft" && project(current.projectId)?.manuscriptScope==="full");
+  const fullBook=Boolean(bookId && effectiveMode==="draft" && usesFullManuscript(project(current.projectId),provider));
+  const compactBotHub=provider==="bothub" && bookId && effectiveMode==="draft" && !fullBook;
   const business=plan.kinds.length>0 && !plan.kinds.includes("book");
   let sourceMessage, sources=[];
   const localHost=!isPaidProvider && endpoint && ["localhost","127.0.0.1","[::1]"].includes(new URL(endpoint).hostname);
@@ -1328,9 +1334,9 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
   if(business && plan.question.includes("\n") && previous)
     questionMessages.unshift({role:"user",content:previous.slice(0,450)});
   const payload=isPaidProvider?{provider,model:provider==="bothub"?selectedModel:undefined,
-    messages:lightweight||business?questionMessages:modelproxyMessages({...current,mode:effectiveMode,messages:[...current.messages,userMessage]},manifest),
+    messages:lightweight||business?questionMessages:modelproxyMessages({...current,mode:effectiveMode,compactBotHub,messages:[...current.messages,userMessage]},manifest),
     mode:effectiveMode,outputTokenLimit:effectiveMode==="draft"?outputLimit:undefined,reasoningEffort,bookId,sourceRevision,
-    ...(bookId && effectiveMode==="draft"?{manuscriptScope:fullBook?"full":"auto"}:{}),freitagContext:true}:null;
+    ...(bookId && effectiveMode==="draft" && !compactBotHub?{manuscriptScope:fullBook?"full":"auto"}:{}),freitagContext:true}:null;
   if(business)manifest.history=questionMessages.length-1;
   if(payload && sourceMessage) payload.messages.unshift(sourceMessage);
   manifest.sources=sources.map(s=>({label:s.label,period:s.period||"",updatedAt:s.updatedAt||""}));
@@ -1362,6 +1368,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
         effort:effortLabels[reasoningEffort],recent,previewOnly,background,
         toolCalls:false});
       if(!confirmed)return;
+      if(provider==="bothub" && fullBook)fullBotHubDraftKey=null;
       if(isMira)payload.apimiraQuote={fingerprint:estimate.fingerprint,estimateUsd:estimate.estimateUsd};
       else payload.contextQuote=estimate.fingerprint;
     }catch(e){return notice(e.message);}
@@ -1996,7 +2003,8 @@ document.addEventListener("change",async(e)=>{
   if(e.target.id==="f-book-scope"){
     const p=project();
     if(!p || preparingPaid || busy || !["auto","full"].includes(e.target.value))return;
-    p.manuscriptScope=e.target.value;
+    if(state.settings.provider==="bothub")fullBotHubDraftKey=e.target.value==="full"?draftKey():null;
+    else p.manuscriptScope=e.target.value;
     await save();renderChat();
     return;
   }
