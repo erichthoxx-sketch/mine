@@ -127,3 +127,12 @@ test("chat uses full viewport height and scrolls messages inside it, not whole p
   assert.match(app,/historyEl\.scrollTop=historyEl\.scrollHeight/);
   assert.doesNotMatch(app,/lastElementChild\?\.scrollIntoView/);
 });
+
+
+test("BotHub compact manuscript choice does not overwrite reasoning, token limits or the draft",async()=>{
+  const app=await load("../ai/app.js");
+  const handler=app.slice(app.indexOf('if(e.target.id==="f-book-scope")'),app.indexOf('if(e.target.id==="f-chapter-effort")',app.indexOf('if(e.target.id==="f-book-scope")')));
+  assert.match(handler,/fullBotHubDraftKey/);
+  assert.doesNotMatch(handler,/chapterEffort|sceneOutputTokens|sendMessage|state\.drafts/);
+  assert.doesNotMatch(app,/bothub-quick-preset/);
+});
