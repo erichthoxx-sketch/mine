@@ -279,6 +279,31 @@ test("valid owner gets accurate snapshot and sends a streamed ModelProxy request
     assert.deepEqual(chapterCall.output_config,{effort:"low"});
     assert.equal(chapterCall.messages.at(-1).content,authorPrompt);
     assert.match(chapterCall.system.find(m=>m.text.includes("Справочные материалы выбранного романа"))?.text||"",/новая глава/);
+
+    // Opt-in rollback to the previous BotHub endpoint must preserve the
+    // full author and project messages and the selected output limit.
+    const legacyChapter=await gateway.fetch(new Request(url("chat"),{
+      method:"POST",headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify({bookId:"test",provider:"bothub",model:"claude-opus-5.5",
+        bothubTransport:"legacy",reasoningEffort:"high",
+        mode:"draft",outputTokenLimit:14000,messages:[
+          {role:"system",content:masterPrompt},
+          {role:"user",content:authorPrompt}
+        ]})
+    }),env);
+    assert.equal(legacyChapter.status,200);
+    assert.match(await legacyChapter.text(),/data: \[DONE\]/);
+    const lastLegacyCall=calls.findLast(c=>String(c.input)==="https://openai.bothub.chat/v1/chat/completions");
+    assert.ok(lastLegacyCall,"old BotHub API was called");
+    const legacyPayload=JSON.parse(lastLegacyCall.init.body);
+    assert.equal(legacyPayload.model,"claude-opus-5.5");
+    assert.equal(legacyPayload.max_tokens,14000);
+    assert.equal(legacyPayload.stream,true);
+    assert.equal(legacyPayload.messages.find(m=>m.content===masterPrompt)?.content,masterPrompt);
+    assert.equal(legacyPayload.messages.at(-1).content,authorPrompt);
+    assert.equal(legacyPayload.tools,undefined);
+    assert.equal(legacyPayload.thinking,undefined);
+    assert.equal(legacyPayload.stream_options,undefined);
     const readyBatch=await gateway.fetch(new Request(url("batch-models"),{headers}),env);
     assert.equal(readyBatch.status,200);
     assert.equal((await readyBatch.json()).model,"claude-opus-5.5:batch");
