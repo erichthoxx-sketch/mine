@@ -127,3 +127,19 @@ test("chat uses full viewport height and scrolls messages inside it, not whole p
   assert.match(app,/historyEl\.scrollTop=historyEl\.scrollHeight/);
   assert.doesNotMatch(app,/lastElementChild\?\.scrollIntoView/);
 });
+
+
+test("BotHub emergency preset keeps the original author prompt and instructions while reducing request load",async()=>{
+  const app=await load("../ai/app.js");
+  const start=app.indexOf('if(a==="bothub-quick-preset")');
+  const end=app.indexOf('if(a==="preview-chapter"',start);
+  assert.ok(start>=0&&end>start,"emergency preset handler exists");
+  const handler=app.slice(start,end);
+  assert.match(app,/data-action="bothub-quick-preset"/);
+  assert.match(handler,/p\.manuscriptScope="auto"/);
+  assert.match(handler,/state\.settings\.sceneOutputTokens=14000/);
+  assert.match(handler,/state\.settings\.chapterEffort="low"/);
+  assert.match(handler,/state\.drafts\[draftKey\(\)\]=currentDraft/);
+  assert.doesNotMatch(handler,/\.instruction\s*=|\.messages\s*=|sendMessage\(/,
+    "preset must not edit project instruction, chat history, or start a paid request");
+});
