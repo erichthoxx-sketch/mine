@@ -135,7 +135,7 @@ test("BotHub emergency preset keeps the original author prompt and instructions 
   const end=app.indexOf('if(a==="preview-chapter"',start);
   assert.ok(start>=0&&end>start,"emergency preset handler exists");
   const handler=app.slice(start,end);
-  assert.match(app,/data-action="bothub-quick-preset"/);
+  assert.doesNotMatch(app,/data-action="bothub-quick-preset"/,"quality-reducing preset must not be offered");
   assert.match(handler,/p\.manuscriptScope="auto"/);
   assert.match(handler,/state\.settings\.sceneOutputTokens=14000/);
   assert.match(handler,/state\.settings\.chapterEffort="low"/);
