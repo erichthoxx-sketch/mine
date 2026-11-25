@@ -135,11 +135,25 @@ test("BotHub emergency preset keeps the original author prompt and instructions 
   const end=app.indexOf('if(a==="preview-chapter"',start);
   assert.ok(start>=0&&end>start,"emergency preset handler exists");
   const handler=app.slice(start,end);
-  assert.match(app,/data-action="bothub-quick-preset"/);
+  assert.doesNotMatch(app,/data-action="bothub-quick-preset"/,"quality-reducing preset must not be offered");
   assert.match(handler,/p\.manuscriptScope="auto"/);
   assert.match(handler,/state\.settings\.sceneOutputTokens=14000/);
   assert.match(handler,/state\.settings\.chapterEffort="low"/);
   assert.match(handler,/state\.drafts\[draftKey\(\)\]=currentDraft/);
   assert.doesNotMatch(handler,/\.instruction\s*=|\.messages\s*=|sendMessage\(/,
     "preset must not edit project instruction, chat history, or start a paid request");
+});
+
+test("legacy BotHub transport is opt-in and retains the selected quality parameters",async()=>{
+  const app=await load("../ai/app.js");
+  const worker=await load("../proxy/freitag-modelproxy-worker.js");
+  assert.match(app,/data-action="preview-chapter"/);
+  assert.match(app,/id="f-bothub-transport"/);
+  assert.match(app,/value="legacy"/);
+  assert.match(app,/bothubTransport:selectedTransport/);
+  assert.match(app,/state\.settings\.bothubTransport=e\.target\.value/);
+  assert.match(worker,/input\.bothubTransport==="legacy"/);
+  assert.match(app,/info\.bothubLegacyTransportSupported!==true/);
+  assert.match(worker,/bothubLegacyTransportSupported: !separate/);
+  assert.match(worker,/const bothubChapter = providerId === "bothub" && isDraft && !legacyBothub/);
 });

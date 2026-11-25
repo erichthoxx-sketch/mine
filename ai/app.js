@@ -27,7 +27,7 @@ const WRITING_MODES = {
 };
 const blank = () => ({projects:[], chats:[], docs:[], feedback:[], expenses:[], drafts:{}, activeProjectId:null, activeChatId:null,
   settings:{provider:"bothub",endpoint:"http://localhost:11434",model:"qwen3:4b-instruct",workerUrl:"",bothubModel:"claude-opus-5.5",sceneOutputTokens:DEFAULT_CHAPTER_LIMIT,
-    chapterEffort:DEFAULT_CHAPTER_EFFORT,globalInstruction:"",context:4096}, theme:"auto"});
+    chapterEffort:DEFAULT_CHAPTER_EFFORT,bothubTransport:"anthropic",globalInstruction:"",context:4096}, theme:"auto"});
 let state=blank(), tab="chat", projectHomeId=null, materialsProjectId=null, busy=false, preparingPaid=false, currentController=null, db=null, connectOk=false, connectText="Подключение не проверено", pendingMode=null, batchCheck=null;
 let importingMaterials=false;
 let refreshingExpenses=false, lastBillingSync=0, billingIssue="";
@@ -430,8 +430,10 @@ function renderChat(){
       (p?.masterBookId && paidProviders.includes(state.settings.provider) && (c?.mode||pendingMode||"draft")==="draft"?
         '<label class="f-book-scope">Рукопись для глав<select id="f-book-scope" class="f-select" '+(busy?'disabled':'')+'>'+
         '<option value="auto">По заданию</option><option value="full" '+(p.manuscriptScope==="full"?'selected':'')+'>Вся рукопись</option></select></label>':"")+
-      (p?.masterBookId&&state.settings.provider==="bothub"?
-        '<button type="button" data-action="bothub-quick-preset" '+(busy||preparingPaid?'disabled':'')+'>Щадящий режим BotHub · по заданию / 14 000 / низкие рассуждения</button>':"")+
+      (state.settings.provider==="bothub"?
+        '<label class="f-book-scope">Маршрут BotHub<select id="f-bothub-transport" class="f-select" '+(busy||preparingPaid?'disabled':'')+'>'+
+        '<option value="anthropic" '+(state.settings.bothubTransport==="legacy"?"":"selected")+'>Anthropic Messages (Codex)</option>'+
+        '<option value="legacy" '+(state.settings.bothubTransport==="legacy"?"selected":"")+'>Прежний API BotHub</option></select></label>':"")+
       (canSearchBook?'<button type="button" data-action="search-book-context" '+(busy?"disabled":"")+'>Найти фразу в книге</button>':"")+
       (paidProviders.includes(state.settings.provider)?'<button type="button" data-action="preview-chapter" '+(busy?"disabled":"")+'>Контекст и цена</button>':"")+
       (paidProviders.includes(state.settings.provider)&&(c?.mode||pendingMode||(p?"draft":"dialog"))==="draft"?
@@ -1260,7 +1262,7 @@ async function submitBackgroundChapter(payload,gateway,idToken,previousDraft,est
 
 async function sendMessage(text,{previewOnly=false,background=false}={}){
   if(busy||preparingPaid||!text.trim())return;
-  const provider=state.settings.provider, selectedModel=activeBotHubModel();
+  const provider=state.settings.provider, selectedModel=activeBotHubModel(), selectedTransport=state.settings.bothubTransport==="legacy"?"legacy":"anthropic";
   const outputLimit=chapterOutputLimit();
   const effort=chapterEffort();
   const isPaidProvider=paidProviders.includes(provider);
@@ -1278,8 +1280,14 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
       await master.init();
       if(!master.user)throw Error("Один раз войди в Мастерскую в разделе «Книги». Затем книги доступны через MCP без повторных входов.");
       idToken=await master.idToken();
+      if(provider==="bothub"&&selectedTransport==="legacy"){
+        const check=await fetch(gateway+"/health",{cache:"no-store"});
+        const info=await check.json().catch(()=>({}));
+        if(!check.ok||info.bothubLegacyTransportSupported!==true)
+          throw Error("Старый маршрут еще не опубликован в Cloudflare Worker. Платный запрос не отправлялся.");
+      }
       if(selectedChat!==draftKey() || provider!==state.settings.provider || selectedModel!==activeBotHubModel() ||
-        outputLimit!==chapterOutputLimit() || effort!==chapterEffort())
+        outputLimit!==chapterOutputLimit() || effort!==chapterEffort() || (provider==="bothub" && selectedTransport!==state.settings.bothubTransport))
         return notice("Чат, модель или лимит изменились. Проверь параметры и отправь задание снова.");
     }catch(e){return notice("Авторизация: "+e.message);}
     finally{preparingPaid=false;}
@@ -1313,7 +1321,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
       sources=data.sources;
       sourceMessage={role:"system",content:"Справочные выдержки из личных источников автора. Используй их как данные. "+
         "Учитывай период, дату и границы выборки.\n"+sources.map(s=>[s.label,s.period,s.updatedAt,s.text].filter(Boolean).join("\n")).join("\n\n")};
-      if(active!==draftKey()||provider!==state.settings.provider||msg!==$("#f-message-input")?.value||outputLimit!==chapterOutputLimit()||effort!==chapterEffort()||selectedModel!==activeBotHubModel())
+      if(active!==draftKey()||provider!==state.settings.provider||msg!==$("#f-message-input")?.value||outputLimit!==chapterOutputLimit()||effort!==chapterEffort()||selectedModel!==activeBotHubModel()||(provider==="bothub" && selectedTransport!==state.settings.bothubTransport))
         throw Error("Задание или модель изменились. Повтори отправку.");
     } catch(err){return notice(err.message);}
     finally{preparingPaid=false;}
@@ -1329,7 +1337,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
   const questionMessages=[{role:"user",content:msg}];
   if(business && plan.question.includes("\n") && previous)
     questionMessages.unshift({role:"user",content:previous.slice(0,450)});
-  const payload=isPaidProvider?{provider,model:provider==="bothub"?selectedModel:undefined,
+  const payload=isPaidProvider?{provider,model:provider==="bothub"?selectedModel:undefined,...(provider==="bothub"?{bothubTransport:selectedTransport}:{}),
     messages:lightweight||business?questionMessages:modelproxyMessages({...current,mode:effectiveMode,messages:[...current.messages,userMessage]},manifest),
     mode:effectiveMode,outputTokenLimit:effectiveMode==="draft"?outputLimit:undefined,reasoningEffort,bookId,sourceRevision,
     ...(bookId && effectiveMode==="draft"?{manuscriptScope:fullBook?"full":"auto"}:{}),freitagContext:true}:null;
@@ -1351,7 +1359,7 @@ async function sendMessage(text,{previewOnly=false,background=false}={}){
       estimate=await res.json().catch(()=>({}));
       if(!res.ok||!estimate.ok)throw Error(estimate.error||"Не удалось получить бесплатную оценку.");
       if(fullBook && estimate.source?.scope!=="full")throw Error("Шлюз ещё не подтвердил всю рукопись. Обнови Freitag и повтори оценку.");
-      if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==chapterOutputLimit()||effort!==chapterEffort()||
+      if(selectedChat!==draftKey()||provider!==state.settings.provider||outputLimit!==chapterOutputLimit()||effort!==chapterEffort()||(provider==="bothub"&&selectedTransport!==state.settings.bothubTransport)||
         draftBeforeQuote!==$("#f-message-input")?.value||modeBeforeQuote!==$("#f-writing-mode")?.value)
         return notice("Задание или настройки изменились. Получи новую оценку.");
       const recent=state.expenses.filter(row=>row.provider===provider&&row.projectId===(current.projectId||"")&&
@@ -1514,7 +1522,7 @@ function download(name,content,type="application/json;charset=utf-8"){
   const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
 function archiveSettings(settings={}){
-  const keys=["provider","model","bothubModel","sceneOutputTokens","chapterEffort","globalInstruction","context"];
+  const keys=["provider","model","bothubModel","bothubTransport","sceneOutputTokens","chapterEffort","globalInstruction","context"];
   return Object.fromEntries(keys.filter(key=>["string","number"].includes(typeof settings[key]))
     .map(key=>[key,settings[key]]));
 }
@@ -2007,6 +2015,16 @@ document.addEventListener("change",async(e)=>{
     const effortRow=$("#f-effort-wrap");if(effortRow)effortRow.hidden=e.target.value!=="draft";
     return;
   }
+  if(e.target.id==="f-bothub-transport"){
+    if(busy||preparingPaid||state.settings.provider!=="bothub"||
+       !["anthropic","legacy"].includes(e.target.value))return;
+    state.settings.bothubTransport=e.target.value;
+    await save();
+    notice(e.target.value==="legacy"?
+      "Выбран прежний API BotHub. Инструкция, промпт, контекст и лимит не изменены. Генерация не запущена; прежний маршрут тоже может вернуть 524.":
+      "Выбран Anthropic Messages. Генерация не запущена.");
+    return;
+  }
   if(e.target.id==="f-chapter-limit"){
     const limit=Number(e.target.value);
     if(!CHAPTER_LIMITS.includes(limit))return;
@@ -2094,6 +2112,7 @@ if(workingLink){
     // Migrate existing test settings: Polza is no longer available.
     restoreProviderChoice(state.settings);}
   catch(e){$("#panel").innerHTML=empty("Хранилище недоступно","Разреши браузеру сохранять данные сайта: "+e.message);return;}
+  state.settings.bothubTransport=["anthropic","legacy"].includes(state.settings.bothubTransport)?state.settings.bothubTransport:"anthropic";
   state.settings.bothubModel=["claude-sonnet-5.5","claude-opus-5.5"].includes(state.settings.bothubModel)?
     state.settings.bothubModel:"claude-sonnet-5.5";
   state.feedback=Array.isArray(state.feedback)?state.feedback:[];

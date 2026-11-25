@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [fix/freitag-bothub-streamed-chapters, fix/freitag-issue-23-chapter-delivery]
   push:
-    branches: [fix/freitag-bothub-streamed-chapters]
+    branches: [fix/freitag-bothub-streamed-chapters, hotfix/freitag-bothub-legacy-recovery]
     paths:
       - "proxy/freitag-modelproxy-worker.js"
       - "ai/**"
