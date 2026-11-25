@@ -971,7 +971,12 @@ async function generate(req, env, estimateOnly = false, background = false) {
   if(isDraft && !CHAPTER_LIMITS.includes(requestedDraftLimit))
     return fail(req,400,"Выбери доступный лимит ответа в токенах ("+CHAPTER_LIMITS.join(", ")+").");
   const maxTokens=greeting?128:isDraft?requestedDraftLimit:input.mode==="canon"?750:900;
-  const bothubChapter = providerId === "bothub" && isDraft;
+  // Legacy route is explicitly selected by the author for recovery only.
+  // It uses the original BotHub OpenAI-compatible streaming endpoint.
+  const legacyBothub=providerId==="bothub" && isDraft && input.bothubTransport==="legacy";
+  if(input.bothubTransport && !["anthropic","legacy"].includes(input.bothubTransport))
+    return fail(req,400,"Неизвестный маршрут BotHub.");
+  const bothubChapter = providerId === "bothub" && isDraft && !legacyBothub;
   const effort = (bothubChapter || apimira && isDraft) ? input.reasoningEffort : undefined;
   if(effort!==undefined && !CHAPTER_EFFORTS.includes(effort))
     return fail(req,400,"Выбери низкий, средний или высокий уровень рассуждений.");
@@ -1028,8 +1033,8 @@ async function generate(req, env, estimateOnly = false, background = false) {
   } : {
     model, messages, stream: true,
     max_tokens: maxTokens,
-    ...(effort ? {reasoning_effort:effort} : {}),
-    ...(apimira || separateGateway || input.freitagContext ? {stream_options:{include_usage:true}} : {})
+    ...(effort && !legacyBothub ? {reasoning_effort:effort} : {}),
+    ...(!legacyBothub && (apimira || separateGateway || input.freitagContext) ? {stream_options:{include_usage:true}} : {})
   };
   if(input.contextQuote && input.contextQuote!==await requestFingerprint(body))
     return fail(req,409,"Задание или снимок книги изменились. Получи новую оценку.");
@@ -1039,7 +1044,7 @@ async function generate(req, env, estimateOnly = false, background = false) {
   }
   if(estimateOnly)return json(req,200,{ok:true,ready:true,outputTokenLimit:maxTokens,
     ...publicEstimate(model,messages,maxTokens),fingerprint:await requestFingerprint(body),...(quoteSource?{source:quoteSource}:{})});
-  const prepared={providerId,bothubChapter,body};
+  const prepared={providerId,bothubChapter,body}; // A quote binds to the chosen transport and full exact prompt.
   if (background && full && utf8(JSON.stringify(prepared)).byteLength>2_000_000)
     return fail(req,413,"Вся рукопись превышает размер одного фонового задания. Используй обычную отправку или подбор по заданию.");
   if(background)return startChapterJob(req,env,input,prepared,quoteSource);
