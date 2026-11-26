@@ -2,6 +2,7 @@
 import { esc, copyRich } from '../../../js/ui.js';
 import { catalogOf, nextIdeas, trackedLink, issues, agentPrompt, parseAgentIdeas, imageFormat, snapshotPayload } from '../pinterest.js';
 import { readCloud, writeCloud, getImage, putImage, deleteImage, inspectImage } from '../pinterest-storage.js';
+import { localIdeas } from '../pinterest-local-ai.js';
 const states=new Map();
 const checks=['Бизнес-аккаунт','Подтвержденный домен','Название и описание профиля','Тематические доски','Проверка ссылок на книги'];
 const fields=[['title','Заголовок',100],['description','SEO-описание',500,true],['board','Доска',100],['keywords','Ключевые фразы',500],['alt','Alt-текст по готовому изображению',500,true],['link','HTTPS-ссылка на книгу',1000],['prompt','Промт для визуала',3000,true]];
@@ -14,7 +15,7 @@ export function mountPinterest(root,a){
  const account=a.store.user?.uid||'local-demo',key='freitag.pinterest.v1.'+account;
  let s=states.get(account);
  if(!s){
-   s={pins:[],done:[],ideas:[],revision:0,tab:'ideas',editing:null,focus:'',raw:'',message:'',problem:'',busy:false,dirty:false,file:null,previewUrl:null};
+   s={pins:[],done:[],ideas:[],revision:0,tab:'ideas',editing:null,focus:'',raw:'',model:'qwen3:4b-instruct',message:'',problem:'',busy:false,dirty:false,file:null,previewUrl:null};
    try{const data=JSON.parse(localStorage.getItem(key)||'{}');for(const k of ['pins','done','ideas'])if(Array.isArray(data[k]))s[k]=data[k];s.revision=Number.isInteger(data.revision)?data.revision:0;}
    catch{s.problem='Локальный архив поврежден. Не перезаписываю его.';}
    states.set(account,s);
@@ -38,7 +39,7 @@ export function mountPinterest(root,a){
      (s.message?'<p role="status" class="small">'+esc(s.message)+'</p>':'')+
      '<div class="chips">'+tabs.map(([id,t])=>'<button type="button" class="chip'+(s.tab===id?' on':'')+'" data-pin-act="tab" data-v="'+id+'">'+esc(t)+'</button>').join('')+'</div>';
    if(s.tab==='ideas'){
-     r.insertAdjacentHTML('beforeend','<h3>ИИ-маркетолог</h3><p class="small muted">Бесплатный режим: скопируйте запрос в ChatGPT или Claude и вставьте JSON-ответ сюда. Передаются только названия, жанры, теги и история пинов, без рукописей.</p>'+field('focus','Фокус недели',600,s.focus,true)+btn('agent','Скопировать запрос для ИИ')+field('raw','Ответ ИИ (JSON)',60000,s.raw,true)+btn('import','Добавить рекомендации')+'<h3>Что генерировать</h3><p class="small muted">Без живой статистики это гипотезы. ИИ-советы требуют проверки.</p>'+
+     r.insertAdjacentHTML('beforeend','<h3>ИИ-маркетолог</h3><p class="small muted">Бесплатный режим: скопируйте запрос в ChatGPT или Claude и вставьте JSON-ответ сюда. Передаются только названия, жанры, теги и история пинов, без рукописей. Если Ollama уже запущена на вашем компьютере, можно получить идеи прямо здесь.</p>'+field('focus','Фокус недели',600,s.focus,true)+field('model','Установленная локальная модель Ollama',100,s.model||'qwen3:4b-instruct',false)+btn('localAI',s.busy?'Выполняется запрос…':'Получить идеи через Ollama')+btn('agent','Скопировать запрос для ИИ')+field('raw','Ответ ИИ (JSON)',60000,s.raw,true)+btn('import','Добавить рекомендации')+'<h3>Что генерировать</h3><p class="small muted">Без живой статистики это гипотезы. ИИ-советы требуют проверки.</p>'+
        (currentIdeas().map((p,i)=>'<div class="item" style="padding:12px 0;border-top:1px solid var(--line,#ddd)"><span class="small muted">'+esc(books().find(b=>b.id===p.bookId)?.title||'Книга')+' · '+esc(p.source==='ai'?'ИИ':'Гипотеза')+'</span><h3>'+esc(p.title)+'</h3><p>'+esc(p.reason)+'</p><p class="small">'+esc(p.prompt)+'</p><div class="row">'+btn('idea','В студию',i)+btn('prompt','Копировать промт',i)+'</div></div>').join('')||'<p>Пока нет рекомендаций.</p>'));
    }else if(s.tab==='pins'){
      r.insertAdjacentHTML('beforeend','<div class="row">'+btn('new','+ Пин')+btn('export','Экспорт JSON')+btn('cloudSave','Сохранить в облако')+btn('cloudLoad','Загрузить из облака')+'</div><p class="small muted">Версия облака: '+s.revision+' · Готовых: '+s.pins.filter(p=>p.status==='ready').length+'</p>');
@@ -61,7 +62,7 @@ export function mountPinterest(root,a){
  const guarded=async(fn)=>{if(s.busy||!active())return;s.busy=true;try{await fn();}catch(e){s.message=e.message||String(e);}finally{s.busy=false;render();}};
  const copy=async(v)=>{s.message=await copyRich(v)?'Скопировано':'Не удалось скопировать';render();};
  root.addEventListener('input',e=>{
-   const el=e.target;if(el.name==='focus'||el.name==='raw'){s[el.name]=el.value;return;}
+   const el=e.target;if(['focus','raw','model'].includes(el.name)){s[el.name]=el.value;return;}
    if(!el.closest('[data-pin-form]')||!s.editing||!el.name)return;
    s.editing[el.name]=el.type==='checkbox'?el.checked:el.value;s.dirty=true;
  });
@@ -80,6 +81,7 @@ export function mountPinterest(root,a){
    if(act==='copy'&&p)return copy(bundle(p));
    if(act==='export')return copy(JSON.stringify(snapshotPayload(s.pins,s.done,s.ideas),null,2));
    guarded(async()=>{
+     if(act==='localAI'){if(!window.confirm('Передать метаданные книг и историю пинов запущенной на этом компьютере Ollama?'))return;s.message='Запрашиваю рекомендации локальной модели…';render();const ideas=await localIdeas({books:books(),pins:s.pins,author:author(),focus:s.focus,model:s.model});if(!active())return;s.ideas=ideas;save();s.message='Рекомендации локальной модели добавлены';}
      if(act==='import'){s.ideas=parseAgentIdeas(s.raw,books());s.raw='';save();s.message='Рекомендации ИИ добавлены';}
      if(act==='tab'&&leave()){clearPreview();s.editing=null;s.dirty=false;s.tab=v;}
      if(act==='idea'&&ideas[Number(v)]&&leave()){edit(ideas[Number(v)]);s.dirty=false;}
@@ -104,7 +106,7 @@ export function mountPinterest(root,a){
      p.reviewed=fd.has('reviewed');p.id=p.id||crypto.randomUUID();if(s.file)await putImage(account,p.id,s.file);
      if(!active())return;
      p.status=issues(p).length?'draft':p.status==='published'?'published':'ready';
-     s.pins=[...s.pins.filter(x=>x.id!==p.id),p];s.ideas=s.ideas.filter(x=>!(x.bookId===p.bookId&&x.title===p.title));clearPreview();s.editing=null;s.dirty=false;save();s.message='Карточка сохранена';
+     s.pins=[...s.pins.filter(x=>x.id!==p.id),p];s.ideas=s.ideas.filter(x=>!(x.bookId===p.bookId&&x.title===p.title));clearPreview();s.editing=null;s.dirty=false;save();s.message=s.problem?'Карточка в памяти, локальная запись не подтверждена':'Карточка сохранена';
    });
  });
  render();
