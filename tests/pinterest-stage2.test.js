@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { catalogOf, agentPrompt, parseAgentIdeas, imageFormat, snapshotPayload } from '../writer/js/pinterest.js';
+import { inspectImage } from '../writer/js/pinterest-storage.js';
+const books=catalogOf([{id:'b',title:'Книга',genres:['Роман'],tags:['тайна'],manuscript:'секрет'}]);
+const row={bookId:'b',kind:'Атмосфера',reason:'Гипотеза',title:'Название',description:'Описание',board:'Доска',keywords:'роман',prompt:'Визуал',link:'https://evil.example/',reviewed:true};
+test('agent prompt avoids manuscript and labels statistics as hypotheses',()=>{const p=agentPrompt(books,[],'Автор');assert.ok(!p.includes('секрет'));assert.match(p,/гипотезы/);});
+test('AI output is validated and cannot set publication or link',()=>{const p=parseAgentIdeas(JSON.stringify([row]),books)[0];assert.equal(p.link,'');assert.equal(p.status,'draft');assert.equal(p.reviewed,undefined);assert.throws(()=>parseAgentIdeas(JSON.stringify([{...row,bookId:'wrong'}]),books));assert.throws(()=>parseAgentIdeas(JSON.stringify([row,row]),books));});
+test('visual format check',()=>{assert.equal(imageFormat(1000,1500),'recommended');assert.equal(imageFormat(1500,1000),'other');assert.equal(imageFormat(0,1),'unknown');});
+test('cloud archive excludes arbitrary fields',()=>{const p=snapshotPayload([{...row,token:'secret',imageData:'blob'}],[],[]);assert.equal(p.pins[0].token,undefined);assert.equal(p.pins[0].imageData,undefined);});
+test('unsupported file fails before decoding',async()=>{await assert.rejects(inspectImage({type:'image/svg+xml',size:100}));});

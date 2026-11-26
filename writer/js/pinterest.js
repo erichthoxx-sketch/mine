@@ -66,3 +66,43 @@ export function nextIdeas(books, pins, author) {
     .filter(x => !used.has(x.bookId + '|' + x.kind))
     .slice(0, 12);
 }
+
+export function agentPrompt(books, pins, author, focus='') {
+  const catalog=books.map(b=>({id:b.id,title:b.title,genres:b.genres,tags:b.tags})).slice(0,40);
+  const history=pins.slice(-60).map(p=>({bookId:p.bookId,kind:p.kind,title:p.title,status:p.status,metrics:p.metrics||null}));
+  return [
+    'Ты книжный Pinterest-маркетолог русскоязычных любовных романов. Автор: '+author+'. Цель — переходы на страницы книг, а не просто охват. Бюджет на Pinterest — 0.',
+    'Предложи 6 разных пинов на неделю: сильные визуальные концепции, конкретные композиции, естественные поисковые фразы, ясный повод перейти. Учитывай историю и реальные метрики, если переданы. Не выдавай гипотезы за статистику и не выдумывай тренды, цитаты, сюжет, ссылки или внешность. Не раскрывай спойлеры. Не повторяй прежние пины. Визуал: вертикаль 2:3, без надписей, если текст будет наложен отдельно.',
+    'Ответ только валидным JSON-массивом из 1–8 объектов с полями bookId (точный id из каталога), kind (формат), reason (обоснование), title (до 100 символов), description (до 500), board, keywords (строка), prompt (подробный промт до 3000). Никаких URL, alt-текста или цитат, если их не предоставили.',
+    'Дополнительный фокус: '+clean(focus,600),
+    'Каталог: '+JSON.stringify(catalog),
+    'История: '+JSON.stringify(history),
+  ].join('\n\n');
+}
+export function parseAgentIdeas(raw, books) {
+  const text=String(raw||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+  if(text.length>60000) throw Error('Ответ слишком большой');
+  let rows;try{rows=JSON.parse(text);}catch{throw Error('Нужен JSON-массив из ответа ИИ');}
+  if(!Array.isArray(rows)||!rows.length||rows.length>8)throw Error('Нужны 1–8 идей');
+  const ids=new Set(books.map(b=>b.id));
+  const seen=new Set();
+  return rows.map((r,i)=>{
+    if(!r||!ids.has(r.bookId))throw Error('Идея '+(i+1)+': неизвестная книга');
+    const out={bookId:r.bookId,kind:clean(r.kind,80),reason:clean(r.reason,600),title:clean(r.title,100),description:clean(r.description,500),board:clean(r.board,100),keywords:clean(r.keywords,500),prompt:clean(r.prompt,3000),alt:'',link:'',imageNote:'',status:'draft',source:'ai'};
+    if(!out.kind||!out.reason||!out.title||!out.description||!out.board||!out.prompt)throw Error('Идея '+(i+1)+': не хватает обязательных полей');
+    const k=out.bookId+'|'+out.title.toLowerCase();if(seen.has(k))throw Error('Повтор заголовка');seen.add(k);
+    return out;
+  });
+}
+export function imageFormat(w,h) {
+  if(!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0)return 'unknown';
+  return Math.abs(w/h-2/3)<=0.025?'recommended':'other';
+}
+export function snapshotPayload(pins,done,ideas) {
+  // Только метаданные, без изображения, токенов и произвольных полей.
+  const fields=['id','bookId','kind','reason','title','description','board','keywords','alt','link','imageNote','prompt','status','reviewed','source','imageWidth','imageHeight','scheduledDate','metrics'];
+  const project=p=>Object.fromEntries(fields.filter(k=>p[k]!==undefined).map(k=>[k,p[k]]));
+  const data={pins:pins.map(project),done:[...done],ideas:ideas.map(project)};
+  if(new TextEncoder().encode(JSON.stringify(data)).length>600000)throw Error('Облачный архив слишком большой; экспортируйте старые пины');
+  return data;
+}
