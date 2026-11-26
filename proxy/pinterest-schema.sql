@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS pinterest_oauth_state (digest TEXT PRIMARY KEY, expires INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS pinterest_connection (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS pinterest_submission (id TEXT PRIMARY KEY, status TEXT NOT NULL, at INTEGER NOT NULL);
