@@ -32,9 +32,24 @@ const mediaOf = (c, b, types) => c.data.w_media.filter((m) => m.bookId === b.id 
 
 // ---------- список книг: по статусам, с поиском и готовностью материалов ----------
 // Маркетинг — три вкладки тонкой линией: Книги · Конкурсы · Связи (Связи переехали сюда из меню, на их месте — «Сайт»)
-const MK_TABS = [['books', 'Книги', '/marketing'], ['contests', 'Конкурсы', '/marketing/contests'], ['links', 'Связи', '/links'], ['piracy', 'Пираты', '/marketing/piracy']];
+const MK_TABS = [['books', 'Книги', '/marketing'], ['contests', 'Конкурсы', '/marketing/contests'], ['links', 'Связи', '/links'], ['piracy', 'Пираты', '/marketing/piracy'], ['pinterest', 'Pinterest', '/marketing/pinterest']];
 export function marketingView(a, sub = 'books') {
   const tabs = `<div class="lg-tabs mk-tabs">${MK_TABS.map(([k, t, to]) => `<button class="${sub === k ? 'on' : ''}" data-act="go" data-to="${to}">${t}</button>`).join('')}</div>`;
+  // Pinterest загружается только на своей вкладке: сбой модуля не влияет на остальные экраны.
+  if (sub === 'pinterest') return {
+    html: `<h2>Маркетинг</h2>${tabs}<div id="pinterest-panel" class="card"><p class="muted">Загрузка Pinterest…</p></div>`,
+    after: () => {
+      const root = document.getElementById('pinterest-panel');
+      if (!root || root.dataset.loading) return;
+      root.dataset.loading = '1';
+      import('./pinterest.js').then(({ mountPinterest }) => {
+        if (root.isConnected) mountPinterest(root, a);
+      }).catch((error) => {
+        console.error('Pinterest:', error);
+        if (root.isConnected) root.textContent = 'Не удалось открыть Pinterest. Остальные разделы работают независимо.';
+      });
+    },
+  };
   if (sub === 'piracy') return { html: `<h2>Маркетинг</h2>${tabs}${piracyView(a)}` };
   if (sub === 'links') return { html: `<h2>Маркетинг</h2>${tabs}${linksView(a, { embedded: true }).html}` };
   if (sub === 'contests') {
