@@ -1,6 +1,7 @@
 // Freitag AI — персональная литературная среда: сменяемые модели, память и контекст автора.
 import { projectAccessClient } from "./handoff.js";
 import { chapterCues, isAcknowledgement, isSimpleGreeting, sourcePlan } from "./source-plan.js";
+import { qwenSetupCommand } from "./qwen-windows.js";
 import { master } from './master-sync.js';
 import { renderMarkdown } from './markdown.js';
 import { projectHomeHtml } from './project-view.js';
@@ -229,7 +230,7 @@ function renderSettings(){
     '<div class="f-fold-body"><label for="f-worker">Cloudflare Worker</label>'+
     '<input id="f-worker" class="f-text-field" name="workerUrl" value="'+esc(s.workerUrl||"")+'" placeholder="https://freitag-opus-gateway....workers.dev">'+
     '<p class="f-muted">По рабочему адресу Freitag AI шлюз выбирается автоматически. Freitag AI напрямую вызывает MCP-инструменты Мастерской для чтения книг, доходов, маркетинга и Директа. Для главы используется последний снимок книги в Мастерской. После правок обнови рукопись через раздел «Рукопись и материалы» в проекте. Секреты хранятся только в Cloudflare.</p></div></details>'+
-    '<details class="f-settings-fold"><summary>Локальная Ollama · дополнительные настройки</summary>'+
+    '<details class="f-settings-fold" '+(location.hash==="#qwen-windows"?'open':'')+'><summary>Локальная Ollama · дополнительные настройки</summary>'+
     '<div class="f-fold-body"><label for="f-endpoint">Адрес Ollama</label>'+
     '<input id="f-endpoint" class="f-text-field" name="endpoint" value="'+esc(s.endpoint)+'" placeholder="http://localhost:11434" required>'+
     '<label for="f-model">Название локальной модели</label>'+
@@ -237,11 +238,11 @@ function renderSettings(){
     '<label for="f-context">Контекст локальной модели</label>'+
     '<select id="f-context" name="context" class="f-select">'+
     [2048,4096,8192].map(n=>'<option value="'+n+'" '+(n===s.context?"selected":"")+'>'+n+' токенов</option>').join("")+'</select>'+
-    '<details class="f-settings-fold f-connection-help"><summary>Инструкция по подключению на Windows</summary>'+
-    '<div class="f-fold-body"><p>Разреши Ollama принимать запросы с этого адреса, затем перезапусти Ollama.</p>'+
-    '<code class="f-command">'+esc(originsCommand())+'</code>'+
-    '<button type="button" class="f-btn" data-action="copy-origins">Скопировать команду</button>'+
-    '<p class="f-muted">На телефоне localhost не подключается к Ollama, установленной на компьютере.</p></div></details>'+
+    '<details id="qwen-windows" class="f-settings-fold f-connection-help" '+(location.hash==="#qwen-windows"?'open':'')+'><summary>Настроить Qwen на Windows</summary>'+
+    '<div class="f-fold-body"><p>Скопируй команду в PowerShell и нажми Enter. Она установит Ollama, загрузит Qwen (2,5 ГБ) и проверит ответ на этом компьютере.</p>'+
+    '<button type="button" class="f-btn" data-action="copy-qwen-setup">Скопировать команду для PowerShell</button>'+
+    '<details><summary>Посмотреть команду</summary><code class="f-command">'+esc(qwenSetupCommand(location.origin))+'</code></details>'+
+    '<p class="f-muted">После проверки выбери «Qwen · локально» в новом чате. Если браузер запросит доступ к локальной сети, разреши его.</p></div></details>'+
     '</div></details></section>'+
     '<section class="f-settings-card"><div class="f-section-kicker">02 / ПИСЬМО</div>'+
     '<h2>Как работать с текстом</h2>'+
@@ -692,7 +693,6 @@ function buildMessages(c){
 }
 // На GitHub Pages обращение к локальному Ollama требует разрешения Chrome (LNA)
 // и CORS-разрешения для ТОЧНОГО origin этого сайта в настройках Ollama.
-const originsCommand=()=>"[Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS','"+location.origin+"','User')";
 const ollamaRequest=(endpoint,path,options={})=>{
   const u=new URL(endpoint);
   const isLoopback=u.protocol==="http:"&&["localhost","127.0.0.1","[::1]"].includes(u.hostname);
@@ -1943,7 +1943,17 @@ document.addEventListener("click",async(e)=>{
       await save();render();notice("Память восстановлена: "+res.projects.length+" проектов, "+res.feedback.length+" примеров.");
     }catch(err){notice("Облако: "+err.message);}
   }
-  if(a==="copy-origins"){try{await navigator.clipboard.writeText(originsCommand());notice("Команда скопирована. Выполни её в PowerShell и перезапусти Ollama.");}catch{prompt("Скопируй команду для PowerShell:",originsCommand());}}
+  if(a==="copy-qwen-setup"){
+    const code=$("#qwen-windows .f-command");
+    try{await navigator.clipboard.writeText(code.textContent);notice("Вставь команду в PowerShell и нажми Enter.");}
+    catch{
+      code.closest("details").open=true;
+      const range=document.createRange();range.selectNodeContents(code);
+      const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+      notice("Команда выделена. Нажми Ctrl+C.");
+    }
+    return;
+  }
   if(a==="export"){await save();download("FreitagAI-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify({app:"FreitagAI",version:1,data:state},null,2));}
 });
 document.addEventListener("submit",async(e)=>{
@@ -2117,7 +2127,9 @@ if(workingLink){
   state.feedback=Array.isArray(state.feedback)?state.feedback:[];
   state.expenses=restoreExpenses(state);
   state.drafts=state.drafts&&typeof state.drafts==="object"&&!Array.isArray(state.drafts)?state.drafts:{};
+  if(location.hash==="#qwen-windows")tab="settings";
   render();
+  if(location.hash==="#qwen-windows")$("#qwen-windows")?.scrollIntoView();
   // Reuse an existing Firebase session and silently load the books list.
   // This never starts Google Drive OAuth and does not send a paid model request.
   master.init().then(async()=>{updateCloudControls();if(master.user){if(tab==="expenses"||state.expenses.some(canReconcileExpense))void refreshExpenses(undefined,true);await master.refresh();if(tab==="projects")render();}}).catch(()=>{});
