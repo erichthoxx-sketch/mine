@@ -160,8 +160,7 @@ export default {async fetch(req,env){
     const db=env.PINTEREST_DB;
     if(path==='/connect'&&req.method==='POST'){
       const state=random();
-      await db.prepare('DELETE FROM pinterest_oauth_state WHERE expires<=?').bind(Date.now()).run();
-      await db.prepare('INSERT INTO pinterest_oauth_state(digest,expires) VALUES(?,?)').bind(await hash(state),Date.now()+10*60000).run();
+      await db.batch([db.prepare('DELETE FROM pinterest_oauth_state'),db.prepare('INSERT INTO pinterest_oauth_state(digest,expires) VALUES(?,?)').bind(await hash(state),Date.now()+10*60000)]);
       return json(req,{url:oauthURL(env,state)});
     }
     if(path==='/disconnect'&&req.method==='POST'){

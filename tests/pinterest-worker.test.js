@@ -15,3 +15,7 @@ test('untrusted origins and missing config fail closed',async()=>{
  assert.equal((await worker.fetch(new Request('https://worker.example/status',{headers:{Origin:'https://evil.example'}}),{})).status,403);
  assert.equal((await worker.fetch(new Request('https://worker.example/status',{headers:{Origin:'https://erichthoxx-sketch.github.io'}}),{})).status,503);
 });
+
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+test('browser and server module syntax',()=>{for(const path of ['../writer/js/views/pinterest.js','../writer/js/views/marketing.js','../writer/js/pinterest-api.js','../proxy/pinterest-worker.js'])execFileSync(process.execPath,['--check',fileURLToPath(new URL(path,import.meta.url))]);});
