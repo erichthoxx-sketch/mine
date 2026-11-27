@@ -15,7 +15,7 @@ import { todayISO, lastSaleDate, bookIdFor } from '../../js/calc.js';
 import { writtenToday, writtenWeek } from './wcalc.js';
 import * as drive from './drive.js';
 import { ic } from '../../js/icons.js';
-import { booksView, bookPage, refreshAll, refreshOne, refreshing } from './views/books.js';
+import { booksView, bookPage, refreshAll, refreshOne } from './views/books.js';
 import { reviewsPage } from './views/reviews.js';
 import { ideasView } from './views/ideas.js';
 import { notebookView } from './views/notebook.js';
@@ -296,17 +296,44 @@ store.init().then(() => {
   };
   store.subscribe(tryRefresh); tryRefresh();
   setTimeout(checkMailQueue, 3000);
-  // вернулись в приложение — подтягиваем знаки, если доступ к Диску ещё действует
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && drive.hasFreshToken()) refreshAll(app, { quiet: true }).catch(() => {}); });
-  // открыла книгу — она сама перечитывается из Документа (новые вкладки-главы, знаки). Доступ Google живёт час:
-  // истёк — берём новый прямо в это нажатие (окно Google без вопросов, доступ уже дан), иначе браузер окно не пустит
+  // Активная книга проверяется независимо от общего обхода. Только при видимой вкладке
+  // и действующем доступе Google; редактор главы не конкурирует с общим фоновым обновлением.
+  const activeBook = () => {
+    const m = /^\/book\/([^/]+)$/.exec(ui.route || '');
+    return m ? store.data.w_books.find(x => x.id === decodeURIComponent(m[1])) : null;
+  };
+  let activeRequest = null;
+  const updateActiveBook = async () => {
+    const b = activeBook();
+    if (!store.user || !b?.fileId || document.visibilityState !== 'visible') return;
+    const setStatus = (text) => {
+      if (activeBook()?.id === b.id) {
+        const el = document.querySelector('[data-drive-sync-status]');
+        if (el) el.textContent = text;
+      }
+    };
+    if (!drive.hasFreshToken()) { setStatus('Доступ Google истёк · нажмите ↻ · '); return; }
+    if (!navigator.onLine || activeRequest) return;
+    const request = refreshOne(app, b);
+    activeRequest = request;
+    try { await request; setStatus(''); }
+    catch (e) { setStatus('Не обновилось · нажмите ↻ · '); console.warn('Обновление книги:', e); }
+    finally { if (activeRequest === request) activeRequest = null; }
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (activeBook()) updateActiveBook();
+    else if (!/^\/(?:ed|blog)\//.test(ui.route || '') && drive.hasFreshToken()) refreshAll(app, { quiet: true }).catch(() => {});
+  });
+  setInterval(updateActiveBook, 30000);
+  window.addEventListener('online', updateActiveBook);
+  // При открытии книги восстанавливаем доступ прямо в пользовательском нажатии.
   document.addEventListener('click', (e) => {
     const to = e.target.closest?.('[data-to^="/book/"]')?.dataset.to;
-    const b = to && store.data.w_books.find((x) => x.id === to.slice(6));
-    if (!b?.fileId || !drive.isConnected() || refreshing.on) return;
+    const b = to && store.data.w_books.find(x => x.id === decodeURIComponent(to.slice(6)));
+    if (!b?.fileId || !drive.isConnected()) return;
     (drive.hasFreshToken() ? Promise.resolve() : drive.ensureToken())
-      .then(() => refreshOne(app, store.data.w_books.find((x) => x.id === b.id) || b))
-      .then((ch) => { if (ch) render(); }).catch(() => {});
+      .then(() => setTimeout(updateActiveBook, 0)).catch(e => console.warn('Доступ Google:', e));
   }, true);
 }).catch((e) => {
   console.error(e);

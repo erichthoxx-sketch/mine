@@ -156,7 +156,11 @@ export async function searchDocs(name) {
 
 export async function fileMeta(id) {
   if (isLocalDev) return mock.meta(id);
-  return (await gfetch(`${DRIVE}/${id}?fields=${FIELDS}&supportsAllDrives=true`)).json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    return await (await gfetch(`${DRIVE}/${id}?fields=${FIELDS}&supportsAllDrives=true`, { signal: controller.signal })).json();
+  } finally { clearTimeout(timer); }
 }
 // даты всех версий файла из истории Google (для справки об авторстве)
 export async function revisionDates(id) {
@@ -195,7 +199,7 @@ export const loadJsZip = () => (jszip ||= (async () => {
 export async function countFile(file) {
   if (isLocalDev) return mock.count(file);
   if (file.mimeType === MIME.doc) {
-    const j = await (await gfetch(`https://docs.googleapis.com/v1/documents/${file.id}?includeTabsContent=true`)).json();
+    const j = await getDoc(file.id);
     return charsFromDocsJson(j);
   }
   const buf = await (await gfetch(`${DRIVE}/${file.id}?alt=media&supportsAllDrives=true`)).arrayBuffer();
@@ -312,18 +316,33 @@ export async function fileBlob(file) {
 }
 
 // ---------- редактор главы: прочитать документ со вкладками и записать вкладку ----------
-export async function getDoc(id, { timeout = 20000 } = {}) {
+export async function getDoc(id, { timeout = 20000, fields = '' } = {}) {
   if (isLocalDev) return mock.doc(id);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await gfetch(`https://docs.googleapis.com/v1/documents/${encodeURIComponent(id)}?includeTabsContent=true`, { signal: controller.signal });
+    const response = await gfetch(`https://docs.googleapis.com/v1/documents/${encodeURIComponent(id)}?includeTabsContent=true${fields ? '&fields=' + encodeURIComponent(fields) : ''}`, { signal: controller.signal });
     return await response.json();
   } catch (e) {
     if (controller.signal.aborted) throw new Error('Google Документы не ответили вовремя.');
     throw e;
   } finally {
     clearTimeout(timer);
+  }
+}
+// Редактору нужны текст, индексы и стили, а не все объекты/настройки документа.
+const CHAPTER_FIELDS = 'documentId,revisionId,body(content),namedStyles,tabs(tabProperties,documentTab(body(content),namedStyles),childTabs)';
+export async function getChapterDoc(id, { timeout = 20000, retryTimeout = 35000 } = {}) {
+  try {
+    return await getDoc(id, { timeout, fields: CHAPTER_FIELDS });
+  } catch (e) {
+    // Только повтор чтения, не записи. Ошибки авторизации и доступа не маскируем.
+    if (e instanceof NeedAuth) throw e;
+    if (/Google Диск: 400\b/.test(e.message)) return getDoc(id, { timeout: retryTimeout });
+    if (e instanceof TypeError || /не ответили вовремя|Google Диск: 5\d\d\b/.test(e.message)) {
+      return getDoc(id, { timeout: retryTimeout, fields: CHAPTER_FIELDS });
+    }
+    throw e;
   }
 }
 export async function docUpdate(id, requests) {

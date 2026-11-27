@@ -8,7 +8,7 @@ import { launchChecklist, launchTimeline } from '../launchlist.js';
 import { leakParts, partKey } from '../partreads.js';
 import { bookIdFor } from '../../../js/calc.js';
 import { mailQueue, mailSent } from './mail.js';
-import { recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter, writtenMonth } from '../wcalc.js';
+import { charsFromDocsJson, recordProgress, written, writtenToday, writtenWeek, pace, forecastDate, charsAt, contestStatus, daysLeft, pubMap, pubState, pubPlatforms, chapterOutDates, plannedPubs, chapterList, bookSchedule, DOW, contestBookIds, contestFit, releaseDate, isAuthorTab, scheduleDates, planBySchedule, writtenChapters, goalStatus, dailyWritten, al, alNum, fromAl, contestVol, manuscriptCounter, writtenMonth } from '../wcalc.js';
 import { goalTitle, goalToday, goalOver } from './goals.js';
 import { writtenChart } from '../wcharts.js';
 export { chapterList };
@@ -332,7 +332,23 @@ export function bookPage(a, id) {
 export const GAINS_V = 5; // 5 — запасной подсчёт по заголовкам глав, если в старых версиях нет названий вкладок
 const COUNT_RULE = 5; // 4 — объём = только рукопись: «Пролог», «Глава …», «Эпилог» (без «От автора», промтов и черновиков); 5 — прирост без промтов
 let lastTitles = 0; // сколько названий глав выровняли при последнем обновлении
+const bookRefreshes = new Map();
+// Один пересчёт на книгу. Ручной запрос после фонового получает свежую версию,
+// автоматические запросы объединяются и не перезаписывают друг друга.
 export async function refreshOne(a, b, force = false) {
+  if (!b?.fileId) return false;
+  const previous = bookRefreshes.get(b.id);
+  if (previous) {
+    if (!force) return previous;
+    try { await previous; } catch { /* ручной повтор */ }
+    return refreshOne(a, a.ctx().wbooksById[b.id] || b, true);
+  }
+  const task = refreshBook(a, a.ctx().wbooksById[b.id] || b, force);
+  bookRefreshes.set(b.id, task);
+  try { return await task; }
+  finally { if (bookRefreshes.get(b.id) === task) bookRefreshes.delete(b.id); }
+}
+async function refreshBook(a, b, force) {
   const c = a.ctx();
   const meta = await drive.fileMeta(b.fileId);
   const ruleChanged = (b.countRule || 1) < COUNT_RULE;
@@ -346,7 +362,7 @@ export async function refreshOne(a, b, force = false) {
     catch (e) { if (force) toast('Названия глав не выровнялись: ' + (e.message || e)); } // при ручном обновлении — честно говорим
   }
   lastTitles = titles;
-  const r = await drive.countFile(meta);
+  const r = doc ? charsFromDocsJson(doc) : await drive.countFile(meta);
   // правило подсчёта поменялось (теперь только Пролог/Главы/Эпилог) — прежние цифры несравнимы, начинаем историю заново
   // при пересчёте прироста старая история (посчитанная прежним способом) тоже заменяется
   const history = ruleChanged || regain ? { [c.today]: r.total } : recordProgress(b.history, c.today, r.total);
@@ -394,16 +410,18 @@ export async function refreshAll(a, { quiet = false } = {}) {
   const list = a.ctx().wbooks.filter((b) => b.fileId);
   let n = 0;
   const fails = [];
-  refreshing.on = true; a.rerender();
+  refreshing.on = true; if (!quiet) a.rerender();
   try {
     // каждая книга отдельно: ошибка в одной не мешает остальным
     for (const b of list) {
+      // Пока открыт редактор или карточка книги, общий фоновый обход уступает ей.
+      if (quiet && /^\/(?:ed|blog|book)\//.test(a.ui?.route || '')) break;
       try { if (await refreshOne(a, b)) n++; } catch (e) {
         if (e instanceof drive.NeedAuth) { toast(e.message); return; }
         fails.push(`«${b.title}»: ${e.message}`);
       }
     }
-  } finally { refreshing.on = false; a.rerender(); }
+  } finally { refreshing.on = false; if (!quiet && !/^\/(?:ed|blog)\//.test(a.ui?.route || '')) a.rerender(); }
   if (fails.length) toast(`Не обновилось — ${fails.join('; ')}`);
   else if (!quiet) {
     const c = a.ctx(), m = c.wbooks.filter((b) => (b.status || 'progress') === 'progress').reduce((s2, b) => s2 + writtenMonth(b, c.today), 0);
@@ -672,7 +690,7 @@ function headCard(c, b, p) {
       ${taxonomy}
       <div class="bh-tiles">${tiles.join('')}</div>${!done && b.fileId ? `<button class="link bh-how" data-act="wbook.how" data-id="${b.id}">как посчитано</button>` : ''}
       <div class="bh-texts">${annBlock}${synBlock}</div>
-      <div class="bh-foot">${b.modifiedTime ? `правка файла ${fmtDate(b.modifiedTime.slice(0, 10))}` : ''}${b.countedAt ? ` · обновлено ${fmtDate(b.countedAt.slice(0, 10)) === fmtDate(c.today) ? 'сегодня' : fmtDate(b.countedAt.slice(0, 10))} в ${b.countedAt.slice(11, 16)}` : ''}</div>
+      <div class="bh-foot">${b.fileId ? `<span data-drive-sync-status>${drive.hasFreshToken() ? '' : 'Доступ Google истёк · нажмите ↻ · '}</span>` : ''}${b.modifiedTime ? `правка файла ${fmtDate(b.modifiedTime.slice(0, 10))}` : ''}${b.countedAt ? ` · обновлено ${fmtDate(b.countedAt.slice(0, 10)) === fmtDate(c.today) ? 'сегодня' : fmtDate(b.countedAt.slice(0, 10))} в ${b.countedAt.slice(11, 16)}` : ''}</div>
     </div>
   </div>`;
 }
