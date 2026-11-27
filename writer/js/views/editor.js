@@ -112,7 +112,7 @@ async function pullFresh(b) {
   pullAt = Date.now();
   const current = ed;
   try {
-    const doc = await drive.getDoc(b.fileId), tab = findTab(doc, ed.tabId || ed.title);
+    const doc = await drive.getChapterDoc(b.fileId), tab = findTab(doc, ed.tabId || ed.title);
     const content = tab ? tab.documentTab?.body?.content : (doc.tabs ? null : doc.body?.content);
     if (!content || ed !== current || ed.saving) return;
     if (blocksText(contentToBlocks(content)) === ed.baseText) return;
@@ -131,7 +131,7 @@ async function load(key, b, title, { authorize = false, doc = null } = {}) {
   try {
     if (authorize) await drive.ensureToken();
     if (ed !== current) return;
-    doc ||= await drive.getDoc(b.fileId);
+    doc ||= await drive.getChapterDoc(b.fileId);
     if (ed !== current) return;
     const tab = findTab(doc, title);
     const content = tab ? tab.documentTab?.body?.content : (doc.tabs ? null : doc.body?.content);
