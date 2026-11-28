@@ -208,8 +208,8 @@ try {
     await page.getByRole("button",{name:"Передать проект",exact:true}).click();
     const transfer=page.getByRole("dialog",{name:"Передать проект"});
     await transfer.getByRole("button",{name:"Включить доступ на чтение"}).click();
-    await transfer.locator("input").last().waitFor();
-    assert.equal(await transfer.locator("input").last().inputValue(),"Bearer fixture-key");
+    await transfer.getByLabel(/Заголовок Authorization/).waitFor();
+    assert.equal(await transfer.getByLabel(/Заголовок Authorization/).inputValue(),"Bearer fixture-key");
     await transfer.getByRole("button",{name:"Отозвать доступ"}).click();
     await transfer.getByRole("button",{name:"Включить доступ на чтение"}).waitFor();
     await transfer.getByRole("button",{name:"Закрыть"}).click();
