@@ -4,17 +4,17 @@
  * Existing IndexedDB, API routing and book sync are intentionally unchanged.
  */
 html.app-freitag{
-  --f-bg:#f8f7f4;
-  --f-sidebar:#f4f3ef;
-  --f-paper:#ffffff;
+  --f-bg:#f8f6f1;
+  --f-sidebar:#eeeee7;
+  --f-paper:#fffefa;
   --f-ink:#292b2a;
   --f-soft-ink:#4f5452;
   --f-muted:#646c67;
-  --f-line:#e8e6e1;
+  --f-line:#e5e3d9;
   --f-line-strong:#d8d6d0;
   --f-hover:#eeede8;
-  --f-active:#e8e8e2;
-  --f-accent:#293831;
+  --f-active:#e4e8de;
+  --f-accent:#2e4136;
   --f-accent-contrast:#fffefa;
   --f-danger:#a54d4b;
   --f-shadow:0 14px 38px rgba(38,39,36,.055);
@@ -71,9 +71,7 @@ html.app-freitag [hidden]{display:none!important}
 .f-new-chat{width:100%;justify-content:flex-start!important;gap:8px;font-size:12px!important;min-height:40px!important;border-radius:10px!important}
 .f-new-chat span{font-size:18px;font-weight:300}
 .f-side-section{margin-top:29px}
-.f-side-label{display:block;color:var(--f-muted);font-size:10px;font-weight:700;letter-spacing:.11em;margin-bottom:10px}
-.f-side-count{display:flex;justify-content:space-between;align-items:center}
-.f-side-count span{font-size:10px;letter-spacing:0;font-weight:500}
+.f-side-label{display:block;color:var(--f-muted);font-size:12px;font-weight:600;margin-bottom:8px}
 .f-sidebar-empty{font-size:12px;color:var(--f-muted);line-height:1.7;margin:9px 0}
 .f-sidebar-foot{display:flex;align-items:center;gap:9px;border-top:1px solid var(--f-line);padding:16px 5px 4px;margin-top:20px;color:var(--f-muted);font-size:10px;line-height:1.4;overflow-wrap:anywhere}
 .f-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--f-muted);flex:none}
@@ -151,17 +149,12 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 .f-writing-bar{display:flex;align-items:center;flex-wrap:wrap;gap:9px;padding-bottom:9px;border-bottom:1px solid var(--f-line)}
 .f-compact-label{font-size:10px;color:var(--f-muted);font-weight:600}
 .f-writing-bar .f-select{width:auto;max-width:210px;border-color:transparent;background:var(--f-bg);padding:6px 8px;font-size:12px!important;min-height:32px}
-.f-compose-canon{margin-left:auto;font-size:10px;color:var(--f-muted);white-space:normal;text-align:right}
 .f-compose .f-textarea{border:0!important;background:transparent!important;box-shadow:none!important;padding:14px 2px 9px;font-size:14px!important;min-height:92px;max-height:45dvh;line-height:1.8;resize:vertical}
 .f-compose .f-textarea:focus{outline:0}
 .f-compose .f-textarea::placeholder{color:var(--f-muted);opacity:.8}
 .f-compose-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:8px}
 .f-compose-controls .f-btn.primary{min-width:122px}
 .f-mini{color:var(--f-muted);font-size:10px;line-height:1.5;overflow-wrap:anywhere}
-.f-extra-tools{padding:8px 11px 0;color:var(--f-muted);font-size:11px}
-.f-extra-tools summary{cursor:pointer;width:max-content;max-width:100%;padding:5px 0;user-select:none}
-.f-extra-tools .f-row{margin:9px 0}
-.f-extra-tools p{max-width:660px;margin:0 0 9px}
 .f-projects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:26px}
 .f-project-card{min-width:0;background:var(--f-paper);border:1px solid var(--f-line);border-radius:15px;padding:20px 20px 17px}
 .f-project-card h2{margin:0 0 8px;color:var(--f-ink);font:500 21px/1.3 "Jost",sans-serif;letter-spacing:-.02em;overflow-wrap:anywhere}
@@ -205,17 +198,106 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 .f-example strong{font-size:12px}
 .f-example p{line-height:1.65;margin:8px 0}
 .f-example .f-muted{white-space:pre-wrap;overflow-wrap:anywhere}
-.f-upload{color:var(--f-soft-ink);font-size:12px;max-width:100%}
+.f-content.f-materials-page{max-width:980px}
+.f-materials-toolbar{display:flex;align-items:end;flex-wrap:wrap;gap:13px 20px}
+.f-material-search{min-width:0;flex:1 1 200px;max-width:300px}
+.f-material-hint{margin:13px 0 20px}
+.f-material-list{list-style:none;margin:0;padding:0;background:var(--f-paper);border:1px solid var(--f-line);border-radius:15px;overflow:hidden}
+.f-material-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:9px 20px;padding:13px 16px}
+.f-material-list li[hidden]{display:none}
+.f-material-list li+li{border-top:1px solid var(--f-line)}
+.f-material-title{min-width:0;flex:1 1 220px}
+.f-material-title button{padding:0;border:0;background:none;color:var(--f-ink);font:600 14px/1.5 "Golos Text",sans-serif;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.f-material-title button:hover{text-decoration:underline;text-underline-offset:3px}
+.f-material-title p{margin:3px 0 0}
+.f-material-use{display:flex;align-items:center;gap:7px;color:var(--f-soft-ink);font-size:12px;cursor:pointer}
+.f-select.f-material-use{width:auto;max-width:100%;font-size:12px;padding:6px 24px 6px 10px}
+.f-chat-list button:has(.f-chat-version){display:grid;justify-content:stretch;gap:2px}
+.f-chat-version{display:block;color:var(--f-muted);font-size:10px;font-weight:400}
+.f-turn-context{margin:8px 0;color:var(--f-muted);font-size:12px;line-height:1.45}
+.f-turn-context summary{width:fit-content;cursor:pointer}
+.f-turn-context p{margin:4px 0;overflow-wrap:anywhere}
+.f-material-style{border-top:1px solid var(--f-line);margin-top:22px;padding-top:14px}
+.f-material-style summary{color:var(--f-ink);font-size:14px;font-weight:600;cursor:pointer}
+.f-material-style .f-row{margin-top:12px}
 .f-dialog{width:min(590px,calc(100vw - 30px));max-height:calc(100dvh - 40px);overflow:auto;margin:auto;padding:27px;background:var(--f-paper);color:var(--f-ink);border:1px solid var(--f-line);border-radius:17px;box-shadow:0 24px 90px rgba(0,0,0,.24)}
 .f-dialog::backdrop{background:rgba(19,25,22,.56)}
 .f-dialog h2{font:500 24px/1.3 "Jost",sans-serif;letter-spacing:-.03em;margin:0 0 18px}
 .f-dialog form>label{display:block;margin:16px 0 7px;font-size:12px;color:var(--f-soft-ink)}
 .f-dialog .f-textarea{min-height:110px}
 .f-dialog .f-row{margin-top:18px}
+.f-material-dialog{width:min(740px,calc(100vw - 30px))}
+.f-material-dialog h2{overflow-wrap:anywhere}
+.f-material-dialog .f-textarea{height:clamp(180px,47dvh,590px);line-height:1.65}
+.f-workflow-dialog{width:min(740px,calc(100vw - 24px))}
+.f-workflow-dialog header{margin-bottom:16px;gap:12px}
+.f-workflow-dialog header h2{margin:0}
+.f-workflow-search{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px}
+.f-workflow-content>.f-muted{margin:12px 0}
+.f-workflow-list{display:grid;gap:8px}
+.f-workflow-card{min-width:0;padding:12px 14px;border:1px solid var(--f-line);border-radius:12px}
+.f-workflow-card h3,.f-workflow-detail h3{font-size:14px;margin:0 0 6px;overflow-wrap:anywhere}
+.f-workflow-card p{margin:0 0 8px;overflow-wrap:anywhere}
+.f-workflow-snippet{font-size:13px;line-height:1.6;white-space:pre-wrap}
+.f-workflow-detail:not(:empty){margin-top:16px}
+.f-workflow-detail .f-job-text{min-height:220px;height:35dvh;margin:4px 0 9px}
+.f-quote-dialog{width:min(600px,calc(100vw - 24px))}
+.f-quote-summary{padding:15px 18px;background:var(--f-bg);border:1px solid var(--f-line);border-radius:13px}
+.f-quote-summary span{font-size:12px;color:var(--f-soft-ink)}
+.f-quote-summary strong{display:block;font:500 clamp(26px,5vw,36px)/1.25 "Jost",sans-serif;font-variant-numeric:tabular-nums}
+.f-quote-summary p,.f-quote-source p{margin:3px 0}
+.f-quote-figures{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 14px;margin:16px 0;font-size:13px}
+.f-quote-figures dt{color:var(--f-soft-ink)}
+.f-quote-figures dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.f-quote-source{border-top:1px solid var(--f-line);padding-top:10px;overflow-wrap:anywhere}
+.f-quote-hint,.f-quote-source,.f-quote-alert{font-size:12px}
+.f-quote-alert{color:var(--f-danger)}
+.f-quote-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:18px}
+.f-spend-page{max-width:1040px}
+.f-spend-filters{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin:0 0 17px}
+.f-spend-filters label{display:grid;gap:4px;flex:1 1 130px;min-width:0;max-width:240px;font-size:12px;color:var(--f-soft-ink)}
+.f-spend-filters .f-select{width:100%;min-width:0}
+.f-spend-overview{padding:19px 22px;background:var(--f-paper);border:1px solid var(--f-line);border-radius:16px}
+.f-spend-totals{display:flex;flex-wrap:wrap;gap:10px}
+.f-spend-totals>*{flex:1 1 130px;min-width:0;color:var(--f-ink);text-align:left;padding:11px 13px;border:1px solid var(--f-line);border-radius:11px;background:transparent}
+.f-spend-totals>button[aria-pressed="true"]{background:var(--f-active);border-color:var(--f-line-strong)}
+.f-spend-totals span{display:block;color:var(--f-soft-ink);font-size:12px}
+.f-spend-totals strong{display:block;font:500 clamp(20px,3vw,29px)/1.25 "Jost",sans-serif;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.f-spend-chart{margin:19px 0 0}
+.f-spend-chart figcaption,.f-spend-axis{font-size:12px;color:var(--f-muted)}
+.f-spend-plot{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px;margin:8px 0 6px}
+.f-spend-scale{display:flex;flex-direction:column;justify-content:space-between;gap:6px;align-items:flex-end;color:var(--f-muted);font-size:11px;text-align:right;overflow-wrap:anywhere}
+.f-spend-bars{display:flex;align-items:stretch;gap:clamp(1px,.5vw,7px);height:130px;border-bottom:1px solid var(--f-line-strong);
+  background:repeating-linear-gradient(to top,transparent 0,transparent calc(25% - 1px),var(--f-line) calc(25% - 1px),var(--f-line) 25%)}
+.f-spend-slot{position:relative;flex:1;min-width:0}
+.f-spend-bar{position:absolute;inset:auto 0 0;height:var(--bar);background:var(--f-accent);border-radius:3px 3px 0 0;opacity:.72}
+.f-spend-slot:hover .f-spend-bar{opacity:1}
+.f-spend-axis{display:flex;justify-content:space-between;gap:10px;margin-left:78px}
+.f-spend-missing{margin:12px 0 0;font-size:12px}
+.f-spend-history{margin-top:24px}
+.f-spend-history h2{font:500 22px/1.3 "Jost",sans-serif;margin:0 0 9px}
+.f-spend-history ul{list-style:none;margin:0;padding:0}
+.f-spend-history li{display:grid;grid-template-columns:minmax(0,1fr) minmax(84px,auto);align-items:start;gap:12px;padding:12px 1px;border-top:1px solid var(--f-line)}
+.f-spend-row-main,.f-spend-row-money{display:grid;justify-items:start;gap:3px;min-width:0}
+.f-spend-row-main time,.f-spend-row-money span,.f-spend-row-main span{font-size:12px;color:var(--f-muted)}
+.f-spend-row-main button,.f-spend-row-main strong{text-align:left;overflow-wrap:anywhere}
+.f-spend-row-money{justify-items:end;text-align:right;font-variant-numeric:tabular-nums}
+.f-spend-row-money strong{font-size:13px}
+.f-effort-choice{display:inline-flex;align-items:center;gap:7px}
+.f-effort-choice[hidden]{display:none}
+@media(max-width:550px){
+  .f-spend-overview{padding:13px}
+  .f-spend-filters label{max-width:none}
+  .f-spend-bars{height:92px}
+  .f-quote-figures{gap:7px;font-size:12px}
+  .f-effort-choice{gap:4px}
+}
+@media(max-width:550px){.f-workflow-search{grid-template-columns:minmax(0,1fr) auto}.f-workflow-search select{grid-column:1/-1}}
 .f-transfer-dialog{width:min(820px,calc(100vw - 30px))}
 .f-transfer #f-external-brief{min-height:220px;max-height:49dvh;font:12px/1.65 ui-monospace,Consolas,monospace!important}
 .f-transfer-actions{margin:14px 0}
 #f-flash{position:fixed;z-index:120;left:50%;bottom:26px;transform:translateX(-50%);width:max-content;max-width:min(440px,calc(100vw - 32px));border:1px solid var(--f-line);border-left:3px solid var(--f-soft-ink);border-radius:11px;padding:12px 17px;background:var(--f-paper);box-shadow:var(--f-shadow);font-size:12px;color:var(--f-ink)}
+html.app-freitag.f-chat-mode #f-flash{top:78px;right:16px;bottom:auto;left:auto;transform:none;margin:0;pointer-events:none}
 .f-mobile-nav{display:none}
 @media(max-width:1050px){
   .f-layout{grid-template-columns:218px minmax(0,1fr)}
@@ -263,7 +345,6 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
   .f-chat-welcome p{font-size:12px}
   .f-msg-text{font-size:13px;line-height:1.8}
   .f-compose-surface{padding:9px 11px}
-  .f-compose-canon{flex-basis:100%;text-align:left;margin-left:0}
   .f-writing-bar{gap:7px}
   .f-compose .f-textarea{font-size:13px!important}
   .f-mini{font-size:9px}
@@ -287,13 +368,12 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 .f-chat-meta .f-title{font-size:20px;letter-spacing:-.025em;line-height:1.3;max-width:100%;min-width:0}
 .f-chat-book{margin:0;gap:7px;flex-wrap:wrap}
 .f-chat-book .f-select{width:min(290px,100%);max-width:100%;min-height:35px}
-.f-project-open-link,.f-project-shortcut,.f-project-back{
+.f-project-open-link,.f-project-back{
   appearance:none;border:0!important;background:transparent!important;
   color:var(--f-soft-ink)!important;cursor:pointer;font:500 12px/1.4 "Golos Text",sans-serif;
   text-decoration:underline;text-underline-offset:3px;
 }
-.f-project-shortcut{display:block;margin-top:9px;text-align:left;padding:4px 2px}
-.f-project-open-link:hover,.f-project-back:hover,.f-project-shortcut:hover{color:var(--f-ink)!important}
+.f-project-open-link:hover,.f-project-back:hover{color:var(--f-ink)!important}
 .f-chat-body{gap:17px;min-height:100px;padding:14px 0 22px}
 .f-msg{max-width:100%;width:auto}
 .f-msg.user{max-width:min(88%,930px);padding:12px 16px;border-radius:14px 14px 4px 14px}
@@ -301,6 +381,7 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 .f-speaker{font-size:11px;margin-bottom:8px}
 .f-msg-text{font-size:16px;line-height:1.72;letter-spacing:0;white-space:normal;overflow-wrap:anywhere;max-width:1200px}
 .f-msg.user .f-msg-text{font-size:15px;line-height:1.65}
+.f-msg.user .f-msg-text,.f-msg-text.streaming{white-space:pre-wrap}
 .f-msg-text.pending{white-space:pre-wrap}
 .f-msg-text p{margin:0 0 .85em}
 .f-msg-text p:last-child{margin-bottom:0}
@@ -324,24 +405,32 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
 .f-chat-welcome{padding:20px 0 40px}
 .f-chat-welcome h2{font-size:25px}
 .f-btn-new{display:none}
-.f-project-home{padding-top:3px}
+.f-project-home{padding-top:3px;max-width:1080px}
 .f-project-back{display:inline-block;margin:0 0 18px;text-decoration:none}
 .f-project-overview{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
 .f-project-overview .f-title{font-size:clamp(25px,2.5vw,34px)}
 .f-project-overview .f-subtitle{font-size:13px}
 .f-project-status{display:flex;align-items:center;gap:9px;margin-bottom:26px;font-size:12px;color:var(--f-soft-ink)}
 .f-status-pip{display:inline-block;flex:none;width:7px;height:7px;background:var(--f-soft-ink);border-radius:50%}
-.f-project-editor,.f-project-source,.f-project-recent{padding:22px 0;border-top:1px solid var(--f-line)}
+.f-project-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(242px,.53fr);align-items:start;gap:17px}
+.f-project-reference{display:grid;gap:14px;min-width:0}
+.f-project-editor,.f-project-source,.f-project-recent{min-width:0;padding:clamp(16px,2.3vw,25px);border:1px solid var(--f-line);border-radius:19px;background:var(--f-paper)}
 .f-project-editor h2,.f-project-source h2,.f-project-recent h2{font:600 19px/1.4 "Golos Text",sans-serif;margin:0 0 8px;letter-spacing:-.02em}
-.f-project-prompt{display:block;width:100%;min-height:190px!important;max-height:55dvh;padding:15px 16px!important;border:1px solid var(--f-line-strong)!important;border-radius:12px;background:var(--f-paper)!important;font-size:14px!important;line-height:1.7!important;resize:vertical}
+.f-project-editor h2 label{font:inherit;color:inherit;margin:0}
+.f-project-prompt{display:block;width:100%;min-height:clamp(218px,40dvh,405px)!important;max-height:65dvh;padding:15px 16px!important;border:1px solid var(--f-line-strong)!important;border-radius:12px;background:var(--f-bg)!important;font-size:14px!important;line-height:1.7!important;resize:vertical}
 .f-project-editor .f-label{margin-top:18px}
 .f-project-editor .f-row{margin-top:16px}
 .f-project-options{border:1px solid var(--f-line);border-radius:10px;padding:14px 16px;margin-top:16px}
 .f-project-options summary{cursor:pointer;font-size:13px}
 .f-project-options .f-textarea{display:block;width:100%;min-height:120px;padding:12px!important}
-.f-project-source .f-spread{align-items:flex-start}
-.f-project-source .f-muted{max-width:800px}
+.f-source-actions{display:flex;align-items:flex-start;flex-wrap:wrap;gap:7px;margin-top:15px}
+.f-source-actions a{text-decoration:none;display:inline-flex;align-items:center}
+.f-book-check:not(:empty){white-space:pre-line;margin-top:13px;padding:11px 13px;background:var(--f-bg);border-radius:10px;font-size:12px;overflow-wrap:anywhere}
+.f-project-source h3{margin:14px 0 4px;font-size:12px}
 .f-project-recent .f-list button{padding-left:0;font-size:13px!important}
+.f-memory-list{list-style:none;padding:0;margin:10px 0 0}
+.f-memory-list li{padding:12px 0;border-top:1px solid var(--f-line);overflow-wrap:anywhere}
+.f-memory-list li p{font-size:13px;color:var(--f-soft-ink);margin:4px 0}
 @media(max-width:1050px){
   .f-layout{grid-template-columns:220px minmax(0,1fr)}
   .f-main{padding:18px 20px 26px}
@@ -359,8 +448,10 @@ html.app-freitag[data-theme="dark"] .f-welcome-mark img{filter:brightness(0) inv
   .f-chat-meta .f-title{font-size:18px}
   .f-btn-new{display:inline-flex}
   .f-project-overview{align-items:flex-start;flex-direction:column}
-  .f-project-source .f-spread{flex-direction:column;align-items:flex-start}
-  .f-project-prompt{min-height:150px!important}
+  .f-project-prompt{min-height:215px!important}
+}
+@media(max-width:930px){
+  .f-project-grid{grid-template-columns:minmax(0,1fr)}
 }
 
 
@@ -413,7 +504,7 @@ html.app-freitag.f-chat-mode .f-main{
   height:100%;
   min-height:0;
   overflow:hidden;
-  padding:12px clamp(14px,2vw,30px) 10px;
+  padding:20px clamp(16px,2.35vw,38px) 16px;
 }
 html.app-freitag.f-chat-mode .f-chat{
   display:flex;
@@ -423,12 +514,63 @@ html.app-freitag.f-chat-mode .f-chat{
   min-height:0;
   max-height:100%;
   flex:1 1 auto;
-  margin:0;
+  margin:0 auto;
+  max-width:850px;
 }
 html.app-freitag.f-chat-mode .f-chat-meta{
   flex:0 0 auto;
   min-height:0;
-  margin:0 0 6px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:start;
+  gap:10px 20px;
+  margin:0 0 9px;
+  padding-bottom:12px;
+  border-bottom:1px solid var(--f-line);
+}
+.f-chat-meta .f-chat-identity{display:grid;gap:8px;justify-items:start}
+.f-chat-meta .f-title{font-size:clamp(19px,2vw,28px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
+.f-chat-meta .f-chat-book{min-width:0;max-width:100%;flex-wrap:nowrap}
+.f-chat-meta .f-chat-book .f-select{width:auto;min-width:110px;max-width:calc(100% - 42px);min-height:32px;text-overflow:ellipsis}
+.f-chat-book label{flex:none}
+.f-chat-source{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:6px 11px;min-width:0}
+.f-source-tag{display:inline-flex;align-items:center;gap:7px;background:var(--f-hover);padding:4px 9px;border-radius:20px;color:var(--f-soft-ink);font-size:11px;white-space:nowrap}
+.f-source-tag.linked{background:var(--f-active)}
+.f-source-tag>span{width:6px;height:6px;border-radius:50%;background:currentColor}
+.f-chat-context{display:none}
+.f-prompt summary{cursor:pointer;font-size:13px;font-weight:600}
+.f-prompt summary span{font-size:11px;color:var(--f-muted);font-weight:400;margin-left:5px}
+.f-prompt[open] .f-msg-text{padding-top:10px}
+.f-msg.assistant .f-msg-text{line-height:1.77}
+.f-compose-actions{display:flex;align-items:center;flex-wrap:wrap;gap:2px 9px;min-width:0}
+.f-compose-actions>.f-inline-btn,.f-extra-tools summary{font-size:12px!important;padding:5px 3px}
+.f-writing-bar #f-chapter-limit-wrap{display:flex;align-items:center;gap:7px}
+.f-extra-tools{position:relative;color:var(--f-soft-ink)}
+.f-extra-tools summary{cursor:pointer;user-select:none;white-space:nowrap}
+.f-compose-menu{position:absolute;z-index:14;bottom:calc(100% + 5px);left:0;display:grid;gap:2px;min-width:220px;max-width:calc(100vw - 46px);border:1px solid var(--f-line);border-radius:12px;padding:5px;background:var(--f-paper);box-shadow:var(--f-shadow)}
+.f-compose-menu button{border:0!important;border-radius:7px;padding:8px 9px;background:transparent!important;color:var(--f-ink)!important;text-align:left;font-size:12px}
+.f-compose-menu button:hover{background:var(--f-hover)!important}
+.f-book-scope{display:grid;gap:4px;padding:6px 9px 9px;border-bottom:1px solid var(--f-line);font-size:12px}
+.f-book-scope select{width:100%;font:inherit}
+.f-dialog:has(#f-field-draft){width:min(840px,calc(100vw - 24px))}
+.f-dialog #f-field-draft{height:clamp(200px,55dvh,720px);min-height:0;line-height:1.7}
+@media(min-width:1160px){
+  html.app-freitag.f-chat-mode .f-chat:has(.f-chat-context){
+    display:grid;max-width:1140px;gap:0 20px;
+    grid-template-columns:minmax(0,1fr) 232px;
+    grid-template-rows:auto minmax(0,1fr) auto;
+    grid-template-areas:"title title" "messages context" "compose context";
+  }
+  .f-chat-meta{grid-area:title}
+  .f-chat-body{grid-area:messages}
+  .f-compose{grid-area:compose}
+  .f-chat-context{display:block;grid-area:context;align-self:start;min-width:0;max-height:100%;overflow:auto;margin-top:10px;padding:17px 16px;border-radius:17px;border:1px solid var(--f-line);background:var(--f-paper)}
+  .f-chat-context h2{font:500 20px/1.3 "Jost",sans-serif;margin:0 0 5px}
+  .f-chat-context h3{font-size:12px;margin:15px 0 3px}
+  .f-chat-context p{margin:0;color:var(--f-muted);font-size:12px;overflow-wrap:anywhere}
+  .f-chat-context .f-context-book{color:var(--f-ink)}
+  .f-chat-context .f-btn{margin-top:16px}
+  .f-chat:has(.f-chat-context) .f-chat-source .f-project-open-link{display:none}
 }
 html.app-freitag.f-chat-mode .f-chat-body{
   flex:1 1 auto;
@@ -453,9 +595,10 @@ html.app-freitag.f-chat-mode .f-compose{
   min-height:0;
 }
 html.app-freitag.f-chat-mode .f-compose-surface{
-  padding:8px 12px;
-  border-radius:13px;
+  padding:9px 13px;
+  border-radius:17px;
 }
+html.app-freitag.f-chat-mode .f-compose-surface:focus-within{border-color:var(--f-muted)}
 html.app-freitag.f-chat-mode .f-writing-bar{
   min-height:30px;
   gap:6px 9px;
@@ -485,13 +628,6 @@ html.app-freitag.f-chat-mode .f-compose-controls{
 html.app-freitag.f-chat-mode .f-compose-controls .f-btn{
   min-height:33px;
 }
-html.app-freitag.f-chat-mode .f-extra-tools{
-  padding:0 4px;
-  font-size:11px;
-}
-html.app-freitag.f-chat-mode .f-extra-tools summary{
-  padding:3px 0 0;
-}
 @media(max-width:760px){
   html.app-freitag.f-chat-mode .f-head{
     flex-basis:63px;
@@ -520,13 +656,25 @@ html.app-freitag.f-chat-mode .f-extra-tools summary{
     height:44px;
     min-height:44px;
     max-height:27dvh;
+    font-size:16px!important;
   }
-  html.app-freitag.f-chat-mode .f-compose-canon{
-    display:none;
-  }
+  .f-chat-meta .f-chat-book .f-select{min-width:0;width:100%}
+  .f-chat-meta .f-chat-book label{flex:none}
+  .f-chat-meta .f-chat-head-actions{gap:5px;flex-wrap:wrap;justify-content:flex-end}
+  .f-compose-menu{left:auto;right:-100px}
   html.app-freitag.f-chat-mode .f-mobile-nav{
+    position:static;
+    flex:0 0 auto;
     min-height:61px;
   }
+}
+@media(max-width:400px){
+  html.app-freitag.f-chat-mode .f-chat-meta{gap:8px}
+  .f-compose-actions{column-gap:5px}
+  .f-compose-actions .f-mini{display:none}
+  .f-chat-meta .f-btn-new{padding-inline:8px}
+  .f-writing-bar #f-chapter-limit-wrap{gap:4px}
+  .f-writing-bar .f-compact-label{font-size:10px}
 }
 @media(max-height:650px) and (min-width:761px){
   html.app-freitag.f-chat-mode .f-head{

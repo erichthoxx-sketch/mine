@@ -23,11 +23,7 @@ cat > "$OUT/pisatel/index.html" <<'HTML'
 <body style="font-family:sans-serif;padding:24px">Мастерская переехала: <a href="../workshop/">открыть</a></body></html>
 HTML
 cp ai/manifest.webmanifest ai/style.css "$OUT/ai/"
-cp ai/app.js "$OUT/$V/ai/app.js"
-cp ai/master-sync.js "$OUT/$V/ai/master-sync.js"
-cp ai/live-context.js "$OUT/$V/ai/live-context.js"
-cp ai/markdown.js "$OUT/$V/ai/markdown.js"
-cp ai/project-view.js "$OUT/$V/ai/project-view.js"
+cp ai/*.js "$OUT/$V/ai/"
 sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\./style.css#./style.css?v=$V#; s#\./app.js#../$V/ai/app.js#" ai/index.html > "$OUT/ai/index.html"
 sed "s#__APPV__#$V#; s#css/style.css#$V/css/style.css#; s#js/app.js#$V/js/app.js#" index.html > "$OUT/index.html"
 sed "s#__APPV__#$V#; s#\.\./css/style.css#../$V/css/style.css#; s#\"js/app.js#\"../$V/writer/js/app.js#" writer/index.html > "$OUT/workshop/index.html"

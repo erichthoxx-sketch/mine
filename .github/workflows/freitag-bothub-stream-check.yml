@@ -1,7 +1,7 @@
 name: Freitag AI · stream BotHub chapter
 on:
   pull_request:
-    branches: [fix/freitag-bothub-streamed-chapters]
+    branches: [fix/freitag-bothub-streamed-chapters, fix/freitag-issue-23-chapter-delivery]
   push:
     branches: [fix/freitag-bothub-streamed-chapters]
     paths:

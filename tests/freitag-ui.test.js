@@ -6,7 +6,7 @@ const load=(path)=>readFile(new URL(path,import.meta.url),"utf8");
 test("Freitag AI navigation and branding remain accessible",async()=>{
   const html=await load("../ai/index.html");
   assert.match(html,/<main class="f-main" id="panel"><\/main>/);
-  for(const item of ['data-nav="chat"','data-nav="projects"','data-nav="knowledge"','data-nav="settings"']){
+  for(const item of ['data-nav="chat"','data-nav="projects"','data-nav="expenses"','data-nav="settings"']){
     assert.equal(html.split(item).length-1,2,item+" must exist in desktop and mobile navigation");
   }
   assert.match(html,/class="f-monogram"/);
@@ -34,7 +34,7 @@ test("book can be changed without desktop sidebar and empty chat accepts text",a
   assert.match(app,/f-mobile-history/);
   assert.match(app,/aria-label="История разговоров"/);
   assert.match(app,/if\(e.target.id==="f-sidebar-project"\|\|e.target.id==="f-chat-project"/);
-  assert.match(app,/const c=ensureChat\(\),msg=text;/);
+  assert.match(app,/const c=ensureChat\(\);/);
   assert.match(app,/if\(a==="new-chat"\)\{state.activeChatId=null;pendingMode=null/);
   assert.match(app,/f-sidebar-project/);
 });
@@ -68,7 +68,8 @@ test("unsent chapter prompts survive navigation and are cleared only after submi
   assert.match(app,/const rememberDraft=/);
   assert.match(app,/if\(e.target.id==="f-message-input"\)\{/);
   assert.match(app,/rememberDraft\(e.target.value\)/);
-  assert.match(app,/esc\(state.drafts\?\.\[draftKey\(\)\]\|\|""\)/);
+  assert.match(app,/const draft=state.drafts\?\.\[draftKey\(\)\]\|\|""/);
+  assert.match(app,/esc\(draft\)/);
   assert.match(app,/delete state.drafts\[previousDraft\]/);
 });
 
@@ -103,8 +104,8 @@ test("Google Docs refresh is optional; normal Opus MCP messages do not reauthori
   assert.match(app,/await ensureDriveAccess\(p\.masterBookId\)/);
   assert.match(app,/await refreshLinkedBook\(/);
   assert.doesNotMatch(send,/ensureDriveAccess\(/);
-  assert.doesNotMatch(send,/confirm\(/);
-  assert.match(worker,/if\(input\.sourceRevision\)/);
+  assert.match(send,/if\(isPaidProvider\)[\s\S]*?\/quote[\s\S]*?await openRequestEstimate\(/);
+  assert.match(worker,/if\(input\.sourceRevision && !separateGateway\)/);
   assert.match(worker,/path === "\/refresh-book"/);
 });
 
@@ -125,4 +126,13 @@ test("chat uses full viewport height and scrolls messages inside it, not whole p
   assert.match(app,/resizeChatInput\(e\.target\)/);
   assert.match(app,/historyEl\.scrollTop=historyEl\.scrollHeight/);
   assert.doesNotMatch(app,/lastElementChild\?\.scrollIntoView/);
+});
+
+
+test("BotHub compact manuscript choice does not overwrite reasoning, token limits or the draft",async()=>{
+  const app=await load("../ai/app.js");
+  const handler=app.slice(app.indexOf('if(e.target.id==="f-book-scope")'),app.indexOf('if(e.target.id==="f-chapter-effort")',app.indexOf('if(e.target.id==="f-book-scope")')));
+  assert.match(handler,/fullBotHubDraftKey/);
+  assert.doesNotMatch(handler,/chapterEffort|sceneOutputTokens|sendMessage|state\.drafts/);
+  assert.doesNotMatch(app,/bothub-quick-preset/);
 });

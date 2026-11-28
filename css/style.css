@@ -151,7 +151,7 @@ details summary { cursor: pointer; font-weight: 700; color: var(--link); }
 .top > div:first-child { min-width: 0; }
 .top .row { gap: 6px; }
 .top .btn, .top button { min-height: 34px; padding: 6px 14px; font-size: 14px; }
-.top button[aria-label] { width: 34px; padding: 0; }
+.top button[aria-label], .top .top-shortcut { width: 34px; padding: 0; }
 /* нижнее меню не отрывается от низа экрана при прокрутке до конца (эффект «резинки» на телефоне) */
 html, body { overscroll-behavior-y: none; }
 nav.tabs { transform: translateZ(0); }
@@ -2925,7 +2925,7 @@ main .rev-actions button.dl .ic { opacity: 1; }
 :root button.link, :root a.link { color: var(--text); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 :root button.dl, :root .dl { color: var(--text-2); }
 :root button.danger, :root button.danger:not(.primary) { color: var(--bad); border-color: var(--bad); }
-:root .top button[aria-label] { border-radius: 50%; border: 1px solid var(--line); background: transparent; }
+:root .top button[aria-label], :root .top .top-shortcut { border-radius: 50%; border: 1px solid var(--line); background: transparent; }
 :root button:focus-visible, :root a:focus-visible, :root input:focus-visible, :root select:focus-visible, :root textarea:focus-visible { outline: 1.5px solid var(--text); outline-offset: 3px; }
 
 /* «пилюли» → тихие вкладки с тонкой линией */
@@ -3045,8 +3045,8 @@ main .rev-actions button.dl .ic { opacity: 1; }
 :root button.primary:hover, :root .btn.primary:hover { background: color-mix(in srgb, var(--text) 85%, var(--bg)) !important; color: var(--bg) !important; }
 :root .small-btn { font-size: 13px !important; min-height: 34px !important; padding: 0 14px !important; }
 :root button.danger, :root button.danger:not(.primary) { color: var(--bad); border-color: transparent; background: color-mix(in srgb, var(--bad) 8%, var(--soft)); }
-:root .top button[aria-label], :root button[aria-label].tb { border: 0; background: var(--soft); border-radius: 50%; }
-:root .top button[aria-label]:hover { background: var(--soft-2); }
+:root .top button[aria-label], :root .top .top-shortcut, :root button[aria-label].tb { border: 0; background: var(--soft); border-radius: 50%; }
+:root .top button[aria-label]:hover, :root .top .top-shortcut:hover { background: var(--soft-2); }
 :root .nav-toggle { border: 0 !important; background: var(--soft); }
 :root button.nt-btn { border-radius: 999px; border: 0; background: var(--soft); font: 500 13px/1.2 var(--font-body); }
 :root .nt-btns button.nt-btn:first-child { background: var(--text); color: var(--bg); border: 0; }

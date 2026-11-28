@@ -13,12 +13,12 @@ test('Freitag AI: entrypoint, styles and manifest exist', () => {
   const index = readFileSync('ai/index.html', 'utf8');
   assert.match(index, /src="\.\/app\.js"/);
   assert.match(index, /href="\.\/style\.css"/);
-  assert.match(index, /href="\.\.\/css\/style\.css"/);
+  assert.doesNotMatch(index, /href="\.\.\/css\/style\.css"/, "Freitag styles must be independent from the other apps");
 });
 test('Freitag AI: deploy pipeline includes the app', () => {
   // приложения собирает общий скрипт scripts/build-apps.sh
   const yaml = readFileSync('.github/workflows/pages.yml', 'utf8'), sh = readFileSync('scripts/build-apps.sh', 'utf8');
   assert.match(yaml, /bash scripts\/build-apps\.sh \$V _site/);
   assert.match(sh, /\$OUT\/ai\/index\.html/);
-  assert.match(sh, /cp ai\/app\.js "\$OUT\/\$V\/ai\/app\.js"/);
+  assert.match(sh, /cp ai\/\*\.js "\$OUT\/\$V\/ai\/"/);
 });

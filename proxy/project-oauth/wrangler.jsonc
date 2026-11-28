@@ -1,0 +1,8 @@
+{
+  "name":"freitag-project-oauth",
+  "main":"index.js",
+  "compatibility_date":"2026-11-01",
+  "compatibility_flags":["global_fetch_strictly_public"],
+  "durable_objects":{"bindings":[{"name":"RECORDS","class_name":"OAuthRecords"}]},
+  "migrations":[{"tag":"v1","new_sqlite_classes":["OAuthRecords"]}]
+}

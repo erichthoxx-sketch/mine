@@ -31,7 +31,7 @@ export function aiCenterCard(c) {
     '<button data-act="ai.drive"' + (running ? ' disabled' : '') + '>' + ic('refresh') + (s.aiDriveEnabled ? 'Обновить файл Google Drive' : 'Включить файл Google Drive') + '</button>' +
     (s.aiDriveEnabled ? '<button data-act="ai.drive.off"' + (running ? ' disabled' : '') + '>Остановить обновление Drive</button>' : '') +
     '<button data-act="bai.settings">Настроить</button>' +
-    '<a class="link" href="../ai/" target="_blank" rel="noopener noreferrer" title="Открыть литературный чат">Freitag AI ↗</a>' +
+    '<a class="link" href="https://codex-freitag-aitunnel.freitag-ai-test.pages.dev/ai/" target="_blank" rel="noopener noreferrer" title="Открыть рабочую Freitag AI">Freitag AI ↗</a>' +
     (when ? '<button class="link" data-act="ai.clear">Отключить всё</button>' : '') +
     '</div>' +
     (when ? '<p class="small muted" style="margin:10px 0 0">Рукописи: последняя ручная передача ' + esc(when) +

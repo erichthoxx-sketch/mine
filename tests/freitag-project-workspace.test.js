@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import {renderMarkdown} from "../ai/markdown.js";
 import {projectHomeHtml} from "../ai/project-view.js";
+import {projectMemoryContext, usableReply, materialMode} from "../ai/project-context.js";
 const read=path=>readFile(new URL(path,import.meta.url),"utf8");
 
 test("Markdown displays paragraphs, bold text, lists and code without HTML execution",()=>{
@@ -19,30 +20,89 @@ test("Project view exposes editable author instructions, MCP source and new chat
   const html=projectHomeHtml({id:"x",name:"Книга <3",instruction:"Пиши свободно",
     masterBookId:"bookid",description:"Мой роман",voice:"",canon:"",scene:""},
     [{id:"c1",projectId:"x",title:"Глава 15",updated:"2026-11-22"}],[],
-    v=>v);
+    v=>v,"https://codex-freitag-aitunnel.freitag-ai-test.pages.dev");
   assert.match(html,/data-action="new-project-chat"/);
   assert.match(html,/id="f-project-instructions"/);
   assert.match(html,/Пиши свободно/);
   assert.match(html,/MCP вызывается автоматически/);
-  assert.match(html,/Обновить Google Docs/);
+  assert.match(html,/href="https:\/\/erichthoxx-sketch\.github\.io\/mine\/workshop\/#\/book\/bookid"[^>]+>Обновить рукопись в Мастерской/);
+  assert.doesNotMatch(html,/data-action="sync-current-book"/);
+  assert.match(html,/Нейросеть» → «Обновить у нейросети/);
+  const sameOrigin=projectHomeHtml({id:"x",masterBookId:"bookid"},[],[],()=>"", "https://erichthoxx-sketch.github.io");
+  assert.match(sameOrigin,/data-action="sync-current-book"/);
   assert.match(html,/Книга &lt;3/);
 });
+
+test("Project memory keeps the author's decisions and finds relevant text across the same book",()=>{
+  const project={id:"book",storyMap:"Хронология с начала романа.",
+    memoryNotes:[{title:"Ключ",text:"Марта прячет медальон. Глеб пока об этом не знает."}]};
+  const full="Другие события. ".repeat(400)+" Архивная находка. Медальон лежал в фамильной шкатулке. "+ "Другая сцена. ".repeat(400);
+  const options={project,task:"Вспомни про медальон",terms:["медальон"],budget:4000,current:"current",
+    recent:[{role:"user",content:"Медальон уже в запросе"}],
+    chats:[
+      {id:"current",projectId:"book",title:"Сегодня",messages:[{role:"user",content:"Медальон уже в запросе"}]},
+      {id:"old",projectId:"book",title:"Ранние сцены",messages:[{role:"assistant",content:full}]},
+      {id:"other",projectId:"other-book",title:"Чужая книга",messages:[{role:"user",content:"Медальон. Секрет другого романа."}]}
+    ],
+    docs:[{projectId:"book",name:"Опись",text:"Медальон достался героине от бабушки."},
+      {projectId:"book",name:"Архивная копия",text:"Медальон из отключённого материала.",includeInContext:false}],
+    feedback:[
+      {id:"approved",projectId:"book",chatId:"old",kind:"good",answer:full.slice(0,18000)},
+      {id:"style",projectId:"book",kind:"good",reason:"Держать авторскую интонацию.",finalText:"Ровный авторский голос."},
+      {id:"other-style",projectId:"other-book",kind:"good",reason:"Стиль другого проекта."}
+    ]};
+  const result=projectMemoryContext(options);
+  assert.match(result,/Сюжетная карта автора\nХронология с начала романа/);
+  assert.match(result,/Утвержденные решения автора[\s\S]*Глеб пока об этом не знает/);
+  assert.match(result,/Ровный авторский голос/);
+  assert.match(result,/решения автора[\s\S]*Выписки из рабочего архива[\s\S]*Ранние сцены[\s\S]*фамильной шкатулке/i);
+  assert.match(result,/Медальон достался героине от бабушки/);
+  assert.doesNotMatch(result,/Секрет другого романа|Стиль другого проекта|Медальон уже в запросе|отключённого материала/);
+  assert.ok(result.length<=4000);
+  assert.ok(projectMemoryContext({...options,budget:600}).length<=600);
+  assert.equal(options.chats[1].messages[0].content,full);
+});
+test("only author-approved answers cross projects' chats and rejecting a former example removes its text",()=>{
+  const fake={role:"assistant",at:"original",content:"Камертон принадлежит незнакомцу."};
+  const unfinished={role:"assistant",content:"Камертон остался у моста.",incomplete:true};
+  const options={project:{id:"p"},current:"new",budget:4000,task:"Где камертон?",terms:["камертон"],
+    chats:[{id:"old",projectId:"p",title:"Вчера",messages:[fake,unfinished]}],feedback:[],docs:[]};
+  assert.equal(projectMemoryContext(options),"");
+  const good={id:"good",chatId:"old",projectId:"p",kind:"good",answer:fake.content,reason:"Кратко.",
+    finalText:"Камертон на витрине."};
+  assert.match(projectMemoryContext({...options,feedback:[good]}),/на витрине/);
+  const bad={id:"bad",chatId:"old",projectId:"p",kind:"bad",messageAt:"original",answer:fake.content,reason:"Перепутана вещь."};
+  const filtered=projectMemoryContext({...options,feedback:[good,bad]});
+  assert.match(filtered,/Перепутана вещь/);
+  assert.doesNotMatch(filtered,/незнакомцу|витрине|моста/);
+  assert.equal(usableReply(fake,"old",[bad]),false);
+  assert.equal(usableReply(unfinished,"old"),false);
+  assert.equal(usableReply({role:"assistant",content:"Ошибка Claude: HTTP 524"},"old"),false);
+  assert.ok(usableReply(fake,"old",[]));
+  const docs=[{projectId:"p",name:"Хронология",text:"На рассвете поезд опоздал.",priority:true},
+    {projectId:"p",name:"Старая версия",text:"Камертон сломан.",includeInContext:false}];
+  assert.deepEqual(docs.map(materialMode),["priority","archive"]);
+  assert.equal(materialMode({}),"auto");
+  assert.match(projectMemoryContext({...options,docs}),/поезд опоздал/);
+  assert.doesNotMatch(projectMemoryContext({...options,docs}),/Камертон сломан/);
+});
+
 test("Paid chats use MCP on send without Google Drive OAuth popups or hidden prompts",async()=>{
   const [app,worker]=await Promise.all([read("../ai/app.js"),read("../proxy/freitag-modelproxy-worker.js")]);
   const send=app.slice(app.indexOf("async function sendMessage("),app.indexOf("function download(",app.indexOf("async function sendMessage(")));
   assert.ok(!send.includes("ensureDriveAccess("));
   assert.ok(!send.includes("refreshLinkedBook("));
-  assert.ok(!send.includes("confirm("));
+  assert.match(send,/if\(isPaidProvider\)[\s\S]*?\/quote[\s\S]*?await openRequestEstimate\(/);
   assert.match(send,/await master\.idToken\(\)/);
-  assert.match(send,/const messages=isPaidProvider\?\(lightweight\?/);
+  assert.match(send,/messages:lightweight\|\|business\?questionMessages:/);
   assert.match(app,/function renderProjectHome/);
   assert.match(app,/renderMarkdown\(m\.content\)/);
   assert.match(app,/p\.instruction=String\(fd\.get\("instruction"\)/);
-  const instructions=app.slice(app.indexOf("function modelproxyMessages(c){"),app.indexOf("function buildMessages(c){"));
+  const instructions=app.slice(app.indexOf("function modelproxyMessages("),app.indexOf("function buildMessages(c){"));
   assert.doesNotMatch(instructions,/mode\.instruction/);
   assert.doesNotMatch(instructions,/ТЕКУЩАЯ СЦЕНА\/ПОСЛЕДНИЕ СОБЫТИЯ/);
   assert.match(instructions,/userInstruction\(p\?\.instruction\)/);
   assert.doesNotMatch(worker,/const editorialStyle=/);
-  assert.match(worker,/if\(input\.sourceRevision\)/);
+  assert.match(worker,/if\(input\.sourceRevision && !separateGateway\)/);
   assert.match(worker,/mcpToolsCompletion/);
 });
