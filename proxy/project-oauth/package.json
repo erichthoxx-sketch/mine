@@ -1,0 +1,8 @@
+{
+  "name": "freitag-project-oauth",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.4.0"
+  }
+}

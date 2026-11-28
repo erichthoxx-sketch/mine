@@ -115,6 +115,8 @@ export function projectAccessClient({master,gateway,getState,notify,isBusy,downl
         field("Адрес MCP","https://freitag-opus-gateway.erichtho-xx.workers.dev/project-mcp?project="+encodeURIComponent(project.id));
         if(token){field("Заголовок Authorization · сохрани ключ сейчас","Bearer "+token);}
         else fields.append(document.createTextNode("Ключ показывается при включении. Для нового ключа отзови доступ и включи его снова."));
+        field("Codex в браузере · URL сервера OAuth","https://freitag-project-oauth.erichtho-xx.workers.dev/mcp");
+        fields.append(document.createTextNode("В плагинах Codex выбери OAuth. Адрес MCP проекта и ключ из Freitag понадобятся на странице разрешения доступа."));
         button("Обновить из этого устройства",async()=>{const result=await send(project,"update",current.version);controls(result,token);});
         button("Отозвать доступ",async()=>{await revoke(project.id);controls({enabled:false});});
       }
